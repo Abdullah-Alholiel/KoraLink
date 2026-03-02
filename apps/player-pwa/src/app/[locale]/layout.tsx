@@ -4,6 +4,7 @@ import localFont from 'next/font/local';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
+import QueryProvider from '@/providers/QueryProvider';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -74,9 +75,11 @@ export default async function RootLayout({
       className={`${outfit.variable} ${marzouk.variable}`}
     >
       <body>
-        <NextIntlClientProvider messages={messages}>
-          {children}
-        </NextIntlClientProvider>
+        <QueryProvider>
+          <NextIntlClientProvider messages={messages}>
+            {children}
+          </NextIntlClientProvider>
+        </QueryProvider>
       </body>
     </html>
   );

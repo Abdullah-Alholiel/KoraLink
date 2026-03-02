@@ -6,6 +6,52 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        // Match feed API: StaleWhileRevalidate, 60s TTL.
+        // Intentionally mirrors React Query's staleTime (60s):
+        //   - Service worker serves cached response instantly (offline resilience)
+        //     while always revalidating in the background.
+        //   - React Query's in-memory cache prevents redundant component-level
+        //     re-fetches within the same 60-second window.
+        // The two layers are complementary: Workbox handles network/offline,
+        // React Query handles in-memory de-duplication across components.
+        urlPattern: /^https?:\/\/.*\/api\/matches(\/.*)?$/,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'matches-feed-cache',
+          expiration: {
+            maxAgeSeconds: 60,
+            maxEntries: 50,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      {
+        // Static assets: CacheFirst for performance
+        urlPattern: /\.(?:js|css|woff2?|png|jpg|jpeg|svg|ico|webp)$/i,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'static-assets-cache',
+          expiration: {
+            maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+            maxEntries: 100,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      {
+        // Payment endpoints: NetworkOnly – never cache financial requests
+        urlPattern: /^https?:\/\/.*\/(api\/payments|moyasar)(\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+    ],
+  },
 });
 
 /** @type {import('next').NextConfig} */
