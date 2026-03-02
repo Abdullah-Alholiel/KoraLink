@@ -55,19 +55,21 @@ export default async function RootLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
-  if (!locales.includes(params.locale as (typeof locales)[number])) {
+  const { locale } = await params;
+
+  if (!locales.includes(locale as (typeof locales)[number])) {
     notFound();
   }
 
   const messages = await getMessages();
 
-  const isRtl = params.locale === 'ar';
+  const isRtl = locale === 'ar';
 
   return (
     <html
-      lang={params.locale}
+      lang={locale}
       dir={isRtl ? 'rtl' : 'ltr'}
       className={`${outfit.variable} ${marzouk.variable}`}
     >
