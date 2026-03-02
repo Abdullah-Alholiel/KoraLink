@@ -14,6 +14,7 @@ import {
   TransactionType,
   ReferenceType,
 } from '../../database/schema';
+import { withTimestamp } from '../../common/utils/timestamp';
 
 export interface LedgerEntryDto {
   type: TransactionType;
@@ -74,10 +75,7 @@ export class WalletService {
 
       const [updatedUser] = await tx
         .update(users)
-        .set({
-          wallet_balance: sql`${users.wallet_balance} + ${balanceDelta}`,
-          updated_at: new Date(),
-        })
+        .set(withTimestamp({ wallet_balance: sql`${users.wallet_balance} + ${balanceDelta}` }))
         .where(eq(users.id, userId))
         .returning({ id: users.id, wallet_balance: users.wallet_balance });
 

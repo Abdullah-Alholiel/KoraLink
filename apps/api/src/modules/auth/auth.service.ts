@@ -14,6 +14,7 @@ import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
 import { UnifonicService } from './unifonic.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { withTimestamp } from '../../common/utils/timestamp';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -97,7 +98,7 @@ export class AuthService {
 
     const [updated] = await this.db
       .update(users)
-      .set({ ...dto, updated_at: new Date() })
+      .set(withTimestamp(dto))
       .where(eq(users.id, userId))
       .returning({
         id: users.id,
