@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "لوحة التحكم",
     "venues": "الملاعب",
+    "myVenue": "ملعبي",
     "bookings": "الحجوزات",
     "users": "المستخدمون",
     "reports": "التقارير",

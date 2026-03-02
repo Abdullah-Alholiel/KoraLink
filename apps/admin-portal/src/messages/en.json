@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "venues": "Venues",
+    "myVenue": "My Venue",
     "bookings": "Bookings",
     "users": "Users",
     "reports": "Reports",
