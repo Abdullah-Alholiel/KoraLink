@@ -51,6 +51,12 @@ const withPWA = withPWAInit({
         handler: 'NetworkOnly',
       },
     ],
+    // Serve the offline page for any navigation request that isn't cached.
+    // The Service Worker will intercept failed navigations and return this
+    // pre-cached document instead of a browser "No Internet" error screen.
+    fallbacks: {
+      document: '/offline',
+    },
   },
 });
 
