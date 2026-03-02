@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand DNA Colors */
+  --color-brand-green: #00C853;
+  --color-brand-red: #D50000;
+  --color-brand-black: #0A0A0A;
+  --color-brand-bg: #F5F5F5;
+
+  /* Font variables */
+  --font-sans: var(--font-outfit), system-ui, sans-serif;
+  --font-arabic: var(--font-marzouk), 'Noto Kufi Arabic', sans-serif;
+}
+
+[dir='rtl'] {
+  font-family: var(--font-arabic);
+}
+
+[dir='ltr'] {
+  font-family: var(--font-sans);
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-brand-bg text-brand-black;
+  }
+}
