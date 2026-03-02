@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Outfit } from 'next/font/google';
-import localFont from 'next/font/local';
+import { Outfit, Tajawal } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
@@ -11,12 +10,14 @@ const outfit = Outfit({
   subsets: ['latin'],
   variable: '--font-outfit',
   display: 'swap',
+  weight: ['300', '400', '500', '600', '700', '800'],
 });
 
-const marzouk = localFont({
-  src: '../../fonts/Marzouk.woff2',
-  variable: '--font-marzouk',
+const tajawal = Tajawal({
+  subsets: ['arabic', 'latin'],
+  variable: '--font-tajawal',
   display: 'swap',
+  weight: ['300', '400', '500', '700', '800'],
 });
 
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
     default: 'KoraLink',
     template: '%s | KoraLink',
   },
-  description: 'منصة كرة القدم الرائدة',
+  description: 'منصة كرة القدم الرائدة في السعودية',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -38,15 +39,17 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'KoraLink',
     title: 'KoraLink',
-    description: 'منصة كرة القدم الرائدة',
+    description: 'منصة كرة القدم الرائدة في السعودية',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#00C853',
+  themeColor: '#1B4332',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 const locales = ['ar', 'en'] as const;
@@ -65,19 +68,18 @@ export default async function RootLayout({
   }
 
   const messages = await getMessages();
-
   const isRtl = locale === 'ar';
 
   return (
     <html
       lang={locale}
       dir={isRtl ? 'rtl' : 'ltr'}
-      className={`${outfit.variable} ${marzouk.variable}`}
+      className={`${outfit.variable} ${tajawal.variable}`}
     >
-      <body>
+      <body className="overscroll-none">
         <QueryProvider>
           <NextIntlClientProvider messages={messages}>
-            {children}
+            <div className="app-shell">{children}</div>
           </NextIntlClientProvider>
         </QueryProvider>
       </body>

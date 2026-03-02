@@ -1,6 +1,25 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
+
+const i18n = {
+  ar: {
+    heading: 'لا يوجد اتصال بالإنترنت',
+    message: 'تحقق من اتصالك وأعد المحاولة',
+    retry: 'إعادة المحاولة',
+  },
+  en: {
+    heading: 'No internet connection',
+    message: 'Check your connection and try again',
+    retry: 'Retry',
+  },
+} as const;
+
 export default function Offline() {
+  const pathname = usePathname();
+  const locale = (pathname.split('/')[1] === 'ar' ? 'ar' : 'en') as keyof typeof i18n;
+  const t = i18n[locale];
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-bg p-8 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
@@ -22,17 +41,15 @@ export default function Offline() {
         </svg>
       </div>
       <div className="flex flex-col gap-2">
-        <h1 lang="ar" className="text-2xl font-bold text-brand-black">لا يوجد اتصال بالإنترنت</h1>
-        <p lang="ar" className="text-sm text-gray-500">
-          تحقق من اتصالك وأعد المحاولة
-        </p>
+        <h1 className="text-2xl font-bold text-brand-black">{t.heading}</h1>
+        <p className="text-sm text-gray-500">{t.message}</p>
       </div>
       <button
         onClick={() => window.location.reload()}
         aria-label="Retry connection"
         className="rounded-lg bg-brand-green px-8 py-3 font-medium text-white transition-opacity hover:opacity-90 active:opacity-75"
       >
-        إعادة المحاولة
+        {t.retry}
       </button>
     </div>
   );

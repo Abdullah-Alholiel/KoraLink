@@ -1,12 +1,15 @@
 // @ts-check
 import withPWAInit from '@ducanh2912/next-pwa';
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
 
 const withPWA = withPWAInit({
   dest: 'public',
   register: true,
-  skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
   workboxOptions: {
+    skipWaiting: true,
     runtimeCaching: [
       {
         // Match feed API: StaleWhileRevalidate, 60s TTL.
@@ -51,12 +54,6 @@ const withPWA = withPWAInit({
         handler: 'NetworkOnly',
       },
     ],
-    // Serve the offline page for any navigation request that isn't cached.
-    // The Service Worker will intercept failed navigations and return this
-    // pre-cached document instead of a browser "No Internet" error screen.
-    fallbacks: {
-      document: '/offline',
-    },
   },
 });
 
@@ -89,7 +86,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' https://api.mapbox.com https://cdn.moyasar.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://cdn.moyasar.com",
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://*.mapbox.com",
               "connect-src 'self' https://api.mapbox.com https://events.mapbox.com wss: ws:",
@@ -107,4 +104,4 @@ const nextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+export default withNextIntl(withPWA(nextConfig));
