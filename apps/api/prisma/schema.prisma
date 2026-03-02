@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SkillLevel {
+  Beginner
+  Intermediate
+  Advanced
+}
+
+enum UserRole {
+  Player
+  VenueOwner
+  Admin
+}
+
+enum PitchSize {
+  FiveVFive   @map("5v5")
+  SevenVSeven @map("7v7")
+  EightVEight @map("8v8")
+  ElevenVEleven @map("11v11")
+}
+
+enum SurfaceType {
+  Grass
+  Artificial
+}
+
+enum Environment {
+  Indoor
+  Outdoor
+}
+
+enum MatchType {
+  Casual
+  Competitive
+}
+
+enum GenderRule {
+  MenOnly  @map("Men Only")
+  WomenOnly @map("Women Only")
+  Mixed
+}
+
+enum MatchStatus {
+  Open
+  Full
+  InProgress
+  Completed
+  Cancelled
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum ReferenceType {
+  MATCH_FEE
+  TOPUP
+  REFUND
+  PRIZE
+}
+
+enum TransactionStatus {
+  Pending
+  Completed
+  Failed
+  Reversed
+}
+
+enum Team {
+  Home
+  Away
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(cuid())
+  phone              String    @unique
+  full_name          String?
+  handle             String?   @unique
+  avatar_url         String?
+  preferred_location String?
+  preferred_position String?
+  skill_level        SkillLevel?
+  role               UserRole  @default(Player)
+  wallet_balance     Decimal   @default(0) @db.Decimal(12, 2)
+  karma_score        Int       @default(0)
+  rating             Float     @default(0)
+  no_show_count      Int       @default(0)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  // Relations
+  venues       Venue[]
+  hosted       Match[]        @relation("HostedMatches")
+  matchPlayers MatchPlayer[]
+  transactions Transaction[]
+  messages     MatchMessage[]
+
+  @@map("users")
+}
+
+model Venue {
+  id          String   @id @default(cuid())
+  owner_id    String
+  name        String
+  city        String
+  address     String
+  amenities   Json     @default("[]")
+  rating      Float    @default(0)
+  is_approved Boolean  @default(false)
+  /// PostGIS geography point — use $queryRaw for spatial queries
+  location    Unsupported("geography(Point, 4326)")?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  owner   User    @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  pitches Pitch[]
+
+  @@index([city])
+  @@map("venues")
+}
+
+model Pitch {
+  id           String      @id @default(cuid())
+  venue_id     String
+  name         String
+  size         PitchSize
+  surface_type SurfaceType
+  environment  Environment
+  hourly_rate  Decimal     @db.Decimal(10, 2)
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+
+  // Relations
+  venue   Venue   @relation(fields: [venue_id], references: [id], onDelete: Cascade)
+  matches Match[]
+
+  @@map("pitches")
+}
+
+model Match {
+  id               String      @id @default(cuid())
+  host_id          String
+  pitch_id         String
+  title            String
+  match_type       MatchType
+  gender_rule      GenderRule
+  status           MatchStatus @default(Open)
+  scheduled_at     DateTime
+  duration_mins    Int
+  price_per_player Decimal     @db.Decimal(10, 2)
+  max_players      Int
+  /// Denormalised from Venue for fast PostGIS queries — kept in sync via triggers or service layer
+  location         Unsupported("geography(Point, 4326)")?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  // Relations
+  host     User          @relation("HostedMatches", fields: [host_id], references: [id])
+  pitch    Pitch         @relation(fields: [pitch_id], references: [id])
+  players  MatchPlayer[]
+  messages MatchMessage[]
+
+  @@index([status])
+  @@index([scheduled_at])
+  @@map("matches")
+}
+
+model MatchPlayer {
+  id       String  @id @default(cuid())
+  match_id String
+  user_id  String
+  team     Team?
+  is_host  Boolean @default(false)
+  no_show  Boolean @default(false)
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([match_id, user_id])
+  @@map("match_players")
+}
+
+model Transaction {
+  id               String            @id @default(cuid())
+  user_id          String
+  type             TransactionType
+  amount           Decimal           @db.Decimal(12, 2)
+  reference_type   ReferenceType
+  reference_id     String?
+  idempotency_key  String            @unique
+  status           TransactionStatus @default(Pending)
+  created_at       DateTime          @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("transactions")
+}
+
+model MatchMessage {
+  id         String   @id @default(cuid())
+  match_id   String
+  user_id    String
+  content    String
+  created_at DateTime @default(now())
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([match_id])
+  @@map("match_messages")
+}
