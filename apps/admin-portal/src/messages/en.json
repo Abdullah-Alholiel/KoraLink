@@ -1,0 +1,21 @@
+{
+  "app": {
+    "title": "KoraLink Admin Portal",
+    "description": "KoraLink Management Platform"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "venues": "Venues",
+    "bookings": "Bookings",
+    "users": "Users",
+    "reports": "Reports",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Sign In",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign In"
+  }
+}
