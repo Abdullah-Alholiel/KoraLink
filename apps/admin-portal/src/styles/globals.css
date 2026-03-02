@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Admin Brand DNA */
+  --color-brand-sidebar: #111827;
+  --color-brand-bg: #f9fafb;
+  --color-brand-green: #1b4332;
+  --color-brand-red: #e63946;
+
+  /* Font variables */
+  --font-sans: var(--font-outfit), sans-serif;
+  --font-arabic: var(--font-marzouk), sans-serif;
+}
+
+[dir='rtl'] {
+  font-family: var(--font-arabic);
+}
+
+[dir='ltr'] {
+  font-family: var(--font-sans);
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-brand-bg text-gray-900;
+  }
+}
