@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { LoggerModule } from 'nestjs-pino';
 
+import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MatchesModule } from './modules/matches/matches.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -50,6 +51,7 @@ import { HealthModule } from './modules/health/health.module';
     }),
 
     // ── Feature modules ──────────────────────────────────────────────────
+    DatabaseModule,
     AuthModule,
     MatchesModule,
     WalletModule,

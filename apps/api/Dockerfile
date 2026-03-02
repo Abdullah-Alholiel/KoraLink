@@ -9,7 +9,6 @@ RUN npm ci --ignore-scripts
 
 # Copy source and build
 COPY . .
-RUN npx prisma generate
 RUN npm run build
 
 # ── Stage 2: Production runtime ─────────────────────────────────────────────
@@ -23,10 +22,8 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-# Copy compiled output and Prisma artifacts
+# Copy compiled output
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY prisma ./prisma
 
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nestjs \

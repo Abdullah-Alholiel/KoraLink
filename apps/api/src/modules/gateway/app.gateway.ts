@@ -11,11 +11,17 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { Inject } from '@nestjs/common';
+import { eq, and } from 'drizzle-orm';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as schema from '../../database/schema';
+import { match_players, match_messages, users } from '../../database/schema';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
+
+type DB = PostgresJsDatabase<typeof schema>;
 
 @WebSocketGateway({
   cors: {
@@ -34,7 +40,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
@@ -87,14 +93,16 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
 
-    const membership = await this.prisma.matchPlayer.findUnique({
-      where: {
-        match_id_user_id: {
-          match_id: data.matchId,
-          user_id: client.userId,
-        },
-      },
-    });
+    const [membership] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, data.matchId),
+          eq(match_players.user_id, client.userId),
+        ),
+      )
+      .limit(1);
 
     if (!membership) throw new WsException('You are not a member of this match.');
 
@@ -112,18 +120,27 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.userId) throw new WsException('Unauthenticated');
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
-    const message = await this.prisma.matchMessage.create({
-      data: {
+    const [insertedMessage] = await this.db
+      .insert(match_messages)
+      .values({
         match_id: data.matchId,
         user_id: client.userId,
         content: data.content.trim(),
-      },
-      include: {
-        user: {
-          select: { id: true, full_name: true, handle: true, avatar_url: true },
-        },
-      },
-    });
+      })
+      .returning();
+
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        full_name: users.full_name,
+        handle: users.handle,
+        avatar_url: users.avatar_url,
+      })
+      .from(users)
+      .where(eq(users.id, client.userId))
+      .limit(1);
+
+    const message = { ...insertedMessage, user };
 
     this.server
       .to(`match:${data.matchId}`)

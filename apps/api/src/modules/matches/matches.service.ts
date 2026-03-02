@@ -1,6 +1,13 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  NotFoundException,
+} from '@nestjs/common';
+import { eq, sql } from 'drizzle-orm';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as schema from '../../database/schema';
+import { matches } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
@@ -27,9 +34,11 @@ export interface NearbyMatchRow {
   venue_city: string;
 }
 
+type DB = PostgresJsDatabase<typeof schema>;
+
 @Injectable()
 export class MatchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // Discovery feed — PostGIS ST_DWithin geo-filter
@@ -39,9 +48,12 @@ export class MatchesService {
    * Returns open matches within `radius_km` of the given coordinates,
    * optionally filtered by date.
    *
-   * Uses a raw PostGIS query so Prisma's DMMF does not need to understand the
-   * `geography` type — only the columns that Prisma does understand are
-   * returned via the SELECT list.
+   * Uses Drizzle's `sql` template tag for raw PostGIS function calls so the
+   * ORM does not need to understand the `geography` column type.
+   *
+   * ST_DWithin implementation:
+   *   ST_DWithin(m.location, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, radiusMetres)
+   * returns true when the great-circle distance (metres) is within the radius.
    */
   async findNearby(dto: GetMatchesDto): Promise<NearbyMatchRow[]> {
     const { lat, lng, radius_km = 10, date } = dto;
@@ -51,28 +63,36 @@ export class MatchesService {
     }
 
     const radiusMetres = radius_km * 1000;
+    const hasCoords = lat !== undefined && lng !== undefined;
 
     // ── Date window filter ─────────────────────────────────────────────────
-    // If a date string is provided, restrict to that calendar day (UTC).
-    const dateClause =
-      date
-        ? Prisma.sql`AND m.scheduled_at::date = ${date}::date`
-        : Prisma.empty;
+    const dateClause = date
+      ? sql`AND m.scheduled_at::date = ${date}::date`
+      : sql``;
 
     // ── Geo filter ─────────────────────────────────────────────────────────
-    // If coordinates are provided, use PostGIS ST_DWithin on the denormalised
-    // `location` column (geography type = great-circle distance in metres).
-    const geoClause =
-      lat !== undefined && lng !== undefined
-        ? Prisma.sql`
-            AND ST_DWithin(
-              m.location,
-              ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
-              ${radiusMetres}
-            )`
-        : Prisma.empty;
+    // ST_DWithin on the denormalised `location` geography column.
+    // Great-circle distance in metres is used for the radius check.
+    const geoClause = hasCoords
+      ? sql`
+          AND ST_DWithin(
+            m.location,
+            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+            ${radiusMetres}
+          )`
+      : sql``;
 
-    const rows = await this.prisma.$queryRaw<NearbyMatchRow[]>`
+    // ── Distance expression ────────────────────────────────────────────────
+    const distanceExpr = hasCoords
+      ? sql`ST_Distance(
+            m.location,
+            ST_SetSRID(ST_MakePoint(${lng ?? 0}, ${lat ?? 0}), 4326)::geography
+          )`
+      : sql`NULL`;
+
+    // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
+    // the SELECT list is fixed, so the cast to NearbyMatchRow[] is safe here.
+    const rows = await this.db.execute(sql`
       SELECT
         m.id,
         m.title,
@@ -84,14 +104,7 @@ export class MatchesService {
         m.price_per_player::float AS price_per_player,
         m.max_players,
         COUNT(mp.id)::int         AS spots_filled,
-        CASE
-          WHEN m.location IS NOT NULL AND ${lat !== undefined && lng !== undefined} THEN
-            ST_Distance(
-              m.location,
-              ST_SetSRID(ST_MakePoint(${lng ?? 0}, ${lat ?? 0}), 4326)::geography
-            )
-          ELSE NULL
-        END                       AS distance_m,
+        ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,
         u.avatar_url              AS host_avatar,
@@ -100,9 +113,9 @@ export class MatchesService {
         v.name                    AS venue_name,
         v.city                    AS venue_city
       FROM matches m
-      INNER JOIN users  u ON u.id = m.host_id
-      INNER JOIN pitches p ON p.id = m.pitch_id
-      INNER JOIN venues  v ON v.id = p.venue_id
+      INNER JOIN users   u  ON u.id  = m.host_id
+      INNER JOIN pitches p  ON p.id  = m.pitch_id
+      INNER JOIN venues  v  ON v.id  = p.venue_id
       LEFT  JOIN match_players mp ON mp.match_id = m.id
       WHERE m.status = 'Open'
         AND m.scheduled_at >= NOW()
@@ -111,9 +124,9 @@ export class MatchesService {
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY m.scheduled_at ASC
       LIMIT 50
-    `;
+    `);
 
-    return rows;
+    return rows as unknown as NearbyMatchRow[];
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -141,11 +154,11 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async findOne(matchId: string) {
-    return this.prisma.match.findUniqueOrThrow({
-      where: { id: matchId },
-      include: {
+    const match = await this.db.query.matches.findFirst({
+      where: eq(matches.id, matchId),
+      with: {
         host: {
-          select: {
+          columns: {
             id: true,
             full_name: true,
             handle: true,
@@ -155,16 +168,21 @@ export class MatchesService {
           },
         },
         pitch: {
-          include: {
+          with: {
             venue: {
-              select: { name: true, city: true, address: true, amenities: true },
+              columns: {
+                name: true,
+                city: true,
+                address: true,
+                amenities: true,
+              },
             },
           },
         },
         players: {
-          include: {
+          with: {
             user: {
-              select: {
+              columns: {
                 id: true,
                 full_name: true,
                 handle: true,
@@ -176,5 +194,11 @@ export class MatchesService {
         },
       },
     });
+
+    if (!match) {
+      throw new NotFoundException(`Match ${matchId} not found.`);
+    }
+
+    return match;
   }
 }

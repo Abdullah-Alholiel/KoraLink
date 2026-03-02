@@ -1,6 +1,13 @@
 import { IsString, IsOptional, IsEnum, MinLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { SkillLevel } from '@prisma/client';
+
+const SkillLevel = {
+  Beginner: 'Beginner',
+  Intermediate: 'Intermediate',
+  Advanced: 'Advanced',
+} as const;
+
+type SkillLevel = (typeof SkillLevel)[keyof typeof SkillLevel];
 
 export class CompleteProfileDto {
   @ApiPropertyOptional({ example: 'Abdullah Al-Harbi' })
