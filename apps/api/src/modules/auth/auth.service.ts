@@ -15,6 +15,7 @@ import { users } from '../../database/schema';
 import { UnifonicService } from './unifonic.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { randomInt } from 'node:crypto';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -116,7 +117,9 @@ export class AuthService {
   }
 
   private generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // crypto.randomInt uses the OS CSPRNG — unlike Math.random() it is
+    // cryptographically secure and suitable for OTP generation.
+    return randomInt(100_000, 1_000_000).toString();
   }
 }
 
