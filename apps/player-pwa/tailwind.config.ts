@@ -7,11 +7,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'brand-green': '#1B4332',
-        'brand-green-light': '#2D6A4F',
-        'brand-red': '#E63946',
-        'brand-black': '#111827',
-        'brand-bg': '#F9FAFB',
+        'brand-green': '#254132',
+        'brand-green-light': '#2d5c3e',
+        'brand-red': '#d4494c',
+        'brand-black': '#202124',
+        'brand-bg': '#f7f8f7',
         'brand-gray': '#6B7280',
         'brand-border': '#E5E7EB',
       },
