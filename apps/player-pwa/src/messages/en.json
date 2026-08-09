@@ -277,6 +277,21 @@
         "yesterday": "Yesterday",
         "joinChat": "Join Chat"
     },
+    "feed": {
+        "title": "Community Feed",
+        "loading": "Loading feed…",
+        "error": "Failed to load feed",
+        "errorDescription": "Couldn't load the latest activity. Try again.",
+        "retry": "Retry",
+        "empty": "No activity yet",
+        "emptyDescription": "Join a match or host one to see activity here!",
+        "hostMatch": "Host a Match",
+        "spotsLeft": "spots left",
+        "at": "at",
+        "nearby": "nearby",
+        "details": "Details",
+        "onlineIndicator": "online"
+    },
     "payment": {
         "title": "Checkout",
         "matchTitle": "Match",
