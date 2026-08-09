@@ -348,7 +348,8 @@
         "minutesAgo": "دقيقة مضت",
         "hoursAgo": "ساعة مضت",
         "yesterday": "أمس",
-        "joinChat": "انضم للمحادثة"
+        "joinChat": "انضم للمحادثة",
+        "openChat": "افتح المحادثة"
     },
     "feed": {
         "title": "آخر الأخبار",
@@ -398,5 +399,12 @@
         "emptyHistory": "لا يوجد سجل مباريات بعد",
         "emptyCta": "ابحث عن مباراة",
         "loading": "جارٍ تحميل مبارياتك..."
+    },
+    "chatSheet": {
+        "title": "محادثة المباراة",
+        "emptyTitle": "لا توجد رسائل بعد",
+        "emptyDescription": "ابدأ المحادثة!",
+        "sendPlaceholder": "اكتب رسالة...",
+        "comingSoon": "المحادثة قريباً"
     }
 }

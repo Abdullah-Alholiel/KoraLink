@@ -348,7 +348,8 @@
         "minutesAgo": "min ago",
         "hoursAgo": "hr ago",
         "yesterday": "Yesterday",
-        "joinChat": "Join Chat"
+        "joinChat": "Join Chat",
+        "openChat": "Open Chat"
     },
     "feed": {
         "title": "Community Feed",
@@ -398,5 +399,12 @@
         "emptyHistory": "No match history yet",
         "emptyCta": "Find a match",
         "loading": "Loading your matches..."
+    },
+    "chatSheet": {
+        "title": "Match Chat",
+        "emptyTitle": "No messages yet",
+        "emptyDescription": "Start the conversation!",
+        "sendPlaceholder": "Type a message...",
+        "comingSoon": "Chat coming soon"
     }
 }

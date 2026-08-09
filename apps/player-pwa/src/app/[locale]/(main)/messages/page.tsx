@@ -125,12 +125,21 @@ export default function MessagesPage() {
                                         by {match.organizer.name} • {match.format}
                                     </p>
                                 )}
-                                <Link
-                                    href={`/${locale}/match/${match.id}`}
-                                    className="mt-3 inline-flex items-center gap-1.5 bg-brand-green/10 text-brand-green text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
-                                >
-                                    {t('messages.joinChat')}
-                                </Link>
+                                {match.isJoined ? (
+                                    <Link
+                                        href={`/${locale}/match/${match.id}?chat=open`}
+                                        className="mt-3 inline-flex items-center gap-1.5 bg-brand-green/10 text-brand-green text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
+                                    >
+                                        {t('messages.openChat')}
+                                    </Link>
+                                ) : (
+                                    <Link
+                                        href={`/${locale}/match/${match.id}`}
+                                        className="mt-3 inline-flex items-center gap-1.5 bg-brand-green/10 text-brand-green text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
+                                    >
+                                        {t('messages.joinChat')}
+                                    </Link>
+                                )}
                             </div>
                         ))}
                     </div>

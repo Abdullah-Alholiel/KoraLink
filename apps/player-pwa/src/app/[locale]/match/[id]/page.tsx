@@ -18,7 +18,6 @@ import {
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch, useLeaveMatch, useCancelMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
-import { selectUser, useAppStore } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
@@ -27,6 +26,7 @@ import TeamLineupSheet from '@/components/matches/TeamLineupSheet';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
+import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import LocationMap from '@/components/matches/LocationMap';
 
@@ -47,18 +47,10 @@ export default function MatchDetailPage({
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
-    // Get current user from Zustand store (populated by auth/dev-login)
-    const storeUser = useAppStore(selectUser);
-    const currentUserId = storeUser?.id;
-
-    // Derived join state from match data — survives page refresh because
-    // GET /matches/:id returns the roster with user IDs.
-    const isJoined =
-        currentUserId && match
-            ? match.roster.some((p) => p.userId === currentUserId)
-            : false;
-    const isUserHost =
-        currentUserId && match ? match.hostId === currentUserId : false;
+    // Derived join state from match data — isJoined/isUserHost now set by
+    // adaptMatchDetail from the roster, populated consistently with MatchCard.
+    const isJoined = match?.isJoined ?? false;
+    const isUserHost = match?.isUserHost ?? false;
     const showJoin = !!match && !isJoined && !isUserHost && match.status === 'open';
 
     const [showPayment, setShowPayment] = useState(false);
@@ -66,6 +58,7 @@ export default function MatchDetailPage({
     const [showRules, setShowRules] = useState(false);
     const [showCancelSheet, setShowCancelSheet] = useState(false);
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
+    const [showChatSheet, setShowChatSheet] = useState(false);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -84,6 +77,15 @@ export default function MatchDetailPage({
             return () => el.removeEventListener('scroll', handleScroll);
         }
     }, [handleScroll]);
+
+    // Auto-open chat sheet when ?chat=open is in the URL
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('chat') === 'open' && isJoined) {
+            setShowChatSheet(true);
+        }
+    }, [isJoined]);
 
     // Parallax calculations
     const heroHeight = 288; // h-72 = 18rem = 288px
@@ -179,7 +181,7 @@ export default function MatchDetailPage({
                             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
-                            onClick={() => isJoined ? router.push(`/${locale}/messages`) : null}>
+                            onClick={() => isJoined ? setShowChatSheet(true) : null}>
                             {isJoined
                                 ? <MessageSquare className="w-5 h-5 text-white" strokeWidth={1.5} />
                                 : <Share2 className="w-5 h-5 text-white" strokeWidth={1.5} />
@@ -506,6 +508,16 @@ export default function MatchDetailPage({
                 onClose={() => setShowTeamSheet(false)}
                 format={match.format}
             />
+            )}
+
+            {/* Chat Sheet */}
+            {match && (
+                <ChatSheet
+                    isOpen={showChatSheet}
+                    onClose={() => setShowChatSheet(false)}
+                    matchId={match.id}
+                    matchTitle={match.title}
+                />
             )}
         </MobileFrame>
     );

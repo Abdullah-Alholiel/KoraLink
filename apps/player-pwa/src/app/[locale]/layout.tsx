@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import QueryProvider from '@/providers/QueryProvider';
+import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -79,6 +80,7 @@ export default async function RootLayout({
       <body className="overscroll-none">
         <QueryProvider>
           <NextIntlClientProvider messages={messages}>
+            <AuthBootstrap />
             <div className="app-shell">{children}</div>
           </NextIntlClientProvider>
         </QueryProvider>

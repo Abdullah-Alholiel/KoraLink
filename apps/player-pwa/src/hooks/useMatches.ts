@@ -85,9 +85,29 @@ export function useMatch(id: string) {
     queryKey: ['match', id],
     queryFn: async () => {
       const raw = await fetcher<MatchDetailApi>(`/matches/${id}`);
-      return adaptMatchDetail(raw);
+      // Read current user from Zustand for isJoined/isUserHost computation.
+      // Using getState() here because queryFn runs once per fetch — the
+      // AuthBootstrap component populates Zustand before any page renders,
+      // so the user is available at call time.
+      const { useAppStore } = await import('@/store/useAppStore');
+      const currentUserId = useAppStore.getState().user?.id;
+      return adaptMatchDetail(raw, currentUserId);
     },
     enabled: !!id,
+  });
+}
+
+// ─── Fetch Match Messages ─────────────────────────────
+
+export function useMatchMessages(matchId: string) {
+  return useQuery<import('@/lib/api-adapter').MatchMessageApi[], FetchError>({
+    queryKey: ['match', matchId, 'messages'],
+    queryFn: () =>
+      fetcher<import('@/lib/api-adapter').MatchMessageApi[]>(
+        `/matches/${matchId}/messages`,
+      ),
+    enabled: !!matchId,
+    staleTime: 15_000,
   });
 }
 

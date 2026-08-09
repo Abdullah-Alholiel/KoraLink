@@ -265,8 +265,11 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
   };
 }
 
-/** Adapts a MatchDetailApi response → frontend Match (full detail) */
-export function adaptMatchDetail(detail: MatchDetailApi): Match {
+/** Adapts a MatchDetailApi response → frontend Match (full detail). */
+export function adaptMatchDetail(
+  detail: MatchDetailApi,
+  currentUserId?: string,
+): Match {
   const scheduled = new Date(detail.scheduled_at);
   const duration = detail.duration_mins ?? 60;
   const venue = detail.pitch?.venue;
@@ -297,6 +300,12 @@ export function adaptMatchDetail(detail: MatchDetailApi): Match {
     rules: [],
     roster: buildRoster(players),
     comments: buildComments(messages),
+    isJoined: currentUserId
+      ? players.some((p) => p.user.id === currentUserId)
+      : false,
+    isUserHost: currentUserId
+      ? detail.host_id === currentUserId
+      : false,
   };
 }
 
