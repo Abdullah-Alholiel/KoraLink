@@ -109,7 +109,7 @@ export function useCompleteProfile() {
         body: JSON.stringify({
           full_name: data.fullName,
           handle: data.fullName.toLowerCase().replace(/\s+/g, '_'),
-          skill_level: data.skillLevel,
+          skill_level: data.skillLevel.charAt(0).toUpperCase() + data.skillLevel.slice(1),
           preferred_location: data.preferredLocation,
           preferred_position: data.preferredPosition,
         }),

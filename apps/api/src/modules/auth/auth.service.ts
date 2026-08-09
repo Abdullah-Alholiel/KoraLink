@@ -117,11 +117,31 @@ export class AuthService {
   }
 
   private generateOtp(): string {
-    // crypto.randomInt uses the OS CSPRNG — unlike Math.random() it is
-    // cryptographically secure and suitable for OTP generation.
-    return randomInt(100_000, 1_000_000).toString();
-  }
-}
+   // crypto.randomInt uses the OS CSPRNG — unlike Math.random() it is
+   // cryptographically secure and suitable for OTP generation.
+   return randomInt(100_000, 1_000_000).toString();
+ }
+
+ /**
+  * DEV ONLY — Returns a JWT for a seeded user by phone number.
+  * Skips OTP entirely. Blocked in production by the controller.
+  */
+ async devLogin(phone: string): Promise<string> {
+   const [user] = await this.db
+     .select({ id: users.id, phone: users.phone })
+     .from(users)
+     .where(eq(users.phone, phone))
+     .limit(1);
+
+   if (!user) {
+     throw new NotFoundException(
+       `No user found with phone ${phone}. Seed the database first.`,
+     );
+   }
+
+   return this.jwt.signAsync({ sub: user.id });
+ }
+ }
 
 // Ephemeral in-memory OTP store — swap for Redis in production.
 const otpStore = new Map<string, { code: string; expiresAt: Date }>();

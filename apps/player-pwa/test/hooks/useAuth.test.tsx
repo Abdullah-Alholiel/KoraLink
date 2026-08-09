@@ -130,7 +130,7 @@ describe('useAuth hooks', () => {
         body: JSON.stringify({
           full_name: 'Ahmed Al-Rashid',
           handle: 'ahmed_al-rashid',
-          skill_level: 'intermediate',
+          skill_level: 'Intermediate',
           preferred_location: 'Riyadh',
           preferred_position: 'Forward',
         }),

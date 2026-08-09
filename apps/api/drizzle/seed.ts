@@ -50,7 +50,7 @@ async function seed() {
     .insert(schema.users)
     .values([
       {
-        phone: '+966512340001',
+        phone: '+966500000001',
         full_name: 'Ahmed Al-Rashid',
         handle: 'ahmed_r',
         preferred_position: 'Forward',
@@ -61,7 +61,7 @@ async function seed() {
         rating: 4.5,
       },
       {
-        phone: '+966512340002',
+        phone: '+966500000002',
         full_name: 'Khalid Al-Otaibi',
         handle: 'khalid_o',
         preferred_position: 'Midfielder',
@@ -72,7 +72,7 @@ async function seed() {
         rating: 4.0,
       },
       {
-        phone: '+966512340003',
+        phone: '+966500000003',
         full_name: 'Faisal Al-Harbi',
         handle: 'faisal_h',
         preferred_position: 'Defender',
@@ -83,7 +83,7 @@ async function seed() {
         rating: 4.8,
       },
       {
-        phone: '+966512340004',
+        phone: '+966500000004',
         full_name: 'Omar Al-Shahrani',
         handle: 'omar_s',
         preferred_position: 'Goalkeeper',
@@ -94,7 +94,7 @@ async function seed() {
         rating: 3.5,
       },
       {
-        phone: '+966512340005',
+        phone: '+966500000005',
         full_name: 'Yousef Al-Qahtani',
         handle: 'yousef_q',
         preferred_position: 'Midfielder',

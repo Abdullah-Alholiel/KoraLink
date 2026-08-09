@@ -7,6 +7,7 @@ import {
   HttpStatus,
   UseGuards,
   Patch,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -92,5 +93,35 @@ export class AuthController {
     @Body() dto: CompleteProfileDto,
   ) {
     return this.authService.completeProfile(user.sub, dto);
+  }
+
+  // ── POST /auth/dev-login — DEV ONLY — bypass SMS OTP ─────────────────────
+  @Post('dev-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      '[DEV ONLY] Login as a seeded user by phone. Sets auth cookie directly.',
+  })
+  async devLogin(
+    @Body('phone') phone: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const isProd =
+      this.configService.get<string>('NODE_ENV') === 'production';
+    if (isProd) {
+      throw new ForbiddenException('dev-login is disabled in production');
+    }
+
+    const token = await this.authService.devLogin(phone);
+
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: SEVEN_DAYS_MS,
+      path: '/',
+    });
+
+    return { message: 'Dev login successful.', token };
   }
 }

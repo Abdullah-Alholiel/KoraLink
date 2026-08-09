@@ -66,9 +66,10 @@ export function useMatchChat(matchId: string | null) {
   useEffect(() => {
     if (!matchId) return;
 
-    const socket: Socket = io(env.NEXT_PUBLIC_API_URL ?? '', {
+    const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
       path: '/socket.io',
       transports: ['websocket'],
+      withCredentials: true,
     });
 
     socket.on('connect', () => {
@@ -97,9 +98,10 @@ export function useMatchChat(matchId: string | null) {
     mutationFn: async ({ content }) => {
       // Emit via the gateway — it persists the message and broadcasts
       // `new-message` to the room, which our socket listener appends.
-      const socket: Socket = io(env.NEXT_PUBLIC_API_URL ?? '', {
+      const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
         path: '/socket.io',
         transports: ['websocket'],
+        withCredentials: true,
       });
       await new Promise<void>((resolve) => socket.on('connect', () => resolve()));
       socket.emit('send-message', { matchId, content });
