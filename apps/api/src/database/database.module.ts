@@ -1,8 +1,10 @@
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import postgres from 'postgres';
+import * as pg from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from './schema';
+
+const postgres = (pg as any).default ?? pg;
 
 @Global()
 @Module({

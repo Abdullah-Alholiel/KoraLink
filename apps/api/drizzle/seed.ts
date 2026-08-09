@@ -9,10 +9,12 @@
  *   sample transactions, and chat messages.
  */
 
-import postgres from 'postgres';
+import * as pg from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import * as schema from '../src/database/schema';
+
+const postgres = (pg as any).default ?? pg;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
