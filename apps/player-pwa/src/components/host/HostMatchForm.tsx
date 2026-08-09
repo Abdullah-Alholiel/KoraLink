@@ -426,9 +426,7 @@ export default function HostMatchForm() {
 
                 {createMatch.isError && (
                     <p className="text-xs text-brand-red mt-2 text-center">
-                        {createMatch.error instanceof Error
-                            ? createMatch.error.message
-                            : 'Failed to create match. Please try again.'}
+                        {t('host.createError')}
                     </p>
                 )}
             </div>
@@ -444,7 +442,7 @@ export default function HostMatchForm() {
                             <div className="w-10 h-1 rounded-full bg-gray-300" />
                         </div>
                         <div className="px-5 pb-6">
-                            <h2 className="text-lg font-bold text-brand-black mb-4">Select a Venue</h2>
+                            <h2 className="text-lg font-bold text-brand-black mb-4">{t('host.selectVenueTitle')}</h2>
 
                             {/* Search */}
                             <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors mb-4">
@@ -453,7 +451,7 @@ export default function HostMatchForm() {
                                     type="text"
                                     value={venueSearch}
                                     onChange={(e) => setVenueSearch(e.target.value)}
-                                    placeholder="Search by city..."
+                                    placeholder={t('host.searchByCity')}
                                     className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                                 />
                             </div>
@@ -480,7 +478,7 @@ export default function HostMatchForm() {
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <p className="text-sm font-bold text-brand-black">{venue.name}</p>
-                                                    <p className="text-xs text-gray-500">{venue.city} • {venue.pitch_count} pitches</p>
+                                                    <p className="text-xs text-gray-500">{venue.city} • {venue.pitch_count} {t('clubs.pitches')}</p>
                                                 </div>
                                                 <div className="text-end">
                                                     <span className="text-xs font-bold text-brand-green">
@@ -493,7 +491,9 @@ export default function HostMatchForm() {
                                 </div>
                             ) : (
                                 <div className="text-center py-8">
-                                    <p className="text-sm text-gray-400">No venues found{venueSearch ? ` in "${venueSearch}"` : ''}</p>
+                                    <p className="text-sm text-gray-400">
+                                        {venueSearch ? t('host.noVenuesFoundIn', { city: venueSearch }) : t('host.noVenuesFound')}
+                                    </p>
                                 </div>
                             )}
                         </div>

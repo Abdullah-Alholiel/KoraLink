@@ -56,3 +56,25 @@ export function useTopupWallet() {
     },
   });
 }
+
+// ─── Pay from Wallet ──────────────────────────────
+
+export function usePayWallet() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { ledgerEntry: unknown; wallet_balance: string },
+    FetchError,
+    { amount: number; idempotencyKey: string; referenceId?: string }
+  >({
+    mutationFn: (data) =>
+      fetcher('/wallet/pay', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
+    },
+  });
+}

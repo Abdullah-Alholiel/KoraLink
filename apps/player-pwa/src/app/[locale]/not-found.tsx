@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
 
 const i18n = {
   ar: {
@@ -14,12 +13,10 @@ const i18n = {
   },
 } as const;
 
-export default async function NotFound() {
-  const headersList = await headers();
-  const referer = headersList.get('referer') ?? '';
-  // Detect locale from the referer URL or default to 'en'
-  const localeMatch = referer.match(/\/(\w{2})\//);
-  const locale = (localeMatch?.[1] === 'ar' ? 'ar' : 'en') as keyof typeof i18n;
+export default function NotFound() {
+  // Default to 'ar' (the app default) — locale detection from referrer
+  // is unreliable. The middleware handles locale routing for valid paths.
+  const locale: keyof typeof i18n = 'ar';
   const t = i18n[locale];
 
   return (

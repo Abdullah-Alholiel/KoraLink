@@ -66,4 +66,22 @@ export class WalletController {
       idempotencyKey: dto.idempotencyKey,
     });
   }
+
+  // ── POST /wallet/pay ─────────────────────────────────────────
+  @Post('pay')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Pay for a match from wallet balance' })
+  @ApiCreatedResponse({ description: 'Payment recorded successfully.' })
+  async pay(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: TopupWalletDto,
+  ) {
+    return this.walletService.recordTransaction(user.sub, {
+      type: 'DEBIT',
+      amount: dto.amount,
+      referenceType: 'MATCH_FEE',
+      referenceId: dto.referenceId,
+      idempotencyKey: dto.idempotencyKey,
+    });
+  }
 }

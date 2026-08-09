@@ -431,6 +431,7 @@ export default function MatchDetailPage({
                 matchTitle={`${match.format} ${match.intensity}`}
                 matchTime={`${match.date}, ${match.time}`}
                 matchLocation={match.venueName}
+                matchId={match.id}
                 price={match.price}
                 walletBalance={walletBalance}
             />
