@@ -1,7 +1,8 @@
 services:
   # ── PostgreSQL 16 + PostGIS ───────────────────────────────────────────────
   postgres:
-    image: imresamu/postgis:16-3.5
+    image: postgis/postgis:16-3.5
+    platform: linux/amd64
     container_name: koralink-postgres
     restart: unless-stopped
     environment:
@@ -36,9 +37,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       COOKIE_SECRET: ${COOKIE_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       PLAYER_URL: http://localhost:3000
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ── Redis (for Bull queues + cache) ──────────────────────────────────────
