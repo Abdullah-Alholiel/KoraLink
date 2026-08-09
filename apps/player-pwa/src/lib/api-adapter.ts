@@ -156,9 +156,9 @@ function mapMatchStatus(status: string): Match['status'] {
   const s = status.toLowerCase();
   if (s === 'open') return 'open';
   if (s === 'full') return 'full';
-  if (s === 'inprogress') return 'closing_soon';
+  if (s === 'inprogress') return 'in_progress';
   if (s === 'cancelled') return 'cancelled';
-  if (s === 'completed') return 'open'; // already played
+  if (s === 'completed') return 'completed';
   return 'open';
 }
 

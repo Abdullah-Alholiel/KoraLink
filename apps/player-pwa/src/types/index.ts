@@ -40,7 +40,7 @@ export interface Match {
     currency: string;
     totalSpots: number;
     filledSpots: number;
-    status: 'open' | 'closing_soon' | 'full' | 'cancelled';
+    status: 'open' | 'closing_soon' | 'full' | 'cancelled' | 'in_progress' | 'completed';
     imageUrl?: string;
     rules?: string[];
     roster: RosterPlayer[];
