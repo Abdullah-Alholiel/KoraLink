@@ -13,16 +13,17 @@ interface MatchesResponse {
   hasMore: boolean;
 }
 
-// ─── Zod Schema ──────────────────────────────────────
+// ─── Zod Schema (matches backend CreateMatchDto) ──────
 
 export const hostMatchSchema = z.object({
-  venueId: z.string().min(1, 'Venue is required'),
-  format: z.enum(['5v5', '6v6', '7v7', '8v8', '9v9']),
-  date: z.string().min(1, 'Date is required'),
-  time: z.string().min(1, 'Time is required'),
-  isPublic: z.boolean().default(true),
-  bookingMode: z.enum(['koralink', 'self']).default('self'),
-  price: z.number().min(0).default(0),
+  pitch_id: z.string().min(1, 'Venue / pitch is required'),
+  title: z.string().min(3, 'Title must be at least 3 characters').max(255),
+  match_type: z.enum(['Casual', 'Competitive']),
+  gender_rule: z.enum(['Men Only', 'Women Only', 'Mixed']),
+  scheduled_at: z.string().min(1, 'Date and time are required'),
+  duration_mins: z.number().int().min(30).max(180).default(60),
+  max_players: z.number().int().min(2).max(22).default(14),
+  pitchCostSar: z.number().min(0).default(0),
 });
 
 export type HostMatchInput = z.infer<typeof hostMatchSchema>;

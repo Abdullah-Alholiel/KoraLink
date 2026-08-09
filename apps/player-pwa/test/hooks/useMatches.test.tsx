@@ -131,13 +131,14 @@ describe('useMatches hooks', () => {
       const { result } = renderHook(() => useCreateMatch(), { wrapper });
 
       const payload = {
-        venueId: 'venue-1',
-        format: '7v7',
-        date: '2026-08-10',
-        time: '18:00',
-        isPublic: true,
-        bookingMode: 'self' as const,
-        price: 37,
+        pitch_id: 'venue-1',
+        title: '7v7 Match',
+        match_type: 'Casual' as const,
+        gender_rule: 'Men Only' as const,
+        scheduled_at: '2026-08-10T18:00:00.000Z',
+        duration_mins: 60,
+        max_players: 14,
+        pitchCostSar: 37,
       };
 
       await waitFor(() => {
@@ -163,13 +164,14 @@ describe('useMatches hooks', () => {
 
       await waitFor(() => {
         result.current.mutate({
-          venueId: 'venue-1',
-          format: '5v5',
-          date: '2026-08-10',
-          time: '18:00',
-          isPublic: true,
-          bookingMode: 'self',
-          price: 30,
+          pitch_id: 'venue-1',
+          title: '5v5 Match',
+          match_type: 'Casual' as const,
+          gender_rule: 'Men Only' as const,
+          scheduled_at: '2026-08-10T18:00:00.000Z',
+          duration_mins: 60,
+          max_players: 10,
+          pitchCostSar: 30,
         });
       });
 

@@ -257,7 +257,8 @@
         "surface": "Surface",
         "location": "Location",
         "openNow": "Open Now",
-        "closed": "Closed"
+        "closed": "Closed",
+        "pitches": "pitches"
     },
     "messages": {
         "title": "Messages",
@@ -273,7 +274,8 @@
         "justNow": "just now",
         "minutesAgo": "min ago",
         "hoursAgo": "hr ago",
-        "yesterday": "Yesterday"
+        "yesterday": "Yesterday",
+        "joinChat": "Join Chat"
     },
     "payment": {
         "title": "Checkout",

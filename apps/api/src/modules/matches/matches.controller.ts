@@ -16,6 +16,7 @@ import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
+  ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
@@ -55,7 +56,7 @@ export class MatchesController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Host a new match' })
-  @ApiOkResponse({ description: 'Match created successfully.' })
+  @ApiCreatedResponse({ description: 'Match created successfully.' })
   createMatch(
     @CurrentUser() user: { sub: string },
     @Body() dto: CreateMatchDto,
@@ -83,5 +84,13 @@ export class MatchesController {
     @Param('id') id: string,
   ) {
     return this.matchesService.leaveMatch(user.sub, id);
+  }
+
+  // ── GET /matches/:id/messages — Match chat history ────────────────────
+  @Get(':id/messages')
+  @ApiOperation({ summary: 'Get match chat message history' })
+  @ApiOkResponse({ description: 'Paginated chat messages for a match.' })
+  getMessages(@Param('id') id: string) {
+    return this.matchesService.getMessages(id);
   }
 }

@@ -44,17 +44,23 @@ export default function HostMatchForm() {
     const handlePublish = () => {
         if (!date || !time) return;
 
-        createMatch.mutate(
-            {
-                venueId: 'demo-venue-001', // Will come from venue picker in production
-                format,
-                date,
-                time,
-                isPublic,
-                bookingMode,
-                price: playerShare,
-            },
-            {
+        // Map form UI state → backend CreateMatchDto fields
+        const playersPerTeam = parseInt(format.charAt(0));
+        const maxPlayers = playersPerTeam * 2;
+        const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+
+        const payload = {
+            pitch_id: 'demo-venue-001', // TODO: venue picker integration
+            title: `${format} Match`,   // TODO: user-editable title field
+            match_type: 'Casual' as const,       // TODO: match_type selector
+            gender_rule: 'Men Only' as const,     // TODO: gender_rule selector
+            scheduled_at: scheduledAt,
+            duration_mins: 60,           // TODO: duration picker
+            max_players: maxPlayers,
+            pitchCostSar: playerShare,
+        };
+
+        createMatch.mutate(payload, {
                 onSuccess: () => {
                     // Navigate back to play page after successful creation
                     router.push('/ar/play');

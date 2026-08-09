@@ -7,8 +7,9 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches } from '../../database/schema';
+import { matches, match_messages } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
+import { withTimestamp } from '../../common/utils/timestamp';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -265,7 +266,7 @@ export class MatchesService {
       if (count + 1 >= match.max_players) {
         await tx
           .update(matches)
-          .set({ status: 'Full' })
+          .set(withTimestamp({ status: 'Full' }))
           .where(eq(matches.id, matchId));
       }
 
@@ -318,7 +319,7 @@ export class MatchesService {
       if (match?.status === 'Full') {
         await tx
           .update(matches)
-          .set({ status: 'Open' })
+          .set(withTimestamp({ status: 'Open' }))
           .where(eq(matches.id, matchId));
       }
 
@@ -387,5 +388,34 @@ export class MatchesService {
 
       return match;
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Match chat history (REST complement to the WebSocket gateway)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns recent chat messages for a match, newest last.
+   * Complements the gateway's real-time `new-message` events with history
+   * for initial render and offline caching.
+   */
+  async getMessages(matchId: string) {
+    const messages = await this.db.query.match_messages.findMany({
+      where: eq(match_messages.match_id, matchId),
+      orderBy: (msg, { asc }) => [asc(msg.created_at)],
+      limit: 50,
+      with: {
+        user: {
+          columns: {
+            id: true,
+            full_name: true,
+            handle: true,
+            avatar_url: true,
+          },
+        },
+      },
+    });
+
+    return messages;
   }
 }

@@ -257,7 +257,8 @@
         "surface": "السطح",
         "location": "الموقع",
         "openNow": "مفتوح الآن",
-        "closed": "مغلق"
+        "closed": "مغلق",
+        "pitches": "ملاعب"
     },
     "messages": {
         "title": "الرسائل",
@@ -273,7 +274,8 @@
         "justNow": "الآن",
         "minutesAgo": "دقيقة مضت",
         "hoursAgo": "ساعة مضت",
-        "yesterday": "أمس"
+        "yesterday": "أمس",
+        "joinChat": "انضم للمحادثة"
     },
     "payment": {
         "title": "الدفع",
