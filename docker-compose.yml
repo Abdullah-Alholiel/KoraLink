@@ -1,8 +1,7 @@
 services:
   # ── PostgreSQL 16 + PostGIS ───────────────────────────────────────────────
   postgres:
-    image: postgis/postgis:16-3.5
-    platform: linux/amd64
+    image: imresamu/postgis:16-3.5
     container_name: koralink-postgres
     restart: unless-stopped
     environment:
@@ -14,12 +13,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./apps/api/drizzle/gist_indexes.sql:/docker-entrypoint-initdb.d/01_gist_indexes.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U koralink -d koralink"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # ── NestJS API Service ────────────────────────────────────────────────────
   api:
