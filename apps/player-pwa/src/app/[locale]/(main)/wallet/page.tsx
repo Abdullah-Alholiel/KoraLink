@@ -14,7 +14,7 @@ import {
     FileText,
     AlertTriangle,
 } from 'lucide-react';
-import { useWalletBalance, useWalletHistory } from '@/hooks/useWallet';
+import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -73,6 +73,18 @@ export default function WalletPage() {
         refetch,
     } = useWalletHistory();
 
+    const topup = useTopupWallet();
+
+    const handleTopUp = () => {
+      const amount = prompt('Amount to top up (SAR):');
+      if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
+        topup.mutate({
+          amount: Number(amount),
+          idempotencyKey: `topup-${Date.now()}`,
+        });
+      }
+    };
+
     // Use API data only; fall back to sensible defaults when loading/error
     const balance = balanceData?.balance ?? 0;
     const transactions: Transaction[] = historyData?.transactions ?? [];
@@ -123,11 +135,16 @@ export default function WalletPage() {
             {/* ── Action Buttons ───────────────────── */}
             <div className="flex justify-center gap-8 mt-6 px-4">
                 {[
-                    { icon: Plus, label: t('wallet.topUp'), active: true },
-                    { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false },
-                    { icon: CreditCard, label: t('wallet.cards'), active: false },
+                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => handleTopUp() },
+                    { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => {} },
+                    { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => {} },
                 ].map((action) => (
-                    <button key={action.label} className="flex flex-col items-center gap-2">
+                    <button
+                        key={action.label}
+                        onClick={action.onClick}
+                        disabled={!action.active}
+                        className="flex flex-col items-center gap-2 disabled:opacity-50"
+                    >
                         <div
                             className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform ${
                                 action.active

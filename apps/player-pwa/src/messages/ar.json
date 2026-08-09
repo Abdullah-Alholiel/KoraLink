@@ -163,8 +163,8 @@
     "host": {
         "title": "استضف مباراة",
         "subtitle": "أنشئ مباراة جديدة وادعُ اللاعبين.",
-        "venueName": "اسم الم venue",
-        "venueNamePlaceholder": "اختر م venue",
+        "venueName": "اسم الملعب",
+        "venueNamePlaceholder": "اختر الملعب",
         "location": "الموقع",
         "locationPlaceholder": "أدخل الموقع",
         "format": "الصيغة",

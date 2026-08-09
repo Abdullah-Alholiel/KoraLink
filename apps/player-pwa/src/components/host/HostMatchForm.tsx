@@ -21,7 +21,7 @@ import { useCreateMatch } from '@/hooks/useMatches';
 import { useVenues, useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
 
 /* ── Format options ─────────────────────────────── */
-const FORMAT_OPTIONS = ['5v5', '6v6', '7v7', '8v8', '9v9'] as const;
+const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
 type Format = (typeof FORMAT_OPTIONS)[number];
 
 /* ── Booking mode ───────────────────────────────── */

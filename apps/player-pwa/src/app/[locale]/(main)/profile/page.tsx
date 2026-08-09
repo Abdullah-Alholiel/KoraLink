@@ -15,8 +15,9 @@ import {
     ChevronRight,
     Camera,
 } from 'lucide-react';
-import { selectUser, selectBalance, selectIsAuth, useAppStore } from '@/store/useAppStore';
+import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats } from '@/hooks/useUser';
+import { useWalletBalance } from '@/hooks/useWallet';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -74,15 +75,15 @@ export default function ProfilePage() {
 
     // ── User data from Zustand store (populated by auth flow) ──
     const user = useAppStore(selectUser);
-    const walletBalance = useAppStore(selectBalance);
     const isAuthenticated = useAppStore(selectIsAuth);
     const logout = useAppStore((s) => s.logout);
 
-    // ── Real stats from API ──
+    // ── Real data from API ──
     const { data: stats } = useUserStats();
+    const { data: walletData } = useWalletBalance();
 
-    // Use store balance or 0 (API data flows through the store)
-    const displayBalance = walletBalance ?? 0;
+    // Live balance from API, fall back to store if API hasn't loaded
+    const displayBalance = walletData?.balance ?? 0;
 
     // Use store user data, fall back to a placeholder if not yet authenticated
     const fullName = user?.fullName ?? t('profile.guestName');
