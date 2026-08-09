@@ -36,6 +36,7 @@ export interface NearbyMatchApi {
 export interface MatchDetailApi {
   id: string;
   title: string;
+  host_id: string;
   match_type: string;
   gender_rule: string;
   status: string;
@@ -206,6 +207,7 @@ function buildOrganizer(host: MatchHostApi): OrganizerInfo {
 function buildRoster(players: MatchPlayerApi[]): RosterPlayer[] {
   return players.map((p) => ({
     id: p.user.id,
+    userId: p.user.id,
     name: p.user.full_name ?? 'Player',
     avatarUrl: p.user.avatar_url ?? '',
   }));
@@ -270,6 +272,7 @@ export function adaptMatchDetail(detail: MatchDetailApi): Match {
   return {
     id: detail.id,
     title: detail.title,
+    hostId: detail.host_id,
     organizer: buildOrganizer(detail.host),
     date: scheduled.toISOString().split('T')[0],
     time: fmtTime(scheduled),

@@ -23,6 +23,7 @@ export interface OrganizerInfo {
 export interface Match {
     id: string;
     title: string;
+    hostId: string;
     organizer: OrganizerInfo;
     date: string; // ISO date
     time: string; // e.g. "11:00 PM"
@@ -49,6 +50,7 @@ export interface Match {
 
 export interface RosterPlayer {
     id: string;
+    userId: string;
     name: string;
     avatarUrl: string;
 }
