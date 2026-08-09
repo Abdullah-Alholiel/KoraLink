@@ -43,7 +43,11 @@ export function useMatches(filters?: {
   format?: string | null;
   maxPrice?: number | null;
 }) {
-  return useQuery<{ matches: Match[] }, FetchError>({
+  return useQuery<{
+    matches: Match[];
+    total?: number;
+    hasMore?: boolean;
+  }, FetchError>({
     queryKey: ['matches', filters],
     queryFn: async () => {
       const params: Record<string, string> = {};
@@ -68,7 +72,8 @@ export function useMatches(filters?: {
         rows = [];
       }
 
-      return { matches: adaptMatchList(rows) };
+      const { total, hasMore } = !Array.isArray(raw) ? raw : {};
+      return { matches: adaptMatchList(rows), total, hasMore };
     },
   });
 }
