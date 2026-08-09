@@ -96,6 +96,7 @@ export class MatchesController {
 
   // ── POST /matches/:id/start — Start a match (host only) ────────────────
   @Post(':id/start')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Start the match (Full → InProgress). Host only.' })
   @ApiOkResponse({ description: 'Match started successfully.' })
   startMatch(
@@ -107,6 +108,7 @@ export class MatchesController {
 
   // ── POST /matches/:id/complete — Complete a match (host only) ──────────
   @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Complete the match (InProgress → Completed). Host only.' })
   @ApiOkResponse({ description: 'Match completed successfully.' })
   completeMatch(
@@ -118,6 +120,7 @@ export class MatchesController {
 
   // ── POST /matches/:id/cancel — Cancel a match (host only) ──────────────
   @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel the match (Open/Full → Cancelled). Host only.' })
   @ApiOkResponse({ description: 'Match cancelled successfully.' })
   cancelMatch(
