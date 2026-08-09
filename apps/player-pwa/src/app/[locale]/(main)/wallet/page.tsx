@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -13,6 +14,7 @@ import {
     ShoppingBag,
     FileText,
     AlertTriangle,
+    X,
 } from 'lucide-react';
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import type { Transaction } from '@/types';
@@ -59,6 +61,11 @@ export default function WalletPage() {
     const router = useRouter();
     const t = useTranslations();
 
+    // ── Top-up modal state ──
+    const [showTopUpModal, setShowTopUpModal] = useState(false);
+    const [topUpAmount, setTopUpAmount] = useState('');
+    const [topUpError, setTopUpError] = useState('');
+
     // ── Data fetching via React Query ──
     const {
         data: balanceData,
@@ -75,14 +82,32 @@ export default function WalletPage() {
 
     const topup = useTopupWallet();
 
-    const handleTopUp = () => {
-      const amount = prompt('Amount to top up (SAR):');
-      if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
-        topup.mutate({
-          amount: Number(amount),
-          idempotencyKey: `topup-${Date.now()}`,
-        });
-      }
+    const handleTopUpSubmit = () => {
+        setTopUpError('');
+        const amount = Number(topUpAmount);
+        if (!topUpAmount || isNaN(amount) || amount <= 0) {
+            setTopUpError(t('wallet.invalidAmount'));
+            return;
+        }
+        if (amount < 10) {
+            setTopUpError(t('wallet.minTopUp'));
+            return;
+        }
+        topup.mutate(
+            {
+                amount,
+                idempotencyKey: `topup-${Date.now()}`,
+            },
+            {
+                onSuccess: () => {
+                    setShowTopUpModal(false);
+                    setTopUpAmount('');
+                },
+                onError: () => {
+                    setTopUpError(t('common.error'));
+                },
+            }
+        );
     };
 
     // Use API data only; fall back to sensible defaults when loading/error
@@ -135,7 +160,7 @@ export default function WalletPage() {
             {/* ── Action Buttons ───────────────────── */}
             <div className="flex justify-center gap-8 mt-6 px-4">
                 {[
-                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => handleTopUp() },
+                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopUpModal(true) },
                     { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => {} },
                     { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => {} },
                 ].map((action) => (
@@ -275,6 +300,61 @@ export default function WalletPage() {
                     </>
                 )}
             </div>
+            {/* ══════════════════════════════════════
+                TOP-UP MODAL
+            ═══════════════════════════════════ */}
+            {showTopUpModal && (
+                <>
+                    <div className="fixed inset-0 bg-black/50 z-50" onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }} />
+                    <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 animate-slide-up">
+                        <div className="flex justify-center pt-3 pb-2">
+                            <div className="w-10 h-1 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="px-5 pb-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-brand-black">{t('wallet.topUp')}</h2>
+                                <button
+                                    onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                                >
+                                    <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
+                                </button>
+                            </div>
+
+                            <p className="text-xs text-gray-400 mb-3">{t('wallet.topUpAmount')}</p>
+                            <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-gray-100 px-4 py-3.5 mb-3 focus-within:border-brand-green transition-colors">
+                                <span className="text-sm font-bold text-gray-500" dir="ltr">SAR</span>
+                                <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    value={topUpAmount}
+                                    onChange={(e) => setTopUpAmount(e.target.value)}
+                                    placeholder="0"
+                                    className="flex-1 text-lg font-bold text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <p className="text-xs text-gray-400 mb-4">{t('wallet.minTopUp')}</p>
+
+                            {topUpError && (
+                                <p className="text-sm text-brand-red mb-3 text-center">{topUpError}</p>
+                            )}
+
+                            <button
+                                onClick={handleTopUpSubmit}
+                                disabled={topup.isPending || !topUpAmount}
+                                className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
+                                    shadow-[0_4px_20px_rgba(37,65,50,0.4)]
+                                    active:scale-[0.98] transition-transform
+                                    disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
+                            >
+                                {topup.isPending ? t('payment.processing') : t('wallet.topUp')}
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

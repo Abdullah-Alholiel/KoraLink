@@ -7,13 +7,21 @@ import { useTranslations } from 'next-intl';
 import { Search, MapPin, Star, ChevronRight } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
 
-const filters = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'];
+const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
+type FilterKey = (typeof FILTER_KEYS)[number];
+
+const FILTER_LABEL_MAP: Record<FilterKey, string> = {
+    Nearby: 'clubs.filters.nearby',
+    'Top Rated': 'clubs.filters.topRated',
+    Indoor: 'clubs.filters.indoor',
+    'Available Now': 'clubs.filters.availableNow',
+};
 
 export default function ClubsPage() {
     const t = useTranslations();
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
-    const [activeFilter, setActiveFilter] = useState('Nearby');
+    const [activeFilter, setActiveFilter] = useState<FilterKey>('Nearby');
     const [searchQuery, setSearchQuery] = useState('');
 
     // ── Data fetching via React Query ──
@@ -66,7 +74,7 @@ export default function ClubsPage() {
 
             {/* ── Filter Pills ──────────────────────── */}
             <div className="flex gap-2 px-4 pb-4 overflow-x-auto scroll-container">
-                {filters.map((filter) => (
+                {FILTER_KEYS.map((filter) => (
                     <button
                         key={filter}
                         onClick={() => setActiveFilter(filter)}
@@ -78,7 +86,7 @@ export default function ClubsPage() {
                             }
             `}
                     >
-                        {filter}
+                        {t(FILTER_LABEL_MAP[filter])}
                     </button>
                 ))}
             </div>

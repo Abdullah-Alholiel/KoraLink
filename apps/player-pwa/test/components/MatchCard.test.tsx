@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Match } from '@/types';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '@/messages/en.json';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -19,6 +21,15 @@ vi.mock('next/link', () => ({
 
 // Import after mocks are set up
 import MatchCard from '@/components/matches/MatchCard';
+
+// Wrapper with NextIntlClientProvider for i18n
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider messages={enMessages} locale="en">
+      {ui}
+    </NextIntlClientProvider>
+  );
+}
 
 const baseMatch: Match = {
   id: 'match-1',
@@ -59,53 +70,53 @@ const baseMatch: Match = {
 
 describe('MatchCard', () => {
   it('renders match title', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('Friday Night Kickoff')).toBeInTheDocument();
   });
 
   it('renders organizer name and handle', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('@khalidfc')).toBeInTheDocument();
   });
 
   it('renders price with SAR', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('SAR 37')).toBeInTheDocument();
   });
 
   it('renders spot count', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('8/14 spots')).toBeInTheDocument();
   });
 
   it('renders location', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('Riyadh')).toBeInTheDocument();
   });
 
   it('renders format and surface', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('7v7 (Grass)')).toBeInTheDocument();
   });
 
   it('renders Book Spot link with correct locale path', () => {
-    render(<MatchCard match={baseMatch} />);
-    const link = screen.getByRole('link', { name: /book spot/i });
+    renderWithProviders(<MatchCard match={baseMatch} />);
+    const link = screen.getByRole('link', { name: /join match/i });
     expect(link).toHaveAttribute('href', '/ar/match/match-1');
   });
 
   it('shows CLOSING SOON badge when status is closing_soon', () => {
-    render(<MatchCard match={{ ...baseMatch, status: 'closing_soon' }} />);
+    renderWithProviders(<MatchCard match={{ ...baseMatch, status: 'closing_soon' }} />);
     expect(screen.getByText('CLOSING SOON')).toBeInTheDocument();
   });
 
   it('shows 1 SPOT LEFT when only 1 spot remaining', () => {
-    render(<MatchCard match={{ ...baseMatch, filledSpots: 13, totalSpots: 14 }} />);
+    renderWithProviders(<MatchCard match={{ ...baseMatch, filledSpots: 13, totalSpots: 14 }} />);
     expect(screen.getByText('1 SPOT LEFT')).toBeInTheDocument();
   });
 
   it('renders organizer avatar initial', () => {
-    render(<MatchCard match={baseMatch} />);
+    renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('K')).toBeInTheDocument();
   });
 });

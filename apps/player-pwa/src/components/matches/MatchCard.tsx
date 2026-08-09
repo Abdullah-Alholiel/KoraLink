@@ -48,7 +48,9 @@ export default function MatchCard({ match }: MatchCardProps) {
                     <p className="text-sm font-bold text-brand-black">{match.time}</p>
                     {isClosing && (
                         <p className="text-[10px] font-bold text-brand-red uppercase tracking-wide mt-0.5">
-                            {spotsLeft <= 1 ? `${spotsLeft} SPOT LEFT` : 'CLOSING SOON'}
+                            {spotsLeft <= 1
+                                ? `${spotsLeft} ${t('matchCard.spotLeft')}`
+                                : t('matchCard.closingSoon')}
                         </p>
                     )}
                 </div>

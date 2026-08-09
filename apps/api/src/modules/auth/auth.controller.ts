@@ -23,6 +23,7 @@ import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { DevLoginDto } from './dto/dev-login.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -105,7 +106,7 @@ export class AuthController {
       '[DEV ONLY] Login as a seeded user by phone. Sets auth cookie directly.',
   })
   async devLogin(
-    @Body('phone') phone: string,
+    @Body() dto: DevLoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const isProd =
@@ -114,7 +115,7 @@ export class AuthController {
       throw new ForbiddenException('dev-login is disabled in production');
     }
 
-    const token = await this.authService.devLogin(phone);
+    const token = await this.authService.devLogin(dto.phone);
 
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,

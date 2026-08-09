@@ -22,6 +22,24 @@ import { useVenues, useVenue, type VenueApi, type PitchApi } from '@/hooks/useVe
 const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
 type Format = (typeof FORMAT_OPTIONS)[number];
 
+/* ── Gender & Match Type option maps ──────────────── */
+const GENDER_OPTIONS = ['Men Only', 'Women Only', 'Mixed'] as const;
+type GenderRule = (typeof GENDER_OPTIONS)[number];
+
+const MATCH_TYPES = ['Casual', 'Competitive'] as const;
+type MatchTypeValue = (typeof MATCH_TYPES)[number];
+
+const GENDER_I18N_MAP: Record<GenderRule, string> = {
+    'Men Only': 'host.genderMen',
+    'Women Only': 'host.genderWomen',
+    Mixed: 'host.genderMixed',
+};
+
+const MATCH_TYPE_I18N_MAP: Record<MatchTypeValue, string> = {
+    Casual: 'host.matchTypeCasual',
+    Competitive: 'host.matchTypeCompetitive',
+};
+
 export default function HostMatchForm() {
     const router = useRouter();
     const locale = useLocale();
@@ -42,8 +60,8 @@ export default function HostMatchForm() {
     /* ── Form State ─────────────────────────────── */
     const [title, setTitle] = useState('');
     const [format, setFormat] = useState<Format>('7v7');
-    const [matchType, setMatchType] = useState<'Casual' | 'Competitive'>('Casual');
-    const [genderRule, setGenderRule] = useState<'Men Only' | 'Women Only' | 'Mixed'>('Men Only');
+    const [matchType, setMatchType] = useState<MatchTypeValue>('Casual');
+    const [genderRule, setGenderRule] = useState<GenderRule>('Men Only');
     const [duration, setDuration] = useState(60);
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
@@ -96,7 +114,7 @@ export default function HostMatchForm() {
                     <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
                 </button>
                 <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
-                    Host a Match
+                    {t('host.title')}
                 </h1>
             </div>
 
@@ -107,7 +125,7 @@ export default function HostMatchForm() {
                 {/* ── VENUE ─────────────────────────── */}
                 <div className="px-5 pt-4">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Venue
+                        {t('host.venue')}
                     </p>
 
                     {/* Selected venue + pitch display */}
@@ -119,7 +137,7 @@ export default function HostMatchForm() {
                                         {selectedVenue.name}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        {selectedVenue.city} • {selectedVenue.pitch_count} pitches
+                                        {selectedVenue.city} • {selectedVenue.pitch_count} {t('clubs.pitches')}
                                     </p>
                                 </div>
                                 <button
@@ -129,7 +147,7 @@ export default function HostMatchForm() {
                                     }}
                                     className="text-xs text-brand-red font-medium"
                                 >
-                                    Change
+                                    {t('host.change')}
                                 </button>
                             </div>
 
@@ -137,7 +155,7 @@ export default function HostMatchForm() {
                             {venueDetail?.pitches && venueDetail.pitches.length > 0 && (
                                 <div className="mt-3 space-y-2">
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                        Select a pitch
+                                        {t('host.selectPitch')}
                                     </p>
                                     {venueDetail.pitches.map((pitch) => (
                                         <button
@@ -154,7 +172,7 @@ export default function HostMatchForm() {
                                                     {pitch.name}
                                                 </span>
                                                 <span className="text-xs text-gray-500">
-                                                    SAR {pitch.hourly_rate}/hr
+                                                    {t('host.pitchRate', { rate: pitch.hourly_rate })}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-gray-400 mt-0.5">
@@ -178,7 +196,7 @@ export default function HostMatchForm() {
                                 fill="currentColor"
                             />
                             <span className="flex-1 text-start text-sm text-gray-400">
-                                Search venues in Riyadh...
+                                {t('host.searchVenuesPlaceholder')}
                             </span>
                             <ChevronRight className="w-4 h-4 text-gray-300" strokeWidth={2} />
                         </button>
@@ -188,10 +206,8 @@ export default function HostMatchForm() {
                     <div className="mt-3 rounded-xl p-3.5 flex items-start gap-3 bg-amber-50 border border-amber-200">
                         <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
                         <p className="text-xs text-gray-600 leading-relaxed">
-                            <span className="font-bold text-gray-700">Disclaimer:</span>{' '}
-                            By hosting a match, you confirm the pitch is fully secured.
-                            If the venue is unavailable at kick-off, your account will be
-                            held strictly liable to refund all paying players.
+                            <span className="font-bold text-gray-700">{t('host.disclaimer')}</span>{' '}
+                            {t('host.disclaimerText')}
                         </p>
                     </div>
                 </div>
@@ -199,26 +215,26 @@ export default function HostMatchForm() {
                 {/* ── MATCH TITLE ─────────────────── */}
                 <div className="px-5 pt-4">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Match Title
+                        {t('host.matchTitle')}
                     </p>
                     <input
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="e.g. Friday Night 7v7"
+                        placeholder={t('host.matchTitlePlaceholder')}
                         maxLength={255}
                         className="w-full bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 text-sm
                             text-brand-black placeholder:text-gray-400 outline-none focus:border-brand-green transition-colors"
                     />
                     {title.length > 0 && title.length < 3 && (
-                        <p className="text-xs text-brand-red mt-1">Title must be at least 3 characters</p>
+                        <p className="text-xs text-brand-red mt-1">{t('host.matchTitleValidation')}</p>
                     )}
                 </div>
 
                 {/* ── FORMAT ────────────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Format
+                        {t('host.format')}
                     </p>
                     <div className="flex gap-2">
                         {FORMAT_OPTIONS.map((f) => (
@@ -240,20 +256,20 @@ export default function HostMatchForm() {
                 {/* ── MATCH TYPE ──────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Match Type
+                        {t('host.matchType')}
                     </p>
                     <div className="flex gap-2">
-                        {(['Casual', 'Competitive'] as const).map((t) => (
+                        {MATCH_TYPES.map((type) => (
                             <button
-                                key={t}
-                                onClick={() => setMatchType(t)}
+                                key={type}
+                                onClick={() => setMatchType(type)}
                                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
-                                    matchType === t
+                                    matchType === type
                                         ? 'bg-brand-green text-white border-brand-green shadow-sm'
                                         : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                                 }`}
                             >
-                                {t}
+                                {t(MATCH_TYPE_I18N_MAP[type])}
                             </button>
                         ))}
                     </div>
@@ -262,10 +278,10 @@ export default function HostMatchForm() {
                 {/* ── GENDER ────────────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Gender
+                        {t('host.gender')}
                     </p>
                     <div className="flex gap-2">
-                        {(['Men Only', 'Women Only', 'Mixed'] as const).map((g) => (
+                        {GENDER_OPTIONS.map((g) => (
                             <button
                                 key={g}
                                 onClick={() => setGenderRule(g)}
@@ -275,7 +291,7 @@ export default function HostMatchForm() {
                                         : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                                 }`}
                             >
-                                {g}
+                                {t(GENDER_I18N_MAP[g])}
                             </button>
                         ))}
                     </div>
@@ -284,7 +300,7 @@ export default function HostMatchForm() {
                 {/* ── DATE & TIME ───────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Date & Time
+                        {t('host.dateTime')}
                     </p>
                     <div className="flex gap-3">
                         {/* Date — click to open native date picker */}
@@ -293,15 +309,15 @@ export default function HostMatchForm() {
                             onClick={() => dateRef.current?.showPicker()}
                             className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
                         >
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Date</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.date')}</p>
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                 <span className="text-sm font-bold text-brand-black">
                                     {date
-                                        ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                                        ? new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
                                             month: 'short', day: 'numeric',
                                         })
-                                        : 'Select date'}
+                                        : t('host.selectDate')}
                                 </span>
                             </div>
                             <input
@@ -318,15 +334,15 @@ export default function HostMatchForm() {
                             onClick={() => timeRef.current?.showPicker()}
                             className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
                         >
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Time</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.time')}</p>
                             <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                 <span className="text-sm font-bold text-brand-black">
                                     {time
-                                        ? new Date(`2025-01-01T${time}`).toLocaleTimeString('en-US', {
+                                        ? new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
                                             hour: 'numeric', minute: '2-digit', hour12: true,
                                         })
-                                        : 'Select time'}
+                                        : t('host.selectTime')}
                                 </span>
                             </div>
                             <input
@@ -343,7 +359,7 @@ export default function HostMatchForm() {
                 {/* ── DURATION ─────────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                        Duration
+                        {t('host.duration')}
                     </p>
                     <div className="flex gap-2">
                         {[30, 45, 60, 90, 120].map((m) => (
@@ -369,17 +385,17 @@ export default function HostMatchForm() {
             <div className="absolute bottom-0 inset-x-0 bg-white border-t border-gray-100 px-5 pt-3 pb-5 animate-slide-in-bottom">
                 {/* Cost row */}
                 <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-400">Player share:</span>
+                    <span className="text-xs text-gray-400">{t('host.playerShare')}</span>
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-brand-black">SAR {playerShare}</span>
                         <span className="inline-flex items-center gap-1 bg-brand-green/10 text-brand-green text-[10px] font-bold px-2 py-0.5 rounded-full">
                             <Sparkles className="w-3 h-3" strokeWidth={2} />
-                            HOST PLAYS FREE
+                            {t('host.hostPlaysFree')}
                         </span>
                     </div>
                 </div>
                 <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs text-gray-400">Pitch cost:</span>
+                    <span className="text-xs text-gray-400">{t('host.pitchCost')}</span>
                     <span className="text-base font-extrabold text-brand-black">
                         SAR {pitchCostSar.toFixed(2)}
                     </span>

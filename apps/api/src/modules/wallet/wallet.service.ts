@@ -5,7 +5,7 @@ import {
   Inject,
   NotFoundException,
 } from '@nestjs/common';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, count } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -104,12 +104,23 @@ export class WalletService {
 
   async getHistory(userId: string, page = 1, perPage = 20) {
     const skip = (page - 1) * perPage;
-    return this.db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.user_id, userId))
-      .orderBy(desc(transactions.created_at))
-      .offset(skip)
-      .limit(perPage);
+    const [transactionsData, totalResult] = await Promise.all([
+      this.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.user_id, userId))
+        .orderBy(desc(transactions.created_at))
+        .offset(skip)
+        .limit(perPage),
+      this.db
+        .select({ total: count() })
+        .from(transactions)
+        .where(eq(transactions.user_id, userId)),
+    ]);
+
+    const total = totalResult[0]?.total ?? 0;
+    const hasMore = skip + perPage < total;
+
+    return { transactions: transactionsData, total, hasMore };
   }
 }

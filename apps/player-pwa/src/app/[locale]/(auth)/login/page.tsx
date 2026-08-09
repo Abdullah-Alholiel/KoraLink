@@ -50,14 +50,14 @@ export default function LoginPage() {
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center justify-center -mt-16">
                 <h1 className="text-2xl font-bold text-brand-black text-center leading-tight">
-                    {t('title').split('number')[0]}
+                    {t('titleLine1')}
                     <br />
-                    number
+                    {t('titleLine2')}
                 </h1>
                 <p className="text-sm text-gray-400 mt-3 text-center">
-                    {t('subtitle').split('verify')[0]}
+                    {t('subtitleLine1')}
                     <br />
-                    verify your account.
+                    {t('subtitleLine2')}
                 </p>
 
                 {/* Phone Input */}

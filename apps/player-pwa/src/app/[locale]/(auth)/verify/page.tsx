@@ -199,8 +199,8 @@ function VerifyContent() {
                     )}
                 </button>
                 <p className="text-center text-xs text-gray-400 mt-4">
-                    Need help?{' '}
-                    <span className="text-brand-green font-medium underline">Contact Support</span>
+                    {t('needHelp')}{' '}
+                    <span className="text-brand-green font-medium underline">{t('contactSupport')}</span>
                 </p>
             </div>
         </div>

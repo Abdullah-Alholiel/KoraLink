@@ -1,5 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,

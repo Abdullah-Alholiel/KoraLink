@@ -177,7 +177,7 @@ export const pitches = pgTable('pitches', {
     .notNull()
     .defaultNow()
     .$onUpdateFn(() => new Date()),
-});
+}, (t) => [index('pitches_venue_id_idx').on(t.venue_id)]);
 
 export const matches = pgTable(
   'matches',
@@ -187,10 +187,10 @@ export const matches = pgTable(
       .$defaultFn(() => randomUUID()),
     host_id: varchar('host_id', { length: 36 })
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     pitch_id: varchar('pitch_id', { length: 36 })
       .notNull()
-      .references(() => pitches.id),
+      .references(() => pitches.id, { onDelete: 'cascade' }),
     title: varchar('title', { length: 255 }).notNull(),
     match_type: matchTypeEnum('match_type').notNull(),
     gender_rule: genderRuleEnum('gender_rule').notNull(),
@@ -235,6 +235,7 @@ export const match_players = pgTable(
   },
   (t) => [
     uniqueIndex('match_players_match_user_idx').on(t.match_id, t.user_id),
+    index('match_players_user_id_idx').on(t.user_id),
   ],
 );
 

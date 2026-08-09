@@ -40,9 +40,14 @@
     },
     "login": {
         "title": "أدخل رقم هاتفك",
+        "titleLine1": "أدخل رقم",
+        "titleLine2": "هاتفك",
         "subtitle": "سنرسل لك رمز من 6 أرقام للتحقق من حسابك.",
+        "subtitleLine1": "سنرسل لك رمز من 6 أرقام",
+        "subtitleLine2": "للتحقق من حسابك.",
         "phonePlaceholder": "5X XXX XXXX",
         "continue": "متابعة",
+        "sending": "جارٍ الإرسال…",
         "terms": "بالمتابعة، أنت توافق على",
         "termsOfService": "شروط الخدمة",
         "privacyPolicy": "سياسة الخصوصية",
@@ -53,11 +58,14 @@
         "subtitle": "أرسلنا رمز من 6 أرقام إلى",
         "codePlaceholder": "000000",
         "verify": "تحقق",
+        "verifying": "جارٍ التحقق…",
         "resend": "إعادة إرسال الرمز",
         "resendIn": "إعادة الإرسال خلال",
         "seconds": "ثانية",
         "wrongCode": "رمز خاطئ. يرجى المحاولة مرة أخرى.",
-        "expiredCode": "انتهت صلاحية الرمز. اطلب رمزاً جديداً."
+        "expiredCode": "انتهت صلاحية الرمز. اطلب رمزاً جديداً.",
+        "needHelp": "تحتاج مساعدة؟",
+        "contactSupport": "تواصل مع الدعم"
     },
     "completeProfile": {
         "title": "أكمل ملفك الشخصي",
@@ -118,7 +126,7 @@
         "noMatchesDescription": "حاول تعديل التصفية أو تحقق لاحقاً.",
         "emptyMatches": "لا توجد مباريات بعد",
         "emptyMatchesDescription": "كن أول من يستضيف مباراة في منطقتك!",
-        "hostMatch": "استضتف مباراة"
+        "hostMatch": "استضف مباراة"
     },
     "matchCard": {
         "price": "السعر",
@@ -161,8 +169,9 @@
         "free": "مجاني"
     },
     "host": {
-        "title": "استضف مباراة",
+        "title": "استضافة مباراة",
         "subtitle": "أنشئ مباراة جديدة وادعُ اللاعبين.",
+        "venue": "الملعب",
         "venueName": "اسم الملعب",
         "venueNamePlaceholder": "اختر الملعب",
         "location": "الموقع",
@@ -188,7 +197,34 @@
         "publish": "نشر المباراة",
         "publishing": "جارٍ النشر…",
         "success": "تم نشر المباراة بنجاح!",
-        "error": "فشل نشر المباراة. حاول مرة أخرى."
+        "error": "فشل نشر المباراة. حاول مرة أخرى.",
+        "change": "تغيير",
+        "selectPitch": "اختر الملعب",
+        "pitchRate": "{rate} ر.س/ساعة",
+        "searchVenuesPlaceholder": "ابحث عن ملاعب في الرياض...",
+        "disclaimer": "إخلاء مسؤولية:",
+        "disclaimerText": "باستضافة مباراة، أنت تؤكد أن الملعب محجوز بالكامل. إذا كان الملعب غير متاح عند وقت البداية، سيكون حسابك مسؤولاً بشكل صارم عن رد المبالغ لجميع اللاعبين.",
+        "matchTitle": "عنوان المباراة",
+        "matchTitlePlaceholder": "مثلاً: مباراة الجمعة 7v7",
+        "matchTitleValidation": "يجب أن يكون العنوان 3 أحرف على الأقل",
+        "matchType": "نوع المباراة",
+        "matchTypeCasual": "ودية",
+        "matchTypeCompetitive": "تنافسية",
+        "genderMen": "رجال فقط",
+        "genderWomen": "نساء فقط",
+        "genderMixed": "مختلط",
+        "dateTime": "التاريخ والوقت",
+        "selectDate": "اختر التاريخ",
+        "selectTime": "اختر الوقت",
+        "duration": "المدة",
+        "playerShare": "حصة اللاعب:",
+        "hostPlaysFree": "المضيف يلعب مجاناً",
+        "pitchCost": "تكلفة الملعب:",
+        "selectVenueTitle": "اختر الملعب",
+        "searchByCity": "ابحث حسب المدينة...",
+        "noVenuesFound": "لا توجد ملاعب",
+        "noVenuesFoundIn": "لا توجد ملاعب في \"{city}\"",
+        "createError": "فشل إنشاء المباراة. يرجى المحاولة مرة أخرى."
     },
     "profile": {
         "title": "الملف الشخصي",
@@ -253,7 +289,8 @@
         "cards": "البطاقات",
         "today": "اليوم",
         "yesterday": "أمس",
-        "earlier": "سابقاً"
+        "earlier": "سابقاً",
+        "invalidAmount": "يرجى إدخال مبلغ صحيح"
     },
     "clubs": {
         "title": "الأندية",
@@ -261,6 +298,10 @@
         "nearby": "قريبة",
         "popular": "شائعة",
         "filters": {
+            "nearby": "قريبة",
+            "topRated": "الأعلى تقييماً",
+            "indoor": "داخلية",
+            "availableNow": "متاحة الآن",
             "city": "المدينة",
             "rating": "التقييم",
             "surfaces": "الأسطح"
