@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   Inject,
   NotFoundException,
 } from '@nestjs/common';
@@ -417,5 +418,111 @@ export class MatchesService {
     });
 
     return messages;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Status transitions (host only)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Start a match: Full → InProgress. Only the host may transition.
+   */
+  async startMatch(userId: string, matchId: string) {
+    return this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.host_id !== userId) {
+        throw new ForbiddenException('Only the match host can start the match.');
+      }
+
+      if (match.status !== 'Full') {
+        throw new BadRequestException(
+          `Cannot start a match with status "${match.status}". Match must be Full.`,
+        );
+      }
+
+      await tx
+        .update(matches)
+        .set(withTimestamp({ status: 'InProgress' }))
+        .where(eq(matches.id, matchId));
+
+      return { message: 'Match started.', status: 'InProgress' };
+    });
+  }
+
+  /**
+   * Complete a match: InProgress → Completed. Only the host may transition.
+   */
+  async completeMatch(userId: string, matchId: string) {
+    return this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.host_id !== userId) {
+        throw new ForbiddenException('Only the match host can complete the match.');
+      }
+
+      if (match.status !== 'InProgress') {
+        throw new BadRequestException(
+          `Cannot complete a match with status "${match.status}". Match must be InProgress.`,
+        );
+      }
+
+      await tx
+        .update(matches)
+        .set(withTimestamp({ status: 'Completed' }))
+        .where(eq(matches.id, matchId));
+
+      return { message: 'Match completed.', status: 'Completed' };
+    });
+  }
+
+  /**
+   * Cancel a match: Open | Full → Cancelled. Only the host may transition.
+   */
+  async cancelMatch(userId: string, matchId: string) {
+    return this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.host_id !== userId) {
+        throw new ForbiddenException('Only the match host can cancel the match.');
+      }
+
+      if (match.status !== 'Open' && match.status !== 'Full') {
+        throw new BadRequestException(
+          `Cannot cancel a match with status "${match.status}". Match must be Open or Full.`,
+        );
+      }
+
+      await tx
+        .update(matches)
+        .set(withTimestamp({ status: 'Cancelled' }))
+        .where(eq(matches.id, matchId));
+
+      return { message: 'Match cancelled.', status: 'Cancelled' };
+    });
   }
 }

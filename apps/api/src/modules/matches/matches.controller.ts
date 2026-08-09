@@ -93,4 +93,37 @@ export class MatchesController {
   getMessages(@Param('id') id: string) {
     return this.matchesService.getMessages(id);
   }
+
+  // ── POST /matches/:id/start — Start a match (host only) ────────────────
+  @Post(':id/start')
+  @ApiOperation({ summary: 'Start the match (Full → InProgress). Host only.' })
+  @ApiOkResponse({ description: 'Match started successfully.' })
+  startMatch(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.startMatch(user.sub, id);
+  }
+
+  // ── POST /matches/:id/complete — Complete a match (host only) ──────────
+  @Post(':id/complete')
+  @ApiOperation({ summary: 'Complete the match (InProgress → Completed). Host only.' })
+  @ApiOkResponse({ description: 'Match completed successfully.' })
+  completeMatch(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.completeMatch(user.sub, id);
+  }
+
+  // ── POST /matches/:id/cancel — Cancel a match (host only) ──────────────
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel the match (Open/Full → Cancelled). Host only.' })
+  @ApiOkResponse({ description: 'Match cancelled successfully.' })
+  cancelMatch(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.cancelMatch(user.sub, id);
+  }
 }
