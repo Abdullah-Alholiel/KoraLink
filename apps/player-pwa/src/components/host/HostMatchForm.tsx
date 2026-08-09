@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
     ArrowLeft,
     MapPin,
@@ -25,6 +25,7 @@ type Format = (typeof FORMAT_OPTIONS)[number];
 export default function HostMatchForm() {
     const router = useRouter();
     const locale = useLocale();
+    const t = useTranslations();
     const createMatch = useCreateMatch();
 
     /* ── Form State ─────────────────────────────── */
@@ -64,7 +65,7 @@ export default function HostMatchForm() {
 
         const payload = {
             pitch_id: selectedPitch.id,
-            title: title.trim() || `${format} Match at ${selectedVenue?.name ?? 'Venue'}`,
+            title: title.trim() || t('host.matchTitleFallback', { format, venue: selectedVenue?.name ?? t('host.unknownVenue') }),
             match_type: matchType,
             gender_rule: genderRule,
             scheduled_at: scheduledAt,
@@ -397,11 +398,11 @@ export default function HostMatchForm() {
                     {createMatch.isPending ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2.5} />
-                            Publishing...
+                            {t('host.publishing')}
                         </>
                     ) : (
                         <>
-                            {selectedPitch ? 'Publish Match' : 'Select a venue to continue'}
+                            {selectedPitch ? t('host.publishMatch') : t('host.selectVenue')}
                             <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
                         </>
                     )}

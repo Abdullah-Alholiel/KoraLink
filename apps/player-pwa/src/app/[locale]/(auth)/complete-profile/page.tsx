@@ -24,15 +24,15 @@ export default function CompleteProfilePage() {
     const [fullName, setFullName] = useState('');
     const [location, setLocation] = useState('');
     const [position, setPosition] = useState('');
-    const [skillLevel, setSkillLevel] = useState<SkillLevel>('intermediate');
+    const [skillLevel, setSkillLevel] = useState<SkillLevel>('Intermediate');
     const [error, setError] = useState<string | null>(null);
 
     const completeProfile = useCompleteProfile();
 
     const skillLevels: { value: SkillLevel; label: string }[] = [
-        { value: 'beginner', label: t('skills.beginner') },
-        { value: 'intermediate', label: t('skills.intermediate') },
-        { value: 'advanced', label: t('skills.advanced') },
+        { value: 'Beginner', label: t('skills.beginner') },
+        { value: 'Intermediate', label: t('skills.intermediate') },
+        { value: 'Advanced', label: t('skills.advanced') },
     ];
 
     const handleFinish = () => {

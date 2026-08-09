@@ -80,7 +80,9 @@ export class AuthController {
       path: '/',
     });
 
-    return { isNewUser };
+    const resp: { isNewUser: boolean; token?: string } = { isNewUser };
+    if (!isProd) resp.token = token;
+    return resp;
   }
 
   // ── POST /auth/complete-profile ──────────────────────────────────────────

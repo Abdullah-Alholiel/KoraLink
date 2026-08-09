@@ -35,7 +35,7 @@ export function useWalletHistory() {
   });
 }
 
-// ─── Fetch Payment Methods ───────────────────────────
+// ─── Top Up Wallet ──────────────────────────────
 
 export function useTopupWallet() {
   const queryClient = useQueryClient();

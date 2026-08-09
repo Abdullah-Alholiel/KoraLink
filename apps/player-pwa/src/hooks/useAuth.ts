@@ -52,7 +52,7 @@ export const completeProfileSchema = z.object({
     .max(50, 'Full name must be under 50 characters'),
   preferredLocation: z.string().min(2, 'Location must be at least 2 characters').max(100).optional().or(z.literal('')),
   preferredPosition: z.string().optional(),
-  skillLevel: z.enum(['beginner', 'intermediate', 'advanced']).default('intermediate'),
+  skillLevel: z.enum(['Beginner', 'Intermediate', 'Advanced']).default('Intermediate'),
 });
 
 export type PhoneInput = z.infer<typeof phoneSchema>;
@@ -109,7 +109,7 @@ export function useCompleteProfile() {
         body: JSON.stringify({
           full_name: data.fullName,
           handle: data.fullName.toLowerCase().replace(/\s+/g, '_'),
-          skill_level: data.skillLevel.charAt(0).toUpperCase() + data.skillLevel.slice(1),
+          skill_level: data.skillLevel,
           preferred_location: data.preferredLocation,
           preferred_position: data.preferredPosition,
         }),

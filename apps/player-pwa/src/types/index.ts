@@ -111,5 +111,5 @@ export interface NavItem {
     href: string;
 }
 
-export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
+export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type MatchGender = 'men' | 'women' | 'mixed';

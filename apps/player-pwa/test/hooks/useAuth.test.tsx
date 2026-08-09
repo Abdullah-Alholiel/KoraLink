@@ -121,7 +121,7 @@ describe('useAuth hooks', () => {
           fullName: 'Ahmed Al-Rashid',
           preferredLocation: 'Riyadh',
           preferredPosition: 'Forward',
-          skillLevel: 'intermediate',
+          skillLevel: 'Intermediate',
         });
       });
 
