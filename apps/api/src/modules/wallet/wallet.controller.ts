@@ -15,7 +15,6 @@ import {
   ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
-import { randomUUID } from 'crypto';
 
 import { WalletService } from './wallet.service';
 import { WalletHistoryDto } from './dto/wallet-history.dto';
