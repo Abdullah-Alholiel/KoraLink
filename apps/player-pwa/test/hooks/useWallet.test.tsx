@@ -38,6 +38,22 @@ function createWrapper() {
   };
 }
 
+// Helper: build API-shaped transaction row
+function makeApiTransaction(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'txn_1',
+    user_id: 'u1',
+    type: 'DEBIT' as const,
+    amount: '45.00',
+    reference_type: 'MATCH_FEE' as const,
+    reference_id: 'ref1',
+    idempotency_key: 'ik1',
+    status: 'Completed' as const,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
 describe('useWallet hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,8 +61,9 @@ describe('useWallet hooks', () => {
 
   describe('useWalletBalance', () => {
     it('fetches wallet balance from /wallet/balance', async () => {
-      const mockBalance = { balance: 150.0, currency: 'SAR' };
-      mockFetcher.mockResolvedValue(mockBalance);
+      // API returns string balance
+      const apiBalance = { balance: '150.00' };
+      mockFetcher.mockResolvedValue(apiBalance);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletBalance(), { wrapper });
@@ -54,7 +71,8 @@ describe('useWallet hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/wallet/balance');
-      expect(result.current.data).toEqual(mockBalance);
+      // Adapted: string → number
+      expect(result.current.data).toEqual({ balance: 150, currency: 'SAR' });
     });
 
     it('handles network error', async () => {
@@ -70,24 +88,8 @@ describe('useWallet hooks', () => {
 
   describe('useWalletHistory', () => {
     it('fetches transaction history from /wallet/history', async () => {
-      const mockHistory = {
-        transactions: [
-          {
-            id: 'txn_1',
-            type: 'debit',
-            category: 'match_payment',
-            title: 'Test Match',
-            description: 'Payment successful',
-            amount: 45.0,
-            currency: 'SAR',
-            createdAt: new Date().toISOString(),
-            icon: 'match',
-          },
-        ],
-        total: 1,
-        hasMore: false,
-      };
-      mockFetcher.mockResolvedValue(mockHistory);
+      const apiTxn = makeApiTransaction();
+      mockFetcher.mockResolvedValue([apiTxn]);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletHistory(), { wrapper });
@@ -95,21 +97,42 @@ describe('useWallet hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/wallet/history');
-      expect(result.current.data).toEqual(mockHistory);
+      expect(result.current.data?.transactions).toHaveLength(1);
+      const txn = result.current.data!.transactions[0];
+      expect(txn.id).toBe('txn_1');
+      expect(txn.type).toBe('debit');
+      expect(txn.category).toBe('match_payment');
+      expect(txn.amount).toBe(45);
+      expect(txn.currency).toBe('SAR');
     });
 
     it('handles empty transaction history', async () => {
-      mockFetcher.mockResolvedValue({
-        transactions: [],
-        total: 0,
-        hasMore: false,
-      });
+      mockFetcher.mockResolvedValue([]);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletHistory(), { wrapper });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data?.transactions).toHaveLength(0);
+    });
+
+    it('adapts CREDIT transactions correctly', async () => {
+      const apiTxn = makeApiTransaction({
+        type: 'CREDIT',
+        amount: '200.00',
+        reference_type: 'TOPUP',
+      });
+      mockFetcher.mockResolvedValue([apiTxn]);
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useWalletHistory(), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const txn = result.current.data!.transactions[0];
+      expect(txn.type).toBe('credit');
+      expect(txn.category).toBe('topup');
+      expect(txn.amount).toBe(200);
     });
   });
 

@@ -1,0 +1,58 @@
+services:
+  # ── PostgreSQL 16 + PostGIS ───────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.5
+    container_name: koralink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: koralink
+      POSTGRES_PASSWORD: koralink_dev
+      POSTGRES_DB: koralink
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./apps/api/drizzle/gist_indexes.sql:/docker-entrypoint-initdb.d/01_gist_indexes.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U koralink -d koralink"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── NestJS API Service ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: koralink-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://koralink:koralink_dev@postgres:5432/koralink}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      COOKIE_SECRET: ${COOKIE_SECRET:-change-me-in-production}
+      PLAYER_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Redis (for Bull queues + cache) ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: koralink-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

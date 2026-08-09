@@ -143,6 +143,8 @@
         "inviteWhatsApp": "Invite via WhatsApp",
         "fillSquad": "Fill the squad",
         "spotsLeft": "spots left",
+        "matchType": "Match",
+        "genderLabel": "Gender",
         "gender": {
             "men": "Men Only",
             "women": "Women Only",
@@ -213,7 +215,9 @@
         "contactSupport": "Contact Support",
         "privacyPolicy": "Privacy Policy",
         "termsOfService": "Terms of Service",
-        "footer": "KoraLink v2.1.0 • Made with 🇸🇦❤️ in KSA"
+        "footer": "KoraLink v2.1.0 • Made with 🇸🇦❤️ in KSA",
+        "languageEn": "English",
+        "languageAr": "العربية"
     },
     "wallet": {
         "title": "Wallet",
@@ -241,7 +245,10 @@
             "withdrawal": "Withdrawal"
         },
         "currency": "SAR",
-        "cards": "Cards"
+        "cards": "Cards",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "earlier": "Earlier"
     },
     "clubs": {
         "title": "Clubs",

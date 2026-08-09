@@ -143,6 +143,8 @@
         "inviteWhatsApp": "دعوة عبر واتساب",
         "fillSquad": "اكمل الفريق",
         "spotsLeft": "مقاعد متبقية",
+        "matchType": "مباراة",
+        "genderLabel": "الجنس",
         "gender": {
             "men": "رجال فقط",
             "women": "نساء فقط",
@@ -213,7 +215,9 @@
         "contactSupport": "تواصل مع الدعم",
         "privacyPolicy": "سياسة الخصوصية",
         "termsOfService": "شروط الخدمة",
-        "footer": "KoraLink v2.1.0 • صُنع ب🇸🇦❤️ في السعودية"
+        "footer": "KoraLink v2.1.0 • صُنع ب🇸🇦❤️ في السعودية",
+        "languageEn": "English",
+        "languageAr": "العربية"
     },
     "wallet": {
         "title": "المحفظة",
@@ -241,7 +245,10 @@
             "withdrawal": "سحب"
         },
         "currency": "ر.س",
-        "cards": "البطاقات"
+        "cards": "البطاقات",
+        "today": "اليوم",
+        "yesterday": "أمس",
+        "earlier": "سابقاً"
     },
     "clubs": {
         "title": "الأندية",

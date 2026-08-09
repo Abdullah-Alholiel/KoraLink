@@ -16,7 +16,6 @@ import {
     Camera,
 } from 'lucide-react';
 import { selectUser, selectBalance, selectIsAuth, useAppStore } from '@/store/useAppStore';
-import { mockWalletBalance } from '@/lib/dummy-data';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -77,8 +76,8 @@ export default function ProfilePage() {
     const walletBalance = useAppStore(selectBalance);
     const isAuthenticated = useAppStore(selectIsAuth);
 
-    // Fallback balance: use store balance or mock for guest/offline
-    const displayBalance = walletBalance ?? mockWalletBalance;
+    // Use store balance or 0 (API data flows through the store)
+    const displayBalance = walletBalance ?? 0;
 
     // Use store user data, fall back to a placeholder if not yet authenticated
     const fullName = user?.fullName ?? t('profile.guestName');
@@ -169,7 +168,7 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<Globe className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.language')}
-                    endText={locale === 'ar' ? 'العربية' : 'English'}
+                    endText={locale === 'ar' ? t('profile.languageAr') : t('profile.languageEn')}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem

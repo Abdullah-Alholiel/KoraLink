@@ -21,11 +21,11 @@ export class UpdateProfileDto {
   avatar_url?: string;
 
   @ApiPropertyOptional({
-    enum: ['beginner', 'intermediate', 'advanced'],
+    enum: ['Beginner', 'Intermediate', 'Advanced'],
     description: 'Skill level',
   })
   @IsOptional()
-  @IsEnum(['beginner', 'intermediate', 'advanced'])
+  @IsEnum(['Beginner', 'Intermediate', 'Advanced'])
   skill_level?: string;
 
   @ApiPropertyOptional({ description: 'Preferred location', maxLength: 255 })

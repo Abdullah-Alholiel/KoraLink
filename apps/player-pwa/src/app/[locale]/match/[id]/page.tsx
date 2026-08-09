@@ -15,7 +15,6 @@ import {
     AlertTriangle,
     Loader2,
 } from 'lucide-react';
-import { mockMatches } from '@/lib/dummy-data';
 import { useMatch } from '@/hooks/useMatches';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
@@ -34,10 +33,8 @@ export default function MatchDetailPage({
     const router = useRouter();
     const t = useTranslations();
 
-    // ── Data fetching via React Query (falls back to mock offline) ──
-    const { data: apiMatch, isLoading, error, refetch } = useMatch(id);
-    const mockMatch = mockMatches.find((m) => m.id === id) || mockMatches[0];
-    const match = apiMatch ?? mockMatch;
+    // ── Data fetching via React Query ──
+    const { data: match, isLoading, error, refetch } = useMatch(id);
 
     const [hasJoined, setHasJoined] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
@@ -77,7 +74,7 @@ export default function MatchDetailPage({
         setHasJoined(true);
     };
 
-    const openSpots = match.totalSpots - match.filledSpots;
+    const openSpots = match ? match.totalSpots - match.filledSpots : 0;
 
     return (
         <MobileFrame>
@@ -95,9 +92,9 @@ export default function MatchDetailPage({
                 )}
 
                 {/* ══════════════════════════════════════
-            Error State (API error and no cached/mock data)
+            Error State (API error, no data)
             ═══════════════════════════════════ */}
-                {error && !isLoading && !apiMatch && !mockMatch && (
+                {error && !isLoading && !match && (
                     <div className="flex flex-col items-center justify-center py-20 px-8">
                         <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                             <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
@@ -118,9 +115,9 @@ export default function MatchDetailPage({
                 )}
 
                 {/* ══════════════════════════════════════
-            Main Content — hidden while loading
+            Main Content — only when match data exists
             ═══════════════════════════════════ */}
-                {!isLoading && (
+                {match && (
                     <>
                 {/* ════ HERO SECTION — Stadium Background with Parallax ════ */}
                 <div className="relative h-72 overflow-hidden">
@@ -173,11 +170,11 @@ export default function MatchDetailPage({
                         {hasJoined && (
                             <div className="inline-flex items-center gap-1.5 bg-brand-green/90 backdrop-blur-sm rounded-full px-3 py-1.5 mb-3 animate-scale-in">
                                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                <span className="text-xs font-bold text-white">You&#39;re In</span>
+                                <span className="text-xs font-bold text-white">{t('matchDetail.joined')}</span>
                             </div>
                         )}
                         <h1 className="text-2xl font-extrabold text-white leading-tight drop-shadow-lg">
-                            {match.time} | {match.title} in {match.location}
+                            {match.time} | {match.title} {t('feed.at')} {match.location}
                         </h1>
                         <div className="flex items-center gap-1.5 mt-1.5">
                             <MapPin className="w-3.5 h-3.5 text-green-400" strokeWidth={2} fill="currentColor" />
@@ -209,7 +206,7 @@ export default function MatchDetailPage({
                             {/* View Match Rules */}
                             <div className="flex items-center justify-center gap-2 py-5">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                <span className="text-sm font-semibold text-brand-black">View Match Rules</span>
+                                <span className="text-sm font-semibold text-brand-black">{t('matchDetail.viewRules')}</span>
                             </div>
 
                             {/* 2. Location / Map */}
@@ -234,11 +231,11 @@ export default function MatchDetailPage({
                                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
                                             <path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.553 4.112 1.52 5.847L.054 23.514l5.826-1.527A11.937 11.937 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.8 0-3.508-.47-5.003-1.29l-.358-.212-3.716.975.991-3.622-.233-.37A9.935 9.935 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
                                         </svg>
-                                        <span className="text-sm font-bold text-white">Invite via WhatsApp</span>
+                                        <span className="text-sm font-bold text-white">{t('matchDetail.inviteWhatsApp')}</span>
                                     </div>
                                     <div className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
                                         <span className="text-[11px] font-bold text-white">
-                                            {openSpots} spots left • Fill the squad
+                                            {openSpots} {t('matchDetail.spotsLeft')} • {t('matchDetail.fillSquad')}
                                         </span>
                                     </div>
                                 </div>
@@ -261,12 +258,12 @@ export default function MatchDetailPage({
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-gray-400">Organizer</p>
+                                        <p className="text-xs text-gray-400">{t('matchDetail.organizer')}</p>
                                         <p className="text-sm font-bold text-brand-black">{match.organizer.name}</p>
                                     </div>
                                 </div>
                                 <button className="text-sm font-medium text-brand-green">
-                                    View Profile
+                                    {t('matchDetail.viewProfile')}
                                 </button>
                             </div>
 
@@ -276,7 +273,7 @@ export default function MatchDetailPage({
                                     <Calendar className="w-4 h-4 text-gray-400 mt-0.5" strokeWidth={1.5} />
                                     <div>
                                         <p className="text-sm font-semibold text-brand-black">{match.date}</p>
-                                        <p className="text-xs text-gray-500">{match.time} - {match.endTime || '12:30 AM'}</p>
+                                        <p className="text-xs text-gray-500">{match.time} - {match.endTime}</p>
                                     </div>
                                 </div>
                                 {/* Location */}
@@ -291,19 +288,19 @@ export default function MatchDetailPage({
                             <div className="px-5 mt-5">
                                 <div className="flex items-center gap-2">
                                     <Trophy className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                                    <p className="text-sm font-bold text-brand-black">{match.intensity} Match</p>
+                                    <p className="text-sm font-bold text-brand-black">{match.intensity} {t('matchDetail.matchType')}</p>
                                 </div>
                                 <p className="text-xs text-gray-500 mt-0.5 ms-6">
-                                    {match.format} • {match.surface} • {match.rules?.[0] || 'Standard rules'}
+                                    {match.format} • {match.surface} • {t('matchDetail.matchRules')}
                                 </p>
                             </div>
 
                             {/* Rule Pills */}
                             <div className="flex gap-2.5 px-5 mt-4 overflow-x-auto scroll-container">
                                 {[
-                                    { label: 'Price', value: `${match.price} SAR` },
-                                    { label: 'Gender', value: match.gender === 'men' ? 'Men Only' : match.gender === 'women' ? 'Women Only' : 'Mixed' },
-                                    { label: 'Surface', value: match.surface },
+                                    { label: t('gameDetails.price'), value: match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}` },
+                                    { label: t('matchDetail.genderLabel'), value: match.gender === 'men' ? t('matchDetail.gender.men') : match.gender === 'women' ? t('matchDetail.gender.women') : t('matchDetail.gender.mixed') },
+                                    { label: t('matchDetail.surface'), value: match.surface },
                                 ].map((pill) => (
                                     <div
                                         key={pill.label}
@@ -320,9 +317,9 @@ export default function MatchDetailPage({
                             {/* Team Section */}
                             <div className="px-5 mt-6">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-base font-bold text-brand-black">Team</h3>
+                                    <h3 className="text-base font-bold text-brand-black">{t('matchDetail.team')}</h3>
                                     <span className="text-sm font-semibold text-brand-green">
-                                        {match.filledSpots} / {match.totalSpots} Attending
+                                        {match.filledSpots} / {match.totalSpots} {t('matchDetail.attending')}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 mt-3">
@@ -354,7 +351,7 @@ export default function MatchDetailPage({
                             {/* Latest Discussion */}
                             {match.comments.length > 0 && (
                                 <div className="px-5 mt-6">
-                                    <h3 className="text-base font-bold text-brand-black">Latest Discussion</h3>
+                                    <h3 className="text-base font-bold text-brand-black">{t('matchDetail.latestDiscussion')}</h3>
                                     <div className="flex items-start gap-3 mt-3">
                                         <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
                                             <span className="text-[10px] font-bold text-gray-500">
@@ -364,7 +361,7 @@ export default function MatchDetailPage({
                                         <div>
                                             <p className="text-sm">
                                                 <span className="font-semibold text-brand-black">{match.comments[0].userName}</span>
-                                                <span className="text-gray-400 text-xs ms-1.5">2m ago</span>
+                                                <span className="text-gray-400 text-xs ms-1.5">{t('messages.justNow')}</span>
                                             </p>
                                             <p className="text-sm text-gray-500 mt-0.5">
                                                 {match.comments[0].text}
@@ -372,7 +369,7 @@ export default function MatchDetailPage({
                                         </div>
                                     </div>
                                     <button className="text-sm font-medium text-brand-green mt-3">
-                                        View all {match.comments.length} comments
+                                        {t('matchDetail.viewAllComments')} {match.comments.length} {t('matchDetail.comments')}
                                     </button>
                                 </div>
                             )}
@@ -388,8 +385,8 @@ export default function MatchDetailPage({
                                         active:scale-[0.98] transition-transform
                                     "
                                 >
-                                    <span>Join Match</span>
-                                    <span className="font-extrabold">{match.price} SAR</span>
+                                    <span>{t('matchDetail.joinMatch')}</span>
+                                    <span className="font-extrabold">{match.price} {match.currency}</span>
                                 </button>
                             </div>
                         </div>
@@ -402,23 +399,27 @@ export default function MatchDetailPage({
             <BottomNav />
 
             {/* Payment Sheet */}
+            {match && (
             <PaymentSheet
                 isOpen={showPayment}
                 onClose={() => setShowPayment(false)}
                 onPaySuccess={handlePaySuccess}
-                matchTitle={`${match.format} ${match.intensity} Match`}
+                matchTitle={`${match.format} ${match.intensity}`}
                 matchTime={`${match.date}, ${match.time}`}
                 matchLocation={match.venueName}
                 price={match.price}
                 walletBalance={0}
             />
+            )}
 
             {/* Team Lineup Sheet (pre-join) */}
+            {match && (
             <TeamLineupSheet
                 isOpen={showTeamSheet}
                 onClose={() => setShowTeamSheet(false)}
                 format={match.format}
             />
+            )}
         </MobileFrame>
     );
 }

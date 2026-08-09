@@ -34,6 +34,65 @@ function createWrapper() {
   };
 }
 
+// Helper: build a minimal API-shaped nearby match row
+function makeApiMatch(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'm1',
+    title: 'Test Match',
+    match_type: 'Casual',
+    gender_rule: 'Men Only',
+    status: 'Open',
+    scheduled_at: '2026-08-10T18:00:00.000Z',
+    duration_mins: 60,
+    price_per_player: 37,
+    max_players: 14,
+    spots_filled: 5,
+    distance_m: null,
+    host_id: 'h1',
+    host_name: 'Ahmed',
+    host_avatar: null,
+    pitch_id: 'p1',
+    pitch_name: 'Pitch A',
+    venue_name: 'Venue A',
+    venue_city: 'Riyadh',
+    ...overrides,
+  };
+}
+
+// Helper: build a minimal API-shaped match detail
+function makeApiMatchDetail(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'm1',
+    title: 'Test Match',
+    match_type: 'Casual',
+    gender_rule: 'Men Only',
+    status: 'Open',
+    scheduled_at: '2026-08-10T18:00:00.000Z',
+    duration_mins: 60,
+    price_per_player: '37.00',
+    max_players: 14,
+    host: {
+      id: 'h1',
+      full_name: 'Ahmed',
+      handle: '@ahmed',
+      avatar_url: null,
+      rating: 4.5,
+    },
+    pitch: {
+      name: 'Pitch A',
+      surface_type: 'Artificial',
+      venue: {
+        name: 'Venue A',
+        city: 'Riyadh',
+        address: '123 Main St',
+      },
+    },
+    players: [],
+    messages: [],
+    ...overrides,
+  };
+}
+
 describe('useMatches hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,12 +100,8 @@ describe('useMatches hooks', () => {
 
   describe('useMatches', () => {
     it('fetches nearby matches with correct endpoint', async () => {
-      const mockData = {
-        matches: [{ id: 'm1', title: 'Test Match' }],
-        total: 1,
-        hasMore: false,
-      };
-      mockFetcher.mockResolvedValue(mockData);
+      const apiRow = makeApiMatch();
+      mockFetcher.mockResolvedValue([apiRow]);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useMatches(), { wrapper });
@@ -54,11 +109,15 @@ describe('useMatches hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/matches', expect.objectContaining({}));
-      expect(result.current.data).toEqual(mockData);
+      // Should return adapted matches
+      expect(result.current.data?.matches).toHaveLength(1);
+      expect(result.current.data?.matches[0].id).toBe('m1');
+      expect(result.current.data?.matches[0].title).toBe('Test Match');
+      expect(result.current.data?.matches[0].organizer.name).toBe('Ahmed');
     });
 
     it('passes date filter as query param when provided', async () => {
-      mockFetcher.mockResolvedValue({ matches: [], total: 0, hasMore: false });
+      mockFetcher.mockResolvedValue([]);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(
@@ -84,7 +143,7 @@ describe('useMatches hooks', () => {
     });
 
     it('does not pass empty filters as params', async () => {
-      mockFetcher.mockResolvedValue({ matches: [], total: 0, hasMore: false });
+      mockFetcher.mockResolvedValue([]);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(
@@ -96,12 +155,24 @@ describe('useMatches hooks', () => {
 
       expect(mockFetcher).toHaveBeenCalledWith('/matches', {});
     });
+
+    it('handles wrapped response format', async () => {
+      const apiRow = makeApiMatch({ id: 'm2' });
+      mockFetcher.mockResolvedValue({ matches: [apiRow], total: 1, hasMore: false });
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useMatches(), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data?.matches).toHaveLength(1);
+      expect(result.current.data?.matches[0].id).toBe('m2');
+    });
   });
 
   describe('useMatch', () => {
     it('fetches a single match by ID', async () => {
-      const mockMatch = { id: 'm1', title: 'Test Match' };
-      mockFetcher.mockResolvedValue(mockMatch);
+      const apiDetail = makeApiMatchDetail();
+      mockFetcher.mockResolvedValue(apiDetail);
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useMatch('m1'), { wrapper });
@@ -109,7 +180,10 @@ describe('useMatches hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/matches/m1');
-      expect(result.current.data).toEqual(mockMatch);
+      expect(result.current.data?.id).toBe('m1');
+      expect(result.current.data?.title).toBe('Test Match');
+      expect(result.current.data?.organizer.name).toBe('Ahmed');
+      expect(result.current.data?.organizer.rating).toBe(4.5);
     });
 
     it('does not fetch when id is empty', () => {
@@ -123,8 +197,8 @@ describe('useMatches hooks', () => {
 
   describe('useCreateMatch', () => {
     it('calls POST /matches with correct payload', async () => {
-      const mockMatch = { id: 'm1', title: 'New Match' };
-      mockFetcher.mockResolvedValue(mockMatch);
+      const apiDetail = makeApiMatchDetail({ id: 'm_new' });
+      mockFetcher.mockResolvedValue(apiDetail);
 
       const { wrapper, queryClient } = createWrapper();
       const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
@@ -152,6 +226,7 @@ describe('useMatches hooks', () => {
         body: JSON.stringify(payload),
       });
 
+      expect(result.current.data?.id).toBe('m_new');
       // Should invalidate the matches query cache
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['matches'] });
     });
