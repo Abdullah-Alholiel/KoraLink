@@ -28,9 +28,8 @@ export function useWalletHistory() {
   return useQuery<{ transactions: Transaction[] }, FetchError>({
     queryKey: ['wallet', 'history'],
     queryFn: async () => {
-      // API returns array of transaction rows
-      const raw = await fetcher<TransactionApi[]>('/wallet/history');
-      return { transactions: adaptTransactionList(raw) };
+      const raw = await fetcher<{ transactions: TransactionApi[]; total: number; hasMore: boolean }>('/wallet/history');
+      return { transactions: adaptTransactionList(raw.transactions) };
     },
   });
 }

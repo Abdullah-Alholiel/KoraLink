@@ -12,6 +12,7 @@ export function useJoinMatch() {
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
     },
   });
 }
@@ -25,6 +26,7 @@ export function useLeaveMatch() {
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
     },
   });
 }

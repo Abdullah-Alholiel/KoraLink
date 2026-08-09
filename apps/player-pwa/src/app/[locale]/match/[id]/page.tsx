@@ -24,6 +24,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import TeamLineupSheet from '@/components/matches/TeamLineupSheet';
+import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import LocationMap from '@/components/matches/LocationMap';
 
@@ -59,6 +60,7 @@ export default function MatchDetailPage({
 
     const [showPayment, setShowPayment] = useState(false);
     const [showTeamSheet, setShowTeamSheet] = useState(false);
+    const [showRules, setShowRules] = useState(false);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -171,7 +173,8 @@ export default function MatchDetailPage({
                         >
                             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
                         </button>
-                        <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                        <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            onClick={() => isJoined ? router.push(`/${locale}/messages`) : null}>
                             {isJoined
                                 ? <MessageSquare className="w-5 h-5 text-white" strokeWidth={1.5} />
                                 : <Share2 className="w-5 h-5 text-white" strokeWidth={1.5} />
@@ -226,7 +229,9 @@ export default function MatchDetailPage({
                             {/* View Match Rules */}
                             <div className="flex items-center justify-center gap-2 py-5">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                <span className="text-sm font-semibold text-brand-black">{t('matchDetail.viewRules')}</span>
+                                <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
+                                    {t('matchDetail.viewRules')}
+                                </button>
                             </div>
 
                             {/* 2. Location / Map */}
@@ -446,6 +451,12 @@ export default function MatchDetailPage({
                     </>
                 )}
             </div>
+
+            {/* Match Rules Sheet */}
+            <MatchRulesSheet
+                isOpen={showRules}
+                onClose={() => setShowRules(false)}
+            />
 
             <BottomNav />
 

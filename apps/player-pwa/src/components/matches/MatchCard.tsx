@@ -19,7 +19,10 @@ export default function MatchCard({ match }: MatchCardProps) {
     const isClosing = match.status === 'closing_soon' || spotsLeft <= 2;
 
     return (
-        <div className="bg-white rounded-2xl shadow-card mx-4 mb-3 p-4 transition-shadow hover:shadow-card-hover">
+        <Link
+            href={`/${locale}/match/${match.id}`}
+            className="block bg-white rounded-2xl shadow-card mx-4 mb-3 p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+        >
             {/* ── Header Row: avatar + title + time ──── */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-start gap-3 flex-1">
@@ -84,19 +87,13 @@ export default function MatchCard({ match }: MatchCardProps) {
                     <span className="text-xs text-gray-500 font-medium">
                         {match.filledSpots}/{match.totalSpots} spots
                     </span>
-                    <Link
-                        href={`/${locale}/match/${match.id}`}
-                        className="
-              bg-brand-green text-white text-sm font-semibold
-              px-5 py-2.5 rounded-full
-              transition-all hover:bg-brand-green-light
-              active:scale-95
-            "
+                    <span
+                        className="bg-brand-green text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-all active:scale-95"
                     >
                         {t('matchDetail.joinMatch')}
-                    </Link>
+                    </span>
                 </div>
             </div>
-        </div>
+        </Link>
     );
 }

@@ -366,6 +366,14 @@
         "processing": "Processing…",
         "freeMatch": "Free Match"
     },
+    "matchRules": {
+        "standard": { "title": "Standard Rules", "body": "FIFA rules apply. No slide tackles. Offside rule enforced." },
+        "duration": { "title": "Match Duration", "body": "Two halves. Half-time break between halves." },
+        "substitutions": { "title": "Substitutions", "body": "Unlimited rolling substitutions. Player must exit before substitute enters." },
+        "equipment": { "title": "Equipment", "body": "Moulded studs or turf boots only. No metal studs. Shin pads mandatory." },
+        "noShow": { "title": "No-Show Policy", "body": "No-show players will be penalized. Repeated no-shows may result in account suspension." },
+        "refund": { "title": "Refund Policy", "body": "Full refund if cancelled 2+ hours before match. No refund within 2 hours of kick-off." }
+    },
     "myGames": {
         "title": "My Games",
         "active": "Active",

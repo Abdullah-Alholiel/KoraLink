@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Match Detail — Joined State</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+.phone { max-width: 390px; margin: 20px auto; background: #fff; border-radius: 40px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+.hero { height: 260px; background: linear-gradient(135deg, #1b4332, #2d6a4f); position: relative; }
+.hero-overlay { position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0,0,0,.6)); }
+.hero-top { position: absolute; top: 0; left: 0; right: 0; padding: 16px; display: flex; justify-content: space-between; z-index: 2; }
+.hero-top button { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,.3); border: none; color: #fff; font-size: 18px; cursor: pointer; }
+.hero-bottom { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px; z-index: 2; }
+.joined-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(37,65,50,.9); border-radius: 20px; padding: 6px 14px; margin-bottom: 10px; }
+.joined-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+.joined-text { color: #fff; font-size: 12px; font-weight: 700; }
+.hero-title { color: #fff; font-size: 20px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.hero-sub { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.hero-sub svg { width: 14px; height: 14px; }
+.hero-sub span { color: rgba(255,255,255,.9); font-size: 13px; }
+.content { border-radius: 24px 24px 0 0; margin-top: -20px; position: relative; background: #f5f5f5; padding: 0 20px 120px; }
+.pull-bar { display: flex; justify-content: center; padding: 12px 0 8px; }
+.pull-bar div { width: 40px; height: 4px; border-radius: 2px; background: #ddd; }
+.card { background: #fff; border-radius: 16px; padding: 16px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.card-title { font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.detail-row { display: flex; align-items: center; gap: 10px; }
+.detail-row svg { width: 16px; height: 16px; color: #999; }
+.detail-label { font-size: 13px; font-weight: 600; color: #1b4332; }
+.detail-value { font-size: 12px; color: #666; }
+.section-title { font-size: 11px; font-weight: 700; color: #2d6a4f; text-transform: uppercase; letter-spacing: .05em; margin: 20px 0 12px; }
+.team-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.avatars { display: flex; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: #e5e7eb; border: 2px solid #fff; margin-left: -8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #666; }
+.avatar:first-child { margin-left: 0; }
+.team-spots { font-size: 12px; color: #666; margin-left: 8px; }
+.leave-btn { width: 100%; padding: 14px; border-radius: 12px; border: 1.5px solid rgba(220,38,38,.3); color: #dc2626; font-size: 14px; font-weight: 600; background: #fff; margin-top: 20px; cursor: pointer; }
+.whatsapp-bar { position: fixed; bottom: 80px; left: 0; right: 0; max-width: 390px; margin: 0 auto; padding: 0 20px; }
+.whatsapp-inner { background: #2d6a4f; border-radius: 16px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(27,67,50,.4); }
+.whatsapp-left { display: flex; align-items: center; gap: 8px; }
+.whatsapp-left span { color: #fff; font-size: 13px; font-weight: 700; }
+.whatsapp-right { background: rgba(255,255,255,.2); border-radius: 20px; padding: 6px 12px; }
+.whatsapp-right span { color: #fff; font-size: 11px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-top">
+      <button>←</button>
+      <button>💬</button>
+    </div>
+    <div class="hero-bottom">
+      <div class="joined-badge">
+        <div class="joined-dot"></div>
+        <span class="joined-text">You're In</span>
+      </div>
+      <div class="hero-title">9:00 PM | Friday Night 7v7 at Riyadh</div>
+      <div class="hero-sub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span>KSU Stadium</span>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="pull-bar"><div></div></div>
+    <div class="card">
+      <div class="card-title">Game Details</div>
+      <div class="detail-row" style="margin-bottom:8px">
+        <span class="detail-label">Fri, Aug 15</span>
+        <span class="detail-value">9:00 PM – 10:30 PM</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">SAR 25</span>
+        <span class="detail-value">per player • Paid ✓</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Location</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <div><div style="font-weight:600;font-size:13px;color:#1b4332">KSU Stadium</div><div style="font-size:12px;color:#999">Olaya St., Riyadh</div></div>
+      </div>
+    </div>
+    <div class="section-title">Team</div>
+    <div class="team-row">
+      <div class="avatars">
+        <div class="avatar">A</div><div class="avatar">M</div><div class="avatar">K</div><div class="avatar">S</div>
+      </div>
+      <span class="team-spots">+3 more • 7/14 spots</span>
+    </div>
+    <button class="leave-btn">Leave Match</button>
+  </div>
+  <div class="whatsapp-bar">
+    <div class="whatsapp-inner">
+      <div class="whatsapp-left">💬 <span>Invite via WhatsApp</span></div>
+      <div class="whatsapp-right"><span>7 spots left • Fill the squad</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

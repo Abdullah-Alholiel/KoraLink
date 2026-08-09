@@ -89,7 +89,7 @@ describe('useWallet hooks', () => {
   describe('useWalletHistory', () => {
     it('fetches transaction history from /wallet/history', async () => {
       const apiTxn = makeApiTransaction();
-      mockFetcher.mockResolvedValue([apiTxn]);
+      mockFetcher.mockResolvedValue({ transactions: [apiTxn], total: 1, hasMore: false });
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletHistory(), { wrapper });
@@ -107,7 +107,7 @@ describe('useWallet hooks', () => {
     });
 
     it('handles empty transaction history', async () => {
-      mockFetcher.mockResolvedValue([]);
+      mockFetcher.mockResolvedValue({ transactions: [], total: 0, hasMore: false });
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletHistory(), { wrapper });
@@ -122,7 +122,7 @@ describe('useWallet hooks', () => {
         amount: '200.00',
         reference_type: 'TOPUP',
       });
-      mockFetcher.mockResolvedValue([apiTxn]);
+      mockFetcher.mockResolvedValue({ transactions: [apiTxn], total: 1, hasMore: false });
 
       const { wrapper } = createWrapper();
       const { result } = renderHook(() => useWalletHistory(), { wrapper });
