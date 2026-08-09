@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import {
     ArrowLeft,
@@ -11,8 +12,11 @@ import {
     MapPin,
     ChevronRight,
     Trophy,
+    AlertTriangle,
+    Loader2,
 } from 'lucide-react';
 import { mockMatches } from '@/lib/dummy-data';
+import { useMatch } from '@/hooks/useMatches';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
@@ -28,7 +32,12 @@ export default function MatchDetailPage({
 }) {
     const { id } = use(params);
     const router = useRouter();
-    const match = mockMatches.find((m) => m.id === id) || mockMatches[0];
+    const t = useTranslations();
+
+    // ── Data fetching via React Query (falls back to mock offline) ──
+    const { data: apiMatch, isLoading, error, refetch } = useMatch(id);
+    const mockMatch = mockMatches.find((m) => m.id === id) || mockMatches[0];
+    const match = apiMatch ?? mockMatch;
 
     const [hasJoined, setHasJoined] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
@@ -77,8 +86,43 @@ export default function MatchDetailPage({
                 className="flex-1 overflow-y-auto scroll-container bg-brand-bg relative"
             >
                 {/* ══════════════════════════════════════
-            HERO SECTION — Stadium Background with Parallax
+            Loading State
             ═══════════════════════════════════ */}
+                {isLoading && (
+                    <div className="flex items-center justify-center min-h-[60vh]">
+                        <Loader2 className="w-8 h-8 text-brand-green animate-spin" strokeWidth={2} />
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════
+            Error State (API error and no cached/mock data)
+            ═══════════════════════════════════ */}
+                {error && !isLoading && !apiMatch && !mockMatch && (
+                    <div className="flex flex-col items-center justify-center py-20 px-8">
+                        <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
+                            <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
+                        </div>
+                        <h3 className="text-lg font-bold text-brand-black mb-1">
+                            {t('common.error')}
+                        </h3>
+                        <p className="text-sm text-gray-400 text-center mb-6">
+                            {t('common.errorDescription')}
+                        </p>
+                        <button
+                            onClick={() => refetch()}
+                            className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+                        >
+                            {t('common.retry')}
+                        </button>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════
+            Main Content — hidden while loading
+            ═══════════════════════════════════ */}
+                {!isLoading && (
+                    <>
+                {/* ════ HERO SECTION — Stadium Background with Parallax ════ */}
                 <div className="relative h-72 overflow-hidden">
                     <div
                         className="absolute inset-0 will-change-transform"
@@ -129,7 +173,7 @@ export default function MatchDetailPage({
                         {hasJoined && (
                             <div className="inline-flex items-center gap-1.5 bg-brand-green/90 backdrop-blur-sm rounded-full px-3 py-1.5 mb-3 animate-scale-in">
                                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                <span className="text-xs font-bold text-white">You&apos;re In</span>
+                                <span className="text-xs font-bold text-white">You&#39;re In</span>
                             </div>
                         )}
                         <h1 className="text-2xl font-extrabold text-white leading-tight drop-shadow-lg">
@@ -142,9 +186,7 @@ export default function MatchDetailPage({
                     </div>
                 </div>
 
-                {/* ══════════════════════════════════════
-            CONTENT AREA
-            ═══════════════════════════════════ */}
+                {/* ════ CONTENT AREA ════ */}
                 <div className="relative -mt-3 bg-brand-bg rounded-t-3xl min-h-[50vh]">
                     {/* Pull Handle */}
                     <div className="flex justify-center pt-3 pb-2">
@@ -152,9 +194,9 @@ export default function MatchDetailPage({
                     </div>
 
                     {hasJoined ? (
-                        /* ═══ JOINED STATE ═══════════════════ */
+                        /* ═══ JOINED STATE ═══ */
                         <div className="pb-32">
-                            {/* 1. Game Details — first */}
+                            {/* 1. Game Details */}
                             <div className="mx-5 mt-2">
                                 <GameDetails
                                     date={match.date}
@@ -170,7 +212,7 @@ export default function MatchDetailPage({
                                 <span className="text-sm font-semibold text-brand-black">View Match Rules</span>
                             </div>
 
-                            {/* 2. Location / Map — second */}
+                            {/* 2. Location / Map */}
                             <div className="mx-5 bg-white rounded-2xl shadow-card p-5">
                                 <LocationMap
                                     venueName={match.venueName}
@@ -179,14 +221,14 @@ export default function MatchDetailPage({
                                 />
                             </div>
 
-                            {/* 3. Team Lineup — third */}
+                            {/* 3. Team Lineup */}
                             <div className="px-5 pt-6">
                                 <TeamLineup format={match.format} />
                             </div>
 
                             {/* WhatsApp Invite CTA (Sticky at bottom) */}
                             <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
-                                <div className="bg-brand-green rounded-2xl py-3.5 px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(27,67,50,0.4)]">
+                                <div className="bg-brand-green rounded-2xl py-3.5 px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(37,65,50,0.4)]">
                                     <div className="flex items-center gap-2">
                                         <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
@@ -203,7 +245,7 @@ export default function MatchDetailPage({
                             </div>
                         </div>
                     ) : (
-                        /* ═══ PRE-JOIN STATE ═════════════════ */
+                        /* ═══ PRE-JOIN STATE ═══ */
                         <div className="pb-32">
                             {/* Organizer */}
                             <div className="flex items-center justify-between px-5 py-3">
@@ -275,7 +317,7 @@ export default function MatchDetailPage({
                                 ))}
                             </div>
 
-                            {/* Team Section — arrow opens drawer */}
+                            {/* Team Section */}
                             <div className="px-5 mt-6">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-base font-bold text-brand-black">Team</h3>
@@ -342,7 +384,7 @@ export default function MatchDetailPage({
                                     className="
                                         w-full py-4 rounded-2xl bg-brand-green text-white
                                         text-sm font-bold flex items-center justify-between px-6
-                                        shadow-[0_4px_20px_rgba(27,67,50,0.4)]
+                                        shadow-[0_4px_20px_rgba(37,65,50,0.4)]
                                         active:scale-[0.98] transition-transform
                                     "
                                 >
@@ -353,6 +395,8 @@ export default function MatchDetailPage({
                         </div>
                     )}
                 </div>
+                    </>
+                )}
             </div>
 
             <BottomNav />

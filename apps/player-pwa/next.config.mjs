@@ -53,6 +53,47 @@ const withPWA = withPWAInit({
         urlPattern: /^https?:\/\/.*\/(api\/payments|moyasar)(\/.*)?$/,
         handler: 'NetworkOnly',
       },
+      {
+        // Auth endpoints: NetworkOnly – never cache authentication
+        urlPattern: /^https?:\/\/.*\/api\/auth(\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+      {
+        // Wallet / transactions: NetworkOnly – financial data
+        urlPattern: /^https?:\/\/.*\/api\/wallet(\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+      {
+        // Clubs / venues API: StaleWhileRevalidate for offline browsing
+        urlPattern: /^https?:\/\/.*\/api\/(clubs|venues)(\/.*)?$/,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'clubs-venues-cache',
+          expiration: {
+            maxAgeSeconds: 60 * 60 * 24, // 24 hours
+            maxEntries: 30,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      {
+        // User profile API: NetworkFirst with short cache fallback
+        urlPattern: /^https?:\/\/.*\/api\/user(\/.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'user-profile-cache',
+          expiration: {
+            maxAgeSeconds: 60 * 5, // 5 minutes
+            maxEntries: 5,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+          networkTimeoutSeconds: 3,
+        },
+      },
     ],
   },
 });

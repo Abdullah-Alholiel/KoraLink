@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@hookform/resolvers": "^5.7.1",
     "@t3-oss/env-nextjs": "^0.10.1",
     "@tanstack/react-query": "^5.56.2",
     "clsx": "^2.1.1",
@@ -22,6 +23,7 @@
     "next-intl": "^3.17.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-hook-form": "^7.85.0",
     "socket.io-client": "^4.7.5",
     "tailwind-merge": "^2.5.2",
     "zod": "^3.23.8",

@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --color-brand-green: #1B4332;
-  --color-brand-green-light: #2D6A4F;
-  --color-brand-red: #E63946;
-  --color-brand-black: #111827;
-  --color-brand-bg: #F9FAFB;
+  --color-brand-green: #254132;
+  --color-brand-green-light: #2d5c3e;
+  --color-brand-red: #d4494c;
+  --color-brand-black: #202124;
+  --color-brand-bg: #f7f8f7;
 }
 
 /* ── PWA Native Feel ───────────────────────────────── */
