@@ -84,7 +84,10 @@
         "avatar": "Profile Photo",
         "uploadAvatar": "Upload Photo",
         "save": "Save Profile",
-        "skip": "Skip for now"
+        "skip": "Skip for now",
+        "saving": "Saving...",
+        "errorTitle": "Failed to save profile",
+        "selectPosition": "Select your position"
     },
     "play": {
         "title": "KoraLink",

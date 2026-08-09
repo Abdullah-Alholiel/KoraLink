@@ -2,18 +2,30 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Trophy, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useSendOtp } from '@/hooks/useAuth';
 
 export default function LoginPage() {
     const router = useRouter();
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const t = useTranslations('login');
     const [phone, setPhone] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
+    const sendOtp = useSendOtp();
 
     const handleContinue = () => {
-        if (phone.length >= 7) {
-            router.push(`/${locale}/verify`);
-        }
+        if (phone.length < 7) return;
+        setError(null);
+        sendOtp.mutate(
+            { phone },
+            {
+                onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
+                onError: (err) => setError(err.message),
+            },
+        );
     };
 
     return (
@@ -37,12 +49,12 @@ export default function LoginPage() {
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center justify-center -mt-16">
                 <h1 className="text-2xl font-bold text-brand-black text-center leading-tight">
-                    Enter your phone
+                    {t('title').split('number')[0]}
                     <br />
                     number
                 </h1>
                 <p className="text-sm text-gray-400 mt-3 text-center">
-                    We&apos;ll send you a 6-digit code to
+                    {t('subtitle').split('verify')[0]}
                     <br />
                     verify your account.
                 </p>
@@ -59,7 +71,7 @@ export default function LoginPage() {
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="5X XXX XXXX"
+                        placeholder={t('phonePlaceholder')}
                         className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                         maxLength={9}
                         autoFocus
@@ -69,25 +81,41 @@ export default function LoginPage() {
 
             {/* ── Bottom Section ────────────────────── */}
             <div className="pb-8 pb-safe">
+                {/* Error */}
+                {error && (
+                    <p className="text-center text-sm text-brand-red mb-3">
+                        {error}
+                    </p>
+                )}
+
                 <button
                     onClick={handleContinue}
-                    disabled={phone.length < 7}
+                    disabled={sendOtp.isPending || phone.length < 7}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${phone.length >= 7
+            ${!sendOtp.isPending && phone.length >= 7
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    Continue
-                    <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                    {sendOtp.isPending ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {t('sending')}
+                        </>
+                    ) : (
+                        <>
+                            {t('continue')}
+                            <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                        </>
+                    )}
                 </button>
                 <p className="text-center text-xs text-gray-400 mt-4 leading-relaxed">
-                    By continuing, you agree to our{' '}
-                    <span className="text-brand-green font-medium underline">Terms of Service</span> &{' '}
-                    <span className="text-brand-green font-medium underline">Privacy Policy</span>
+                    {t('terms')}{' '}
+                    <span className="text-brand-green font-medium underline">{t('termsOfService')}</span> {t('and')}{' '}
+                    <span className="text-brand-green font-medium underline">{t('privacyPolicy')}</span>
                 </p>
             </div>
         </div>
