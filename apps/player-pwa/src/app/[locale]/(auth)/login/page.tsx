@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Trophy, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp } from '@/hooks/useAuth';
+import DevLoginBar from '@/components/auth/DevLoginBar';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -117,6 +118,8 @@ export default function LoginPage() {
                     <span className="text-brand-green font-medium underline">{t('termsOfService')}</span> {t('and')}{' '}
                     <span className="text-brand-green font-medium underline">{t('privacyPolicy')}</span>
                 </p>
+
+                <DevLoginBar />
             </div>
         </div>
     );
