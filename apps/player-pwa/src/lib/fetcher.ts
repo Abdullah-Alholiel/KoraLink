@@ -72,5 +72,8 @@ export async function fetcher<T>(
     );
   }
 
+  // 204 No Content — return empty (e.g. DELETE /matches/:id/leave)
+  if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
 }

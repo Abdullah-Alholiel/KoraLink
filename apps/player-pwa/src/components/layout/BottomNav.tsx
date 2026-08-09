@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
     Rss,
     Users,
@@ -11,16 +12,17 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-    { key: 'feed', icon: Rss, label: 'Feed', href: '' },
-    { key: 'clubs', icon: Users, label: 'Clubs', href: '/clubs' },
-    { key: 'play', icon: null, label: 'Play', href: '/play' },
-    { key: 'messages', icon: MessageSquare, label: 'Messages', href: '/messages' },
-    { key: 'profile', icon: User, label: 'Profile', href: '/profile' },
+    { key: 'feed', icon: Rss, i18nKey: 'nav.feed' as const, href: '' },
+    { key: 'clubs', icon: Users, i18nKey: 'nav.clubs' as const, href: '/clubs' },
+    { key: 'play', icon: null, i18nKey: 'nav.play' as const, href: '/play' },
+    { key: 'messages', icon: MessageSquare, i18nKey: 'nav.messages' as const, href: '/messages' },
+    { key: 'profile', icon: User, i18nKey: 'nav.profile' as const, href: '/profile' },
 ];
 
 export default function BottomNav() {
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const t = useTranslations();
 
     const isActive = (href: string) => {
         const fullPath = `/${locale}${href}`;
@@ -66,7 +68,7 @@ export default function BottomNav() {
                                     />
                                 </div>
                                 <span className="text-[10px] font-semibold mt-0.5 text-brand-green">
-                                    {item.label}
+                                    {t(item.i18nKey)}
                                 </span>
                             </Link>
                         );
@@ -88,7 +90,7 @@ export default function BottomNav() {
                                 className={`text-[10px] mt-1 ${active ? 'font-semibold text-brand-green' : 'font-normal text-gray-400'
                                     }`}
                             >
-                                {item.label}
+                                {t(item.i18nKey)}
                             </span>
                         </Link>
                     );

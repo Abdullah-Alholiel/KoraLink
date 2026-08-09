@@ -18,6 +18,7 @@ import {
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
+import { clearAuthToken } from '@/lib/fetcher';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -170,6 +171,7 @@ export default function ProfilePage() {
                     danger
                     onClick={() => {
                       logout();
+                      clearAuthToken();
                       window.location.href = `/${locale}/login`;
                     }}
                 />
