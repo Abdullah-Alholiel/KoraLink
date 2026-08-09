@@ -13,11 +13,11 @@ import {
 // ─── Fetch Wallet Balance ───────────────────────────
 
 export function useWalletBalance() {
-  return useQuery<{ balance: number }, FetchError>({
+  return useQuery<{ balance: number; currency: string }, FetchError>({
     queryKey: ['wallet', 'balance'],
     queryFn: async () => {
       const raw = await fetcher<WalletBalanceApi>('/wallet/balance');
-      return { balance: adaptWalletBalance(raw) };
+      return { balance: adaptWalletBalance(raw), currency: 'SAR' };
     },
   });
 }
