@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// Mock next/navigation before importing the component
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/ar/offline',
+}));
+
 import Offline from '@/app/[locale]/offline';
 
 describe('Offline page', () => {

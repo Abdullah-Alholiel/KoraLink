@@ -29,13 +29,15 @@ export async function fetcher<T>(
     );
   }
 
+  const { headers: customHeaders, ...restOptions } = options;
+
   const response = await fetch(url.toString(), {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...customHeaders,
     },
-    ...options,
+    ...restOptions,
   });
 
   if (!response.ok) {

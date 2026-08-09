@@ -1,0 +1,52 @@
+import {
+  IsString,
+  IsInt,
+  IsEnum,
+  IsISO8601,
+  Min,
+  Max,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CreateMatchDto {
+  @ApiProperty({ description: 'Pitch UUID' })
+  @IsString()
+  pitch_id: string;
+
+  @ApiProperty({ description: 'Match title', minLength: 3, maxLength: 255 })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(255)
+  title: string;
+
+  @ApiProperty({ enum: ['Casual', 'Competitive'] })
+  @IsEnum(['Casual', 'Competitive'])
+  match_type: 'Casual' | 'Competitive';
+
+  @ApiProperty({ enum: ['Men Only', 'Women Only', 'Mixed'] })
+  @IsEnum(['Men Only', 'Women Only', 'Mixed'])
+  gender_rule: 'Men Only' | 'Women Only' | 'Mixed';
+
+  @ApiProperty({ description: 'Scheduled kick-off time (ISO 8601)' })
+  @IsISO8601()
+  scheduled_at: string;
+
+  @ApiProperty({ description: 'Match duration in minutes', minimum: 30, maximum: 180 })
+  @IsInt()
+  @Min(30)
+  @Max(180)
+  duration_mins: number;
+
+  @ApiProperty({ description: 'Maximum number of players', minimum: 2, maximum: 22 })
+  @IsInt()
+  @Min(2)
+  @Max(22)
+  max_players: number;
+
+  @ApiProperty({ description: 'Total pitch rental cost in SAR', minimum: 0 })
+  @IsInt()
+  @Min(0)
+  pitchCostSar: number;
+}

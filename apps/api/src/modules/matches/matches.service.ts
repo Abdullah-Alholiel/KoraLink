@@ -201,4 +201,191 @@ export class MatchesService {
 
     return match;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Join a match (add player to roster)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async joinMatch(userId: string, matchId: string) {
+    return this.db.transaction(async (tx) => {
+      // 1. Verify match exists and is Open
+      const [match] = await tx
+        .select({
+          id: matches.id,
+          status: matches.status,
+          max_players: matches.max_players,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.status !== 'Open') {
+        throw new BadRequestException('This match is no longer open for joining.');
+      }
+
+      // 2. Check user is not already in match_players
+      const [existing] = await tx
+        .select({ id: schema.match_players.id })
+        .from(schema.match_players)
+        .where(
+          sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.user_id} = ${userId}`,
+        )
+        .limit(1);
+
+      if (existing) {
+        throw new BadRequestException('You have already joined this match.');
+      }
+
+      // 3. Check spots available
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.match_players)
+        .where(eq(schema.match_players.match_id, matchId));
+
+      if (count >= match.max_players) {
+        throw new BadRequestException('Match is full.');
+      }
+
+      // 4. Insert match_players row
+      const [player] = await tx
+        .insert(schema.match_players)
+        .values({
+          match_id: matchId,
+          user_id: userId,
+          is_host: false,
+          no_show: false,
+        })
+        .returning();
+
+      // 5. If last spot, mark Full
+      if (count + 1 >= match.max_players) {
+        await tx
+          .update(matches)
+          .set({ status: 'Full' })
+          .where(eq(matches.id, matchId));
+      }
+
+      return player;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Leave a match (remove player from roster)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async leaveMatch(userId: string, matchId: string) {
+    return this.db.transaction(async (tx) => {
+      // 1. Verify user is in the match
+      const [membership] = await tx
+        .select({
+          id: schema.match_players.id,
+          is_host: schema.match_players.is_host,
+        })
+        .from(schema.match_players)
+        .where(
+          sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.user_id} = ${userId}`,
+        )
+        .limit(1);
+
+      if (!membership) {
+        throw new BadRequestException('You are not a member of this match.');
+      }
+
+      if (membership.is_host) {
+        throw new BadRequestException(
+          'Host cannot leave the match. Cancel the match instead.',
+        );
+      }
+
+      // 2. Remove from match_players
+      await tx
+        .delete(schema.match_players)
+        .where(
+          sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.user_id} = ${userId}`,
+        );
+
+      // 3. If match was Full, revert to Open
+      const [match] = await tx
+        .select({ status: matches.status })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (match?.status === 'Full') {
+        await tx
+          .update(matches)
+          .set({ status: 'Open' })
+          .where(eq(matches.id, matchId));
+      }
+
+      return { message: 'Successfully left the match.' };
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Create a new match (host)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async createMatch(
+    hostId: string,
+    dto: {
+      pitch_id: string;
+      title: string;
+      match_type: typeof schema.matchTypeEnum.enumValues[number];
+      gender_rule: typeof schema.genderRuleEnum.enumValues[number];
+      scheduled_at: string;
+      duration_mins: number;
+      max_players: number;
+      pitchCostSar: number;
+    },
+  ) {
+    // Validate pitch exists
+    const [pitch] = await this.db
+      .select({ id: schema.pitches.id })
+      .from(schema.pitches)
+      .where(eq(schema.pitches.id, dto.pitch_id))
+      .limit(1);
+
+    if (!pitch) {
+      throw new NotFoundException(`Pitch ${dto.pitch_id} not found.`);
+    }
+
+    const pricePerPlayer = this.calculatePricePerPlayer(
+      dto.pitchCostSar,
+      dto.max_players,
+    );
+
+    return this.db.transaction(async (tx) => {
+      // 1. Create the match
+      const [match] = await tx
+        .insert(matches)
+        .values({
+          host_id: hostId,
+          pitch_id: dto.pitch_id,
+          title: dto.title,
+          match_type: dto.match_type,
+          gender_rule: dto.gender_rule,
+          scheduled_at: new Date(dto.scheduled_at),
+          duration_mins: dto.duration_mins,
+          price_per_player: pricePerPlayer.toString(),
+          max_players: dto.max_players,
+          status: 'Open',
+        })
+        .returning();
+
+      // 2. Add host to match_players
+      await tx.insert(schema.match_players).values({
+        match_id: match.id,
+        user_id: hostId,
+        is_host: true,
+        team: 'Home',
+      });
+
+      return match;
+    });
+  }
 }

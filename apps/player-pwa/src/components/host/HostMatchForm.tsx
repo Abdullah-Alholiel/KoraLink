@@ -13,7 +13,9 @@ import {
     Info,
     ArrowRight,
     Sparkles,
+    Loader2,
 } from 'lucide-react';
+import { useCreateMatch } from '@/hooks/useMatches';
 
 /* ── Format options ─────────────────────────────── */
 const FORMAT_OPTIONS = ['5v5', '6v6', '7v7', '8v8', '9v9'] as const;
@@ -24,6 +26,7 @@ type BookingMode = 'koralink' | 'self';
 
 export default function HostMatchForm() {
     const router = useRouter();
+    const createMatch = useCreateMatch();
 
     /* ── Form State ─────────────────────────────── */
     const [format, setFormat] = useState<Format>('7v7');
@@ -32,8 +35,33 @@ export default function HostMatchForm() {
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
 
+    // Derive max players from format (e.g. "7v7" → 14)
+    // TODO: Send max_players to API as part of CreateMatchDto
+    // const maxPlayers = parseInt(format.charAt(0)) * 2;
     const playerShare = 37;
     const hostCost = 0;
+
+    const handlePublish = () => {
+        if (!date || !time) return;
+
+        createMatch.mutate(
+            {
+                venueId: 'demo-venue-001', // Will come from venue picker in production
+                format,
+                date,
+                time,
+                isPublic,
+                bookingMode,
+                price: playerShare,
+            },
+            {
+                onSuccess: () => {
+                    // Navigate back to play page after successful creation
+                    router.push('/ar/play');
+                },
+            },
+        );
+    };
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -277,16 +305,37 @@ export default function HostMatchForm() {
 
                 {/* Publish CTA */}
                 <button
+                    onClick={handlePublish}
+                    disabled={createMatch.isPending || !date || !time}
                     className="
                         w-full py-4 rounded-2xl bg-brand-green text-white
                         text-sm font-bold flex items-center justify-center gap-2
-                        shadow-[0_4px_20px_rgba(27,67,50,0.4)]
+                        shadow-[0_4px_20px_rgba(37,65,50,0.4)]
                         active:scale-[0.98] transition-transform
+                        disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none
                     "
                 >
-                    Publish Match
-                    <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                    {createMatch.isPending ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2.5} />
+                            Publishing...
+                        </>
+                    ) : (
+                        <>
+                            Publish Match
+                            <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                        </>
+                    )}
                 </button>
+
+                {/* Error message */}
+                {createMatch.isError && (
+                    <p className="text-xs text-brand-red mt-2 text-center">
+                        {createMatch.error instanceof Error
+                            ? createMatch.error.message
+                            : 'Failed to create match. Please try again.'}
+                    </p>
+                )}
             </div>
         </div>
     );
