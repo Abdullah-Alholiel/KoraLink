@@ -16,7 +16,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
-import { useJoinMatch } from '@/hooks/useMatchActions';
+import { useJoinMatch, useLeaveMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
@@ -32,13 +32,14 @@ export default function MatchDetailPage({
 }: {
     params: Promise<{ id: string; locale: string }>;
 }) {
-    const { id } = use(params);
+    const { id, locale } = use(params);
     const router = useRouter();
     const t = useTranslations();
 
     // ── Data fetching via React Query ──
     const { data: match, isLoading, error, refetch } = useMatch(id);
     const joinMatch = useJoinMatch();
+    const leaveMatch = useLeaveMatch();
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
@@ -58,7 +59,6 @@ export default function MatchDetailPage({
 
     const [showPayment, setShowPayment] = useState(false);
     const [showTeamSheet, setShowTeamSheet] = useState(false);
-    const [hasJoined, setHasJoined] = useState(false);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -91,10 +91,7 @@ export default function MatchDetailPage({
 
     const handlePaySuccess = () => {
         setShowPayment(false);
-        // Actually join the match via API
-        joinMatch.mutate(id, {
-            onSuccess: () => setHasJoined(true),
-        });
+        joinMatch.mutate(id);
     };
 
     const openSpots = match ? match.totalSpots - match.filledSpots : 0;
@@ -175,7 +172,7 @@ export default function MatchDetailPage({
                             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
-                            {hasJoined
+                            {isJoined
                                 ? <MessageSquare className="w-5 h-5 text-white" strokeWidth={1.5} />
                                 : <Share2 className="w-5 h-5 text-white" strokeWidth={1.5} />
                             }
@@ -190,7 +187,7 @@ export default function MatchDetailPage({
                             opacity: Math.max(0, 1 - parallaxProgress * 1.2),
                         }}
                     >
-                        {hasJoined && (
+                        {isJoined && (
                             <div className="inline-flex items-center gap-1.5 bg-brand-green/90 backdrop-blur-sm rounded-full px-3 py-1.5 mb-3 animate-scale-in">
                                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                                 <span className="text-xs font-bold text-white">{t('matchDetail.joined')}</span>
@@ -213,7 +210,7 @@ export default function MatchDetailPage({
                         <div className="w-10 h-1 rounded-full bg-gray-300" />
                     </div>
 
-                    {hasJoined ? (
+                    {isJoined ? (
                         /* ═══ JOINED STATE ═══ */
                         <div className="pb-32">
                             {/* 1. Game Details */}
@@ -245,6 +242,35 @@ export default function MatchDetailPage({
                             <div className="px-5 pt-6">
                                 <TeamLineup format={match.format} />
                             </div>
+
+                            {/* Leave Match Button */}
+                            {!isUserHost && (
+                                <div className="px-5 pt-6">
+                                    <button
+                                        onClick={() => leaveMatch.mutate(id)}
+                                        disabled={leaveMatch.isPending}
+                                        className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform disabled:opacity-50"
+                                    >
+                                        {leaveMatch.isPending ? '...' : (t('matchDetail.leaveMatch') || 'Leave Match')}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Cancel Match Button (Host only) */}
+                            {isUserHost && match.status !== 'completed' && match.status !== 'cancelled' && (
+                                <div className="px-5 pt-6">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm(t('matchDetail.cancelConfirm') || 'Cancel this match?')) {
+                                                // TODO: wire cancel endpoint
+                                            }
+                                        }}
+                                        className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
+                                    >
+                                        {t('matchDetail.cancelMatch') || 'Cancel Match'}
+                                    </button>
+                                </div>
+                            )}
 
                             {/* WhatsApp Invite CTA (Sticky at bottom) */}
                             <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
@@ -285,7 +311,8 @@ export default function MatchDetailPage({
                                         <p className="text-sm font-bold text-brand-black">{match.organizer.name}</p>
                                     </div>
                                 </div>
-                                <button className="text-sm font-medium text-brand-green">
+                                <button className="text-sm font-medium text-brand-green"
+                                    onClick={() => router.push(`/${locale}/personal-info`)}>
                                     {t('matchDetail.viewProfile')}
                                 </button>
                             </div>

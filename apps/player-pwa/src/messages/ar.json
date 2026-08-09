@@ -159,7 +159,9 @@
             "mixed": "مختلط"
         },
         "surface": "السطح",
-        "matchRules": "القواعد القياسية"
+        "matchRules": "القواعد القياسية",
+        "leaveMatch": "مغادرة المباراة",
+        "cancelMatch": "إلغاء المباراة"
     },
     "gameDetails": {
         "date": "التاريخ",

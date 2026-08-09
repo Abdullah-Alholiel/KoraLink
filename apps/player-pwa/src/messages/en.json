@@ -159,7 +159,9 @@
             "mixed": "Mixed"
         },
         "surface": "Surface",
-        "matchRules": "Standard rules"
+        "matchRules": "Standard rules",
+        "leaveMatch": "Leave Match",
+        "cancelMatch": "Cancel Match"
     },
     "gameDetails": {
         "date": "Date",
