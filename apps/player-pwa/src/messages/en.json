@@ -363,5 +363,15 @@
         "paymentFailed": "Payment failed. Please try again.",
         "processing": "Processing…",
         "freeMatch": "Free Match"
+    },
+    "myGames": {
+        "title": "My Games",
+        "active": "Active",
+        "history": "History",
+        "empty": "No matches yet",
+        "emptyActive": "You have no active matches",
+        "emptyHistory": "No match history yet",
+        "emptyCta": "Find a match",
+        "loading": "Loading your matches..."
     }
 }

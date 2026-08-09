@@ -82,21 +82,30 @@ export class UsersService {
       SELECT
         m.id,
         m.title,
+        m.match_type,
+        m.gender_rule,
         m.status,
         m.scheduled_at,
+        m.duration_mins,
         m.max_players,
         m.price_per_player::float AS price_per_player,
-        COUNT(mp2.id)::int AS spots_filled,
+        COUNT(mp2.id) FILTER (WHERE mp2.is_host = false)::int AS spots_filled,
+        NULL::float8 AS distance_m,
+        u.id AS host_id,
+        u.full_name AS host_name,
+        u.avatar_url AS host_avatar,
+        p.id AS pitch_id,
+        p.name AS pitch_name,
         v.name AS venue_name,
         v.city AS venue_city
       FROM match_players my
       INNER JOIN matches m ON m.id = my.match_id
-      INNER JOIN venues v ON v.id = (
-        SELECT p.venue_id FROM pitches p WHERE p.id = m.pitch_id
-      )
+      INNER JOIN users u ON u.id = m.host_id
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
-      GROUP BY m.id, v.id
+      GROUP BY m.id, u.id, p.id, v.id
       ORDER BY m.scheduled_at DESC
       LIMIT 50
     `);
@@ -104,11 +113,20 @@ export class UsersService {
     return rows as unknown as Array<{
       id: string;
       title: string;
+      match_type: string;
+      gender_rule: string;
       status: string;
       scheduled_at: Date;
+      duration_mins: number;
       max_players: number;
       price_per_player: number;
       spots_filled: number;
+      distance_m: number | null;
+      host_id: string;
+      host_name: string | null;
+      host_avatar: string | null;
+      pitch_id: string;
+      pitch_name: string;
       venue_name: string;
       venue_city: string;
     }>;

@@ -162,7 +162,7 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<Trophy className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.myGames')}
-                    href={`/${locale}/play`}
+                    href={`/${locale}/my-games`}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem

@@ -74,3 +74,13 @@ export function useUpdateProfile() {
     },
   });
 }
+
+// ─── Fetch My Matches ──────────────────────────────────
+
+export function useMyMatches() {
+  return useQuery<import('@/lib/api-adapter').NearbyMatchApi[], FetchError>({
+    queryKey: ['user', 'my-matches'],
+    queryFn: () => fetcher<import('@/lib/api-adapter').NearbyMatchApi[]>('/users/me/matches'),
+    staleTime: 30_000,
+  });
+}

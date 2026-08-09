@@ -105,7 +105,7 @@ export class MatchesService {
         m.duration_mins,
         m.price_per_player::float AS price_per_player,
         m.max_players,
-        COUNT(mp.id)::int         AS spots_filled,
+        COUNT(mp.id) FILTER (WHERE mp.is_host = false)::int         AS spots_filled,
         ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,
@@ -209,7 +209,7 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async joinMatch(userId: string, matchId: string) {
-    return this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx) => {
       // 1. Verify match exists and is Open
       const [match] = await tx
         .select({
@@ -253,15 +253,14 @@ export class MatchesService {
       }
 
       // 4. Insert match_players row
-      const [player] = await tx
+      await tx
         .insert(schema.match_players)
         .values({
           match_id: matchId,
           user_id: userId,
           is_host: false,
           no_show: false,
-        })
-        .returning();
+        });
 
       // 5. If last spot, mark Full
       if (count + 1 >= match.max_players) {
@@ -270,9 +269,10 @@ export class MatchesService {
           .set(withTimestamp({ status: 'Full' }))
           .where(eq(matches.id, matchId));
       }
-
-      return player;
     });
+
+    // Return fully populated match with relations (API Contract Rule §2)
+    return this.findOne(matchId);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async leaveMatch(userId: string, matchId: string) {
-    return this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx) => {
       // 1. Verify user is in the match
       const [membership] = await tx
         .select({
@@ -323,9 +323,10 @@ export class MatchesService {
           .set(withTimestamp({ status: 'Open' }))
           .where(eq(matches.id, matchId));
       }
-
-      return { message: 'Successfully left the match.' };
     });
+
+    // Return fully populated match with relations (API Contract Rule §2)
+    return this.findOne(matchId);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -437,7 +438,7 @@ export class MatchesService {
    * Start a match: Full → InProgress. Only the host may transition.
    */
   async startMatch(userId: string, matchId: string) {
-    return this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
         .from(matches)
@@ -462,16 +463,17 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'InProgress' }))
         .where(eq(matches.id, matchId));
-
-      return { message: 'Match started.', status: 'InProgress' };
     });
+
+    // Return fully populated match with relations (API Contract Rule §2)
+    return this.findOne(matchId);
   }
 
   /**
    * Complete a match: InProgress → Completed. Only the host may transition.
    */
   async completeMatch(userId: string, matchId: string) {
-    return this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
         .from(matches)
@@ -496,16 +498,17 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'Completed' }))
         .where(eq(matches.id, matchId));
-
-      return { message: 'Match completed.', status: 'Completed' };
     });
+
+    // Return fully populated match with relations (API Contract Rule §2)
+    return this.findOne(matchId);
   }
 
   /**
    * Cancel a match: Open | Full → Cancelled. Only the host may transition.
    */
   async cancelMatch(userId: string, matchId: string) {
-    return this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
         .from(matches)
@@ -530,8 +533,9 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'Cancelled' }))
         .where(eq(matches.id, matchId));
-
-      return { message: 'Match cancelled.', status: 'Cancelled' };
     });
+
+    // Return fully populated match with relations (API Contract Rule §2)
+    return this.findOne(matchId);
   }
 }
