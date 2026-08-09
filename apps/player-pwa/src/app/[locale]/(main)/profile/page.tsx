@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
     User,
@@ -71,6 +71,7 @@ function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps
 
 export default function ProfilePage() {
     const pathname = usePathname();
+    const router = useRouter();
     const t = useTranslations();
     const locale = pathname.split('/')[1] || 'en';
 
@@ -117,6 +118,7 @@ export default function ProfilePage() {
                     <button
                         className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-brand-green flex items-center justify-center border-2 border-white active:scale-95 transition-transform"
                         aria-label={t('profile.editProfile')}
+                        onClick={() => router.push(`/${locale}/personal-info`)}
                     >
                         <Camera className="w-4 h-4 text-white" strokeWidth={2} />
                     </button>
@@ -150,6 +152,7 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<User className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.personalInfo')}
+                    href={`/${locale}/personal-info`}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem
@@ -183,6 +186,11 @@ export default function ProfilePage() {
                     icon={<Globe className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.language')}
                     endText={locale === 'ar' ? t('profile.languageAr') : t('profile.languageEn')}
+                    onClick={() => {
+                        const newLocale = locale === 'ar' ? 'en' : 'ar';
+                        const newPath = pathname.replace(`/${locale}`, `/${newLocale}`);
+                        router.push(newPath);
+                    }}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem

@@ -5,6 +5,9 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp } from '@/hooks/useAuth';
+import { useAppStore } from '@/store/useAppStore';
+import { fetcher } from '@/lib/fetcher';
+import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 30; // seconds
@@ -62,10 +65,29 @@ function VerifyContent() {
         verifyOtp.mutate(
             { phone, otp: otp.join('') },
             {
-                onSuccess: (data) => {
+                onSuccess: async (data) => {
                     if (data.isNewUser) {
                         router.push(`/${locale}/complete-profile`);
                     } else {
+                        // Populate Zustand user for returning users — cascade-fixes
+                        // join detection, host detection, isAuthenticated, and profile display.
+                        try {
+                            const profile = await fetcher<UserProfileApi>('/users/me');
+                            const skillLevel = (profile.skill_level?.toLowerCase() ?? 'intermediate') as 'beginner' | 'intermediate' | 'advanced';
+                            useAppStore.getState().login({
+                                id: profile.id,
+                                fullName: profile.full_name ?? '',
+                                handle: profile.handle ?? '',
+                                avatarUrl: profile.avatar_url ?? '',
+                                phone: profile.phone,
+                                preferredLocation: profile.preferred_location ?? '',
+                                preferredPosition: profile.preferred_position ?? '',
+                                skillLevel,
+                                locale: locale as 'ar' | 'en',
+                            }, '');
+                        } catch {
+                            // If profile fetch fails, still navigate — UI will show fallback
+                        }
                         router.push(`/${locale}`);
                     }
                 },

@@ -243,7 +243,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     },
     date: scheduled.toISOString().split('T')[0],
     time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, row.duration_mins),
+    endTime: fmtEnd(scheduled, row.duration_mins ?? 60),
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,

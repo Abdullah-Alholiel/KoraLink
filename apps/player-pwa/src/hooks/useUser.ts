@@ -5,7 +5,7 @@ import { fetcher, FetchError } from '@/lib/fetcher';
 
 // ─── API Response Types ────────────────────────────────
 
-interface UserProfileApi {
+export interface UserProfileApi {
   id: string;
   phone: string;
   full_name: string | null;
