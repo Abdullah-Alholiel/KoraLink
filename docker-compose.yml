@@ -13,6 +13,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./apps/api/drizzle/gist_indexes.sql:/docker-entrypoint-initdb.d/01_gist_indexes.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U koralink -d koralink"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # ── NestJS API Service ────────────────────────────────────────────────────
   api:
