@@ -16,7 +16,7 @@ import {
     Camera,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
-import { useUserStats } from '@/hooks/useUser';
+import { useUserStats, useUserProfile } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
 
 interface MenuItemProps {
@@ -74,32 +74,34 @@ export default function ProfilePage() {
     const locale = pathname.split('/')[1] || 'en';
 
     // ── User data from Zustand store (populated by auth flow) ──
-    const user = useAppStore(selectUser);
+    const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
     const logout = useAppStore((s) => s.logout);
 
-    // ── Real data from API ──
+    // ── Real data from API (fills gaps when store is stale after dev-login) ──
+    const { data: apiUser } = useUserProfile();
     const { data: stats } = useUserStats();
     const { data: walletData } = useWalletBalance();
 
-    // Live balance from API, fall back to store if API hasn't loaded
-    const displayBalance = walletData?.balance ?? 0;
-
-    // Use store user data, fall back to a placeholder if not yet authenticated
-    const fullName = user?.fullName ?? t('profile.guestName');
-    const handle = user?.handle ?? '@guest';
+    // Merge store + API data. API takes priority when available.
+    const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
+    const handle = apiUser?.handle ?? storeUser?.handle ?? '@guest';
+    const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
     const avatarInitial = fullName.charAt(0).toUpperCase();
+
+    // Live balance from API
+    const displayBalance = walletData?.balance ?? 0;
 
     return (
         <div className="pb-4">
             {/* ── Avatar & Name ─────────────────────── */}
             <div className="flex flex-col items-center pt-6 pb-4 bg-white">
                 <div className="relative">
-                    {user?.avatarUrl ? (
+                    {avatarUrl ? (
                         <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                src={user.avatarUrl}
+                                src={avatarUrl}
                                 alt={fullName}
                                 className="w-full h-full object-cover"
                             />
@@ -123,7 +125,7 @@ export default function ProfilePage() {
             </div>
 
             {/* ── Stats Row ────────────────────────── */}
-            {isAuthenticated && user && (
+            {isAuthenticated && (
                 <div className="flex justify-around bg-white rounded-2xl mx-4 mt-4 py-4 shadow-card">
                     <div className="text-center">
                         <p className="text-2xl font-extrabold text-brand-black">{stats?.games_played ?? 0}</p>

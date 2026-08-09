@@ -365,7 +365,7 @@ export class MatchesService {
       dto.max_players,
     );
 
-    return this.db.transaction(async (tx) => {
+    const created = await this.db.transaction(async (tx) => {
       // 1. Create the match
       const [match] = await tx
         .insert(matches)
@@ -395,6 +395,9 @@ export class MatchesService {
 
       return match;
     });
+
+    // Fetch complete match with host relation so the frontend gets full_name etc.
+    return this.findOne(created.id);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
