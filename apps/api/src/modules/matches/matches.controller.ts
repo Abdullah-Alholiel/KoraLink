@@ -34,9 +34,10 @@ export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
 
   // ── GET /matches — Discovery feed ─────────────────────────────────────
+  // NOTE: No cache interceptor here because query params (lat, lng, date)
+  // vary per user; the default NestJS cache key is only the route path,
+  // which would serve stale cached results to different users.
   @Get()
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(60)
   @ApiOperation({
     summary: 'Discover nearby open matches (PostGIS geo-filter)',
   })

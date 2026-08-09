@@ -8,6 +8,7 @@ import {
   OnGatewayDisconnect,
   WsException,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -38,6 +39,8 @@ type DB = PostgresJsDatabase<typeof schema>;
 export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(AppGateway.name);
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -81,7 +84,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: AuthenticatedSocket): void {
     // Rooms are cleaned up automatically by Socket.IO on disconnect.
-    console.log(`Client disconnected: ${client.id}`);
+    this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   // ── Join a match lobby ───────────────────────────────────────────────────

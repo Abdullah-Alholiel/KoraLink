@@ -1,5 +1,6 @@
 import {
   IsString,
+  IsNumber,
   IsInt,
   IsEnum,
   IsISO8601,
@@ -45,8 +46,8 @@ export class CreateMatchDto {
   @Max(22)
   max_players: number;
 
-  @ApiProperty({ description: 'Total pitch rental cost in SAR', minimum: 0 })
-  @IsInt()
+  @ApiProperty({ description: 'Total pitch rental cost in SAR (supports decimals)', minimum: 0 })
+  @IsNumber()
   @Min(0)
   pitchCostSar: number;
 }

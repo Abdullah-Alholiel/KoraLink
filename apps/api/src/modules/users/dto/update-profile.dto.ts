@@ -26,7 +26,7 @@ export class UpdateProfileDto {
   })
   @IsOptional()
   @IsEnum(['Beginner', 'Intermediate', 'Advanced'])
-  skill_level?: string;
+  skill_level?: 'Beginner' | 'Intermediate' | 'Advanced';
 
   @ApiPropertyOptional({ description: 'Preferred location', maxLength: 255 })
   @IsOptional()

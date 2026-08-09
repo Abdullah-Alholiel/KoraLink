@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
@@ -10,6 +10,7 @@ import axios from 'axios';
 export class UnifonicService {
   private readonly appSid: string;
   private readonly senderId: string;
+  private readonly logger = new Logger(UnifonicService.name);
 
   constructor(private readonly config: ConfigService) {
     this.appSid = config.get<string>('UNIFONIC_APP_SID', '');
@@ -19,7 +20,7 @@ export class UnifonicService {
   async sendSms(to: string, body: string): Promise<void> {
     if (!this.appSid) {
       // In local/test environments without credentials just log.
-      console.warn(`[Unifonic] Skipping SMS to ${to}: "${body}"`);
+      this.logger.warn(`Skipping SMS to ${to}: "${body}"`);
       return;
     }
 

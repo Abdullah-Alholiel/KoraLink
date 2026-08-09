@@ -147,8 +147,9 @@ function fmtEnd(scheduled: Date, durationMins: number): string {
 
 function mapGender(rule: string): 'men' | 'women' | 'mixed' {
   const l = rule.toLowerCase();
-  if (l.includes('men')) return 'men';
+  // Check 'women' FIRST — 'women only'.includes('men') is true (substring at index 2)
   if (l.includes('women')) return 'women';
+  if (l.includes('men')) return 'men';
   return 'mixed';
 }
 

@@ -61,13 +61,13 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
-    const participations = await this.db
-      .select()
+    const [{ count }] = await this.db
+      .select({ count: sql<number>`COUNT(*)::int` })
       .from(match_players)
       .where(eq(match_players.user_id, userId));
 
     return {
-      games_played: participations.length,
+      games_played: count,
       rating: user.rating,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
@@ -120,7 +120,7 @@ export class UsersService {
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const [updated] = await this.db
       .update(users)
-      .set(withTimestamp({ ...dto } as Record<string, unknown>))
+      .set(withTimestamp({ ...dto }))
       .where(eq(users.id, userId))
       .returning({
         id: users.id,

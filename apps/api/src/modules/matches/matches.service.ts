@@ -345,10 +345,14 @@ export class MatchesService {
       pitchCostSar: number;
     },
   ) {
-    // Validate pitch exists
+    // Validate pitch exists and fetch venue location for geo-discovery
     const [pitch] = await this.db
-      .select({ id: schema.pitches.id })
+      .select({
+        id: schema.pitches.id,
+        venueLocation: schema.venues.location,
+      })
       .from(schema.pitches)
+      .innerJoin(schema.venues, eq(schema.pitches.venue_id, schema.venues.id))
       .where(eq(schema.pitches.id, dto.pitch_id))
       .limit(1);
 
@@ -376,6 +380,8 @@ export class MatchesService {
           price_per_player: pricePerPlayer.toString(),
           max_players: dto.max_players,
           status: 'Open',
+          // Inherit venue location so geo-discovery works for user-created matches
+          ...(pitch.venueLocation ? { location: pitch.venueLocation } : {}),
         })
         .returning();
 

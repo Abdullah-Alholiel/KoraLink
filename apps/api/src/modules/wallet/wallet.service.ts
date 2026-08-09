@@ -44,18 +44,18 @@ export class WalletService {
       throw new BadRequestException('Transaction amount must be positive.');
     }
 
-    // Check for duplicate idempotency key before entering the transaction.
-    const [existing] = await this.db
-      .select({ id: transactions.id })
-      .from(transactions)
-      .where(eq(transactions.idempotency_key, idempotencyKey))
-      .limit(1);
-
-    if (existing) {
-      throw new ConflictException('Duplicate transaction: idempotency key already used.');
-    }
-
+    // Idempotency check and insert are now inside the SAME transaction
+    // to eliminate the TOCTOU race condition.
     return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.idempotency_key, idempotencyKey))
+        .limit(1);
+
+      if (existing) {
+        throw new ConflictException('Duplicate transaction: idempotency key already used.');
+      }
       // 1. Create the immutable ledger entry.
       const [ledgerEntry] = await tx
         .insert(transactions)

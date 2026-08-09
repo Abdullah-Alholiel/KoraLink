@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
 import { Rss, Bell, AlertCircle, WifiOff, Plus } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
@@ -9,6 +9,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 export default function CommunityFeedPage() {
     const t = useTranslations('feed');
     const tc = useTranslations('common');
+    const locale = useLocale();
     const { data, isLoading, isError, refetch } = useMatches();
     const isOnline = useOnlineStatus();
 
@@ -74,7 +75,7 @@ export default function CommunityFeedPage() {
                     <h2 className="text-sm font-bold text-brand-black">{t('empty')}</h2>
                     <p className="text-sm text-gray-500 mt-1">{t('emptyDescription')}</p>
                     <Link
-                        href="/host"
+                        href={`/${locale}/host`}
                         className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 bg-brand-green text-white text-sm font-medium rounded-full hover:bg-brand-green/90 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
