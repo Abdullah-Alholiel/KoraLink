@@ -13,6 +13,8 @@ koralink/
 │   └── player-pwa/       # Next.js 14 App Router PWA — port 3000
 ├── package.json          # npm workspaces root (npm@10, NOT pnpm)
 ├── turbo.json            # Turborepo pipeline
+├── docker-compose.yml    # PostgreSQL 16 + PostGIS + Redis
+├── Dockerfile            # Multi-stage production build
 └── AGENTS.md             # ← This file
 ```
 
@@ -51,9 +53,21 @@ apps/api/src/
     │   ├── matches.service.ts
     │   ├── matches.module.ts
     │   └── dto/
-    ├── wallet/                # Ledger service (REST controller missing)
+    ├── wallet/                # Ledger service
+    │   ├── wallet.controller.ts
     │   ├── wallet.service.ts
-    │   └── wallet.module.ts
+    │   ├── wallet.module.ts
+    │   └── dto/
+    ├── venues/                # Venue discovery + detail
+    │   ├── venues.controller.ts
+    │   ├── venues.service.ts
+    │   ├── venues.module.ts
+    │   └── dto/
+    ├── users/                 # User profile + stats
+    │   ├── users.controller.ts
+    │   ├── users.service.ts
+    │   ├── users.module.ts
+    │   └── dto/
     ├── gateway/               # Socket.IO /lobby WebSocket
     │   ├── app.gateway.ts
     │   └── gateway.module.ts
@@ -120,7 +134,8 @@ apps/player-pwa/src/
 │   └── slices.ts               # Auth, Match, Wallet, UI slices
 ├── lib/
 │   ├── fetcher.ts              # Canonical API client (extend, don't replace)
-│   └── dummy-data.ts           # Mock data (DELETE when API wired)
+│   ├── api-adapter.ts          # Snake→camelCase transformations
+│   └── utils.ts                # Shared utilities
 ├── providers/QueryProvider.tsx  # TanStack Query provider
 ├── messages/                    # i18n — ar.json, en.json
 ├── types/index.ts
@@ -140,6 +155,7 @@ apps/player-pwa/src/
 8. **PWA**: `manifest.json` and `sw.js` must be kept in sync with new routes. Icons in `public/icons/`.
 9. **Components**: `'use client'` directive ONLY when using hooks/state/event handlers. Server components by default.
 10. **Form validation**: use Zod schemas + `react-hook-form` with `@hookform/resolvers`. No inline validation regex.
+11. **NO mock data**: `dummy-data.ts` is removed. All data flows through the API. If the API returns empty/error, show the appropriate UX state.
 
 ### File-Naming Convention
 
@@ -155,7 +171,79 @@ apps/player-pwa/src/
 
 ---
 
-## 4. Database Schema (Drizzle ORM)
+## 4. Database Subagent — Data Infrastructure & Integrity
+
+> **This section is binding for the database subagent.** When delegating database work, dispatch a dedicated agent whose sole responsibility is the PostgreSQL/Drizzle data layer. It must follow these rules.
+
+### Responsibilities
+
+1. **Schema design & evolution** — all schema changes go through `apps/api/src/database/schema.ts`. Review changes for normalization, correct types, and FK cascade behavior.
+2. **Migrations** — `npm run db:generate` → review the generated SQL → `npm run db:migrate`. Never squash or delete applied migrations.
+3. **GiST indexes** — PostGIS spatial indexes are manually defined in `apps/api/drizzle/gist_indexes.sql`. Apply after every new database or migration that touches geography columns.
+4. **Seed data** — `apps/api/drizzle/seed.ts` must produce a realistic dev dataset (≥5 users, ≥3 venues, ≥5 pitches, ≥5 matches). The seed is idempotent (clears before inserting).
+5. **Docker environment** — `docker compose up -d postgres redis` must yield a fully functional database. The DB is PostgreSQL 16 + PostGIS 3.5.
+6. **Connection string** — `DATABASE_URL` in `.env` (from `.env.example`) points to the Docker PostgreSQL instance. SSL mode controlled by `SSL_MODE` env var.
+7. **Data integrity** — all monetary values use `numeric(12,2)`, PostGIS columns use `geography(Point,4326)`, FK constraints use `ON DELETE CASCADE` where appropriate.
+
+### Development Quickstart
+
+```bash
+# 1. Start the database
+docker compose up -d postgres redis
+
+# 2. Apply migrations + GiST indexes + seed
+cd apps/api
+cp .env.example .env                          # if not already done
+npm run db:migrate                            # apply Drizzle migrations
+psql "$DATABASE_URL" -f drizzle/gist_indexes.sql  # apply spatial indexes
+npm run db:seed                               # insert dev data
+
+# 3. Start the API
+npm run dev
+```
+
+### Database Health Checks
+
+- **PostgreSQL ready**: `docker compose exec postgres pg_isready -U koralink -d koralink`
+- **PostGIS installed**: `docker compose exec postgres psql -U koralink -d koralink -c "SELECT PostGIS_Version();"`
+- **GiST indexes present**: `docker compose exec postgres psql -U koralink -d koralink -c "\di *gist*"`
+- **Seed data count**: `docker compose exec postgres psql -U koralink -d koralink -c "SELECT 'users' AS tbl, COUNT(*) FROM users UNION ALL SELECT 'venues', COUNT(*) FROM venues UNION ALL SELECT 'pitches', COUNT(*) FROM pitches UNION ALL SELECT 'matches', COUNT(*) FROM matches;"`
+
+### Migration Workflow
+
+```
+Schema change needed
+  ↓
+1. Edit apps/api/src/database/schema.ts
+  ↓
+2. cd apps/api && npm run db:generate
+   → Review generated SQL in drizzle/
+  ↓
+3. npm run db:migrate
+   → Apply to dev database
+  ↓
+4. Update drizzle/seed.ts if new tables/columns added
+  ↓
+5. npm run db:seed
+   → Verify seed still runs
+  ↓
+6. Commit: schema.ts + generated migration + updated seed
+```
+
+### Seed Data Checklist
+
+The seed MUST populate a realistic development dataset:
+
+| Entity | Min Count | Key Data |
+|--------|-----------|----------|
+| Users | 5 | Diverse roles (Player, VenueOwner), skill levels, wallet balances |
+| Venues | 3 | Different cities, amenities (parking, floodlights, etc.), is_approved=true |
+| Pitches | 5 | Various sizes (5v5, 7v7, 11v11), surfaces (Grass, Artificial), environments |
+| Matches | 5 | Open/Full statuses, different dates, realistic pricing, max players |
+
+---
+
+## 5. Database Schema (Drizzle ORM)
 
 ### Tables (all in `apps/api/src/database/schema.ts`)
 
@@ -175,7 +263,7 @@ apps/player-pwa/src/
 
 ---
 
-## 5. API Endpoints
+## 6. API Endpoints
 
 | Method | Path | Auth | Status |
 |--------|------|------|--------|
@@ -184,24 +272,33 @@ apps/player-pwa/src/
 | PATCH | `/api/v1/auth/complete-profile` | JWT | ✅ |
 | GET | `/api/v1/matches` | JWT | ✅ Geo-filter |
 | GET | `/api/v1/matches/:id` | JWT | ✅ |
+| POST | `/api/v1/matches` | JWT | ✅ Host match |
+| POST | `/api/v1/matches/:id/join` | JWT | ✅ Join match |
+| DELETE | `/api/v1/matches/:id/leave` | JWT | ✅ Leave match |
+| POST | `/api/v1/matches/:id/start` | JWT | ✅ Start match |
+| POST | `/api/v1/matches/:id/complete` | JWT | ✅ Complete match |
+| POST | `/api/v1/matches/:id/cancel` | JWT | ✅ Cancel match |
+| GET | `/api/v1/matches/:id/messages` | JWT | ✅ Chat history |
+| GET | `/api/v1/users/profile` | JWT | ✅ User profile |
+| GET | `/api/v1/users/stats` | JWT | ✅ User stats |
+| PATCH | `/api/v1/users/profile` | JWT | ✅ Update profile |
+| GET | `/api/v1/venues` | JWT | ✅ Geo-filter |
+| GET | `/api/v1/venues/:id` | JWT | ✅ Venue detail |
+| GET | `/api/v1/wallet/balance` | JWT | ✅ |
+| GET | `/api/v1/wallet/history` | JWT | ✅ |
+| POST | `/api/v1/wallet/topup` | JWT | ✅ |
 | GET | `/api/v1/health` | Public | ✅ |
-| GET | `/api/v1/wallet/balance` | JWT | ❌ Not yet exposed |
-| GET | `/api/v1/wallet/history` | JWT | ❌ Not yet exposed |
-| POST | `/api/v1/wallet/topup` | JWT | ❌ Not yet exposed |
-| POST | `/api/v1/matches` | JWT | ❌ Host match |
-| POST | `/api/v1/matches/:id/join` | JWT | ❌ Join match |
-| DELETE | `/api/v1/matches/:id/leave` | JWT | ❌ Leave match |
 | WebSocket | `/lobby` (Socket.IO) | JWT | ✅ Chat + roster |
 
 ---
 
-## 6. Code Quality Gates
+## 7. Code Quality Gates
 
 Before marking ANY work complete:
 
-1. **`npm run build` from the app directory** must pass with zero errors.
-2. **`npm run lint`** must pass.
-3. **Tests pass**: `npm test` for PWA. API tests TBD.
+1. **`npm run build` from root** must pass with zero errors.
+2. **`npx tsc --noEmit -p apps/api/tsconfig.json`** must pass with zero errors.
+3. **Tests pass**: `npx vitest run` from `apps/player-pwa` (85+ tests, 9+ files).
 4. **No `any` types** in new code — use proper TypeScript types.
 5. **No `console.log`** in production paths — use NestJS `Logger` for API.
 6. **No hardcoded strings** in UI — all must be i18n keys in both `ar.json` and `en.json`.
@@ -209,7 +306,7 @@ Before marking ANY work complete:
 
 ---
 
-## 7. Git Workflow
+## 8. Git Workflow
 
 - **Branch naming**: `feat/<description>`, `fix/<description>`, `refactor/<description>`
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`)
@@ -218,30 +315,20 @@ Before marking ANY work complete:
 
 ---
 
-## 8. Current State & Known Gaps
+## 9. Current State & Known Gaps
 
 ### Backend Gaps (Priority Order)
-1. ~~Wallet REST controller~~ ✅ Done
-2. ~~Match join/leave endpoints~~ ✅ Done
-3. ~~Match creation (host) endpoint~~ ✅ Done
-4. OTP store → Redis migration — HIGH (prod blocking)
-5. Team lineup management endpoints — MEDIUM
-6. Match status transitions (Open→InProgress→Completed) — MEDIUM
-7. Socket.IO Redis adapter — MEDIUM (scaling)
+1. OTP store → Redis migration — HIGH (prod blocking)
+2. Team lineup management endpoints — MEDIUM
+3. Socket.IO Redis adapter — MEDIUM (scaling)
+4. Payment (Moyasar) integration — MEDIUM
+5. Rate limiting per endpoint — LOW
 
 ### Frontend Gaps (Priority Order)
-1. ~~All pages use hardcoded mock data~~ ✅ Phase 3 wired play/wallet/profile/match/clubs/messages
-2. ~~No TanStack React Query hooks~~ ✅ 6 hooks (useMatches, useWallet, useAuth, useUser, useVenues, useMessages, useMatchActions, useOnlineStatus)
-3. ~~Login doesn't call real OTP endpoints~~ ✅ Phase 4 wired login/verify/complete-profile to API
-4. ~~Host form doesn't submit to API~~ ✅ Wired to useCreateMatch
-5. ~~Missing loading/empty/error states~~ ✅ 5 UX states on all main pages
-6. ~~No form validation~~ ✅ Zod schemas in hooks
-7. ~~Arabic translations minimal~~ ✅ Full ar.json with all keys
-8. ~~PWA icons missing~~ ✅ 192px + 512px icons
-9. ~~Tests only cover fetcher + offline~~ ✅ 83 tests across 9 files
-10. ~~Community feed hardcoded data~~ ✅ Wired to API (Phase 4)
-11. Community feed shows matches data only — dedicated feed endpoint needed — LOW
-12. Payment sheet (Moyasar) integration — MEDIUM
+1. Payment sheet (Moyasar) integration — MEDIUM
+2. PWA push notification integration — MEDIUM
+3. Location permission / geolocation UX — LOW
+4. Community feed dedicated endpoint — LOW
 
 ### Documentation
 - `apps/api/docs/FRONTEND_INTEGRATION.md` — authoritative API reference (17KB)
@@ -250,7 +337,7 @@ Before marking ANY work complete:
 
 ---
 
-## 9. Pre-Work Checklist
+## 10. Pre-Work Checklist
 
 Before generating any code:
 
@@ -258,5 +345,7 @@ Before generating any code:
 2. Read `apps/api/docs/FRONTEND_INTEGRATION.md` (for API contracts)
 3. Read `apps/api/src/database/schema.ts` (for DB types)
 4. Check if `koralink-ui-standards` skill is loaded (for UI work)
-5. Verify `npm install` is current in the target app
-6. Run `npm run build` to confirm current state is green
+5. Check if `koralink-api-standards` skill is loaded (for API work)
+6. Verify `npm install` is current
+7. Run `npm run build` to confirm current state is green
+8. For database work: ensure `docker compose up -d postgres` is running
