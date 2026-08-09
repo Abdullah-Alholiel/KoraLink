@@ -3,14 +3,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import type { Match } from '@/types';
+import {
+  type NearbyMatchApi,
+  type MatchDetailApi,
+  adaptMatchDetail,
+  adaptMatchList,
+} from '@/lib/api-adapter';
 import { z } from 'zod';
 
-// ─── API Response Types ──────────────────────────────
+// ─── API Response Types (snake_case raw) ──────────────
 
-interface MatchesResponse {
-  matches: Match[];
-  total: number;
-  hasMore: boolean;
+interface MatchesApiResponse {
+  matches?: NearbyMatchApi[];
+  data?: NearbyMatchApi[];
+  total?: number;
+  hasMore?: boolean;
 }
 
 // ─── Zod Schema (matches backend CreateMatchDto) ──────
@@ -36,18 +43,32 @@ export function useMatches(filters?: {
   format?: string | null;
   maxPrice?: number | null;
 }) {
-  return useQuery<MatchesResponse, FetchError>({
+  return useQuery<{ matches: Match[] }, FetchError>({
     queryKey: ['matches', filters],
-    queryFn: () => {
+    queryFn: async () => {
       const params: Record<string, string> = {};
       if (filters) {
         for (const [key, value] of Object.entries(filters)) {
           if (value != null) params[key] = String(value);
         }
       }
-      return fetcher<MatchesResponse>('/matches', {
+      const raw = await fetcher<MatchesApiResponse | NearbyMatchApi[]>('/matches', {
         params: Object.keys(params).length > 0 ? params : undefined,
       });
+
+      // Support both wrapped and unwrapped API responses
+      let rows: NearbyMatchApi[];
+      if (Array.isArray(raw)) {
+        rows = raw;
+      } else if (raw.matches) {
+        rows = raw.matches;
+      } else if (raw.data) {
+        rows = raw.data;
+      } else {
+        rows = [];
+      }
+
+      return { matches: adaptMatchList(rows) };
     },
   });
 }
@@ -57,7 +78,10 @@ export function useMatches(filters?: {
 export function useMatch(id: string) {
   return useQuery<Match, FetchError>({
     queryKey: ['match', id],
-    queryFn: () => fetcher<Match>(`/matches/${id}`),
+    queryFn: async () => {
+      const raw = await fetcher<MatchDetailApi>(`/matches/${id}`);
+      return adaptMatchDetail(raw);
+    },
     enabled: !!id,
   });
 }
@@ -68,11 +92,13 @@ export function useCreateMatch() {
   const queryClient = useQueryClient();
 
   return useMutation<Match, Error, HostMatchInput>({
-    mutationFn: (data) =>
-      fetcher<Match>('/matches', {
+    mutationFn: async (data) => {
+      const raw = await fetcher<MatchDetailApi>('/matches', {
         method: 'POST',
         body: JSON.stringify(data),
-      }),
+      });
+      return adaptMatchDetail(raw);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
     },
