@@ -7,6 +7,8 @@ import { LoggerModule } from 'nestjs-pino';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MatchesModule } from './modules/matches/matches.module';
+import { UsersModule } from './modules/users/users.module';
+import { VenuesModule } from './modules/venues/venues.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
@@ -54,6 +56,8 @@ import { HealthModule } from './modules/health/health.module';
     DatabaseModule,
     AuthModule,
     MatchesModule,
+    UsersModule,
+    VenuesModule,
     WalletModule,
     GatewayModule,
     HealthModule,
