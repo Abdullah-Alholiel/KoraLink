@@ -1,29 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { fetcher } from '@/lib/fetcher';
 
 /**
  * Dev-only quick-login buttons for seeded users.
- * Only renders when API_URL is localhost.
+ * Only renders when running on localhost, detected via useEffect
+ * to avoid hydration mismatch (SSR cannot know the hostname).
  */
 export default function DevLoginBar() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLocalhost, setIsLocalhost] = useState(false);
 
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1');
+  useEffect(() => {
+    const hostname = window.location.hostname;
+    setIsLocalhost(hostname === 'localhost' || hostname === '127.0.0.1');
+  }, []);
 
   if (!isLocalhost) return null;
 
   const seededPhones = [
-    { phone: '+966500000001', name: 'Ahmed Al-Rashid' },
-    { phone: '+966500000002', name: 'Khalid Al-Otaibi' },
-    { phone: '+966500000003', name: 'Faisal Al-Harbi' },
-    { phone: '+966500000004', name: 'Omar Al-Shahrani' },
-    { phone: '+966500000005', name: 'Yousef Al-Qahtani' },
+    { phone: '+966****0001', name: 'Ahmed Al-Rashid' },
+    { phone: '+966****0002', name: 'Khalid Al-Otaibi' },
+    { phone: '+966****0003', name: 'Faisal Al-Harbi' },
+    { phone: '+966****0004', name: 'Omar Al-Shahrani' },
+    { phone: '+966****0005', name: 'Yousef Al-Qahtani' },
   ];
 
   const devLogin = async (phone: string) => {
@@ -34,7 +36,6 @@ export default function DevLoginBar() {
         method: 'POST',
         body: JSON.stringify({ phone }),
       });
-      // Reload so the cookie is picked up by middleware
       window.location.href = `/${document.documentElement.lang || 'en'}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Dev login failed');
