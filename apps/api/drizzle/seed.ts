@@ -26,7 +26,7 @@ const db = drizzle(pool, { schema });
 
 /** Builds a PostGIS geography literal: ST_SetSRID(ST_MakePoint(lng, lat), 4326) */
 function point(lng: number, lat: number) {
-  return sql.raw(`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`);
+  return sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`;
 }
 
 // ── Seed data ───────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ async function seed() {
     .insert(schema.users)
     .values([
       {
-        phone: '+966500000001',
+        phone: '+966512340001',
         full_name: 'Ahmed Al-Rashid',
         handle: 'ahmed_r',
         preferred_position: 'Forward',
@@ -60,7 +60,7 @@ async function seed() {
         rating: 4.5,
       },
       {
-        phone: '+966500000002',
+        phone: '+966512340002',
         full_name: 'Khalid Al-Otaibi',
         handle: 'khalid_o',
         preferred_position: 'Midfielder',
@@ -71,7 +71,7 @@ async function seed() {
         rating: 4.0,
       },
       {
-        phone: '+966500000003',
+        phone: '+966512340003',
         full_name: 'Faisal Al-Harbi',
         handle: 'faisal_h',
         preferred_position: 'Defender',
@@ -82,7 +82,7 @@ async function seed() {
         rating: 4.8,
       },
       {
-        phone: '+966500000004',
+        phone: '+966512340004',
         full_name: 'Omar Al-Shahrani',
         handle: 'omar_s',
         preferred_position: 'Goalkeeper',
@@ -93,7 +93,7 @@ async function seed() {
         rating: 3.5,
       },
       {
-        phone: '+966500000005',
+        phone: '+966512340005',
         full_name: 'Yousef Al-Qahtani',
         handle: 'yousef_q',
         preferred_position: 'Midfielder',
