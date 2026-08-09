@@ -221,23 +221,27 @@ Before marking ANY work complete:
 ## 8. Current State & Known Gaps
 
 ### Backend Gaps (Priority Order)
-1. Wallet REST controller (service exists, no endpoints) — HIGH
-2. Match join/leave endpoints — HIGH
-3. Match creation (host) endpoint — MEDIUM
+1. ~~Wallet REST controller~~ ✅ Done
+2. ~~Match join/leave endpoints~~ ✅ Done
+3. ~~Match creation (host) endpoint~~ ✅ Done
 4. OTP store → Redis migration — HIGH (prod blocking)
-5. Team lineup management endpoints — LOW
-6. Socket.IO Redis adapter — MEDIUM (scaling)
+5. Team lineup management endpoints — MEDIUM
+6. Match status transitions (Open→InProgress→Completed) — MEDIUM
+7. Socket.IO Redis adapter — MEDIUM (scaling)
 
 ### Frontend Gaps (Priority Order)
-1. All pages use hardcoded mock data — zero API wiring — CRITICAL
-2. No TanStack React Query hooks for server state — CRITICAL
-3. Login doesn't call real OTP endpoints — HIGH
-4. Host form doesn't submit to API — HIGH
-5. Missing loading/empty/error states on all pages — MEDIUM
-6. No form validation (Zod/react-hook-form) — MEDIUM
-7. Arabic translations minimal (2 keys) — MEDIUM
-8. PWA icons missing (only .gitkeep) — LOW
-9. Tests only cover fetcher + offline (2 tests) — MEDIUM
+1. ~~All pages use hardcoded mock data~~ ✅ Phase 3 wired play/wallet/profile/match/clubs/messages
+2. ~~No TanStack React Query hooks~~ ✅ 6 hooks (useMatches, useWallet, useAuth, useUser, useVenues, useMessages, useMatchActions, useOnlineStatus)
+3. ~~Login doesn't call real OTP endpoints~~ ✅ Phase 4 wired login/verify/complete-profile to API
+4. ~~Host form doesn't submit to API~~ ✅ Wired to useCreateMatch
+5. ~~Missing loading/empty/error states~~ ✅ 5 UX states on all main pages
+6. ~~No form validation~~ ✅ Zod schemas in hooks
+7. ~~Arabic translations minimal~~ ✅ Full ar.json with all keys
+8. ~~PWA icons missing~~ ✅ 192px + 512px icons
+9. ~~Tests only cover fetcher + offline~~ ✅ 83 tests across 9 files
+10. ~~Community feed hardcoded data~~ ✅ Wired to API (Phase 4)
+11. Community feed shows matches data only — dedicated feed endpoint needed — LOW
+12. Payment sheet (Moyasar) integration — MEDIUM
 
 ### Documentation
 - `apps/api/docs/FRONTEND_INTEGRATION.md` — authoritative API reference (17KB)

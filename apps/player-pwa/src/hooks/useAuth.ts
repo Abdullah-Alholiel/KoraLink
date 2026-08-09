@@ -50,7 +50,7 @@ export const completeProfileSchema = z.object({
     .string()
     .min(2, 'Full name must be at least 2 characters')
     .max(50, 'Full name must be under 50 characters'),
-  preferredLocation: z.string().min(2, 'Location is required').max(100),
+  preferredLocation: z.string().min(2, 'Location must be at least 2 characters').max(100).optional().or(z.literal('')),
   preferredPosition: z.string().optional(),
   skillLevel: z.enum(['beginner', 'intermediate', 'advanced']).default('intermediate'),
 });

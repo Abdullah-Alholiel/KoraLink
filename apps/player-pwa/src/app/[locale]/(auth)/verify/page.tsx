@@ -1,17 +1,36 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, Trophy, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useVerifyOtp, useSendOtp } from '@/hooks/useAuth';
 
 const OTP_LENGTH = 6;
+const RESEND_COOLDOWN = 30; // seconds
 
-export default function VerifyPage() {
+function VerifyContent() {
     const router = useRouter();
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const t = useTranslations('verify');
+    const searchParams = useSearchParams();
+    const phone = searchParams.get('phone') || '';
+
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+    const [error, setError] = useState<string | null>(null);
+    const [resendCountdown, setResendCountdown] = useState(0);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    const verifyOtp = useVerifyOtp();
+    const sendOtp = useSendOtp();
+
+    // Resend countdown timer
+    useEffect(() => {
+        if (resendCountdown <= 0) return;
+        const timer = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [resendCountdown]);
 
     const handleChange = useCallback(
         (index: number, value: string) => {
@@ -23,7 +42,7 @@ export default function VerifyPage() {
                 inputRefs.current[index + 1]?.focus();
             }
         },
-        [otp]
+        [otp],
     );
 
     const handleKeyDown = useCallback(
@@ -32,16 +51,45 @@ export default function VerifyPage() {
                 inputRefs.current[index - 1]?.focus();
             }
         },
-        [otp]
+        [otp],
     );
 
     const isComplete = otp.every((d) => d !== '');
 
     const handleVerify = () => {
-        if (isComplete) {
-            router.push(`/${locale}/complete-profile`);
-        }
+        if (!isComplete || !phone) return;
+        setError(null);
+        verifyOtp.mutate(
+            { phone, otp: otp.join('') },
+            {
+                onSuccess: (data) => {
+                    if (data.isNewUser) {
+                        router.push(`/${locale}/complete-profile`);
+                    } else {
+                        router.push(`/${locale}`);
+                    }
+                },
+                onError: (err) => setError(err.message),
+            },
+        );
     };
+
+    const handleResend = () => {
+        if (resendCountdown > 0 || !phone) return;
+        setError(null);
+        setResendCountdown(RESEND_COOLDOWN);
+        sendOtp.mutate(
+            { phone },
+            {
+                onError: (err) => setError(err.message),
+            },
+        );
+    };
+
+    // Mask phone for display: +966 5X XXX XXXX
+    const maskedPhone = phone
+        ? `+966 ${phone.slice(0, 1)}X XXX ${phone.slice(-4).padStart(4, 'X')}`
+        : '+966 5X XXX XXXX';
 
     return (
         <div className="flex flex-col min-h-full px-6">
@@ -64,26 +112,34 @@ export default function VerifyPage() {
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center pt-12">
                 <h1 className="text-2xl font-bold text-brand-black text-center">
-                    Enter 6-digit code
+                    {t('title')}
                 </h1>
                 <p className="text-sm text-gray-400 mt-2 text-center">
-                    We&apos;ve sent a code to
+                    {t('subtitle')}
                     <br />
-                    <span className="font-medium text-gray-600">+966 5X XXX XXXX</span>
+                    <span className="font-medium text-gray-600">{maskedPhone}</span>
                 </p>
+
+                {/* Error */}
+                {error && (
+                    <p className="text-sm text-brand-red mt-4 text-center">{error}</p>
+                )}
 
                 {/* OTP Boxes */}
                 <div className="flex gap-2.5 mt-8">
                     {otp.map((digit, idx) => (
                         <input
                             key={idx}
-                            ref={(el) => { inputRefs.current[idx] = el; }}
+                            ref={(el) => {
+                                inputRefs.current[idx] = el;
+                            }}
                             type="tel"
                             inputMode="numeric"
                             maxLength={1}
                             value={digit}
                             onChange={(e) => handleChange(idx, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(idx, e)}
+                            disabled={verifyOtp.isPending}
                             className={`
                 w-12 h-14 rounded-xl border-2 text-center text-xl font-bold
                 outline-none transition-colors bg-white
@@ -92,6 +148,7 @@ export default function VerifyPage() {
                                     : 'border-gray-200 text-gray-300'
                                 }
                 focus:border-brand-green
+                disabled:opacity-50 disabled:cursor-not-allowed
               `}
                             autoFocus={idx === 0}
                         />
@@ -99,9 +156,19 @@ export default function VerifyPage() {
                 </div>
 
                 {/* Resend */}
-                <button className="flex items-center gap-1.5 mt-6 text-sm text-brand-green font-medium">
-                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
-                    Resend code
+                <button
+                    onClick={handleResend}
+                    disabled={resendCountdown > 0 || sendOtp.isPending}
+                    className="flex items-center gap-1.5 mt-6 text-sm text-brand-green font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {sendOtp.isPending ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
+                    )}
+                    {resendCountdown > 0
+                        ? `${t('resendIn')} ${resendCountdown} ${t('seconds')}`
+                        : t('resend')}
                 </button>
             </div>
 
@@ -109,18 +176,27 @@ export default function VerifyPage() {
             <div className="pb-8 pb-safe">
                 <button
                     onClick={handleVerify}
-                    disabled={!isComplete}
+                    disabled={!isComplete || verifyOtp.isPending}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${isComplete
+            ${!verifyOtp.isPending && isComplete
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    Verify and Login
-                    <CheckCircle2 className="w-4.5 h-4.5" strokeWidth={2} />
+                    {verifyOtp.isPending ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {t('verifying')}
+                        </>
+                    ) : (
+                        <>
+                            {t('verify')}
+                            <CheckCircle2 className="w-4.5 h-4.5" strokeWidth={2} />
+                        </>
+                    )}
                 </button>
                 <p className="text-center text-xs text-gray-400 mt-4">
                     Need help?{' '}
@@ -128,5 +204,19 @@ export default function VerifyPage() {
                 </p>
             </div>
         </div>
+    );
+}
+
+export default function VerifyPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex flex-col min-h-full items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-green" />
+                </div>
+            }
+        >
+            <VerifyContent />
+        </Suspense>
     );
 }

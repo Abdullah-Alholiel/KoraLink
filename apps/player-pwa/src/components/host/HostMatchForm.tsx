@@ -29,7 +29,11 @@ export default function HostMatchForm() {
     const createMatch = useCreateMatch();
 
     /* ── Form State ─────────────────────────────── */
+    const [title, setTitle] = useState('');
     const [format, setFormat] = useState<Format>('7v7');
+    const [matchType, setMatchType] = useState<'Casual' | 'Competitive'>('Casual'); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const [genderRule, setGenderRule] = useState<'Men Only' | 'Women Only' | 'Mixed'>('Men Only'); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const [duration, setDuration] = useState(60); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [bookingMode, setBookingMode] = useState<BookingMode>('self');
     const [isPublic, setIsPublic] = useState(true);
     const [date, setDate] = useState('');
@@ -51,11 +55,11 @@ export default function HostMatchForm() {
 
         const payload = {
             pitch_id: 'demo-venue-001', // TODO: venue picker integration
-            title: `${format} Match`,   // TODO: user-editable title field
-            match_type: 'Casual' as const,       // TODO: match_type selector
-            gender_rule: 'Men Only' as const,     // TODO: gender_rule selector
+            title: title.trim() || `${format} Match`,
+            match_type: matchType,
+            gender_rule: genderRule,
             scheduled_at: scheduledAt,
-            duration_mins: 60,           // TODO: duration picker
+            duration_mins: duration,
             max_players: maxPlayers,
             pitchCostSar: playerShare,
         };
@@ -172,6 +176,25 @@ export default function HostMatchForm() {
                     </div>
                 </div>
 
+                {/* ── MATCH TITLE ─────────────────── */}
+                <div className="px-5 pt-4">
+                    <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                        Match Title
+                    </p>
+                    <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="e.g. Friday Night 7v7"
+                        maxLength={255}
+                        className="w-full bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 text-sm
+                            text-brand-black placeholder:text-gray-400 outline-none focus:border-brand-green transition-colors"
+                    />
+                    {title.length > 0 && title.length < 3 && (
+                        <p className="text-xs text-brand-red mt-1">Title must be at least 3 characters</p>
+                    )}
+                </div>
+
                 {/* ── FORMAT ────────────────────────── */}
                 <div className="px-5 pt-6">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
@@ -182,16 +205,51 @@ export default function HostMatchForm() {
                             <button
                                 key={f}
                                 onClick={() => setFormat(f)}
-                                className={`
-                                    flex-1 py-2 rounded-full text-sm font-semibold
-                                    transition-all border
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
                                     ${format === f
                                         ? 'bg-brand-green text-white border-brand-green shadow-sm'
                                         : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                                    }
-                                `}
+                                    }`}
                             >
                                 {f}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── MATCH TYPE ──────────────────── */}
+                <div className="px-5 pt-6">
+                    <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                        Match Type
+                    </p>
+                    <div className="flex gap-2">
+                        {(['Casual', 'Competitive'] as const).map((t) => (
+                            <button
+                                key={t}
+                                onClick={() => setMatchType(t)}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
+                                    ${matchType === t ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                            >
+                                {t}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── GENDER ────────────────────────── */}
+                <div className="px-5 pt-6">
+                    <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                        Gender
+                    </p>
+                    <div className="flex gap-2">
+                        {(['Men Only', 'Women Only', 'Mixed'] as const).map((g) => (
+                            <button
+                                key={g}
+                                onClick={() => setGenderRule(g)}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
+                                    ${genderRule === g ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                            >
+                                {g}
                             </button>
                         ))}
                     </div>
@@ -254,6 +312,25 @@ export default function HostMatchForm() {
                     </div>
                 </div>
 
+                {/* ── DURATION ─────────────────────── */}
+                <div className="px-5 pt-6">
+                    <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                        Duration
+                    </p>
+                    <div className="flex gap-2">
+                        {[30, 45, 60, 90, 120].map((m) => (
+                            <button
+                                key={m}
+                                onClick={() => setDuration(m)}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
+                                    ${duration === m ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                            >
+                                {m}m
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* ── PUBLIC MATCH TOGGLE ───────────── */}
                 <div className="px-5 pt-6">
                     <div className="flex items-center justify-between">
@@ -312,7 +389,7 @@ export default function HostMatchForm() {
                 {/* Publish CTA */}
                 <button
                     onClick={handlePublish}
-                    disabled={createMatch.isPending || !date || !time}
+                    disabled={createMatch.isPending || !date || !time || (title.length > 0 && title.length < 3)}
                     className="
                         w-full py-4 rounded-2xl bg-brand-green text-white
                         text-sm font-bold flex items-center justify-center gap-2
