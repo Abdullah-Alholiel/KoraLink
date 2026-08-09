@@ -234,6 +234,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
   return {
     id: row.id,
     title: row.title,
+    hostId: row.host_id,
     organizer: {
       name: row.host_name ?? 'Unknown',
       handle: '',

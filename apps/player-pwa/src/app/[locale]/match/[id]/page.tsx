@@ -18,6 +18,7 @@ import {
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
+import { selectUser, useAppStore } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
@@ -41,9 +42,23 @@ export default function MatchDetailPage({
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
-    const [hasJoined, setHasJoined] = useState(false);
+    // Get current user from Zustand store (populated by auth/dev-login)
+    const storeUser = useAppStore(selectUser);
+    const currentUserId = storeUser?.id;
+
+    // Derived join state from match data — survives page refresh because
+    // GET /matches/:id returns the roster with user IDs.
+    const isJoined =
+        currentUserId && match
+            ? match.roster.some((p) => p.userId === currentUserId)
+            : false;
+    const isUserHost =
+        currentUserId && match ? match.hostId === currentUserId : false;
+    const showJoin = !!match && !isJoined && !isUserHost && match.status === 'open';
+
     const [showPayment, setShowPayment] = useState(false);
     const [showTeamSheet, setShowTeamSheet] = useState(false);
+    const [hasJoined, setHasJoined] = useState(false);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -382,7 +397,7 @@ export default function MatchDetailPage({
                                 </div>
                             )}
 
-                            {/* Sticky Join CTA */}
+                            {showJoin && (
                             <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
                                 <button
                                     onClick={handleJoinClick}
@@ -397,6 +412,7 @@ export default function MatchDetailPage({
                                     <span className="font-extrabold">{match.price} {match.currency}</span>
                                 </button>
                             </div>
+                            )}
                         </div>
                     )}
                 </div>
