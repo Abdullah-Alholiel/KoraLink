@@ -120,7 +120,7 @@ export class UsersService {
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const [updated] = await this.db
       .update(users)
-      .set(withTimestamp({ ...dto }))
+      .set(withTimestamp({ ...dto } as Record<string, unknown>))
       .where(eq(users.id, userId))
       .returning({
         id: users.id,

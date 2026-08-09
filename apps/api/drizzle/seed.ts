@@ -112,7 +112,7 @@ async function seed() {
 
   // ── 2. Venues (2) ──────────────────────────────────────────────────────
   // faisal_h is the venue owner (UserRole = VenueOwner)
-  const [venueRows] = await db
+  const venueRows = await db
     .insert(schema.venues)
     .values([
       {

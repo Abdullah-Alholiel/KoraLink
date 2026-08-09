@@ -111,7 +111,6 @@ export class VenuesService {
             size: true,
             surface_type: true,
             hourly_rate: true,
-            is_available: true,
           },
         },
       },
