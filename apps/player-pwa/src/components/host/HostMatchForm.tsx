@@ -1,20 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import {
     ArrowLeft,
     MapPin,
     ChevronRight,
-    Lock,
-    Calendar,
-    Clock,
     AlertTriangle,
-    Info,
     ArrowRight,
     Sparkles,
     Loader2,
+    Calendar,
+    Clock,
     Search,
 } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
@@ -24,15 +22,12 @@ import { useVenues, useVenue, type VenueApi, type PitchApi } from '@/hooks/useVe
 const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
 type Format = (typeof FORMAT_OPTIONS)[number];
 
-/* ── Booking mode ───────────────────────────────── */
-type BookingMode = 'koralink' | 'self';
-
 export default function HostMatchForm() {
     const router = useRouter();
     const locale = useLocale();
     const createMatch = useCreateMatch();
 
-    /* ── Venue / Pitch Selection ─────────────────── */
+    /* ── Form State ─────────────────────────────── */
     const [showVenuePicker, setShowVenuePicker] = useState(false);
     const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(null);
     const [selectedPitch, setSelectedPitch] = useState<PitchApi | null>(null);
@@ -49,9 +44,10 @@ export default function HostMatchForm() {
     const [matchType, setMatchType] = useState<'Casual' | 'Competitive'>('Casual');
     const [genderRule, setGenderRule] = useState<'Men Only' | 'Women Only' | 'Mixed'>('Men Only');
     const [duration, setDuration] = useState(60);
-    const [bookingMode, setBookingMode] = useState<BookingMode>('self');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
+    const dateRef = useRef<HTMLInputElement>(null);
+    const timeRef = useRef<HTMLInputElement>(null);
 
     // Derive cost from selected pitch's hourly rate
     const pitchRate = selectedPitch ? parseFloat(String(selectedPitch.hourly_rate)) : 0;
@@ -187,59 +183,14 @@ export default function HostMatchForm() {
                         </button>
                     )}
 
-                    {/* Booking mode tabs */}
-                    <div className="flex rounded-full border border-gray-200 overflow-hidden mt-2">
-                        <button
-                            onClick={() => setBookingMode('koralink')}
-                            className={`flex-1 py-2.5 text-xs font-semibold text-center transition-all ${
-                                bookingMode === 'koralink'
-                                    ? 'bg-brand-green text-white'
-                                    : 'bg-white text-gray-500'
-                            }`}
-                        >
-                            Book via KoraLink
-                        </button>
-                        <button
-                            onClick={() => setBookingMode('self')}
-                            className={`flex-1 py-2.5 text-xs font-semibold text-center transition-all ${
-                                bookingMode === 'self'
-                                    ? 'bg-brand-green text-white'
-                                    : 'bg-white text-gray-500'
-                            }`}
-                        >
-                            I have booked it
-                        </button>
-                    </div>
-
-                    {/* Disclaimer */}
-                    <div
-                        className={`mt-3 rounded-xl p-3.5 flex items-start gap-3 ${
-                            bookingMode === 'self'
-                                ? 'bg-amber-50 border border-amber-200'
-                                : 'bg-blue-50 border border-blue-200'
-                        }`}
-                    >
-                        {bookingMode === 'self' ? (
-                            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
-                        ) : (
-                            <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
-                        )}
+                    {/* Disclaimer — user confirms they have secured the pitch */}
+                    <div className="mt-3 rounded-xl p-3.5 flex items-start gap-3 bg-amber-50 border border-amber-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
                         <p className="text-xs text-gray-600 leading-relaxed">
-                            {bookingMode === 'self' ? (
-                                <>
-                                    <span className="font-bold text-gray-700">Disclaimer:</span>{' '}
-                                    By selecting this, you confirm the pitch is fully secured.
-                                    If the venue is unavailable at kick-off, your account will be
-                                    held strictly liable to refund all paying players.
-                                </>
-                            ) : (
-                                <>
-                                    <span className="font-bold text-gray-700">Concierge Booking:</span>{' '}
-                                    A KoraLink agent will text you within 1-2 hours to confirm your pitch.
-                                    If the pitch is unavailable, your payment will be fully refunded
-                                    to your KoraLink wallet credits.
-                                </>
-                            )}
+                            <span className="font-bold text-gray-700">Disclaimer:</span>{' '}
+                            By hosting a match, you confirm the pitch is fully secured.
+                            If the venue is unavailable at kick-off, your account will be
+                            held strictly liable to refund all paying players.
                         </p>
                     </div>
                 </div>
@@ -335,7 +286,12 @@ export default function HostMatchForm() {
                         Date & Time
                     </p>
                     <div className="flex gap-3">
-                        <div className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 relative">
+                        {/* Date — click to open native date picker */}
+                        <button
+                            type="button"
+                            onClick={() => dateRef.current?.showPicker()}
+                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                        >
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Date</p>
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
@@ -348,13 +304,19 @@ export default function HostMatchForm() {
                                 </span>
                             </div>
                             <input
+                                ref={dateRef}
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="sr-only"
                             />
-                        </div>
-                        <div className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 relative">
+                        </button>
+                        {/* Time — click to open native time picker */}
+                        <button
+                            type="button"
+                            onClick={() => timeRef.current?.showPicker()}
+                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                        >
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Time</p>
                             <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
@@ -367,12 +329,13 @@ export default function HostMatchForm() {
                                 </span>
                             </div>
                             <input
+                                ref={timeRef}
                                 type="time"
                                 value={time}
                                 onChange={(e) => setTime(e.target.value)}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="sr-only"
                             />
-                        </div>
+                        </button>
                     </div>
                 </div>
 
@@ -395,21 +358,6 @@ export default function HostMatchForm() {
                                 {m}m
                             </button>
                         ))}
-                    </div>
-                </div>
-
-                {/* ── PUBLIC MATCH TOGGLE ───────────── */}
-                <div className="px-5 pt-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-                                <Lock className="w-4 h-4 text-gray-500" strokeWidth={2} />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-brand-black">Public Match</p>
-                                <p className="text-xs text-gray-400">Anyone can join</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
