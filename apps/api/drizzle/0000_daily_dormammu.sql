@@ -39,7 +39,7 @@ CREATE TABLE "matches" (
 	"duration_mins" integer NOT NULL,
 	"price_per_player" numeric(10, 2) NOT NULL,
 	"max_players" integer NOT NULL,
-	"location" "geography(Point, 4326)",
+	"location" geography(Point, 4326),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -98,7 +98,7 @@ CREATE TABLE "venues" (
 	"amenities" json DEFAULT '[]'::json NOT NULL,
 	"rating" double precision DEFAULT 0 NOT NULL,
 	"is_approved" boolean DEFAULT false NOT NULL,
-	"location" "geography(Point, 4326)",
+	"location" geography(Point, 4326),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
