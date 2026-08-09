@@ -244,7 +244,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
     format: row.match_type, // pitch size not in nearby query
-    surface: 'Artificial Turf', // not in nearby query
+    surface: '',  // not in nearby query
     gender: mapGender(row.gender_rule),
     intensity: row.match_type,
     price: toNum(row.price_per_player),
@@ -252,7 +252,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     totalSpots: row.max_players,
     filledSpots: row.spots_filled,
     status: mapMatchStatus(row.status),
-    imageUrl: '/images/pitch-hero.jpg',
+    imageUrl: '',
     roster: [],
     comments: [],
   };
@@ -277,7 +277,7 @@ export function adaptMatchDetail(detail: MatchDetailApi): Match {
     venueName: venue?.name ?? detail.pitch?.name ?? '',
     venueDetails: venue?.address ?? '',
     format: detail.match_type,
-    surface: detail.pitch?.surface_type ?? 'Artificial Turf',
+    surface: detail.pitch?.surface_type ?? '',
     gender: mapGender(detail.gender_rule),
     intensity: detail.match_type,
     price: toNum(detail.price_per_player),
@@ -285,7 +285,7 @@ export function adaptMatchDetail(detail: MatchDetailApi): Match {
     totalSpots: detail.max_players,
     filledSpots: players.length,
     status: mapMatchStatus(detail.status),
-    imageUrl: '/images/pitch-hero.jpg',
+    imageUrl: '',
     rules: [],
     roster: buildRoster(players),
     comments: buildComments(messages),
