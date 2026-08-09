@@ -15,7 +15,6 @@ import {
     AlertTriangle,
 } from 'lucide-react';
 import { useWalletBalance, useWalletHistory } from '@/hooks/useWallet';
-import { mockTransactions, mockWalletBalance } from '@/lib/dummy-data';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -33,7 +32,7 @@ function getTransactionIcon(icon: string) {
     }
 }
 
-function groupTransactionsByDay(transactions: Transaction[]) {
+function groupTransactionsByDay(transactions: Transaction[], t: (key: string) => string) {
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
 
@@ -49,9 +48,9 @@ function groupTransactionsByDay(transactions: Transaction[]) {
         return d !== today && d !== yesterday;
     });
 
-    if (todayItems.length) groups.push({ label: 'TODAY', items: todayItems });
-    if (yesterdayItems.length) groups.push({ label: 'YESTERDAY', items: yesterdayItems });
-    if (olderItems.length) groups.push({ label: 'EARLIER', items: olderItems });
+    if (todayItems.length) groups.push({ label: t('wallet.today'), items: todayItems });
+    if (yesterdayItems.length) groups.push({ label: t('wallet.yesterday'), items: yesterdayItems });
+    if (olderItems.length) groups.push({ label: t('wallet.earlier'), items: olderItems });
 
     return groups;
 }
@@ -74,10 +73,10 @@ export default function WalletPage() {
         refetch,
     } = useWalletHistory();
 
-    // Use API data when available; mock data as offline fallback
-    const balance = balanceData?.balance ?? mockWalletBalance;
-    const transactions: Transaction[] = historyData?.transactions ?? mockTransactions;
-    const groups = groupTransactionsByDay(transactions);
+    // Use API data only; fall back to sensible defaults when loading/error
+    const balance = balanceData?.balance ?? 0;
+    const transactions: Transaction[] = historyData?.transactions ?? [];
+    const groups = groupTransactionsByDay(transactions, t);
 
     return (
         <div className="pb-4">

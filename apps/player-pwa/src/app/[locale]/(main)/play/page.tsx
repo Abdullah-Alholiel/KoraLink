@@ -8,8 +8,6 @@ import { Bell, Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMatches } from '@/hooks/useMatches';
-import { mockMatches } from '@/lib/dummy-data';
-import type { Match } from '@/types';
 
 export default function PlayPage() {
     const pathname = usePathname();
@@ -17,7 +15,7 @@ export default function PlayPage() {
     const locale = pathname.split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-    // ── Data fetching via React Query (falls back to mock data offline) ──
+    // ── Data fetching via React Query ──
     const {
         data,
         isLoading,
@@ -27,9 +25,7 @@ export default function PlayPage() {
         date: selectedDate,
     });
 
-    // Determine match list: API data when available, mock data as offline fallback
-    const apiMatches = data?.matches ?? [];
-    const matches: Match[] = apiMatches.length > 0 ? apiMatches : mockMatches;
+    const matches = data?.matches ?? [];
 
     return (
         <div className="pb-4">
@@ -122,8 +118,8 @@ export default function PlayPage() {
                 </div>
             )}
 
-            {/* 3. Empty State (only when API returns empty array, not offline) */}
-            {!isLoading && !error && data && apiMatches.length === 0 && (
+            {/* 3. Empty State (only when API returns empty array) */}
+            {!isLoading && !error && data && matches.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 px-8">
                     <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <Trophy className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
@@ -155,15 +151,15 @@ export default function PlayPage() {
 
                     {/* Match cards */}
                     <div className="animate-fade-in-up">
-                        {matches.map((match: Match) => (
+                        {matches.map((match) => (
                             <MatchCard key={match.id} match={match} />
                         ))}
                     </div>
                 </>
             )}
 
-            {/* 5. Edge Case — offline fallback indicator */}
-            {error && !isLoading && data === undefined && mockMatches.length > 0 && (
+            {/* 5. Edge Case — offline/connection error indicator */}
+            {error && !isLoading && !data && (
                 <div className="mx-4 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
                     <p className="text-xs text-amber-700 font-medium">
                         {t('common.offlineBanner')}
