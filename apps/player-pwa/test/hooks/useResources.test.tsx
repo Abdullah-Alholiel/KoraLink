@@ -143,7 +143,7 @@ describe('useUser hooks', () => {
       method: 'PATCH',
       body: JSON.stringify({ full_name: 'New Name' }),
     });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['user', 'me'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['user', 'profile'] });
   });
 });
 

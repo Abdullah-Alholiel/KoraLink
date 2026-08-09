@@ -16,6 +16,7 @@ import {
     Camera,
 } from 'lucide-react';
 import { selectUser, selectBalance, selectIsAuth, useAppStore } from '@/store/useAppStore';
+import { useUserStats } from '@/hooks/useUser';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -76,6 +77,9 @@ export default function ProfilePage() {
     const walletBalance = useAppStore(selectBalance);
     const isAuthenticated = useAppStore(selectIsAuth);
 
+    // ── Real stats from API ──
+    const { data: stats } = useUserStats();
+
     // Use store balance or 0 (API data flows through the store)
     const displayBalance = walletBalance ?? 0;
 
@@ -120,17 +124,17 @@ export default function ProfilePage() {
             {isAuthenticated && user && (
                 <div className="flex justify-around bg-white rounded-2xl mx-4 mt-4 py-4 shadow-card">
                     <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black">0</p>
+                        <p className="text-2xl font-extrabold text-brand-black">{stats?.games_played ?? 0}</p>
                         <p className="text-xs text-gray-400">{t('profile.gamesPlayed')}</p>
                     </div>
                     <div className="w-px bg-gray-100" />
                     <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black">0</p>
-                        <p className="text-xs text-gray-400">{t('profile.gamesWon')}</p>
+                        <p className="text-2xl font-extrabold text-brand-black">{stats?.karma_score ?? 0}</p>
+                        <p className="text-xs text-gray-400">{t('profile.karma')}</p>
                     </div>
                     <div className="w-px bg-gray-100" />
                     <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black" dir="ltr">—</p>
+                        <p className="text-2xl font-extrabold text-brand-black" dir="ltr">{stats?.rating?.toFixed(1) ?? '—'}</p>
                         <p className="text-xs text-gray-400">{t('profile.rating')}</p>
                     </div>
                 </div>

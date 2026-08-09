@@ -3,9 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 
-// ─── API Response Types ──────────────────────────────
+// ─── API Response Types ────────────────────────────────
 
-export interface UserProfile {
+interface UserProfileApi {
   id: string;
   phone: string;
   full_name: string | null;
@@ -22,44 +22,55 @@ export interface UserProfile {
   created_at: string;
 }
 
-export interface UserStats {
+interface UserStatsApi {
   games_played: number;
   rating: number;
   karma_score: number;
   no_show_count: number;
 }
 
-// ─── Fetch My Profile ────────────────────────────────
+// ─── Fetch User Profile ────────────────────────────────
 
 export function useUserProfile() {
-  return useQuery<UserProfile, FetchError>({
-    queryKey: ['user', 'me'],
-    queryFn: () => fetcher<UserProfile>('/users/me'),
+  return useQuery<UserProfileApi, FetchError>({
+    queryKey: ['user', 'profile'],
+    queryFn: () => fetcher<UserProfileApi>('/users/me'),
+    staleTime: 60_000,
   });
 }
 
-// ─── Fetch My Stats ──────────────────────────────────
+// ─── Fetch User Stats ──────────────────────────────────
 
 export function useUserStats() {
-  return useQuery<UserStats, FetchError>({
-    queryKey: ['user', 'me', 'stats'],
-    queryFn: () => fetcher<UserStats>('/users/me/stats'),
+  return useQuery<UserStatsApi, FetchError>({
+    queryKey: ['user', 'stats'],
+    queryFn: () => fetcher<UserStatsApi>('/users/me/stats'),
+    staleTime: 120_000,
   });
 }
 
-// ─── Update My Profile ───────────────────────────────
+// ─── Update User Profile ───────────────────────────────
+
+interface UpdateProfileInput {
+  full_name?: string;
+  handle?: string;
+  avatar_url?: string;
+  skill_level?: 'Beginner' | 'Intermediate' | 'Advanced';
+  preferred_location?: string;
+  preferred_position?: string;
+}
 
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
 
-  return useMutation<UserProfile, Error, Partial<UserProfile>>({
+  return useMutation<UserProfileApi, FetchError, UpdateProfileInput>({
     mutationFn: (data) =>
-      fetcher<UserProfile>('/users/me', {
+      fetcher<UserProfileApi>('/users/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
     },
   });
 }

@@ -2,11 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import type { Venue } from '@/types';
 
-// ─── API Response Types ──────────────────────────────
+// ─── API Response Types ────────────────────────────────
 
-export interface NearbyVenueRow {
+export interface VenueApi {
   id: string;
   name: string;
   city: string;
@@ -20,54 +19,50 @@ export interface NearbyVenueRow {
   pitch_count: number;
 }
 
-export interface VenueDetail extends Venue {
-  owner: {
+export interface PitchApi {
+  id: string;
+  name: string;
+  size: string;
+  surface_type: string;
+  hourly_rate: string | number;
+  environment?: string;
+}
+
+export interface VenueDetailApi extends VenueApi {
+  owner?: {
     id: string;
     full_name: string | null;
     handle: string | null;
     avatar_url: string | null;
     rating: number;
   };
-  pitches: Array<{
-    id: string;
-    name: string;
-    size: string;
-    surface_type: string;
-    hourly_rate: string | null;
-    is_available: boolean | null;
-  }>;
+  pitches?: PitchApi[];
 }
 
-// ─── Fetch Nearby Venues ─────────────────────────────
+// ─── Fetch Nearby Venues ───────────────────────────────
 
-export function useVenues(filters?: {
-  city?: string | null;
-  lat?: number | null;
-  lng?: number | null;
-}) {
-  return useQuery<NearbyVenueRow[], FetchError>({
-    queryKey: ['venues', filters],
+export function useVenues(params?: { lat?: number; lng?: number; city?: string }) {
+  return useQuery<VenueApi[], FetchError>({
+    queryKey: ['venues', params],
     queryFn: () => {
-      const params: Record<string, string> = {};
-      if (filters) {
-        for (const [key, value] of Object.entries(filters)) {
-          if (value != null) params[key] = String(value);
-        }
-      }
-      return fetcher<NearbyVenueRow[]>('/venues', {
-        params: Object.keys(params).length > 0 ? params : undefined,
+      const searchParams: Record<string, string> = {};
+      if (params?.lat != null) searchParams.lat = String(params.lat);
+      if (params?.lng != null) searchParams.lng = String(params.lng);
+      if (params?.city) searchParams.city = params.city;
+      return fetcher<VenueApi[]>('/venues', {
+        params: Object.keys(searchParams).length > 0 ? searchParams : undefined,
       });
     },
-    staleTime: 300_000, // venues change rarely — cache 5 min
+    staleTime: 300_000, // 5 min — venues change rarely
   });
 }
 
-// ─── Fetch Single Venue ──────────────────────────────
+// ─── Fetch Single Venue Detail ─────────────────────────
 
-export function useVenue(id: string) {
-  return useQuery<VenueDetail, FetchError>({
-    queryKey: ['venue', id],
-    queryFn: () => fetcher<VenueDetail>(`/venues/${id}`),
-    enabled: !!id,
+export function useVenue(venueId: string | null) {
+  return useQuery<VenueDetailApi, FetchError>({
+    queryKey: ['venue', venueId],
+    queryFn: () => fetcher<VenueDetailApi>(`/venues/${venueId}`),
+    enabled: !!venueId,
   });
 }

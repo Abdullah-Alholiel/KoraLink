@@ -7,42 +7,6 @@ import { Search, Clock, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useMyMatches } from '@/hooks/useMessages';
 import type { MyJoinedMatch } from '@/hooks/useMessages';
 
-const directMessages = [
-    {
-        id: 'm1',
-        name: 'Khalid Al-Faisal',
-        avatar: 'K',
-        text: 'Are we still on for the match on Friday?',
-        time: '2m ago',
-        unread: 1,
-    },
-    {
-        id: 'm2',
-        name: 'Sarah Johnson',
-        avatar: 'S',
-        text: 'Great game yesterday! The team played...',
-        time: '1h ago',
-        unread: 0,
-    },
-    {
-        id: 'm3',
-        name: 'Omar Hassan',
-        avatar: 'O',
-        text: 'Send me the location pin please.',
-        time: 'Yesterday',
-        unread: 0,
-    },
-    {
-        id: 'm4',
-        name: 'Team Support',
-        avatar: '🎧',
-        isSystem: true,
-        text: 'Your booking #4492 has been confirmed.',
-        time: '2d ago',
-        unread: 0,
-    },
-];
-
 function formatMatchTime(scheduledAt: string) {
     const d = new Date(scheduledAt);
     const today = new Date();
@@ -175,38 +139,6 @@ export default function MessagesPage() {
                         ))}
                     </div>
                 )}
-            </div>
-
-            {/* ── Direct Messages ────────────────────── */}
-            <div className="px-5 pt-4">
-                <p className="text-[10px] font-bold text-brand-green uppercase tracking-widest mb-3">
-                    {t('messages.directMessages')}
-                </p>
-                <div className="space-y-4">
-                    {directMessages.map((dm) => (
-                        <div key={dm.id} className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-bold text-gray-500">{dm.avatar}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm font-semibold text-brand-black truncate">
-                                        {dm.name}
-                                    </p>
-                                    <span className="text-[10px] text-gray-400 flex-shrink-0 ms-2">
-                                        {dm.time}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-gray-400 truncate mt-0.5">{dm.text}</p>
-                            </div>
-                            {dm.unread > 0 && (
-                                <span className="w-4.5 h-4.5 min-w-4 rounded-full bg-brand-red text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 px-1">
-                                    {dm.unread}
-                                </span>
-                            )}
-                        </div>
-                    ))}
-                </div>
             </div>
         </div>
     );

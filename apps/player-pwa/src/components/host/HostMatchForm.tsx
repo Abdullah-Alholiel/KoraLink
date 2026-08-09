@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale } from 'next-intl';
 import {
     ArrowLeft,
     MapPin,
@@ -14,8 +15,10 @@ import {
     ArrowRight,
     Sparkles,
     Loader2,
+    Search,
 } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
+import { useVenues, useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
 
 /* ── Format options ─────────────────────────────── */
 const FORMAT_OPTIONS = ['5v5', '6v6', '7v7', '8v8', '9v9'] as const;
@@ -26,52 +29,62 @@ type BookingMode = 'koralink' | 'self';
 
 export default function HostMatchForm() {
     const router = useRouter();
+    const locale = useLocale();
     const createMatch = useCreateMatch();
+
+    /* ── Venue / Pitch Selection ─────────────────── */
+    const [showVenuePicker, setShowVenuePicker] = useState(false);
+    const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(null);
+    const [selectedPitch, setSelectedPitch] = useState<PitchApi | null>(null);
+    const [venueSearch, setVenueSearch] = useState('');
+
+    const { data: venues, isLoading: venuesLoading } = useVenues(
+        venueSearch ? { city: venueSearch } : undefined,
+    );
+    const { data: venueDetail } = useVenue(selectedVenue?.id ?? null);
 
     /* ── Form State ─────────────────────────────── */
     const [title, setTitle] = useState('');
     const [format, setFormat] = useState<Format>('7v7');
-    const [matchType, setMatchType] = useState<'Casual' | 'Competitive'>('Casual'); // eslint-disable-line @typescript-eslint/no-unused-vars
-    const [genderRule, setGenderRule] = useState<'Men Only' | 'Women Only' | 'Mixed'>('Men Only'); // eslint-disable-line @typescript-eslint/no-unused-vars
-    const [duration, setDuration] = useState(60); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const [matchType, setMatchType] = useState<'Casual' | 'Competitive'>('Casual');
+    const [genderRule, setGenderRule] = useState<'Men Only' | 'Women Only' | 'Mixed'>('Men Only');
+    const [duration, setDuration] = useState(60);
     const [bookingMode, setBookingMode] = useState<BookingMode>('self');
-    const [isPublic, setIsPublic] = useState(true);
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
 
-    // Derive max players from format (e.g. "7v7" → 14)
-    // TODO: Send max_players to API as part of CreateMatchDto
-    // const maxPlayers = parseInt(format.charAt(0)) * 2;
-    const playerShare = 37;
-    const hostCost = 0;
+    // Derive cost from selected pitch's hourly rate
+    const pitchRate = selectedPitch ? parseFloat(String(selectedPitch.hourly_rate)) : 0;
+    const pitchCostSar = pitchRate > 0 ? pitchRate : 0;
+
+    // Calculate player share (host plays free)
+    const maxPlayers = format ? parseInt(format.charAt(0)) * 2 : 14;
+    const playerShare = maxPlayers > 1 ? Math.ceil(pitchCostSar / (maxPlayers - 1)) : pitchCostSar;
 
     const handlePublish = () => {
-        if (!date || !time) return;
+        if (!selectedPitch || !date || !time) return;
 
-        // Map form UI state → backend CreateMatchDto fields
-        const playersPerTeam = parseInt(format.charAt(0));
-        const maxPlayers = playersPerTeam * 2;
         const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
 
         const payload = {
-            pitch_id: 'demo-venue-001', // TODO: venue picker integration
-            title: title.trim() || `${format} Match`,
+            pitch_id: selectedPitch.id,
+            title: title.trim() || `${format} Match at ${selectedVenue?.name ?? 'Venue'}`,
             match_type: matchType,
             gender_rule: genderRule,
             scheduled_at: scheduledAt,
             duration_mins: duration,
             max_players: maxPlayers,
-            pitchCostSar: playerShare,
+            pitchCostSar,
         };
 
         createMatch.mutate(payload, {
-                onSuccess: () => {
-                    // Navigate back to play page after successful creation
-                    router.push('/ar/play');
-                },
+            onSuccess: () => {
+                router.push(`/${locale}/play`);
             },
-        );
+        });
     };
+
+    const canPublish = selectedPitch && date && time && (title.length === 0 || title.length >= 3);
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -100,56 +113,111 @@ export default function HostMatchForm() {
                         Venue
                     </p>
 
-                    {/* Search venue row */}
-                    <button className="w-full flex items-center gap-3 py-3 group">
-                        <MapPin
-                            className="w-5 h-5 text-brand-green flex-shrink-0"
-                            strokeWidth={2}
-                            fill="currentColor"
-                        />
-                        <span className="flex-1 text-start text-sm text-gray-400">
-                            Search venues in Riyadh...
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-gray-300" strokeWidth={2} />
-                    </button>
+                    {/* Selected venue + pitch display */}
+                    {selectedVenue ? (
+                        <div className="bg-gray-50 rounded-xl p-4 mb-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-brand-black">
+                                        {selectedVenue.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {selectedVenue.city} • {selectedVenue.pitch_count} pitches
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setSelectedVenue(null);
+                                        setSelectedPitch(null);
+                                    }}
+                                    className="text-xs text-brand-red font-medium"
+                                >
+                                    Change
+                                </button>
+                            </div>
+
+                            {/* Pitch selection */}
+                            {venueDetail?.pitches && venueDetail.pitches.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                        Select a pitch
+                                    </p>
+                                    {venueDetail.pitches.map((pitch) => (
+                                        <button
+                                            key={pitch.id}
+                                            onClick={() => setSelectedPitch(pitch)}
+                                            className={`w-full text-start p-3 rounded-lg border transition-all ${
+                                                selectedPitch?.id === pitch.id
+                                                    ? 'border-brand-green bg-brand-green/5'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-semibold text-brand-black">
+                                                    {pitch.name}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    SAR {pitch.hourly_rate}/hr
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                {pitch.size} • {pitch.surface_type}
+                                                {pitch.environment ? ` • ${pitch.environment}` : ''}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* Search venue button */
+                        <button
+                            onClick={() => setShowVenuePicker(true)}
+                            className="w-full flex items-center gap-3 py-3 group"
+                        >
+                            <MapPin
+                                className="w-5 h-5 text-brand-green flex-shrink-0"
+                                strokeWidth={2}
+                                fill="currentColor"
+                            />
+                            <span className="flex-1 text-start text-sm text-gray-400">
+                                Search venues in Riyadh...
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-gray-300" strokeWidth={2} />
+                        </button>
+                    )}
 
                     {/* Booking mode tabs */}
                     <div className="flex rounded-full border border-gray-200 overflow-hidden mt-2">
                         <button
                             onClick={() => setBookingMode('koralink')}
-                            className={`
-                                flex-1 py-2.5 text-xs font-semibold text-center transition-all
-                                ${bookingMode === 'koralink'
+                            className={`flex-1 py-2.5 text-xs font-semibold text-center transition-all ${
+                                bookingMode === 'koralink'
                                     ? 'bg-brand-green text-white'
                                     : 'bg-white text-gray-500'
-                                }
-                            `}
+                            }`}
                         >
                             Book via KoraLink
                         </button>
                         <button
                             onClick={() => setBookingMode('self')}
-                            className={`
-                                flex-1 py-2.5 text-xs font-semibold text-center transition-all
-                                ${bookingMode === 'self'
+                            className={`flex-1 py-2.5 text-xs font-semibold text-center transition-all ${
+                                bookingMode === 'self'
                                     ? 'bg-brand-green text-white'
                                     : 'bg-white text-gray-500'
-                                }
-                            `}
+                            }`}
                         >
                             I have booked it
                         </button>
                     </div>
 
-                    {/* Disclaimer based on booking mode */}
+                    {/* Disclaimer */}
                     <div
-                        className={`
-                            mt-3 rounded-xl p-3.5 flex items-start gap-3
-                            ${bookingMode === 'self'
+                        className={`mt-3 rounded-xl p-3.5 flex items-start gap-3 ${
+                            bookingMode === 'self'
                                 ? 'bg-amber-50 border border-amber-200'
                                 : 'bg-blue-50 border border-blue-200'
-                            }
-                        `}
+                        }`}
                     >
                         {bookingMode === 'self' ? (
                             <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
@@ -205,11 +273,11 @@ export default function HostMatchForm() {
                             <button
                                 key={f}
                                 onClick={() => setFormat(f)}
-                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
-                                    ${format === f
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                    format === f
                                         ? 'bg-brand-green text-white border-brand-green shadow-sm'
                                         : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                                    }`}
+                                }`}
                             >
                                 {f}
                             </button>
@@ -227,8 +295,11 @@ export default function HostMatchForm() {
                             <button
                                 key={t}
                                 onClick={() => setMatchType(t)}
-                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
-                                    ${matchType === t ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                    matchType === t
+                                        ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
                             >
                                 {t}
                             </button>
@@ -246,8 +317,11 @@ export default function HostMatchForm() {
                             <button
                                 key={g}
                                 onClick={() => setGenderRule(g)}
-                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
-                                    ${genderRule === g ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                    genderRule === g
+                                        ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
                             >
                                 {g}
                             </button>
@@ -261,20 +335,16 @@ export default function HostMatchForm() {
                         Date & Time
                     </p>
                     <div className="flex gap-3">
-                        {/* Date Card */}
                         <div className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 relative">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                Date
-                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Date</p>
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                 <span className="text-sm font-bold text-brand-black">
                                     {date
                                         ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
+                                            month: 'short', day: 'numeric',
                                         })
-                                        : 'Oct 24'}
+                                        : 'Select date'}
                                 </span>
                             </div>
                             <input
@@ -284,22 +354,16 @@ export default function HostMatchForm() {
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />
                         </div>
-
-                        {/* Time Card */}
                         <div className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 relative">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                Time
-                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Time</p>
                             <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                 <span className="text-sm font-bold text-brand-black">
                                     {time
                                         ? new Date(`2025-01-01T${time}`).toLocaleTimeString('en-US', {
-                                            hour: 'numeric',
-                                            minute: '2-digit',
-                                            hour12: true,
+                                            hour: 'numeric', minute: '2-digit', hour12: true,
                                         })
-                                        : '8:00 PM'}
+                                        : 'Select time'}
                                 </span>
                             </div>
                             <input
@@ -322,8 +386,11 @@ export default function HostMatchForm() {
                             <button
                                 key={m}
                                 onClick={() => setDuration(m)}
-                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95
-                                    ${duration === m ? 'bg-brand-green text-white border-brand-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                    duration === m
+                                        ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
                             >
                                 {m}m
                             </button>
@@ -343,23 +410,6 @@ export default function HostMatchForm() {
                                 <p className="text-xs text-gray-400">Anyone can join</p>
                             </div>
                         </div>
-
-                        {/* Toggle */}
-                        <button
-                            onClick={() => setIsPublic(!isPublic)}
-                            className={`
-                                relative w-12 h-7 rounded-full transition-colors duration-200
-                                ${isPublic ? 'bg-brand-green' : 'bg-gray-300'}
-                            `}
-                        >
-                            <div
-                                className={`
-                                    absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md
-                                    transition-transform duration-200
-                                    ${isPublic ? 'translate-x-5' : 'translate-x-0.5'}
-                                `}
-                            />
-                        </button>
                     </div>
                 </div>
             </div>
@@ -380,23 +430,21 @@ export default function HostMatchForm() {
                     </div>
                 </div>
                 <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs text-gray-400">Your total cost:</span>
+                    <span className="text-xs text-gray-400">Pitch cost:</span>
                     <span className="text-base font-extrabold text-brand-black">
-                        SAR {hostCost.toFixed(2)}
+                        SAR {pitchCostSar.toFixed(2)}
                     </span>
                 </div>
 
                 {/* Publish CTA */}
                 <button
                     onClick={handlePublish}
-                    disabled={createMatch.isPending || !date || !time || (title.length > 0 && title.length < 3)}
-                    className="
-                        w-full py-4 rounded-2xl bg-brand-green text-white
-                        text-sm font-bold flex items-center justify-center gap-2
+                    disabled={createMatch.isPending || !canPublish}
+                    className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
+                        flex items-center justify-center gap-2
                         shadow-[0_4px_20px_rgba(37,65,50,0.4)]
                         active:scale-[0.98] transition-transform
-                        disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none
-                    "
+                        disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                     {createMatch.isPending ? (
                         <>
@@ -405,13 +453,12 @@ export default function HostMatchForm() {
                         </>
                     ) : (
                         <>
-                            Publish Match
+                            {selectedPitch ? 'Publish Match' : 'Select a venue to continue'}
                             <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
                         </>
                     )}
                 </button>
 
-                {/* Error message */}
                 {createMatch.isError && (
                     <p className="text-xs text-brand-red mt-2 text-center">
                         {createMatch.error instanceof Error
@@ -420,6 +467,74 @@ export default function HostMatchForm() {
                     </p>
                 )}
             </div>
+
+            {/* ══════════════════════════════════════
+                VENUE PICKER MODAL
+            ═══════════════════════════════════ */}
+            {showVenuePicker && (
+                <>
+                    <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowVenuePicker(false)} />
+                    <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 max-h-[70vh] overflow-y-auto animate-slide-up">
+                        <div className="flex justify-center pt-3 pb-2">
+                            <div className="w-10 h-1 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="px-5 pb-6">
+                            <h2 className="text-lg font-bold text-brand-black mb-4">Select a Venue</h2>
+
+                            {/* Search */}
+                            <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors mb-4">
+                                <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                                <input
+                                    type="text"
+                                    value={venueSearch}
+                                    onChange={(e) => setVenueSearch(e.target.value)}
+                                    placeholder="Search by city..."
+                                    className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                                />
+                            </div>
+
+                            {/* Venue list */}
+                            {venuesLoading ? (
+                                <div className="space-y-3">
+                                    {[1, 2, 3].map((i) => (
+                                        <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
+                                    ))}
+                                </div>
+                            ) : venues && venues.length > 0 ? (
+                                <div className="space-y-2">
+                                    {venues.map((venue) => (
+                                        <button
+                                            key={venue.id}
+                                            onClick={() => {
+                                                setSelectedVenue(venue);
+                                                setSelectedPitch(null);
+                                                setShowVenuePicker(false);
+                                            }}
+                                            className="w-full text-start p-4 rounded-xl border border-gray-200 hover:border-brand-green transition-colors"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-bold text-brand-black">{venue.name}</p>
+                                                    <p className="text-xs text-gray-500">{venue.city} • {venue.pitch_count} pitches</p>
+                                                </div>
+                                                <div className="text-end">
+                                                    <span className="text-xs font-bold text-brand-green">
+                                                        ★ {venue.rating.toFixed(1)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <p className="text-sm text-gray-400">No venues found{venueSearch ? ` in "${venueSearch}"` : ''}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
