@@ -233,7 +233,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     title: row.title,
     organizer: {
       name: row.host_name ?? 'Unknown',
-      handle: row.host_id ? `@${row.host_id.slice(0, 8)}` : '@unknown',
+      handle: '',
       avatarUrl: row.host_avatar ?? '',
       rating: 0,
     },
