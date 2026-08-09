@@ -10,7 +10,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:enable-postgis": "tsx -e \"const pg=require('postgres');const p=pg.default||pg;const db=p(process.env.DATABASE_URL);db.unsafe('CREATE EXTENSION IF NOT EXISTS postgis').then(()=>{console.log('✅ PostGIS enabled');return db.end()}).catch(e=>{console.error(e);process.exit(1)})\"",
+    "db:migrate": "npm run db:enable-postgis && drizzle-kit migrate",
     "db:seed": "tsx drizzle/seed.ts",
     "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
   },

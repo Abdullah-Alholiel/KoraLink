@@ -1,4 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS "postgis";--> statement-breakpoint
 CREATE TYPE "public"."Environment" AS ENUM('Indoor', 'Outdoor');--> statement-breakpoint
 CREATE TYPE "public"."GenderRule" AS ENUM('Men Only', 'Women Only', 'Mixed');--> statement-breakpoint
 CREATE TYPE "public"."MatchStatus" AS ENUM('Open', 'Full', 'InProgress', 'Completed', 'Cancelled');--> statement-breakpoint
