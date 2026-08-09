@@ -16,6 +16,8 @@ import {
     Loader2,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
+import { useJoinMatch } from '@/hooks/useMatchActions';
+import { useWalletBalance } from '@/hooks/useWallet';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
@@ -35,6 +37,9 @@ export default function MatchDetailPage({
 
     // ── Data fetching via React Query ──
     const { data: match, isLoading, error, refetch } = useMatch(id);
+    const joinMatch = useJoinMatch();
+    const { data: walletData } = useWalletBalance();
+    const walletBalance = Number(walletData?.balance ?? 0);
 
     const [hasJoined, setHasJoined] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
@@ -71,7 +76,10 @@ export default function MatchDetailPage({
 
     const handlePaySuccess = () => {
         setShowPayment(false);
-        setHasJoined(true);
+        // Actually join the match via API
+        joinMatch.mutate(id, {
+            onSuccess: () => setHasJoined(true),
+        });
     };
 
     const openSpots = match ? match.totalSpots - match.filledSpots : 0;
@@ -408,7 +416,7 @@ export default function MatchDetailPage({
                 matchTime={`${match.date}, ${match.time}`}
                 matchLocation={match.venueName}
                 price={match.price}
-                walletBalance={0}
+                walletBalance={walletBalance}
             />
             )}
 
