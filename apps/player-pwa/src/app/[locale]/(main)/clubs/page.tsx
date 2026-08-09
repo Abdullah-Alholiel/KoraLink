@@ -192,7 +192,7 @@ export default function ClubsPage() {
                                         </span>
                                     </div>
                                     <Link href={`/${locale}/clubs/${venue.id}`} className="flex items-center gap-0.5 text-sm font-medium text-brand-black active:scale-95 transition-transform">
-                                        {t('clubs.book')}
+                                        {t('common.seeAll')}
                                         <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
                                     </Link>
                                 </div>

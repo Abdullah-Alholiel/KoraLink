@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useLocale } from 'next-intl';
 import { fetcher, setAuthToken } from '@/lib/fetcher';
+import { useAppStore } from '@/store/useAppStore';
+import type { UserProfileApi } from '@/hooks/useUser';
 
 /**
  * Dev-only quick-login buttons for seeded users.
@@ -12,6 +16,8 @@ export default function DevLoginBar() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLocalhost, setIsLocalhost] = useState(false);
+  const router = useRouter();
+  const locale = useLocale();
 
   useEffect(() => {
     const hostname = window.location.hostname;
@@ -40,15 +46,31 @@ export default function DevLoginBar() {
     try {
       const res = await fetcher<{ message: string; token?: string }>(
         '/auth/dev-login',
-        {
-          method: 'POST',
-          body: JSON.stringify({ phone }),
-        }
+        { method: 'POST', body: JSON.stringify({ phone }) }
       );
-      // Cross-origin dev via Tailscale: SameSite=Lax cookie is NOT forwarded,
-      // so persist the JWT and let fetcher send it as a Bearer header.
       if (res.token) setAuthToken(res.token);
-      window.location.href = `/${document.documentElement.lang || 'en'}`;
+
+      // Populate Zustand user — cascade-fixes join detection, host check,
+      // isAuthenticated, stats, and profile display.
+      try {
+        const profile = await fetcher<UserProfileApi>('/users/me');
+        const skillLevel = (profile.skill_level?.toLowerCase() ?? 'intermediate') as 'beginner' | 'intermediate' | 'advanced';
+        useAppStore.getState().login({
+          id: profile.id,
+          fullName: profile.full_name ?? '',
+          handle: profile.handle ?? '',
+          avatarUrl: profile.avatar_url ?? '',
+          phone: profile.phone,
+          preferredLocation: profile.preferred_location ?? '',
+          preferredPosition: profile.preferred_position ?? '',
+          skillLevel,
+          locale: locale as 'ar' | 'en',
+        }, res.token ?? '');
+      } catch {
+        // Profile fetch may fail; Zustand stays null, UI shows fallback
+      }
+
+      router.push(`/${locale}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Dev login failed');
     } finally {

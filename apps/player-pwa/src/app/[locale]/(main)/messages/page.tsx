@@ -4,20 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, Clock, MessageSquare, AlertTriangle } from 'lucide-react';
-import { useMyMatches } from '@/hooks/useMessages';
-import type { MyJoinedMatch } from '@/hooks/useMessages';
-
-function formatMatchTime(scheduledAt: string) {
-    const d = new Date(scheduledAt);
-    const today = new Date();
-    const isToday = d.toDateString() === today.toDateString();
-    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (isToday) return `Tonight, ${time}`;
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow, ${time}`;
-    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
+import { useMyMatches } from '@/hooks/useUser';
+import { adaptMatchList } from '@/lib/api-adapter';
+import type { Match } from '@/types';
 
 export default function MessagesPage() {
     const t = useTranslations();
@@ -26,11 +15,13 @@ export default function MessagesPage() {
 
     // ── Active Discussions from joined matches (REST) ──
     const {
-        data: myMatches,
+        data: matchesApi,
         isLoading,
         error,
         refetch,
     } = useMyMatches();
+
+    const myMatches: Match[] = matchesApi ? adaptMatchList(matchesApi) : [];
 
     return (
         <div className="pb-4">
@@ -101,17 +92,17 @@ export default function MessagesPage() {
                 {/* Populated — joined match discussion cards */}
                 {!isLoading && !error && myMatches && myMatches.length > 0 && (
                     <div className="space-y-3">
-                        {myMatches.map((match: MyJoinedMatch) => (
+                        {myMatches.map((match: Match) => (
                             <div key={match.id} className="bg-white rounded-2xl shadow-card p-4 animate-fade-in-up">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-bold text-brand-black flex-1 min-w-0 truncate">
-                                        {match.venue_name || match.title}
+                                        {match.venueName || match.title}
                                     </h3>
                                     <span
                                         className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ms-2 flex-shrink-0 ${
-                                            match.status === 'Open'
+                                            match.status === 'open'
                                                 ? 'bg-brand-green/10 text-brand-green'
-                                                : match.status === 'Full'
+                                                : match.status === 'full'
                                                   ? 'bg-gray-200 text-gray-600'
                                                   : 'bg-gray-100 text-gray-500'
                                         }`}
@@ -122,13 +113,18 @@ export default function MessagesPage() {
                                 <div className="flex items-center gap-1 mt-1.5">
                                     <Clock className="w-3 h-3 text-gray-400" strokeWidth={1.5} />
                                     <span className="text-xs text-gray-500">
-                                        {formatMatchTime(match.scheduled_at)}
+                                        {match.date} • {match.time}
                                     </span>
                                     <span className="text-xs text-gray-300">•</span>
                                     <span className="text-xs text-gray-500">
-                                        {match.spots_filled}/{match.max_players}
+                                        {match.filledSpots}/{match.totalSpots}
                                     </span>
                                 </div>
+                                {match.organizer.name && match.organizer.name !== 'Unknown' && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        by {match.organizer.name} • {match.format}
+                                    </p>
+                                )}
                                 <Link
                                     href={`/${locale}/match/${match.id}`}
                                     className="mt-3 inline-flex items-center gap-1.5 bg-brand-green/10 text-brand-green text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"

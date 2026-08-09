@@ -79,7 +79,8 @@ export default function CompleteProfilePage() {
                         <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center">
                             <span className="text-3xl text-gray-300">👤</span>
                         </div>
-                        <button className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-brand-black flex items-center justify-center border-2 border-white">
+                        <button className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-brand-black flex items-center justify-center border-2 border-white"
+                            onClick={() => router.push(`/${locale}/personal-info`)}>
                             <Camera className="w-4 h-4 text-white" strokeWidth={2} />
                         </button>
                     </div>

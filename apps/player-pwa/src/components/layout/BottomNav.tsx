@@ -29,6 +29,11 @@ export default function BottomNav() {
         if (href === '') {
             return pathname === `/${locale}` || pathname === `/${locale}/`;
         }
+        if (href === '/profile') {
+            return pathname.startsWith(fullPath) ||
+                pathname.startsWith(`/${locale}/my-games`) ||
+                pathname.startsWith(`/${locale}/personal-info`);
+        }
         return pathname.startsWith(fullPath);
     };
 

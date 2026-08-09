@@ -110,7 +110,7 @@ export default function WalletPage() {
         );
     };
 
-    // Use API data only; fall back to sensible defaults when loading/error
+    // Use API data only; show skeleton while loading
     const balance = balanceData?.balance ?? 0;
     const transactions: Transaction[] = historyData?.transactions ?? [];
     const groups = groupTransactionsByDay(transactions, t);

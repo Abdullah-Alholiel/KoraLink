@@ -14,6 +14,7 @@ export default function PlayPage() {
     const t = useTranslations();
     const locale = pathname.split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // ── Data fetching via React Query ──
     const {
@@ -52,9 +53,13 @@ export default function PlayPage() {
                 <div className="flex items-center gap-3 px-4 pb-3">
                     <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
                         <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
-                        <span className="text-sm text-gray-400">
-                            {t('play.searchPlaceholder')}
-                        </span>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={t('play.searchPlaceholder')}
+                            className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                        />
                     </div>
                     <Link
                         href={`/${locale}/host`}
