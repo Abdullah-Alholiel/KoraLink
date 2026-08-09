@@ -15,17 +15,23 @@ export default function DevLoginBar() {
 
   useEffect(() => {
     const hostname = window.location.hostname;
-    setIsLocalhost(hostname === 'localhost' || hostname === '127.0.0.1');
+    setIsLocalhost(
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.includes('.ts.net') ||  // Tailscale
+      hostname === 'vps' ||
+      hostname.startsWith('100.')      // Tailscale IPs
+    );
   }, []);
 
   if (!isLocalhost) return null;
 
   const seededPhones = [
-    { phone: '+966****0001', name: 'Ahmed Al-Rashid' },
-    { phone: '+966****0002', name: 'Khalid Al-Otaibi' },
-    { phone: '+966****0003', name: 'Faisal Al-Harbi' },
-    { phone: '+966****0004', name: 'Omar Al-Shahrani' },
-    { phone: '+966****0005', name: 'Yousef Al-Qahtani' },
+    { phone: '+966500000001', name: 'Ahmed Al-Rashid' },
+    { phone: '+966500000002', name: 'Khalid Al-Otaibi' },
+    { phone: '+966500000003', name: 'Faisal Al-Harbi' },
+    { phone: '+966500000004', name: 'Omar Al-Shahrani' },
+    { phone: '+966500000005', name: 'Yousef Al-Qahtani' },
   ];
 
   const devLogin = async (phone: string) => {

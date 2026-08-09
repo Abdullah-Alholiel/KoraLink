@@ -130,7 +130,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://cdn.moyasar.com",
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://*.mapbox.com",
-              "connect-src 'self' https://api.mapbox.com https://events.mapbox.com http://localhost:* http://127.0.0.1:* wss: ws:",
+              "connect-src 'self' https://api.mapbox.com https://events.mapbox.com http://localhost:* http://127.0.0.1:* http://100.*:* http://*.ts.net:* wss: ws:",
               "worker-src blob:",
               "font-src 'self' data:",
               "frame-src 'none'",
