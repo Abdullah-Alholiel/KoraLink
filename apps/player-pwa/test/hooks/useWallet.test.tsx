@@ -72,7 +72,7 @@ describe('useWallet hooks', () => {
 
       expect(mockFetcher).toHaveBeenCalledWith('/wallet/balance');
       // Adapted: string → number
-      expect(result.current.data).toEqual({ balance: 150 });
+      expect(result.current.data).toEqual({ balance: 150, currency: 'SAR' });
     });
 
     it('handles network error', async () => {
