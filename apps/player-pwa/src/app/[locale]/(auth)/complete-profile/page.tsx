@@ -9,29 +9,47 @@ import {
     MapPin,
     Trophy,
     ChevronDown,
+    Loader2,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useCompleteProfile } from '@/hooks/useAuth';
 import type { SkillLevel } from '@/types';
 
 export default function CompleteProfilePage() {
     const router = useRouter();
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const t = useTranslations('completeProfile');
 
     const [fullName, setFullName] = useState('');
     const [location, setLocation] = useState('');
     const [position, setPosition] = useState('');
     const [skillLevel, setSkillLevel] = useState<SkillLevel>('intermediate');
+    const [error, setError] = useState<string | null>(null);
+
+    const completeProfile = useCompleteProfile();
 
     const skillLevels: { value: SkillLevel; label: string }[] = [
-        { value: 'beginner', label: 'Beginner' },
-        { value: 'intermediate', label: 'Intermediate' },
-        { value: 'advanced', label: 'Advanced' },
+        { value: 'beginner', label: t('skills.beginner') },
+        { value: 'intermediate', label: t('skills.intermediate') },
+        { value: 'advanced', label: t('skills.advanced') },
     ];
 
     const handleFinish = () => {
-        if (fullName.trim()) {
-            router.push(`/${locale}`);
-        }
+        if (!fullName.trim()) return;
+        setError(null);
+        completeProfile.mutate(
+            {
+                fullName: fullName.trim(),
+                preferredLocation: location || undefined,
+                preferredPosition: position || undefined,
+                skillLevel,
+            },
+            {
+                onSuccess: () => router.push(`/${locale}`),
+                onError: (err) => setError(err.message),
+            },
+        );
     };
 
     return (
@@ -49,10 +67,10 @@ export default function CompleteProfilePage() {
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 px-6 pb-24">
                 <h1 className="text-2xl font-bold text-brand-black mt-2">
-                    Complete your profile
+                    {t('title')}
                 </h1>
                 <p className="text-sm text-gray-400 mt-1.5">
-                    Just a few more details to get you on the pitch.
+                    {t('subtitle')}
                 </p>
 
                 {/* Avatar */}
@@ -69,15 +87,16 @@ export default function CompleteProfilePage() {
 
                 {/* Full Name */}
                 <div className="mt-6">
-                    <label className="text-sm font-semibold text-brand-black">Full Name</label>
+                    <label className="text-sm font-semibold text-brand-black">{t('fullName')}</label>
                     <div className="flex items-center gap-2 mt-2 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-brand-green transition-colors">
                         <span className="text-gray-400">👤</span>
                         <input
                             type="text"
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
-                            placeholder="e.g. Abdullah Ahmed"
+                            placeholder={t('fullNamePlaceholder')}
                             className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                            disabled={completeProfile.isPending}
                         />
                     </div>
                 </div>
@@ -85,7 +104,7 @@ export default function CompleteProfilePage() {
                 {/* Preferred Location */}
                 <div className="mt-4">
                     <label className="text-sm font-semibold text-brand-black">
-                        Preferred Location
+                        {t('preferredLocation')}
                     </label>
                     <div className="flex items-center gap-2 mt-2 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-brand-green transition-colors">
                         <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
@@ -93,8 +112,9 @@ export default function CompleteProfilePage() {
                             type="text"
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
-                            placeholder="e.g. Riyadh"
+                            placeholder={t('locationPlaceholder')}
                             className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                            disabled={completeProfile.isPending}
                         />
                     </div>
                 </div>
@@ -102,8 +122,8 @@ export default function CompleteProfilePage() {
                 {/* Preferred Position */}
                 <div className="mt-4">
                     <label className="text-sm font-semibold text-brand-black">
-                        Preferred Position{' '}
-                        <span className="text-gray-400 font-normal">(Optional)</span>
+                        {t('preferredPosition')}{' '}
+                        <span className="text-gray-400 font-normal"></span>
                     </label>
                     <div className="flex items-center gap-2 mt-2 border border-gray-200 rounded-xl px-4 py-3">
                         <Trophy className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
@@ -111,12 +131,13 @@ export default function CompleteProfilePage() {
                             value={position}
                             onChange={(e) => setPosition(e.target.value)}
                             className="flex-1 text-sm text-brand-black outline-none bg-transparent appearance-none"
+                            disabled={completeProfile.isPending}
                         >
-                            <option value="">Select your position</option>
-                            <option value="goalkeeper">Goalkeeper</option>
-                            <option value="defender">Defender</option>
-                            <option value="midfielder">Midfielder</option>
-                            <option value="forward">Forward</option>
+                            <option value="">{t('selectPosition')}</option>
+                            <option value="goalkeeper">{t('positions.goalkeeper')}</option>
+                            <option value="defender">{t('positions.defender')}</option>
+                            <option value="midfielder">{t('positions.midfielder')}</option>
+                            <option value="forward">{t('positions.forward')}</option>
                         </select>
                         <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
                     </div>
@@ -125,20 +146,21 @@ export default function CompleteProfilePage() {
                 {/* Skill Level */}
                 <div className="mt-4">
                     <label className="text-sm font-semibold text-brand-black">
-                        Skill Level{' '}
-                        <span className="text-gray-400 font-normal">(Optional)</span>
+                        {t('skillLevel')}
                     </label>
                     <div className="flex gap-2 mt-2">
                         {skillLevels.map((level) => (
                             <button
                                 key={level.value}
                                 onClick={() => setSkillLevel(level.value)}
+                                disabled={completeProfile.isPending}
                                 className={`
                   px-4 py-2.5 rounded-full text-sm font-medium transition-all
                   ${skillLevel === level.value
                                         ? 'bg-brand-green text-white'
                                         : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
                                     }
+                  disabled:opacity-50 disabled:cursor-not-allowed
                 `}
                             >
                                 {level.label}
@@ -150,20 +172,34 @@ export default function CompleteProfilePage() {
 
             {/* ── Bottom Section ────────────────────── */}
             <div className="absolute bottom-0 left-0 right-0 px-6 pb-8 pb-safe bg-white">
+                {/* Error */}
+                {error && (
+                    <p className="text-center text-sm text-brand-red mb-3">{error}</p>
+                )}
+
                 <button
                     onClick={handleFinish}
-                    disabled={!fullName.trim()}
+                    disabled={completeProfile.isPending || !fullName.trim()}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${fullName.trim()
+            ${!completeProfile.isPending && fullName.trim()
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    Finish Setup
-                    <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                    {completeProfile.isPending ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {t('saving')}
+                        </>
+                    ) : (
+                        <>
+                            {t('save')}
+                            <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                        </>
+                    )}
                 </button>
             </div>
         </div>
