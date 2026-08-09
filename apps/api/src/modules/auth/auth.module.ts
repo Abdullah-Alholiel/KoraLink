@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { OtpStoreService } from './otp-store.service';
 import { UnifonicService } from './unifonic.service';
 import { JwtCookieStrategy } from './jwt-cookie.strategy';
 
@@ -21,7 +22,7 @@ import { JwtCookieStrategy } from './jwt-cookie.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, UnifonicService, JwtCookieStrategy],
+  providers: [AuthService, OtpStoreService, UnifonicService, JwtCookieStrategy],
   exports: [JwtModule, PassportModule],
 })
 export class AuthModule {}

@@ -13,6 +13,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
 import { UnifonicService } from './unifonic.service';
+import { OtpStoreService } from './otp-store.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { randomInt } from 'node:crypto';
@@ -28,28 +29,22 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly unifonic: UnifonicService,
+    private readonly otpStore: OtpStoreService,
   ) {
-    if (config.get('NODE_ENV') === 'production') {
-      this.logger.warn(
-        'In-memory OTP store is active in production. ' +
-          'Replace with a Redis-backed store before go-live.',
-      );
-    }
+    this.logger.log('OTP store backed by Redis (cache-manager).');
   }
 
   async sendOtp(phone: string): Promise<void> {
     const code = this.generateOtp();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Upsert user record so the phone always exists before OTP is saved.
     await this.db
       .insert(users)
-      .values({ phone })
+      .values(withTimestamp({ phone }))
       .onConflictDoNothing({ target: users.phone });
 
-    // Store OTP in a dedicated cache / table. Using a simple in-memory map for
-    // scaffolding; replace with Redis in production.
-    otpStore.set(phone, { code, expiresAt });
+    // Store OTP in Redis via cache-manager (5-minute TTL handled by store).
+    await this.otpStore.setOtp(phone, code);
 
     await this.unifonic.sendSms(phone, `Your KoraLink code: ${code}`);
   }
@@ -58,13 +53,13 @@ export class AuthService {
     phone: string,
     code: string,
   ): Promise<{ token: string; isNewUser: boolean }> {
-    const entry = otpStore.get(phone);
+    const storedCode = await this.otpStore.getOtp(phone);
 
-    if (!entry || entry.code !== code || entry.expiresAt < new Date()) {
+    if (!storedCode || storedCode !== code) {
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
-    otpStore.delete(phone);
+    await this.otpStore.deleteOtp(phone);
 
     const [user] = await this.db
       .select()
@@ -142,6 +137,3 @@ export class AuthService {
    return this.jwt.signAsync({ sub: user.id });
  }
  }
-
-// Ephemeral in-memory OTP store — swap for Redis in production.
-const otpStore = new Map<string, { code: string; expiresAt: Date }>();
