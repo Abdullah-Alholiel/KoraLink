@@ -30,6 +30,7 @@ export interface NearbyMatchApi {
   pitch_name: string;
   venue_name: string;
   venue_city: string;
+  is_joined: boolean;
 }
 
 /** Shape returned by GET /matches/:id — Drizzle findFirst with relations */
@@ -229,7 +230,7 @@ function buildComments(messages: MatchMessageApi[]): Comment[] {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** Adapts a NearbyMatchApi row → frontend Match (sparse fields from feed query) */
-export function adaptNearbyMatch(row: NearbyMatchApi): Match {
+export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): Match {
   const scheduled = new Date(row.scheduled_at);
   return {
     id: row.id,
@@ -247,8 +248,8 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
-    format: row.match_type, // pitch size not in nearby query
-    surface: '',  // not in nearby query
+    format: row.match_type,
+    surface: '',
     gender: mapGender(row.gender_rule),
     intensity: row.match_type,
     price: toNum(row.price_per_player),
@@ -259,6 +260,8 @@ export function adaptNearbyMatch(row: NearbyMatchApi): Match {
     imageUrl: '',
     roster: [],
     comments: [],
+    isJoined: row.is_joined,
+    isUserHost: currentUserId ? row.host_id === currentUserId : false,
   };
 }
 
@@ -298,8 +301,8 @@ export function adaptMatchDetail(detail: MatchDetailApi): Match {
 }
 
 /** Adapts many NearbyMatchApi rows → Match[] */
-export function adaptMatchList(rows: NearbyMatchApi[]): Match[] {
-  return rows.map(adaptNearbyMatch);
+export function adaptMatchList(rows: NearbyMatchApi[], currentUserId?: string): Match[] {
+  return rows.map(row => adaptNearbyMatch(row, currentUserId));
 }
 
 // ── Wallet Adapters ──────────────────────────────────────────────────────────

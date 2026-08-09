@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Leave Match — Bottom Sheet</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#000}
+.phone{max-width:390px;margin:20px auto;background:#f5f5f5;border-radius:40px;overflow:hidden;height:700px;position:relative}
+.bg{display:flex;align-items:flex-end;height:100%}
+.sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;padding:0 20px 32px;animation:up .3s ease}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.pull{display:flex;justify-content:center;padding:12px 0}.pull div{width:40px;height:4px;border-radius:2px;background:#ddd}
+.icon{width:56px;height:56px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:8px auto 16px;font-size:24px}
+h2{text-align:center;font-size:18px;font-weight:800;color:#1b4332;margin-bottom:6px}
+.desc{text-align:center;font-size:13px;color:#666;margin-bottom:16px;line-height:1.5}
+.info{background:#f9fafb;border-radius:12px;padding:12px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.info svg{width:16px;height:16px;color:#6b7280;flex-shrink:0}
+.info p{font-size:12px;color:#6b7280;line-height:1.4}
+.actions{display:flex;flex-direction:column;gap:10px}
+.btn-danger{width:100%;padding:14px;border-radius:14px;background:#dc2626;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer}
+.btn-secondary{width:100%;padding:14px;border-radius:14px;background:#f3f4f6;color:#666;font-size:14px;font-weight:600;border:none;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="phone"><div class="bg"><div class="sheet">
+  <div class="pull"><div></div></div>
+  <div class="icon">🚪</div>
+  <h2>Leave Match?</h2>
+  <p class="desc">Friday Night 7v7<br>Fri, Aug 15 • 9:00 PM</p>
+  <div class="info">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <p>Your spot will be released. You can rejoin later if spots are available. Refund policy applies.</p>
+  </div>
+  <div class="actions">
+    <button class="btn-danger">Leave Match</button>
+    <button class="btn-secondary">Stay</button>
+  </div>
+</div></div></div>
+</body>
+</html>

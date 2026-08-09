@@ -42,8 +42,8 @@ export class MatchesController {
     summary: 'Discover nearby open matches (PostGIS geo-filter)',
   })
   @ApiOkResponse({ description: 'Paginated list of nearby open matches.' })
-  findNearby(@Query() dto: GetMatchesDto) {
-    return this.matchesService.findNearby(dto);
+  findNearby(@CurrentUser() user: { sub: string }, @Query() dto: GetMatchesDto) {
+    return this.matchesService.findNearby(dto, user.sub);
   }
 
   // ── GET /matches/:id — Match details ──────────────────────────────────

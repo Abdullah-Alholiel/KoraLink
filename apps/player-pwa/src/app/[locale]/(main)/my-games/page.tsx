@@ -9,6 +9,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList } from '@/lib/api-adapter';
+import { selectUser, useAppStore } from '@/store/useAppStore';
 
 export default function MyGamesPage() {
   const router = useRouter();
@@ -17,7 +18,8 @@ export default function MyGamesPage() {
   const t = useTranslations();
 
   const { data: matchesApi, isLoading, error, refetch } = useMyMatches();
-  const matches = matchesApi ? adaptMatchList(matchesApi) : [];
+  const storeUser = useAppStore(selectUser);
+  const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
 
   const activeMatches = matches.filter((m) =>
     ['open', 'full', 'in_progress'].includes(m.status)
@@ -88,7 +90,7 @@ export default function MyGamesPage() {
                 </div>
               ) : (
                 activeMatches.map((match) => (
-                  <MatchCard key={match.id} match={match} />
+                  <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
                 ))
               )}
             </div>
@@ -105,7 +107,7 @@ export default function MyGamesPage() {
                   {t('myGames.history')}
                 </h2>
                 {historyMatches.map((match) => (
-                  <MatchCard key={match.id} match={match} />
+                  <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
                 ))}
               </div>
             )}

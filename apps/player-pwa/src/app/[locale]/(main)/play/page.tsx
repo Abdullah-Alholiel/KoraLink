@@ -8,6 +8,7 @@ import { Bell, Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMatches } from '@/hooks/useMatches';
+import { selectUser, useAppStore } from '@/store/useAppStore';
 
 export default function PlayPage() {
     const pathname = usePathname();
@@ -27,6 +28,8 @@ export default function PlayPage() {
     });
 
     const matches = data?.matches ?? [];
+    const storeUser = useAppStore(selectUser);
+    const currentUserId = storeUser?.id;
 
     return (
         <div className="pb-4">
@@ -157,7 +160,7 @@ export default function PlayPage() {
                     {/* Match cards */}
                     <div className="animate-fade-in-up">
                         {matches.map((match) => (
-                            <MatchCard key={match.id} match={match} />
+                            <MatchCard key={match.id} match={match} currentUserId={currentUserId} />
                         ))}
                     </div>
                 </>

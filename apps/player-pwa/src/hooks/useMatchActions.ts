@@ -30,3 +30,19 @@ export function useLeaveMatch() {
     },
   });
 }
+
+// ─── Cancel Match (Host) ────────────────────────────────
+
+export function useCancelMatch() {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, FetchError, string>({
+    mutationFn: (matchId) =>
+      fetcher(`/matches/${matchId}/cancel`, { method: 'POST' }),
+    onSuccess: (_, matchId) => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+    },
+  });
+}

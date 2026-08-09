@@ -34,6 +34,7 @@ export interface NearbyMatchRow {
   pitch_name: string;
   venue_name: string;
   venue_city: string;
+  is_joined: boolean;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -57,7 +58,7 @@ export class MatchesService {
    *   ST_DWithin(m.location, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, radiusMetres)
    * returns true when the great-circle distance (metres) is within the radius.
    */
-  async findNearby(dto: GetMatchesDto): Promise<NearbyMatchRow[]> {
+  async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
     const { lat, lng, radius_km = 10, date } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
@@ -113,7 +114,11 @@ export class MatchesService {
         p.id                      AS pitch_id,
         p.name                    AS pitch_name,
         v.name                    AS venue_name,
-        v.city                    AS venue_city
+        v.city                    AS venue_city,
+        EXISTS(
+          SELECT 1 FROM match_players mu
+          WHERE mu.match_id = m.id AND mu.user_id = ${currentUserId ?? null}::uuid
+        )                         AS is_joined
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id

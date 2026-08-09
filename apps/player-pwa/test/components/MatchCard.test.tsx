@@ -99,9 +99,9 @@ describe('MatchCard', () => {
     expect(screen.getByText('7v7 (Grass)')).toBeInTheDocument();
   });
 
-  it('renders Book Spot link with correct locale path', () => {
+  it('renders card link with correct locale path', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    const link = screen.getByRole('link', { name: /join match/i });
+    const link = screen.getByRole('link');
     expect(link).toHaveAttribute('href', '/ar/match/match-1');
   });
 

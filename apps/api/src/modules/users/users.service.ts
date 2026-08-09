@@ -91,6 +91,7 @@ export class UsersService {
         m.price_per_player::float AS price_per_player,
         COUNT(mp2.id) FILTER (WHERE mp2.is_host = false)::int AS spots_filled,
         NULL::float8 AS distance_m,
+        TRUE AS is_joined,
         u.id AS host_id,
         u.full_name AS host_name,
         u.avatar_url AS host_avatar,

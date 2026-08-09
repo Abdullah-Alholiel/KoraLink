@@ -16,7 +16,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
-import { useJoinMatch, useLeaveMatch } from '@/hooks/useMatchActions';
+import { useJoinMatch, useLeaveMatch, useCancelMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
@@ -25,6 +25,8 @@ import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import TeamLineupSheet from '@/components/matches/TeamLineupSheet';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
+import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
+import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import LocationMap from '@/components/matches/LocationMap';
 
@@ -41,6 +43,7 @@ export default function MatchDetailPage({
     const { data: match, isLoading, error, refetch } = useMatch(id);
     const joinMatch = useJoinMatch();
     const leaveMatch = useLeaveMatch();
+    const cancelMatch = useCancelMatch();
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
@@ -61,6 +64,8 @@ export default function MatchDetailPage({
     const [showPayment, setShowPayment] = useState(false);
     const [showTeamSheet, setShowTeamSheet] = useState(false);
     const [showRules, setShowRules] = useState(false);
+    const [showCancelSheet, setShowCancelSheet] = useState(false);
+    const [showLeaveSheet, setShowLeaveSheet] = useState(false);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -252,11 +257,10 @@ export default function MatchDetailPage({
                             {!isUserHost && (
                                 <div className="px-5 pt-6">
                                     <button
-                                        onClick={() => leaveMatch.mutate(id)}
-                                        disabled={leaveMatch.isPending}
-                                        className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform disabled:opacity-50"
+                                        onClick={() => setShowLeaveSheet(true)}
+                                        className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
                                     >
-                                        {leaveMatch.isPending ? '...' : (t('matchDetail.leaveMatch') || 'Leave Match')}
+                                        {t('matchDetail.leaveMatch')}
                                     </button>
                                 </div>
                             )}
@@ -265,14 +269,10 @@ export default function MatchDetailPage({
                             {isUserHost && match.status !== 'completed' && match.status !== 'cancelled' && (
                                 <div className="px-5 pt-6">
                                     <button
-                                        onClick={() => {
-                                            if (confirm(t('matchDetail.cancelConfirm') || 'Cancel this match?')) {
-                                                // TODO: wire cancel endpoint
-                                            }
-                                        }}
+                                        onClick={() => setShowCancelSheet(true)}
                                         className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
                                     >
-                                        {t('matchDetail.cancelMatch') || 'Cancel Match'}
+                                        {t('matchDetail.cancelMatch')}
                                     </button>
                                 </div>
                             )}
@@ -457,6 +457,30 @@ export default function MatchDetailPage({
                 isOpen={showRules}
                 onClose={() => setShowRules(false)}
             />
+
+            {/* Cancel Match Sheet (Host) */}
+            {match && (
+                <CancelMatchSheet
+                    isOpen={showCancelSheet}
+                    onClose={() => setShowCancelSheet(false)}
+                    onConfirm={() => { cancelMatch.mutate(id); setShowCancelSheet(false); }}
+                    matchTitle={match.title}
+                    matchTime={`${match.date}, ${match.time}`}
+                    isPending={cancelMatch.isPending}
+                />
+            )}
+
+            {/* Leave Match Sheet (Player) */}
+            {match && (
+                <LeaveMatchSheet
+                    isOpen={showLeaveSheet}
+                    onClose={() => setShowLeaveSheet(false)}
+                    onConfirm={() => { leaveMatch.mutate(id); setShowLeaveSheet(false); }}
+                    matchTitle={match.title}
+                    matchTime={`${match.date}, ${match.time}`}
+                    isPending={leaveMatch.isPending}
+                />
+            )}
 
             <BottomNav />
 

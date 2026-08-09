@@ -161,7 +161,22 @@
         "surface": "Surface",
         "matchRules": "Standard rules",
         "leaveMatch": "Leave Match",
-        "cancelMatch": "Cancel Match"
+        "cancelMatch": "Cancel Match",
+        "viewDetails": "View Details",
+        "yourMatch": "Your Match",
+        "view": "View"
+    },
+    "cancelMatch": {
+        "title": "Cancel Match?",
+        "warning": "All players will be notified and refunded. This action cannot be undone.",
+        "confirm": "Cancel Match",
+        "keep": "Keep Match"
+    },
+    "leaveMatch": {
+        "title": "Leave Match?",
+        "info": "Your spot will be released. You can rejoin later if spots are available. Refund policy applies.",
+        "confirm": "Leave Match",
+        "stay": "Stay"
     },
     "gameDetails": {
         "date": "Date",

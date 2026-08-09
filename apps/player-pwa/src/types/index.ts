@@ -46,6 +46,10 @@ export interface Match {
     rules?: string[];
     roster: RosterPlayer[];
     comments: Comment[];
+    /** True if current user is in the match roster (from feed API is_joined). */
+    isJoined?: boolean;
+    /** True if current user is the match host. */
+    isUserHost?: boolean;
 }
 
 export interface RosterPlayer {
