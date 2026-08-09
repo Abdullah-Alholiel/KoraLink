@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { MapPin, Users as UsersIcon } from 'lucide-react';
 import type { Match } from '@/types';
 
@@ -12,6 +13,7 @@ interface MatchCardProps {
 export default function MatchCard({ match }: MatchCardProps) {
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const t = useTranslations();
 
     const spotsLeft = match.totalSpots - match.filledSpots;
     const isClosing = match.status === 'closing_soon' || spotsLeft <= 2;
@@ -89,7 +91,7 @@ export default function MatchCard({ match }: MatchCardProps) {
               active:scale-95
             "
                     >
-                        Book Spot
+                        {t('matchDetail.joinMatch')}
                     </Link>
                 </div>
             </div>
