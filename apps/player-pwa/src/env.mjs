@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 export const env = createEnv({
   client: {
-    NEXT_PUBLIC_API_URL: z.string().url().default('https://api.koralink.sa'),
+    NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:3001/api/v1'),
     NEXT_PUBLIC_MAPBOX_TOKEN: z.string().min(1).default('pk_placeholder'),
     NEXT_PUBLIC_MOYASAR_KEY: z.string().min(1).default('pk_placeholder'),
     NEXT_PUBLIC_APP_URL: z.string().url().default('https://app.koralink.sa'),

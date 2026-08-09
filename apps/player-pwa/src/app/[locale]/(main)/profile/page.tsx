@@ -76,6 +76,7 @@ export default function ProfilePage() {
     const user = useAppStore(selectUser);
     const walletBalance = useAppStore(selectBalance);
     const isAuthenticated = useAppStore(selectIsAuth);
+    const logout = useAppStore((s) => s.logout);
 
     // ── Real stats from API ──
     const { data: stats } = useUserStats();
@@ -164,6 +165,10 @@ export default function ProfilePage() {
                     icon={<LogOut className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.signOut')}
                     danger
+                    onClick={() => {
+                      logout();
+                      window.location.href = `/${locale}/login`;
+                    }}
                 />
             </div>
 

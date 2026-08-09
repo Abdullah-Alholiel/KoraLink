@@ -207,7 +207,18 @@ async function seed() {
   const pitches = Object.fromEntries(pitchRows.map((p) => [p.name, p.id]));
   //   Pitch A – Main Field, Pitch B – Training Ground, Pitch C – Indoor Court
 
-  // ── 4. Matches (5) with host auto-join ─────────────────────────────────
+  // ── 4. Matches (5) with dynamic dates ──────────────────────────────
+  // Dates are anchored to the current date so matches never expire.
+  const now = new Date();
+  const days = (n: number) =>
+    new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
+  const fmtDate = (d: Date, time: string) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return new Date(`${yyyy}-${mm}-${dd}T${time}:00+03:00`);
+  };
+
   const matchRows = await db
     .insert(schema.matches)
     .values([
@@ -218,7 +229,7 @@ async function seed() {
         match_type: 'Competitive',
         gender_rule: 'Men Only',
         status: 'Open',
-        scheduled_at: new Date('2026-08-14T20:00:00+03:00'),
+        scheduled_at: fmtDate(days(5), '20:00'),
         duration_mins: 90,
         price_per_player: '45.00',
         max_players: 22,
@@ -231,7 +242,7 @@ async function seed() {
         match_type: 'Casual',
         gender_rule: 'Mixed',
         status: 'Open',
-        scheduled_at: new Date('2026-08-15T18:00:00+03:00'),
+        scheduled_at: fmtDate(days(6), '18:00'),
         duration_mins: 60,
         price_per_player: '25.00',
         max_players: 14,
@@ -244,7 +255,7 @@ async function seed() {
         match_type: 'Competitive',
         gender_rule: 'Mixed',
         status: 'Open',
-        scheduled_at: new Date('2026-08-16T21:00:00+03:00'),
+        scheduled_at: fmtDate(days(7), '21:00'),
         duration_mins: 50,
         price_per_player: '30.00',
         max_players: 10,
@@ -257,7 +268,7 @@ async function seed() {
         match_type: 'Casual',
         gender_rule: 'Men Only',
         status: 'Full',
-        scheduled_at: new Date('2026-08-17T17:30:00+03:00'),
+        scheduled_at: fmtDate(days(3), '17:30'),
         duration_mins: 60,
         price_per_player: '35.00',
         max_players: 14,
@@ -266,11 +277,11 @@ async function seed() {
       {
         host_id: users.ahmed_r!,
         pitch_id: pitches['Pitch E – Championship Field']!,
-        title: 'Women\'s Championship Qualifier',
+        title: "Women's Championship Qualifier",
         match_type: 'Competitive',
         gender_rule: 'Women Only',
         status: 'InProgress',
-        scheduled_at: new Date('2026-08-18T19:00:00+03:00'),
+        scheduled_at: fmtDate(days(2), '19:00'),
         duration_mins: 90,
         price_per_player: '55.00',
         max_players: 22,

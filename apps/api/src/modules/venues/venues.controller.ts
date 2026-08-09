@@ -19,9 +19,8 @@ export class VenuesController {
   constructor(private readonly venuesService: VenuesService) {}
 
   // ── GET /venues — Nearby venues (PostGIS geo-filter) ──────────────────
+  // NOTE: No cache interceptor — query params (lat, lng, city) vary per user.
   @Get()
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(300)
   @ApiOperation({ summary: 'Discover nearby approved venues (PostGIS geo-filter)' })
   @ApiOkResponse({ description: 'List of nearby approved venues.' })
   findNearby(@Query() dto: GetVenuesDto) {

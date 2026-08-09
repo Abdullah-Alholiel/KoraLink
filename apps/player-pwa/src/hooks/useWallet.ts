@@ -1,8 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import type { Transaction, PaymentMethod } from '@/types';
+import type { Transaction } from '@/types';
 import {
   type TransactionApi,
   type WalletBalanceApi,
@@ -37,9 +37,22 @@ export function useWalletHistory() {
 
 // ─── Fetch Payment Methods ───────────────────────────
 
-export function usePaymentMethods() {
-  return useQuery<{ methods: PaymentMethod[] }, FetchError>({
-    queryKey: ['wallet', 'payment-methods'],
-    queryFn: () => fetcher<{ methods: PaymentMethod[] }>('/wallet/payment-methods'),
+export function useTopupWallet() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { ledgerEntry: unknown; wallet_balance: string },
+    FetchError,
+    { amount: number; idempotencyKey: string; referenceId?: string }
+  >({
+    mutationFn: (data) =>
+      fetcher('/wallet/topup', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
+    },
   });
 }

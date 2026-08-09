@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
@@ -22,7 +22,7 @@ vi.mock('@/lib/fetcher', () => ({
 import {
   useWalletBalance,
   useWalletHistory,
-  usePaymentMethods,
+  useTopupWallet,
 } from '@/hooks/useWallet';
 
 // Wrapper with QueryClientProvider
@@ -136,28 +136,28 @@ describe('useWallet hooks', () => {
     });
   });
 
-  describe('usePaymentMethods', () => {
-    it('fetches payment methods from /wallet/payment-methods', async () => {
-      const mockMethods = {
-        methods: [
-          {
-            id: 'pm_1',
-            type: 'card',
-            last4: '4242',
-            brand: 'visa',
-            isDefault: true,
-          },
-        ],
+  describe('useTopupWallet', () => {
+    it('POSTs topup data to /wallet/topup', async () => {
+      const mockResponse = {
+        ledgerEntry: { id: 'txn_new', type: 'CREDIT', amount: '100.00' },
+        wallet_balance: '250.00',
       };
-      mockFetcher.mockResolvedValue(mockMethods);
+      mockFetcher.mockResolvedValue(mockResponse);
 
       const { wrapper } = createWrapper();
-      const { result } = renderHook(() => usePaymentMethods(), { wrapper });
+      const { result } = renderHook(() => useTopupWallet(), { wrapper });
 
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      await act(async () => {
+        await result.current.mutateAsync({
+          amount: 100,
+          idempotencyKey: 'test-key-001',
+        });
+      });
 
-      expect(mockFetcher).toHaveBeenCalledWith('/wallet/payment-methods');
-      expect(result.current.data).toEqual(mockMethods);
+      expect(mockFetcher).toHaveBeenCalledWith('/wallet/topup', {
+        method: 'POST',
+        body: JSON.stringify({ amount: 100, idempotencyKey: 'test-key-001' }),
+      });
     });
   });
 });
