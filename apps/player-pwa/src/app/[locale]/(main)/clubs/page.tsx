@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, MapPin, Star, ChevronRight } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
@@ -9,6 +11,8 @@ const filters = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'];
 
 export default function ClubsPage() {
     const t = useTranslations();
+    const pathname = usePathname();
+    const locale = pathname.split('/')[1] || 'en';
     const [activeFilter, setActiveFilter] = useState('Nearby');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -179,10 +183,10 @@ export default function ClubsPage() {
                                             {venue.name.charAt(0)}
                                         </span>
                                     </div>
-                                    <button className="flex items-center gap-0.5 text-sm font-medium text-brand-black active:scale-95 transition-transform">
+                                    <Link href={`/${locale}/clubs/${venue.id}`} className="flex items-center gap-0.5 text-sm font-medium text-brand-black active:scale-95 transition-transform">
                                         {t('clubs.book')}
                                         <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
-                                    </button>
+                                    </Link>
                                 </div>
                             </div>
                         </div>
