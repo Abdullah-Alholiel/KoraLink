@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, setAuthToken } from '@/lib/fetcher';
 
 /**
  * Dev-only quick-login buttons for seeded users.
@@ -38,10 +38,16 @@ export default function DevLoginBar() {
     setLoading(phone);
     setError(null);
     try {
-      await fetcher('/auth/dev-login', {
-        method: 'POST',
-        body: JSON.stringify({ phone }),
-      });
+      const res = await fetcher<{ message: string; token?: string }>(
+        '/auth/dev-login',
+        {
+          method: 'POST',
+          body: JSON.stringify({ phone }),
+        }
+      );
+      // Cross-origin dev via Tailscale: SameSite=Lax cookie is NOT forwarded,
+      // so persist the JWT and let fetcher send it as a Bearer header.
+      if (res.token) setAuthToken(res.token);
       window.location.href = `/${document.documentElement.lang || 'en'}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Dev login failed');

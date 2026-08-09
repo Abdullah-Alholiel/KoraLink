@@ -29,7 +29,7 @@ async function bootstrap(): Promise<void> {
     origin: [playerUrl, adminUrl],
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   });
 
   // ── Global validation pipe ───────────────────────────────────────────────
