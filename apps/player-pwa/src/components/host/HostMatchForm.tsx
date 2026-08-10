@@ -73,7 +73,9 @@ export default function HostMatchForm() {
     const pitchCostSar = pitchRate > 0 ? pitchRate : 0;
 
     // Calculate player share (host plays free)
-    const maxPlayers = format ? parseInt(format.charAt(0)) * 2 : 14;
+    // Parse the full number before 'v' — '11v11' → 11, not 1
+    const playersPerSide = format ? parseInt(format.split('v')[0]) : 7;
+    const maxPlayers = playersPerSide * 2;
     const playerShare = maxPlayers > 1 ? Math.ceil(pitchCostSar / (maxPlayers - 1)) : pitchCostSar;
 
     const handlePublish = () => {

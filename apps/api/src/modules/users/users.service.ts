@@ -154,8 +154,13 @@ export class UsersService {
         AND m.status != 'Cancelled'
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY
-        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') THEN 0 ELSE 1 END,
-        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') THEN m.scheduled_at END ASC,
+        -- Upcoming/active matches first (scheduled today or later)
+        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN 0
+             WHEN m.status = 'Completed' THEN 1
+             ELSE 2 END,
+        -- Upcoming: soonest first
+        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN m.scheduled_at END ASC,
+        -- Past: most recent first
         m.scheduled_at DESC
       LIMIT 50
     `);

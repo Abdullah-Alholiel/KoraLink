@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, MapPin, Star, ChevronRight } from 'lucide-react';
+import { Search, MapPin, Star } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
 
 const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
@@ -153,7 +153,11 @@ export default function ClubsPage() {
             {!isLoading && !error && filteredVenues.length > 0 && (
                 <div className="space-y-3 px-4">
                     {filteredVenues.map((venue) => (
-                        <div key={venue.id} className="bg-white rounded-2xl shadow-card p-4 animate-fade-in-up">
+                        <Link
+                            key={venue.id}
+                            href={`/${locale}/clubs/${venue.id}`}
+                            className="block bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+                        >
                             <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-base font-bold text-brand-black">{venue.name}</h3>
@@ -191,13 +195,9 @@ export default function ClubsPage() {
                                             {venue.name.charAt(0)}
                                         </span>
                                     </div>
-                                    <Link href={`/${locale}/clubs/${venue.id}`} className="flex items-center gap-0.5 text-sm font-medium text-brand-black active:scale-95 transition-transform">
-                                        {t('common.seeAll')}
-                                        <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
-                                    </Link>
                                 </div>
                             </div>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             )}

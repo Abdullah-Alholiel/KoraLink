@@ -97,9 +97,10 @@ export default function CommunityFeedPage() {
                             .slice(0, 2);
 
                         return (
-                            <div
+                            <Link
                                 key={match.id}
-                                className={`bg-white rounded-2xl shadow-card p-4 ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
+                                href={`/${locale}/match/${match.id}`}
+                                className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
                             >
                                 <div className="flex items-start gap-3">
                                     {/* Avatar */}
@@ -147,7 +148,7 @@ export default function CommunityFeedPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </Link>
                         );
                     })}
                 </div>

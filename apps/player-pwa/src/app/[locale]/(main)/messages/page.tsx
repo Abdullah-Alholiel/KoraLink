@@ -94,11 +94,13 @@ export default function MessagesPage() {
                     <div className="space-y-3">
                         {myMatches.map((match: Match) => {
                             const isCompleted = match.status === 'completed';
+                            const isPast = new Date(match.date) < new Date(new Date().toDateString());
+                            const isFaded = isCompleted || (isPast && match.status === 'open');
                             return (
                             <div
                                 key={match.id}
                                 className={`bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-opacity ${
-                                    isCompleted ? 'opacity-60' : ''
+                                    isFaded ? 'opacity-60' : ''
                                 }`}
                             >
                                 <div className="flex items-center justify-between">
@@ -107,16 +109,16 @@ export default function MessagesPage() {
                                     </h3>
                                     <span
                                         className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ms-2 flex-shrink-0 ${
-                                            match.status === 'open'
+                                            match.status === 'open' && !isPast
                                                 ? 'bg-brand-green/10 text-brand-green'
                                                 : match.status === 'full'
                                                   ? 'bg-gray-200 text-gray-600'
-                                                  : isCompleted
+                                                  : isCompleted || isPast
                                                     ? 'bg-gray-100 text-gray-400'
                                                     : 'bg-gray-100 text-gray-500'
                                         }`}
                                     >
-                                        {isCompleted ? t('messages.completed') : match.status}
+                                        {isCompleted ? t('messages.completed') : isPast && match.status === 'open' ? t('messages.matchEnded') : match.status}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1 mt-1.5">
@@ -134,7 +136,7 @@ export default function MessagesPage() {
                                         by {match.organizer.name} • {match.format}
                                     </p>
                                 )}
-                                {isCompleted ? (
+                                {isCompleted || isPast ? (
                                     <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-400 font-medium">
                                         {t('messages.matchEnded')}
                                     </span>
