@@ -80,17 +80,13 @@ export function useMatches(filters?: {
 
 // ─── Fetch Single Match ───────────────────────────────
 
-export function useMatch(id: string) {
+export function useMatch(id: string, currentUserId?: string) {
   return useQuery<Match, FetchError>({
-    queryKey: ['match', id],
+    // Include currentUserId in the key so React Query re-fetches
+    // when AuthBootstrap populates Zustand (cold page loads).
+    queryKey: ['match', id, { currentUserId }],
     queryFn: async () => {
       const raw = await fetcher<MatchDetailApi>(`/matches/${id}`);
-      // Read current user from Zustand for isJoined/isUserHost computation.
-      // Using getState() here because queryFn runs once per fetch — the
-      // AuthBootstrap component populates Zustand before any page renders,
-      // so the user is available at call time.
-      const { useAppStore } = await import('@/store/useAppStore');
-      const currentUserId = useAppStore.getState().user?.id;
       return adaptMatchDetail(raw, currentUserId);
     },
     enabled: !!id,

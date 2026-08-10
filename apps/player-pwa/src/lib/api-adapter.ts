@@ -214,7 +214,7 @@ function buildRoster(players: MatchPlayerApi[]): RosterPlayer[] {
   }));
 }
 
-function buildComments(messages: MatchMessageApi[]): Comment[] {
+export function buildComments(messages: MatchMessageApi[]): Comment[] {
   return messages.map((m) => ({
     id: m.id,
     userId: m.user.id,

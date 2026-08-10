@@ -18,6 +18,7 @@ import {
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch, useLeaveMatch, useCancelMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
+import { useAppStore, selectUser } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
@@ -40,7 +41,9 @@ export default function MatchDetailPage({
     const t = useTranslations();
 
     // ── Data fetching via React Query ──
-    const { data: match, isLoading, error, refetch } = useMatch(id);
+    const user = useAppStore(selectUser);
+    const currentUserId = user?.id;
+    const { data: match, isLoading, error, refetch } = useMatch(id, currentUserId);
     const joinMatch = useJoinMatch();
     const leaveMatch = useLeaveMatch();
     const cancelMatch = useCancelMatch();

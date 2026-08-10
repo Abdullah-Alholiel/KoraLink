@@ -3,27 +3,7 @@
 import { Loader2, MessageSquare, AlertTriangle, X, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMatchMessages } from '@/hooks/useMatches';
-function adaptMessages(
-  messages: Array<{
-    id: string;
-    content: string;
-    created_at: string;
-    user: {
-      id: string;
-      full_name: string | null;
-      avatar_url: string | null;
-    };
-  }>,
-) {
-  return messages.map((m) => ({
-    id: m.id,
-    userId: m.user.id,
-    userName: m.user.full_name ?? 'Player',
-    userAvatar: m.user.avatar_url ?? '',
-    text: m.content,
-    createdAt: m.created_at,
-  }));
-}
+import { buildComments } from '@/lib/api-adapter';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -49,7 +29,7 @@ export default function ChatSheet({
 
   if (!isOpen) return null;
 
-  const comments = messages ? adaptMessages(messages) : [];
+  const comments = messages ? buildComments(messages) : [];
 
   return (
     <>
