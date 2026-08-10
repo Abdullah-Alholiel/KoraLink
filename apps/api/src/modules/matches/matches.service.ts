@@ -115,7 +115,7 @@ export class MatchesService {
         p.name                    AS pitch_name,
         v.name                    AS venue_name,
         v.city                    AS venue_city,
-        COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::uuid), FALSE) AS is_joined
+        COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id
