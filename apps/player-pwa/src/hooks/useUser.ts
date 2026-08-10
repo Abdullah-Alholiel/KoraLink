@@ -19,6 +19,7 @@ export interface UserProfileApi {
   karma_score: number;
   rating: number;
   no_show_count: number;
+  pom_count: number;
   created_at: string;
 }
 

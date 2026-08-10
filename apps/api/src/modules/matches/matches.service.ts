@@ -8,7 +8,7 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, match_messages } from '../../database/schema';
+import { matches, match_messages, match_players, match_votes, users } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
@@ -498,7 +498,7 @@ export class MatchesService {
 
       await tx
         .update(matches)
-        .set(withTimestamp({ status: 'Completed' }))
+        .set(withTimestamp({ status: 'Completed', completed_at: new Date() }))
         .where(eq(matches.id, matchId));
     });
 
@@ -539,5 +539,236 @@ export class MatchesService {
 
     // Return fully populated match with relations (API Contract Rule §2)
     return this.findOne(matchId);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Player of the Match — Voting & Results
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Voting window: 24 hours after match completion */
+  private static readonly VOTING_WINDOW_HOURS = 24;
+
+  /**
+   * Cast or update a Player of the Match vote.
+   * Validates: match is completed, voting window is open, voter attended
+   * (not no-show), and candidate is not the voter themselves.
+   */
+  async castVote(
+    voterId: string,
+    matchId: string,
+    candidateId: string,
+  ): Promise<{ matchId: string; votedFor: string; message: string }> {
+    // Cannot vote for yourself
+    if (voterId === candidateId) {
+      throw new BadRequestException('You cannot vote for yourself.');
+    }
+
+    const [match] = await this.db
+      .select({
+        id: matches.id,
+        status: matches.status,
+        completed_at: matches.completed_at,
+      })
+      .from(matches)
+      .where(eq(matches.id, matchId))
+      .limit(1);
+
+    if (!match) {
+      throw new NotFoundException(`Match ${matchId} not found.`);
+    }
+
+    if (match.status !== 'Completed') {
+      throw new BadRequestException(
+        `Voting is only available for completed matches. Current status: "${match.status}".`,
+      );
+    }
+
+    // Check voting window
+    if (!match.completed_at) {
+      throw new BadRequestException('Match completion time not recorded.');
+    }
+    const votingClosesAt = new Date(
+      match.completed_at.getTime() +
+        MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+    if (new Date() > votingClosesAt) {
+      throw new BadRequestException('The voting window has closed.');
+    }
+
+    // Verify voter attended the match (is in roster and not a no-show)
+    const [voterPlayer] = await this.db
+      .select({ id: match_players.id, no_show: match_players.no_show })
+      .from(match_players)
+      .where(
+        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${voterId}`,
+      )
+      .limit(1);
+
+    if (!voterPlayer) {
+      throw new BadRequestException(
+        'You did not attend this match, so you cannot vote.',
+      );
+    }
+
+    if (voterPlayer.no_show) {
+      throw new BadRequestException(
+        'Players who did not show up cannot vote.',
+      );
+    }
+
+    // Verify candidate also attended (is in roster, not no-show)
+    const [candidatePlayer] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${candidateId} AND ${match_players.no_show} = false`,
+      )
+      .limit(1);
+
+    if (!candidatePlayer) {
+      throw new BadRequestException(
+        'The selected player did not attend this match.',
+      );
+    }
+
+    // Upsert the vote (unique constraint on match_id + voter_id)
+    await this.db
+      .insert(match_votes)
+      .values({
+        match_id: matchId,
+        voter_id: voterId,
+        candidate_id: candidateId,
+      })
+      .onConflictDoUpdate({
+        target: [match_votes.match_id, match_votes.voter_id],
+        set: { candidate_id: candidateId, created_at: new Date() },
+      });
+
+    return {
+      matchId,
+      votedFor: candidateId,
+      message: 'Vote recorded.',
+    };
+  }
+
+  /**
+   * Get Player of the Match status for a completed match.
+   * - If voting is still open: returns candidates and whether user has voted
+   * - If voting is closed: returns the winner (player with most votes) or
+   *   no_winner status if tied or no votes were cast
+   */
+  async getPomResult(matchId: string, userId: string) {
+    const [match] = await this.db
+      .select({
+        id: matches.id,
+        status: matches.status,
+        completed_at: matches.completed_at,
+      })
+      .from(matches)
+      .where(eq(matches.id, matchId))
+      .limit(1);
+
+    if (!match) {
+      throw new NotFoundException(`Match ${matchId} not found.`);
+    }
+
+    if (match.status !== 'Completed') {
+      return { status: 'not_completed' as const };
+    }
+
+    if (!match.completed_at) {
+      return { status: 'not_completed' as const };
+    }
+
+    const votingClosesAt = new Date(
+      match.completed_at.getTime() +
+        MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+    const now = new Date();
+
+    // ── Voting still open ──
+    if (now < votingClosesAt) {
+      // Get eligible candidates (all attendees except the current user)
+      const candidates = await this.db
+        .select({
+          id: users.id,
+          fullName: users.full_name,
+          avatarUrl: users.avatar_url,
+        })
+        .from(match_players)
+        .innerJoin(users, eq(users.id, match_players.user_id))
+        .where(
+          sql`${match_players.match_id} = ${matchId}
+              AND ${match_players.no_show} = false
+              AND ${match_players.user_id} != ${userId}`,
+        );
+
+      // Check if user has already voted
+      const [existingVote] = await this.db
+        .select({ candidateId: match_votes.candidate_id })
+        .from(match_votes)
+        .where(
+          sql`${match_votes.match_id} = ${matchId} AND ${match_votes.voter_id} = ${userId}`,
+        )
+        .limit(1);
+
+      return {
+        status: 'voting_open' as const,
+        completedAt: match.completed_at,
+        votingClosesAt,
+        hasVoted: !!existingVote,
+        votedFor: existingVote?.candidateId ?? null,
+        candidates: candidates.map((c) => ({
+          id: c.id,
+          fullName: c.fullName ?? 'Player',
+          avatarUrl: c.avatarUrl,
+        })),
+      };
+    }
+
+    // ── Voting closed — determine winner ──
+    const voteCounts = await this.db.execute(sql`
+      SELECT
+        mv.candidate_id,
+        u.full_name,
+        u.avatar_url,
+        COUNT(*)::int AS vote_count
+      FROM ${match_votes} mv
+      INNER JOIN ${users} u ON u.id = mv.candidate_id
+      WHERE mv.match_id = ${matchId}
+      GROUP BY mv.candidate_id, u.full_name, u.avatar_url
+      ORDER BY vote_count DESC
+      LIMIT 5
+    `);
+
+    const results = voteCounts as unknown as Array<{
+      candidate_id: string;
+      full_name: string | null;
+      avatar_url: string | null;
+      vote_count: number;
+    }>;
+
+    if (results.length === 0) {
+      return { status: 'no_winner' as const };
+    }
+
+    // Check for tie at the top
+    const topCount = results[0].vote_count;
+    const tiedWinners = results.filter((r) => r.vote_count === topCount);
+
+    if (tiedWinners.length > 1) {
+      return { status: 'no_winner' as const };
+    }
+
+    const winner = results[0];
+    return {
+      status: 'completed' as const,
+      winner: {
+        id: winner.candidate_id,
+        fullName: winner.full_name ?? 'Player',
+        avatarUrl: winner.avatar_url,
+      },
+      voteCount: winner.vote_count,
+    };
   }
 }

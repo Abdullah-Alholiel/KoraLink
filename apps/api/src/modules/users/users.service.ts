@@ -1,8 +1,8 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { users, match_players } from '../../database/schema';
+import { users, match_players, match_votes, matches } from '../../database/schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
@@ -11,6 +11,49 @@ type DB = PostgresJsDatabase<typeof schema>;
 @Injectable()
 export class UsersService {
   constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
+
+  /**
+   * Count how many times a user won Player of the Match.
+   * A "win" = the user was the candidate with the most votes in a completed
+   * match where votes are closed (completed_at + 24h < now).
+   */
+  private async getPomCount(userId: string): Promise<number> {
+    // Find completed matches where voting window has closed, and the user
+    // had the most votes (no tie at top).
+    const result = await this.db.execute(sql`
+      WITH closed_matches AS (
+        SELECT m.id
+        FROM ${matches} m
+        WHERE m.status = 'Completed'
+          AND m.completed_at IS NOT NULL
+          AND m.completed_at + INTERVAL '24 hours' < NOW()
+      ),
+      vote_winners AS (
+        SELECT
+          mv.match_id,
+          mv.candidate_id,
+          COUNT(*)::int AS vc,
+          RANK() OVER (PARTITION BY mv.match_id ORDER BY COUNT(*) DESC) AS rnk
+        FROM ${match_votes} mv
+        INNER JOIN closed_matches cm ON cm.id = mv.match_id
+        GROUP BY mv.match_id, mv.candidate_id
+      )
+      SELECT COUNT(*)::int AS pom_count
+      FROM vote_winners vw
+      WHERE vw.rnk = 1
+        AND vw.candidate_id = ${userId}
+        AND vw.vc > 0
+        -- Exclude ties: ensure no other candidate has same count at rank 1
+        AND NOT EXISTS (
+          SELECT 1 FROM vote_winners vw2
+          WHERE vw2.match_id = vw.match_id
+            AND vw2.rnk = 1
+            AND vw2.candidate_id != vw.candidate_id
+        )
+    `);
+
+    return (result[0] as { pom_count: number })?.pom_count ?? 0;
+  }
 
   /**
    * Get the authenticated user's profile including stats.
@@ -40,7 +83,9 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
-    return user;
+    const pom_count = await this.getPomCount(userId);
+
+    return { ...user, pom_count };
   }
 
   /**

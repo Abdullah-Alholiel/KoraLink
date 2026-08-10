@@ -203,6 +203,7 @@ export const matches = pgTable(
     }).notNull(),
     max_players: integer('max_players').notNull(),
     location: geography('location'),
+    completed_at: timestamp('completed_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -285,6 +286,31 @@ export const match_messages = pgTable(
   (t) => [index('match_messages_match_idx').on(t.match_id)],
 );
 
+export const match_votes = pgTable(
+  'match_votes',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    match_id: varchar('match_id', { length: 36 })
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    voter_id: varchar('voter_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    candidate_id: varchar('candidate_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('match_votes_voter_match_idx').on(t.match_id, t.voter_id),
+    index('match_votes_match_idx').on(t.match_id),
+  ],
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Relations (replicate Prisma nested reading capabilities)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,5 +373,22 @@ export const matchMessagesRelations = relations(match_messages, ({ one }) => ({
   user: one(users, {
     fields: [match_messages.user_id],
     references: [users.id],
+  }),
+}));
+
+export const matchVotesRelations = relations(match_votes, ({ one }) => ({
+  match: one(matches, {
+    fields: [match_votes.match_id],
+    references: [matches.id],
+  }),
+  voter: one(users, {
+    fields: [match_votes.voter_id],
+    references: [users.id],
+    relationName: 'CastVotes',
+  }),
+  candidate: one(users, {
+    fields: [match_votes.candidate_id],
+    references: [users.id],
+    relationName: 'ReceivedVotes',
   }),
 }));

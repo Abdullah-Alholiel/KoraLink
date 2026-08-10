@@ -270,6 +270,7 @@
         "guestName": "ضيف",
         "wallet": "المحفظة",
         "myGames": "مبارياتي",
+        "pomCount": "أفضل لاعب",
         "contactSupport": "تواصل مع الدعم",
         "privacyPolicy": "سياسة الخصوصية",
         "termsOfService": "شروط الخدمة",
@@ -408,5 +409,22 @@
         "emptyDescription": "ابدأ المحادثة!",
         "sendPlaceholder": "اكتب رسالة...",
         "comingSoon": "المحادثة قريباً"
+    },
+    "pom": {
+        "title": "أفضل لاعب في المباراة",
+        "votePrompt": "صوّت لأفضل لاعب",
+        "voteSubtitle": "اختر أفضل لاعب في مباراة اليوم",
+        "vote": "صوّت",
+        "voted": "صوّت لـ",
+        "changeVote": "تغيير الصوت",
+        "votingOpen": "التصويت مفتوح",
+        "votingClosed": "انتهى التصويت",
+        "winner": "الفائز",
+        "votes": "أصوات",
+        "noWinner": "لا يوجد فائز هذه المرة",
+        "noWinnerDescription": "تعادل الأصوات — لم يتم تحديد أفضل لاعب.",
+        "matchCompleted": "انتهت المباراة",
+        "notAttended": "لم تحضر هذه المباراة، لذا التصويت غير متاح.",
+        "cannotVoteSelf": "لا يمكنك التصويت لنفسك!"
     }
 }

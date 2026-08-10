@@ -23,6 +23,7 @@ import {
 import { MatchesService } from './matches.service';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { CreateMatchDto } from './dto/create-match.dto';
+import { CastVoteDto } from './dto/cast-vote.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -129,5 +130,29 @@ export class MatchesController {
     @Param('id') id: string,
   ) {
     return this.matchesService.cancelMatch(user.sub, id);
+  }
+
+  // ── POST /matches/:id/vote — Vote for Player of the Match ─────────────
+  @Post(':id/vote')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cast or update Player of the Match vote.' })
+  @ApiOkResponse({ description: 'Vote recorded successfully.' })
+  castVote(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Body() dto: CastVoteDto,
+  ) {
+    return this.matchesService.castVote(user.sub, id, dto.candidateId);
+  }
+
+  // ── GET /matches/:id/pom-result — Player of the Match status ──────────
+  @Get(':id/pom-result')
+  @ApiOperation({ summary: 'Get Player of the Match voting status or result.' })
+  @ApiOkResponse({ description: 'POM voting status or winner.' })
+  getPomResult(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.getPomResult(id, user.sub);
   }
 }

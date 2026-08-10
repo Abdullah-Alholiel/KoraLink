@@ -270,6 +270,7 @@
         "guestName": "Guest",
         "wallet": "Wallet",
         "myGames": "My Games",
+        "pomCount": "POTM",
         "contactSupport": "Contact Support",
         "privacyPolicy": "Privacy Policy",
         "termsOfService": "Terms of Service",
@@ -408,5 +409,22 @@
         "emptyDescription": "Start the conversation!",
         "sendPlaceholder": "Type a message...",
         "comingSoon": "Chat coming soon"
+    },
+    "pom": {
+        "title": "Player of the Match",
+        "votePrompt": "Vote for Player of the Match",
+        "voteSubtitle": "Pick the standout performer from today's game",
+        "vote": "Vote",
+        "voted": "You voted for",
+        "changeVote": "Change Vote",
+        "votingOpen": "Voting is open",
+        "votingClosed": "Voting has ended",
+        "winner": "Winner",
+        "votes": "votes",
+        "noWinner": "No winner this time",
+        "noWinnerDescription": "Votes were tied — no Player of the Match was decided.",
+        "matchCompleted": "Match Completed",
+        "notAttended": "You didn't attend this match, so voting is unavailable.",
+        "cannotVoteSelf": "You can't vote for yourself!"
     }
 }

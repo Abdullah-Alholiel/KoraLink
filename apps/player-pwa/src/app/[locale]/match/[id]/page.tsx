@@ -29,6 +29,7 @@ import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
+import PostMatchSection from '@/components/matches/PostMatchSection';
 import LocationMap from '@/components/matches/LocationMap';
 
 export default function MatchDetailPage({
@@ -252,6 +253,11 @@ export default function MatchDetailPage({
                                     location={match.location}
                                 />
                             </div>
+
+                            {/* Player of the Match — voting/results (completed matches only) */}
+                            {match.status === 'completed' && (
+                                <PostMatchSection matchId={match.id} currentUserId={currentUserId} />
+                            )}
 
                             {/* 3. Team Lineup */}
                             <div className="px-5 pt-6">
