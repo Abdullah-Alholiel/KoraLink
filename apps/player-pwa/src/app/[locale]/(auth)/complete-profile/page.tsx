@@ -46,7 +46,7 @@ export default function CompleteProfilePage() {
                 skillLevel,
             },
             {
-                onSuccess: () => router.push(`/${locale}`),
+                onSuccess: () => router.push(`/${locale}/play`),
                 onError: (err) => setError(err.message),
             },
         );

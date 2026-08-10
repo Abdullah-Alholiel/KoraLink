@@ -92,8 +92,15 @@ export default function MessagesPage() {
                 {/* Populated — joined match discussion cards */}
                 {!isLoading && !error && myMatches && myMatches.length > 0 && (
                     <div className="space-y-3">
-                        {myMatches.map((match: Match) => (
-                            <div key={match.id} className="bg-white rounded-2xl shadow-card p-4 animate-fade-in-up">
+                        {myMatches.map((match: Match) => {
+                            const isCompleted = match.status === 'completed';
+                            return (
+                            <div
+                                key={match.id}
+                                className={`bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-opacity ${
+                                    isCompleted ? 'opacity-60' : ''
+                                }`}
+                            >
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-bold text-brand-black flex-1 min-w-0 truncate">
                                         {match.venueName || match.title}
@@ -104,10 +111,12 @@ export default function MessagesPage() {
                                                 ? 'bg-brand-green/10 text-brand-green'
                                                 : match.status === 'full'
                                                   ? 'bg-gray-200 text-gray-600'
-                                                  : 'bg-gray-100 text-gray-500'
+                                                  : isCompleted
+                                                    ? 'bg-gray-100 text-gray-400'
+                                                    : 'bg-gray-100 text-gray-500'
                                         }`}
                                     >
-                                        {match.status}
+                                        {isCompleted ? t('messages.completed') : match.status}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1 mt-1.5">
@@ -125,7 +134,11 @@ export default function MessagesPage() {
                                         by {match.organizer.name} • {match.format}
                                     </p>
                                 )}
-                                {match.isJoined ? (
+                                {isCompleted ? (
+                                    <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                                        {t('messages.matchEnded')}
+                                    </span>
+                                ) : match.isJoined ? (
                                     <Link
                                         href={`/${locale}/match/${match.id}?chat=open`}
                                         className="mt-3 inline-flex items-center gap-1.5 bg-brand-green/10 text-brand-green text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
@@ -141,7 +154,8 @@ export default function MessagesPage() {
                                     </Link>
                                 )}
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

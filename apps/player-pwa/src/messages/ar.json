@@ -349,7 +349,9 @@
         "hoursAgo": "ساعة مضت",
         "yesterday": "أمس",
         "joinChat": "انضم للمحادثة",
-        "openChat": "افتح المحادثة"
+        "openChat": "افتح المحادثة",
+        "completed": "انتهت",
+        "matchEnded": "انتهت المباراة"
     },
     "feed": {
         "title": "آخر الأخبار",

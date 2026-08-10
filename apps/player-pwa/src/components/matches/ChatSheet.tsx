@@ -35,12 +35,12 @@ export default function ChatSheet({
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50 z-50"
+        className="fixed inset-0 bg-black/50 z-[60]"
         onClick={onClose}
       />
 
       {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 max-h-[85vh] flex flex-col animate-slide-up">
+      <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] max-h-[85vh] flex flex-col animate-slide-up">
         {/* Pull handle */}
         <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />

@@ -106,8 +106,12 @@ export class UsersService {
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
+        AND m.status != 'Cancelled'
       GROUP BY m.id, u.id, p.id, v.id
-      ORDER BY m.scheduled_at DESC
+      ORDER BY
+        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') THEN 0 ELSE 1 END,
+        CASE WHEN m.status IN ('Open', 'Full', 'InProgress') THEN m.scheduled_at END ASC,
+        m.scheduled_at DESC
       LIMIT 50
     `);
 

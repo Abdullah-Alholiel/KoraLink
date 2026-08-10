@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
@@ -21,6 +21,12 @@ export default function DatePicker({ onDateSelect }: DatePickerProps) {
                 dayNumber: d.getDate(),
             };
         });
+    }, []);
+
+    // Fire initial onDateSelect on mount so the parent filters by today.
+    useEffect(() => {
+        onDateSelect?.(dates[0].date);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

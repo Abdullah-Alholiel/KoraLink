@@ -31,6 +31,19 @@ export default function PlayPage() {
     const storeUser = useAppStore(selectUser);
     const currentUserId = storeUser?.id;
 
+    // ── Client-side search filter ──
+    const filteredMatches = searchQuery
+        ? matches.filter((m) => {
+              const q = searchQuery.toLowerCase();
+              return (
+                  m.title.toLowerCase().includes(q) ||
+                  m.venueName.toLowerCase().includes(q) ||
+                  m.location.toLowerCase().includes(q) ||
+                  m.organizer.name.toLowerCase().includes(q)
+              );
+          })
+        : matches;
+
     return (
         <div className="pb-4">
             {/* ── Top App Bar (inline) ─────────────── */}
@@ -126,8 +139,8 @@ export default function PlayPage() {
                 </div>
             )}
 
-            {/* 3. Empty State (only when API returns empty array) */}
-            {!isLoading && !error && data && matches.length === 0 && (
+            {/* 3. Empty State (only when API returns empty array or search has no results) */}
+            {!isLoading && !error && data && filteredMatches.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 px-8">
                     <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <Trophy className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
@@ -148,7 +161,7 @@ export default function PlayPage() {
             )}
 
             {/* 4. Populated State — match list */}
-            {!isLoading && !error && matches.length > 0 && (
+            {!isLoading && !error && filteredMatches.length > 0 && (
                 <>
                     {/* Section label */}
                     <div className="px-4 pt-1 pb-2">
@@ -159,7 +172,7 @@ export default function PlayPage() {
 
                     {/* Match cards */}
                     <div className="animate-fade-in-up">
-                        {matches.map((match) => (
+                        {filteredMatches.map((match) => (
                             <MatchCard key={match.id} match={match} currentUserId={currentUserId} />
                         ))}
                     </div>

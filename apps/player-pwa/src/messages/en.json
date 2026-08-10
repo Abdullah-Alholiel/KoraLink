@@ -349,7 +349,9 @@
         "hoursAgo": "hr ago",
         "yesterday": "Yesterday",
         "joinChat": "Join Chat",
-        "openChat": "Open Chat"
+        "openChat": "Open Chat",
+        "completed": "Completed",
+        "matchEnded": "Match ended"
     },
     "feed": {
         "title": "Community Feed",

@@ -88,7 +88,7 @@ function VerifyContent() {
                         } catch {
                             // If profile fetch fails, still navigate — UI will show fallback
                         }
-                        router.push(`/${locale}`);
+                        router.push(`/${locale}/play`);
                     }
                 },
                 onError: (err) => setError(err.message),

@@ -70,7 +70,7 @@ export default function DevLoginBar() {
         // Profile fetch may fail; Zustand stays null, UI shows fallback
       }
 
-      router.push(`/${locale}`);
+      router.push(`/${locale}/play`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Dev login failed');
     } finally {
