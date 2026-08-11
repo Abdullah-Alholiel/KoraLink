@@ -13,6 +13,7 @@ export interface NearbyVenueRow {
   amenities: unknown;
   rating: number;
   is_approved: boolean;
+  is_koralink_partner: boolean;
   distance_m: number | null;
   owner_id: string;
   owner_name: string | null;
@@ -30,7 +31,7 @@ export class VenuesService {
    * Uses PostGIS ST_DWithin for geo-filtering (same pattern as matches service).
    */
   async findNearby(dto: GetVenuesDto): Promise<NearbyVenueRow[]> {
-    const { lat, lng, radius_km = 10, city } = dto;
+    const { lat, lng, radius_km = 10, city, is_koralink_partner } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -52,6 +53,10 @@ export class VenuesService {
       ? sql`AND v.city ILIKE ${'%' + city + '%'}`
       : sql``;
 
+    const partnerClause = is_koralink_partner !== undefined
+      ? sql`AND v.is_koralink_partner = ${is_koralink_partner}`
+      : sql``;
+
     const distanceExpr = hasCoords
       ? sql`ST_Distance(
             v.location,
@@ -68,6 +73,7 @@ export class VenuesService {
         v.amenities,
         v.rating,
         v.is_approved,
+        v.is_koralink_partner,
         ${distanceExpr} AS distance_m,
         v.owner_id,
         u.full_name AS owner_name,
@@ -77,6 +83,7 @@ export class VenuesService {
       LEFT JOIN pitches p ON p.venue_id = v.id
       WHERE v.is_approved = true
         ${cityClause}
+        ${partnerClause}
         ${geoClause}
       GROUP BY v.id, u.id
       ORDER BY

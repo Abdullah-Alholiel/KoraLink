@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MatchesModule } from './modules/matches/matches.module';
 import { UsersModule } from './modules/users/users.module';
 import { VenuesModule } from './modules/venues/venues.module';
+import { PitchesModule } from './modules/pitches/pitches.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
@@ -60,6 +61,7 @@ import { HealthModule } from './modules/health/health.module';
     MatchesModule,
     UsersModule,
     VenuesModule,
+    PitchesModule,
     WalletModule,
     GatewayModule,
     HealthModule,

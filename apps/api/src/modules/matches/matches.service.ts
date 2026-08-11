@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   NotFoundException,
@@ -8,7 +9,7 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, match_messages, match_players, match_votes, users } from '../../database/schema';
+import { matches, match_messages, match_players, match_votes, pitch_slots, users } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
@@ -373,6 +374,8 @@ export class MatchesService {
       duration_mins: number;
       max_players: number;
       pitchCostSar: number;
+      booking_mode: 'koralink' | 'self';
+      booking_slot_id?: string;
     },
   ) {
     // Validate pitch exists and fetch venue location for geo-discovery
@@ -396,6 +399,27 @@ export class MatchesService {
     );
 
     const created = await this.db.transaction(async (tx) => {
+      // ── Atomic slot booking (koralink mode) ────────────────────
+      if (dto.booking_mode === 'koralink') {
+        if (!dto.booking_slot_id) {
+          throw new BadRequestException('booking_slot_id is required for koralink mode');
+        }
+
+        const [slot] = await tx.execute(sql`
+          SELECT id, is_booked FROM pitch_slots
+          WHERE id = ${dto.booking_slot_id}::text
+          FOR UPDATE
+        `) as unknown as [{ id: string; is_booked: boolean }];
+
+        if (!slot) {
+          throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+        }
+
+        if (slot.is_booked) {
+          throw new ConflictException('This slot has already been booked by another host');
+        }
+      }
+
       // 1. Create the match
       const [match] = await tx
         .insert(matches)
@@ -410,12 +434,22 @@ export class MatchesService {
           price_per_player: pricePerPlayer.toString(),
           max_players: dto.max_players,
           status: 'Open',
+          booking_mode: dto.booking_mode ?? 'self',
+          booking_slot_id: dto.booking_mode === 'koralink' ? dto.booking_slot_id : null,
           // Inherit venue location so geo-discovery works for user-created matches
           ...(pitch.venueLocation ? { location: pitch.venueLocation } : {}),
         })
         .returning();
 
-      // 2. Add host to match_players
+      // 2. Mark slot as booked (koralink mode)
+      if (dto.booking_mode === 'koralink' && dto.booking_slot_id) {
+        await tx
+          .update(pitch_slots)
+          .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
+          .where(eq(pitch_slots.id, dto.booking_slot_id));
+      }
+
+      // 3. Add host to match_players
       await tx.insert(schema.match_players).values({
         match_id: match.id,
         user_id: hostId,
@@ -428,6 +462,32 @@ export class MatchesService {
 
     // Fetch complete match with host relation so the frontend gets full_name etc.
     return this.findOne(created.id);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Pitch slots — availability lookup
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async getPitchSlots(pitchId: string, date: string) {
+    const rows = await this.db
+      .select({
+        id: pitch_slots.id,
+        pitch_id: pitch_slots.pitch_id,
+        slot_date: pitch_slots.slot_date,
+        start_time: pitch_slots.start_time,
+        end_time: pitch_slots.end_time,
+        is_booked: pitch_slots.is_booked,
+        booked_match_id: pitch_slots.booked_match_id,
+        created_at: pitch_slots.created_at,
+        updated_at: pitch_slots.updated_at,
+      })
+      .from(pitch_slots)
+      .where(
+        sql`${pitch_slots.pitch_id} = ${pitchId}::text AND ${pitch_slots.slot_date} = ${date}::date`,
+      )
+      .orderBy(pitch_slots.start_time);
+
+    return rows;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

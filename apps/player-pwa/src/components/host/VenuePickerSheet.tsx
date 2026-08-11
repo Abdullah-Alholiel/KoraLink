@@ -16,9 +16,10 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
     const t = useTranslations();
     const [venueSearch, setVenueSearch] = useState('');
 
-    // Note: is_koralink_partner filter will be wired when useVenues accepts it (Slice 1)
-    const queryParams = venueSearch ? { city: venueSearch } : undefined;
-    const { data: venues, isLoading: venuesLoading } = useVenues(queryParams);
+    // Note: is_koralink_partner filter now supported by useVenues (Slice 1)
+    const { data: venues, isLoading: venuesLoading } = useVenues(
+        { city: venueSearch || undefined, is_koralink_partner: filterPartnerOnly || undefined },
+    );
 
     if (!open) return null;
 

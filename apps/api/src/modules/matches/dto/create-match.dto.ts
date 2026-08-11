@@ -4,12 +4,13 @@ import {
   IsInt,
   IsEnum,
   IsISO8601,
+  IsOptional,
   Min,
   Max,
   MinLength,
   MaxLength,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateMatchDto {
   @ApiProperty({ description: 'Pitch UUID' })
@@ -50,4 +51,14 @@ export class CreateMatchDto {
   @IsNumber()
   @Min(0)
   pitchCostSar: number;
+
+  @ApiProperty({ enum: ['koralink', 'self'], default: 'self',
+    description: 'Who handles pitch booking — koralink = we book it, self = host books it' })
+  @IsEnum(['koralink', 'self'])
+  booking_mode: 'koralink' | 'self';
+
+  @ApiPropertyOptional({ description: 'Slot ID — required when booking_mode = koralink' })
+  @IsOptional()
+  @IsString()
+  booking_slot_id?: string;
 }

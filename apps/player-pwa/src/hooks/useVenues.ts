@@ -13,6 +13,7 @@ export interface VenueApi {
   amenities: unknown;
   rating: number;
   is_approved: boolean;
+  is_koralink_partner: boolean;
   distance_m: number | null;
   owner_id: string;
   owner_name: string | null;
@@ -41,7 +42,12 @@ export interface VenueDetailApi extends VenueApi {
 
 // ─── Fetch Nearby Venues ───────────────────────────────
 
-export function useVenues(params?: { lat?: number; lng?: number; city?: string }) {
+export function useVenues(params?: {
+  lat?: number;
+  lng?: number;
+  city?: string;
+  is_koralink_partner?: boolean;
+}) {
   return useQuery<VenueApi[], FetchError>({
     queryKey: ['venues', params],
     queryFn: () => {
@@ -49,6 +55,8 @@ export function useVenues(params?: { lat?: number; lng?: number; city?: string }
       if (params?.lat != null) searchParams.lat = String(params.lat);
       if (params?.lng != null) searchParams.lng = String(params.lng);
       if (params?.city) searchParams.city = params.city;
+      if (params?.is_koralink_partner != null)
+        searchParams.is_koralink_partner = String(params.is_koralink_partner);
       return fetcher<VenueApi[]>('/venues', {
         params: Object.keys(searchParams).length > 0 ? searchParams : undefined,
       });

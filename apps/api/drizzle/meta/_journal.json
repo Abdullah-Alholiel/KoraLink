@@ -15,6 +15,13 @@
       "when": 1786382832964,
       "tag": "0001_daily_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786474700351,
+      "tag": "0002_mushy_fenris",
+      "breakpoints": true
     }
   ]
 }

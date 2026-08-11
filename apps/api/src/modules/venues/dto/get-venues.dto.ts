@@ -31,4 +31,9 @@ export class GetVenuesDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @ApiPropertyOptional({ description: 'Filter to KoraLink partner venues only' })
+  @IsOptional()
+  @Type(() => Boolean)
+  is_koralink_partner?: boolean;
 }

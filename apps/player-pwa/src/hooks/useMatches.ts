@@ -31,6 +31,8 @@ export const hostMatchSchema = z.object({
   duration_mins: z.number().int().min(30).max(180).default(60),
   max_players: z.number().int().min(2).max(22).default(14),
   pitchCostSar: z.number().min(0).default(0),
+  booking_mode: z.enum(['koralink', 'self']).default('self'),
+  booking_slot_id: z.string().min(1).optional(),
 });
 
 export type HostMatchInput = z.infer<typeof hostMatchSchema>;

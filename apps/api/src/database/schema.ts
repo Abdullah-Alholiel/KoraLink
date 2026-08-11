@@ -7,6 +7,8 @@ import {
   numeric,
   doublePrecision,
   timestamp,
+  date,
+  time,
   json,
   pgEnum,
   index,
@@ -90,6 +92,8 @@ export const transactionStatusEnum = pgEnum('TransactionStatus', [
 
 export const teamEnum = pgEnum('Team', ['Home', 'Away']);
 
+export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TypeScript string-literal types (replaces @prisma/client enum imports)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +150,7 @@ export const venues = pgTable(
     amenities: json('amenities').notNull().default(sql`'[]'::json`),
     rating: doublePrecision('rating').notNull().default(0),
     is_approved: boolean('is_approved').notNull().default(false),
+    is_koralink_partner: boolean('is_koralink_partner').notNull().default(false),
     location: geography('location'),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -179,6 +184,32 @@ export const pitches = pgTable('pitches', {
     .$onUpdateFn(() => new Date()),
 }, (t) => [index('pitches_venue_id_idx').on(t.venue_id)]);
 
+export const pitch_slots = pgTable('pitch_slots', {
+  id: varchar('id', { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  pitch_id: varchar('pitch_id', { length: 36 })
+    .notNull()
+    .references(() => pitches.id, { onDelete: 'cascade' }),
+  slot_date: date('slot_date').notNull(),
+  start_time: time('start_time').notNull(),
+  end_time: time('end_time').notNull(),
+  is_booked: boolean('is_booked').notNull().default(false),
+  booked_match_id: varchar('booked_match_id', { length: 36 })
+    .references(() => matches.id, { onDelete: 'set null' }),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('uq_pitch_slot').on(table.pitch_id, table.slot_date, table.start_time),
+  index('idx_slots_pitch_date').on(table.pitch_id, table.slot_date),
+  index('idx_slots_available').on(table.is_booked).where(sql`${table.is_booked} = false`),
+]);
+
 export const matches = pgTable(
   'matches',
   {
@@ -204,6 +235,9 @@ export const matches = pgTable(
     max_players: integer('max_players').notNull(),
     location: geography('location'),
     completed_at: timestamp('completed_at', { withTimezone: true }),
+    booking_mode: bookingModeEnum('booking_mode').notNull().default('self'),
+    booking_slot_id: varchar('booking_slot_id', { length: 36 })
+      .references(() => pitch_slots.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -331,6 +365,12 @@ export const venuesRelations = relations(venues, ({ one, many }) => ({
 export const pitchesRelations = relations(pitches, ({ one, many }) => ({
   venue: one(venues, { fields: [pitches.venue_id], references: [venues.id] }),
   matches: many(matches),
+  slots: many(pitch_slots),
+}));
+
+export const pitchSlotsRelations = relations(pitch_slots, ({ one }) => ({
+  pitch: one(pitches, { fields: [pitch_slots.pitch_id], references: [pitches.id] }),
+  match: one(matches, { fields: [pitch_slots.booked_match_id], references: [matches.id] }),
 }));
 
 export const matchesRelations = relations(matches, ({ one, many }) => ({

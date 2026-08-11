@@ -56,6 +56,7 @@ export default function HostMatchForm() {
             duration_mins: duration,
             max_players: maxPlayers,
             pitchCostSar,
+            booking_mode: 'self' as const,
         };
 
         createMatch.mutate(payload, {
