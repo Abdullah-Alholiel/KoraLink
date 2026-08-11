@@ -81,6 +81,7 @@ export const referenceTypeEnum = pgEnum('ReferenceType', [
   'TOPUP',
   'REFUND',
   'PRIZE',
+  'PITCH_BOOKING',
 ]);
 
 export const transactionStatusEnum = pgEnum('TransactionStatus', [
@@ -99,7 +100,7 @@ export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type TransactionType = 'CREDIT' | 'DEBIT';
-export type ReferenceType = 'MATCH_FEE' | 'TOPUP' | 'REFUND' | 'PRIZE';
+export type ReferenceType = 'MATCH_FEE' | 'TOPUP' | 'REFUND' | 'PRIZE' | 'PITCH_BOOKING';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tables

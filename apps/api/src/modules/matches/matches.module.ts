@@ -1,8 +1,10 @@
 import { Module, OnModuleInit, Logger } from '@nestjs/common';
 import { MatchesController } from './matches.controller';
 import { MatchesService } from './matches.service';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
+  imports: [WalletModule],
   controllers: [MatchesController],
   providers: [MatchesService],
   exports: [MatchesService],

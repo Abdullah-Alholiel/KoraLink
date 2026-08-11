@@ -6,11 +6,13 @@ import {
   Post,
   Delete,
   Body,
+  Res,
   UseGuards,
   UseInterceptors,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
@@ -45,6 +47,58 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Paginated list of nearby open matches.' })
   findNearby(@CurrentUser() user: { sub: string }, @Query() dto: GetMatchesDto) {
     return this.matchesService.findNearby(dto, user.sub);
+  }
+
+  // ── GET /matches/:id/calendar — ICS file download ─────────────────────
+  // Must come BEFORE `:id` to avoid route collision
+  @Get(':id/calendar')
+  @ApiOperation({ summary: 'Download match as ICS calendar file' })
+  async getCalendar(
+    @Param('id') id: string,
+    @Query('format') format: 'ics' | 'google' = 'ics',
+    @Res() res: Response,
+  ) {
+    const match = await this.matchesService.findOne(id);
+
+    const startDate = new Date(match.scheduled_at);
+    const endDate = new Date(startDate.getTime() + (match.duration_mins ?? 60) * 60 * 1000);
+
+    const toICSDate = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+    if (format === 'google') {
+      const googleUrl = new URL('https://www.google.com/calendar/render');
+      googleUrl.searchParams.set('action', 'TEMPLATE');
+      googleUrl.searchParams.set('text', match.title);
+      googleUrl.searchParams.set('dates', `${toICSDate(startDate)}/${toICSDate(endDate)}`);
+      googleUrl.searchParams.set('details', `${match.match_type} ${match.gender_rule}`);
+      const venueName = (match as any).pitch?.venue?.name ?? '';
+      googleUrl.searchParams.set('location', venueName);
+      return res.redirect(googleUrl.toString());
+    }
+
+    const venueName = (match as any).pitch?.venue?.name ?? '';
+    const venueAddr = (match as any).pitch?.venue?.address ?? '';
+    const location = [venueName, venueAddr].filter(Boolean).join(', ');
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//KoraLink//Match Calendar//EN',
+      'BEGIN:VEVENT',
+      `SUMMARY:${match.title}`,
+      `DTSTART:${toICSDate(startDate)}`,
+      `DTEND:${toICSDate(endDate)}`,
+      `LOCATION:${location}`,
+      `DESCRIPTION:${match.match_type} \\u2022 ${match.gender_rule} \\u2022 Hosted on KoraLink`,
+      `URL:https://koralink.app/match/${match.id}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="koralink-match-${id.slice(0, 8)}.ics"`);
+    return res.send(ics);
   }
 
   // ── GET /matches/:id — Match details ──────────────────────────────────

@@ -9,9 +9,10 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, match_messages, match_players, match_votes, pitch_slots, users } from '../../database/schema';
+import { matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { WalletService } from '../wallet/wallet.service';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -42,7 +43,10 @@ type DB = PostgresJsDatabase<typeof schema>;
 
 @Injectable()
 export class MatchesService {
-  constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
+  constructor(
+    @Inject('DB_CONNECTION') private readonly db: DB,
+    private readonly walletService: WalletService,
+  ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // Match Lifecycle — Auto-complete past matches
@@ -505,6 +509,42 @@ export class MatchesService {
           .update(pitch_slots)
           .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
           .where(eq(pitch_slots.id, dto.booking_slot_id));
+
+        // 2b. Deduct pitch cost from host wallet (koralink mode)
+        if (dto.pitchCostSar && dto.pitchCostSar > 0) {
+          // Check balance first
+          const [user] = await tx
+            .select({ wallet_balance: users.wallet_balance })
+            .from(users)
+            .where(eq(users.id, hostId))
+            .limit(1);
+
+          if (!user || parseFloat(user.wallet_balance) < dto.pitchCostSar) {
+            throw new BadRequestException(
+              `Insufficient wallet balance. Required: SAR ${dto.pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+            );
+          }
+
+          // Deduct from wallet atomically
+          await tx
+            .update(users)
+            .set({
+              wallet_balance: sql`${users.wallet_balance} - ${dto.pitchCostSar.toString()}`,
+              updated_at: new Date(),
+            })
+            .where(eq(users.id, hostId));
+
+          // Record ledger entry
+          await tx.insert(schema.transactions).values({
+            user_id: hostId,
+            type: 'DEBIT',
+            amount: dto.pitchCostSar.toString(),
+            reference_type: 'PITCH_BOOKING',
+            reference_id: dto.booking_slot_id,
+            idempotency_key: `slot-booking-${dto.booking_slot_id}`,
+            status: 'Completed',
+          });
+        }
       }
 
       // 3. Add host to match_players
@@ -653,11 +693,20 @@ export class MatchesService {
 
   /**
    * Cancel a match: Open | Full → Cancelled. Only the host may transition.
+   * In koralink mode, releases the booked slot and refunds the pitch cost.
    */
   async cancelMatch(userId: string, matchId: string) {
     await this.db.transaction(async (tx) => {
       const [match] = await tx
-        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .select({
+          id: matches.id,
+          host_id: matches.host_id,
+          status: matches.status,
+          booking_mode: matches.booking_mode,
+          booking_slot_id: matches.booking_slot_id,
+          price_per_player: matches.price_per_player,
+          max_players: matches.max_players,
+        })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -680,6 +729,44 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'Cancelled' }))
         .where(eq(matches.id, matchId));
+
+      // Release slot + refund (koralink mode)
+      if (match.booking_mode === 'koralink' && match.booking_slot_id) {
+        const [slot] = await tx
+          .select({ id: pitch_slots.id, is_booked: pitch_slots.is_booked })
+          .from(pitch_slots)
+          .where(eq(pitch_slots.id, match.booking_slot_id))
+          .limit(1);
+
+        if (slot && slot.is_booked) {
+          await tx
+            .update(pitch_slots)
+            .set(withTimestamp({ is_booked: false, booked_match_id: null }))
+            .where(eq(pitch_slots.id, match.booking_slot_id));
+
+          // Calculate pitch cost and refund
+          const pitchCostSar = parseFloat(match.price_per_player) * (match.max_players - 1);
+          if (pitchCostSar > 0) {
+            await tx
+              .update(users)
+              .set({
+                wallet_balance: sql`${users.wallet_balance} + ${pitchCostSar.toString()}`,
+                updated_at: new Date(),
+              })
+              .where(eq(users.id, userId));
+
+            await tx.insert(transactions).values({
+              user_id: userId,
+              type: 'CREDIT',
+              amount: pitchCostSar.toString(),
+              reference_type: 'REFUND',
+              reference_id: matchId,
+              idempotency_key: `refund-${matchId}`,
+              status: 'Completed',
+            });
+          }
+        }
+      }
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
