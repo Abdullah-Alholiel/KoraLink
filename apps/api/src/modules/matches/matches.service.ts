@@ -228,8 +228,16 @@ export class MatchesService {
         throw new NotFoundException(`Match ${matchId} not found.`);
       }
 
-      if (match.status !== 'Open') {
+      // Allow joining if Open, or if Full with spots available (defensive — status may be stale)
+      if (match.status !== 'Open' && match.status !== 'Full') {
         throw new BadRequestException('This match is no longer open for joining.');
+      }
+      if (match.status === 'Full') {
+        // Stale Full status — revert to Open before allowing join
+        await tx
+          .update(matches)
+          .set(withTimestamp({ status: 'Open' }))
+          .where(eq(matches.id, matchId));
       }
 
       // 2. Check user is not already in match_players
