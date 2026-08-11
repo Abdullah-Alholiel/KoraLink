@@ -1,9 +1,11 @@
 'use client';
 
-import { Loader2, MessageSquare, AlertTriangle, X, Send } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Loader2, MessageSquare, AlertTriangle, X, Send, Wifi, WifiOff } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useMatchMessages } from '@/hooks/useMatches';
-import { buildComments } from '@/lib/api-adapter';
+import { useMatchChat } from '@/hooks/useMessages';
+import type { MatchMessage } from '@/hooks/useMessages';
+import { useAppStore, selectUser } from '@/store/useAppStore';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -12,6 +14,43 @@ interface ChatSheetProps {
   matchTitle: string;
 }
 
+// ── Date grouping helpers ──────────────────────────
+
+function getDateGroup(dateStr: string, now: Date): string {
+  const d = new Date(dateStr);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((msgDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === -1) return 'yesterday';
+  if (diffDays < -1) return 'older';
+  return 'today';
+}
+
+function groupMessages(messages: MatchMessage[]) {
+  const groups: { label: string; messages: MatchMessage[] }[] = [];
+  const now = new Date();
+
+  for (const msg of messages) {
+    const group = getDateGroup(msg.created_at, now);
+    const label =
+      group === 'today' ? 'Today' :
+      group === 'yesterday' ? 'Yesterday' :
+      new Date(msg.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.messages.push(msg);
+    } else {
+      groups.push({ label, messages: [msg] });
+    }
+  }
+  return groups;
+}
+
+// ── Component ──────────────────────────────────────
+
 export default function ChatSheet({
   isOpen,
   onClose,
@@ -19,23 +58,60 @@ export default function ChatSheet({
   matchTitle,
 }: ChatSheetProps) {
   const t = useTranslations();
+  const user = useAppStore(selectUser);
+  const currentUserId = user?.id;
 
   const {
-    data: messages,
+    messages,
     isLoading,
     error,
     refetch,
-  } = useMatchMessages(matchId);
+    isConnected,
+    sendMessage,
+  } = useMatchChat(matchId);
+
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Auto-scroll to bottom on new messages ──
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length]);
+
+  // ── Focus input on open ──
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const comments = messages ? buildComments(messages) : [];
+  const grouped = groupMessages(messages);
+  const isSending = sendMessage.isPending;
+
+  const handleSend = () => {
+    const trimmed = input.trim();
+    if (!trimmed || isSending) return;
+    sendMessage.mutate({ content: trimmed });
+    setInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50 z-[60]"
+        className="fixed inset-0 bg-black/50 z-[60] animate-fade-in"
         onClick={onClose}
       />
 
@@ -47,21 +123,36 @@ export default function ChatSheet({
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0">
-          <h2 className="text-base font-bold text-brand-black">
-            {matchTitle}
-          </h2>
+        <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0 border-b border-gray-50">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-brand-black truncate">
+              {matchTitle}
+            </h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {isConnected ? (
+                <>
+                  <Wifi className="w-3 h-3 text-brand-green" strokeWidth={2.5} />
+                  <span className="text-[10px] text-brand-green font-medium">{t('messages.online')}</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3 h-3 text-gray-400" strokeWidth={2} />
+                  <span className="text-[10px] text-gray-400">{t('messages.offline')}</span>
+                </>
+              )}
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
             aria-label="Close chat"
           >
             <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
           </button>
         </div>
 
-        {/* Content area */}
-        <div className="flex-1 overflow-y-auto scroll-container min-h-[200px]">
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto scroll-container min-h-[200px] bg-gray-50/50">
           {/* Loading */}
           {isLoading && (
             <div className="flex items-center justify-center py-16">
@@ -88,72 +179,133 @@ export default function ChatSheet({
           )}
 
           {/* Empty */}
-          {!isLoading && !error && comments.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 px-6">
-              <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                <MessageSquare className="w-7 h-7 text-gray-300" strokeWidth={1.5} />
+          {!isLoading && !error && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 px-6">
+              <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mb-4">
+                <MessageSquare className="w-8 h-8 text-brand-green/50" strokeWidth={1.5} />
               </div>
               <h3 className="text-base font-bold text-brand-black mb-1">
                 {t('chatSheet.emptyTitle')}
               </h3>
-              <p className="text-sm text-gray-400 text-center">
+              <p className="text-sm text-gray-400 text-center max-w-[240px]">
                 {t('chatSheet.emptyDescription')}
               </p>
             </div>
           )}
 
-          {/* Populated — message list */}
-          {!isLoading && !error && comments.length > 0 && (
-            <div className="pb-2">
-              {comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="flex items-start gap-3 px-5 py-3"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[10px] font-bold text-gray-500">
-                      {comment.userName.charAt(0)}
+          {/* Populated — grouped messages */}
+          {!isLoading && !error && grouped.map((group) => (
+            <div key={group.label}>
+              {/* Date divider */}
+              <div className="flex items-center justify-center py-4">
+                <div className="bg-gray-200/60 rounded-full px-3 py-0.5">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                    {group.label}
+                  </span>
+                </div>
+              </div>
+
+              {group.messages.map((msg) => {
+                const isMine = msg.user_id === currentUserId;
+                const avatarInitial = (msg.user?.full_name ?? 'P').charAt(0).toUpperCase();
+                const timeStr = new Date(msg.created_at).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                });
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex items-end gap-2 px-4 py-1.5 ${
+                      isMine ? 'flex-row-reverse' : 'flex-row'
+                    }`}
+                  >
+                    {/* Avatar (hidden for own messages) */}
+                    {!isMine && (
+                      <div className="w-7 h-7 rounded-full bg-brand-green/20 flex items-center justify-center flex-shrink-0 mb-0.5">
+                        <span className="text-[10px] font-bold text-brand-green">
+                          {avatarInitial}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Bubble */}
+                    <div
+                      className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl ${
+                        isMine
+                          ? 'bg-brand-green text-white rounded-br-md'
+                          : 'bg-white shadow-sm border border-gray-100 rounded-bl-md'
+                      }`}
+                    >
+                      {/* Sender name (in group chats, show for others) */}
+                      {!isMine && (
+                        <p className="text-[10px] font-semibold text-brand-green mb-0.5">
+                          {msg.user?.full_name ?? msg.user?.handle ?? 'Player'}
+                        </p>
+                      )}
+                      <p className={`text-sm leading-relaxed ${isMine ? 'text-white' : 'text-gray-700'}`}>
+                        {msg.content}
+                      </p>
+                    </div>
+
+                    {/* Time */}
+                    <span className={`text-[9px] text-gray-400 flex-shrink-0 mb-0.5 ${isMine ? 'text-end' : ''}`}>
+                      {timeStr}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-brand-black">
-                        {comment.userName}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        {new Date(comment.createdAt).toLocaleTimeString(
-                          'en-US',
-                          {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true,
-                          },
-                        )}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-0.5">
-                      {comment.text}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
+          ))}
+
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input row (disabled — send deferred to future cycle) */}
-        <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 flex-shrink-0">
-          <input
-            disabled
-            placeholder={t('chatSheet.sendPlaceholder')}
-            className="flex-1 bg-gray-50 rounded-full px-4 py-2.5 text-sm text-gray-400 placeholder:text-gray-300 outline-none cursor-not-allowed"
-          />
+        {/* Send error banner */}
+        {sendMessage.isError && (
+          <div className="px-5 py-2 bg-brand-red/5 border-t border-brand-red/10 flex-shrink-0">
+            <p className="text-xs text-brand-red text-center">
+              {t('chatSheet.sendError') || 'Failed to send. Retry?'}
+            </p>
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 flex-shrink-0 bg-white">
+          <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
+            <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t('chatSheet.sendPlaceholder')}
+              disabled={!isConnected || isSending}
+              maxLength={500}
+              className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent disabled:opacity-50"
+            />
+            {input.length > 0 && (
+              <span className="text-[10px] text-gray-400 flex-shrink-0">{input.length}/500</span>
+            )}
+          </div>
           <button
-            disabled
-            className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 cursor-not-allowed"
-            title={t('chatSheet.comingSoon')}
+            onClick={handleSend}
+            disabled={!input.trim() || !isConnected || isSending}
+            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
+              input.trim() && isConnected && !isSending
+                ? 'bg-brand-green text-white shadow-[0_4px_12px_rgba(37,65,50,0.3)]'
+                : 'bg-gray-200 text-gray-400'
+            }`}
+            aria-label={t('messages.send')}
           >
-            <Send className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+            {isSending ? (
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+            ) : (
+              <Send className="w-4 h-4" strokeWidth={1.5} />
+            )}
           </button>
         </div>
       </div>

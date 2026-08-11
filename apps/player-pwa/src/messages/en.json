@@ -447,6 +447,7 @@
         "emptyTitle": "No messages yet",
         "emptyDescription": "Start the conversation!",
         "sendPlaceholder": "Type a message...",
+        "sendError": "Failed to send. Tap to retry.",
         "comingSoon": "Chat coming soon"
     },
     "pom": {

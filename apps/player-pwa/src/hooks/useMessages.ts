@@ -67,10 +67,19 @@ export function useMatchChat(matchId: string | null) {
   useEffect(() => {
     if (!matchId) return;
 
+    // Read auth token for cross-origin WebSocket handshake (Tailscale/remote).
+    const token = typeof window !== 'undefined'
+      ? localStorage.getItem('koralink_token')
+      : null;
+
     const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
       path: '/socket.io',
       transports: ['websocket'],
       withCredentials: true,
+      auth: token ? { token } : undefined,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     socket.on('connect', () => {

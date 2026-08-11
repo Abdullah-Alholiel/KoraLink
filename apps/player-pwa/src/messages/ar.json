@@ -447,6 +447,7 @@
         "emptyTitle": "لا توجد رسائل بعد",
         "emptyDescription": "ابدأ المحادثة!",
         "sendPlaceholder": "اكتب رسالة...",
+        "sendError": "فشل الإرسال. اضغط لإعادة المحاولة.",
         "comingSoon": "المحادثة قريباً"
     },
     "pom": {

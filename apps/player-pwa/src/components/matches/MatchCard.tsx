@@ -109,7 +109,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
             {/* ── Footer Row: Price + Spots + Button── */}
             <div className="flex items-center justify-between">
                 <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">Price</p>
+                    <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">{t('matchCard.price')}</p>
                     <p className="text-xl font-extrabold text-brand-black leading-none">SAR {match.price}</p>
                 </div>
                 <div className="flex items-center gap-3">

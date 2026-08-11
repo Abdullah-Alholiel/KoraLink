@@ -1,5 +1,7 @@
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
+import ErrorBoundary from '@/components/layout/ErrorBoundary';
+import Toast from '@/components/layout/Toast';
 
 export default function MainLayout({
     children,
@@ -7,11 +9,14 @@ export default function MainLayout({
     children: React.ReactNode;
 }) {
     return (
-        <MobileFrame>
-            <main className="flex-1 overflow-y-auto scroll-container bg-brand-bg">
-                {children}
-            </main>
-            <BottomNav />
-        </MobileFrame>
+        <ErrorBoundary>
+            <MobileFrame>
+                <main className="flex-1 overflow-y-auto scroll-container bg-brand-bg">
+                    {children}
+                </main>
+                <BottomNav />
+                <Toast />
+            </MobileFrame>
+        </ErrorBoundary>
     );
 }

@@ -22,6 +22,7 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
+import Toast from '@/components/layout/Toast';
 import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
@@ -551,6 +552,8 @@ export default function MatchDetailPage({
                 player={selectedPlayer}
                 onClose={() => setSelectedPlayer(null)}
             />
+
+            <Toast />
         </MobileFrame>
     );
 }
