@@ -297,7 +297,7 @@ export function adaptMatchDetail(
     price: toNum(detail.price_per_player),
     currency: 'SAR',
     totalSpots: detail.max_players,
-    filledSpots: players.filter((p) => !p.is_host).length,
+    filledSpots: players.length,
     status: mapMatchStatus(detail.status),
     imageUrl: '',
     rules: [],

@@ -106,7 +106,7 @@ export class MatchesService {
         m.duration_mins,
         m.price_per_player::float AS price_per_player,
         m.max_players,
-        COUNT(mp.id) FILTER (WHERE mp.is_host = false)::int         AS spots_filled,
+        COUNT(mp.id)::int                                     AS spots_filled,
         ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,
