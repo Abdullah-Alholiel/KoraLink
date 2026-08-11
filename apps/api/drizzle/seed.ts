@@ -42,6 +42,7 @@ async function seed() {
   await db.delete(schema.transactions);
   await db.delete(schema.match_players);
   await db.delete(schema.matches);
+  await db.delete(schema.pitch_slots);
   await db.delete(schema.pitches);
   await db.delete(schema.venues);
   await db.delete(schema.users);
@@ -126,6 +127,7 @@ async function seed() {
         amenities: ['parking', 'changing_rooms', 'floodlights', 'cafe'],
         rating: 4.6,
         is_approved: true,
+        is_koralink_partner: true,
         location: point(46.6227, 24.7231),
       },
       {
@@ -208,6 +210,52 @@ async function seed() {
   console.log(`✔ Inserted ${pitchRows.length} pitches`);
   const pitches = Object.fromEntries(pitchRows.map((p) => [p.name, p.id]));
   //   Pitch A – Main Field, Pitch B – Training Ground, Pitch C – Indoor Court
+
+  // ── 3b. Pitch Slots (for partner venue — KSU Stadium) ──────────────────
+  // Generate slots for the next 7 days, 6 PM – 10 PM, 1-hour blocks
+  const slotNow = new Date();
+  const slotDates: string[] = [];
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(slotNow.getTime() + d * 24 * 60 * 60 * 1000);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    slotDates.push(`${yyyy}-${mm}-${dd}`);
+  }
+
+  const slotHours = [18, 19, 20, 21]; // 6 PM, 7 PM, 8 PM, 9 PM (end hour = start + 1)
+
+  const partnerPitchIds = [
+    pitches['Pitch A – Main Field']!,
+    pitches['Pitch B – Training Ground']!,
+  ];
+
+  const slotValues: Array<{
+    pitch_id: string;
+    slot_date: string;
+    start_time: string;
+    end_time: string;
+    is_booked: boolean;
+  }> = [];
+
+  for (const pitchId of partnerPitchIds) {
+    for (const dateStr of slotDates) {
+      for (const hour of slotHours) {
+        const startTime = `${String(hour).padStart(2, '0')}:00:00`;
+        const endTime = `${String(hour + 1).padStart(2, '0')}:00:00`;
+        slotValues.push({
+          pitch_id: pitchId,
+          slot_date: dateStr,
+          start_time: startTime,
+          end_time: endTime,
+          is_booked: false,
+        });
+      }
+    }
+  }
+
+  await db.insert(schema.pitch_slots).values(slotValues);
+  console.log(`✔ Inserted ${slotValues.length} pitch slots (2 pitches × 7 days × 4 slots)`);
 
   // ── 4. Matches (5) with dynamic dates ──────────────────────────────
   // Dates are anchored to the current date so matches never expire.
