@@ -3,20 +3,26 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, MapPin, ChevronRight, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
 
+import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
 import VenuePickerSheet from './VenuePickerSheet';
 import PitchSelector from './PitchSelector';
 import CostFooter from './CostFooter';
+import PublishWarningSheet from './PublishWarningSheet';
 
 export default function HostMatchForm() {
     const router = useRouter();
     const locale = useLocale();
     const t = useTranslations();
     const createMatch = useCreateMatch();
+
+    /* ── Mode State ──────────────────────────────── */
+    const [mode, setMode] = useState<'koralink' | 'self'>('self');
+    const [showWarning, setShowWarning] = useState(false);
 
     /* ── Form State ─────────────────────────────── */
     const [showVenuePicker, setShowVenuePicker] = useState(false);
@@ -42,7 +48,21 @@ export default function HostMatchForm() {
     const maxPlayers = playersPerSide * 2;
     const playerShare = maxPlayers > 1 ? Math.ceil(pitchCostSar / (maxPlayers - 1)) : pitchCostSar;
 
-    const handlePublish = () => {
+    /* ── Handlers ────────────────────────────────── */
+
+    const handleModeChange = (newMode: 'koralink' | 'self') => {
+        setMode(newMode);
+        // Reset venue/pitch when switching modes (different venue pools)
+        setSelectedVenue(null);
+        setSelectedPitch(null);
+    };
+
+    const handlePublishClick = () => {
+        if (!selectedPitch || !date || !time) return;
+        setShowWarning(true);
+    };
+
+    const doPublish = () => {
         if (!selectedPitch || !date || !time) return;
 
         const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
@@ -56,11 +76,13 @@ export default function HostMatchForm() {
             duration_mins: duration,
             max_players: maxPlayers,
             pitchCostSar,
-            booking_mode: 'self' as const,
+            booking_mode: mode,
+            // booking_slot_id will be added in Slice 3 for koralink mode
         };
 
         createMatch.mutate(payload, {
             onSuccess: () => {
+                setShowWarning(false);
                 router.push(`/${locale}/play`);
             },
         });
@@ -73,7 +95,7 @@ export default function HostMatchForm() {
             {/* ══════════════════════════════════════
                 HEADER
             ═══════════════════════════════════ */}
-            <div className="flex items-center px-4 pt-4 pb-3 relative flex-shrink-0">
+            <div className="flex items-center px-4 pt-4 pb-1 relative flex-shrink-0">
                 <button
                     onClick={() => router.back()}
                     className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 z-10"
@@ -84,6 +106,11 @@ export default function HostMatchForm() {
                     {t('host.title')}
                 </h1>
             </div>
+
+            {/* ══════════════════════════════════════
+                MODE TOGGLE
+            ═══════════════════════════════════ */}
+            <ModeToggle mode={mode} onModeChange={handleModeChange} />
 
             {/* ══════════════════════════════════════
                 SCROLLABLE BODY
@@ -139,18 +166,31 @@ export default function HostMatchForm() {
                                 fill="currentColor"
                             />
                             <span className="flex-1 text-start text-sm text-gray-400">
-                                {t('host.searchVenuesPlaceholder')}
+                                {mode === 'koralink'
+                                    ? t('host.searchPartnerVenues')
+                                    : t('host.searchVenuesPlaceholder')
+                                }
                             </span>
                             <ChevronRight className="w-4 h-4 text-gray-300" strokeWidth={2} />
                         </button>
                     )}
 
-                    {/* Disclaimer */}
-                    <div className="mt-3 rounded-xl p-3.5 flex items-start gap-3 bg-amber-50 border border-amber-200">
-                        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                    {/* Mode-specific disclaimer */}
+                    <div className={`mt-3 rounded-xl p-3.5 flex items-start gap-3 ${
+                        mode === 'self'
+                            ? 'bg-amber-50 border border-amber-200'
+                            : 'bg-brand-green/5 border border-brand-green/20'
+                    }`}>
+                        {mode === 'self' ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                        ) : (
+                            <Shield className="w-4 h-4 text-brand-green flex-shrink-0 mt-0.5" strokeWidth={2} />
+                        )}
                         <p className="text-xs text-gray-600 leading-relaxed">
-                            <span className="font-bold text-gray-700">{t('host.disclaimer')}</span>{' '}
-                            {t('host.disclaimerText')}
+                            <span className="font-bold text-gray-700">
+                                {mode === 'self' ? t('host.disclaimer') : t('host.viaUsDescription')}
+                            </span>{' '}
+                            {mode === 'self' ? t('host.disclaimerText') : ''}
                         </p>
                     </div>
                 </div>
@@ -177,7 +217,7 @@ export default function HostMatchForm() {
                 canPublish={canPublish}
                 isPending={createMatch.isPending}
                 isError={createMatch.isError}
-                onPublish={handlePublish}
+                onPublish={handlePublishClick}
             />
 
             {/* ══════════════════════════════════════
@@ -190,6 +230,18 @@ export default function HostMatchForm() {
                     setSelectedVenue(venue);
                     setSelectedPitch(null);
                 }}
+                filterPartnerOnly={mode === 'koralink'}
+            />
+
+            {/* ══════════════════════════════════════
+                PUBLISH WARNING SHEET
+            ═══════════════════════════════════ */}
+            <PublishWarningSheet
+                open={showWarning}
+                mode={mode}
+                onConfirm={doPublish}
+                onCancel={() => setShowWarning(false)}
+                isPending={createMatch.isPending}
             />
         </div>
     );
