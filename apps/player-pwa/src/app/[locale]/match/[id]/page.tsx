@@ -10,7 +10,6 @@ import {
     MessageSquare,
     Calendar,
     MapPin,
-    ChevronRight,
     Trophy,
     AlertTriangle,
     Play,
@@ -25,7 +24,6 @@ import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
-import TeamLineupSheet from '@/components/matches/TeamLineupSheet';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
@@ -63,7 +61,6 @@ export default function MatchDetailPage({
     const showJoin = !!match && !isJoined && !isUserHost && match.status === 'open';
 
     const [showPayment, setShowPayment] = useState(false);
-    const [showTeamSheet, setShowTeamSheet] = useState(false);
     const [showRules, setShowRules] = useState(false);
     const [showCancelSheet, setShowCancelSheet] = useState(false);
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
@@ -438,38 +435,9 @@ export default function MatchDetailPage({
                                 </button>
                             </div>
 
-                            {/* Team Section */}
-                            <div className="px-5 mt-6">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-base font-bold text-brand-black">{t('matchDetail.team')}</h3>
-                                    <span className="text-sm font-semibold text-brand-green">
-                                        {match.filledSpots} / {match.totalSpots} {t('matchDetail.attending')}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-3">
-                                    <div className="flex -space-x-2 rtl:space-x-reverse">
-                                        {match.roster.slice(0, 3).map((p) => (
-                                            <div
-                                                key={p.id}
-                                                className="w-9 h-9 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center"
-                                            >
-                                                <span className="text-[10px] font-bold text-gray-500">
-                                                    {p.name.charAt(0)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <span className="text-xs font-medium text-gray-400">
-                                        +{Math.max(0, match.filledSpots - 3)}
-                                    </span>
-                                    <div className="flex-1" />
-                                    <button
-                                        onClick={() => setShowTeamSheet(true)}
-                                        className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center"
-                                    >
-                                        <ChevronRight className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                                    </button>
-                                </div>
+                            {/* Team Lineup (shows roster to anyone — even pre-join) */}
+                            <div className="px-5 pt-6">
+                                <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
                             </div>
 
                             {/* Latest Discussion */}
@@ -565,18 +533,6 @@ export default function MatchDetailPage({
                 matchId={match.id}
                 price={match.price}
                 walletBalance={walletBalance}
-            />
-            )}
-
-            {/* Team Lineup Sheet (pre-join) */}
-            {match && (
-            <TeamLineupSheet
-                isOpen={showTeamSheet}
-                onClose={() => setShowTeamSheet(false)}
-                format={match.format}
-                roster={match.roster}
-                hostId={match.hostId}
-                onPlayerClick={setSelectedPlayer}
             />
             )}
 
