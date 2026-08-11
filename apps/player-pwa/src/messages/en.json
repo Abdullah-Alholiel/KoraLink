@@ -358,7 +358,18 @@
         "joinChat": "Join Chat",
         "openChat": "Open Chat",
         "completed": "Completed",
-        "matchEnded": "Match ended"
+        "matchEnded": "Match ended",
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "thisWeek": "This Week",
+        "upcoming": "Upcoming",
+        "past": "Past",
+        "discussions": "discussions",
+        "open": "Open",
+        "full": "Full",
+        "live": "Live",
+        "cancelled": "Cancelled",
+        "spots": "spots"
     },
     "feed": {
         "title": "Community Feed",

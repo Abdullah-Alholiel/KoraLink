@@ -358,7 +358,18 @@
         "joinChat": "انضم للمحادثة",
         "openChat": "افتح المحادثة",
         "completed": "انتهت",
-        "matchEnded": "انتهت المباراة"
+        "matchEnded": "انتهت المباراة",
+        "today": "اليوم",
+        "tomorrow": "غداً",
+        "thisWeek": "هذا الأسبوع",
+        "upcoming": "قادمة",
+        "past": "سابقة",
+        "discussions": "مناقشات",
+        "open": "مفتوحة",
+        "full": "مكتملة",
+        "live": "مباشر",
+        "cancelled": "ملغاة",
+        "spots": "مقاعد"
     },
     "feed": {
         "title": "آخر الأخبار",
