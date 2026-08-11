@@ -282,6 +282,8 @@
         "signOut": "تسجيل الخروج",
         "settings": "الإعدادات",
         "notifications": "الإشعارات",
+        "notificationsOn": "مفعلة",
+        "notificationsOff": "معطلة",
         "language": "اللغة",
         "theme": "المظهر",
         "dark": "داكن",

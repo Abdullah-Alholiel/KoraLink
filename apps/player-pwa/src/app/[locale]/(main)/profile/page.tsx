@@ -14,10 +14,12 @@ import {
     FileText,
     ChevronRight,
     Camera,
+    Bell,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
 
 interface MenuItemProps {
@@ -84,6 +86,10 @@ export default function ProfilePage() {
     const { data: apiUser } = useUserProfile();
     const { data: stats } = useUserStats();
     const { data: walletData } = useWalletBalance();
+    const {
+        isSubscribed, isSubscribing, isSupported,
+        subscribe, unsubscribe,
+    } = usePushNotifications();
 
     // Merge store + API data. API takes priority when available.
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
@@ -200,6 +206,23 @@ export default function ProfilePage() {
                         router.push(newPath);
                     }}
                 />
+                {isSupported && (
+                    <>
+                        <div className="h-px bg-gray-50 mx-4" />
+                        <MenuItem
+                            icon={
+                                isSubscribing ? (
+                                    <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                                ) : (
+                                    <Bell className="w-5 h-5" strokeWidth={1.5} />
+                                )
+                            }
+                            label={t('profile.notifications')}
+                            endText={isSubscribed ? t('profile.notificationsOn') : t('profile.notificationsOff')}
+                            onClick={() => isSubscribed ? unsubscribe() : subscribe()}
+                        />
+                    </>
+                )}
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem
                     icon={<Headphones className="w-5 h-5" strokeWidth={1.5} />}

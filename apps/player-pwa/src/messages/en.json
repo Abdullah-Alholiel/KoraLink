@@ -282,6 +282,8 @@
         "signOut": "Sign Out",
         "settings": "Settings",
         "notifications": "Notifications",
+        "notificationsOn": "On",
+        "notificationsOff": "Off",
         "language": "Language",
         "theme": "Theme",
         "dark": "Dark",

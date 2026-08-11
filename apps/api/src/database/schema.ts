@@ -478,3 +478,41 @@ export const matchReviewsRelations = relations(match_reviews, ({ one }) => ({
     relationName: 'ReceivedReviews',
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Push notification subscriptions (Web Push API)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const push_subscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    user_agent: text('user_agent'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('push_subscriptions_endpoint_idx').on(t.endpoint),
+    index('push_subscriptions_user_idx').on(t.user_id),
+  ],
+);
+
+export const pushSubscriptionsRelations = relations(push_subscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [push_subscriptions.user_id],
+    references: [users.id],
+  }),
+}));
