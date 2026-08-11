@@ -1,0 +1,112 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Calendar, Clock } from 'lucide-react';
+import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
+
+export interface SlotPickerProps {
+    pitchId: string | null;
+    selectedSlot: PitchSlotApi | null;
+    onSelectSlot: (slot: PitchSlotApi) => void;
+}
+
+export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: SlotPickerProps) {
+    const locale = useLocale();
+    const t = useTranslations();
+    const dateRef = useRef<HTMLInputElement>(null);
+    const [slotDate, setSlotDate] = useState('');
+
+    const { data: slots, isLoading } = usePitchSlots(
+        pitchId,
+        slotDate || null,
+    );
+
+    // Get today's date as min for the date picker
+    const today = new Date().toISOString().split('T')[0];
+
+    return (
+        <div className="mt-3 space-y-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                {t('host.selectSlot')}
+            </p>
+
+            {/* Date picker */}
+            <button
+                type="button"
+                onClick={() => dateRef.current?.showPicker()}
+                className="w-full bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+            >
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                    {t('host.slotDate')}
+                </p>
+                <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                    <span className="text-sm font-bold text-brand-black">
+                        {slotDate
+                            ? new Date(slotDate + 'T00:00:00').toLocaleDateString(
+                                locale === 'ar' ? 'ar-SA' : 'en-US',
+                                { month: 'short', day: 'numeric', weekday: 'short' },
+                            )
+                            : t('host.pickDateFirst')}
+                    </span>
+                </div>
+                <input
+                    ref={dateRef}
+                    type="date"
+                    value={slotDate}
+                    min={today}
+                    onChange={(e) => {
+                        setSlotDate(e.target.value);
+                        onSelectSlot(null as unknown as PitchSlotApi); // clear selection
+                    }}
+                    className="sr-only"
+                />
+            </button>
+
+            {/* Time slots */}
+            {slotDate && (
+                <>
+                    {isLoading ? (
+                        <div className="space-y-2">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+                            ))}
+                        </div>
+                    ) : slots && slots.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2">
+                            {slots.map((slot) => {
+                                const isBooked = slot.is_booked;
+                                const isSelected = selectedSlot?.id === slot.id;
+                                const startLabel = slot.start_time.slice(0, 5); // "18:00"
+                                const endLabel = slot.end_time.slice(0, 5);
+
+                                return (
+                                    <button
+                                        key={slot.id}
+                                        disabled={isBooked}
+                                        onClick={() => onSelectSlot(slot)}
+                                        className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-semibold transition-all
+                                            ${isBooked
+                                                ? 'bg-gray-100 border-gray-150 text-gray-400 cursor-not-allowed line-through'
+                                                : isSelected
+                                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                                    : 'bg-white border-gray-200 text-brand-black hover:border-brand-green active:scale-[0.98]'
+                                            }`}
+                                    >
+                                        <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+                                        <span>{startLabel} – {endLabel}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-gray-400 text-center py-4">
+                            {t('host.noSlotsAvailable')}
+                        </p>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}

@@ -11,8 +11,10 @@ import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
 import VenuePickerSheet from './VenuePickerSheet';
 import PitchSelector from './PitchSelector';
+import SlotPicker from './SlotPicker';
 import CostFooter from './CostFooter';
 import PublishWarningSheet from './PublishWarningSheet';
+import type { PitchSlotApi } from '@/hooks/usePitchSlots';
 
 export default function HostMatchForm() {
     const router = useRouter();
@@ -28,6 +30,7 @@ export default function HostMatchForm() {
     const [showVenuePicker, setShowVenuePicker] = useState(false);
     const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(null);
     const [selectedPitch, setSelectedPitch] = useState<PitchApi | null>(null);
+    const [selectedSlot, setSelectedSlot] = useState<PitchSlotApi | null>(null);
 
     const { data: venueDetail } = useVenue(selectedVenue?.id ?? null);
 
@@ -52,9 +55,10 @@ export default function HostMatchForm() {
 
     const handleModeChange = (newMode: 'koralink' | 'self') => {
         setMode(newMode);
-        // Reset venue/pitch when switching modes (different venue pools)
+        // Reset venue/pitch/slot when switching modes (different venue pools)
         setSelectedVenue(null);
         setSelectedPitch(null);
+        setSelectedSlot(null);
     };
 
     const handlePublishClick = () => {
@@ -77,7 +81,7 @@ export default function HostMatchForm() {
             max_players: maxPlayers,
             pitchCostSar,
             booking_mode: mode,
-            // booking_slot_id will be added in Slice 3 for koralink mode
+            booking_slot_id: mode === 'koralink' ? selectedSlot?.id : undefined,
         };
 
         createMatch.mutate(payload, {
@@ -88,7 +92,9 @@ export default function HostMatchForm() {
         });
     };
 
-    const canPublish = !!(selectedPitch && date && time && (title.length === 0 || title.length >= 3));
+    const canPublish = !!(selectedPitch && date && time
+        && (title.length === 0 || title.length >= 3)
+        && (mode === 'self' || (mode === 'koralink' && selectedSlot)));
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -150,7 +156,19 @@ export default function HostMatchForm() {
                                 <PitchSelector
                                     pitches={venueDetail.pitches}
                                     selectedPitch={selectedPitch}
-                                    onSelect={setSelectedPitch}
+                                    onSelect={(pitch) => {
+                                        setSelectedPitch(pitch);
+                                        setSelectedSlot(null); // reset slot when pitch changes
+                                    }}
+                                />
+                            )}
+
+                            {/* Slot picker — only in koralink mode */}
+                            {mode === 'koralink' && selectedPitch && (
+                                <SlotPicker
+                                    pitchId={selectedPitch.id}
+                                    selectedSlot={selectedSlot}
+                                    onSelectSlot={setSelectedSlot}
                                 />
                             )}
                         </div>
@@ -217,6 +235,7 @@ export default function HostMatchForm() {
                 canPublish={canPublish}
                 isPending={createMatch.isPending}
                 isError={createMatch.isError}
+                hasSlot={mode === 'self' ? undefined : !!selectedSlot}
                 onPublish={handlePublishClick}
             />
 
