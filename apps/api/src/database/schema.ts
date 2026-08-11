@@ -346,6 +346,34 @@ export const match_votes = pgTable(
   ],
 );
 
+export const match_reviews = pgTable(
+  'match_reviews',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    match_id: varchar('match_id', { length: 36 })
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    reviewer_id: varchar('reviewer_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    reviewee_id: varchar('reviewee_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rating: integer('rating').notNull(), // 1–5 stars
+    comment: text('comment'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('match_reviews_unique_idx').on(t.match_id, t.reviewer_id, t.reviewee_id),
+    index('match_reviews_match_idx').on(t.match_id),
+    index('match_reviews_reviewee_idx').on(t.reviewee_id),
+  ],
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Relations (replicate Prisma nested reading capabilities)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -431,5 +459,22 @@ export const matchVotesRelations = relations(match_votes, ({ one }) => ({
     fields: [match_votes.candidate_id],
     references: [users.id],
     relationName: 'ReceivedVotes',
+  }),
+}));
+
+export const matchReviewsRelations = relations(match_reviews, ({ one }) => ({
+  match: one(matches, {
+    fields: [match_reviews.match_id],
+    references: [matches.id],
+  }),
+  reviewer: one(users, {
+    fields: [match_reviews.reviewer_id],
+    references: [users.id],
+    relationName: 'GivenReviews',
+  }),
+  reviewee: one(users, {
+    fields: [match_reviews.reviewee_id],
+    references: [users.id],
+    relationName: 'ReceivedReviews',
   }),
 }));

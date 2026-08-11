@@ -4,6 +4,7 @@ import {
   Param,
   Patch,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -24,6 +25,15 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // ── GET /users/search?q= — Search users ──────────────────
+  // Must be defined BEFORE `:id` routes to avoid collision
+  @Get('search')
+  @ApiOperation({ summary: 'Search users by name or handle' })
+  @ApiOkResponse({ description: 'Matching users.' })
+  searchUsers(@Query('q') q: string) {
+    return this.usersService.searchUsers(q);
+  }
 
   // ── GET /users/me ──────────────────────────────────────
   @Get('me')
@@ -66,5 +76,13 @@ export class UsersController {
   @ApiOkResponse({ description: 'Public user profile.' })
   getPublicProfile(@Param('id') id: string) {
     return this.usersService.getPublicProfile(id);
+  }
+
+  // ── GET /users/:id/reviews — User's received reviews ──────
+  @Get(':id/reviews')
+  @ApiOperation({ summary: 'Get reviews received by a user' })
+  @ApiOkResponse({ description: 'List of reviews.' })
+  getUserReviews(@Param('id') id: string) {
+    return this.usersService.getUserReviews(id);
   }
 }

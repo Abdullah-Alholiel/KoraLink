@@ -40,6 +40,8 @@ export interface PublicProfileApi {
   rating: number;
   pom_count: number;
   games_played: number;
+  review_count: number;
+  review_avg: number;
 }
 
 // ─── Fetch User Profile ────────────────────────────────
@@ -106,5 +108,50 @@ export function useMyMatches() {
     queryKey: ['user', 'my-matches'],
     queryFn: () => fetcher<import('@/lib/api-adapter').NearbyMatchApi[]>('/users/me/matches'),
     staleTime: 30_000,
+  });
+}
+
+// ─── Search Users ──────────────────────────────────────
+
+export interface SearchUserApi {
+  id: string;
+  full_name: string | null;
+  handle: string | null;
+  avatar_url: string | null;
+  preferred_position: string | null;
+  skill_level: string | null;
+  rating: number;
+}
+
+export function useSearchUsers(query: string) {
+  return useQuery<SearchUserApi[], FetchError>({
+    queryKey: ['users', 'search', query],
+    queryFn: () => fetcher<SearchUserApi[]>(`/users/search?q=${encodeURIComponent(query)}`),
+    enabled: query.length >= 2,
+    staleTime: 30_000,
+  });
+}
+
+// ─── Submit Reviews ────────────────────────────────────
+
+export interface ReviewInput {
+  revieweeId: string;
+  rating: number;
+  comment?: string;
+}
+
+export function useSubmitReviews(matchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, FetchError, ReviewInput[]>({
+    mutationFn: (reviews) =>
+      fetcher(`/matches/${matchId}/reviews`, {
+        method: 'POST',
+        body: JSON.stringify({ reviews }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
   });
 }
