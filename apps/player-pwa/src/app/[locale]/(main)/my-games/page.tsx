@@ -4,8 +4,6 @@ import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
-import MobileFrame from '@/components/layout/MobileFrame';
-import BottomNav from '@/components/layout/BottomNav';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList } from '@/lib/api-adapter';
@@ -29,7 +27,7 @@ export default function MyGamesPage() {
   );
 
   return (
-    <MobileFrame>
+    <div>
       {/* Header */}
       <div className="flex items-center px-4 pt-4 pb-3 flex-shrink-0 bg-white relative z-10">
         <button
@@ -133,7 +131,6 @@ export default function MyGamesPage() {
         )}
       </div>
 
-      <BottomNav />
-    </MobileFrame>
+    </div>
   );
 }

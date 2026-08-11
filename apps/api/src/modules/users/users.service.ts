@@ -142,6 +142,7 @@ export class UsersService {
         u.avatar_url AS host_avatar,
         p.id AS pitch_id,
         p.name AS pitch_name,
+        p.size AS pitch_size,
         v.name AS venue_name,
         v.city AS venue_city
       FROM match_players my

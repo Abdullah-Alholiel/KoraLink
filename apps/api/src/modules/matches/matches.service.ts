@@ -113,6 +113,7 @@ export class MatchesService {
         u.avatar_url              AS host_avatar,
         p.id                      AS pitch_id,
         p.name                    AS pitch_name,
+        p.size                    AS pitch_size,
         v.name                    AS venue_name,
         v.city                    AS venue_city,
         COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined
