@@ -1,0 +1,217 @@
+'use client';
+
+import { useRef } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Calendar, Clock } from 'lucide-react';
+
+/* ── Format options ─────────────────────────────── */
+export const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
+export type Format = (typeof FORMAT_OPTIONS)[number];
+
+/* ── Gender & Match Type option maps ──────────────── */
+export const GENDER_OPTIONS = ['Men Only', 'Women Only', 'Mixed'] as const;
+export type GenderRule = (typeof GENDER_OPTIONS)[number];
+
+export const MATCH_TYPES = ['Casual', 'Competitive'] as const;
+export type MatchTypeValue = (typeof MATCH_TYPES)[number];
+
+export const GENDER_I18N_MAP: Record<GenderRule, string> = {
+    'Men Only': 'host.genderMen',
+    'Women Only': 'host.genderWomen',
+    Mixed: 'host.genderMixed',
+};
+
+export const MATCH_TYPE_I18N_MAP: Record<MatchTypeValue, string> = {
+    Casual: 'host.matchTypeCasual',
+    Competitive: 'host.matchTypeCompetitive',
+};
+
+export interface MatchDetailsFormProps {
+    title: string;
+    setTitle: (v: string) => void;
+    format: Format;
+    setFormat: (v: Format) => void;
+    matchType: MatchTypeValue;
+    setMatchType: (v: MatchTypeValue) => void;
+    genderRule: GenderRule;
+    setGenderRule: (v: GenderRule) => void;
+    date: string;
+    setDate: (v: string) => void;
+    time: string;
+    setTime: (v: string) => void;
+    duration: number;
+    setDuration: (v: number) => void;
+}
+
+export default function MatchDetailsForm({
+    title, setTitle,
+    format, setFormat,
+    matchType, setMatchType,
+    genderRule, setGenderRule,
+    date, setDate,
+    time, setTime,
+    duration, setDuration,
+}: MatchDetailsFormProps) {
+    const locale = useLocale();
+    const t = useTranslations();
+    const dateRef = useRef<HTMLInputElement>(null);
+    const timeRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <>
+            {/* ── MATCH TITLE ─────────────────── */}
+            <div className="px-5 pt-4">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.matchTitle')}
+                </p>
+                <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={t('host.matchTitlePlaceholder')}
+                    maxLength={255}
+                    className="w-full bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 text-sm
+                        text-brand-black placeholder:text-gray-400 outline-none focus:border-brand-green transition-colors"
+                />
+                {title.length > 0 && title.length < 3 && (
+                    <p className="text-xs text-brand-red mt-1">{t('host.matchTitleValidation')}</p>
+                )}
+            </div>
+
+            {/* ── FORMAT ────────────────────────── */}
+            <div className="px-5 pt-6">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.format')}
+                </p>
+                <div className="flex gap-2">
+                    {FORMAT_OPTIONS.map((f) => (
+                        <button
+                            key={f}
+                            onClick={() => setFormat(f)}
+                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                format === f
+                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {f}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── MATCH TYPE ──────────────────── */}
+            <div className="px-5 pt-6">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.matchType')}
+                </p>
+                <div className="flex gap-2">
+                    {MATCH_TYPES.map((type) => (
+                        <button
+                            key={type}
+                            onClick={() => setMatchType(type)}
+                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                matchType === type
+                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {t(MATCH_TYPE_I18N_MAP[type])}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── GENDER ────────────────────────── */}
+            <div className="px-5 pt-6">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.gender')}
+                </p>
+                <div className="flex gap-2">
+                    {GENDER_OPTIONS.map((g) => (
+                        <button
+                            key={g}
+                            onClick={() => setGenderRule(g)}
+                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                genderRule === g
+                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {t(GENDER_I18N_MAP[g])}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── DATE & TIME ───────────────────── */}
+            <div className="px-5 pt-6">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.dateTime')}
+                </p>
+                <div className="flex gap-3">
+                    {/* Date */}
+                    <button
+                        type="button"
+                        onClick={() => dateRef.current?.showPicker()}
+                        className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                    >
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.date')}</p>
+                        <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                            <span className="text-sm font-bold text-brand-black">
+                                {date
+                                    ? new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                        month: 'short', day: 'numeric',
+                                    })
+                                    : t('host.selectDate')}
+                            </span>
+                        </div>
+                        <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="sr-only" />
+                    </button>
+                    {/* Time */}
+                    <button
+                        type="button"
+                        onClick={() => timeRef.current?.showPicker()}
+                        className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                    >
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.time')}</p>
+                        <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                            <span className="text-sm font-bold text-brand-black">
+                                {time
+                                    ? new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                        hour: 'numeric', minute: '2-digit', hour12: true,
+                                    })
+                                    : t('host.selectTime')}
+                            </span>
+                        </div>
+                        <input ref={timeRef} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sr-only" />
+                    </button>
+                </div>
+            </div>
+
+            {/* ── DURATION ─────────────────────── */}
+            <div className="px-5 pt-6">
+                <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
+                    {t('host.duration')}
+                </p>
+                <div className="flex gap-2">
+                    {[30, 45, 60, 90, 120].map((m) => (
+                        <button
+                            key={m}
+                            onClick={() => setDuration(m)}
+                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                duration === m
+                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {m}m
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+}
