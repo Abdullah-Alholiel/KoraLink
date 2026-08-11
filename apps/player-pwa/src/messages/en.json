@@ -267,7 +267,8 @@
         "slotCost": "Slot cost:",
         "partnerVenuesOnly": "Partner Venues",
         "searchPartnerVenues": "Search partner venues...",
-        "slotConflictError": "This slot was just booked by another host. Please pick another."
+        "slotConflictError": "This slot was just booked by another host. Please pick another.",
+        "slotLocked": "Date and time locked to your selected slot"
     },
     "profile": {
         "title": "Profile",

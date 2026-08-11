@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Shield } from 'lucide-react';
 
 /* ── Format options ─────────────────────────────── */
 export const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
@@ -41,6 +41,8 @@ export interface MatchDetailsFormProps {
     setTime: (v: string) => void;
     duration: number;
     setDuration: (v: number) => void;
+    /** When true, date & time come from a slot — section is locked */
+    readOnlyDateTime?: boolean;
 }
 
 export default function MatchDetailsForm({
@@ -51,6 +53,7 @@ export default function MatchDetailsForm({
     date, setDate,
     time, setTime,
     duration, setDuration,
+    readOnlyDateTime = false,
 }: MatchDetailsFormProps) {
     const locale = useLocale();
     const t = useTranslations();
@@ -149,46 +152,67 @@ export default function MatchDetailsForm({
                 <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
                     {t('host.dateTime')}
                 </p>
-                <div className="flex gap-3">
-                    {/* Date */}
-                    <button
-                        type="button"
-                        onClick={() => dateRef.current?.showPicker()}
-                        className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
-                    >
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.date')}</p>
-                        <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                            <span className="text-sm font-bold text-brand-black">
-                                {date
-                                    ? new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                        month: 'short', day: 'numeric',
-                                    })
-                                    : t('host.selectDate')}
-                            </span>
+                {readOnlyDateTime ? (
+                    /* In koralink mode: date/time are locked from the selected slot */
+                    <div className="bg-brand-green/5 rounded-xl border border-brand-green/20 p-3.5 flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-brand-green flex-shrink-0" strokeWidth={2} />
+                        <div>
+                            <p className="text-sm font-bold text-brand-black">
+                                {new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                    month: 'short', day: 'numeric',
+                                })}
+                                {' · '}
+                                {new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                    hour: 'numeric', minute: '2-digit', hour12: true,
+                                })}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                {t('host.slotLocked')}
+                            </p>
                         </div>
-                        <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="sr-only" />
-                    </button>
-                    {/* Time */}
-                    <button
-                        type="button"
-                        onClick={() => timeRef.current?.showPicker()}
-                        className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
-                    >
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.time')}</p>
-                        <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                            <span className="text-sm font-bold text-brand-black">
-                                {time
-                                    ? new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                        hour: 'numeric', minute: '2-digit', hour12: true,
-                                    })
-                                    : t('host.selectTime')}
-                            </span>
-                        </div>
-                        <input ref={timeRef} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sr-only" />
-                    </button>
-                </div>
+                    </div>
+                ) : (
+                    <div className="flex gap-3">
+                        {/* Date */}
+                        <button
+                            type="button"
+                            onClick={() => dateRef.current?.showPicker()}
+                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                        >
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.date')}</p>
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                                <span className="text-sm font-bold text-brand-black">
+                                    {date
+                                        ? new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                            month: 'short', day: 'numeric',
+                                        })
+                                        : t('host.selectDate')}
+                                </span>
+                            </div>
+                            <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="sr-only" />
+                        </button>
+                        {/* Time */}
+                        <button
+                            type="button"
+                            onClick={() => timeRef.current?.showPicker()}
+                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
+                        >
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.time')}</p>
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                                <span className="text-sm font-bold text-brand-black">
+                                    {time
+                                        ? new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+                                            hour: 'numeric', minute: '2-digit', hour12: true,
+                                        })
+                                        : t('host.selectTime')}
+                                </span>
+                            </div>
+                            <input ref={timeRef} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sr-only" />
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ── DURATION ─────────────────────── */}

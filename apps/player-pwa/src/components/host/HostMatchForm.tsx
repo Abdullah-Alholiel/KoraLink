@@ -55,10 +55,12 @@ export default function HostMatchForm() {
 
     const handleModeChange = (newMode: 'koralink' | 'self') => {
         setMode(newMode);
-        // Reset venue/pitch/slot when switching modes (different venue pools)
+        // Reset venue/pitch/slot/date/time when switching modes (different venue pools)
         setSelectedVenue(null);
         setSelectedPitch(null);
         setSelectedSlot(null);
+        setDate('');
+        setTime('');
     };
 
     const handlePublishClick = () => {
@@ -159,6 +161,11 @@ export default function HostMatchForm() {
                                     onSelect={(pitch) => {
                                         setSelectedPitch(pitch);
                                         setSelectedSlot(null); // reset slot when pitch changes
+                                        // In koralink mode: reset date/time — will be set by slot
+                                        if (mode === 'koralink') {
+                                            setDate('');
+                                            setTime('');
+                                        }
                                     }}
                                 />
                             )}
@@ -168,7 +175,17 @@ export default function HostMatchForm() {
                                 <SlotPicker
                                     pitchId={selectedPitch.id}
                                     selectedSlot={selectedSlot}
-                                    onSelectSlot={setSelectedSlot}
+                                    onSelectSlot={(slot) => {
+                                        setSelectedSlot(slot);
+                                        // Auto-populate date/time from slot (koralink mode)
+                                        if (slot) {
+                                            setDate(slot.slot_date);
+                                            setTime(slot.start_time.slice(0, 5)); // "HH:MM" from "HH:MM:SS"
+                                        } else {
+                                            setDate('');
+                                            setTime('');
+                                        }
+                                    }}
                                 />
                             )}
                         </div>
@@ -222,6 +239,7 @@ export default function HostMatchForm() {
                     date={date} setDate={setDate}
                     time={time} setTime={setTime}
                     duration={duration} setDuration={setDuration}
+                    readOnlyDateTime={mode === 'koralink' && !!selectedSlot}
                 />
             </div>
 
