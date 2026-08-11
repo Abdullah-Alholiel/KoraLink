@@ -23,7 +23,13 @@ export default function LocationMap({ venueName, venueDetails, location }: Locat
 
             {/* Map Placeholder */}
             <div className="mt-4 h-28 rounded-2xl bg-gray-100 flex items-center justify-center">
-                <button className="text-sm font-medium text-gray-500 border border-gray-200 rounded-full px-4 py-2">
+                <button
+                    onClick={() => {
+                        const query = encodeURIComponent(`${venueName}, ${venueDetails || location}`);
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                    }}
+                    className="text-sm font-medium text-gray-500 border border-gray-200 rounded-full px-4 py-2"
+                >
                     View on Map
                 </button>
             </div>
