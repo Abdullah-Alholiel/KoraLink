@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Param,
   Patch,
   Body,
   UseGuards,
@@ -57,5 +58,13 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  // ── GET /users/:id — Public profile ──────────────────────
+  @Get(':id')
+  @ApiOperation({ summary: 'Get public user profile by ID' })
+  @ApiOkResponse({ description: 'Public user profile.' })
+  getPublicProfile(@Param('id') id: string) {
+    return this.usersService.getPublicProfile(id);
   }
 }

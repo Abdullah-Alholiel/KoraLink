@@ -2,14 +2,18 @@
 
 import { X } from 'lucide-react';
 import TeamLineup from './TeamLineup';
+import type { RosterPlayer } from '@/types';
 
 interface TeamLineupSheetProps {
     isOpen: boolean;
     onClose: () => void;
     format: string;
+    roster?: RosterPlayer[];
+    hostId?: string;
+    onPlayerClick?: (player: RosterPlayer) => void;
 }
 
-export default function TeamLineupSheet({ isOpen, onClose, format }: TeamLineupSheetProps) {
+export default function TeamLineupSheet({ isOpen, onClose, format, roster = [], hostId, onPlayerClick }: TeamLineupSheetProps) {
     if (!isOpen) return null;
 
     return (
@@ -40,13 +44,13 @@ export default function TeamLineupSheet({ isOpen, onClose, format }: TeamLineupS
                         onClick={onClose}
                         className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"
                     >
-                        <X className="w-5 h-5 text-gray-400" strokeWidth={2} />
+                        <X className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
                     </button>
                 </div>
 
                 {/* Team Lineup Content */}
                 <div className="px-5 pb-8">
-                    <TeamLineup format={format} />
+                    <TeamLineup format={format} roster={roster} hostId={hostId} onPlayerClick={onPlayerClick} />
                 </div>
             </div>
         </>

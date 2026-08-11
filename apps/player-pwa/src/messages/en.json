@@ -165,6 +165,8 @@
         "viewDetails": "View Details",
         "yourMatch": "Your Match",
         "view": "View",
+        "startMatch": "Start Match",
+        "completeMatch": "End Match",
         "teamWhite": "Team White",
         "teamDark": "Team Dark",
         "playerProfile": "Player Profile"

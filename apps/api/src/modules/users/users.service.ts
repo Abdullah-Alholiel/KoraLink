@@ -214,4 +214,46 @@ export class UsersService {
 
     return updated;
   }
+
+  /**
+   * Get a public user profile by ID — visible to any authenticated user.
+   */
+  async getPublicProfile(userId: string) {
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        full_name: users.full_name,
+        handle: users.handle,
+        avatar_url: users.avatar_url,
+        preferred_position: users.preferred_position,
+        skill_level: users.skill_level,
+        rating: users.rating,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    const pom_count = await this.getPomCount(userId);
+
+    const [{ games_played }] = await this.db
+      .select({ games_played: sql<number>`COUNT(*)::int` })
+      .from(match_players)
+      .where(eq(match_players.user_id, userId));
+
+    return {
+      id: user.id,
+      full_name: user.full_name,
+      handle: user.handle,
+      avatar_url: user.avatar_url,
+      preferred_position: user.preferred_position,
+      skill_level: user.skill_level,
+      rating: user.rating,
+      pom_count,
+      games_played,
+    };
+  }
 }

@@ -13,10 +13,12 @@ import {
     ChevronRight,
     Trophy,
     AlertTriangle,
+    Play,
+    CheckCircle2,
     Loader2,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
-import { useJoinMatch, useLeaveMatch, useCancelMatch } from '@/hooks/useMatchActions';
+import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import MobileFrame from '@/components/layout/MobileFrame';
@@ -38,7 +40,7 @@ export default function MatchDetailPage({
 }: {
     params: Promise<{ id: string; locale: string }>;
 }) {
-    const { id, locale } = use(params);
+    const { id } = use(params);
     const router = useRouter();
     const t = useTranslations();
 
@@ -49,6 +51,8 @@ export default function MatchDetailPage({
     const joinMatch = useJoinMatch();
     const leaveMatch = useLeaveMatch();
     const cancelMatch = useCancelMatch();
+    const startMatch = useStartMatch();
+    const completeMatch = useCompleteMatch();
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
@@ -278,6 +282,32 @@ export default function MatchDetailPage({
                                 </div>
                             )}
 
+                            {/* Host Lifecycle Controls */}
+                            {isUserHost && match.status === 'full' && (
+                                <div className="px-5 pt-6">
+                                    <button
+                                        onClick={() => startMatch.mutate(id)}
+                                        disabled={startMatch.isPending}
+                                        className="w-full py-3 rounded-xl bg-brand-green text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {startMatch.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                                        {t('matchDetail.startMatch')}
+                                    </button>
+                                </div>
+                            )}
+                            {isUserHost && match.status === 'in_progress' && (
+                                <div className="px-5 pt-6">
+                                    <button
+                                        onClick={() => completeMatch.mutate(id)}
+                                        disabled={completeMatch.isPending}
+                                        className="w-full py-3 rounded-xl bg-brand-green text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {completeMatch.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                        {t('matchDetail.completeMatch')}
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Cancel Match Button (Host only) */}
                             {isUserHost && match.status !== 'completed' && match.status !== 'cancelled' && (
                                 <div className="px-5 pt-6">
@@ -337,7 +367,18 @@ export default function MatchDetailPage({
                                     </div>
                                 </div>
                                 <button className="text-sm font-medium text-brand-green"
-                                    onClick={() => router.push(`/${locale}/personal-info`)}>
+                                    onClick={() => {
+                                        if (match.organizer) {
+                                            setSelectedPlayer({
+                                                id: match.hostId,
+                                                userId: match.hostId,
+                                                name: match.organizer.name,
+                                                avatarUrl: match.organizer.avatarUrl,
+                                                team: 'Home',
+                                                isHost: true,
+                                            });
+                                        }
+                                    }}>
                                     {t('matchDetail.viewProfile')}
                                 </button>
                             </div>
@@ -451,7 +492,7 @@ export default function MatchDetailPage({
                                             </p>
                                         </div>
                                     </div>
-                                    <button className="text-sm font-medium text-brand-green mt-3">
+                                    <button className="text-sm font-medium text-brand-green mt-3" onClick={() => setShowChatSheet(true)}>
                                         {t('matchDetail.viewAllComments')} {match.comments.length} {t('matchDetail.comments')}
                                     </button>
                                 </div>
@@ -533,6 +574,9 @@ export default function MatchDetailPage({
                 isOpen={showTeamSheet}
                 onClose={() => setShowTeamSheet(false)}
                 format={match.format}
+                roster={match.roster}
+                hostId={match.hostId}
+                onPlayerClick={setSelectedPlayer}
             />
             )}
 

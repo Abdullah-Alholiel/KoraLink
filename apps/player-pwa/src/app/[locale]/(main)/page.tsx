@@ -2,7 +2,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
-import { Rss, Bell, AlertCircle, WifiOff, Plus } from 'lucide-react';
+import { Rss, AlertCircle, WifiOff, Plus } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -28,9 +28,6 @@ export default function CommunityFeedPage() {
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4">
                 <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
-                <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50">
-                    <Bell className="w-5 h-5 text-brand-black" strokeWidth={1.5} />
-                </button>
             </div>
 
             {/* ── Loading State ─────────────────────── */}

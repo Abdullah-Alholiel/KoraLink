@@ -30,6 +30,18 @@ interface UserStatsApi {
   no_show_count: number;
 }
 
+export interface PublicProfileApi {
+  id: string;
+  full_name: string | null;
+  handle: string | null;
+  avatar_url: string | null;
+  preferred_position: string | null;
+  skill_level: string | null;
+  rating: number;
+  pom_count: number;
+  games_played: number;
+}
+
 // ─── Fetch User Profile ────────────────────────────────
 
 export function useUserProfile() {
@@ -37,6 +49,17 @@ export function useUserProfile() {
     queryKey: ['user', 'profile'],
     queryFn: () => fetcher<UserProfileApi>('/users/me'),
     staleTime: 60_000,
+  });
+}
+
+// ─── Fetch Public Profile ──────────────────────────────
+
+export function usePublicProfile(userId: string) {
+  return useQuery<PublicProfileApi, FetchError>({
+    queryKey: ['user', 'public', userId],
+    queryFn: () => fetcher<PublicProfileApi>(`/users/${userId}`),
+    enabled: !!userId,
+    staleTime: 120_000,
   });
 }
 

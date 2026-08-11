@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Bell, Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMatches } from '@/hooks/useMatches';
@@ -57,12 +57,6 @@ export default function PlayPage() {
                             {t('app.title')}
                         </span>
                     </div>
-                    <button
-                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50"
-                        aria-label={t('nav.notifications')}
-                    >
-                        <Bell className="w-5 h-5 text-brand-black" strokeWidth={1.5} />
-                    </button>
                 </div>
 
                 {/* Search bar + Host button */}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -12,6 +13,8 @@ export default function MessagesPage() {
     const t = useTranslations();
     const pathname = usePathname();
     const locale = pathname.split('/')[1] || 'en';
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
 
     // ── Active Discussions from joined matches (REST) ──
     const {
@@ -21,17 +24,43 @@ export default function MessagesPage() {
         refetch,
     } = useMyMatches();
 
-    const myMatches: Match[] = matchesApi ? adaptMatchList(matchesApi) : [];
+    const allMatches: Match[] = matchesApi ? adaptMatchList(matchesApi) : [];
+    const myMatches = searchQuery
+        ? allMatches.filter((m) =>
+              (m.venueName || m.title).toLowerCase().includes(searchQuery.toLowerCase()) ||
+              m.organizer.name.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+        : allMatches;
 
     return (
         <div className="pb-4">
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4">
                 <h1 className="text-2xl font-bold text-brand-black">{t('messages.title')}</h1>
-                <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50">
-                    <Search className="w-5 h-5 text-brand-black" strokeWidth={1.5} />
+                <button
+                    onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); }}
+                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50"
+                >
+                    <Search className={`w-5 h-5 ${showSearch ? 'text-brand-green' : 'text-brand-black'}`} strokeWidth={1.5} />
                 </button>
             </div>
+
+            {/* Search Input (toggle) */}
+            {showSearch && (
+                <div className="px-5 pb-3">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
+                        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={t('common.search')}
+                            className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* ── Active Discussions ────────────────── */}
             <div className="px-5 pb-2">
