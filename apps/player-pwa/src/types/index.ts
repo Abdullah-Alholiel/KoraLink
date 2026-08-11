@@ -57,6 +57,8 @@ export interface RosterPlayer {
     userId: string;
     name: string;
     avatarUrl: string;
+    team: 'Home' | 'Away' | null;
+    isHost: boolean;
 }
 
 export interface Comment {

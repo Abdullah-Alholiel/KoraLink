@@ -164,7 +164,10 @@
         "cancelMatch": "Cancel Match",
         "viewDetails": "View Details",
         "yourMatch": "Your Match",
-        "view": "View"
+        "view": "View",
+        "teamWhite": "Team White",
+        "teamDark": "Team Dark",
+        "playerProfile": "Player Profile"
     },
     "cancelMatch": {
         "title": "Cancel Match?",

@@ -30,6 +30,7 @@ import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import PostMatchSection from '@/components/matches/PostMatchSection';
+import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import LocationMap from '@/components/matches/LocationMap';
 
 export default function MatchDetailPage({
@@ -63,6 +64,7 @@ export default function MatchDetailPage({
     const [showCancelSheet, setShowCancelSheet] = useState(false);
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
     const [showChatSheet, setShowChatSheet] = useState(false);
+    const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -261,7 +263,7 @@ export default function MatchDetailPage({
 
                             {/* 3. Team Lineup */}
                             <div className="px-5 pt-6">
-                                <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} />
+                                <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
                             </div>
 
                             {/* Leave Match Button */}
@@ -543,6 +545,12 @@ export default function MatchDetailPage({
                     matchTitle={match.title}
                 />
             )}
+
+            {/* Player Profile Sheet */}
+            <PlayerProfileSheet
+                player={selectedPlayer}
+                onClose={() => setSelectedPlayer(null)}
+            />
         </MobileFrame>
     );
 }

@@ -211,6 +211,8 @@ function buildRoster(players: MatchPlayerApi[]): RosterPlayer[] {
     userId: p.user.id,
     name: p.user.full_name ?? 'Player',
     avatarUrl: p.user.avatar_url ?? '',
+    team: p.team as 'Home' | 'Away' | null,
+    isHost: p.is_host,
   }));
 }
 
@@ -294,7 +296,7 @@ export function adaptMatchDetail(
     price: toNum(detail.price_per_player),
     currency: 'SAR',
     totalSpots: detail.max_players,
-    filledSpots: players.length,
+    filledSpots: players.filter((p) => !p.is_host).length,
     status: mapMatchStatus(detail.status),
     imageUrl: '',
     rules: [],

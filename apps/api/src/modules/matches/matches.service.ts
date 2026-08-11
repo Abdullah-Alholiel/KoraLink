@@ -254,17 +254,35 @@ export class MatchesService {
         throw new BadRequestException('Match is full.');
       }
 
-      // 4. Insert match_players row
+      // 4. Auto-assign team: alternate Home/Away so players fill evenly.
+      //    Host is always 'Home'. Joiners go to the team with fewer players.
+      const [{ homeCount }] = await tx
+        .select({ homeCount: sql<number>`count(*)::int` })
+        .from(schema.match_players)
+        .where(
+          sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.team} = 'Home'`,
+        );
+      const [{ awayCount }] = await tx
+        .select({ awayCount: sql<number>`count(*)::int` })
+        .from(schema.match_players)
+        .where(
+          sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.team} = 'Away'`,
+        );
+
+      const assignedTeam = homeCount <= awayCount ? 'Home' : 'Away';
+
+      // 5. Insert match_players row with team assignment
       await tx
         .insert(schema.match_players)
         .values({
           match_id: matchId,
           user_id: userId,
           is_host: false,
+          team: assignedTeam,
           no_show: false,
         });
 
-      // 5. If last spot, mark Full
+      // 6. If last spot, mark Full
       if (count + 1 >= match.max_players) {
         await tx
           .update(matches)

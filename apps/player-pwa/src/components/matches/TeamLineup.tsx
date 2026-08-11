@@ -8,21 +8,31 @@ interface TeamLineupProps {
     format: string;
     roster?: RosterPlayer[];
     hostId?: string;
+    onPlayerClick?: (player: RosterPlayer) => void;
 }
 
 /**
- * Dynamic team lineup — renders actual match roster from DB.
- * Players are listed in a single team view with filled/empty slots.
- * Empty slots show the format's total minus filled players.
+ * Two-team lineup with dynamic roster from DB.
+ * Players auto-assigned to Home (White) / Away (Dark) by backend.
+ * Each team shows filled players + open slots up to the format's per-side count.
  */
-export default function TeamLineup({ format, roster = [], hostId }: TeamLineupProps) {
+export default function TeamLineup({ format, roster = [], onPlayerClick }: TeamLineupProps) {
     const t = useTranslations();
 
-    // Parse format to get total slots (e.g. '7v7' → 14, '11v11' → 22)
+    // Parse format: '7v7' → 7 per side
     const playersPerSide = parseInt(format?.split('v')[0] || '7');
-    const totalSlots = !isNaN(playersPerSide) ? playersPerSide * 2 : 14;
-    const filledSpots = roster.length;
-    const openSlots = Math.max(0, totalSlots - filledSpots);
+    const perSide = !isNaN(playersPerSide) ? playersPerSide : 7;
+
+    const homePlayers = roster.filter((p) => p.team === 'Home' || (p.isHost && !p.team));
+    const awayPlayers = roster.filter((p) => p.team === 'Away');
+    // Players with no team assigned (legacy data) — distribute evenly
+    const unassigned = roster.filter((p) => !p.team && !p.isHost);
+    unassigned.forEach((p, i) => {
+        if (i % 2 === 0) homePlayers.push(p); else awayPlayers.push(p);
+    });
+
+    const homeOpen = Math.max(0, perSide - homePlayers.length);
+    const awayOpen = Math.max(0, perSide - awayPlayers.length);
 
     return (
         <div>
@@ -33,62 +43,97 @@ export default function TeamLineup({ format, roster = [], hostId }: TeamLineupPr
                 </span>
             </div>
 
-            {/* Unified Team Card */}
-            <div className="bg-white rounded-2xl shadow-card p-4">
-                <div className="flex items-center gap-2 mb-3">
-                    <Users className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                    <span className="text-sm font-bold text-brand-black">
-                        {filledSpots} / {totalSlots} {t('matchDetail.attending')}
-                    </span>
+            <div className="flex gap-3">
+                {/* ── Team Home (White) ── */}
+                <div className="flex-1 bg-white rounded-2xl shadow-card p-3">
+                    <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-white border border-gray-300" />
+                            <span className="text-xs font-bold text-brand-black">{t('matchDetail.teamWhite')}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-bold">{homePlayers.length}/{perSide}</span>
+                    </div>
+                    <div className="space-y-2">
+                        {homePlayers.map((player) => (
+                            <PlayerSlot
+                                key={player.id}
+                                player={player}
+                                onClick={onPlayerClick}
+                            />
+                        ))}
+                        {Array.from({ length: homeOpen }).map((_, i) => (
+                            <EmptySlot key={`home-empty-${i}`} />
+                        ))}
+                    </div>
                 </div>
-                <div className="space-y-2.5">
-                    {/* Filled slots from DB roster */}
-                    {roster.map((player) => {
-                        const isHost = player.userId === hostId || player.id === hostId;
-                        return (
-                            <div key={player.id} className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 overflow-hidden flex-shrink-0">
-                                    {player.avatarUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        player.name.charAt(0).toUpperCase()
-                                    )}
-                                </div>
-                                <span className="text-xs text-brand-black font-medium flex-1 truncate">
-                                    {player.name}
-                                </span>
-                                {isHost && (
-                                    <span className="text-[9px] font-bold text-brand-green bg-brand-green/10 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 flex-shrink-0">
-                                        <Crown className="w-2.5 h-2.5" strokeWidth={2.5} />
-                                        {t('matchDetail.organizer')}
-                                    </span>
-                                )}
-                            </div>
-                        );
-                    })}
 
-                    {/* Empty slots */}
-                    {Array.from({ length: openSlots }).slice(0, 12).map((_, i) => (
-                        <div key={`empty-${i}`} className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 flex-shrink-0">
-                                <Users className="w-3 h-3" strokeWidth={1.5} />
-                            </div>
-                            <span className="text-xs text-gray-300">Open</span>
+                {/* ── Team Away (Dark) ── */}
+                <div className="flex-1 bg-brand-black rounded-2xl shadow-card p-3">
+                    <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-gray-600" />
+                            <span className="text-xs font-bold text-white">{t('matchDetail.teamDark')}</span>
                         </div>
-                    ))}
-
-                    {/* Show "+N more" if many open slots */}
-                    {openSlots > 12 && (
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 flex-shrink-0">
-                                <Users className="w-3 h-3" strokeWidth={1.5} />
-                            </div>
-                            <span className="text-xs text-gray-400">+{openSlots - 12} {t('matchDetail.spotsLeft')}</span>
-                        </div>
-                    )}
+                        <span className="text-[10px] text-gray-500 font-bold">{awayPlayers.length}/{perSide}</span>
+                    </div>
+                    <div className="space-y-2">
+                        {awayPlayers.map((player) => (
+                            <PlayerSlot
+                                key={player.id}
+                                player={player}
+                                dark
+                                onClick={onPlayerClick}
+                            />
+                        ))}
+                        {Array.from({ length: awayOpen }).map((_, i) => (
+                            <EmptySlot key={`away-empty-${i}`} dark />
+                        ))}
+                    </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/* ─── Player Slot (filled) ─── */
+function PlayerSlot({ player, dark, onClick }: { player: RosterPlayer; dark?: boolean; onClick?: (p: RosterPlayer) => void }) {
+    return (
+        <button
+            onClick={() => onClick?.(player)}
+            className={`w-full flex items-center gap-1.5 text-start transition-opacity ${dark ? 'hover:opacity-80' : 'hover:bg-gray-50'} rounded-lg p-1`}
+        >
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden flex-shrink-0 ${
+                dark ? 'bg-gray-700 text-gray-200' : 'bg-gray-200 text-gray-600'
+            }`}>
+                {player.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                ) : (
+                    player.name.charAt(0).toUpperCase()
+                )}
+            </div>
+            <span className={`text-[11px] font-medium flex-1 truncate ${dark ? 'text-white' : 'text-brand-black'}`}>
+                {player.name}
+            </span>
+            {player.isHost && (
+                <Crown className={`w-3 h-3 flex-shrink-0 ${dark ? 'text-amber-400' : 'text-brand-green'}`} strokeWidth={2.5} />
+            )}
+        </button>
+    );
+}
+
+/* ─── Empty Slot ─── */
+function EmptySlot({ dark }: { dark?: boolean }) {
+    return (
+        <div className="flex items-center gap-1.5 p-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                dark ? 'bg-gray-800' : 'bg-gray-50'
+            }`}>
+                <Users className={`w-2.5 h-2.5 ${dark ? 'text-gray-600' : 'text-gray-300'}`} strokeWidth={1.5} />
+            </div>
+            <span className={`text-[11px] ${dark ? 'text-gray-600' : 'text-gray-300'}`}>
+                Open
+            </span>
         </div>
     );
 }
