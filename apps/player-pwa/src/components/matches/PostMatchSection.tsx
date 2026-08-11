@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Trophy, Crown, Check, Loader2, Clock } from 'lucide-react';
+import { Trophy, Crown, Check, Loader2, Clock, ChevronRight } from 'lucide-react';
 import { usePomResult, useVote } from '@/hooks/usePom';
+import PomVotingSheet from './PomVotingSheet';
 
 interface PostMatchSectionProps {
   matchId: string;
@@ -13,6 +15,7 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
   const t = useTranslations('pom');
   const { data: pom, isLoading } = usePomResult(matchId, currentUserId);
   const voteMutation = useVote(matchId);
+  const [showVoting, setShowVoting] = useState(false);
 
   if (isLoading) {
     return (
@@ -81,84 +84,56 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
 
   // ── Voting still open ──
   return (
-    <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
+    <>
+      <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
-                <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
+              <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
             </div>
             <span className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
-                {t('votePrompt')}
+              {t('votePrompt')}
             </span>
-        </div>
-        <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
+          </div>
+          <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
             <Clock className="w-3 h-3" strokeWidth={1.5} />
             {t('votingOpen')}
-        </span>
-      </div>
-      <p className="text-xs text-gray-500 mb-4">{t('voteSubtitle')}</p>
-
-      {/* Already voted indicator */}
-      {pom.hasVoted && (
-        <div className="mb-3 bg-brand-green/5 rounded-xl px-4 py-2 flex items-center gap-2">
-            <Check className="w-4 h-4 text-brand-green" strokeWidth={2.5} />
-            <span className="text-xs font-medium text-brand-green">{t('voted')}</span>
+          </span>
         </div>
-      )}
+        <p className="text-xs text-gray-500 mb-4">{t('voteSubtitle')}</p>
 
-      {/* Candidate list */}
-      <div className="space-y-2">
-        {pom.candidates.map((candidate) => {
-            const isSelected = pom.hasVoted && pom.votedFor === candidate.id;
-            return (
-                <button
-                    key={candidate.id}
-                    onClick={() => voteMutation.mutate(candidate.id)}
-                    disabled={voteMutation.isPending}
-                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all active:scale-[0.98] ${
-                        isSelected
-                            ? 'bg-brand-green/10 border border-brand-green/30'
-                            : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
-                    }`}
-                >
-                    {candidate.avatarUrl ? (
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={candidate.avatarUrl} alt={candidate.fullName} className="w-full h-full object-cover" />
-                        </div>
-                    ) : (
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            isSelected ? 'bg-brand-green/20' : 'bg-gray-200'
-                        }`}>
-                            <span className={`text-sm font-bold ${isSelected ? 'text-brand-green' : 'text-gray-500'}`}>
-                                {candidate.fullName.charAt(0).toUpperCase()}
-                            </span>
-                        </div>
-                    )}
-                    <span className={`flex-1 text-start text-sm font-medium ${
-                        isSelected ? 'text-brand-green' : 'text-brand-black'
-                    }`}>
-                        {candidate.fullName}
-                    </span>
-                    {isSelected && (
-                        <div className="w-6 h-6 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
-                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                        </div>
-                    )}
-                    {voteMutation.isPending && voteMutation.variables === candidate.id && (
-                        <Loader2 className="w-4 h-4 text-brand-green animate-spin flex-shrink-0" strokeWidth={2} />
-                    )}
-                </button>
-            );
-        })}
+        {/* Already voted indicator */}
+        {pom.hasVoted ? (
+          <div className="bg-brand-green/5 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
+              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+            </div>
+            <span className="text-sm font-medium text-brand-green">{t('voted')}</span>
+          </div>
+        ) : (
+          /* Vote trigger button */
+          <button
+            onClick={() => setShowVoting(true)}
+            className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3.5
+              hover:bg-brand-green/5 active:scale-[0.98] transition-all group"
+          >
+            <span className="text-sm font-semibold text-brand-black">{t('votePrompt')}</span>
+            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-brand-green transition-colors" strokeWidth={2} />
+          </button>
+        )}
       </div>
 
-      {pom.candidates.length === 0 && (
-        <p className="text-xs text-gray-400 text-center py-2">
-            {t('notAttended')}
-        </p>
-      )}
-    </div>
+      {/* Voting bottom sheet */}
+      <PomVotingSheet
+        open={showVoting}
+        onClose={() => setShowVoting(false)}
+        candidates={pom.candidates}
+        hasVoted={pom.hasVoted}
+        votedFor={pom.votedFor}
+        isPending={voteMutation.isPending}
+        onVote={(candidateId) => voteMutation.mutate(candidateId)}
+      />
+    </>
   );
 }

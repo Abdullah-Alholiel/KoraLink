@@ -464,6 +464,11 @@
         "noWinnerDescription": "تعادل الأصوات — لم يتم تحديد أفضل لاعب.",
         "matchCompleted": "انتهت المباراة",
         "notAttended": "لم تحضر هذه المباراة، لذا التصويت غير متاح.",
-        "cannotVoteSelf": "لا يمكنك التصويت لنفسك!"
+        "cannotVoteSelf": "لا يمكنك التصويت لنفسك!",
+        "selectPlayer": "اختر لاعباً",
+        "voteConfirmBody": "هل تصوت لـ {name} كأفضل لاعب؟",
+        "confirmVote": "تأكيد التصويت",
+        "voteCancel": "إلغاء",
+        "casting": "جارٍ التصويت..."
     }
 }

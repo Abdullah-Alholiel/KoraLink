@@ -152,13 +152,13 @@ export class UsersService {
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
-        AND m.status != 'Cancelled'
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY
         -- Upcoming/active matches first (scheduled today or later)
         CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN 0
-             WHEN m.status = 'Completed' THEN 1
-             ELSE 2 END,
+             WHEN m.status = 'Cancelled' THEN 1
+             WHEN m.status = 'Completed' THEN 2
+             ELSE 3 END,
         -- Upcoming: soonest first
         CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN m.scheduled_at END ASC,
         -- Past: most recent first

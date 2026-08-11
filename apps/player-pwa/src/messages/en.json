@@ -464,6 +464,11 @@
         "noWinnerDescription": "Votes were tied — no Player of the Match was decided.",
         "matchCompleted": "Match Completed",
         "notAttended": "You didn't attend this match, so voting is unavailable.",
-        "cannotVoteSelf": "You can't vote for yourself!"
+        "cannotVoteSelf": "You can't vote for yourself!",
+        "selectPlayer": "Select a player",
+        "voteConfirmBody": "Vote for {name} as Player of the Match?",
+        "confirmVote": "Confirm Vote",
+        "voteCancel": "Cancel",
+        "casting": "Casting..."
     }
 }

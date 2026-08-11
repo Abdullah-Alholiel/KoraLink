@@ -45,6 +45,56 @@ export class MatchesService {
   constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Match Lifecycle — Auto-complete past matches
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the effective status of a match, auto-completing past matches
+   * whose scheduled end time has passed without needing a DB write.
+   *
+   * Terminal states (Completed, Cancelled) are returned as-is.
+   * Active states (Open, Full, InProgress) are promoted to Completed
+   * when ``scheduled_at + duration_mins`` is in the past.
+   */
+  private static resolveEffectiveStatus(match: {
+    status: string;
+    scheduled_at: Date;
+    duration_mins: number;
+    completed_at: Date | null;
+  }): string {
+    if (['Completed', 'Cancelled'].includes(match.status)) {
+      return match.status;
+    }
+    const endTime = new Date(
+      match.scheduled_at.getTime() + match.duration_mins * 60 * 1000,
+    );
+    if (new Date() >= endTime) {
+      return 'Completed';
+    }
+    return match.status;
+  }
+
+  /**
+   * Bulk-update past Open/Full/InProgress matches to Completed.
+   * Runs once at module init so the DB state reflects reality.
+   * Query-time ``resolveEffectiveStatus`` handles the window between
+   * match end and the next restart.
+   *
+   * @returns number of rows updated.
+   */
+  async autoCompletePastMatches(): Promise<number> {
+    const result = await this.db.execute(sql`
+      UPDATE ${matches}
+      SET status = 'Completed',
+          completed_at = scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval,
+          updated_at = NOW()
+      WHERE status IN ('Open', 'Full', 'InProgress')
+        AND scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval < NOW()
+    `);
+    return result.rowCount ?? 0;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Discovery feed — PostGIS ST_DWithin geo-filter
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -204,6 +254,14 @@ export class MatchesService {
     if (!match) {
       throw new NotFoundException(`Match ${matchId} not found.`);
     }
+
+    // Apply virtual status — past matches show as Completed
+    match.status = MatchesService.resolveEffectiveStatus({
+      status: match.status,
+      scheduled_at: match.scheduled_at,
+      duration_mins: match.duration_mins ?? 60,
+      completed_at: match.completed_at,
+    }) as typeof match.status;
 
     return match;
   }
@@ -654,6 +712,8 @@ export class MatchesService {
       .select({
         id: matches.id,
         status: matches.status,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
         completed_at: matches.completed_at,
       })
       .from(matches)
@@ -664,7 +724,7 @@ export class MatchesService {
       throw new NotFoundException(`Match ${matchId} not found.`);
     }
 
-    if (match.status !== 'Completed') {
+    if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
       throw new BadRequestException(
         `Voting is only available for completed matches. Current status: "${match.status}".`,
       );
@@ -749,6 +809,8 @@ export class MatchesService {
       .select({
         id: matches.id,
         status: matches.status,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
         completed_at: matches.completed_at,
       })
       .from(matches)
@@ -759,7 +821,7 @@ export class MatchesService {
       throw new NotFoundException(`Match ${matchId} not found.`);
     }
 
-    if (match.status !== 'Completed') {
+    if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
       return { status: 'not_completed' as const };
     }
 
