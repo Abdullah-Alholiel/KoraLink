@@ -245,12 +245,20 @@ export default function MatchDetailPage({
                                 />
                             </div>
 
-                            {/* 2. Team Lineup — who's playing (most important visual) */}
+                            {/* 2. Match Rules */}
+                            <div className="flex items-center justify-center gap-2 py-4">
+                                <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
+                                <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
+                                    {t('matchDetail.viewRules')}
+                                </button>
+                            </div>
+
+                            {/* 3. Team Lineup — who's playing (most important visual) */}
                             <div className="px-5 pt-5">
                                 <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
                             </div>
 
-                            {/* 3. Chat / Discussion Preview */}
+                            {/* 4. Chat / Discussion Preview */}
                             <div className="mx-5 mt-5">
                                 <button
                                     onClick={() => setShowChatSheet(true)}
@@ -288,7 +296,7 @@ export default function MatchDetailPage({
                                 </button>
                             </div>
 
-                            {/* 4. Location / Map */}
+                            {/* 5. Location / Map */}
                             <div className="mx-5 mt-5 bg-white rounded-2xl shadow-card p-5">
                                 <LocationMap
                                     venueName={match.venueName}
@@ -321,14 +329,6 @@ export default function MatchDetailPage({
                                 >
                                     <Share2 className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
                                     {t('matchDetail.share')}
-                                </button>
-                            </div>
-
-                            {/* 5. View Match Rules */}
-                            <div className="flex items-center justify-center gap-2 py-4">
-                                <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
-                                    {t('matchDetail.viewRules')}
                                 </button>
                             </div>
 
