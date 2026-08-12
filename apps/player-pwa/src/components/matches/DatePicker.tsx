@@ -4,9 +4,11 @@ import { useState, useMemo, useEffect } from 'react';
 
 interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
+    /** Fire onDateSelect on mount with today's date. Default true (needed by Play page). */
+    fireOnMount?: boolean;
 }
 
-export default function DatePicker({ onDateSelect }: DatePickerProps) {
+export default function DatePicker({ onDateSelect, fireOnMount = true }: DatePickerProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const dates = useMemo(() => {
@@ -25,7 +27,7 @@ export default function DatePicker({ onDateSelect }: DatePickerProps) {
 
     // Fire initial onDateSelect on mount so the parent filters by today.
     useEffect(() => {
-        onDateSelect?.(dates[0].date);
+        if (fireOnMount) onDateSelect?.(dates[0].date);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

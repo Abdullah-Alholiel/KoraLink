@@ -181,7 +181,7 @@ export default function ClubsPage() {
                                         <div className="flex items-center gap-0.5">
                                             <Users className="w-3.5 h-3.5 text-brand-green" />
                                             <span className="text-xs font-semibold text-brand-green">
-                                                {venue.pitches?.length ?? 0} {t('clubs.pitches')}
+                                                {venue.pitch_count} {t('clubs.pitches')}
                                             </span>
                                         </div>
                                     </div>
