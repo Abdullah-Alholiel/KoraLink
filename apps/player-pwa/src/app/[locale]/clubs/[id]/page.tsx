@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -71,6 +71,11 @@ export default function ClubPage() {
   // ── Date filter state ──────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
+  // Skip DatePicker's onDateSelect mount-fire — it would close the sheet instantly.
+  const calendarJustOpened = useRef(false);
+  useEffect(() => {
+    if (showCalendar) calendarJustOpened.current = true;
+  }, [showCalendar]);
 
   const dateStr = selectedDate.toISOString().slice(0, 10);
 
@@ -84,6 +89,12 @@ export default function ClubPage() {
   const matches = matchesApi?.matches ?? [];
 
   const handleDateSelect = useCallback((date: Date) => {
+    // DatePicker fires onDateSelect on mount — skip that initial fire so
+    // the calendar sheet stays open for the user to actually choose a date.
+    if (calendarJustOpened.current) {
+      calendarJustOpened.current = false;
+      return;
+    }
     setSelectedDate(date);
     setShowCalendar(false);
   }, []);
