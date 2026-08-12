@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -76,6 +77,11 @@ export default function ProfilePage() {
     const router = useRouter();
     const t = useTranslations();
     const locale = (pathname ?? '').split('/')[1] || 'en';
+
+    // Guard against hydration mismatch — browser-only APIs (Push) differ
+    // between server and client, causing DOM tree divergence.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     // ── User data from Zustand store (populated by auth flow) ──
     const storeUser = useAppStore(selectUser);
@@ -208,7 +214,7 @@ export default function ProfilePage() {
                         window.location.href = newPath;
                     }}
                 />
-                {isSupported && (
+                {mounted && isSupported && (
                     <>
                         <div className="h-px bg-gray-50 mx-4" />
                         <MenuItem
