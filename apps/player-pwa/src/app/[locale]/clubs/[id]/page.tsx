@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
 import { useMatches } from '@/hooks/useMatches';
-import { adaptMatchList } from '@/lib/api-adapter';
 import MatchCard from '@/components/matches/MatchCard';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
@@ -81,10 +80,8 @@ export default function ClubPage() {
     venue_id: id,
   });
 
-  const matches = useMemo(() => {
-    if (!matchesApi || !Array.isArray(matchesApi)) return [];
-    return adaptMatchList(matchesApi);
-  }, [matchesApi]);
+  // useMatches already adapts + returns { matches: Match[] } — do NOT re-adapt
+  const matches = matchesApi?.matches ?? [];
 
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
