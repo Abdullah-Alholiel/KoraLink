@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Star } from 'lucide-react';
+import { MapPin, Users as UsersIcon } from 'lucide-react';
 import type { Match } from '@/types';
 
 interface MatchCardProps {
@@ -84,11 +84,6 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         </h3>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className="text-xs text-gray-500">{match.organizer.name}</span>
-                            <span className="text-xs text-gray-300">•</span>
-                            <Star className="w-3 h-3 text-amber-500 fill-amber-500" strokeWidth={1} />
-                            <span className="text-xs font-medium text-gray-600">
-                                {match.organizer.rating > 0 ? match.organizer.rating.toFixed(1) : '—'}
-                            </span>
                             {badge && <span className="ms-1">{badge}</span>}
                         </div>
                     </div>

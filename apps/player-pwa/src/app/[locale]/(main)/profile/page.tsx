@@ -159,11 +159,6 @@ export default function ProfilePage() {
                         <p className="text-2xl font-extrabold text-brand-black">{stats?.karma_score ?? 0}</p>
                         <p className="text-xs text-gray-400">{t('profile.karma')}</p>
                     </div>
-                    <div className="w-px bg-gray-100" />
-                    <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black" dir="ltr">{stats?.rating?.toFixed(1) ?? '—'}</p>
-                        <p className="text-xs text-gray-400">{t('profile.rating')}</p>
-                    </div>
                 </div>
             )}
 

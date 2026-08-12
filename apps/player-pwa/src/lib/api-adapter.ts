@@ -62,7 +62,6 @@ export interface MatchHostApi {
   full_name: string | null;
   handle: string | null;
   avatar_url: string | null;
-  rating: number;
   karma_score?: number;
 }
 
@@ -88,7 +87,6 @@ export interface MatchPlayerApi {
     full_name: string | null;
     handle: string | null;
     avatar_url: string | null;
-    rating: number;
   };
 }
 
@@ -204,7 +202,6 @@ function buildOrganizer(host: MatchHostApi): OrganizerInfo {
     name: host.full_name ?? 'Unknown',
     handle: host.handle ?? '@unknown',
     avatarUrl: host.avatar_url ?? '',
-    rating: host.rating ?? 0,
   };
 }
 
@@ -245,7 +242,6 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
       name: row.host_name ?? 'Unknown',
       handle: '',
       avatarUrl: row.host_avatar ?? '',
-      rating: 0,
     },
     date: scheduled.toISOString().split('T')[0],
     time: fmtTime(scheduled),

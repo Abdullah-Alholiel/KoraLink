@@ -7,7 +7,6 @@ import {
     ArrowLeft,
     Phone,
     MapPin,
-    Award,
     Target,
     Loader2,
     AlertTriangle,
@@ -190,9 +189,10 @@ export default function PersonalInfoPage() {
                   highlight
               />
               <StatCard
-                  icon={<Award className="w-4 h-4 text-gray-400" strokeWidth={2} />}
-                  value={stats?.rating?.toFixed(1) ?? '—'}
-                  label={t('profile.rating')}
+                  icon={<Sparkles className="w-4 h-4 text-amber-500" strokeWidth={2} />}
+                  value={stats?.karma_score ?? 0}
+                  label={t('profile.karma')}
+                  highlight
               />
           </div>
 

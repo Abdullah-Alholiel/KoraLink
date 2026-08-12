@@ -41,7 +41,6 @@ export default function HostMatchForm() {
                 city: '',
                 address: '',
                 amenities: [],
-                rating: 0,
                 is_approved: false,
                 is_koralink_partner: false,
                 distance_m: null,

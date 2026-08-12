@@ -73,7 +73,6 @@ export class UsersService {
         role: true,
         wallet_balance: true,
         karma_score: true,
-        rating: true,
         no_show_count: true,
         created_at: true,
       },
@@ -94,7 +93,6 @@ export class UsersService {
   async getStats(userId: string) {
     const [user] = await this.db
       .select({
-        rating: users.rating,
         karma_score: users.karma_score,
         no_show_count: users.no_show_count,
       })
@@ -113,7 +111,6 @@ export class UsersService {
 
     return {
       games_played: count,
-      rating: user.rating,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
     };
@@ -294,7 +291,6 @@ export class UsersService {
         avatar_url: users.avatar_url,
         preferred_position: users.preferred_position,
         skill_level: users.skill_level,
-        rating: users.rating,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -327,7 +323,6 @@ export class UsersService {
       avatar_url: user.avatar_url,
       preferred_position: user.preferred_position,
       skill_level: user.skill_level,
-      rating: user.rating,
       pom_count,
       games_played,
       review_count: review_count ?? 0,
@@ -352,7 +347,6 @@ export class UsersService {
         avatar_url: users.avatar_url,
         preferred_position: users.preferred_position,
         skill_level: users.skill_level,
-        rating: users.rating,
       })
       .from(users)
       .where(

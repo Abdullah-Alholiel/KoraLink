@@ -433,9 +433,6 @@ export default function MatchDetailPage({
                                                 {match.organizer.name.charAt(0)}
                                             </span>
                                         </div>
-                                        <div className="absolute -bottom-1 -end-1 bg-brand-green text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                                            {match.organizer.rating}
-                                        </div>
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-400">{t('matchDetail.organizer')}</p>

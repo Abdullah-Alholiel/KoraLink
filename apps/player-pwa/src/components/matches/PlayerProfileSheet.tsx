@@ -87,8 +87,8 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div className="bg-white rounded-xl shadow-card p-3 text-center">
                                 <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1.5" strokeWidth={2} />
-                                <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.rating?.toFixed(1) ?? '—'}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.rating')}</p>
+                                <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.review_avg ? profile.review_avg.toFixed(1) : '—'}</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{t('gameDetails.reviews')}</p>
                             </div>
                             <div className="bg-white rounded-xl shadow-card p-3 text-center">
                                 <Trophy className="w-4 h-4 text-brand-green mx-auto mb-1.5" strokeWidth={2} />

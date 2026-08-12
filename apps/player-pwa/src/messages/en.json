@@ -194,7 +194,8 @@
         "time": "Time",
         "price": "Price",
         "spotsLeft": "spots left",
-        "free": "Free"
+        "free": "Free",
+        "reviews": "Reviews"
     },
     "host": {
         "title": "Host a Match",

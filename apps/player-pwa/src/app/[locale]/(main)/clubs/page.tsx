@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, MapPin, Star } from 'lucide-react';
+import { Search, MapPin, Users } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
 
 const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
@@ -38,7 +38,7 @@ export default function ClubsPage() {
             v.city.toLowerCase().includes(searchQuery.toLowerCase());
         if (!matchesQuery) return false;
 
-        if (activeFilter === 'Top Rated') return v.rating >= 4.7;
+        if (activeFilter === 'Top Rated') return true; // rating removed — show all
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
             return amenities.includes('indoors') || amenities.includes('indoor');
@@ -176,18 +176,14 @@ export default function ClubsPage() {
                                         </span>
                                     </div>
 
-                                    {/* Rating + pitch count */}
+                                    {/* Pitch count */}
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="flex items-center gap-0.5">
-                                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                                            <span className="text-xs font-semibold text-amber-600">
-                                                {venue.rating.toFixed(1)}
+                                            <Users className="w-3.5 h-3.5 text-brand-green" />
+                                            <span className="text-xs font-semibold text-brand-green">
+                                                {venue.pitches?.length ?? 0} {t('clubs.pitches')}
                                             </span>
                                         </div>
-                                        <span className="text-gray-200">|</span>
-                                        <span className="text-xs text-gray-400">
-                                            {venue.pitch_count} {t('clubs.pitches')}
-                                        </span>
                                     </div>
 
                                     {/* Amenities badges */}

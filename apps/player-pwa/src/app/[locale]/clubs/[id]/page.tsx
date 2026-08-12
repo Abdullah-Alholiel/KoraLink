@@ -160,9 +160,8 @@ export default function ClubPage() {
                 </div>
                 <div className="flex items-center gap-1 mt-1">
                   <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" strokeWidth={1} />
-                  <span className="text-white text-sm font-semibold">{venue.rating?.toFixed(1)}</span>
-                  <span className="text-white/50 text-xs ms-1">
-                    · {venue.pitches?.length ?? 0} {t('clubs.pitches')}
+                  <span className="text-white/50 text-xs">
+                    {venue.pitches?.length ?? 0} {t('clubs.pitches')}
                   </span>
                 </div>
               </div>

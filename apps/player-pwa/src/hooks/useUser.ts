@@ -17,7 +17,6 @@ export interface UserProfileApi {
   role: string;
   wallet_balance: string;
   karma_score: number;
-  rating: number;
   no_show_count: number;
   pom_count: number;
   created_at: string;
@@ -25,7 +24,6 @@ export interface UserProfileApi {
 
 interface UserStatsApi {
   games_played: number;
-  rating: number;
   karma_score: number;
   no_show_count: number;
 }
@@ -37,7 +35,6 @@ export interface PublicProfileApi {
   avatar_url: string | null;
   preferred_position: string | null;
   skill_level: string | null;
-  rating: number;
   pom_count: number;
   games_played: number;
   review_count: number;
@@ -120,7 +117,6 @@ export interface SearchUserApi {
   avatar_url: string | null;
   preferred_position: string | null;
   skill_level: string | null;
-  rating: number;
 }
 
 export function useSearchUsers(query: string) {

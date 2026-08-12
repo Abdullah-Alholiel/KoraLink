@@ -17,7 +17,6 @@ export interface OrganizerInfo {
     name: string;
     handle: string;
     avatarUrl: string;
-    rating: number;
 }
 
 export interface Match {
@@ -91,7 +90,6 @@ export interface Venue {
     lng: number;
     imageUrl: string;
     surfaces: string[];
-    rating: number;
 }
 
 export interface PaymentMethod {

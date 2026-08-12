@@ -72,7 +72,7 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
                                         </div>
                                         <div className="text-end">
                                             <span className="text-xs font-bold text-brand-green">
-                                                ★ {venue.rating.toFixed(1)}
+                                                {venue.pitch_count} {t('clubs.pitches')}
                                             </span>
                                         </div>
                                     </div>

@@ -11,7 +11,6 @@ export interface NearbyVenueRow {
   city: string;
   address: string;
   amenities: unknown;
-  rating: number;
   is_approved: boolean;
   is_koralink_partner: boolean;
   distance_m: number | null;
@@ -71,7 +70,6 @@ export class VenuesService {
         v.city,
         v.address,
         v.amenities,
-        v.rating,
         v.is_approved,
         v.is_koralink_partner,
         ${distanceExpr} AS distance_m,
@@ -88,7 +86,7 @@ export class VenuesService {
       GROUP BY v.id, u.id
       ORDER BY
         ${hasCoords ? sql`distance_m ASC,` : sql``}
-        v.rating DESC
+        v.name ASC
       LIMIT 50
     `);
 
@@ -108,7 +106,6 @@ export class VenuesService {
             full_name: true,
             handle: true,
             avatar_url: true,
-            rating: true,
           },
         },
         pitches: {

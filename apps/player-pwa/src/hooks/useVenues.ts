@@ -11,7 +11,6 @@ export interface VenueApi {
   city: string;
   address: string;
   amenities: unknown;
-  rating: number;
   is_approved: boolean;
   is_koralink_partner: boolean;
   distance_m: number | null;
@@ -35,7 +34,6 @@ export interface VenueDetailApi extends VenueApi {
     full_name: string | null;
     handle: string | null;
     avatar_url: string | null;
-    rating: number;
   };
   pitches?: PitchApi[];
 }
