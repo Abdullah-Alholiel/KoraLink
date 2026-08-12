@@ -203,7 +203,9 @@ export default function ProfilePage() {
                     onClick={() => {
                         const newLocale = locale === 'ar' ? 'en' : 'ar';
                         const newPath = (pathname ?? "").replace(`/${locale}`, `/${newLocale}`);
-                        router.push(newPath);
+                        // Full page reload ensures complete server re-render with
+                        // fresh i18n messages — router.push() may reuse cached RSC.
+                        window.location.href = newPath;
                     }}
                 />
                 {isSupported && (

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Outfit, Tajawal } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
+import { getMessages, setRequestLocale } from 'next-intl/server';
 import QueryProvider from '@/providers/QueryProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import '@/styles/globals.css';
@@ -70,6 +70,9 @@ export default async function RootLayout({
     notFound();
   }
 
+  // Explicitly set the request locale from URL params — bypasses any
+  // stale middleware header caching on client-side navigations.
+  setRequestLocale(locale);
   const messages = await getMessages();
   const isRtl = locale === 'ar';
 
