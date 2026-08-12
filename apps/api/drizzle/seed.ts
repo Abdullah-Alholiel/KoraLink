@@ -2,11 +2,11 @@
  * KoraLink database seed script.
  *
  * Usage (from apps/api):
- *   DATABASE_URL=postgresql://... npx tsx drizzle/seed.ts
+ *   npx tsx --env-file=.env drizzle/seed.ts
  *
  * Inserts a realistic development dataset:
- *   5 users, 3 venues, 5 pitches, 5 matches with players,
- *   sample transactions, and chat messages.
+ *   8 users, 3 venues, 5 pitches, 8 matches (incl. today + completed),
+ *   pitch slots, match votes (POM), reviews, sample transactions, chat messages.
  */
 
 import * as pg from 'postgres';
@@ -38,7 +38,9 @@ async function seed() {
   console.log('🌱 Seeding KoraLink database...\n');
 
   // ── Clear existing data (order respects FK constraints) ───────────────
+  await db.delete(schema.match_reviews);
   await db.delete(schema.match_messages);
+  await db.delete(schema.match_votes);
   await db.delete(schema.transactions);
   await db.delete(schema.match_players);
   await db.delete(schema.matches);
@@ -48,7 +50,7 @@ async function seed() {
   await db.delete(schema.users);
   console.log('✔ Cleared existing data');
 
-  // ── 1. Users (5) ───────────────────────────────────────────────────────
+  // ── 1. Users (8) ───────────────────────────────────────────────────────
   const userRows = await db
     .insert(schema.users)
     .values([
@@ -59,7 +61,7 @@ async function seed() {
         preferred_position: 'Forward',
         skill_level: 'Advanced',
         role: 'Player',
-        wallet_balance: '500.00',
+        wallet_balance: '700.00',
         karma_score: 10,
         rating: 4.5,
       },
@@ -70,7 +72,7 @@ async function seed() {
         preferred_position: 'Midfielder',
         skill_level: 'Intermediate',
         role: 'Player',
-        wallet_balance: '250.00',
+        wallet_balance: '350.00',
         karma_score: 8,
         rating: 4.0,
       },
@@ -92,7 +94,7 @@ async function seed() {
         preferred_position: 'Goalkeeper',
         skill_level: 'Beginner',
         role: 'Player',
-        wallet_balance: '100.00',
+        wallet_balance: '200.00',
         karma_score: 5,
         rating: 3.5,
       },
@@ -103,19 +105,50 @@ async function seed() {
         preferred_position: 'Midfielder',
         skill_level: 'Advanced',
         role: 'Player',
-        wallet_balance: '750.00',
+        wallet_balance: '850.00',
         karma_score: 20,
         rating: 4.9,
+      },
+      {
+        phone: '+966500000006',
+        full_name: 'Sultan Al-Dossari',
+        handle: 'sultan_d',
+        preferred_position: 'Defender',
+        skill_level: 'Advanced',
+        role: 'Player',
+        wallet_balance: '400.00',
+        karma_score: 12,
+        rating: 4.3,
+      },
+      {
+        phone: '+966500000007',
+        full_name: 'Mansour Al-Ghamdi',
+        handle: 'mansour_g',
+        preferred_position: 'Forward',
+        skill_level: 'Intermediate',
+        role: 'Player',
+        wallet_balance: '300.00',
+        karma_score: 7,
+        rating: 4.1,
+      },
+      {
+        phone: '+966500000008',
+        full_name: 'Nawaf Al-Subaie',
+        handle: 'nawaf_s',
+        preferred_position: 'Midfielder',
+        skill_level: 'Beginner',
+        role: 'Player',
+        wallet_balance: '150.00',
+        karma_score: 3,
+        rating: 3.8,
       },
     ])
     .returning({ id: schema.users.id, handle: schema.users.handle });
 
   console.log(`✔ Inserted ${userRows.length} users`);
   const users = Object.fromEntries(userRows.map((u) => [u.handle, u.id]));
-  //   ahmed_r, khalid_o, faisal_h, omar_s, yousef_q
 
   // ── 2. Venues (3) ──────────────────────────────────────────────────────
-  // faisal_h is the venue owner (UserRole = VenueOwner)
   const venueRows = await db
     .insert(schema.venues)
     .values([
@@ -151,14 +184,10 @@ async function seed() {
         location: point(39.1925, 21.4858),
       },
     ])
-    .returning({
-      id: schema.venues.id,
-      name: schema.venues.name,
-    });
+    .returning({ id: schema.venues.id, name: schema.venues.name });
 
   console.log(`✔ Inserted ${venueRows.length} venues`);
   const venues = Object.fromEntries(venueRows.map((v) => [v.name, v.id]));
-  //   KSU Stadium, Olaya Sports Park
 
   // ── 3. Pitches (5) ─────────────────────────────────────────────────────
   const pitchRows = await db
@@ -209,10 +238,8 @@ async function seed() {
 
   console.log(`✔ Inserted ${pitchRows.length} pitches`);
   const pitches = Object.fromEntries(pitchRows.map((p) => [p.name, p.id]));
-  //   Pitch A – Main Field, Pitch B – Training Ground, Pitch C – Indoor Court
 
   // ── 3b. Pitch Slots (for partner venue — KSU Stadium) ──────────────────
-  // Generate slots for the next 7 days, 6 PM – 10 PM, 1-hour blocks
   const slotNow = new Date();
   const slotDates: string[] = [];
   for (let d = 0; d < 7; d++) {
@@ -223,7 +250,7 @@ async function seed() {
     slotDates.push(`${yyyy}-${mm}-${dd}`);
   }
 
-  const slotHours = [18, 19, 20, 21]; // 6 PM, 7 PM, 8 PM, 9 PM (end hour = start + 1)
+  const slotHours = [18, 19, 20, 21];
 
   const partnerPitchIds = [
     pitches['Pitch A – Main Field']!,
@@ -255,10 +282,9 @@ async function seed() {
   }
 
   await db.insert(schema.pitch_slots).values(slotValues);
-  console.log(`✔ Inserted ${slotValues.length} pitch slots (2 pitches × 7 days × 4 slots)`);
+  console.log(`✔ Inserted ${slotValues.length} pitch slots`);
 
-  // ── 4. Matches (5) with dynamic dates ──────────────────────────────
-  // Dates are anchored to the current date so matches never expire.
+  // ── 4. Matches (8) with dynamic dates ──────────────────────────────
   const now = new Date();
   const days = (n: number) =>
     new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
@@ -272,6 +298,7 @@ async function seed() {
   const matchRows = await db
     .insert(schema.matches)
     .values([
+      // ── Today's matches (so Play screen has data immediately) ──
       {
         host_id: users.ahmed_r!,
         pitch_id: pitches['Pitch A – Main Field']!,
@@ -279,7 +306,7 @@ async function seed() {
         match_type: 'Competitive',
         gender_rule: 'Men Only',
         status: 'Open',
-        scheduled_at: fmtDate(days(5), '20:00'),
+        scheduled_at: fmtDate(days(0), '20:00'),
         duration_mins: 90,
         price_per_player: '45.00',
         max_players: 22,
@@ -288,16 +315,17 @@ async function seed() {
       {
         host_id: users.yousef_q!,
         pitch_id: pitches['Pitch B – Training Ground']!,
-        title: 'Casual 7v7 Kickabout',
+        title: 'Today 7v7 Kickabout',
         match_type: 'Casual',
         gender_rule: 'Mixed',
         status: 'Open',
-        scheduled_at: fmtDate(days(6), '18:00'),
+        scheduled_at: fmtDate(days(0), '18:00'),
         duration_mins: 60,
         price_per_player: '25.00',
         max_players: 14,
         location: point(46.6227, 24.7231),
       },
+      // ── Tomorrow ──
       {
         host_id: users.khalid_o!,
         pitch_id: pitches['Pitch C – Indoor Court']!,
@@ -305,12 +333,13 @@ async function seed() {
         match_type: 'Competitive',
         gender_rule: 'Mixed',
         status: 'Open',
-        scheduled_at: fmtDate(days(7), '21:00'),
+        scheduled_at: fmtDate(days(1), '21:00'),
         duration_mins: 50,
         price_per_player: '30.00',
         max_players: 10,
         location: point(46.6753, 24.696),
       },
+      // ── This week ──
       {
         host_id: users.omar_s!,
         pitch_id: pitches['Pitch D – Rooftop 7v7']!,
@@ -325,17 +354,59 @@ async function seed() {
         location: point(46.6753, 24.696),
       },
       {
-        host_id: users.ahmed_r!,
-        pitch_id: pitches['Pitch E – Championship Field']!,
-        title: "Women's Championship Qualifier",
+        host_id: users.sultan_d!,
+        pitch_id: pitches['Pitch A – Main Field']!,
+        title: 'Weekend Warriors 11v11',
         match_type: 'Competitive',
-        gender_rule: 'Women Only',
-        status: 'InProgress',
-        scheduled_at: fmtDate(days(2), '19:00'),
+        gender_rule: 'Men Only',
+        status: 'Open',
+        scheduled_at: fmtDate(days(5), '19:00'),
         duration_mins: 90,
-        price_per_player: '55.00',
+        price_per_player: '40.00',
         max_players: 22,
-        location: point(39.1925, 21.4858),
+        location: point(46.6227, 24.7231),
+      },
+      {
+        host_id: users.mansour_g!,
+        pitch_id: pitches['Pitch B – Training Ground']!,
+        title: 'Mixed 7v7 Friday',
+        match_type: 'Casual',
+        gender_rule: 'Mixed',
+        status: 'Open',
+        scheduled_at: fmtDate(days(4), '20:00'),
+        duration_mins: 60,
+        price_per_player: '20.00',
+        max_players: 14,
+        location: point(46.6227, 24.7231),
+      },
+      // ── Completed matches (for POM voting + reviews demo) ──
+      {
+        host_id: users.ahmed_r!,
+        pitch_id: pitches['Pitch A – Main Field']!,
+        title: 'Last Week 11v11 Classic',
+        match_type: 'Competitive',
+        gender_rule: 'Men Only',
+        status: 'Completed',
+        scheduled_at: fmtDate(days(-3), '20:00'),
+        duration_mins: 90,
+        price_per_player: '45.00',
+        max_players: 22,
+        location: point(46.6227, 24.7231),
+        completed_at: new Date(days(-3).getTime() + 90 * 60 * 1000),
+      },
+      {
+        host_id: users.yousef_q!,
+        pitch_id: pitches['Pitch C – Indoor Court']!,
+        title: 'Last Week Indoor 5v5',
+        match_type: 'Casual',
+        gender_rule: 'Mixed',
+        status: 'Completed',
+        scheduled_at: fmtDate(days(-2), '19:00'),
+        duration_mins: 50,
+        price_per_player: '30.00',
+        max_players: 10,
+        location: point(46.6753, 24.696),
+        completed_at: new Date(days(-2).getTime() + 50 * 60 * 1000),
       },
     ])
     .returning({ id: schema.matches.id, title: schema.matches.title });
@@ -343,7 +414,10 @@ async function seed() {
   console.log(`✔ Inserted ${matchRows.length} matches`);
   const matchMap = Object.fromEntries(matchRows.map((m) => [m.title, m.id]));
 
-  // ── 5. Match Players (hosts auto-join + some additional players) ───────
+  // ── 5. Match Players ────────────────────────────────────────────────
+  const allHandles = ['ahmed_r', 'khalid_o', 'faisal_h', 'omar_s', 'yousef_q', 'sultan_d', 'mansour_g', 'nawaf_s'];
+  const allPlayerIds = allHandles.map((h) => users[h]!);
+
   const matchPlayersData: Array<{
     match_id: string;
     user_id: string;
@@ -351,30 +425,29 @@ async function seed() {
     is_host: boolean;
   }> = [];
 
-  // Hosts
-  matchPlayersData.push(
-    { match_id: matchMap['Friday Night 11v11']!, user_id: users.ahmed_r!, team: 'Home', is_host: true },
-    { match_id: matchMap['Casual 7v7 Kickabout']!, user_id: users.yousef_q!, team: 'Home', is_host: true },
-    { match_id: matchMap['Indoor 5v5 Tournament']!, user_id: users.khalid_o!, team: 'Home', is_host: true },
-    { match_id: matchMap['Sunset 7v7 Rooftop']!, user_id: users.omar_s!, team: 'Home', is_host: true },
-    { match_id: matchMap["Women's Championship Qualifier"]!, user_id: users.ahmed_r!, team: 'Home', is_host: true },
-  );
-
-  // Additional players for open matches
-  const allPlayerIds = [users.khalid_o!, users.omar_s!, users.yousef_q!, users.ahmed_r!];
   for (let i = 0; i < matchRows.length; i++) {
-    const matchId = matchRows[i].id;
-    // Add 2-4 extra players per match
-    const extraCount = 2 + (i % 3);
+    const match = matchRows[i];
+    const hostHandle = allHandles[i % allHandles.length];
+    const hostId = users[hostHandle]!;
+
+    // Host joins as Home
+    matchPlayersData.push({
+      match_id: match.id,
+      user_id: hostId,
+      team: 'Home',
+      is_host: true,
+    });
+
+    // Add 3-6 extra players per match
+    const extraCount = 3 + (i % 4);
     for (let j = 0; j < extraCount; j++) {
-      const playerId = allPlayerIds[(i + j + 1) % allPlayerIds.length]!;
-      // Don't add if already host of this match
+      const playerId = allPlayerIds[(i * 2 + j + 1) % allPlayerIds.length]!;
       const alreadyJoined = matchPlayersData.some(
-        (mp) => mp.match_id === matchId && mp.user_id === playerId,
+        (mp) => mp.match_id === match.id && mp.user_id === playerId,
       );
       if (!alreadyJoined) {
         matchPlayersData.push({
-          match_id: matchId,
+          match_id: match.id,
           user_id: playerId,
           team: j % 2 === 0 ? 'Home' : 'Away',
           is_host: false,
@@ -383,57 +456,166 @@ async function seed() {
     }
   }
 
-  if (matchPlayersData.length > 0) {
-    await db.insert(schema.match_players).values(matchPlayersData);
-  }
+  await db.insert(schema.match_players).values(matchPlayersData);
   console.log(`✔ Inserted ${matchPlayersData.length} match players`);
 
-  // ── 6. Transactions (sample ledger entries) ───────────────────────────
+  // ── 6. POM Votes (for the two completed matches) ────────────────────
+  const completedMatch1 = matchMap['Last Week 11v11 Classic'];
+  const completedMatch2 = matchMap['Last Week Indoor 5v5'];
+
+  const voteData: Array<{
+    match_id: string;
+    voter_id: string;
+    candidate_id: string;
+  }> = [];
+
+  // Match 1: Ahmed hosted, players vote Yousef as POM (3 votes), Khalid gets 1
+  if (completedMatch1) {
+    const m1Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch1);
+    const voters1 = m1Players.filter((mp) => !mp.is_host).slice(0, 4);
+    for (let i = 0; i < voters1.length; i++) {
+      const candidateId = i < 3 ? users.yousef_q! : users.khalid_o!;
+      if (voters1[i].user_id !== candidateId) {
+        voteData.push({
+          match_id: completedMatch1,
+          voter_id: voters1[i].user_id,
+          candidate_id: candidateId,
+        });
+      }
+    }
+  }
+
+  // Match 2: Yousef hosted, players vote Sultan as POM (2 votes)
+  if (completedMatch2) {
+    const m2Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch2);
+    const voters2 = m2Players.filter((mp) => !mp.is_host).slice(0, 3);
+    for (let i = 0; i < voters2.length; i++) {
+      if (voters2[i].user_id !== users.sultan_d!) {
+        voteData.push({
+          match_id: completedMatch2,
+          voter_id: voters2[i].user_id,
+          candidate_id: users.sultan_d!,
+        });
+      }
+    }
+  }
+
+  if (voteData.length > 0) {
+    await db.insert(schema.match_votes).values(voteData);
+  }
+  console.log(`✔ Inserted ${voteData.length} POM votes`);
+
+  // ── 7. Reviews ──────────────────────────────────────────────────────
+  const reviewData: Array<{
+    match_id: string;
+    reviewer_id: string;
+    reviewee_id: string;
+    rating: number;
+    comment: string | null;
+  }> = [];
+
+  if (completedMatch1) {
+    const m1Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch1);
+    // Ahmed (host) gets reviewed positively
+    const ahmedReviewers = m1Players.filter((mp) => mp.user_id !== users.ahmed_r!).slice(0, 3);
+    for (const r of ahmedReviewers) {
+      reviewData.push({
+        match_id: completedMatch1,
+        reviewer_id: r.user_id,
+        reviewee_id: users.ahmed_r!,
+        rating: 5,
+        comment: 'Great host, well organized!',
+      });
+    }
+    // Yousef (POM) gets reviewed too
+    const yousefReviewers = m1Players.filter((mp) => mp.user_id !== users.yousef_q!).slice(0, 2);
+    for (const r of yousefReviewers) {
+      reviewData.push({
+        match_id: completedMatch1,
+        reviewer_id: r.user_id,
+        reviewee_id: users.yousef_q!,
+        rating: 5,
+        comment: 'Unstoppable on the pitch!',
+      });
+    }
+  }
+
+  if (reviewData.length > 0) {
+    await db.insert(schema.match_reviews).values(reviewData);
+  }
+  console.log(`✔ Inserted ${reviewData.length} reviews`);
+
+  // ── 8. Transactions ─────────────────────────────────────────────────
   await db.insert(schema.transactions).values([
     {
       user_id: users.ahmed_r!,
-      type: 'CREDIT',
+      type: 'CREDIT' as const,
       amount: '500.00',
-      reference_type: 'TOPUP',
+      reference_type: 'TOPUP' as const,
       idempotency_key: 'seed-topup-ahmed-001',
-      status: 'Completed',
+      status: 'Completed' as const,
+    },
+    {
+      user_id: users.ahmed_r!,
+      type: 'DEBIT' as const,
+      amount: '45.00',
+      reference_type: 'MATCH_FEE' as const,
+      reference_id: matchMap['Last Week 11v11 Classic'],
+      idempotency_key: 'seed-matchfee-ahmed-001',
+      status: 'Completed' as const,
     },
     {
       user_id: users.khalid_o!,
-      type: 'DEBIT',
+      type: 'DEBIT' as const,
       amount: '45.00',
-      reference_type: 'MATCH_FEE',
-      reference_id: matchMap['Friday Night 11v11']!,
+      reference_type: 'MATCH_FEE' as const,
+      reference_id: matchMap['Friday Night 11v11'],
       idempotency_key: 'seed-matchfee-khalid-001',
-      status: 'Completed',
+      status: 'Completed' as const,
     },
     {
       user_id: users.yousef_q!,
-      type: 'CREDIT',
+      type: 'CREDIT' as const,
+      amount: '750.00',
+      reference_type: 'TOPUP' as const,
+      idempotency_key: 'seed-topup-yousef-001',
+      status: 'Completed' as const,
+    },
+    {
+      user_id: users.yousef_q!,
+      type: 'CREDIT' as const,
       amount: '25.00',
-      reference_type: 'REFUND',
-      reference_id: matchMap['Indoor 5v5 Tournament']!,
+      reference_type: 'REFUND' as const,
+      reference_id: matchMap['Indoor 5v5 Tournament'],
       idempotency_key: 'seed-refund-yousef-001',
-      status: 'Completed',
+      status: 'Completed' as const,
     },
     {
       user_id: users.omar_s!,
-      type: 'DEBIT',
+      type: 'DEBIT' as const,
       amount: '35.00',
-      reference_type: 'MATCH_FEE',
-      reference_id: matchMap['Sunset 7v7 Rooftop']!,
+      reference_type: 'MATCH_FEE' as const,
+      reference_id: matchMap['Sunset 7v7 Rooftop'],
       idempotency_key: 'seed-matchfee-omar-001',
-      status: 'Completed',
+      status: 'Completed' as const,
+    },
+    {
+      user_id: users.sultan_d!,
+      type: 'CREDIT' as const,
+      amount: '400.00',
+      reference_type: 'TOPUP' as const,
+      idempotency_key: 'seed-topup-sultan-001',
+      status: 'Completed' as const,
     },
   ]);
-  console.log('✔ Inserted 4 sample transactions');
+  console.log(`✔ Inserted 7 sample transactions`);
 
-  // ── 7. Chat Messages ──────────────────────────────────────────────────
+  // ── 9. Chat Messages ────────────────────────────────────────────────
   await db.insert(schema.match_messages).values([
     {
       match_id: matchMap['Friday Night 11v11']!,
       user_id: users.ahmed_r!,
-      content: 'Who\'s ready for Friday? 🔥⚽',
+      content: 'Who\'s ready for tonight? 🔥⚽',
     },
     {
       match_id: matchMap['Friday Night 11v11']!,
@@ -441,26 +623,49 @@ async function seed() {
       content: 'Count me in! Bringing my A-game 💪',
     },
     {
-      match_id: matchMap['Casual 7v7 Kickabout']!,
+      match_id: matchMap['Friday Night 11v11']!,
+      user_id: users.omar_s!,
+      content: 'I\'ll be there 15 mins early to warm up',
+    },
+    {
+      match_id: matchMap['Today 7v7 Kickabout']!,
       user_id: users.yousef_q!,
       content: 'Casual vibes only — no slide tackles please 😄',
+    },
+    {
+      match_id: matchMap['Today 7v7 Kickabout']!,
+      user_id: users.nawaf_s!,
+      content: 'First time using KoraLink! Excited to play',
     },
     {
       match_id: matchMap['Indoor 5v5 Tournament']!,
       user_id: users.khalid_o!,
       content: 'Indoor AC is a blessing in this heat 🥶',
     },
+    {
+      match_id: matchMap['Weekend Warriors 11v11']!,
+      user_id: users.sultan_d!,
+      content: 'Looking for a goalkeeper! Anyone interested?',
+    },
+    {
+      match_id: matchMap['Mixed 7v7 Friday']!,
+      user_id: users.mansour_g!,
+      content: 'All skill levels welcome 🤝',
+    },
   ]);
-  console.log('✔ Inserted 4 chat messages');
+  console.log(`✔ Inserted 8 chat messages`);
 
   console.log('\n✅ Seed complete!\n');
-  console.log('  Users:', userRows.map((u) => u.handle).join(', '));
-  console.log('  Venues:', venueRows.map((v) => v.name).join(', '));
-  console.log('  Pitches:', pitchRows.map((p) => p.name).join(', '));
-  console.log('  Matches:', matchRows.map((m) => m.title).join(', '));
-  console.log('  Match Players:', matchPlayersData.length);
-  console.log('  Transactions: 4');
-  console.log('  Chat Messages: 4');
+  console.log(`  Users: ${userRows.length}`);
+  console.log(`  Venues: ${venueRows.length}`);
+  console.log(`  Pitches: ${pitchRows.length}`);
+  console.log(`  Pitch Slots: ${slotValues.length}`);
+  console.log(`  Matches: ${matchRows.length} (incl. 2 completed with POM votes)`);
+  console.log(`  Match Players: ${matchPlayersData.length}`);
+  console.log(`  POM Votes: ${voteData.length}`);
+  console.log(`  Reviews: ${reviewData.length}`);
+  console.log(`  Transactions: 7`);
+  console.log(`  Chat Messages: 8`);
 }
 
 seed()

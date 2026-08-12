@@ -29,6 +29,7 @@ export interface NearbyMatchApi {
   pitch_id: string;
   pitch_name: string;
   pitch_size?: string;
+  pitch_surface?: string;
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
@@ -252,7 +253,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
     format: row.pitch_size ?? '7v7',
-    surface: '',
+    surface: row.pitch_surface ?? '',
     gender: mapGender(row.gender_rule),
     intensity: row.match_type,
     price: toNum(row.price_per_player),

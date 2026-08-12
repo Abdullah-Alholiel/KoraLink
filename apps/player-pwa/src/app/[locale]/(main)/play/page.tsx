@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import MatchCard from '@/components/matches/MatchCard';
+import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import { useMatches } from '@/hooks/useMatches';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
@@ -16,6 +17,11 @@ export default function PlayPage() {
     const locale = pathname.split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filters, setFilters] = useState<PlayFilters>({
+        format: null,
+        gender: null,
+        maxPrice: null,
+    });
 
     // ── Data fetching via React Query ──
     const {
@@ -25,6 +31,9 @@ export default function PlayPage() {
         refetch,
     } = useMatches({
         date: selectedDate,
+        format: filters.format,
+        gender: filters.gender,
+        maxPrice: filters.maxPrice,
     });
 
     const matches = data?.matches ?? [];
@@ -85,6 +94,9 @@ export default function PlayPage() {
             <DatePicker
                 onDateSelect={(date) => setSelectedDate(date.toISOString().split('T')[0])}
             />
+
+            {/* ── Filter Bar ──────────────────────── */}
+            <FilterBar filters={filters} onChange={setFilters} />
 
             {/* ── Content: 5 UX States ────────────── */}
 
@@ -160,7 +172,7 @@ export default function PlayPage() {
                     {/* Section label */}
                     <div className="px-4 pt-1 pb-2">
                         <p className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
-                            {t('play.discoveringMore')}
+                            {filteredMatches.length} {t('play.discoveringMore')}
                         </p>
                     </div>
 

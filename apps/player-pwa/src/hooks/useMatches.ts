@@ -44,6 +44,7 @@ export function useMatches(filters?: {
   city?: string | null;
   format?: string | null;
   maxPrice?: number | null;
+  gender?: string | null;
 }) {
   return useQuery<{
     matches: Match[];
@@ -54,9 +55,10 @@ export function useMatches(filters?: {
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (filters) {
-        for (const [key, value] of Object.entries(filters)) {
-          if (value != null) params[key] = String(value);
-        }
+        if (filters.date) params.date = filters.date;
+        if (filters.format) params.format = filters.format;
+        if (filters.gender) params.gender = filters.gender;
+        if (filters.maxPrice != null) params.max_price = String(filters.maxPrice);
       }
       const raw = await fetcher<MatchesApiResponse | NearbyMatchApi[]>('/matches', {
         params: Object.keys(params).length > 0 ? params : undefined,

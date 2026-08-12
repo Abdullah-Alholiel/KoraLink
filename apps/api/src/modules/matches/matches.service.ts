@@ -34,6 +34,8 @@ export interface NearbyMatchRow {
   host_avatar: string | null;
   pitch_id: string;
   pitch_name: string;
+  pitch_size?: string;
+  pitch_surface?: string;
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
@@ -114,7 +116,7 @@ export class MatchesService {
    * returns true when the great-circle distance (metres) is within the radius.
    */
   async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
-    const { lat, lng, radius_km = 10, date } = dto;
+    const { lat, lng, radius_km = 10, date, format, gender, max_price } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -148,6 +150,21 @@ export class MatchesService {
           )`
       : sql`NULL`;
 
+    // ── Format filter (5v5, 7v7, 8v8, 11v11) ──────────────────────────────
+    const formatClause = format
+      ? sql`AND p.size = ${format}`
+      : sql``;
+
+    // ── Gender filter ──────────────────────────────────────────────────────
+    const genderClause = gender
+      ? sql`AND m.gender_rule = ${gender}`
+      : sql``;
+
+    // ── Max price filter ──────────────────────────────────────────────────
+    const priceClause = max_price != null
+      ? sql`AND m.price_per_player::float <= ${max_price}`
+      : sql``;
+
     // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
     // the SELECT list is fixed, so the cast to NearbyMatchRow[] is safe here.
     const rows = await this.db.execute(sql`
@@ -169,6 +186,7 @@ export class MatchesService {
         p.id                      AS pitch_id,
         p.name                    AS pitch_name,
         p.size                    AS pitch_size,
+        p.surface_type            AS pitch_surface,
         v.name                    AS venue_name,
         v.city                    AS venue_city,
         COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined
@@ -181,6 +199,9 @@ export class MatchesService {
         AND m.scheduled_at >= NOW()
         ${geoClause}
         ${dateClause}
+        ${formatClause}
+        ${genderClause}
+        ${priceClause}
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY m.scheduled_at ASC
       LIMIT 50

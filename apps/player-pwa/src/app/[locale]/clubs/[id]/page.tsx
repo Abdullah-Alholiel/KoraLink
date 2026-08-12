@@ -84,7 +84,7 @@ export default function ClubPage() {
             {venue.pitches && venue.pitches.length > 0 && (
               <div className="px-5 pt-6 pb-4">
                 <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
-                  Available Pitches
+                  {t('clubs.availablePitches')}
                 </p>
                 <div className="space-y-3">
                   {venue.pitches.map((pitch) => (

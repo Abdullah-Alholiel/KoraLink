@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Matches, Min, Max } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Matches, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -44,4 +44,32 @@ export class GetMatchesDto {
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be in YYYY-MM-DD format' })
   date?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by pitch format',
+    example: '7v7',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['5v5', '7v7', '8v8', '11v11'])
+  format?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by gender rule',
+    example: 'Men Only',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['Men Only', 'Women Only', 'Mixed'])
+  gender?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by max price per player (SAR)',
+    example: 50,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  max_price?: number;
 }

@@ -104,6 +104,7 @@
         "nearby": "Nearby",
         "popular": "Popular",
         "filters": {
+            "title": "Filters",
             "date": "Date",
             "city": "City",
             "format": "Format",
@@ -365,7 +366,9 @@
         "location": "Location",
         "openNow": "Open Now",
         "closed": "Closed",
-        "pitches": "pitches"
+        "pitches": "pitches",
+        "address": "Address",
+        "availablePitches": "Available Pitches"
     },
     "messages": {
         "title": "Messages",

@@ -104,6 +104,7 @@
         "nearby": "قريب",
         "popular": "شائع",
         "filters": {
+            "title": "تصفية",
             "date": "التاريخ",
             "city": "المدينة",
             "format": "الصيغة",
@@ -365,7 +366,9 @@
         "location": "الموقع",
         "openNow": "مفتوح الآن",
         "closed": "مغلق",
-        "pitches": "ملاعب"
+        "pitches": "ملاعب",
+        "address": "العنوان",
+        "availablePitches": "الملاعب المتاحة"
     },
     "messages": {
         "title": "الرسائل",
