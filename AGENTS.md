@@ -238,12 +238,13 @@ When delegating database work, the subagent must:
 
 Before claiming ANY work complete:
 1. `npm run build` from root — zero errors.
-2. `npx tsc --noEmit -p apps/api/tsconfig.json` — zero errors.
-3. Tests pass: `npx vitest run` from `apps/player-pwa`.
-4. No `any` types in new code.
-5. No `console.log` in production paths — use NestJS `Logger` / Pino.
-6. No hardcoded strings in UI — all must be i18n keys.
-7. No raw `fetch` in PWA components — always use `lib/fetcher.ts`.
+2. **If API source changed:** `systemctl --user restart koralink-api.service` (or `npm run restart` from `apps/api`). Stale code is the #1 cause of "property X should not exist" 400 errors — the DTO compiles but the running service has old code.
+3. `npx tsc --noEmit -p apps/api/tsconfig.json` — zero errors.
+4. Tests pass: `npx vitest run` from `apps/player-pwa`.
+5. No `any` types in new code.
+6. No `console.log` in production paths — use NestJS `Logger` / Pino.
+7. No hardcoded strings in UI — all must be i18n keys.
+8. No raw `fetch` in PWA components — always use `lib/fetcher.ts`.
 
 ---
 
