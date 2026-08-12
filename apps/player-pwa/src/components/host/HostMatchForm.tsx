@@ -24,8 +24,8 @@ export default function HostMatchForm() {
     const createMatch = useCreateMatch();
 
     /* ── Venue pre-select from query params ─────────── */
-    const venueIdFromQuery = searchParams.get('venue');
-    const venueNameFromQuery = searchParams.get('venueName');
+    const venueIdFromQuery = searchParams?.get('venue');
+    const venueNameFromQuery = searchParams?.get('venueName');
 
     /* ── Mode State ──────────────────────────────── */
     const [mode, setMode] = useState<'koralink' | 'self'>('self');

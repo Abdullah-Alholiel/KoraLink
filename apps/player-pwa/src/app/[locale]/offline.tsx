@@ -17,7 +17,7 @@ const i18n = {
 
 export default function Offline() {
   const pathname = usePathname();
-  const locale = (pathname.split('/')[1] === 'ar' ? 'ar' : 'en') as keyof typeof i18n;
+  const locale = ((pathname ?? '').split('/')[1] === 'ar' ? 'ar' : 'en') as keyof typeof i18n;
   const t = i18n[locale];
 
   return (

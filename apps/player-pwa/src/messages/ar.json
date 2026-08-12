@@ -174,12 +174,8 @@
         "teamDark": "الفريق الأسود",
         "playerProfile": "ملف اللاعب",
         "addToCalendar": "أضف إلى التقويم",
-<<<<<<< Updated upstream
         "share": "مشاركة",
         "linkCopied": "تم نسخ الرابط!"
-=======
-        "share": "مشاركة"
->>>>>>> Stashed changes
     },
     "cancelMatch": {
         "title": "إلغاء المباراة؟",
@@ -380,7 +376,19 @@
         "pitches": "ملاعب",
         "address": "العنوان",
         "amenities": "المرافق",
-        "availablePitches": "الملاعب"
+        "availablePitches": "الملاعب",
+        "venues": "نادي",
+        "venue": "النادي",
+        "owner": "المالك",
+        "availableMatches": "المباريات المتاحة",
+        "viewCalendar": "عرض التقويم",
+        "selectDate": "اختر التاريخ",
+        "backToToday": "العودة لليوم",
+        "noMatches": "لا توجد مباريات في هذا التاريخ",
+        "today": "اليوم",
+        "tomorrow": "غداً",
+        "hostHere": "استضف مباراة هنا",
+        "error": "فشل تحميل النادي"
     },
     "messages": {
         "title": "الرسائل",

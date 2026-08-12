@@ -15,10 +15,10 @@ const RESEND_COOLDOWN = 30; // seconds
 function VerifyContent() {
     const router = useRouter();
     const pathname = usePathname();
-    const locale = pathname.split('/')[1] || 'en';
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('verify');
     const searchParams = useSearchParams();
-    const phone = searchParams.get('phone') || '';
+    const phone = searchParams?.get('phone') || '';
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
     const [error, setError] = useState<string | null>(null);

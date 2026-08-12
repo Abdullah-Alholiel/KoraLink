@@ -10,7 +10,7 @@ import DevLoginBar from '@/components/auth/DevLoginBar';
 export default function LoginPage() {
     const router = useRouter();
     const pathname = usePathname();
-    const locale = pathname.split('/')[1] || 'en';
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('login');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);

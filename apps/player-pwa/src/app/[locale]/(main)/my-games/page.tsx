@@ -12,7 +12,7 @@ import { selectUser, useAppStore } from '@/store/useAppStore';
 export default function MyGamesPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const locale = pathname.split('/')[1] || 'en';
+  const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations();
 
   const { data: matchesApi, isLoading, error, refetch } = useMyMatches();

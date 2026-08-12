@@ -72,4 +72,12 @@ export class GetMatchesDto {
   @Type(() => Number)
   @Min(0)
   max_price?: number;
+
+  @ApiPropertyOptional({
+    description: 'Filter by venue ID',
+    example: 'venue-uuid',
+  })
+  @IsOptional()
+  @IsString()
+  venue_id?: string;
 }

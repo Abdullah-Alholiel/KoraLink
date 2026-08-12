@@ -14,7 +14,7 @@ import { selectUser, useAppStore } from '@/store/useAppStore';
 export default function PlayPage() {
     const pathname = usePathname();
     const t = useTranslations();
-    const locale = pathname.split('/')[1] || 'en';
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filters, setFilters] = useState<PlayFilters>({

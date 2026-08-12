@@ -75,7 +75,7 @@ export default function ProfilePage() {
     const pathname = usePathname();
     const router = useRouter();
     const t = useTranslations();
-    const locale = pathname.split('/')[1] || 'en';
+    const locale = (pathname ?? '').split('/')[1] || 'en';
 
     // ── User data from Zustand store (populated by auth flow) ──
     const storeUser = useAppStore(selectUser);
@@ -202,7 +202,7 @@ export default function ProfilePage() {
                     endText={locale === 'ar' ? t('profile.languageAr') : t('profile.languageEn')}
                     onClick={() => {
                         const newLocale = locale === 'ar' ? 'en' : 'ar';
-                        const newPath = pathname.replace(`/${locale}`, `/${newLocale}`);
+                        const newPath = (pathname ?? "").replace(`/${locale}`, `/${newLocale}`);
                         router.push(newPath);
                     }}
                 />

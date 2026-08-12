@@ -288,42 +288,8 @@ export default function MatchDetailPage({
                                 </button>
                             </div>
 
-<<<<<<< Updated upstream
                             {/* 4. Location / Map */}
                             <div className="mx-5 mt-5 bg-white rounded-2xl shadow-card p-5">
-=======
-                            {/* Action Buttons: Calendar + Share */}
-                            <div className="flex gap-3 mx-5 mt-1 mb-4">
-                                <a
-                                    href={`${env.NEXT_PUBLIC_API_URL}/matches/${id}/calendar?format=ics`}
-                                    download
-                                    className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full py-3 px-4 shadow-card active:scale-[0.98] transition-transform"
-                                >
-                                    <Calendar className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                    <span className="text-sm font-semibold text-brand-black">{t('matchDetail.addToCalendar')}</span>
-                                </a>
-                                <button
-                                    onClick={() => {
-                                        if (typeof navigator !== 'undefined' && navigator.share) {
-                                            navigator.share({
-                                                title: match.title,
-                                                text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
-                                                url: window.location.href,
-                                            }).catch(() => {});
-                                        } else {
-                                            navigator.clipboard?.writeText(window.location.href);
-                                        }
-                                    }}
-                                    className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full py-3 px-4 shadow-card active:scale-[0.98] transition-transform"
-                                >
-                                    <Share2 className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                    <span className="text-sm font-semibold text-brand-black">{t('matchDetail.share')}</span>
-                                </button>
-                            </div>
-
-                            {/* 2. Location / Map */}
-                            <div className="mx-5 bg-white rounded-2xl shadow-card p-5">
->>>>>>> Stashed changes
                                 <LocationMap
                                     venueName={match.venueName}
                                     venueDetails={match.venueDetails || match.location}

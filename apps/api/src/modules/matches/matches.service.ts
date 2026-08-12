@@ -116,7 +116,7 @@ export class MatchesService {
    * returns true when the great-circle distance (metres) is within the radius.
    */
   async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
-    const { lat, lng, radius_km = 10, date, format, gender, max_price } = dto;
+    const { lat, lng, radius_km = 10, date, format, gender, max_price, venue_id } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -165,6 +165,11 @@ export class MatchesService {
       ? sql`AND m.price_per_player::float <= ${max_price}`
       : sql``;
 
+    // ── Venue filter (for club detail screen) ────────────────────────────
+    const venueClause = venue_id
+      ? sql`AND v.id = ${venue_id}::text`
+      : sql``;
+
     // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
     // the SELECT list is fixed, so the cast to NearbyMatchRow[] is safe here.
     const rows = await this.db.execute(sql`
@@ -195,13 +200,13 @@ export class MatchesService {
       INNER JOIN pitches p  ON p.id  = m.pitch_id
       INNER JOIN venues  v  ON v.id  = p.venue_id
       LEFT  JOIN match_players mp ON mp.match_id = m.id
-      WHERE m.status = 'Open'
-        AND m.scheduled_at >= NOW()
+      WHERE (${venue_id ? sql`TRUE` : sql`m.status = 'Open' AND m.scheduled_at >= NOW()`})
         ${geoClause}
         ${dateClause}
         ${formatClause}
         ${genderClause}
         ${priceClause}
+        ${venueClause}
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY m.scheduled_at ASC
       LIMIT 50

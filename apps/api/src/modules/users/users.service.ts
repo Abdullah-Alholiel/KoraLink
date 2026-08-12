@@ -189,8 +189,6 @@ export class UsersService {
       last_message: string;
       venue_name: string;
       venue_city: string;
-      pitch_surface?: string | null;
-      last_message?: string | null;
     }>;
   }
 

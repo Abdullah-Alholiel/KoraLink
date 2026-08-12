@@ -174,12 +174,8 @@
         "teamDark": "Team Dark",
         "playerProfile": "Player Profile",
         "addToCalendar": "Add to Calendar",
-<<<<<<< Updated upstream
         "share": "Share",
         "linkCopied": "Link copied!"
-=======
-        "share": "Share"
->>>>>>> Stashed changes
     },
     "cancelMatch": {
         "title": "Cancel Match?",
@@ -380,7 +376,19 @@
         "pitches": "pitches",
         "address": "Address",
         "amenities": "Amenities",
-        "availablePitches": "Pitches"
+        "availablePitches": "Pitches",
+        "venues": "venues",
+        "venue": "Venue",
+        "owner": "Owner",
+        "availableMatches": "Available Matches",
+        "viewCalendar": "View Calendar",
+        "selectDate": "Select Date",
+        "backToToday": "Back to today",
+        "noMatches": "No matches on this date",
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "hostHere": "Host a Match Here",
+        "error": "Failed to load venue"
     },
     "messages": {
         "title": "Messages",

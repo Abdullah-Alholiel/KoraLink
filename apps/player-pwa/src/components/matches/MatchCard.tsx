@@ -14,7 +14,7 @@ interface MatchCardProps {
 
 export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const pathname = usePathname();
-    const locale = pathname.split('/')[1] || 'en';
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations();
 
     const spotsLeft = match.totalSpots - match.filledSpots;
