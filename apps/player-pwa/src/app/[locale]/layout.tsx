@@ -55,6 +55,8 @@ export const viewport: Viewport = {
 
 const locales = ['ar', 'en'] as const;
 
+export const dynamic = 'force-dynamic';
+
 export default async function RootLayout({
   children,
   params,
