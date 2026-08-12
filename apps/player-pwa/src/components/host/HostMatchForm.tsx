@@ -39,6 +39,16 @@ export default function HostMatchForm() {
     const [matchType, setMatchType] = useState<MatchTypeValue>('Casual');
     const [genderRule, setGenderRule] = useState<GenderRule>('Men Only');
     const [duration, setDuration] = useState(60);
+
+    /** Compute match duration in minutes from a slot's start_time and end_time.
+     *  Handles overnight slots (end < start) by wrapping around 24h. */
+    const computeSlotDuration = (slot: PitchSlotApi): number => {
+        const [startH, startM] = slot.start_time.split(':').map(Number);
+        const [endH, endM] = slot.end_time.split(':').map(Number);
+        let mins = (endH * 60 + endM) - (startH * 60 + startM);
+        if (mins <= 0) mins += 24 * 60;
+        return mins;
+    };
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
 
@@ -181,6 +191,7 @@ export default function HostMatchForm() {
                                         if (slot) {
                                             setDate(slot.slot_date);
                                             setTime(slot.start_time.slice(0, 5)); // "HH:MM" from "HH:MM:SS"
+                                            setDuration(computeSlotDuration(slot)); // lock duration to slot window
                                         } else {
                                             setDate('');
                                             setTime('');
@@ -240,6 +251,7 @@ export default function HostMatchForm() {
                     time={time} setTime={setTime}
                     duration={duration} setDuration={setDuration}
                     readOnlyDateTime={mode === 'koralink' && !!selectedSlot}
+                    readOnlyDuration={mode === 'koralink' && !!selectedSlot}
                 />
             </div>
 

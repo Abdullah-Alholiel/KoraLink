@@ -43,6 +43,8 @@ export interface MatchDetailsFormProps {
     setDuration: (v: number) => void;
     /** When true, date & time come from a slot — section is locked */
     readOnlyDateTime?: boolean;
+    /** When true, duration is computed from the slot — section is locked */
+    readOnlyDuration?: boolean;
 }
 
 export default function MatchDetailsForm({
@@ -54,6 +56,7 @@ export default function MatchDetailsForm({
     time, setTime,
     duration, setDuration,
     readOnlyDateTime = false,
+    readOnlyDuration = false,
 }: MatchDetailsFormProps) {
     const locale = useLocale();
     const t = useTranslations();
@@ -220,21 +223,36 @@ export default function MatchDetailsForm({
                 <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
                     {t('host.duration')}
                 </p>
-                <div className="flex gap-2">
-                    {[30, 45, 60, 90, 120].map((m) => (
-                        <button
-                            key={m}
-                            onClick={() => setDuration(m)}
-                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
-                                duration === m
-                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
-                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                            }`}
-                        >
-                            {m}m
-                        </button>
-                    ))}
-                </div>
+                {readOnlyDuration ? (
+                    /* In koralink mode: duration is locked from the selected slot */
+                    <div className="bg-brand-green/5 rounded-xl border border-brand-green/20 p-3.5 flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-brand-green flex-shrink-0" strokeWidth={2} />
+                        <div>
+                            <p className="text-sm font-bold text-brand-black">
+                                {duration} {t('host.minutes')}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                {t('host.durationLocked')}
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex gap-2">
+                        {[30, 45, 60, 90, 120].map((m) => (
+                            <button
+                                key={m}
+                                onClick={() => setDuration(m)}
+                                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
+                                    duration === m
+                                        ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                {m}m
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
         </>
     );

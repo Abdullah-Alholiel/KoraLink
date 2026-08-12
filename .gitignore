@@ -10,6 +10,11 @@ coverage
 .next/
 out/
 
+# next-pwa build artifacts (regenerated on every build — committing them
+# causes stale service-worker precache hashes that break the installed PWA)
+apps/player-pwa/public/sw.js
+apps/player-pwa/public/workbox-*.js
+
 # production
 build
 dist

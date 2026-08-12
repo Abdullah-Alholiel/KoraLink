@@ -98,6 +98,10 @@ export function usePushNotifications() {
     isSubscribing,
     subscribe,
     unsubscribe,
-    isSupported: 'Notification' in window && 'serviceWorker' in navigator,
+    isSupported:
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator,
   };
 }
