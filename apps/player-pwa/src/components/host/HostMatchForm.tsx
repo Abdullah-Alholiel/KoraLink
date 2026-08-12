@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
@@ -18,9 +18,14 @@ import type { PitchSlotApi } from '@/hooks/usePitchSlots';
 
 export default function HostMatchForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const locale = useLocale();
     const t = useTranslations();
     const createMatch = useCreateMatch();
+
+    /* ── Venue pre-select from query params ─────────── */
+    const venueIdFromQuery = searchParams.get('venue');
+    const venueNameFromQuery = searchParams.get('venueName');
 
     /* ── Mode State ──────────────────────────────── */
     const [mode, setMode] = useState<'koralink' | 'self'>('self');
@@ -28,11 +33,36 @@ export default function HostMatchForm() {
 
     /* ── Form State ─────────────────────────────── */
     const [showVenuePicker, setShowVenuePicker] = useState(false);
-    const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(null);
+    const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(() => {
+        if (venueIdFromQuery) {
+            return {
+                id: venueIdFromQuery,
+                name: venueNameFromQuery || '',
+                city: '',
+                address: '',
+                amenities: [],
+                rating: 0,
+                is_approved: false,
+                is_koralink_partner: false,
+                distance_m: null,
+                owner_id: '',
+                owner_name: null,
+                pitch_count: 0,
+            };
+        }
+        return null;
+    });
     const [selectedPitch, setSelectedPitch] = useState<PitchApi | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<PitchSlotApi | null>(null);
 
     const { data: venueDetail } = useVenue(selectedVenue?.id ?? null);
+
+    // Sync venueDetail into selectedVenue when pre-selected venue loads
+    useEffect(() => {
+        if (venueDetail && venueIdFromQuery) {
+            setSelectedVenue(venueDetail);
+        }
+    }, [venueDetail, venueIdFromQuery]);
 
     const [title, setTitle] = useState('');
     const [format, setFormat] = useState<Format>('7v7');

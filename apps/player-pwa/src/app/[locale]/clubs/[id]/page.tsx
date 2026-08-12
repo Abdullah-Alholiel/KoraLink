@@ -80,6 +80,37 @@ export default function ClubPage() {
               <p className="text-sm text-gray-600">{venue.address}</p>
             </div>
 
+            {/* Amenities */}
+            {(() => {
+              const amenities = Array.isArray(venue.amenities) ? (venue.amenities as string[]) : [];
+              if (amenities.length === 0) return null;
+              const AMENITY_ICONS: Record<string, string> = {
+                parking: '🅿️',
+                changing_rooms: '👕',
+                floodlights: '💡',
+                cafe: '☕',
+                water_cooler: '💧',
+                gym: '🏋️',
+              };
+              return (
+                <div className="bg-white mx-4 rounded-2xl shadow-card p-4 mt-3 relative z-10">
+                  <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-2">
+                    {t('clubs.amenities')}
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto scroll-container pb-1">
+                    {amenities.map((code) => (
+                      <span
+                        key={code}
+                        className="text-xs px-3 py-1.5 rounded-full bg-brand-green/10 text-brand-green font-medium whitespace-nowrap flex-shrink-0"
+                      >
+                        {AMENITY_ICONS[code] || code} {code.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Pitches */}
             {venue.pitches && venue.pitches.length > 0 && (
               <div className="px-5 pt-6 pb-4">
@@ -113,7 +144,7 @@ export default function ClubPage() {
             {/* Host CTA */}
             <div className="px-5 pt-2 pb-32">
               <Link
-                href={`/${locale}/host`}
+                href={`/${locale}/host?venue=${venue.id}&venueName=${encodeURIComponent(venue.name)}`}
                 className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
                   flex items-center justify-center gap-2
                   shadow-[0_4px_20px_rgba(37,65,50,0.4)]

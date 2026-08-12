@@ -174,8 +174,12 @@
         "teamDark": "الفريق الأسود",
         "playerProfile": "ملف اللاعب",
         "addToCalendar": "أضف إلى التقويم",
+<<<<<<< Updated upstream
         "share": "مشاركة",
         "linkCopied": "تم نسخ الرابط!"
+=======
+        "share": "مشاركة"
+>>>>>>> Stashed changes
     },
     "cancelMatch": {
         "title": "إلغاء المباراة؟",
@@ -375,7 +379,8 @@
         "closed": "مغلق",
         "pitches": "ملاعب",
         "address": "العنوان",
-        "availablePitches": "الملاعب المتاحة"
+        "amenities": "المرافق",
+        "availablePitches": "الملاعب"
     },
     "messages": {
         "title": "الرسائل",
@@ -383,6 +388,7 @@
         "directMessages": "الرسائل المباشرة",
         "noMessages": "لا توجد رسائل بعد",
         "noMessagesDescription": "انضم لمباراة لبدء المحادثة مع اللاعبين.",
+        "noMessagesYet": "لا توجد رسائل بعد",
         "typeMessage": "اكتب رسالة…",
         "send": "إرسال",
         "online": "متصل",

@@ -184,6 +184,7 @@ export default function ClubsPage() {
                                         <span className="text-gray-300">|</span>
                                         <span className="text-xs text-gray-400">
                                             {venue.pitch_count} {t('clubs.pitches')}
+<<<<<<< Updated upstream
                                             </span>
                                             </div>
 
@@ -201,6 +202,46 @@ export default function ClubsPage() {
                                             </div>
                                             )}
                                             </div>
+=======
+                                        </span>
+                                    </div>
+
+                                    {/* Amenities badges */}
+                                    {(() => {
+                                        const amenities = Array.isArray(venue.amenities)
+                                            ? (venue.amenities as string[])
+                                            : [];
+                                        if (amenities.length === 0) return null;
+                                        const AMENITY_ICONS: Record<string, string> = {
+                                            parking: '🅿️',
+                                            changing_rooms: '👕',
+                                            floodlights: '💡',
+                                            cafe: '☕',
+                                            water_cooler: '💧',
+                                            gym: '🏋️',
+                                        };
+                                        const shown = amenities.slice(0, 3);
+                                        const overflow = amenities.length - 3;
+                                        return (
+                                            <div className="flex items-center gap-1 mt-2 flex-wrap">
+                                                {shown.map((code) => (
+                                                    <span
+                                                        key={code}
+                                                        className="text-[9px] px-1.5 py-px rounded-full bg-gray-100 text-gray-500 font-medium"
+                                                    >
+                                                        {AMENITY_ICONS[code] || code}
+                                                    </span>
+                                                ))}
+                                                {overflow > 0 && (
+                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                        +{overflow}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+>>>>>>> Stashed changes
 
                                 {/* Avatar + Book */}
                                 <div className="flex flex-col items-end gap-2 ms-3">

@@ -168,6 +168,7 @@ export default function WalletPage() {
                         key={action.label}
                         onClick={action.onClick}
                         disabled={!action.active}
+                        title={!action.active ? t('wallet.comingSoon') : undefined}
                         className="flex flex-col items-center gap-2 disabled:opacity-50"
                     >
                         <div
@@ -181,7 +182,11 @@ export default function WalletPage() {
                         </div>
                         <span className="text-xs text-gray-600 font-medium">{action.label}</span>
                         {!action.active && (
+<<<<<<< Updated upstream
                             <span className="text-[9px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 mt-0.5">
+=======
+                            <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+>>>>>>> Stashed changes
                                 {t('wallet.comingSoon')}
                             </span>
                         )}
@@ -194,9 +199,17 @@ export default function WalletPage() {
 
             {/* ── Recent Activity with 5 UX states ── */}
             <div className="px-4 pt-4 pb-4">
+<<<<<<< Updated upstream
                 <h2 className="text-base font-bold text-brand-black mb-4">
                     {t('wallet.transactions')}
                 </h2>
+=======
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-base font-bold text-brand-black">
+                        {t('wallet.transactions')}
+                    </h2>
+                </div>
+>>>>>>> Stashed changes
 
                 {/* Loading state */}
                 {historyLoading && (

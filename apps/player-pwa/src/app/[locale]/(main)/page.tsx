@@ -2,7 +2,11 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
+<<<<<<< Updated upstream
 import { MapPin, AlertCircle, WifiOff } from 'lucide-react';
+=======
+import { AlertCircle, WifiOff, MapPin } from 'lucide-react';
+>>>>>>> Stashed changes
 import { useMatches } from '@/hooks/useMatches';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -26,13 +30,19 @@ export default function CommunityFeedPage() {
             )}
 
             {/* ── Header ────────────────────────────── */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-4">
-                <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                <div>
+                    <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
+                    <p className="text-sm text-gray-400 mt-1">{t('nearby')}</p>
+                </div>
             </div>
 
             {/* ── Loading State ─────────────────────── */}
             {isLoading && (
                 <div className="space-y-3 px-4" role="status" aria-label={t('loading')}>
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
+                    </div>
                     {[1, 2, 3, 4].map((i) => (
                         <div key={i} className="bg-white rounded-2xl shadow-card p-4 animate-pulse">
                             <div className="flex items-start gap-3">
@@ -66,20 +76,32 @@ export default function CommunityFeedPage() {
             {/* ── Empty State ──────────────────────── */}
             {!isLoading && !isError && matches.length === 0 && (
                 <div className="mx-4 rounded-2xl bg-white shadow-card p-6 text-center">
+<<<<<<< Updated upstream
                     <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
                         <MapPin className="w-7 h-7 text-gray-400" strokeWidth={1.5} />
+=======
+                    <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mx-auto mb-3">
+                        <MapPin className="w-7 h-7 text-brand-green" strokeWidth={1.5} />
+>>>>>>> Stashed changes
                     </div>
                     <h2 className="text-sm font-bold text-brand-black">{t('empty')}</h2>
                     <p className="text-sm text-gray-500 mt-1">{t('emptyDescription')}</p>
                     <Link
                         href={`/${locale}/play`}
+<<<<<<< Updated upstream
                         className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 bg-brand-green text-white text-sm font-medium rounded-full hover:bg-brand-green/90 transition-colors"
                     >
+=======
+                        className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 bg-brand-green text-white text-sm font-medium rounded-full hover:bg-brand-green/90 transition-colors active:scale-95"
+                    >
+                        <MapPin className="w-4 h-4" />
+>>>>>>> Stashed changes
                         {t('goToPlay')}
                     </Link>
                 </div>
             )}
 
+<<<<<<< Updated upstream
             {/* ── Populated: Nearby Matches ────────── */}
             {!isLoading && !isError && matches.length > 0 && (
                 <>
@@ -98,6 +120,28 @@ export default function CommunityFeedPage() {
                                 .join('')
                                 .slice(0, 2);
 
+=======
+            {/* ── Populated: Section Header + Match Cards ── */}
+            {!isLoading && !isError && matches.length > 0 && (
+                <>
+                    {/* Section Header */}
+                    <div className="px-4 pt-2 pb-3">
+                        <h2 className="text-base font-bold text-brand-black">
+                            {t('nearbyMatches')}
+                        </h2>
+                    </div>
+
+                    <div className="space-y-3 px-4">
+                        {matches.map((match) => {
+                            const spotsLeft = match.totalSpots - match.filledSpots;
+                            const isUrgent = spotsLeft <= 2 && spotsLeft > 0;
+                            const initials = match.organizer.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .slice(0, 2);
+
+>>>>>>> Stashed changes
                             return (
                                 <Link
                                     key={match.id}
@@ -105,10 +149,18 @@ export default function CommunityFeedPage() {
                                     className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
+<<<<<<< Updated upstream
+=======
+                                        {/* Avatar */}
+>>>>>>> Stashed changes
                                         <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
                                             <span className="text-sm font-bold text-gray-500">{initials}</span>
                                         </div>
                                         <div className="flex-1 min-w-0">
+<<<<<<< Updated upstream
+=======
+                                            {/* Organizer + time */}
+>>>>>>> Stashed changes
                                             <div className="flex items-center justify-between">
                                                 <h3 className="text-sm font-bold text-brand-black">
                                                     {match.organizer.name}
@@ -117,10 +169,18 @@ export default function CommunityFeedPage() {
                                                     {match.date} • {match.time}
                                                 </span>
                                             </div>
+<<<<<<< Updated upstream
+=======
+                                            {/* Match info */}
+>>>>>>> Stashed changes
                                             <p className="text-sm text-gray-600 mt-1">
                                                 <strong>{match.title}</strong>{' '}
                                                 <span className="text-gray-400">{t('at')} {match.venueName}</span>
                                             </p>
+<<<<<<< Updated upstream
+=======
+                                            {/* Spots / format */}
+>>>>>>> Stashed changes
                                             <div className="flex items-center gap-2 mt-2">
                                                 <span
                                                     className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${

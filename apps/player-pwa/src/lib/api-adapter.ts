@@ -30,6 +30,7 @@ export interface NearbyMatchApi {
   pitch_name: string;
   pitch_size?: string;
   pitch_surface?: string;
+  last_message?: string;
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
@@ -267,7 +268,11 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     comments: [],
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
+<<<<<<< Updated upstream
     lastMessage: row.last_message ?? null,
+=======
+    lastMessage: row.last_message ?? '',
+>>>>>>> Stashed changes
   };
 }
 

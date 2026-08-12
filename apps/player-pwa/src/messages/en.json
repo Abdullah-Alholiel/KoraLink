@@ -174,8 +174,12 @@
         "teamDark": "Team Dark",
         "playerProfile": "Player Profile",
         "addToCalendar": "Add to Calendar",
+<<<<<<< Updated upstream
         "share": "Share",
         "linkCopied": "Link copied!"
+=======
+        "share": "Share"
+>>>>>>> Stashed changes
     },
     "cancelMatch": {
         "title": "Cancel Match?",
@@ -375,7 +379,8 @@
         "closed": "Closed",
         "pitches": "pitches",
         "address": "Address",
-        "availablePitches": "Available Pitches"
+        "amenities": "Amenities",
+        "availablePitches": "Pitches"
     },
     "messages": {
         "title": "Messages",
@@ -383,6 +388,7 @@
         "directMessages": "Direct Messages",
         "noMessages": "No messages yet",
         "noMessagesDescription": "Join a match to start chatting with players.",
+        "noMessagesYet": "No messages yet",
         "typeMessage": "Type a message…",
         "send": "Send",
         "online": "Online",

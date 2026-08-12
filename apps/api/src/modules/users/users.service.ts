@@ -185,6 +185,8 @@ export class UsersService {
       host_avatar: string | null;
       pitch_id: string;
       pitch_name: string;
+      pitch_surface: string;
+      last_message: string;
       venue_name: string;
       venue_city: string;
       pitch_surface?: string | null;

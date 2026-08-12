@@ -50,8 +50,13 @@ export interface Match {
     isJoined?: boolean;
     /** True if current user is the match host. */
     isUserHost?: boolean;
+<<<<<<< Updated upstream
     /** Last chat message preview (from Messages API). */
     lastMessage?: string | null;
+=======
+    /** Preview of the last chat message for the match (from API). */
+    lastMessage?: string;
+>>>>>>> Stashed changes
 }
 
 export interface RosterPlayer {
