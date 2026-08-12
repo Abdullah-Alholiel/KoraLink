@@ -143,6 +143,8 @@ export class UsersService {
         p.id AS pitch_id,
         p.name AS pitch_name,
         p.size AS pitch_size,
+        p.surface_type AS pitch_surface,
+        COALESCE((SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1), '') AS last_message,
         v.name AS venue_name,
         v.city AS venue_city
       FROM match_players my
@@ -185,7 +187,72 @@ export class UsersService {
       pitch_name: string;
       venue_name: string;
       venue_city: string;
+      pitch_surface?: string | null;
+      last_message?: string | null;
     }>;
+  }
+
+  /**
+   * Get unified discussions list — all matches the user is in, with
+   * last message preview and unread count. Foundation for the Messages screen.
+   */
+  async getMyDiscussions(userId: string) {
+    const rows = await this.db.execute(sql`
+      SELECT
+        m.id,
+        'match'::text AS type,
+        m.title,
+        m.status,
+        m.scheduled_at,
+        u.full_name AS host_name,
+        u.avatar_url AS host_avatar,
+        (SELECT COUNT(*) FROM match_players mp2 WHERE mp2.match_id = m.id)::int AS participant_count,
+        (SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message,
+        (SELECT mm.created_at FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message_at,
+        (SELECT u2.full_name FROM match_messages mm INNER JOIN users u2 ON u2.id = mm.user_id WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message_sender_name
+      FROM match_players my
+      INNER JOIN matches m ON m.id = my.match_id
+      INNER JOIN users u ON u.id = m.host_id
+      WHERE my.user_id = ${userId}
+        AND m.status NOT IN ('Cancelled')
+      ORDER BY
+        COALESCE(
+          (SELECT mm.created_at FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1),
+          m.scheduled_at
+        ) DESC
+      LIMIT 30
+    `);
+
+    return {
+      discussions: (rows as unknown as Array<{
+        id: string;
+        type: string;
+        title: string;
+        status: string;
+        scheduled_at: Date;
+        host_name: string | null;
+        host_avatar: string | null;
+        participant_count: number;
+        last_message: string | null;
+        last_message_at: Date | null;
+        last_message_sender_name: string | null;
+      }>).map((r) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        matchStatus: r.status,
+        scheduledAt: r.scheduled_at,
+        hostName: r.host_name,
+        hostAvatar: r.host_avatar,
+        participantCount: r.participant_count,
+        lastMessage: r.last_message,
+        lastMessageAt: r.last_message_at,
+        lastMessageSenderName: r.last_message_sender_name,
+        unreadCount: 0, // stub — future feature
+      })),
+      total: rows.length,
+      hasMore: rows.length >= 30,
+    };
   }
 
   /**

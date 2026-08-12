@@ -384,6 +384,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   matchPlayers: many(match_players),
   transactions: many(transactions),
   messages: many(match_messages),
+  conversationParticipants: many(conversation_participants),
+  sentPersonalMessages: many(personal_messages, { relationName: 'SentPersonalMessages' }),
 }));
 
 export const venuesRelations = relations(venues, ({ one, many }) => ({
@@ -513,6 +515,100 @@ export const push_subscriptions = pgTable(
 export const pushSubscriptionsRelations = relations(push_subscriptions, ({ one }) => ({
   user: one(users, {
     fields: [push_subscriptions.user_id],
+    references: [users.id],
+  }),
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personal Messages (foundation for future direct-message feature)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+);
+
+export const conversation_participants = pgTable(
+  'conversation_participants',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    conversation_id: varchar('conversation_id', { length: 36 })
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    joined_at: timestamp('joined_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('conv_participants_unique_idx').on(t.conversation_id, t.user_id),
+    index('conv_participants_user_idx').on(t.user_id),
+  ],
+);
+
+export const personal_messages = pgTable(
+  'personal_messages',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    conversation_id: varchar('conversation_id', { length: 36 })
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    sender_id: varchar('sender_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('personal_messages_conv_idx').on(t.conversation_id),
+    index('personal_messages_conv_created_idx').on(t.conversation_id, t.created_at),
+  ],
+);
+
+// ── Personal Messages Relations ─────────────────────────────────────────────
+
+export const conversationsRelations = relations(conversations, ({ many }) => ({
+  participants: many(conversation_participants),
+  messages: many(personal_messages),
+}));
+
+export const conversationParticipantsRelations = relations(conversation_participants, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [conversation_participants.conversation_id],
+    references: [conversations.id],
+  }),
+  user: one(users, {
+    fields: [conversation_participants.user_id],
+    references: [users.id],
+  }),
+}));
+
+export const personalMessagesRelations = relations(personal_messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [personal_messages.conversation_id],
+    references: [conversations.id],
+  }),
+  sender: one(users, {
+    fields: [personal_messages.sender_id],
     references: [users.id],
   }),
 }));

@@ -273,6 +273,18 @@ export class MatchesService {
             },
           },
         },
+        messages: {
+          with: {
+            user: {
+              columns: {
+                id: true,
+                full_name: true,
+                avatar_url: true,
+              },
+            },
+          },
+          orderBy: (msg, { asc }) => [asc(msg.created_at)],
+        },
       },
     });
 

@@ -15,11 +15,13 @@ import {
     Play,
     CheckCircle2,
     Loader2,
+    ChevronRight,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
+import { env } from '@/env.mjs';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import Toast from '@/components/layout/Toast';
@@ -55,6 +57,7 @@ export default function MatchDetailPage({
     const completeMatch = useCompleteMatch();
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
+    const showToast = useAppStore((s) => s.showToast);
 
     // Derived join state from match data — isJoined/isUserHost now set by
     // adaptMatchDetail from the roster, populated consistently with MatchCard.
@@ -242,21 +245,91 @@ export default function MatchDetailPage({
                                 />
                             </div>
 
-                            {/* View Match Rules */}
-                            <div className="flex items-center justify-center gap-2 py-5">
-                                <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
-                                    {t('matchDetail.viewRules')}
+                            {/* 2. Team Lineup — who's playing (most important visual) */}
+                            <div className="px-5 pt-5">
+                                <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
+                            </div>
+
+                            {/* 3. Chat / Discussion Preview */}
+                            <div className="mx-5 mt-5">
+                                <button
+                                    onClick={() => setShowChatSheet(true)}
+                                    className="w-full bg-white rounded-2xl shadow-card p-4 text-start hover:bg-gray-50/80 active:scale-[0.99] transition-all"
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <MessageSquare className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                                            <h3 className="text-sm font-bold text-brand-black">{t('matchDetail.matchChat')}</h3>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs text-brand-green font-medium">{t('matchDetail.openChat')}</span>
+                                            <ChevronRight className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                                        </div>
+                                    </div>
+                                    {match.comments.length > 0 ? (
+                                        <div className="space-y-1.5">
+                                            {match.comments.slice(-2).reverse().map((c) => (
+                                                <div key={c.id} className="flex items-start gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-brand-green/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                        <span className="text-[9px] font-bold text-brand-green">
+                                                            {c.userName.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="text-xs font-semibold text-gray-700">{c.userName}</span>
+                                                        <span className="text-xs text-gray-400 ms-1">{c.text}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-400 mt-1">{t('messages.noMessages')}</p>
+                                    )}
                                 </button>
                             </div>
 
-                            {/* 2. Location / Map */}
-                            <div className="mx-5 bg-white rounded-2xl shadow-card p-5">
+                            {/* 4. Location / Map */}
+                            <div className="mx-5 mt-5 bg-white rounded-2xl shadow-card p-5">
                                 <LocationMap
                                     venueName={match.venueName}
                                     venueDetails={match.venueDetails || match.location}
                                     location={match.location}
                                 />
+                            </div>
+
+                            {/* Calendar + Share Actions */}
+                            <div className="flex gap-3 mx-5 mt-4">
+                                <a
+                                    href={`${env.NEXT_PUBLIC_API_URL}/matches/${id}/calendar?format=ics`}
+                                    download
+                                    className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full shadow-card py-3 text-sm font-semibold text-brand-black hover:bg-gray-50 active:scale-[0.98] transition-all"
+                                >
+                                    <Calendar className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                                    {t('matchDetail.addToCalendar')}
+                                </a>
+                                <button
+                                    onClick={() => {
+                                        const shareText = `⚽ ${match.title}\n${match.date} at ${match.time}\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}`;
+                                        if (navigator.share) {
+                                            navigator.share({ title: match.title, text: shareText, url: window.location.href });
+                                        } else {
+                                            navigator.clipboard?.writeText(`${shareText}\n${window.location.href}`);
+                                            showToast(t('matchDetail.linkCopied'), 'success');
+                                        }
+                                    }}
+                                    className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full shadow-card py-3 text-sm font-semibold text-brand-black hover:bg-gray-50 active:scale-[0.98] transition-all"
+                                >
+                                    <Share2 className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                                    {t('matchDetail.share')}
+                                </button>
+                            </div>
+
+                            {/* 5. View Match Rules */}
+                            <div className="flex items-center justify-center gap-2 py-4">
+                                <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
+                                <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
+                                    {t('matchDetail.viewRules')}
+                                </button>
                             </div>
 
                             {/* Player of the Match — voting/results (completed matches only) */}
@@ -272,11 +345,6 @@ export default function MatchDetailPage({
                                     currentUserId={currentUserId}
                                 />
                             )}
-
-                            {/* 3. Team Lineup */}
-                            <div className="px-5 pt-6">
-                                <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
-                            </div>
 
                             {/* Leave Match Button */}
                             {!isUserHost && (

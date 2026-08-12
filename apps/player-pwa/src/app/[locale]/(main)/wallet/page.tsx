@@ -180,6 +180,11 @@ export default function WalletPage() {
                             <action.icon className="w-6 h-6" strokeWidth={1.5} />
                         </div>
                         <span className="text-xs text-gray-600 font-medium">{action.label}</span>
+                        {!action.active && (
+                            <span className="text-[9px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 mt-0.5">
+                                {t('wallet.comingSoon')}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -189,14 +194,9 @@ export default function WalletPage() {
 
             {/* ── Recent Activity with 5 UX states ── */}
             <div className="px-4 pt-4 pb-4">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-bold text-brand-black">
-                        {t('wallet.transactions')}
-                    </h2>
-                    <button className="text-sm font-medium text-gray-500 border border-gray-200 rounded-full px-3 py-1">
-                        {t('common.seeAll')}
-                    </button>
-                </div>
+                <h2 className="text-base font-bold text-brand-black mb-4">
+                    {t('wallet.transactions')}
+                </h2>
 
                 {/* Loading state */}
                 {historyLoading && (

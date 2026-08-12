@@ -184,9 +184,23 @@ export default function ClubsPage() {
                                         <span className="text-gray-300">|</span>
                                         <span className="text-xs text-gray-400">
                                             {venue.pitch_count} {t('clubs.pitches')}
-                                        </span>
-                                    </div>
-                                </div>
+                                            </span>
+                                            </div>
+
+                                            {/* Amenities badges */}
+                                            {Array.isArray(venue.amenities) && (venue.amenities as string[]).length > 0 && (
+                                            <div className="flex items-center gap-1 mt-2 flex-wrap">
+                                            {(venue.amenities as string[]).slice(0, 3).map((a) => (
+                                                <span key={a} className="text-[9px] bg-gray-50 rounded-full px-2 py-0.5 text-gray-600">
+                                                    {a === 'parking' ? '🅿️' : a === 'changing_rooms' ? '👕' : a === 'floodlights' ? '💡' : a === 'cafe' ? '☕' : a === 'water_cooler' ? '💧' : a === 'gym' ? '🏋️' : a}
+                                                </span>
+                                            ))}
+                                            {(venue.amenities as string[]).length > 3 && (
+                                                <span className="text-[9px] text-gray-400">+{(venue.amenities as string[]).length - 3}</span>
+                                            )}
+                                            </div>
+                                            )}
+                                            </div>
 
                                 {/* Avatar + Book */}
                                 <div className="flex flex-col items-end gap-2 ms-3">

@@ -59,6 +59,14 @@ export class UsersController {
     return this.usersService.getMyMatches(user.sub);
   }
 
+  // ── GET /users/me/discussions ────────────────────────────
+  @Get('me/discussions')
+  @ApiOperation({ summary: 'Get unified discussion list for Messages screen' })
+  @ApiOkResponse({ description: 'Discussions with last message preview.' })
+  getMyDiscussions(@CurrentUser() user: { sub: string }) {
+    return this.usersService.getMyDiscussions(user.sub);
+  }
+
   // ── PATCH /users/me ────────────────────────────────────
   @Patch('me')
   @ApiOperation({ summary: 'Update authenticated user profile' })

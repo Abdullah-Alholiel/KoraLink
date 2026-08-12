@@ -33,6 +33,7 @@ export interface NearbyMatchApi {
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
+  last_message?: string | null;
 }
 
 /** Shape returned by GET /matches/:id — Drizzle findFirst with relations */
@@ -266,6 +267,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     comments: [],
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
+    lastMessage: row.last_message ?? null,
   };
 }
 

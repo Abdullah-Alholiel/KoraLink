@@ -50,6 +50,8 @@ export interface Match {
     isJoined?: boolean;
     /** True if current user is the match host. */
     isUserHost?: boolean;
+    /** Last chat message preview (from Messages API). */
+    lastMessage?: string | null;
 }
 
 export interface RosterPlayer {
@@ -121,3 +123,20 @@ export interface NavItem {
 
 export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type MatchGender = 'men' | 'women' | 'mixed';
+
+// ─── Discussion (Messages screen) ────────────────────
+
+export interface Discussion {
+    id: string;
+    type: 'match' | 'personal';
+    title: string;
+    avatarUrl: string | null;
+    avatarInitials: string;
+    lastMessage: string | null;
+    lastMessageAt: string | null;
+    lastMessageSenderName: string | null;
+    unreadCount: number;
+    matchStatus?: Match['status'];
+    participantCount?: number;
+    isOnline?: boolean;
+}

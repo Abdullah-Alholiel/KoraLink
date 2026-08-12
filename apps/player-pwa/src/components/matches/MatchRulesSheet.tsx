@@ -65,6 +65,17 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
             );
           })}
         </div>
+
+        {/* Bottom CTA */}
+        <div className="px-5 pb-8 pt-2">
+          <button
+            onClick={onClose}
+            className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
+              shadow-[0_4px_20px_rgba(37,65,50,0.4)] active:scale-[0.98] transition-transform"
+          >
+            {t('matchRules.gotIt')}
+          </button>
+        </div>
       </div>
     </>
   );

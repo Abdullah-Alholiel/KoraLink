@@ -142,6 +142,8 @@
         "joinMatch": "Join Match",
         "joined": "You're In",
         "viewRules": "View Match Rules",
+        "matchChat": "Match Chat",
+        "openChat": "Open Chat",
         "team": "Team",
         "attending": "Attending",
         "latestDiscussion": "Latest Discussion",
@@ -170,7 +172,10 @@
         "completeMatch": "End Match",
         "teamWhite": "Team White",
         "teamDark": "Team Dark",
-        "playerProfile": "Player Profile"
+        "playerProfile": "Player Profile",
+        "addToCalendar": "Add to Calendar",
+        "share": "Share",
+        "linkCopied": "Link copied!"
     },
     "cancelMatch": {
         "title": "Cancel Match?",
@@ -343,7 +348,8 @@
         "today": "Today",
         "yesterday": "Yesterday",
         "earlier": "Earlier",
-        "invalidAmount": "Please enter a valid amount"
+        "invalidAmount": "Please enter a valid amount",
+        "comingSoon": "Coming soon"
     },
     "clubs": {
         "title": "Clubs",
@@ -396,11 +402,15 @@
         "upcoming": "Upcoming",
         "past": "Past",
         "discussions": "discussions",
+        "noMessagesYet": "No messages yet",
         "open": "Open",
         "full": "Full",
         "live": "Live",
         "cancelled": "Cancelled",
-        "spots": "spots"
+        "spots": "spots",
+        "noDiscussions": "No discussions yet",
+        "noDiscussionsDescription": "Join or host a match to start chatting with players!",
+        "older": "Older"
     },
     "feed": {
         "title": "Community Feed",
@@ -415,7 +425,9 @@
         "at": "at",
         "nearby": "nearby",
         "details": "Details",
-        "onlineIndicator": "online"
+        "onlineIndicator": "online",
+        "nearbyMatches": "Nearby Matches",
+        "goToPlay": "Discover Matches"
     },
     "payment": {
         "title": "Checkout",
@@ -439,7 +451,8 @@
         "substitutions": { "title": "Substitutions", "body": "Unlimited rolling substitutions. Player must exit before substitute enters." },
         "equipment": { "title": "Equipment", "body": "Moulded studs or turf boots only. No metal studs. Shin pads mandatory." },
         "noShow": { "title": "No-Show Policy", "body": "No-show players will be penalized. Repeated no-shows may result in account suspension." },
-        "refund": { "title": "Refund Policy", "body": "Full refund if cancelled 2+ hours before match. No refund within 2 hours of kick-off." }
+        "refund": { "title": "Refund Policy", "body": "Full refund if cancelled 2+ hours before match. No refund within 2 hours of kick-off." },
+        "gotIt": "Got It"
     },
     "myGames": {
         "title": "My Games",

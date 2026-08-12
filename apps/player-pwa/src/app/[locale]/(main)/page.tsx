@@ -2,7 +2,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
-import { Rss, AlertCircle, WifiOff, Plus } from 'lucide-react';
+import { MapPin, AlertCircle, WifiOff } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -67,88 +67,90 @@ export default function CommunityFeedPage() {
             {!isLoading && !isError && matches.length === 0 && (
                 <div className="mx-4 rounded-2xl bg-white shadow-card p-6 text-center">
                     <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
-                        <Rss className="w-7 h-7 text-gray-400" strokeWidth={1.5} />
+                        <MapPin className="w-7 h-7 text-gray-400" strokeWidth={1.5} />
                     </div>
                     <h2 className="text-sm font-bold text-brand-black">{t('empty')}</h2>
                     <p className="text-sm text-gray-500 mt-1">{t('emptyDescription')}</p>
                     <Link
-                        href={`/${locale}/host`}
+                        href={`/${locale}/play`}
                         className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 bg-brand-green text-white text-sm font-medium rounded-full hover:bg-brand-green/90 transition-colors"
                     >
-                        <Plus className="w-4 h-4" />
-                        {t('hostMatch')}
+                        {t('goToPlay')}
                     </Link>
                 </div>
             )}
 
-            {/* ── Populated: Match Feed Cards ────────── */}
+            {/* ── Populated: Nearby Matches ────────── */}
             {!isLoading && !isError && matches.length > 0 && (
-                <div className="space-y-3 px-4">
-                    {matches.map((match) => {
-                        const spotsLeft = match.totalSpots - match.filledSpots;
-                        const isUrgent = spotsLeft <= 2 && spotsLeft > 0;
-                        const initials = match.organizer.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')
-                            .slice(0, 2);
+                <>
+                    <div className="px-5 pb-2">
+                        <p className="text-xs font-bold text-brand-green uppercase tracking-widest">
+                            {t('nearbyMatches')}
+                        </p>
+                    </div>
+                    <div className="space-y-3 px-4">
+                        {matches.map((match) => {
+                            const spotsLeft = match.totalSpots - match.filledSpots;
+                            const isUrgent = spotsLeft <= 2 && spotsLeft > 0;
+                            const initials = match.organizer.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .slice(0, 2);
 
-                        return (
-                            <Link
-                                key={match.id}
-                                href={`/${locale}/match/${match.id}`}
-                                className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
-                            >
-                                <div className="flex items-start gap-3">
-                                    {/* Avatar */}
-                                    <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                        <span className="text-sm font-bold text-gray-500">{initials}</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        {/* Organizer + time */}
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-bold text-brand-black">
-                                                {match.organizer.name}
-                                            </h3>
-                                            <span className="text-xs text-gray-400">
-                                                {match.date} • {match.time}
-                                            </span>
+                            return (
+                                <Link
+                                    key={match.id}
+                                    href={`/${locale}/match/${match.id}`}
+                                    className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                            <span className="text-sm font-bold text-gray-500">{initials}</span>
                                         </div>
-                                        {/* Match info */}
-                                        <p className="text-sm text-gray-600 mt-1">
-                                            <strong>{match.title}</strong>{' '}
-                                            <span className="text-gray-400">{t('at')} {match.venueName}</span>
-                                        </p>
-                                        {/* Spots / format */}
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <span
-                                                className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                                                    match.status === 'full'
-                                                        ? 'bg-gray-100 text-gray-500'
-                                                        : isUrgent
-                                                          ? 'bg-brand-red/10 text-brand-red'
-                                                          : 'bg-brand-green/10 text-brand-green'
-                                                }`}
-                                            >
-                                                {match.status === 'full'
-                                                    ? 'FULL'
-                                                    : `${spotsLeft} ${t('spotsLeft')}`}
-                                            </span>
-                                            <span className="text-xs text-gray-400">
-                                                {match.format} • {match.surface}
-                                            </span>
-                                            {match.price > 0 && (
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-sm font-bold text-brand-black">
+                                                    {match.organizer.name}
+                                                </h3>
                                                 <span className="text-xs text-gray-400">
-                                                    {match.price} {match.currency}
+                                                    {match.date} • {match.time}
                                                 </span>
-                                            )}
+                                            </div>
+                                            <p className="text-sm text-gray-600 mt-1">
+                                                <strong>{match.title}</strong>{' '}
+                                                <span className="text-gray-400">{t('at')} {match.venueName}</span>
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <span
+                                                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                                        match.status === 'full'
+                                                            ? 'bg-gray-100 text-gray-500'
+                                                            : isUrgent
+                                                              ? 'bg-brand-red/10 text-brand-red'
+                                                              : 'bg-brand-green/10 text-brand-green'
+                                                    }`}
+                                                >
+                                                    {match.status === 'full'
+                                                        ? 'FULL'
+                                                        : `${spotsLeft} ${t('spotsLeft')}`}
+                                                </span>
+                                                <span className="text-xs text-gray-400">
+                                                    {match.format} • {match.surface}
+                                                </span>
+                                                {match.price > 0 && (
+                                                    <span className="text-xs text-gray-400">
+                                                        {match.price} {match.currency}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </Link>
-                        );
-                    })}
-                </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </>
             )}
         </div>
     );

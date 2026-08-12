@@ -5,6 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { env } from '@/env.mjs';
+import {
+  adaptDiscussionList,
+  type DiscussionsApiResponse,
+} from '@/lib/discussion-adapter';
+import type { Discussion } from '@/types';
 
 // ─── Types ────────────────────────────────────────────
 
@@ -40,6 +45,19 @@ export function useMyMatches() {
   return useQuery<MyJoinedMatch[], FetchError>({
     queryKey: ['user', 'me', 'matches'],
     queryFn: () => fetcher<MyJoinedMatch[]>('/users/me/matches'),
+  });
+}
+
+// ─── Unified Discussions (Messages screen) ────────────
+
+export function useDiscussions() {
+  return useQuery<Discussion[], FetchError>({
+    queryKey: ['user', 'me', 'discussions'],
+    queryFn: async () => {
+      const data = await fetcher<DiscussionsApiResponse>('/users/me/discussions');
+      return adaptDiscussionList(data);
+    },
+    staleTime: 30_000,
   });
 }
 
