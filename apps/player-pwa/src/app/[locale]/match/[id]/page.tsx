@@ -31,6 +31,7 @@ import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import PostMatchSection from '@/components/matches/PostMatchSection';
+import ReviewSection from '@/components/matches/ReviewSection';
 import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import LocationMap from '@/components/matches/LocationMap';
 
@@ -261,6 +262,15 @@ export default function MatchDetailPage({
                             {/* Player of the Match — voting/results (completed matches only) */}
                             {match.status === 'completed' && (
                                 <PostMatchSection matchId={match.id} currentUserId={currentUserId} />
+                            )}
+
+                            {/* Player Reviews — rate teammates (completed matches only) */}
+                            {match.status === 'completed' && isJoined && (
+                                <ReviewSection
+                                    matchId={match.id}
+                                    roster={match.roster}
+                                    currentUserId={currentUserId}
+                                />
                             )}
 
                             {/* 3. Team Lineup */}
