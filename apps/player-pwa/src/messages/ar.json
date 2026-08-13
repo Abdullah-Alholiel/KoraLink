@@ -505,6 +505,11 @@
         "voteConfirmBody": "هل تصوت لـ {name} كأفضل لاعب؟",
         "confirmVote": "تأكيد التصويت",
         "voteCancel": "إلغاء",
-        "casting": "جارٍ التصويت..."
+        "casting": "جارٍ التصويت...",
+        "votersSubmitted": "صوّت {voted} من {total}",
+        "awaitingVotes": "بانتظار {count} آخرين للمشاركة",
+        "runnerUp": "الوصيف",
+        "viewResults": "عرض النتائج الكاملة",
+        "willBeDecided": "يُحدد أفضل لاعب بعد انتهاء المباراة"
     }
 }

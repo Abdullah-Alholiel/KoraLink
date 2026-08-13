@@ -32,7 +32,7 @@ export default function PomVotingSheet({
   if (!open) return null;
 
   const handlePlayerTap = (candidate: PomCandidate) => {
-    if (hasVoted) return;
+    // Allow re-selection — voting is editable until the 24h window closes.
     setSelectedCandidate(candidate);
     setShowConfirm(true);
   };
@@ -48,10 +48,7 @@ export default function PomVotingSheet({
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-[60]"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
 
       {/* Sheet */}
       <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] max-h-[85vh] overflow-y-auto animate-slide-up">
@@ -77,7 +74,12 @@ export default function PomVotingSheet({
               <div className="w-6 h-6 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
                 <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
               </div>
-              <span className="text-sm font-medium text-brand-green">{t('voted')}</span>
+              <span className="text-sm font-medium text-brand-green">
+                {t('voted')}{' '}
+                {votedFor
+                  ? candidates.find((c) => c.id === votedFor)?.fullName ?? ''
+                  : ''}
+              </span>
             </div>
           )}
 
@@ -89,18 +91,15 @@ export default function PomVotingSheet({
           {/* Candidate list */}
           <div className="space-y-2">
             {candidates.map((candidate) => {
-              const isSelected = hasVoted && votedFor === candidate.id;
+              const isSelected = votedFor === candidate.id;
               return (
                 <button
                   key={candidate.id}
                   onClick={() => handlePlayerTap(candidate)}
-                  disabled={hasVoted}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.98] ${
                     isSelected
                       ? 'bg-brand-green/10 border border-brand-green/30'
-                      : hasVoted
-                        ? 'bg-gray-50 border border-transparent opacity-60'
-                        : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
+                      : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
                   }`}
                 >
                   {/* Avatar */}
@@ -138,7 +137,7 @@ export default function PomVotingSheet({
                     {candidate.fullName}
                   </span>
 
-                  {/* Checkmark for selected */}
+                  {/* Checkmark for current selection */}
                   {isSelected && (
                     <div className="w-6 h-6 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
                       <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />

@@ -505,6 +505,11 @@
         "voteConfirmBody": "Vote for {name} as Player of the Match?",
         "confirmVote": "Confirm Vote",
         "voteCancel": "Cancel",
-        "casting": "Casting..."
+        "casting": "Casting...",
+        "votersSubmitted": "{voted} of {total} voted",
+        "awaitingVotes": "Waiting for {count} more to take part",
+        "runnerUp": "Runner-up",
+        "viewResults": "View full results",
+        "willBeDecided": "Player of the Match is decided after the match ends"
     }
 }

@@ -11,9 +11,30 @@ export interface PomCandidate {
   avatarUrl: string | null;
 }
 
+export interface PomResultRow {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  voteCount: number;
+}
+
 export type PomResult =
-  | { status: 'voting_open'; completedAt: string; votingClosesAt: string; hasVoted: boolean; votedFor: string | null; candidates: PomCandidate[] }
-  | { status: 'completed'; winner: { id: string; fullName: string; avatarUrl: string | null }; voteCount: number }
+  | {
+      status: 'voting_open';
+      completedAt: string;
+      votingClosesAt: string;
+      hasVoted: boolean;
+      votedFor: string | null;
+      totalEligibleVoters: number;
+      votedCount: number;
+      candidates: PomCandidate[];
+    }
+  | {
+      status: 'completed';
+      winner: { id: string; fullName: string; avatarUrl: string | null };
+      voteCount: number;
+      results: PomResultRow[];
+    }
   | { status: 'no_winner' }
   | { status: 'not_completed' };
 
@@ -30,7 +51,7 @@ export function usePomResult(matchId: string, currentUserId?: string) {
     queryKey: ['pom', matchId, { currentUserId }],
     queryFn: () => fetcher<PomResult>(`/matches/${matchId}/pom-result`),
     enabled: !!matchId,
-    staleTime: 30_000,
+    staleTime: 15_000,
   });
 }
 

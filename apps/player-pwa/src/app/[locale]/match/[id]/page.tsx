@@ -231,6 +231,9 @@ export default function MatchDetailPage({
                         <div className="w-10 h-1 rounded-full bg-gray-300" />
                     </div>
 
+                    {/* Player of the Match — top of page, all states */}
+                    <PostMatchSection matchId={match.id} currentUserId={currentUserId} />
+
                     {isJoined ? (
                         /* ═══ JOINED STATE ═══ */
                         <div className="pb-32">
@@ -330,11 +333,6 @@ export default function MatchDetailPage({
                                     {t('matchDetail.share')}
                                 </button>
                             </div>
-
-                            {/* Player of the Match — voting/results (completed matches only) */}
-                            {match.status === 'completed' && (
-                                <PostMatchSection matchId={match.id} currentUserId={currentUserId} />
-                            )}
 
                             {/* Leave Match Button */}
                             {!isUserHost && (

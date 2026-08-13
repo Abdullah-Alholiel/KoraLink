@@ -984,12 +984,28 @@ export class MatchesService {
         )
         .limit(1);
 
+      // Total eligible voters (all attendees who showed up, incl. self)
+      const [{ totalEligibleVoters }] = await this.db
+        .select({ totalEligibleVoters: sql<number>`COUNT(*)::int` })
+        .from(match_players)
+        .where(
+          sql`${match_players.match_id} = ${matchId} AND ${match_players.no_show} = false`,
+        );
+
+      // How many distinct voters have cast a vote so far
+      const [{ votedCount }] = await this.db
+        .select({ votedCount: sql<number>`COUNT(DISTINCT ${match_votes.voter_id})::int` })
+        .from(match_votes)
+        .where(sql`${match_votes.match_id} = ${matchId}`);
+
       return {
         status: 'voting_open' as const,
         completedAt: match.completed_at,
         votingClosesAt,
         hasVoted: !!existingVote,
         votedFor: existingVote?.candidateId ?? null,
+        totalEligibleVoters: totalEligibleVoters ?? 0,
+        votedCount: votedCount ?? 0,
         candidates: candidates.map((c) => ({
           id: c.id,
           fullName: c.fullName ?? 'Player',
@@ -1041,6 +1057,12 @@ export class MatchesService {
         avatarUrl: winner.avatar_url,
       },
       voteCount: winner.vote_count,
+      results: results.map((r) => ({
+        id: r.candidate_id,
+        fullName: r.full_name ?? 'Player',
+        avatarUrl: r.avatar_url,
+        voteCount: r.vote_count,
+      })),
     };
   }
 
