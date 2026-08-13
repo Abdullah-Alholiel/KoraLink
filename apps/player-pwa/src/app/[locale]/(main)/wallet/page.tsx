@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
+import { uuid } from '@/lib/uuid';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -98,7 +99,7 @@ export default function WalletPage() {
         topup.mutate(
             {
                 amount,
-                idempotencyKey: `topup-${crypto.randomUUID()}`,
+                idempotencyKey: `topup-${uuid()}`,
             },
             {
                 onSuccess: () => {

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Calendar, MapPin, Info, X, Plus } from 'lucide-react';
 import { usePayWallet } from '@/hooks/useWallet';
+import { uuid } from '@/lib/uuid';
 
 interface PaymentSheetProps {
     isOpen: boolean;
@@ -37,7 +38,7 @@ export default function PaymentSheet({
     const [agreed, setAgreed] = useState(false);
     // Stable idempotency key per logical payment attempt — prevents double-charge on retry.
     // Only regenerates when the user explicitly re-opens the sheet.
-    const [idempotencyKey] = useState(() => `match-join-${matchId}-${crypto.randomUUID()}`);
+    const [idempotencyKey] = useState(() => `match-join-${matchId}-${uuid()}`);
     const payWallet = usePayWallet();
     const toPay = Math.max(0, price - walletBalance);
     const canAfford = walletBalance >= price;
