@@ -6,9 +6,23 @@ interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
     /** Fire onDateSelect on mount with today's date. Default true (needed by Play page). */
     fireOnMount?: boolean;
+    /**
+     * Controlled selected date. When provided, the matching day is highlighted
+     * (instead of the internal selection), so reopening a sheet shows the user's
+     * previously chosen date instead of resetting to TODAY.
+     */
+    selectedDate?: Date;
 }
 
-export default function DatePicker({ onDateSelect, fireOnMount = true }: DatePickerProps) {
+function isSameDay(a: Date, b: Date): boolean {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+export default function DatePicker({ onDateSelect, fireOnMount = true, selectedDate }: DatePickerProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const dates = useMemo(() => {
@@ -31,10 +45,18 @@ export default function DatePicker({ onDateSelect, fireOnMount = true }: DatePic
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // When controlled, reflect the parent's selectedDate; otherwise fall back to
+    // the internal index (Play page keeps its own string state).
+    const activeIndex = useMemo(() => {
+        if (!selectedDate) return selectedIndex;
+        const idx = dates.findIndex((item) => isSameDay(item.date, selectedDate));
+        return idx >= 0 ? idx : selectedIndex;
+    }, [selectedDate, selectedIndex, dates]);
+
     return (
         <div className="flex gap-1 px-4 py-3 scroll-container overflow-x-auto">
             {dates.map((item, idx) => {
-                const isActive = idx === selectedIndex;
+                const isActive = idx === activeIndex;
                 return (
                     <button
                         key={idx}

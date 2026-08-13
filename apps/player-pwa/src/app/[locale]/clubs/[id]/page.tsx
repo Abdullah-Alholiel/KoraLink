@@ -325,7 +325,7 @@ export default function ClubPage() {
             </div>
 
             <div className="px-5 pb-8">
-              <DatePicker onDateSelect={handleDateSelect} fireOnMount={false} />
+              <DatePicker onDateSelect={handleDateSelect} fireOnMount={false} selectedDate={selectedDate} />
             </div>
           </div>
         </>
