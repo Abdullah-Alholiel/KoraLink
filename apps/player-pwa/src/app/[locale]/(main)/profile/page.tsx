@@ -239,13 +239,13 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<Shield className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.privacyPolicy')}
-                    href="/privacy"
+                    href={`/${locale}/privacy`}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem
                     icon={<FileText className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.termsOfService')}
-                    href="/terms"
+                    href={`/${locale}/terms`}
                 />
             </div>
 

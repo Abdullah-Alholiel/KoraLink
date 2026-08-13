@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Calendar, MapPin, Info, X } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Info, X, Plus } from 'lucide-react';
 import { usePayWallet } from '@/hooks/useWallet';
 
 interface PaymentSheetProps {
@@ -30,10 +31,21 @@ export default function PaymentSheet({
     walletBalance,
 }: PaymentSheetProps) {
     const t = useTranslations();
+    const router = useRouter();
+    const pathname = usePathname();
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const [agreed, setAgreed] = useState(false);
+    // Stable idempotency key per logical payment attempt — prevents double-charge on retry.
+    // Only regenerates when the user explicitly re-opens the sheet.
+    const [idempotencyKey] = useState(() => `match-join-${matchId}-${crypto.randomUUID()}`);
     const payWallet = usePayWallet();
     const toPay = Math.max(0, price - walletBalance);
     const canAfford = walletBalance >= price;
+
+    // Reset checkbox state when sheet closes
+    useEffect(() => {
+        if (!isOpen) setAgreed(false);
+    }, [isOpen]);
 
     const handlePay = async () => {
         if (!agreed) return;
@@ -42,7 +54,7 @@ export default function PaymentSheet({
         payWallet.mutate(
             {
                 amount: price,
-                idempotencyKey: `match-join-${matchId}-${Date.now()}`,
+                idempotencyKey,
                 referenceId: matchId,
             },
             {
@@ -115,11 +127,21 @@ export default function PaymentSheet({
                     </div>
                 </div>
 
-                {/* Insufficient Balance Warning */}
+                {/* Insufficient Balance Warning + Top-Up CTA */}
                 {!canAfford && (
                     <div className="mx-5 mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <p className="text-sm font-semibold text-amber-800">{t('payment.insufficientBalance')}</p>
                         <p className="text-xs text-amber-600 mt-1">{t('payment.topUpToJoin')}</p>
+                        <button
+                            onClick={() => {
+                                onClose();
+                                router.push(`/${locale}/wallet`);
+                            }}
+                            className="mt-3 w-full flex items-center justify-center gap-2 bg-brand-green text-white text-sm font-bold py-2.5 rounded-xl active:scale-95 transition-transform"
+                        >
+                            <Plus className="w-4 h-4" strokeWidth={2} />
+                            {t('wallet.topUp')}
+                        </button>
                     </div>
                 )}
 

@@ -17,6 +17,7 @@ import {
     X,
 } from 'lucide-react';
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
+import { useAppStore } from '@/store/useAppStore';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -60,6 +61,7 @@ function groupTransactionsByDay(transactions: Transaction[], t: (key: string) =>
 export default function WalletPage() {
     const router = useRouter();
     const t = useTranslations();
+    const showToast = useAppStore((s) => s.showToast);
 
     // ── Top-up modal state ──
     const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -96,7 +98,7 @@ export default function WalletPage() {
         topup.mutate(
             {
                 amount,
-                idempotencyKey: `topup-${Date.now()}`,
+                idempotencyKey: `topup-${crypto.randomUUID()}`,
             },
             {
                 onSuccess: () => {
@@ -161,14 +163,13 @@ export default function WalletPage() {
             <div className="flex justify-center gap-8 mt-6 px-4">
                 {[
                     { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopUpModal(true) },
-                    { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => {} },
-                    { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => {} },
+                    { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
+                    { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                 ].map((action) => (
                     <button
                         key={action.label}
                         onClick={action.onClick}
-                        disabled={!action.active}
-                        className="flex flex-col items-center gap-2 disabled:opacity-50"
+                        className="flex flex-col items-center gap-2"
                     >
                         <div
                             className={`w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform ${
@@ -179,7 +180,7 @@ export default function WalletPage() {
                         >
                             <action.icon className="w-6 h-6" strokeWidth={1.5} />
                         </div>
-                        <span className="text-xs text-gray-600 font-medium">{action.label}</span>
+                        <span className={`text-xs font-medium ${action.active ? 'text-gray-600' : 'text-gray-400'}`}>{action.label}</span>
                     </button>
                 ))}
             </div>
@@ -193,9 +194,6 @@ export default function WalletPage() {
                     <h2 className="text-base font-bold text-brand-black">
                         {t('wallet.transactions')}
                     </h2>
-                    <button className="text-sm font-medium text-gray-500 border border-gray-200 rounded-full px-3 py-1">
-                        {t('common.seeAll')}
-                    </button>
                 </div>
 
                 {/* Loading state */}

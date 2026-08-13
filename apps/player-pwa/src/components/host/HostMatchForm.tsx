@@ -126,9 +126,10 @@ export default function HostMatchForm() {
         };
 
         createMatch.mutate(payload, {
-            onSuccess: () => {
+            onSuccess: (createdMatch) => {
                 setShowWarning(false);
-                router.push(`/${locale}/play`);
+                // Navigate to the newly created match detail page
+                router.push(`/${locale}/match/${createdMatch.id}`);
             },
         });
     };

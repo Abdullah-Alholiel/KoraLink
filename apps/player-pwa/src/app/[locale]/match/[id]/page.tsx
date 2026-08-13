@@ -192,7 +192,20 @@ export default function MatchDetailPage({
                             <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
-                            onClick={() => isJoined ? setShowChatSheet(true) : null}>
+                            onClick={() => {
+                                if (isJoined) {
+                                    setShowChatSheet(true);
+                                } else if (typeof navigator !== 'undefined' && navigator.share) {
+                                    navigator.share({
+                                        title: match.title,
+                                        text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
+                                        url: typeof window !== 'undefined' ? window.location.href : '',
+                                    }).catch(() => {});
+                                } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                    navigator.clipboard.writeText(typeof window !== 'undefined' ? window.location.href : '');
+                                    showToast(t('matchDetail.linkCopied'), 'success');
+                                }
+                            }}>
                             {isJoined
                                 ? <MessageSquare className="w-5 h-5 text-white" strokeWidth={1.5} />
                                 : <Share2 className="w-5 h-5 text-white" strokeWidth={1.5} />
@@ -334,8 +347,8 @@ export default function MatchDetailPage({
                                 </button>
                             </div>
 
-                            {/* Leave Match Button */}
-                            {!isUserHost && (
+                            {/* Leave Match Button — only for active (not started/completed/cancelled) matches */}
+                            {!isUserHost && (match.status === 'open' || match.status === 'full') && (
                                 <div className="px-5 pt-6">
                                     <button
                                         onClick={() => setShowLeaveSheet(true)}

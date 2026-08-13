@@ -166,10 +166,11 @@ export default function PersonalInfoPage() {
                   </h2>
                   <p className="text-xs text-gray-400" dir="ltr">@{apiUser?.handle ?? storeUser?.handle}</p>
 
-                  {skill && skill !== '-' && (
+                  {(editing ? skill : (apiUser?.skill_level ?? storeUser?.skillLevel)) &&
+                   (editing ? skill : (apiUser?.skill_level ?? storeUser?.skillLevel)) !== '-' && (
                       <span className="mt-2 text-[10px] font-bold text-brand-green bg-brand-green/10 px-3 py-1 rounded-full uppercase tracking-wide flex items-center gap-1">
                           <Shield className="w-3 h-3" strokeWidth={2.5} />
-                          {skill}
+                          {editing ? skill : (apiUser?.skill_level ?? storeUser?.skillLevel)}
                       </span>
                   )}
               </div>

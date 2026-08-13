@@ -65,7 +65,6 @@ export default function LoginPage() {
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className="text-lg">🇸🇦</span>
                         <span className="text-sm font-medium text-brand-black">+966</span>
-                        <span className="text-gray-300 text-sm">ˇ</span>
                     </div>
                     <div className="w-px h-5 bg-gray-200 mx-1" />
                     <input
@@ -115,8 +114,8 @@ export default function LoginPage() {
                 </button>
                 <p className="text-center text-xs text-gray-400 mt-4 leading-relaxed">
                     {t('terms')}{' '}
-                    <span className="text-brand-green font-medium underline">{t('termsOfService')}</span> {t('and')}{' '}
-                    <span className="text-brand-green font-medium underline">{t('privacyPolicy')}</span>
+                    <a href={`/${locale}/terms`} className="text-brand-green font-medium underline">{t('termsOfService')}</a> {t('and')}{' '}
+                    <a href={`/${locale}/privacy`} className="text-brand-green font-medium underline">{t('privacyPolicy')}</a>
                 </p>
 
                 <DevLoginBar />

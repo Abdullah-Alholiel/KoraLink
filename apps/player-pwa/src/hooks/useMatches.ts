@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { useAppStore } from '@/store/useAppStore';
 import type { Match } from '@/types';
 import {
   type NearbyMatchApi,
@@ -117,8 +118,9 @@ export function useMatchMessages(matchId: string) {
 
 export function useCreateMatch() {
   const queryClient = useQueryClient();
+  const showToast = useAppStore.getState().showToast;
 
-  return useMutation<Match, Error, HostMatchInput>({
+  return useMutation<Match, FetchError, HostMatchInput>({
     mutationFn: async (data) => {
       const raw = await fetcher<MatchDetailApi>('/matches', {
         method: 'POST',
@@ -128,6 +130,11 @@ export function useCreateMatch() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+      showToast('Match created successfully!', 'success');
+    },
+    onError: (err) => {
+      showToast(err.message || 'Failed to create match. Please try again.', 'error');
     },
   });
 }

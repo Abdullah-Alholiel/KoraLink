@@ -85,8 +85,11 @@ function VerifyContent() {
                                 skillLevel,
                                 locale: locale as 'ar' | 'en',
                             }, '');
-                        } catch {
-                            // If profile fetch fails, still navigate — UI will show fallback
+                        } catch (profileErr) {
+                            // Profile fetch failed — show error instead of silently navigating
+                            // as guest. This usually means the auth cookie didn't set properly.
+                            setError(t('verify.profileFetchError'));
+                            return;
                         }
                         router.push(`/${locale}/play`);
                     }
