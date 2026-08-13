@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { captureError, addBreadcrumb, trackEvent } from '@/providers/ObservabilityProvider';
 
 // ─── API Response Types ────────────────────────────────
 
@@ -52,7 +53,14 @@ export interface VoteResult {
 export function usePomResult(matchId: string, currentUserId?: string) {
   return useQuery<PomResult, FetchError>({
     queryKey: ['pom', matchId, { currentUserId }],
-    queryFn: () => fetcher<PomResult>(`/matches/${matchId}/pom-result`),
+    queryFn: async () => {
+      try {
+        return await fetcher<PomResult>(`/matches/${matchId}/pom-result`);
+      } catch (err) {
+        captureError(err, { hook: 'usePomResult', matchId });
+        throw err;
+      }
+    },
     enabled: !!matchId,
     staleTime: 15_000,
   });
@@ -62,11 +70,23 @@ export function useVote(matchId: string) {
   const queryClient = useQueryClient();
 
   return useMutation<VoteResult, FetchError, string>({
-    mutationFn: (candidateId: string) =>
-      fetcher<VoteResult>(`/matches/${matchId}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ candidateId }),
-      }),
+    mutationFn: async (candidateId: string) => {
+      addBreadcrumb('POTM vote submitted', 'potm', 'info', { matchId, candidateId });
+      try {
+        const result = await fetcher<VoteResult>(`/matches/${matchId}/vote`, {
+          method: 'POST',
+          body: JSON.stringify({ candidateId }),
+        });
+        trackEvent('potm_vote_cast', {
+          match_id: matchId,
+          candidate_id: candidateId,
+        });
+        return result;
+      } catch (err) {
+        captureError(err, { hook: 'useVote', matchId, candidateId });
+        throw err;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });

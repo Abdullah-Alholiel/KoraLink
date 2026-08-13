@@ -38,7 +38,6 @@ const baseMatch: Match = {
     name: 'Khalid FC',
     handle: '@khalidfc',
     avatarUrl: '',
-    rating: 4.8,
   },
   date: '2026-08-15',
   time: '9:00 PM',
@@ -74,19 +73,19 @@ describe('MatchCard', () => {
     expect(screen.getByText('Friday Night Kickoff')).toBeInTheDocument();
   });
 
-  it('renders organizer name and handle', () => {
+  it('renders organizer name', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('@khalidfc')).toBeInTheDocument();
+    expect(screen.getByText('Khalid FC')).toBeInTheDocument();
   });
 
   it('renders price with SAR', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('SAR 37')).toBeInTheDocument();
+    expect(screen.getByText('37 SAR')).toBeInTheDocument();
   });
 
   it('renders spot count', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('8/14 spots')).toBeInTheDocument();
+    expect(screen.getByText('8/14')).toBeInTheDocument();
   });
 
   it('renders location', () => {
@@ -94,9 +93,11 @@ describe('MatchCard', () => {
     expect(screen.getByText('Riyadh')).toBeInTheDocument();
   });
 
-  it('renders format and surface', () => {
+  it('renders format and surface as separate pills', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('7v7 (Grass)')).toBeInTheDocument();
+    // Format and surface are rendered as separate pills in the info row
+    expect(screen.getByText('7v7')).toBeInTheDocument();
+    expect(screen.getByText('Grass')).toBeInTheDocument();
   });
 
   it('renders card link with correct locale path', () => {

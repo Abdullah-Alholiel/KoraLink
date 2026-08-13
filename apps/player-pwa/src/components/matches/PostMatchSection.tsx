@@ -8,6 +8,7 @@ import { io, Socket } from 'socket.io-client';
 import { env } from '@/env.mjs';
 import { useAppStore } from '@/store/useAppStore';
 import { usePomResult, useVote } from '@/hooks/usePom';
+import { trackEvent, addBreadcrumb } from '@/providers/ObservabilityProvider';
 import PomVotingSheet from './PomVotingSheet';
 import PomResultsSheet from './PomResultsSheet';
 
@@ -26,6 +27,16 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
   const [showVoting, setShowVoting] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
+  // Analytics: track which POTM status the user sees
+  useEffect(() => {
+    if (pom) {
+      trackEvent('potm_status_viewed', {
+        match_id: matchId,
+        status: pom.status,
+      });
+    }
+  }, [pom?.status, matchId]);
+
   // Real-time: listen for the POTM winner being decided while viewing.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -38,6 +49,8 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
     });
     socket.on('connect', () => socket.emit('join-lobby', { matchId }));
     socket.on('pom-decided', (payload: { winner: { fullName: string } }) => {
+      addBreadcrumb('POTM decided via WebSocket', 'potm', 'info', { matchId });
+      trackEvent('potm_decided_received', { match_id: matchId });
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
       showToast(`🏆 ${payload.winner.fullName} — ${t('pomDecided')}`, 'success');
     });
@@ -111,8 +124,8 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
   if (pom.status === 'completed') {
     return (
       <>
-        <button
-          onClick={() => setShowResults(true)}
+      <button
+          onClick={() => { setShowResults(true); trackEvent('potm_results_opened', { match_id: matchId }); }}
           className="mx-5 mt-4 w-full text-start bg-gradient-to-b from-brand-green/5 to-white rounded-2xl p-5 border border-brand-green/10 active:scale-[0.99] transition-transform"
         >
           <div className="flex items-center gap-2 mb-4">
@@ -225,7 +238,7 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
               </span>
             </div>
             <button
-              onClick={() => setShowVoting(true)}
+              onClick={() => { setShowVoting(true); trackEvent('potm_change_vote_clicked', { match_id: matchId }); }}
               className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3
                 border border-brand-green/20 text-sm font-semibold text-brand-green
                 hover:bg-brand-green/5 active:scale-[0.98] transition-all"
@@ -236,7 +249,7 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
           </div>
         ) : (
           <button
-            onClick={() => setShowVoting(true)}
+            onClick={() => { setShowVoting(true); trackEvent('potm_vote_opened', { match_id: matchId }); }}
             className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3.5
               hover:bg-brand-green/5 active:scale-[0.98] transition-all group"
           >

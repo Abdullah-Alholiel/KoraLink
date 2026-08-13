@@ -1,28 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '@/messages/en.json';
+
+// Mock socket.io-client before importing the component
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => ({
+    on: vi.fn(),
+    emit: vi.fn(),
+    disconnect: vi.fn(),
+    connected: false,
+    close: vi.fn(),
+  })),
+}));
+
+// Mock useMatchChat hook from useMessages (NOT useMatches)
+const mockUseMatchChat = vi.fn();
+vi.mock('@/hooks/useMessages', () => ({
+  useMatchChat: (...args: unknown[]) => mockUseMatchChat(...args),
+  type: { MatchMessage: {} },
+}));
+
+// Mock useAppStore (ChatSheet reads current user for message authorship)
+vi.mock('@/store/useAppStore', () => ({
+  useAppStore: vi.fn(() => ({ id: 'user-1', full_name: 'Test User' })),
+  selectUser: () => ({ id: 'user-1', full_name: 'Test User' }),
+}));
+
 import ChatSheet from '@/components/matches/ChatSheet';
 
-// Mock useMatchMessages hook
-const mockUseMatchMessages = vi.fn();
-vi.mock('@/hooks/useMatches', () => ({
-  useMatchMessages: (...args: unknown[]) => mockUseMatchMessages(...args),
-  useMatch: vi.fn(),
-}));
-
-// Mock next-intl
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => {
-    const t: Record<string, string> = {
-      'common.errorDescription': 'Something went wrong',
-      'common.retry': 'Try Again',
-      'chatSheet.emptyTitle': 'No messages yet',
-      'chatSheet.emptyDescription': 'Start the conversation!',
-      'chatSheet.sendPlaceholder': 'Type a message...',
-      'chatSheet.comingSoon': 'Chat coming soon',
-    };
-    return t[key] ?? key;
-  },
-}));
+// Wrapper with QueryClientProvider + i18n
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <NextIntlClientProvider messages={enMessages} locale="en">
+        {ui}
+      </NextIntlClientProvider>
+    </QueryClientProvider>,
+  );
+}
 
 const baseProps = {
   isOpen: true,
@@ -35,21 +56,23 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function mockReturn(value: Partial<ReturnType<typeof mockUseMatchMessages>>) {
-  mockUseMatchMessages.mockReturnValue({
-    data: undefined,
+function mockReturn(value: Partial<Record<string, unknown>>) {
+  mockUseMatchChat.mockReturnValue({
+    messages: [],
     isLoading: false,
     error: null,
     refetch: vi.fn(),
+    isConnected: false,
+    sendMessage: vi.fn(),
     ...value,
   });
 }
 
 describe('ChatSheet', () => {
   it('CS-1: renders loading spinner when messages are loading', () => {
-    mockReturn({ isLoading: true, data: undefined });
+    mockReturn({ isLoading: true, messages: [] });
 
-    render(<ChatSheet {...baseProps} />);
+    renderWithProviders(<ChatSheet {...baseProps} />);
 
     // Spinner should be visible
     const spinner = document.querySelector('.animate-spin');
@@ -60,9 +83,9 @@ describe('ChatSheet', () => {
   });
 
   it('CS-2: renders empty state when API returns empty array', () => {
-    mockReturn({ data: [], isLoading: false });
+    mockReturn({ messages: [], isLoading: false });
 
-    render(<ChatSheet {...baseProps} />);
+    renderWithProviders(<ChatSheet {...baseProps} />);
 
     expect(screen.getByText('No messages yet')).toBeTruthy();
     expect(screen.getByText('Start the conversation!')).toBeTruthy();
@@ -70,7 +93,7 @@ describe('ChatSheet', () => {
 
   it('CS-3: renders message list when API returns messages', () => {
     mockReturn({
-      data: [
+      messages: [
         {
           id: 'msg-1',
           content: 'Great game everyone!',
@@ -87,7 +110,7 @@ describe('ChatSheet', () => {
       isLoading: false,
     });
 
-    render(<ChatSheet {...baseProps} />);
+    renderWithProviders(<ChatSheet {...baseProps} />);
 
     expect(screen.getByText('Great game everyone!')).toBeTruthy();
     expect(screen.getByText('See you at 8pm')).toBeTruthy();
@@ -99,19 +122,19 @@ describe('ChatSheet', () => {
   });
 
   it('CS-4: does not render when isOpen=false', () => {
-    mockReturn({ data: [], isLoading: false });
+    mockReturn({ messages: [], isLoading: false });
 
-    render(<ChatSheet {...baseProps} isOpen={false} />);
+    renderWithProviders(<ChatSheet {...baseProps} isOpen={false} />);
 
     expect(screen.queryByText('Friday Night 5v5')).toBeNull();
     expect(screen.queryByText('No messages yet')).toBeNull();
   });
 
   it('CS-5: calls onClose when backdrop (overlay) is clicked', () => {
-    mockReturn({ data: [], isLoading: false });
+    mockReturn({ messages: [], isLoading: false });
     const onClose = vi.fn();
 
-    render(<ChatSheet {...baseProps} onClose={onClose} />);
+    renderWithProviders(<ChatSheet {...baseProps} onClose={onClose} />);
 
     const overlay = document.querySelector('.bg-black\\/50');
     expect(overlay).toBeTruthy();
@@ -123,15 +146,15 @@ describe('ChatSheet', () => {
   it('CS-6: shows error state with retry button on API failure', () => {
     const mockRefetch = vi.fn();
     mockReturn({
-      data: undefined,
+      messages: [],
       isLoading: false,
       error: new Error('Network error'),
       refetch: mockRefetch,
     });
 
-    render(<ChatSheet {...baseProps} />);
+    renderWithProviders(<ChatSheet {...baseProps} />);
 
-    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    expect(screen.getByText("Couldn't load data. Check your connection.")).toBeTruthy();
     expect(screen.getByText('Try Again')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Try Again'));

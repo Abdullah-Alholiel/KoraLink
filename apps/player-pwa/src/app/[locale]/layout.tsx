@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import QueryProvider from '@/providers/QueryProvider';
+import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import '@/styles/globals.css';
 
@@ -84,10 +85,12 @@ export default async function RootLayout({
     >
       <body className="overscroll-none">
         <QueryProvider>
-          <NextIntlClientProvider messages={messages}>
-            <AuthBootstrap />
-            <div className="app-shell">{children}</div>
-          </NextIntlClientProvider>
+          <ObservabilityProvider>
+            <NextIntlClientProvider messages={messages}>
+              <AuthBootstrap />
+              <div className="app-shell">{children}</div>
+            </NextIntlClientProvider>
+          </ObservabilityProvider>
         </QueryProvider>
       </body>
     </html>

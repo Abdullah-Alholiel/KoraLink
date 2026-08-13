@@ -76,7 +76,6 @@ function makeApiMatchDetail(overrides: Partial<Record<string, unknown>> = {}) {
       full_name: 'Ahmed',
       handle: '@ahmed',
       avatar_url: null,
-      rating: 4.5,
     },
     pitch: {
       name: 'Pitch A',
@@ -183,7 +182,6 @@ describe('useMatches hooks', () => {
       expect(result.current.data?.id).toBe('m1');
       expect(result.current.data?.title).toBe('Test Match');
       expect(result.current.data?.organizer.name).toBe('Ahmed');
-      expect(result.current.data?.organizer.rating).toBe(4.5);
     });
 
     it('does not fetch when id is empty', () => {

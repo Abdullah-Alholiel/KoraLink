@@ -1,4 +1,5 @@
 import { env } from '@/env.mjs';
+import { addBreadcrumb } from '@/providers/ObservabilityProvider';
 
 type FetchOptions = RequestInit & {
   params?: Record<string, string>;
@@ -65,6 +66,13 @@ export async function fetcher<T>(
   });
 
   if (!response.ok) {
+    // Sentry breadcrumb for API failures — gives error trails across all pages
+    addBreadcrumb(
+      `API ${response.status}: ${options.method ?? 'GET'} ${path}`,
+      'api',
+      response.status >= 500 ? 'error' : 'warning',
+      { status: response.status, path, method: options.method ?? 'GET' },
+    );
     throw new FetchError(
       `Request failed with status ${response.status}`,
       response.status,
