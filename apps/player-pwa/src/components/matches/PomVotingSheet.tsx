@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shield, Check } from 'lucide-react';
 import type { PomCandidate } from '@/hooks/usePom';
+import type { RosterPlayer } from '@/types';
+import TeamLineup from './TeamLineup';
 import PomConfirmModal from './PomConfirmModal';
 
 interface PomVotingSheetProps {
   open: boolean;
   onClose: () => void;
+  format: string;
   candidates: PomCandidate[];
   hasVoted: boolean;
   votedFor: string | null;
@@ -19,6 +22,7 @@ interface PomVotingSheetProps {
 export default function PomVotingSheet({
   open,
   onClose,
+  format,
   candidates,
   hasVoted,
   votedFor,
@@ -29,12 +33,29 @@ export default function PomVotingSheet({
   const [selectedCandidate, setSelectedCandidate] = useState<PomCandidate | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // Map the confirmed candidates into the shared team-lineup shape so the
+  // picker is the single source of truth (Home/Away roster), not a flat list.
+  const roster = useMemo<RosterPlayer[]>(
+    () =>
+      candidates.map((c) => ({
+        id: c.id,
+        userId: c.id,
+        name: c.fullName,
+        avatarUrl: c.avatarUrl ?? '',
+        team: c.team,
+        isHost: c.isHost,
+      })),
+    [candidates],
+  );
+
   if (!open) return null;
 
-  const handlePlayerTap = (candidate: PomCandidate) => {
-    // Allow re-selection — voting is editable until the 24h window closes.
-    setSelectedCandidate(candidate);
-    setShowConfirm(true);
+  const handlePlayerTap = (player: RosterPlayer) => {
+    const candidate = candidates.find((c) => c.id === player.userId) ?? null;
+    if (candidate) {
+      setSelectedCandidate(candidate);
+      setShowConfirm(true);
+    }
   };
 
   const handleConfirmVote = () => {
@@ -59,14 +80,13 @@ export default function PomVotingSheet({
 
         <div className="px-5 pb-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center">
-                <Shield className="w-4 h-4 text-brand-green" strokeWidth={2} />
-              </div>
-              <h2 className="text-lg font-bold text-brand-black">{t('selectPlayer')}</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-4 h-4 text-brand-green" strokeWidth={2} />
             </div>
+            <h2 className="text-lg font-bold text-brand-black">{t('selectPlayer')}</h2>
           </div>
+          <p className="text-xs text-gray-500 mb-4">{t('voteSubtitle')}</p>
 
           {/* Already voted indicator */}
           {hasVoted && (
@@ -88,65 +108,15 @@ export default function PomVotingSheet({
             <p className="text-sm text-gray-400 text-center py-8">{t('notAttended')}</p>
           )}
 
-          {/* Candidate list */}
-          <div className="space-y-2">
-            {candidates.map((candidate) => {
-              const isSelected = votedFor === candidate.id;
-              return (
-                <button
-                  key={candidate.id}
-                  onClick={() => handlePlayerTap(candidate)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-brand-green/10 border border-brand-green/30'
-                      : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
-                  }`}
-                >
-                  {/* Avatar */}
-                  {candidate.avatarUrl ? (
-                    <div className="w-11 h-11 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={candidate.avatarUrl}
-                        alt={candidate.fullName}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? 'bg-brand-green/20' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`text-sm font-bold ${
-                          isSelected ? 'text-brand-green' : 'text-gray-500'
-                        }`}
-                      >
-                        {candidate.fullName.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Name */}
-                  <span
-                    className={`flex-1 text-start text-sm font-medium ${
-                      isSelected ? 'text-brand-green' : 'text-brand-black'
-                    }`}
-                  >
-                    {candidate.fullName}
-                  </span>
-
-                  {/* Checkmark for current selection */}
-                  {isSelected && (
-                    <div className="w-6 h-6 rounded-full bg-brand-green flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {/* Team lineup picker — the confirmed roster is the source of truth */}
+          {candidates.length > 0 && (
+            <TeamLineup
+              format={format}
+              roster={roster}
+              onPlayerClick={handlePlayerTap}
+              hideEmpty
+            />
+          )}
         </div>
       </div>
 

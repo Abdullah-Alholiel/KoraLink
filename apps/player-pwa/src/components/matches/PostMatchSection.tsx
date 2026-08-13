@@ -14,9 +14,10 @@ import PomResultsSheet from './PomResultsSheet';
 interface PostMatchSectionProps {
   matchId: string;
   currentUserId?: string;
+  format?: string;
 }
 
-export default function PostMatchSection({ matchId, currentUserId }: PostMatchSectionProps) {
+export default function PostMatchSection({ matchId, currentUserId, format = '7v7' }: PostMatchSectionProps) {
   const t = useTranslations('pom');
   const queryClient = useQueryClient();
   const showToast = useAppStore((s) => s.showToast);
@@ -70,20 +71,38 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
     );
   }
 
-  // ── Voting closed — no winner (tie or no votes) ──
+  // ── Voting closed — no votes cast ──
+  if (pom.status === 'no_votes') {
+    return (
+      <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+          <Trophy className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {t('title')}
+          </p>
+          <p className="text-sm font-semibold text-brand-black mt-1">{t('noVotes')}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t('noVotesDescription')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Voting closed — tied votes (no winner) ──
   if (pom.status === 'no_winner') {
     return (
-      <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
-            <Trophy className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
-          </div>
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-            {t('title')}
-          </span>
+      <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+          <Trophy className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
         </div>
-        <h3 className="text-sm font-bold text-brand-black">{t('noWinner')}</h3>
-        <p className="text-xs text-gray-400 mt-1">{t('noWinnerDescription')}</p>
+        <div className="flex-1">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {t('title')}
+          </p>
+          <p className="text-sm font-semibold text-brand-black mt-1">{t('noWinner')}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t('noWinnerDescription')}</p>
+        </div>
       </div>
     );
   }
@@ -152,24 +171,24 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
     <>
       <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5">
         {/* Header */}
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
               <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
             </div>
-            <span className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
-              {t('votePrompt')}
+            <span className="text-[10px] font-bold text-brand-green uppercase tracking-widest truncate">
+              {t('title')}
             </span>
           </div>
-          <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
+          <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1 flex-shrink-0">
             <Clock className="w-3 h-3" strokeWidth={1.5} />
             {t('votingOpen')}
           </span>
         </div>
-        <p className="text-xs text-gray-500 mb-3">{t('voteSubtitle')}</p>
+        <p className="text-xs text-gray-500 mb-4">{t('voteSubtitle')}</p>
 
         {/* Submitted / waiting for others state */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-1.5">
           <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-brand-green rounded-full transition-all"
@@ -178,18 +197,18 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
               }}
             />
           </div>
-          <span className="text-[10px] font-semibold text-gray-500 flex-shrink-0">
+          <span className="text-[10px] font-semibold text-gray-500 flex-shrink-0 whitespace-nowrap">
             {t('votersSubmitted', {
               voted: pom.votedCount,
               total: pom.totalEligibleVoters,
             })}
           </span>
         </div>
-        {waiting > 0 && (
-          <p className="text-[11px] text-gray-400 mb-3">
-            {t('awaitingVotes', { count: waiting })}
-          </p>
-        )}
+        <p className="text-[11px] text-gray-400 mb-4">
+          {waiting > 0
+            ? t('awaitingVotes', { count: waiting })
+            : t('allVoted')}
+        </p>
 
         {/* Voted / change-vote or vote button */}
         {pom.hasVoted ? (
@@ -234,6 +253,7 @@ export default function PostMatchSection({ matchId, currentUserId }: PostMatchSe
       <PomVotingSheet
         open={showVoting}
         onClose={() => setShowVoting(false)}
+        format={format}
         candidates={pom.candidates}
         hasVoted={pom.hasVoted}
         votedFor={pom.votedFor}

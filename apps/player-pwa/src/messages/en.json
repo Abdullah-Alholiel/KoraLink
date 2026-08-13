@@ -511,6 +511,9 @@
         "runnerUp": "Runner-up",
         "viewResults": "View full results",
         "willBeDecided": "Player of the Match is decided after the match ends",
-        "pomDecided": "is the Player of the Match!"
+        "pomDecided": "is the Player of the Match!",
+        "noVotes": "No votes were cast",
+        "noVotesDescription": "No votes were taken, so there is no Player of the Match.",
+        "allVoted": "All votes are in"
     }
 }

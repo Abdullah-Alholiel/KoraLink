@@ -9,6 +9,8 @@ interface TeamLineupProps {
     roster?: RosterPlayer[];
     hostId?: string;
     onPlayerClick?: (player: RosterPlayer) => void;
+    /** Hide empty "Open" slots — used when the lineup doubles as a picker (e.g. POTM voting). */
+    hideEmpty?: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ interface TeamLineupProps {
  * Players auto-assigned to Home (White) / Away (Dark) by backend.
  * Each team shows filled players + open slots up to the format's per-side count.
  */
-export default function TeamLineup({ format, roster = [], onPlayerClick }: TeamLineupProps) {
+export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmpty = false }: TeamLineupProps) {
     const t = useTranslations();
 
     // Parse format: '7v7' → 7 per side
@@ -61,7 +63,7 @@ export default function TeamLineup({ format, roster = [], onPlayerClick }: TeamL
                                 onClick={onPlayerClick}
                             />
                         ))}
-                        {Array.from({ length: homeOpen }).map((_, i) => (
+                        {!hideEmpty && Array.from({ length: homeOpen }).map((_, i) => (
                             <EmptySlot key={`home-empty-${i}`} />
                         ))}
                     </div>
@@ -85,7 +87,7 @@ export default function TeamLineup({ format, roster = [], onPlayerClick }: TeamL
                                 onClick={onPlayerClick}
                             />
                         ))}
-                        {Array.from({ length: awayOpen }).map((_, i) => (
+                        {!hideEmpty && Array.from({ length: awayOpen }).map((_, i) => (
                             <EmptySlot key={`away-empty-${i}`} dark />
                         ))}
                     </div>

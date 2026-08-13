@@ -975,6 +975,8 @@ export class MatchesService {
           id: users.id,
           fullName: users.full_name,
           avatarUrl: users.avatar_url,
+          team: match_players.team,
+          isHost: match_players.is_host,
         })
         .from(match_players)
         .innerJoin(users, eq(users.id, match_players.user_id))
@@ -1019,6 +1021,8 @@ export class MatchesService {
           id: c.id,
           fullName: c.fullName ?? 'Player',
           avatarUrl: c.avatarUrl,
+          team: c.team,
+          isHost: c.isHost,
         })),
       };
     }
@@ -1046,7 +1050,7 @@ export class MatchesService {
     }>;
 
     if (results.length === 0) {
-      return { status: 'no_winner' as const };
+      return { status: 'no_votes' as const };
     }
 
     // Check for tie at the top

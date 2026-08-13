@@ -232,7 +232,7 @@ export default function MatchDetailPage({
                     </div>
 
                     {/* Player of the Match — top of page, all states */}
-                    <PostMatchSection matchId={match.id} currentUserId={currentUserId} />
+                    <PostMatchSection matchId={match.id} currentUserId={currentUserId} format={match.format} />
 
                     {isJoined ? (
                         /* ═══ JOINED STATE ═══ */

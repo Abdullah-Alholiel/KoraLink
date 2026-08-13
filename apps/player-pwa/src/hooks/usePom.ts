@@ -9,6 +9,8 @@ export interface PomCandidate {
   id: string;
   fullName: string;
   avatarUrl: string | null;
+  team: 'Home' | 'Away' | null;
+  isHost: boolean;
 }
 
 export interface PomResultRow {
@@ -36,6 +38,7 @@ export type PomResult =
       results: PomResultRow[];
     }
   | { status: 'no_winner' }
+  | { status: 'no_votes' }
   | { status: 'not_completed' };
 
 export interface VoteResult {
