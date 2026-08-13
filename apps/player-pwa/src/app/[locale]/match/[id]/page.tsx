@@ -14,6 +14,7 @@ import {
     AlertTriangle,
     Play,
     CheckCircle2,
+    Users,
     Loader2,
     ChevronRight,
 } from 'lucide-react';
@@ -106,7 +107,12 @@ export default function MatchDetailPage({
     const heroTranslateY = scrollY * 0.4;
 
     const handleJoinClick = () => {
-        setShowPayment(true);
+        // Free matches skip the payment sheet — join directly
+        if (match && match.price === 0) {
+            joinMatch.mutate(id);
+        } else {
+            setShowPayment(true);
+        }
     };
 
     const handlePaySuccess = () => {
@@ -246,6 +252,54 @@ export default function MatchDetailPage({
 
                     {/* Player of the Match — top of page, all states */}
                     <PostMatchSection matchId={match.id} currentUserId={currentUserId} format={match.format} />
+
+                    {/* ════ MATCH STATUS BANNER (all states) ════ */}
+                    {match.status === 'cancelled' && (
+                        <div className="mx-5 mt-4 bg-brand-red/5 border border-brand-red/20 rounded-2xl p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-brand-red/10 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle className="w-5 h-5 text-brand-red" strokeWidth={2} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-brand-red">{t('matchDetail.statusCancelled')}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{t('matchDetail.statusCancelledDesc')}</p>
+                            </div>
+                        </div>
+                    )}
+                    {match.status === 'completed' && (
+                        <div className="mx-5 mt-4 bg-gray-50 border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                <CheckCircle2 className="w-5 h-5 text-gray-500" strokeWidth={2} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-700">{t('matchDetail.statusCompleted')}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">{t('matchDetail.statusCompletedDesc')}</p>
+                            </div>
+                        </div>
+                    )}
+                    {match.status === 'in_progress' && (
+                        <div className="mx-5 mt-4 bg-brand-green/5 border border-brand-green/20 rounded-2xl p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0 relative">
+                                <div className="w-3 h-3 rounded-full bg-brand-green animate-pulse" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-brand-green flex items-center gap-1.5">
+                                    {t('matchDetail.statusInProgress')}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">{t('matchDetail.statusInProgressDesc')}</p>
+                            </div>
+                        </div>
+                    )}
+                    {match.status === 'full' && !isJoined && !isUserHost && (
+                        <div className="mx-5 mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-5 h-5 text-amber-600" strokeWidth={2} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-amber-800">{t('matchDetail.statusFull')}</p>
+                                <p className="text-xs text-amber-600 mt-0.5">{t('matchDetail.statusFullDesc')}</p>
+                            </div>
+                        </div>
+                    )}
 
                     {isJoined ? (
                         /* ═══ JOINED STATE ═══ */
@@ -584,7 +638,9 @@ export default function MatchDetailPage({
                                     "
                                 >
                                     <span>{t('matchDetail.joinMatch')}</span>
-                                    <span className="font-extrabold">{match.price} {match.currency}</span>
+                                    <span className="font-extrabold">
+                                        {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                                    </span>
                                 </button>
                             </div>
                             )}

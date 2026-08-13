@@ -176,7 +176,16 @@
     "playerProfile": "ملف اللاعب",
     "addToCalendar": "أضف إلى التقويم",
     "share": "مشاركة",
-    "linkCopied": "تم نسخ الرابط!"
+    "linkCopied": "تم نسخ الرابط!",
+    "statusFull": "المباراة ممتلئة",
+    "statusFullDesc": "جميع الأماكن محجوزة. تحقق لاحقاً لمعرفة الأماكن المتاحة.",
+    "statusCancelled": "تم إلغاء المباراة",
+    "statusCancelledDesc": "تم إلغاء هذه المباراة من قبل المنظِّم.",
+    "statusCompleted": "انتهت المباراة",
+    "statusCompletedDesc": "انتهت هذه المباراة.",
+    "statusInProgress": "مباشر الآن",
+    "statusInProgressDesc": "هذه المباراة قيد التقدم الآن.",
+    "matchFull": "المباراة ممتلئة"
   },
   "cancelMatch": {
     "title": "إلغاء المباراة؟",

@@ -176,7 +176,16 @@
     "playerProfile": "Player Profile",
     "addToCalendar": "Add to Calendar",
     "share": "Share",
-    "linkCopied": "Link copied!"
+    "linkCopied": "Link copied!",
+    "statusFull": "Match Full",
+    "statusFullDesc": "All spots are taken. Check back later for openings.",
+    "statusCancelled": "Match Cancelled",
+    "statusCancelledDesc": "This match has been cancelled by the host.",
+    "statusCompleted": "Match Completed",
+    "statusCompletedDesc": "This match has ended.",
+    "statusInProgress": "Live Now",
+    "statusInProgressDesc": "This match is currently in progress.",
+    "matchFull": "Match Full"
   },
   "cancelMatch": {
     "title": "Cancel Match?",
