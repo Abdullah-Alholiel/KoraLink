@@ -15,8 +15,16 @@ async function bootstrap(): Promise<void> {
   app.useLogger(app.get(Logger));
 
   const configService = app.get(ConfigService);
-  const playerUrl = configService.get<string>('PLAYER_URL', 'http://localhost:3000');
-  const adminUrl = configService.get<string>('ADMIN_URL', 'http://localhost:3002');
+  const playerUrls = configService
+    .get<string>('PLAYER_URL', 'http://localhost:3000')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const adminUrls = configService
+    .get<string>('ADMIN_URL', 'http://localhost:3002')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const port = configService.get<number>('PORT', 3001);
   const cookieSecret = configService.get<string>('COOKIE_SECRET', 'change-me');
 
@@ -26,7 +34,7 @@ async function bootstrap(): Promise<void> {
 
   // ── CORS — HttpOnly cookies require credentials: true ───────────────────
   app.enableCors({
-    origin: [playerUrl, adminUrl],
+    origin: [...playerUrls, ...adminUrls],
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],

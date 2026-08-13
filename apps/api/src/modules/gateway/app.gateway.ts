@@ -53,9 +53,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
     // Validate origin against the configured whitelist.
     const origin = client.handshake.headers?.origin;
-    const playerUrl = this.config.get<string>('PLAYER_URL', 'http://localhost:3000');
-    const adminUrl = this.config.get<string>('ADMIN_URL', 'http://localhost:3002');
-    const allowedOrigins = [playerUrl, adminUrl];
+    const playerUrls = this.config
+      .get<string>('PLAYER_URL', 'http://localhost:3000')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const adminUrls = this.config
+      .get<string>('ADMIN_URL', 'http://localhost:3002')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const allowedOrigins = [...playerUrls, ...adminUrls];
 
     if (origin && !allowedOrigins.includes(origin)) {
       client.disconnect(true);
