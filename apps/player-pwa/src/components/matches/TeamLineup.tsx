@@ -126,6 +126,7 @@ function PlayerSlot({ player, dark, onClick }: { player: RosterPlayer; dark?: bo
 
 /* ─── Empty Slot ─── */
 function EmptySlot({ dark }: { dark?: boolean }) {
+    const t = useTranslations('matchDetail');
     return (
         <div className="flex items-center gap-1.5 p-1">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -134,7 +135,7 @@ function EmptySlot({ dark }: { dark?: boolean }) {
                 <Users className={`w-2.5 h-2.5 ${dark ? 'text-gray-600' : 'text-gray-300'}`} strokeWidth={1.5} />
             </div>
             <span className={`text-[11px] ${dark ? 'text-gray-600' : 'text-gray-300'}`}>
-                Open
+                {t('openSlot')}
             </span>
         </div>
     );

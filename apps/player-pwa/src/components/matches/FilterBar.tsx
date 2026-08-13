@@ -16,7 +16,12 @@ interface FilterBarProps {
 }
 
 const FORMAT_KEYS = ['5v5', '7v7', '8v8', '11v11'] as const;
-const GENDER_KEYS = ['Men Only', 'Women Only', 'Mixed'] as const;
+// Value (API gender) → display key. API uses 'men'/'women'/'mixed', NOT 'Men Only'.
+const GENDER_KEYS = [
+    { value: 'men', labelKey: 'matchDetail.gender.men' },
+    { value: 'women', labelKey: 'matchDetail.gender.women' },
+    { value: 'mixed', labelKey: 'matchDetail.gender.mixed' },
+] as const;
 const PRICE_OPTIONS = [25, 50, 100];
 
 export default function FilterBar({ filters, onChange }: FilterBarProps) {
@@ -57,7 +62,7 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                 {/* Filter button */}
                 <button
                     onClick={() => setShowSheet(true)}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ml-auto flex-shrink-0 ${
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ms-auto flex-shrink-0 ${
                         activeCount > 0
                             ? 'bg-brand-black text-white'
                             : 'bg-white text-gray-500 border border-gray-200'
@@ -103,20 +108,20 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                                 <div className="flex flex-wrap gap-2">
                                     {GENDER_KEYS.map((g) => (
                                         <button
-                                            key={g}
+                                            key={g.value}
                                             onClick={() =>
                                                 onChange({
                                                     ...filters,
-                                                    gender: filters.gender === g ? null : g,
+                                                    gender: filters.gender === g.value ? null : g.value,
                                                 })
                                             }
                                             className={`px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 ${
-                                                filters.gender === g
+                                                filters.gender === g.value
                                                     ? 'bg-brand-green text-white'
                                                     : 'bg-gray-50 text-gray-600 border border-gray-200'
                                             }`}
                                         >
-                                            {t(`matchDetail.gender.${g === 'Men Only' ? 'men' : g === 'Women Only' ? 'women' : 'mixed'}`)}
+                                            {t(g.labelKey)}
                                         </button>
                                     ))}
                                 </div>

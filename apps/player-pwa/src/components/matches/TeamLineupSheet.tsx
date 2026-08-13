@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import TeamLineup from './TeamLineup';
 import type { RosterPlayer } from '@/types';
 
@@ -14,6 +15,8 @@ interface TeamLineupSheetProps {
 }
 
 export default function TeamLineupSheet({ isOpen, onClose, format, roster = [], hostId, onPlayerClick }: TeamLineupSheetProps) {
+    const t = useTranslations('matchDetail');
+
     if (!isOpen) return null;
 
     return (
@@ -39,7 +42,7 @@ export default function TeamLineupSheet({ isOpen, onClose, format, roster = [], 
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 pb-4">
-                    <h2 className="text-lg font-bold text-brand-black">Team Lineup</h2>
+                    <h2 className="text-lg font-bold text-brand-black">{t('team')}</h2>
                     <button
                         onClick={onClose}
                         className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"

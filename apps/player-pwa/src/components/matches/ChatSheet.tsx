@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Loader2, MessageSquare, AlertTriangle, X, Send, Wifi, WifiOff } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
@@ -28,16 +28,20 @@ function getDateGroup(dateStr: string, now: Date): string {
   return 'today';
 }
 
-function groupMessages(messages: MatchMessage[]) {
+function groupMessages(
+  messages: MatchMessage[],
+  t: (key: string) => string,
+  locale: string,
+) {
   const groups: { label: string; messages: MatchMessage[] }[] = [];
   const now = new Date();
 
   for (const msg of messages) {
     const group = getDateGroup(msg.created_at, now);
     const label =
-      group === 'today' ? 'Today' :
-      group === 'yesterday' ? 'Yesterday' :
-      new Date(msg.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      group === 'today' ? t('messages.today') :
+      group === 'yesterday' ? t('messages.yesterday') :
+      new Date(msg.created_at).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 
     const last = groups[groups.length - 1];
     if (last && last.label === label) {
@@ -58,6 +62,7 @@ export default function ChatSheet({
   matchTitle,
 }: ChatSheetProps) {
   const t = useTranslations();
+  const locale = useLocale();
   const user = useAppStore(selectUser);
   const currentUserId = user?.id;
 
@@ -90,7 +95,7 @@ export default function ChatSheet({
 
   if (!isOpen) return null;
 
-  const grouped = groupMessages(messages);
+  const grouped = groupMessages(messages, t, locale);
   const isSending = sendMessage.isPending;
 
   const handleSend = () => {
@@ -208,7 +213,7 @@ export default function ChatSheet({
               {group.messages.map((msg) => {
                 const isMine = msg.user_id === currentUserId;
                 const avatarInitial = (msg.user?.full_name ?? 'P').charAt(0).toUpperCase();
-                const timeStr = new Date(msg.created_at).toLocaleTimeString('en-US', {
+                const timeStr = new Date(msg.created_at).toLocaleTimeString(locale, {
                   hour: 'numeric',
                   minute: '2-digit',
                   hour12: true,

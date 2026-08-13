@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 
 interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
@@ -23,6 +24,8 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 export default function DatePicker({ onDateSelect, fireOnMount = true, selectedDate }: DatePickerProps) {
+    const t = useTranslations('datePicker');
+    const locale = useLocale();
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const dates = useMemo(() => {
@@ -30,14 +33,16 @@ export default function DatePicker({ onDateSelect, fireOnMount = true, selectedD
         return Array.from({ length: 7 }, (_, i) => {
             const d = new Date(today);
             d.setDate(today.getDate() + i);
-            const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            const isToday = i === 0;
+            // Localized day abbreviation (e.g. "Mon", "الاثنين")
+            const dayAbbr = d.toLocaleDateString(locale, { weekday: 'short' });
             return {
                 date: d,
-                dayLabel: i === 0 ? 'TODAY' : dayNames[d.getDay()],
+                dayLabel: isToday ? t('today') : dayAbbr,
                 dayNumber: d.getDate(),
             };
         });
-    }, []);
+    }, [locale, t]);
 
     // Fire initial onDateSelect on mount so the parent filters by today.
     useEffect(() => {

@@ -185,7 +185,8 @@
     "statusCompletedDesc": "This match has ended.",
     "statusInProgress": "Live Now",
     "statusInProgressDesc": "This match is currently in progress.",
-    "matchFull": "Match Full"
+    "matchFull": "Match Full",
+    "openSlot": "Open"
   },
   "cancelMatch": {
     "title": "Cancel Match?",
@@ -204,7 +205,11 @@
     "time": "Time",
     "price": "Price",
     "spotsLeft": "spots left",
-    "free": "Free"
+    "free": "Free",
+    "title": "Game Details",
+    "paid": "Paid",
+    "water": "Water",
+    "provided": "Provided"
   },
   "host": {
     "title": "Host a Match",
@@ -561,5 +566,8 @@
     "termsMatchesDesc": "Match hosts are responsible for venue bookings. Players agree to attend matches they join. No-shows may affect your karma score and eligibility for Player of the Match voting.",
     "termsPayments": "Payments",
     "termsPaymentsDesc": "Wallet top-ups are non-refundable. Match fees are deducted from your wallet balance upon joining. Refunds for cancelled matches are credited back to your wallet."
+  },
+  "datePicker": {
+    "today": "TODAY"
   }
 }
