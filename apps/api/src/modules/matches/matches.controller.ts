@@ -26,7 +26,6 @@ import { MatchesService } from './matches.service';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
-import { SubmitReviewsDto } from './dto/submit-reviews.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -209,31 +208,5 @@ export class MatchesController {
     @Param('id') id: string,
   ) {
     return this.matchesService.getPomResult(id, user.sub);
-  }
-
-  // ── POST /matches/:id/reviews — Submit player reviews ──────────────────
-  @Post(':id/reviews')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Submit reviews for fellow players after a completed match.' })
-  @ApiOkResponse({ description: 'Reviews submitted successfully.' })
-  submitReviews(
-    @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
-    @Body() dto: SubmitReviewsDto,
-  ) {
-    const reviews = dto.reviews.map((r) => ({
-      revieweeId: r.revieweeId,
-      rating: r.rating,
-      comment: r.comment,
-    }));
-    return this.matchesService.submitReviews(user.sub, id, reviews);
-  }
-
-  // ── GET /matches/:id/reviews — Get match reviews ────────────────────────
-  @Get(':id/reviews')
-  @ApiOperation({ summary: 'Get all reviews for a match.' })
-  @ApiOkResponse({ description: 'List of reviews.' })
-  getMatchReviews(@Param('id') id: string) {
-    return this.matchesService.getMatchReviews(id);
   }
 }

@@ -36,6 +36,13 @@
       "when": 1786529987214,
       "tag": "0004_add-personal-messages",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786607077149,
+      "tag": "0005_spicy_wallow",
+      "breakpoints": true
     }
   ]
 }

@@ -194,8 +194,7 @@
         "time": "Time",
         "price": "Price",
         "spotsLeft": "spots left",
-        "free": "Free",
-        "reviews": "Reviews"
+        "free": "Free"
     },
     "host": {
         "title": "Host a Match",
@@ -310,7 +309,6 @@
         "wallet": "Wallet",
         "myGames": "My Games",
         "pomCount": "POTM",
-        "noReviews": "No reviews",
         "about": "Account",
         "contactSupport": "Contact Support",
         "privacyPolicy": "Privacy Policy",
@@ -508,15 +506,5 @@
         "confirmVote": "Confirm Vote",
         "voteCancel": "Cancel",
         "casting": "Casting..."
-    },
-    "reviews": {
-        "title": "Rate Players",
-        "subtitle": "How was your experience with these players?",
-        "ratePlayers": "Rate your teammates",
-        "rated": "rated",
-        "submit": "Submit Ratings",
-        "submitted": "Reviews submitted! 🎉",
-        "submitting": "Submitting...",
-        "thankYou": "Thanks for the feedback!"
     }
 }

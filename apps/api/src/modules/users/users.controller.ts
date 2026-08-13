@@ -85,12 +85,4 @@ export class UsersController {
   getPublicProfile(@Param('id') id: string) {
     return this.usersService.getPublicProfile(id);
   }
-
-  // ── GET /users/:id/reviews — User's received reviews ──────
-  @Get(':id/reviews')
-  @ApiOperation({ summary: 'Get reviews received by a user' })
-  @ApiOkResponse({ description: 'List of reviews.' })
-  getUserReviews(@Param('id') id: string) {
-    return this.usersService.getUserReviews(id);
-  }
 }

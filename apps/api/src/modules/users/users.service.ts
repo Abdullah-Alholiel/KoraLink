@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, sql, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { users, match_players, match_votes, matches, match_reviews } from '../../database/schema';
+import { users, match_players, match_votes, matches } from '../../database/schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
@@ -307,15 +307,6 @@ export class UsersService {
       .from(match_players)
       .where(eq(match_players.user_id, userId));
 
-    // Get review stats
-    const [{ review_count, review_avg }] = await this.db
-      .select({
-        review_count: sql<number>`COUNT(*)::int`,
-        review_avg: sql<number>`ROUND(AVG(${match_reviews.rating})::numeric, 1)`,
-      })
-      .from(match_reviews)
-      .where(eq(match_reviews.reviewee_id, userId));
-
     return {
       id: user.id,
       full_name: user.full_name,
@@ -325,8 +316,6 @@ export class UsersService {
       skill_level: user.skill_level,
       pom_count,
       games_played,
-      review_count: review_count ?? 0,
-      review_avg: review_avg ?? 0,
     };
   }
 
@@ -352,35 +341,6 @@ export class UsersService {
       .where(
         sql`(${users.full_name} ILIKE ${q} OR ${users.handle} ILIKE ${q})`,
       )
-      .limit(20);
-  }
-
-  /**
-   * Get reviews received by a user.
-   */
-  async getUserReviews(userId: string) {
-    return this.db
-      .select({
-        id: match_reviews.id,
-        rating: match_reviews.rating,
-        comment: match_reviews.comment,
-        created_at: match_reviews.created_at,
-        reviewer: {
-          id: users.id,
-          full_name: users.full_name,
-          avatar_url: users.avatar_url,
-        },
-        match: {
-          id: matches.id,
-          title: matches.title,
-          scheduled_at: matches.scheduled_at,
-        },
-      })
-      .from(match_reviews)
-      .innerJoin(users, eq(users.id, match_reviews.reviewer_id))
-      .innerJoin(matches, eq(matches.id, match_reviews.match_id))
-      .where(eq(match_reviews.reviewee_id, userId))
-      .orderBy(sql`${match_reviews.created_at} DESC`)
       .limit(20);
   }
 }

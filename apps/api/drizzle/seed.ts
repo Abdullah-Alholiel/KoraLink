@@ -38,7 +38,6 @@ async function seed() {
   console.log('🌱 Seeding KoraLink database...\n');
 
   // ── Clear existing data (order respects FK constraints) ───────────────
-  await db.delete(schema.match_reviews);
   await db.delete(schema.match_messages);
   await db.delete(schema.match_votes);
   await db.delete(schema.transactions);
@@ -505,46 +504,6 @@ async function seed() {
   }
   console.log(`✔ Inserted ${voteData.length} POM votes`);
 
-  // ── 7. Reviews ──────────────────────────────────────────────────────
-  const reviewData: Array<{
-    match_id: string;
-    reviewer_id: string;
-    reviewee_id: string;
-    rating: number;
-    comment: string | null;
-  }> = [];
-
-  if (completedMatch1) {
-    const m1Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch1);
-    // Ahmed (host) gets reviewed positively
-    const ahmedReviewers = m1Players.filter((mp) => mp.user_id !== users.ahmed_r!).slice(0, 3);
-    for (const r of ahmedReviewers) {
-      reviewData.push({
-        match_id: completedMatch1,
-        reviewer_id: r.user_id,
-        reviewee_id: users.ahmed_r!,
-        rating: 5,
-        comment: 'Great host, well organized!',
-      });
-    }
-    // Yousef (POM) gets reviewed too
-    const yousefReviewers = m1Players.filter((mp) => mp.user_id !== users.yousef_q!).slice(0, 2);
-    for (const r of yousefReviewers) {
-      reviewData.push({
-        match_id: completedMatch1,
-        reviewer_id: r.user_id,
-        reviewee_id: users.yousef_q!,
-        rating: 5,
-        comment: 'Unstoppable on the pitch!',
-      });
-    }
-  }
-
-  if (reviewData.length > 0) {
-    await db.insert(schema.match_reviews).values(reviewData);
-  }
-  console.log(`✔ Inserted ${reviewData.length} reviews`);
-
   // ── 8. Transactions ─────────────────────────────────────────────────
   await db.insert(schema.transactions).values([
     {
@@ -663,7 +622,6 @@ async function seed() {
   console.log(`  Matches: ${matchRows.length} (incl. 2 completed with POM votes)`);
   console.log(`  Match Players: ${matchPlayersData.length}`);
   console.log(`  POM Votes: ${voteData.length}`);
-  console.log(`  Reviews: ${reviewData.length}`);
   console.log(`  Transactions: 7`);
   console.log(`  Chat Messages: 8`);
 }

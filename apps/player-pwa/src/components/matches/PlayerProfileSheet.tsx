@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { X, Trophy, Star, Users, MessageSquare, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Trophy, Users, Loader2, AlertTriangle } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import type { RosterPlayer } from '@/types';
 
@@ -86,11 +86,6 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                     {profile && !isLoading && (
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div className="bg-white rounded-xl shadow-card p-3 text-center">
-                                <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1.5" strokeWidth={2} />
-                                <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.review_avg ? profile.review_avg.toFixed(1) : '—'}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{t('gameDetails.reviews')}</p>
-                            </div>
-                            <div className="bg-white rounded-xl shadow-card p-3 text-center">
                                 <Trophy className="w-4 h-4 text-brand-green mx-auto mb-1.5" strokeWidth={2} />
                                 <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.pom_count ?? 0}</p>
                                 <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.pomCount')}</p>
@@ -99,15 +94,6 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                                 <Users className="w-4 h-4 text-gray-400 mx-auto mb-1.5" strokeWidth={2} />
                                 <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.games_played ?? 0}</p>
                                 <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.gamesPlayed')}</p>
-                            </div>
-                            <div className="bg-white rounded-xl shadow-card p-3 text-center">
-                                <MessageSquare className="w-4 h-4 text-brand-green/70 mx-auto mb-1.5" strokeWidth={2} />
-                                <p className="text-base font-extrabold text-brand-black" dir="ltr">
-                                    {profile.review_count > 0 ? `${profile.review_avg?.toFixed(1)}` : '—'}
-                                </p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">
-                                    {profile.review_count > 0 ? `${profile.review_count} reviews` : t('profile.noReviews')}
-                                </p>
                             </div>
                         </div>
                     )}

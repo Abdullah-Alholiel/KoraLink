@@ -37,8 +37,6 @@ export interface PublicProfileApi {
   skill_level: string | null;
   pom_count: number;
   games_played: number;
-  review_count: number;
-  review_avg: number;
 }
 
 // ─── Fetch User Profile ────────────────────────────────
@@ -125,29 +123,5 @@ export function useSearchUsers(query: string) {
     queryFn: () => fetcher<SearchUserApi[]>(`/users/search?q=${encodeURIComponent(query)}`),
     enabled: query.length >= 2,
     staleTime: 30_000,
-  });
-}
-
-// ─── Submit Reviews ────────────────────────────────────
-
-export interface ReviewInput {
-  revieweeId: string;
-  rating: number;
-  comment?: string;
-}
-
-export function useSubmitReviews(matchId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation<unknown, FetchError, ReviewInput[]>({
-    mutationFn: (reviews) =>
-      fetcher(`/matches/${matchId}/reviews`, {
-        method: 'POST',
-        body: JSON.stringify({ reviews }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      queryClient.invalidateQueries({ queryKey: ['user'] });
-    },
   });
 }
