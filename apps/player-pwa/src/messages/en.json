@@ -510,6 +510,7 @@
         "awaitingVotes": "Waiting for {count} more to take part",
         "runnerUp": "Runner-up",
         "viewResults": "View full results",
-        "willBeDecided": "Player of the Match is decided after the match ends"
+        "willBeDecided": "Player of the Match is decided after the match ends",
+        "pomDecided": "is the Player of the Match!"
     }
 }

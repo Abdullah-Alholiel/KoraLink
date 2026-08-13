@@ -236,6 +236,9 @@ export const matches = pgTable(
     max_players: integer('max_players').notNull(),
     location: geography('location'),
     completed_at: timestamp('completed_at', { withTimezone: true }),
+    pom_winner_id: varchar('pom_winner_id', { length: 36 })
+      .references(() => users.id, { onDelete: 'set null' }),
+    pom_announced_at: timestamp('pom_announced_at', { withTimezone: true }),
     booking_mode: bookingModeEnum('booking_mode').notNull().default('self'),
     booking_slot_id: varchar('booking_slot_id', { length: 36 })
       .references(() => pitch_slots.id, { onDelete: 'set null' }),

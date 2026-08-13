@@ -155,4 +155,10 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   broadcastRosterUpdate(matchId: string, payload: unknown): void {
     this.server.to(`match:${matchId}`).emit('roster-update', payload);
   }
+
+  // ── POTM decided broadcast (called from MatchesService) ──────────────────
+
+  broadcastPomDecided(matchId: string, payload: unknown): void {
+    this.server.to(`match:${matchId}`).emit('pom-decided', payload);
+  }
 }

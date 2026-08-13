@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Inject,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -13,6 +14,8 @@ import { matches, match_messages, match_players, match_votes, pitch_slots, trans
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
+import { AppGateway } from '../gateway/app.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -45,9 +48,13 @@ type DB = PostgresJsDatabase<typeof schema>;
 
 @Injectable()
 export class MatchesService {
+  private readonly logger = new Logger(MatchesService.name);
+
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly walletService: WalletService,
+    private readonly appGateway: AppGateway,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -935,6 +942,8 @@ export class MatchesService {
         scheduled_at: matches.scheduled_at,
         duration_mins: matches.duration_mins,
         completed_at: matches.completed_at,
+        pom_winner_id: matches.pom_winner_id,
+        pom_announced_at: matches.pom_announced_at,
       })
       .from(matches)
       .where(eq(matches.id, matchId))
@@ -1049,6 +1058,15 @@ export class MatchesService {
     }
 
     const winner = results[0];
+
+    // ── Announce winner exactly once (persist + WS broadcast + push) ──
+    await this.announcePomWinner(matchId, match.pom_winner_id, match.pom_announced_at, {
+      id: winner.candidate_id,
+      fullName: winner.full_name ?? 'Player',
+      avatarUrl: winner.avatar_url,
+      voteCount: winner.vote_count,
+    });
+
     return {
       status: 'completed' as const,
       winner: {
@@ -1064,6 +1082,50 @@ export class MatchesService {
         voteCount: r.vote_count,
       })),
     };
+  }
+
+  /**
+   * Persist the POTM winner and notify attendees exactly once.
+   * Idempotent via pom_announced_at — subsequent calls no-op.
+   */
+  private async announcePomWinner(
+    matchId: string,
+    existingWinnerId: string | null,
+    announcedAt: Date | null,
+    winner: { id: string; fullName: string; avatarUrl: string | null; voteCount: number },
+  ): Promise<void> {
+    if (announcedAt && existingWinnerId === winner.id) {
+      return; // already announced for this winner
+    }
+
+    // Persist winner + announcement timestamp (idempotent gate).
+    await this.db
+      .update(matches)
+      .set(
+        withTimestamp({
+          pom_winner_id: winner.id,
+          pom_announced_at: new Date(),
+        }),
+      )
+      .where(eq(matches.id, matchId));
+
+    const payload = {
+      matchId,
+      winner: { id: winner.id, fullName: winner.fullName, avatarUrl: winner.avatarUrl },
+      voteCount: winner.voteCount,
+    };
+
+    // Real-time broadcast to open clients.
+    try {
+      this.appGateway.broadcastPomDecided(matchId, payload);
+    } catch (err) {
+      this.logger.error(`WS broadcast failed for POTM ${matchId}: ${(err as Error).message}`);
+    }
+
+    // Web-push to attendees (fire-and-forget, config-gated).
+    this.notificationsService
+      .sendPomDecidedNotification(matchId, payload)
+      .catch(() => undefined);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

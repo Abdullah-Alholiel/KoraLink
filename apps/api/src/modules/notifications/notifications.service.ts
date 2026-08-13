@@ -1,6 +1,8 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { eq, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as webpush from 'web-push';
 import * as schema from '../../database/schema';
 import { push_subscriptions, match_players } from '../../database/schema';
 
@@ -16,7 +18,26 @@ export interface PushSubscriptionDto {
 
 @Injectable()
 export class NotificationsService {
-  constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
+  private readonly logger = new Logger(NotificationsService.name);
+  private vapidConfigured = false;
+
+  constructor(
+    @Inject('DB_CONNECTION') private readonly db: DB,
+    private readonly config: ConfigService,
+  ) {
+    const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
+    const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY');
+    const subject = this.config.get<string>('VAPID_SUBJECT', 'mailto:hello@koralink.sa');
+
+    if (publicKey && privateKey) {
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+      this.vapidConfigured = true;
+    } else {
+      this.logger.warn(
+        'Web Push VAPID keys not configured — push notifications disabled. Set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY.',
+      );
+    }
+  }
 
   /**
    * Store a push subscription for a user.
@@ -94,5 +115,46 @@ export class NotificationsService {
       p256dh: string;
       auth: string;
     }>;
+  }
+
+  /**
+   * Send a "Player of the Match decided" push notification to every
+   * attendee of a match. Gracefully no-ops when VAPID keys are not configured
+   * (in-app WebSocket broadcast still delivers the result to open clients).
+   */
+  async sendPomDecidedNotification(
+    matchId: string,
+    payload: { matchId: string; winner: { id: string; fullName: string; avatarUrl: string | null }; voteCount: number },
+  ): Promise<number> {
+    if (!this.vapidConfigured) {
+      return 0;
+    }
+
+    const subs = await this.getMatchSubscriptions(matchId);
+    let sent = 0;
+
+    const body = JSON.stringify({
+      title: '🏆 Player of the Match',
+      body: `${payload.winner.fullName} was voted Player of the Match!`,
+      data: { type: 'pom-decided', matchId: payload.matchId, winnerId: payload.winner.id },
+    });
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
+          body,
+        );
+        sent += 1;
+      } catch (err) {
+        // Invalid/expired subscription — ignore and continue.
+        this.logger.debug(`Push failed for ${sub.endpoint.slice(0, 20)}…: ${(err as Error).message}`);
+      }
+    }
+
+    return sent;
   }
 }

@@ -43,6 +43,13 @@
       "when": 1786607077149,
       "tag": "0005_spicy_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786607682795,
+      "tag": "0006_dashing_viper",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Trophy, Crown, Check, Loader2, Clock, ChevronRight, Pencil } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { io, Socket } from 'socket.io-client';
+import { env } from '@/env.mjs';
+import { useAppStore } from '@/store/useAppStore';
 import { usePomResult, useVote } from '@/hooks/usePom';
 import PomVotingSheet from './PomVotingSheet';
 import PomResultsSheet from './PomResultsSheet';
@@ -14,10 +18,32 @@ interface PostMatchSectionProps {
 
 export default function PostMatchSection({ matchId, currentUserId }: PostMatchSectionProps) {
   const t = useTranslations('pom');
+  const queryClient = useQueryClient();
+  const showToast = useAppStore((s) => s.showToast);
   const { data: pom, isLoading } = usePomResult(matchId, currentUserId);
   const voteMutation = useVote(matchId);
   const [showVoting, setShowVoting] = useState(false);
   const [showResults, setShowResults] = useState(false);
+
+  // Real-time: listen for the POTM winner being decided while viewing.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('koralink_token');
+    const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+    socket.on('connect', () => socket.emit('join-lobby', { matchId }));
+    socket.on('pom-decided', (payload: { winner: { fullName: string } }) => {
+      queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
+      showToast(`🏆 ${payload.winner.fullName} — ${t('pomDecided')}`, 'success');
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [matchId, queryClient, showToast, t]);
 
   if (isLoading) {
     return (
