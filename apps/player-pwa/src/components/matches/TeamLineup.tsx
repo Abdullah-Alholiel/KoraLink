@@ -17,13 +17,12 @@ interface TeamLineupProps {
  * Two-team lineup with dynamic roster from DB.
  * Players auto-assigned to Home (White) / Away (Dark) by backend.
  *
- * Layout adapts to the format so every player is visible on every screen:
- * - Small sides (≤6 per team): single column per team, two teams side-by-side
- *   on ≥sm screens (the classic match-card look).
- * - Large sides (7+ per team: 7v7, 8v8, 11v11): player chips flow in a
- *   2-column grid inside each team card, and the two team cards stack
- *   vertically on phones (side-by-side from lg up) — full-width columns mean
- *   every row stays readable and the card never collapses into a narrow tower.
+ * The two teams are ALWAYS side-by-side (classic match-sheet look) on every
+ * screen and every format. Inside each team card:
+ * - Small sides (≤6 per team): single column of tall rows.
+ * - Large sides (7+ per team: 7v7, 8v8, 11v11): players flow in a compact
+ *   2-column grid so an 11-per-side roster stays readable in a half-width
+ *   column instead of becoming an 11-row tower.
  */
 export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmpty = false }: TeamLineupProps) {
     const t = useTranslations();
@@ -56,7 +55,7 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
                 </span>
             </div>
 
-            <div className={isLargeFormat ? 'flex flex-col lg:flex-row gap-3' : 'flex gap-3'}>
+            <div className="flex gap-3">
                 {/* ── Team Home (White) ── */}
                 <div className="flex-1 min-w-0 bg-white rounded-2xl shadow-card p-3">
                     <TeamHeader
