@@ -19,6 +19,8 @@ import {
     ChevronRight,
     Crown,
     ShieldAlert,
+    Lock as LockIcon,
+    UserPlus,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
@@ -398,6 +400,38 @@ export default function MatchDetailPage({
                                     location={match.location}
                                 />
                             </div>
+
+                            {/* Private match banner — invite link is the only way in */}
+                            {match.isPrivate && (
+                                <div className="mx-5 mt-4 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                                    <div className="flex items-start gap-3">
+                                        <LockIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-amber-900">
+                                                {t('matchDetail.privateBannerTitle')}
+                                            </p>
+                                            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                                                {t('matchDetail.privateBannerText')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const url = typeof window !== 'undefined' ? window.location.href : '';
+                                            if (navigator.share) {
+                                                navigator.share({ title: match.title, text: t('matchDetail.inviteShareText'), url });
+                                            } else {
+                                                navigator.clipboard?.writeText(url);
+                                                showToast(t('matchDetail.linkCopied'), 'success');
+                                            }
+                                        }}
+                                        className="mt-3 w-full flex items-center justify-center gap-2 bg-amber-500 text-white rounded-full py-2.5 text-sm font-bold active:scale-[0.98] transition-transform shadow-[0_4px_16px_rgba(245,158,11,0.35)]"
+                                    >
+                                        <UserPlus className="w-4 h-4" strokeWidth={2} />
+                                        {t('matchDetail.copyInviteLink')}
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Calendar + Share Actions */}
                             <div className="flex gap-3 mx-5 mt-4">

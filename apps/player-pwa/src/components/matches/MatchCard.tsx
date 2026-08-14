@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
 import { formatDistance } from '@/lib/format';
@@ -144,6 +144,12 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-green bg-brand-green/10 rounded-full px-2 py-1">
                         <Navigation className="w-3 h-3" strokeWidth={2} />
                         {formatDistance(match.distanceM, locale === 'ar' ? 'ar' : 'en')}
+                    </span>
+                )}
+                {match.isPrivate && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
+                        <LockIcon className="w-3 h-3" strokeWidth={2} />
+                        {t('matchDetail.private')}
                     </span>
                 )}
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">

@@ -43,6 +43,7 @@ export interface NearbyMatchRow {
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
+  visibility: 'public' | 'private';
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -115,7 +116,10 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Returns open matches within `radius_km` of the given coordinates,
+   * Returns matches ordered by proximity when coordinates are supplied
+   * (nearest-first, soft geo — never a hard radius exclusion), otherwise
+   * chronologically. Private matches are returned only to their own
+   * host/participants.
    * optionally filtered by date.
    *
    * Uses Drizzle's `sql` template tag for raw PostGIS function calls so the
@@ -132,27 +136,16 @@ export class MatchesService {
       throw new BadRequestException('Both lat and lng must be provided together.');
     }
 
-    const radiusMetres = radius_km * 1000;
     const hasCoords = lat !== undefined && lng !== undefined;
 
-    // ── Date window filter ─────────────────────────────────────────────────
+    // ── Date window filter (Riyadh local day, matches the PWA's dateInRiyadh) ──
     const dateClause = date
-      ? sql`AND m.scheduled_at::date = ${date}::date`
+      ? sql`AND (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')::date = ${date}::date`
       : sql``;
 
-    // ── Geo filter ─────────────────────────────────────────────────────────
-    // ST_DWithin on the denormalised `location` geography column.
-    // Great-circle distance in metres is used for the radius check.
-    const geoClause = hasCoords
-      ? sql`
-          AND ST_DWithin(
-            m.location,
-            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
-            ${radiusMetres}
-          )`
-      : sql``;
-
-    // ── Distance expression ────────────────────────────────────────────────
+    // ── Geo: SOFT — distance is computed for sorting/badging only. Discovery
+    // never excludes matches by radius: a public match anywhere is visible to
+    // everyone (product decision, US2). NULL location → NULL distance. ──
     const distanceExpr = hasCoords
       ? sql`ST_Distance(
             m.location,
@@ -205,7 +198,8 @@ export class MatchesService {
         v.name                    AS venue_name,
         v.city                    AS venue_city,
         COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined,
-        EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${currentUserId}::text) AS has_voted
+        EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${currentUserId}::text) AS has_voted,
+        m.visibility               AS visibility
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id
@@ -235,14 +229,29 @@ export class MatchesService {
               `
         }
       )
-        ${geoClause}
+        -- Visibility: private matches are hidden from discovery feeds for
+        -- everyone except their own host/participants (invite-link only).
+        -- EXISTS subquery — aggregates are not allowed in WHERE.
+        AND (
+          m.visibility = 'public'
+          OR m.host_id = ${currentUserId ?? null}::text
+          OR EXISTS (
+            SELECT 1 FROM match_players mpv
+            WHERE mpv.match_id = m.id AND mpv.user_id = ${currentUserId ?? null}::text
+          )
+        )
         ${dateClause}
         ${formatClause}
         ${genderClause}
         ${priceClause}
         ${venueClause}
       GROUP BY m.id, u.id, p.id, v.id
-      ORDER BY m.scheduled_at ASC
+      ORDER BY
+        ${
+          hasCoords
+            ? sql`distance_m ASC NULLS LAST, m.scheduled_at ASC`
+            : sql`m.scheduled_at ASC`
+        }
       LIMIT 50
     `);
 
@@ -537,6 +546,7 @@ export class MatchesService {
       pitchCostSar: number;
       booking_mode: 'koralink' | 'self';
       booking_slot_id?: string;
+      visibility?: 'public' | 'private';
     },
   ) {
     // Validate pitch exists and fetch venue location for geo-discovery
@@ -595,6 +605,7 @@ export class MatchesService {
           price_per_player: pricePerPlayer.toString(),
           max_players: dto.max_players,
           status: 'Open',
+          visibility: dto.visibility ?? 'public',
           booking_mode: dto.booking_mode ?? 'self',
           booking_slot_id: dto.booking_mode === 'koralink' ? dto.booking_slot_id : null,
           // Inherit venue location so geo-discovery works for user-created matches
@@ -661,18 +672,22 @@ export class MatchesService {
     const fullMatch = await this.findOne(created.id);
 
     // Fan out "created_match" to the host's followers (fire-and-forget).
-    const followers = await this.db
-      .select({ follower_id: schema.follows.follower_id })
-      .from(schema.follows)
-      .where(eq(schema.follows.following_id, hostId));
-    await this.activitiesService
-      .record({
-        actorId: hostId,
-        verb: 'created_match',
-        matchId: created.id,
-        recipients: followers.map((f) => f.follower_id),
-      })
-      .catch(() => undefined);
+    // Private matches NEVER fan out — they must stay invisible to
+    // non-participants in every feed (product rule US3).
+    if ((dto.visibility ?? 'public') === 'public') {
+      const followers = await this.db
+        .select({ follower_id: schema.follows.follower_id })
+        .from(schema.follows)
+        .where(eq(schema.follows.following_id, hostId));
+      await this.activitiesService
+        .record({
+          actorId: hostId,
+          verb: 'created_match',
+          matchId: created.id,
+          recipients: followers.map((f) => f.follower_id),
+        })
+        .catch(() => undefined);
+    }
 
     return fullMatch;
   }

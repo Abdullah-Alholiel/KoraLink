@@ -37,6 +37,7 @@ export const hostMatchSchema = z.object({
   pitchCostSar: z.number().min(0).default(0),
   booking_mode: z.enum(['koralink', 'self']).default('self'),
   booking_slot_id: z.string().min(1).optional(),
+  visibility: z.enum(['public', 'private']).default('public'),
 });
 
 export type HostMatchInput = z.infer<typeof hostMatchSchema>;

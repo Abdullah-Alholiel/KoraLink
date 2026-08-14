@@ -61,4 +61,10 @@ export class CreateMatchDto {
   @IsOptional()
   @IsString()
   booking_slot_id?: string;
+
+  @ApiPropertyOptional({ enum: ['public', 'private'], default: 'public',
+    description: 'Public matches are discoverable by everyone; private matches are only accessible via the invite link' })
+  @IsOptional()
+  @IsEnum(['public', 'private'])
+  visibility?: 'public' | 'private';
 }

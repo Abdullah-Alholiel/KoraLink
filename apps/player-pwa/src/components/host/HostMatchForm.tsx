@@ -14,6 +14,7 @@ import PitchSelector from './PitchSelector';
 import SlotPicker from './SlotPicker';
 import CostFooter from './CostFooter';
 import PublishWarningSheet from './PublishWarningSheet';
+import VisibilityToggle, { type Visibility } from './VisibilityToggle';
 import type { PitchSlotApi } from '@/hooks/usePitchSlots';
 
 export default function HostMatchForm() {
@@ -29,6 +30,7 @@ export default function HostMatchForm() {
 
     /* ── Mode State ──────────────────────────────── */
     const [mode, setMode] = useState<'koralink' | 'self'>('self');
+    const [visibility, setVisibility] = useState<Visibility>('public');
     const [showWarning, setShowWarning] = useState(false);
 
     /* ── Form State ─────────────────────────────── */
@@ -123,6 +125,7 @@ export default function HostMatchForm() {
             pitchCostSar,
             booking_mode: mode,
             booking_slot_id: mode === 'koralink' ? selectedSlot?.id : undefined,
+            visibility,
         };
 
         createMatch.mutate(payload, {
@@ -159,6 +162,11 @@ export default function HostMatchForm() {
                 MODE TOGGLE
             ═══════════════════════════════════ */}
             <ModeToggle mode={mode} onModeChange={handleModeChange} />
+
+            {/* ══════════════════════════════════════
+                VISIBILITY (public / private) — shared by both modes
+            ═══════════════════════════════════ */}
+            <VisibilityToggle value={visibility} onChange={setVisibility} />
 
             {/* ══════════════════════════════════════
                 SCROLLABLE BODY

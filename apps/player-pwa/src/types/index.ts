@@ -62,6 +62,8 @@ export interface Match {
     isUserHost?: boolean;
     /** True if the current user has already cast a POTM vote for this match. */
     hasVotedPotm?: boolean;
+    /** True when the match is invite-link only (visibility = 'private'). */
+    isPrivate?: boolean;
 }
 
 export interface RosterPlayer {

@@ -221,9 +221,17 @@ export const pitch_slots = pgTable('pitch_slots', {
   index('idx_slots_available').on(table.is_booked).where(sql`${table.is_booked} = false`),
 ]);
 
+export const matchVisibilityEnum = pgEnum('match_visibility', [
+  'public',
+  'private',
+] as const);
+
 export const matches = pgTable(
   'matches',
   {
+    visibility: matchVisibilityEnum('visibility')
+      .notNull()
+      .default('public'),
     id: varchar('id', { length: 36 })
       .primaryKey()
       .$defaultFn(() => randomUUID()),

@@ -33,6 +33,8 @@ export interface NearbyMatchApi {
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
+  /** Match visibility — 'private' matches are invite-link only. */
+  visibility?: 'public' | 'private';
   /** True if the current user already voted POTM for this match. */
   has_voted?: boolean;
   last_message?: string | null;
@@ -51,6 +53,7 @@ export interface MatchDetailApi {
   price_per_player: string | number;
   max_players: number;
   location?: unknown; // PostGIS geography (may be absent in JSON)
+  visibility?: 'public' | 'private';
   created_at?: string;
   updated_at?: string;
   host: MatchHostApi;
@@ -307,6 +310,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
     hasVotedPotm: row.has_voted ?? false,
     distanceM: row.distance_m ?? null,
+    isPrivate: row.visibility === 'private',
   };
 }
 
@@ -361,6 +365,7 @@ export function adaptMatchDetail(
     isUserHost: currentUserId
       ? detail.host_id === currentUserId
       : false,
+    isPrivate: detail.visibility === 'private',
   };
 }
 
