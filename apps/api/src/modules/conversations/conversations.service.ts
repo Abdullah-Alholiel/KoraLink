@@ -15,6 +15,8 @@ import {
   users,
 } from '../../database/schema';
 import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -53,6 +55,8 @@ export class ConversationsService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly activitiesService: ActivitiesService,
+    private readonly notificationsService: NotificationsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async findOrCreateDirect(userId: string, targetUserId: string): Promise<Conversation> {
@@ -225,6 +229,25 @@ export class ConversationsService {
       subjectId: others[0]?.user_id,
       recipients: others.map((o) => o.user_id),
     });
+
+    // Web push for recipients with no live socket (PWA closed, US10).
+    const offline = others
+      .map((o) => o.user_id)
+      .filter((uid) => !this.realtime.isUserOnline(uid));
+    if (offline.length > 0) {
+      const [sender] = await this.db
+        .select({ full_name: users.full_name })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      await this.notificationsService
+        .sendPushToUsers(offline, {
+          title: sender?.full_name ?? 'KoraLink',
+          body: trimmed.slice(0, 80),
+          data: { type: 'dm', conversationId },
+        })
+        .catch(() => 0);
+    }
 
     const [sender] = await this.db
       .select({

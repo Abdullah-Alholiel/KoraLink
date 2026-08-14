@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
 import * as schema from '../../database/schema';
@@ -115,6 +115,54 @@ export class NotificationsService {
       p256dh: string;
       auth: string;
     }>;
+  }
+
+  /**
+   * Generic web-push to a list of users' subscribed devices (US10).
+   * Gracefully no-ops when VAPID keys are not configured or the users have
+   * no subscriptions. Invalid/expired subscriptions are pruned.
+   */
+  async sendPushToUsers(
+    userIds: string[],
+    payload: { title: string; body: string; data: { type: string; matchId?: string; conversationId?: string } },
+  ): Promise<number> {
+    if (!this.vapidConfigured || userIds.length === 0) {
+      return 0;
+    }
+
+    const subs = await this.db
+      .select({
+        endpoint: push_subscriptions.endpoint,
+        p256dh: push_subscriptions.p256dh,
+        auth: push_subscriptions.auth,
+      })
+      .from(push_subscriptions)
+      .where(inArray(push_subscriptions.user_id, userIds));
+
+    let sent = 0;
+    const body = JSON.stringify(payload);
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          body,
+        );
+        sent += 1;
+      } catch (err) {
+        const statusCode = (err as { statusCode?: number }).statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          // Subscription no longer valid — prune it.
+          await this.db
+            .delete(push_subscriptions)
+            .where(eq(push_subscriptions.endpoint, sub.endpoint));
+        }
+        this.logger.debug(
+          `Push failed for ${sub.endpoint.slice(0, 20)}…: ${(err as Error).message}`,
+        );
+      }
+    }
+    return sent;
   }
 
   /**

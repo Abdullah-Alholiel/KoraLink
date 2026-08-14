@@ -19,6 +19,8 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { match_players, match_messages, users } from '../../database/schema';
 import { ConversationsService } from '../conversations/conversations.service';
+import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from './realtime.service';
 
 interface AuthenticatedSocket extends Socket {
@@ -51,6 +53,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     private readonly config: ConfigService,
     private readonly conversationsService: ConversationsService,
     private readonly realtime: RealtimeService,
+    private readonly activitiesService: ActivitiesService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   afterInit(): void {
@@ -180,6 +184,59 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     this.server
       .to(`match:${data.matchId}`)
       .emit('new-message', message);
+
+    // ── Notify participants NOT viewing this match (US8) ────────────────
+    // Room membership = currently viewing. Everyone else on the roster gets
+    // a personal-room 'notification' (bell/toast) + web push.
+    try {
+      const roster = await this.db
+        .select({ user_id: match_players.user_id })
+        .from(match_players)
+        .where(eq(match_players.match_id, data.matchId));
+
+      // @WebSocketServer() on a namespaced gateway injects the NAMESPACE, so
+      // use its own adapter/socket maps (this.server.sockets is undefined).
+      const nsp = this.server as unknown as import('socket.io').Namespace;
+      const viewing = [
+        ...(nsp.adapter.rooms?.get(`match:${data.matchId}`) ?? new Set<string>()),
+      ];
+      const viewingUserIds = new Set<string>();
+      for (const socketId of viewing) {
+        const sock = nsp.sockets.get(socketId) as AuthenticatedSocket | undefined;
+        if (sock?.userId) viewingUserIds.add(sock.userId);
+      }
+
+      const absent = roster
+        .map((r) => r.user_id)
+        .filter((uid) => uid !== client.userId && !viewingUserIds.has(uid));
+
+      if (absent.length > 0) {
+        const matchRow = await this.db
+          .select({ title: schema.matches.title })
+          .from(schema.matches)
+          .where(eq(schema.matches.id, data.matchId))
+          .limit(1);
+
+        await this.activitiesService.record({
+          actorId: client.userId,
+          verb: 'messaged',
+          matchId: data.matchId,
+          recipients: absent,
+        });
+
+        // Web push for users with no live socket at all (PWA closed).
+        const offline = absent.filter((uid) => !this.realtime.isUserOnline(uid));
+        if (offline.length > 0) {
+          await this.notificationsService.sendPushToUsers(offline, {
+            title: `${user.full_name ?? 'KoraLink'}`,
+            body: `${data.content.trim().slice(0, 80)} · ${matchRow[0]?.title ?? ''}`,
+            data: { type: 'match-chat', matchId: data.matchId },
+          });
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`chat notify fan-out failed: ${(err as Error).message}`);
+    }
   }
 
   // ── Join a conversation (DM room) ────────────────────────────────────────
