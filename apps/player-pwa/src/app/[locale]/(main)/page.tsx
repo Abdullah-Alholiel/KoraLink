@@ -29,7 +29,7 @@ export default function CommunityFeedPage() {
       <div className="flex items-center justify-between px-5 pt-[var(--top-safe-inset)] pb-3">
         <div>
           <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
-          <p className="text-sm text-gray-400 mt-1">{tc('feedSubtitle')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
       </div>
 

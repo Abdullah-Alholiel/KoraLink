@@ -5,6 +5,7 @@ import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import { LocationProvider } from '@/providers/LocationProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
+import ServiceWorkerUpdater from '@/components/auth/ServiceWorkerUpdater';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -103,6 +104,7 @@ export default async function RootLayout({
             <IntlClientProvider locale={locale} messages={messages}>
               <LocationProvider>
                 <AuthBootstrap />
+                <ServiceWorkerUpdater />
                 <div className="app-shell">{children}</div>
               </LocationProvider>
             </IntlClientProvider>

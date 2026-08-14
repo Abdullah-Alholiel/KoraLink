@@ -5,6 +5,7 @@ import { X, Trophy, Users, Loader2, AlertTriangle } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
 import FollowButton from '@/components/features/FollowButton';
+import { selectUser, useAppStore } from '@/store/useAppStore';
 import type { RosterPlayer } from '@/types';
 
 interface PlayerProfileSheetProps {
@@ -16,6 +17,8 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
     const t = useTranslations();
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
+    const storeUser = useAppStore(selectUser);
+    const isSelf = player?.userId === storeUser?.id;
 
     if (!player) return null;
 
@@ -103,8 +106,8 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                         </div>
                     )}
 
-                    {/* ── Follow ── */}
-                    {profile && !isLoading && (
+                    {/* ── Follow (hidden for self) ── */}
+                    {profile && !isLoading && !isSelf && (
                         <div className="bg-white rounded-xl shadow-card p-4 mb-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-4">
                                 <span className="text-center">
