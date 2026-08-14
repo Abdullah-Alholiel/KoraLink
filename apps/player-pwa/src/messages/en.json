@@ -321,7 +321,13 @@
     "visibilityPublic": "Public",
     "visibilityPrivate": "Private",
     "visibilityPublicDesc": "Anyone can discover and join this match",
-    "visibilityPrivateDesc": "Only people with your invite link can find this match"
+    "visibilityPrivateDesc": "Only people with your invite link can find this match",
+    "lockedByPitch": "Format is set by the selected pitch",
+    "formatFromPitchHint": "Choose a venue and pitch first — the match format follows the pitch size",
+    "pitchSelected": "Selected pitch",
+    "changePitch": "Change",
+    "slotSelected": "Selected slot",
+    "changeSlot": "Change"
   },
   "profile": {
     "title": "Profile",

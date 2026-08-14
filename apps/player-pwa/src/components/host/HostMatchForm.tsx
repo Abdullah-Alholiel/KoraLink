@@ -71,6 +71,15 @@ export default function HostMatchForm() {
     const [genderRule, setGenderRule] = useState<GenderRule>('Men Only');
     const [duration, setDuration] = useState(60);
 
+    // Format is ALWAYS derived from the selected pitch (US4). While no pitch
+    // is chosen the free picker is unavailable — pick a pitch first.
+    const effectiveFormat = (selectedPitch?.size as Format | undefined) ?? null;
+    useEffect(() => {
+        if (effectiveFormat && effectiveFormat !== format) {
+            setFormat(effectiveFormat);
+        }
+    }, [effectiveFormat]); // eslint-disable-line react-hooks/exhaustive-deps
+
     /** Compute match duration in minutes from a slot's start_time and end_time.
      *  Handles overnight slots (end < start) by wrapping around 24h. */
     const computeSlotDuration = (slot: PitchSlotApi): number => {
@@ -87,8 +96,9 @@ export default function HostMatchForm() {
     const pitchRate = selectedPitch ? parseFloat(String(selectedPitch.hourly_rate)) : 0;
     const pitchCostSar = pitchRate > 0 ? pitchRate : 0;
 
-    // Calculate player share (host plays free)
-    const playersPerSide = format ? parseInt(format.split('v')[0]) : 7;
+    // Calculate player share (host plays free) — always derived from the
+    // pitch's size, never from a free-standing format choice.
+    const playersPerSide = effectiveFormat ? parseInt(effectiveFormat.split('v')[0]) : 0;
     const maxPlayers = playersPerSide * 2;
     const playerShare = maxPlayers > 1 ? Math.ceil(pitchCostSar / (maxPlayers - 1)) : pitchCostSar;
 
@@ -201,7 +211,7 @@ export default function HostMatchForm() {
                                 </button>
                             </div>
 
-                            {/* Pitch selection */}
+                            {/* Pitch selection — collapses to a locked summary once chosen */}
                             {venueDetail?.pitches && (
                                 <PitchSelector
                                     pitches={venueDetail.pitches}
@@ -215,6 +225,7 @@ export default function HostMatchForm() {
                                             setTime('');
                                         }
                                     }}
+                                    onClear={() => setSelectedPitch(null)}
                                 />
                             )}
 
@@ -282,7 +293,7 @@ export default function HostMatchForm() {
                 {/* ── SHARED MATCH DETAILS ──────────── */}
                 <MatchDetailsForm
                     title={title} setTitle={setTitle}
-                    format={format} setFormat={setFormat}
+                    lockedFormat={effectiveFormat ?? undefined}
                     matchType={matchType} setMatchType={setMatchType}
                     genderRule={genderRule} setGenderRule={setGenderRule}
                     date={date} setDate={setDate}

@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, Clock, Shield } from 'lucide-react';
+import { Calendar, Clock, Shield, MapPin } from 'lucide-react';
 
 /* ── Format options ─────────────────────────────── */
 export const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
@@ -29,8 +29,6 @@ export const MATCH_TYPE_I18N_MAP: Record<MatchTypeValue, string> = {
 export interface MatchDetailsFormProps {
     title: string;
     setTitle: (v: string) => void;
-    format: Format;
-    setFormat: (v: Format) => void;
     matchType: MatchTypeValue;
     setMatchType: (v: MatchTypeValue) => void;
     genderRule: GenderRule;
@@ -45,11 +43,12 @@ export interface MatchDetailsFormProps {
     readOnlyDateTime?: boolean;
     /** When true, duration is computed from the slot — section is locked */
     readOnlyDuration?: boolean;
+    /** When set, format is locked to the selected pitch's size (US4) */
+    lockedFormat?: Format;
 }
 
 export default function MatchDetailsForm({
     title, setTitle,
-    format, setFormat,
     matchType, setMatchType,
     genderRule, setGenderRule,
     date, setDate,
@@ -57,6 +56,7 @@ export default function MatchDetailsForm({
     duration, setDuration,
     readOnlyDateTime = false,
     readOnlyDuration = false,
+    lockedFormat,
 }: MatchDetailsFormProps) {
     const locale = useLocale();
     const t = useTranslations();
@@ -84,26 +84,33 @@ export default function MatchDetailsForm({
                 )}
             </div>
 
-            {/* ── FORMAT ────────────────────────── */}
+            {/* ── FORMAT ───────────────────────────── */}
             <div className="px-5 pt-6">
                 <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
                     {t('host.format')}
                 </p>
-                <div className="flex gap-2">
-                    {FORMAT_OPTIONS.map((f) => (
-                        <button
-                            key={f}
-                            onClick={() => setFormat(f)}
-                            className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all border active:scale-95 ${
-                                format === f
-                                    ? 'bg-brand-green text-white border-brand-green shadow-sm'
-                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                            }`}
-                        >
-                            {f}
-                        </button>
-                    ))}
-                </div>
+                {lockedFormat ? (
+                    /* Format locked to the selected pitch's size (US4) */
+                    <div className="bg-brand-green/5 rounded-xl border border-brand-green/20 p-3.5 flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-brand-green flex-shrink-0" strokeWidth={2} />
+                        <div>
+                            <p className="text-sm font-bold text-brand-black">{lockedFormat}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                {t('host.lockedByPitch')}
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    /* No pitch yet — format derives from the pitch, so prompt
+                     * for pitch selection instead of offering a free picker
+                     * that the pitch would silently override (US4). */
+                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-3.5 flex items-center gap-3">
+                        <MapPin className="w-5 h-5 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                        <p className="text-xs text-gray-500">
+                            {t('host.formatFromPitchHint')}
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* ── MATCH TYPE ──────────────────── */}

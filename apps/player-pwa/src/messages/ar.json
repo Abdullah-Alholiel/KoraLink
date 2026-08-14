@@ -321,7 +321,13 @@
     "visibilityPublic": "عام",
     "visibilityPrivate": "خاص",
     "visibilityPublicDesc": "يمكن لأي شخص اكتشاف هذه المباراة والانضمام إليها",
-    "visibilityPrivateDesc": "الأشخاص الذين لديهم رابط الدعوة فقط يمكنهم العثور على هذه المباراة"
+    "visibilityPrivateDesc": "الأشخاص الذين لديهم رابط الدعوة فقط يمكنهم العثور على هذه المباراة",
+    "lockedByPitch": "الصيغة محددة حسب الملعب المختار",
+    "formatFromPitchHint": "اختر المكان والملعب أولاً — صيغة المباراة تتبع حجم الملعب",
+    "pitchSelected": "الملعب المختار",
+    "changePitch": "تغيير",
+    "slotSelected": "الفترة المحجوزة",
+    "changeSlot": "تغيير"
   },
   "profile": {
     "title": "الملف الشخصي",
