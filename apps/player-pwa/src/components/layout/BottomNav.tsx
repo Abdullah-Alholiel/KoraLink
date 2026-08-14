@@ -10,6 +10,7 @@ import {
     MessageSquare,
     User,
 } from 'lucide-react';
+import { useAppStore, selectMessagesBadge } from '@/store/useAppStore';
 
 const navItems = [
     { key: 'feed', icon: Rss, i18nKey: 'nav.feed' as const, href: '' },
@@ -23,6 +24,7 @@ export default function BottomNav() {
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations();
+    const messagesBadge = useAppStore(selectMessagesBadge);
 
     const isActive = (href: string) => {
         const fullPath = `/${locale}${href}`;
@@ -82,16 +84,27 @@ export default function BottomNav() {
 
                     /* ── Regular Nav Items ───────────────── */
                     const Icon = item.icon!;
+                    const badge = item.key === 'messages' ? messagesBadge : 0;
                     return (
                         <Link
                             key={item.key}
                             href={`/${locale}${item.href}`}
-                            className="flex flex-col items-center py-1 px-3 min-w-[48px]"
+                            className="flex flex-col items-center py-1 px-3 min-w-[48px] relative"
                         >
-                            <Icon
-                                className={`w-5 h-5 ${active ? 'text-brand-green' : 'text-gray-400'}`}
-                                strokeWidth={active ? 2.5 : 1.5}
-                            />
+                            <span className="relative">
+                                <Icon
+                                    className={`w-5 h-5 ${active ? 'text-brand-green' : 'text-gray-400'}`}
+                                    strokeWidth={active ? 2.5 : 1.5}
+                                />
+                                {badge > 0 && (
+                                    <span
+                                        className="absolute -top-1.5 -end-2 min-w-[16px] h-4 px-1 rounded-full bg-brand-red text-white text-[9px] font-bold flex items-center justify-center border-2 border-white animate-scale-in"
+                                        dir="ltr"
+                                    >
+                                        {badge > 99 ? '99+' : badge}
+                                    </span>
+                                )}
+                            </span>
                             <span
                                 className={`text-[10px] mt-1 ${active ? 'font-semibold text-brand-green' : 'font-normal text-gray-400'
                                     }`}

@@ -6,6 +6,7 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   WsException,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
@@ -18,6 +19,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { match_players, match_messages, users } from '../../database/schema';
 import { ConversationsService } from '../conversations/conversations.service';
+import { RealtimeService } from './realtime.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -37,7 +39,7 @@ type DB = PostgresJsDatabase<typeof schema>;
   },
   namespace: '/lobby',
 })
-export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -48,7 +50,13 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly conversationsService: ConversationsService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  afterInit(): void {
+    this.realtime.registerServer(this.server);
+    this.logger.log('Gateway initialised — realtime server registered');
+  }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -97,6 +105,10 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       client.userId = payload.sub;
+
+      // Every authenticated socket joins the user's personal room so the
+      // server can push notifications/badge updates at any time.
+      await client.join(this.realtime.userRoom(payload.sub));
     } catch {
       client.disconnect(true);
     }

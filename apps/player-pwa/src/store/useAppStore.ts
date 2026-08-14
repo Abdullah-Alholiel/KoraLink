@@ -116,4 +116,6 @@ export const selectFilters = (s: AppStore) => s.filters;
 export const selectBalance = (s: AppStore) => s.balance;
 export const selectIsLoading = (s: AppStore) => s.isLoading;
 export const selectToast = (s: AppStore) => s.toast;
+export const selectNotificationBadge = (s: AppStore) => s.notificationBadge;
+export const selectMessagesBadge = (s: AppStore) => s.messagesBadge;
 export const selectBookedIds = (s: AppStore) => s.bookedMatchIds;

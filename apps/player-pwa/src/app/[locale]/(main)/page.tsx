@@ -5,6 +5,7 @@ import { AlertCircle, WifiOff, Rss } from 'lucide-react';
 import { useFeed } from '@/hooks/useFeed';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import ActivityCard from '@/components/feed/ActivityCard';
+import NotificationBell from '@/components/layout/NotificationBell';
 
 export default function CommunityFeedPage() {
   const t = useTranslations('feed');
@@ -31,6 +32,7 @@ export default function CommunityFeedPage() {
           <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
           <p className="text-sm text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
+        <NotificationBell />
       </div>
 
       {/* ── Loading ── */}

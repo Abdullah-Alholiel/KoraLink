@@ -630,7 +630,18 @@
   },
   "notifications": {
     "title": "الإشعارات",
-    "empty": "لا توجد إشعارات",
-    "markAllRead": "تحديد الكل كمقروء"
+    "empty": "لا توجد إشعارات جديدة",
+    "markAllRead": "تحديد الكل كمقروء",
+    "emptyDescription": "المتابعات والرسائل وتحديثات المباريات الجديدة ستظهر هنا",
+    "newActivity": "نشاط جديد",
+    "newMessage": "رسالة جديدة",
+    "followedYou": "{name} بدأ متابعتك",
+    "messagedYou": "{name} أرسل لك رسالة",
+    "joinedYourMatch": "{name} انضم إلى مباراتك",
+    "pomDecided": "تم اختيار رجل المباراة",
+    "pomDecidedTitle": "تم اختيار رجل المباراة",
+    "createdMatch": "{name} يستضيف: {title}",
+    "createdMatchTitle": "{name} أنشأ مباراة جديدة",
+    "seeAll": "عرض الكل"
   }
 }

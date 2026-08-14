@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Optional, forwardRef } from '@nestjs/common';
 import { eq, inArray, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -11,6 +11,7 @@ import {
   pitches,
   venues,
 } from '../../database/schema';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -43,12 +44,17 @@ export interface FeedItem {
 
 @Injectable()
 export class ActivitiesService {
-  constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
+  constructor(
+    @Inject('DB_CONNECTION') private readonly db: DB,
+    @Optional() @Inject(forwardRef(() => RealtimeService))
+    private readonly realtime?: RealtimeService,
+  ) {}
 
   /**
    * Single choke point for recording an activity and fanning it out to
    * recipients' feed items (fan-out on write — fast reads at scale).
    * Deduplicates recipients and excludes the actor. No-ops when empty.
+   * Also emits a `notification` WS event to each recipient's personal room.
    */
   async record(params: RecordParams): Promise<void> {
     const { excludeActor = true } = params;
@@ -65,7 +71,7 @@ export class ActivitiesService {
         match_id: params.matchId ?? null,
         subject_id: params.subjectId ?? null,
       })
-      .returning({ id: activities.id });
+      .returning({ id: activities.id, created_at: activities.created_at });
 
     await this.db.insert(feed_items).values(
       recipients.map((recipientId) => ({
@@ -73,6 +79,83 @@ export class ActivitiesService {
         activity_id: activity.id,
       })),
     );
+
+    // Real-time fan-out: push a notification event to each recipient.
+    // Fire-and-forget — delivery failure never breaks the recording.
+    try {
+      await this.emitNotifications(recipients, {
+        id: activity.id,
+        verb: params.verb,
+        createdAt: activity.created_at,
+        actorId: params.actorId,
+        matchId: params.matchId ?? null,
+      });
+    } catch {
+      // swallow — WS is best-effort
+    }
+  }
+
+  /** Push `notification` + authoritative unread count to user rooms. */
+  private async emitNotifications(
+    recipients: string[],
+    base: { id: string; verb: ActivityVerb; createdAt: Date; actorId: string; matchId: string | null },
+  ): Promise<void> {
+    if (!this.realtime) return;
+
+    const [actor] = await this.db
+      .select({
+        id: users.id,
+        full_name: users.full_name,
+        avatar_url: users.avatar_url,
+      })
+      .from(users)
+      .where(eq(users.id, base.actorId))
+      .limit(1);
+
+    const unreadCounts = await this.db
+      .select({
+        recipient_id: feed_items.recipient_id,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(feed_items)
+      .where(
+        and(
+          inArray(feed_items.recipient_id, recipients),
+          eq(feed_items.is_read, false),
+        ),
+      )
+      .groupBy(feed_items.recipient_id);
+
+    const byUser = new Map(unreadCounts.map((r) => [r.recipient_id, r.count]));
+    for (const userId of recipients) {
+      this.realtime.emitToUser(userId, 'notification', {
+        id: base.id,
+        verb: base.verb,
+        createdAt: base.createdAt,
+        actor: actor
+          ? { id: actor.id, name: actor.full_name, avatarUrl: actor.avatar_url }
+          : null,
+        matchId: base.matchId,
+        unreadCount: byUser.get(userId) ?? 0,
+      });
+    }
+  }
+
+  /** Unread DIRECTED notification count (drives the bell badge). */
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [row] = (await this.db.execute(sql`
+      SELECT COUNT(*)::int AS n
+      FROM ${feed_items} fi
+      INNER JOIN ${activities} a ON a.id = fi.activity_id
+      LEFT JOIN ${matches} m ON m.id = a.match_id
+      WHERE fi.recipient_id = ${userId}::text
+        AND fi.is_read = FALSE
+        AND (
+          a.verb IN ('followed','messaged','pom_decided')
+          OR (a.verb = 'joined_match' AND m.host_id = ${userId}::text)
+        )
+    `)) as unknown as Array<{ n: number }>;
+    return row?.n ?? 0;
   }
 
   async getFeed(userId: string, page = 1, perPage = 20) {
@@ -166,6 +249,10 @@ export class ActivitiesService {
       .set({ is_read: true })
       .where(base)
       .returning({ id: feed_items.id });
+
+    // Converge badges on every connected device of this user.
+    const unreadCount = await this.getUnreadNotificationCount(userId);
+    this.realtime?.emitToUser(userId, 'badge-sync', { unreadCount });
 
     return { updated: rows.length };
   }

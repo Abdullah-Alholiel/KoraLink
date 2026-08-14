@@ -128,24 +128,38 @@ export const createWalletSlice = (
 
 // ─── UI Slice ───────────────────────────────────────
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'notification';
+
+export interface ToastMeta {
+    /** Deep-link applied when the toast is tapped (router.push). */
+    href?: string;
+    /** Actor avatar URL for notification toasts. */
+    avatarUrl?: string | null;
+}
 
 export interface Toast {
     id: string;
     message: string;
     type: ToastType;
+    meta?: ToastMeta;
 }
 
 export interface UISlice {
     isLoading: boolean;
     activeModal: string | null;
     toast: Toast | null;
+    /** Absolute unread directed-notification count (bell badge). */
+    notificationBadge: number;
+    /** Absolute unread messages count (BottomNav badge). */
+    messagesBadge: number;
 
     setLoading: (isLoading: boolean) => void;
     openModal: (id: string) => void;
     closeModal: () => void;
-    showToast: (message: string, type: ToastType) => void;
+    showToast: (message: string, type: ToastType, meta?: ToastMeta) => void;
     dismissToast: () => void;
+    setNotificationBadge: (n: number) => void;
+    setMessagesBadge: (n: number) => void;
 }
 
 export const createUISlice = (
@@ -154,15 +168,20 @@ export const createUISlice = (
     isLoading: false,
     activeModal: null,
     toast: null,
+    notificationBadge: 0,
+    messagesBadge: 0,
 
     setLoading: (isLoading) => set(() => ({ isLoading })),
     openModal: (activeModal) => set(() => ({ activeModal })),
     closeModal: () => set(() => ({ activeModal: null })),
 
-    showToast: (message, type) =>
+    showToast: (message, type, meta) =>
         set(() => ({
-            toast: { id: Date.now().toString(), message, type },
+            toast: { id: Date.now().toString(), message, type, meta },
         })),
 
     dismissToast: () => set(() => ({ toast: null })),
+
+    setNotificationBadge: (notificationBadge) => set(() => ({ notificationBadge })),
+    setMessagesBadge: (messagesBadge) => set(() => ({ messagesBadge })),
 });

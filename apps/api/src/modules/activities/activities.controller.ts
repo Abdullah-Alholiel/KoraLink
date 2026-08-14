@@ -47,6 +47,14 @@ export class ActivitiesController {
     );
   }
 
+  @Get('notifications/unread-count')
+  @ApiOperation({ summary: 'Unread directed-notification count (bell badge)' })
+  @ApiOkResponse({ description: '{ unreadCount: number }' })
+  async getUnreadCount(@CurrentUser() user: { sub: string }) {
+    const unreadCount = await this.activitiesService.getUnreadNotificationCount(user.sub);
+    return { unreadCount };
+  }
+
   @Post('notifications/read')
   @ApiOperation({ summary: 'Mark notifications as read' })
   @ApiOkResponse({ description: 'Number of items marked read.' })
