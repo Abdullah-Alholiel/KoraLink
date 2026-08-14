@@ -26,6 +26,7 @@ import { MatchesService } from './matches.service';
 import { GetMatchesDto } from './dto/get-matches.dto';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
+import { MarkNoShowDto } from './dto/mark-no-show.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -218,7 +219,7 @@ export class MatchesController {
   markNoShow(
     @CurrentUser() user: { sub: string },
     @Param('id') id: string,
-    @Body() dto: { targetUserId: string; noShow: boolean },
+    @Body() dto: MarkNoShowDto,
   ) {
     return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
   }

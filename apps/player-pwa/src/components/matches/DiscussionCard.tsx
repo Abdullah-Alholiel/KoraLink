@@ -60,6 +60,7 @@ export default function DiscussionCard({ discussion, href }: DiscussionCardProps
       <div className="relative flex-shrink-0">
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center">
           {discussion.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={discussion.avatarUrl}
               alt={title}

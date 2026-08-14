@@ -77,9 +77,12 @@ export default function MatchDetailPage({
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
 
-    // Calculate if match start time has passed or status is in_progress
+    // Calculate if match start time has passed or status is in_progress.
+    // Uses the raw scheduled_at ISO (timezone-safe) — match.time is a display
+    // string ("7:30 PM") that cannot be parsed reliably.
     const isMatchStarted = match
-        ? match.status === 'in_progress' || (!!match.date && !!match.time && new Date() >= new Date(`${match.date}T${match.time}`))
+        ? match.status === 'in_progress' ||
+          (!!match.scheduledAt && new Date(match.scheduledAt).getTime() <= Date.now())
         : false;
 
     /* ── Scroll Parallax ─────────────────────────────── */

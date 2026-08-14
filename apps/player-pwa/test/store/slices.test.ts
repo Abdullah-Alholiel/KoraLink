@@ -13,7 +13,7 @@ function mockSet<T>() {
     const prevState = set.__prevState ?? {};
     const partial = fn(prevState as T);
     set.__prevState = { ...prevState, ...partial };
-  }) as ReturnType<typeof vi.fn> & { __prevState: Record<string, any> };
+  }) as ReturnType<typeof vi.fn> & { __prevState: Record<string, unknown> };
   set.__prevState = {};
   return set;
 }
@@ -201,8 +201,8 @@ describe('createWalletSlice', () => {
     };
     const slice = createWalletSlice(set as never);
     slice.addPaymentMethod(method);
-    expect(set.__prevState.paymentMethods).toHaveLength(1);
-    expect(set.__prevState.paymentMethods[0].id).toBe('pm1');
+    expect((set.__prevState.paymentMethods as unknown[])).toHaveLength(1);
+    expect((set.__prevState.paymentMethods as { id: string }[])[0].id).toBe('pm1');
   });
 
   it('removePaymentMethod removes by id', () => {
@@ -215,8 +215,8 @@ describe('createWalletSlice', () => {
     };
     const slice = createWalletSlice(set as never);
     slice.removePaymentMethod('pm1');
-    expect(set.__prevState.paymentMethods).toHaveLength(1);
-    expect(set.__prevState.paymentMethods[0].id).toBe('pm2');
+    expect((set.__prevState.paymentMethods as unknown[])).toHaveLength(1);
+    expect((set.__prevState.paymentMethods as { id: string }[])[0].id).toBe('pm2');
   });
 
   it('removePaymentMethod is a no-op for missing id', () => {

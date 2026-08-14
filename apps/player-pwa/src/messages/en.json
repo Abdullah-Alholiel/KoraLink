@@ -137,7 +137,10 @@
         "closingSoon": "CLOSING SOON",
         "spotLeft": "SPOT LEFT",
         "spotsLeft": "spots left",
-        "full": "FULL"
+        "full": "FULL",
+        "votePotm": "Vote POTM",
+        "potmVoted": "POTM voted",
+        "potmBadge": "POTM"
     },
     "matchDetail": {
         "joinMatch": "Join Match",

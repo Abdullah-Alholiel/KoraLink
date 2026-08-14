@@ -27,6 +27,8 @@ export interface Match {
     date: string; // ISO date
     time: string; // e.g. "11:00 PM"
     endTime?: string;
+    /** Raw scheduled_at ISO string from the API — timezone-safe source for time math. */
+    scheduledAt?: string;
     location: string;
     venueName: string;
     venueDetails?: string;
@@ -49,6 +51,8 @@ export interface Match {
     isJoined?: boolean;
     /** True if current user is the match host. */
     isUserHost?: boolean;
+    /** True if the current user has already cast a POTM vote for this match. */
+    hasVotedPotm?: boolean;
 }
 
 export interface RosterPlayer {

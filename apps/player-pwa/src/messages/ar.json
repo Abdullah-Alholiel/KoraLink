@@ -137,7 +137,10 @@
         "closingSoon": "يغلق قريباً",
         "spotLeft": "مقعد متبقي",
         "spotsLeft": "مقاعد متبقية",
-        "full": "مكتمل"
+        "full": "مكتمل",
+        "votePotm": "صوّت لأفضل لاعب",
+        "potmVoted": "تم التصويت",
+        "potmBadge": "أفضل لاعب"
     },
     "matchDetail": {
         "joinMatch": "انضم للمباراة",

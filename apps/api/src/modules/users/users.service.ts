@@ -142,6 +142,7 @@ export class UsersService {
         p.size AS pitch_size,
         p.surface_type AS pitch_surface,
         COALESCE((SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1), '') AS last_message,
+        EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${userId}::text) AS has_voted,
         v.name AS venue_name,
         v.city AS venue_city
       FROM match_players my
@@ -184,6 +185,7 @@ export class UsersService {
       pitch_name: string;
       pitch_surface: string;
       last_message: string;
+      has_voted: boolean;
       venue_name: string;
       venue_city: string;
     }>;

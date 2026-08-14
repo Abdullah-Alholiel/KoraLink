@@ -28,14 +28,15 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
   const [showResults, setShowResults] = useState(false);
 
   // Analytics: track which POTM status the user sees
+  const pomStatus = pom?.status;
   useEffect(() => {
-    if (pom) {
+    if (pomStatus) {
       trackEvent('potm_status_viewed', {
         match_id: matchId,
-        status: pom.status,
+        status: pomStatus,
       });
     }
-  }, [pom?.status, matchId]);
+  }, [pomStatus, matchId]);
 
   // Real-time: listen for the POTM winner being decided while viewing.
   useEffect(() => {

@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMyMatches } from '@/hooks/useUser';
-import { adaptMatchList } from '@/lib/api-adapter';
+import { adaptMatchList, todayInRiyadh } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
 export default function MyGamesPage() {
@@ -20,13 +20,11 @@ export default function MyGamesPage() {
   const storeUser = useAppStore(selectUser);
   const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
 
-  const isToday = (dateStr: string) => dateStr === new Date().toISOString().split('T')[0];
-
   const activeMatches = matches.filter((m) =>
-    ['open', 'full', 'in_progress'].includes(m.status) || (m.status === 'completed' && isToday(m.date))
+    ['open', 'full', 'in_progress'].includes(m.status) || (m.status === 'completed' && m.date === todayInRiyadh())
   );
   const historyMatches = matches.filter((m) =>
-    ['completed', 'cancelled'].includes(m.status) && !(m.status === 'completed' && isToday(m.date))
+    ['completed', 'cancelled'].includes(m.status) && !(m.status === 'completed' && m.date === todayInRiyadh())
   );
 
   return (

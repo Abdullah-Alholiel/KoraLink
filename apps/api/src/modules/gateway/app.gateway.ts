@@ -66,9 +66,18 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const allowedOrigins = [...playerUrls, ...adminUrls];
 
     const isProd = this.config.get<string>('NODE_ENV') === 'production';
-    if (origin && isProd && !allowedOrigins.includes(origin)) {
-      client.disconnect(true);
-      return;
+    if (origin && !allowedOrigins.includes(origin)) {
+      // In production, reject outright. In development, log a warning but keep
+      // the connection so local tooling (e.g. a dev server on a LAN IP that is
+      // not yet listed in PLAYER_URL) still works — auth still applies, this
+      // only relaxes the browser-origin check, never authentication.
+      if (isProd) {
+        client.disconnect(true);
+        return;
+      }
+      this.logger.warn(
+        `WS connection from unlisted origin "${origin}" allowed (development mode)`,
+      );
     }
 
     try {

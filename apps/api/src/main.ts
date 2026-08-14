@@ -37,16 +37,19 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser(cookieSecret));
 
   // ── CORS — HttpOnly cookies require credentials: true ───────────────────
+  // Strict allowlist from PLAYER_URL/ADMIN_URL (comma-separated origins are
+  // supported). Non-browser requests (no Origin header — curl, health checks,
+  // native apps) pass through; every browser origin must be explicitly listed.
+  // Never widen this with a NODE_ENV check — an attacker on the same Tailscale
+  // network with a misconfigured .env (NODE_ENV unset) would then be able to
+  // make credentialed cross-origin requests from any origin.
+  const allowedOrigins = [...playerUrls, ...adminUrls];
   app.enableCors({
     origin: (origin, callback) => {
-      // In development mode, allow localhost, local Wi-Fi IPs, and Tailscale
-      if (!origin || configService.get<string>('NODE_ENV') !== 'production') {
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      if (playerUrls.includes(origin) || adminUrls.includes(origin)) {
-        return callback(null, true);
-      }
-      callback(new Error('CORS not allowed'));
+      callback(new Error(`CORS origin not allowed: ${origin}`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],

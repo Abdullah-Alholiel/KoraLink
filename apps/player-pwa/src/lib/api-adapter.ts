@@ -33,6 +33,8 @@ export interface NearbyMatchApi {
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
+  /** True if the current user already voted POTM for this match. */
+  has_voted?: boolean;
   last_message?: string | null;
 }
 
@@ -144,6 +146,23 @@ function fmtTime(d: Date): string {
   });
 }
 
+/** Formats a date as YYYY-MM-DD in Asia/Riyadh — the app's display timezone
+ *  (set in i18n/request.ts). Using the UTC ISO date instead would mislabel
+ *  matches that start before 03:00 Riyadh time. */
+export function dateInRiyadh(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Riyadh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/** Today's date (YYYY-MM-DD) in Asia/Riyadh — pair with dateInRiyadh(). */
+export function todayInRiyadh(): string {
+  return dateInRiyadh(new Date());
+}
+
 function fmtEnd(scheduled: Date, durationMins: number): string {
   return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000));
 }
@@ -253,9 +272,10 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
       handle: '',
       avatarUrl: row.host_avatar ?? '',
     },
-    date: scheduled.toISOString().split('T')[0],
+    date: dateInRiyadh(scheduled),
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, durationMins),
+    scheduledAt: scheduled.toISOString(),
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
@@ -273,6 +293,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     comments: [],
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
+    hasVotedPotm: row.has_voted ?? false,
   };
 }
 
@@ -300,9 +321,10 @@ export function adaptMatchDetail(
     title: detail.title,
     hostId: detail.host_id,
     organizer: buildOrganizer(detail.host),
-    date: scheduled.toISOString().split('T')[0],
+    date: dateInRiyadh(scheduled),
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, duration),
+    scheduledAt: scheduled.toISOString(),
     location: venue?.city ?? '',
     venueName: venue?.name ?? detail.pitch?.name ?? '',
     venueDetails: venue?.address ?? '',

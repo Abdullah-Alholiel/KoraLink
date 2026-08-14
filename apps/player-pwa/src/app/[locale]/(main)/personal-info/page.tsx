@@ -154,6 +154,7 @@ export default function PersonalInfoPage() {
               <div className="px-5 pb-5 -mt-10 flex flex-col items-center">
                   <div className="w-20 h-20 rounded-full bg-gray-200 border-4 border-white flex items-center justify-center overflow-hidden shadow-sm">
                       {avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
                       ) : (
                           <span className="text-2xl font-bold text-gray-400">

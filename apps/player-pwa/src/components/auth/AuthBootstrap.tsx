@@ -66,7 +66,10 @@ export default function AuthBootstrap() {
         return null;
       }
     },
-    enabled: isHydrated && !user && typeof window !== 'undefined' && !!localStorage.getItem('koralink_token'),
+    // Bootstrap whenever we might have a session: a stored Bearer token OR the
+    // HttpOnly cookie set by the real OTP flow (which never writes localStorage).
+    // A 401 for genuine guests is handled by the catch below (logout, no retry).
+    enabled: isHydrated && !user && typeof window !== 'undefined',
     staleTime: 60_000,
     retry: false, // Do not retry 401 — user is unauthenticated
   });

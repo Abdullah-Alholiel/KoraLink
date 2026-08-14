@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import type { Match } from '@/types';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
+import { todayInRiyadh } from '@/lib/api-adapter';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -14,7 +14,7 @@ vi.mock('next/navigation', () => ({
 // We import the component — since it's 'use client' and uses Link,
 // we need to mock next/link to avoid routing errors in jsdom.
 vi.mock('next/link', () => ({
-  default: function MockLink({ href, children, ...props }: any) {
+  default: function MockLink({ href, children, ...props }: Record<string, unknown> & { href: string; children: React.ReactNode }) {
     return <a href={href} {...props}>{children}</a>;
   },
 }));
@@ -120,5 +120,40 @@ describe('MatchCard', () => {
   it('renders organizer avatar initial', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
     expect(screen.getByText('K')).toBeInTheDocument();
+  });
+
+  // ── POTM (Player of the Match) button states ─────────────────────────────
+
+  const today = todayInRiyadh();
+
+  it('shows short "Vote POTM" pill on a completed-today match when not yet voted', () => {
+    renderWithProviders(
+      <MatchCard match={{ ...baseMatch, status: 'completed', date: today, isJoined: true }} currentUserId="p2" />
+    );
+    expect(screen.getByText('Vote POTM')).toBeInTheDocument();
+    expect(screen.getByText('POTM')).toBeInTheDocument();
+    // Long label must NOT be rendered anywhere on the card
+    expect(screen.queryByText('Vote for Player of the Match')).not.toBeInTheDocument();
+  });
+
+  it('shows voted state (View Details + POTM voted badge) when hasVotedPotm is true', () => {
+    renderWithProviders(
+      <MatchCard
+        match={{ ...baseMatch, status: 'completed', date: today, isJoined: true, hasVotedPotm: true }}
+        currentUserId="p2"
+      />
+    );
+    expect(screen.getByText('View Details')).toBeInTheDocument();
+    expect(screen.getByText('POTM voted')).toBeInTheDocument();
+    expect(screen.queryByText('Vote POTM')).not.toBeInTheDocument();
+  });
+
+  it('shows plain View Details for a completed match from before today', () => {
+    renderWithProviders(
+      <MatchCard match={{ ...baseMatch, status: 'completed', date: '2026-08-01', isJoined: true }} currentUserId="p2" />
+    );
+    expect(screen.getByText('View Details')).toBeInTheDocument();
+    expect(screen.queryByText('Vote POTM')).not.toBeInTheDocument();
+    expect(screen.queryByText('POTM voted')).not.toBeInTheDocument();
   });
 });

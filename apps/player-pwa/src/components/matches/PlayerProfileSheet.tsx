@@ -43,6 +43,7 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                         <div className="flex flex-col items-center">
                             <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                                 {player.avatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
                                     <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
                                 ) : (
                                     <span className="text-2xl font-bold text-gray-400">{player.name.charAt(0).toUpperCase()}</span>

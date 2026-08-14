@@ -810,9 +810,15 @@ export class MatchesService {
         throw new ForbiddenException('Only the match host can cancel the match.');
       }
 
-      if (match.status !== 'Open' && match.status !== 'Full') {
+      // Emergency cancel: a host may cancel an InProgress match (the PWA shows
+      // the EmergencyCancelSheet and opens a support ticket for refunds).
+      if (
+        match.status !== 'Open' &&
+        match.status !== 'Full' &&
+        match.status !== 'InProgress'
+      ) {
         throw new BadRequestException(
-          `Cannot cancel a match with status "${match.status}". Match must be Open or Full.`,
+          `Cannot cancel a match with status "${match.status}". Match must be Open, Full, or InProgress.`,
         );
       }
 
@@ -876,7 +882,7 @@ export class MatchesService {
   async markNoShow(hostId: string, matchId: string, targetUserId: string, noShow: boolean) {
     await this.db.transaction(async (tx) => {
       const [match] = await tx
-        .select({ id: matches.id, host_id: matches.host_id })
+        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -887,6 +893,13 @@ export class MatchesService {
 
       if (match.host_id !== hostId) {
         throw new ForbiddenException('Only the match host can mark no-shows.');
+      }
+
+      // Attendance is only meaningful once a match is underway or finished.
+      if (match.status !== 'InProgress' && match.status !== 'Completed') {
+        throw new BadRequestException(
+          `Attendance can only be marked for an in-progress or completed match (current: "${match.status}").`,
+        );
       }
 
       const [player] = await tx

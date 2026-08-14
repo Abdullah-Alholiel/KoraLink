@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check } from 'lucide-react';
 import type { Match } from '@/types';
+import { todayInRiyadh } from '@/lib/api-adapter';
 
 interface MatchCardProps {
     match: Match;
@@ -25,21 +26,38 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
-    const isToday = match.date === new Date().toISOString().split('T')[0];
+    // Riyadh-day comparison — matches how match.date is now derived (dateInRiyadh).
+    const isToday = match.date === todayInRiyadh();
     const isCompletedToday = match.status === 'completed' && isToday && (isJoined || isHost);
+    // POTM vote state comes from the feed/my-matches SQL (has_voted) via the adapter.
+    const hasVotedPotm = match.hasVotedPotm ?? false;
 
     let buttonLabel: string;
     let buttonStyle: string;
     let badge: React.ReactNode = null;
 
     if (isCompletedToday) {
-        buttonLabel = t('pom.votePrompt') || 'Vote POTM';
-        buttonStyle = 'bg-amber-500 text-white font-bold shadow-[0_2px_10px_rgba(245,158,11,0.4)]';
-        badge = (
-            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                🏆 {t('pom.title') || 'POTM'}
-            </span>
-        );
+        if (hasVotedPotm) {
+            // Vote cast — quiet confirmation state; next sensible action is viewing results.
+            buttonLabel = t('matchDetail.viewDetails');
+            buttonStyle = 'bg-gray-100 text-gray-600';
+            badge = (
+                <span className="inline-flex items-center gap-1 bg-brand-green/10 text-brand-green text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <Check className="w-3 h-3" strokeWidth={2.5} />
+                    {t('matchCard.potmVoted')}
+                </span>
+            );
+        } else {
+            // Same pill geometry/weight as every other card action — short label, no extra shadow.
+            buttonLabel = t('matchCard.votePotm');
+            buttonStyle = 'bg-amber-500 text-white';
+            badge = (
+                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <Trophy className="w-3 h-3" strokeWidth={2} />
+                    {t('matchCard.potmBadge')}
+                </span>
+            );
+        }
     } else if (isCompleted) {
         buttonLabel = t('matchDetail.viewDetails');
         buttonStyle = 'bg-gray-100 text-gray-600';
@@ -48,7 +66,8 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
         buttonStyle = 'bg-amber-100 text-amber-800 border border-amber-300';
         badge = (
             <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                👑 {t('matchDetail.yourMatch')}
+                <Crown className="w-3 h-3" strokeWidth={2} />
+                {t('matchDetail.yourMatch')}
             </span>
         );
     } else if (isJoined) {
@@ -56,7 +75,8 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
         buttonStyle = 'bg-brand-green/10 text-brand-green border border-brand-green';
         badge = (
             <span className="inline-flex items-center gap-1 bg-brand-green/10 text-brand-green text-[10px] font-bold px-2 py-0.5 rounded-full">
-                ✓ {t('matchDetail.joined')}
+                <Check className="w-3 h-3" strokeWidth={2.5} />
+                {t('matchDetail.joined')}
             </span>
         );
     } else if (isFull) {

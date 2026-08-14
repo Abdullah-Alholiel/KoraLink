@@ -90,6 +90,10 @@ export function useVote(matchId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
+      // Refresh has_voted on feed/my-games cards so the POTM button flips to
+      // the "voted" state without a manual reload.
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
     },
   });
 }
