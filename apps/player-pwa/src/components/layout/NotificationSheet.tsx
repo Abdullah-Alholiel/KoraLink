@@ -18,6 +18,7 @@ import { useNotificationsFeed, useMarkNotificationsRead } from '@/hooks/useNotif
 import { useAppStore } from '@/store/useAppStore';
 import type { ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 interface NotificationSheetProps {
   open: boolean;
@@ -63,7 +64,10 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
 
   // Hydrate the bell badge from the server whenever the sheet opens.
   useEffect(() => {
-    if (open) refetch();
+    if (open) {
+      trackEvent('notification_sheet_opened');
+      refetch();
+    }
   }, [open, refetch]);
 
   if (!open) return null;
@@ -166,7 +170,10 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
                   <Link
                     key={item.id}
                     href={itemHref(item.verb, item.match?.id ?? null)}
-                    onClick={onClose}
+                    onClick={() => {
+                      trackEvent('notification_opened', { verb: item.verb });
+                      onClose();
+                    }}
                     className={`flex items-start gap-3 py-3 px-2 rounded-xl transition-colors ${
                       item.isRead ? 'bg-white' : 'bg-brand-green/5'
                     }`}

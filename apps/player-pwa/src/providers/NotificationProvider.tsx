@@ -7,6 +7,7 @@ import { io, type Socket } from 'socket.io-client';
 import { useTranslations } from 'next-intl';
 import { env } from '@/env.mjs';
 import { useAppStore } from '@/store/useAppStore';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 /** WS payload pushed by ActivitiesService.record() fan-out. */
 interface NotificationEvent {
@@ -64,6 +65,8 @@ export default function NotificationProvider({ children }: { children: React.Rea
     socketRef.current = socket;
 
     socket.on('notification', (payload: NotificationEvent) => {
+      trackEvent('notification_delivered', { verb: payload.verb });
+
       // Absolute count from the server — multi-tab safe.
       setNotificationBadge(payload.unreadCount);
 

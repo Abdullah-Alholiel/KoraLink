@@ -14,6 +14,7 @@ import {
   adaptMatchList,
 } from '@/lib/api-adapter';
 import { z } from 'zod';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 // ─── API Response Types (snake_case raw) ──────────────
 
@@ -177,10 +178,14 @@ export function useCreateMatch() {
       });
       return adaptMatchDetail(raw);
     },
-    onSuccess: () => {
+    onSuccess: (_match, variables) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       showToast('Match created successfully!', 'success');
+      trackEvent('match_created', {
+        visibility: variables.visibility ?? 'public',
+        booking_mode: variables.booking_mode,
+      });
     },
     onError: (err) => {
       showToast(err.message || 'Failed to create match. Please try again.', 'error');

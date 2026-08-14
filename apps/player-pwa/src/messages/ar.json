@@ -496,7 +496,10 @@
     "followedYou": "بدأ {name} بمتابعتك",
     "messagedYou": "أرسل لك {name} رسالة",
     "pomDecided": "فاز {name} بجائزة أفضل لاعب",
-    "subtitle": "أحدث الأنشطة من حولك"
+    "subtitle": "أحدث الأنشطة من حولك",
+    "newActivities": "أنشطة جديدة",
+    "newDivider": "جديد",
+    "updatedJustNow": "تم التحديث الآن"
   },
   "payment": {
     "title": "الدفع",

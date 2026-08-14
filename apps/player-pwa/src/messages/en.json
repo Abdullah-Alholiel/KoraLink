@@ -496,7 +496,10 @@
     "followedYou": "{name} started following you",
     "messagedYou": "{name} sent you a message",
     "pomDecided": "{name} won Player of the Match",
-    "subtitle": "Latest activity around you"
+    "subtitle": "Latest activity around you",
+    "newActivities": "New activities",
+    "newDivider": "New",
+    "updatedJustNow": "Updated just now"
   },
   "payment": {
     "title": "Checkout",
