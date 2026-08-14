@@ -27,7 +27,7 @@ export default function CommunityFeedPage() {
             )}
 
             {/* ── Header ────────────────────────────── */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <div className="flex items-center justify-between px-5 pt-[var(--top-safe-inset)] pb-3">
                 <div>
                     <h1 className="text-2xl font-bold text-brand-black">{t('title')}</h1>
                     <p className="text-sm text-gray-400 mt-1">{t('nearby')}</p>

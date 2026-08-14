@@ -190,7 +190,7 @@ export default function WalletPage() {
             <div className="h-2 bg-brand-bg mt-6" />
 
             {/* ── Recent Activity with 5 UX states ── */}
-            <div className="px-4 pt-4 pb-4">
+            <div className="px-4 pt-[var(--top-safe-inset)] pb-4">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-base font-bold text-brand-black">
                         {t('wallet.transactions')}

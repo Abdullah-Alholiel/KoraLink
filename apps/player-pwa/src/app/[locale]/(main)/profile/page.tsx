@@ -109,7 +109,7 @@ export default function ProfilePage() {
     return (
         <div className="pb-4">
             {/* ── Avatar & Name ─────────────────────── */}
-            <div className="flex flex-col items-center pt-6 pb-4 bg-white">
+            <div className="flex flex-col items-center pt-[var(--top-safe-inset)] pb-4 bg-white">
                 <div className="relative">
                     {avatarUrl ? (
                         <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">

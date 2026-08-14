@@ -5,7 +5,7 @@ import { Trophy } from 'lucide-react';
 
 export default function TopAppBar() {
     return (
-        <div className="flex-shrink-0 bg-white pt-safe">
+        <div className="flex-shrink-0 bg-white pt-[var(--top-safe-inset)]">
             {/* ── Top Row: Logo + Notification ──────────── */}
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
                 <div className="flex items-center gap-2">

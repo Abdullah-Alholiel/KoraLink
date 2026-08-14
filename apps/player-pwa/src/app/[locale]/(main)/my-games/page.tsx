@@ -34,7 +34,7 @@ export default function MyGamesPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center px-4 pt-4 pb-3 flex-shrink-0 bg-white relative z-10">
+      <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 flex-shrink-0 bg-white relative z-10">
         <button
           onClick={() => router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"

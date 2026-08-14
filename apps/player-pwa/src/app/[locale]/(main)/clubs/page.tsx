@@ -49,7 +49,7 @@ export default function ClubsPage() {
     return (
         <div className="pb-4">
             {/* ── Header ── */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <div className="flex items-center justify-between px-5 pt-[var(--top-safe-inset)] pb-3">
                 <div>
                     <h1 className="text-2xl font-bold text-brand-black">{t('clubs.title')}</h1>
                     {filteredVenues.length > 0 && (

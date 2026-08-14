@@ -57,7 +57,7 @@ export default function PlayPage() {
         <div className="pb-4">
             {/* ── Top App Bar (inline) ─────────────── */}
             <div className="bg-white">
-                <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                <div className="flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-2">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center">
                             <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2.5} />

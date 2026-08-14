@@ -10,7 +10,7 @@ export default function TermsPage() {
 
     return (
         <div className="min-h-screen bg-brand-bg">
-            <div className="flex items-center px-4 pt-4 pb-3 flex-shrink-0 bg-white">
+            <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 flex-shrink-0 bg-white">
                 <button
                     onClick={() => router.back()}
                     className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"

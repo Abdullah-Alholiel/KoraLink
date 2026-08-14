@@ -119,7 +119,7 @@ function VerifyContent() {
     return (
         <div className="flex flex-col min-h-full px-6">
             {/* ── Header ────────────────────────────── */}
-            <div className="flex items-center gap-3 pt-4 pb-4 pt-safe">
+            <div className="flex items-center gap-3 pt-[var(--top-safe-inset)] pb-4">
                 <button
                     onClick={() => router.back()}
                     className="w-10 h-10 flex items-center justify-center"

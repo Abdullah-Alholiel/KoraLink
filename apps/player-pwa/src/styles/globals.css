@@ -71,7 +71,7 @@ body {
   }
 
   body {
-    @apply bg-slate-950 text-brand-black;
+    @apply bg-white text-brand-black;
     overscroll-behavior: none;
     height: 100%;
     height: 100dvh;

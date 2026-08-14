@@ -79,7 +79,7 @@ export default function PersonalInfoPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center px-4 pt-4 pb-3 bg-white sticky top-0 z-10">
+      <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 bg-white sticky top-0 z-10">
         <button
           onClick={() => editing ? setEditing(false) : router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"

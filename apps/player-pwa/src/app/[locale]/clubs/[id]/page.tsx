@@ -98,7 +98,7 @@ export default function ClubPage() {
   return (
     <MobileFrame>
       {/* ── Header ── */}
-      <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-safe pt-4 pb-3">
+      <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-3">
         <button
           onClick={() => router.back()}
           className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"

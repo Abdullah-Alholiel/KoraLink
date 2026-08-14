@@ -55,7 +55,7 @@ export default function CompleteProfilePage() {
     return (
         <div className="flex flex-col min-h-full">
             {/* ── Header ────────────────────────────── */}
-            <div className="flex items-center gap-3 px-4 pt-4 pb-2 pt-safe">
+            <div className="flex items-center gap-3 px-4 pt-[var(--top-safe-inset)] pb-2">
                 <button
                     onClick={() => router.back()}
                     className="w-10 h-10 flex items-center justify-center"
