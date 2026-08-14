@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDistance } from '@/lib/format';
+import { formatDistance, formatDateSection, formatRelativeTime } from '@/lib/format';
 
 describe('formatDistance', () => {
   it('returns null for null, undefined, or NaN', () => {
@@ -26,5 +26,28 @@ describe('formatDistance', () => {
 
   it('rounds metres to a whole number', () => {
     expect(formatDistance(850.6, 'en')).toBe('851 m');
+  });
+});
+
+describe('formatDateSection', () => {
+  it('formats English as "day name, number month year"', () => {
+    expect(formatDateSection('2026-08-14', 'en')).toBe('Friday, 14 August 2026');
+  });
+
+  it('formats Arabic with weekday/month and Hindi numerals (Gregorian)', () => {
+    expect(formatDateSection('2026-08-14', 'ar')).toBe('الجمعة، ١٤ أغسطس ٢٠٢٦');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  it('returns "now" for a future or invalid timestamp', () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    expect(formatRelativeTime(future, 'en')).toBe('now');
+    expect(formatRelativeTime('not-a-date', 'en')).toBe('now');
+  });
+
+  it('returns a relative string for a recent past timestamp', () => {
+    const recent = new Date(Date.now() - 5 * 60_000).toISOString();
+    expect(formatRelativeTime(recent, 'en')).toBe('5m ago');
   });
 });

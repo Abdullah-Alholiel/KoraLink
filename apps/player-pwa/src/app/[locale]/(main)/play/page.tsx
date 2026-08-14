@@ -6,9 +6,11 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
-import MatchCard from '@/components/matches/MatchCard';
+import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import { useMatches } from '@/hooks/useMatches';
+import { useLocation } from '@/providers/LocationProvider';
+import { dateInRiyadh } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
 export default function PlayPage() {
@@ -22,6 +24,7 @@ export default function PlayPage() {
         gender: null,
         maxPrice: null,
     });
+    const { coords } = useLocation();
 
     // ── Data fetching via React Query ──
     const {
@@ -31,6 +34,8 @@ export default function PlayPage() {
         refetch,
     } = useMatches({
         date: selectedDate,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
         format: filters.format,
         gender: filters.gender,
         maxPrice: filters.maxPrice,
@@ -90,9 +95,14 @@ export default function PlayPage() {
                 </div>
             </div>
 
-            {/* ── Date Picker ─────────────────────── */}
+            {/* ── Date Picker (all games by default; tap to filter, tap again to clear) ── */}
             <DatePicker
-                onDateSelect={(date) => setSelectedDate(date.toISOString().split('T')[0])}
+                fireOnMount={false}
+                selectedDate={selectedDate ? new Date(selectedDate) : null}
+                onDateSelect={(date) => {
+                    const iso = dateInRiyadh(date);
+                    setSelectedDate((prev) => (prev === iso ? null : iso));
+                }}
             />
 
             {/* ── Filter Bar ──────────────────────── */}
@@ -166,23 +176,13 @@ export default function PlayPage() {
                 </div>
             )}
 
-            {/* 4. Populated State — match list */}
+            {/* 4. Populated State — matches grouped by date, nearest-first within a day */}
             {!isLoading && !error && filteredMatches.length > 0 && (
-                <>
-                    {/* Section label */}
-                    <div className="px-4 pt-1 pb-2">
-                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
-                            {filteredMatches.length} {t('play.discoveringMore')}
-                        </p>
-                    </div>
-
-                    {/* Match cards */}
-                    <div className="animate-fade-in-up">
-                        {filteredMatches.map((match) => (
-                            <MatchCard key={match.id} match={match} currentUserId={currentUserId} />
-                        ))}
-                    </div>
-                </>
+                <MatchDateSections
+                    matches={filteredMatches}
+                    currentUserId={currentUserId}
+                    locale={locale === 'ar' ? 'ar' : 'en'}
+                />
             )}
 
             {/* 5. Edge Case — offline/connection error indicator */}

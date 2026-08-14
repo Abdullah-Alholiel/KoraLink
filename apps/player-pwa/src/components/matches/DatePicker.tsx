@@ -10,9 +10,10 @@ interface DatePickerProps {
     /**
      * Controlled selected date. When provided, the matching day is highlighted
      * (instead of the internal selection), so reopening a sheet shows the user's
-     * previously chosen date instead of resetting to TODAY.
+     * previously chosen date instead of resetting to TODAY. Pass `null` to
+     * explicitly show no selection (Play "all games" default).
      */
-    selectedDate?: Date;
+    selectedDate?: Date | null;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -51,8 +52,10 @@ export default function DatePicker({ onDateSelect, fireOnMount = true, selectedD
     }, []);
 
     // When controlled, reflect the parent's selectedDate; otherwise fall back to
-    // the internal index (Play page keeps its own string state).
+    // the internal index (Play page keeps its own string state). `null` means
+    // explicitly "no selection" — used by the Play page's all-games default.
     const activeIndex = useMemo(() => {
+        if (selectedDate === null) return -1;
         if (!selectedDate) return selectedIndex;
         const idx = dates.findIndex((item) => isSameDay(item.date, selectedDate));
         return idx >= 0 ? idx : selectedIndex;

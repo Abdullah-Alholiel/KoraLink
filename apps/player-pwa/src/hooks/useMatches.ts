@@ -45,6 +45,9 @@ export type HostMatchInput = z.infer<typeof hostMatchSchema>;
 
 export function useMatches(filters?: {
   date?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  radiusKm?: number | null;
   city?: string | null;
   format?: string | null;
   maxPrice?: number | null;
@@ -61,6 +64,11 @@ export function useMatches(filters?: {
       const params: Record<string, string> = {};
       if (filters) {
         if (filters.date) params.date = filters.date;
+        if (filters.lat != null && filters.lng != null) {
+          params.lat = String(filters.lat);
+          params.lng = String(filters.lng);
+          if (filters.radiusKm != null) params.radius_km = String(filters.radiusKm);
+        }
         if (filters.format) params.format = filters.format;
         if (filters.gender) params.gender = filters.gender;
         if (filters.maxPrice != null) params.max_price = String(filters.maxPrice);

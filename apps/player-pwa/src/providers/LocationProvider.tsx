@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -14,6 +15,8 @@ import {
   type GeoCoords,
   type GeoStatus,
 } from '@/hooks/useGeolocation';
+import { fetcher } from '@/lib/fetcher';
+import { selectUser, useAppStore } from '@/store/useAppStore';
 
 interface LocationContextValue {
   coords: GeoCoords | null;
@@ -41,11 +44,23 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const t = useTranslations();
   const { coords, status, request } = useGeolocation();
   const [dismissed, setDismissed] = useState(false);
+  const storeUser = useAppStore(selectUser);
 
   const value = useMemo(
     () => ({ coords, status, request }),
     [coords, status, request],
   );
+
+  // Persist the last-known location to the profile (best-effort, fire-and-forget).
+  // Fires when a fresh fix arrives OR when auth resolves after a cached fix.
+  useEffect(() => {
+    if (coords && storeUser?.id) {
+      fetcher('/users/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ home_lat: coords.lat, home_lng: coords.lng }),
+      }).catch(() => undefined);
+    }
+  }, [coords, storeUser?.id]);
 
   const showPrompt = status === 'idle' && !dismissed;
   const showDenied = status === 'denied' && !coords && !dismissed;
