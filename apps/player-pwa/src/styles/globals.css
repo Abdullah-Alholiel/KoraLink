@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --app-height: 100vh; /* full-screen height; JS overrides with window.innerHeight */
+  --app-height: 100vh; /* full-screen height (large viewport), not 100dvh which shrinks on iOS */
   --bottom-nav-height: calc(4.5rem + env(safe-area-inset-bottom));
   --floating-cta-bottom: calc(var(--bottom-nav-height) + 1.75rem);
   --top-safe-inset: max(1rem, env(safe-area-inset-top));

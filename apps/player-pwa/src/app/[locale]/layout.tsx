@@ -4,7 +4,6 @@ import IntlClientProvider from '@/providers/IntlClientProvider';
 import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
-import ViewportHeight from '@/components/layout/ViewportHeight';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -68,8 +67,6 @@ export const viewport: Viewport = {
 
 const locales = ['ar', 'en'] as const;
 
-export const dynamic = 'force-dynamic';
-
 export default async function RootLayout({
   children,
   params,
@@ -92,11 +89,18 @@ export default async function RootLayout({
       className={`${outfit.variable} ${tajawal.variable}`}
     >
       <body className="overscroll-none">
+        {/* iOS PWA standalone meta tags — rendered directly in the JSX so they
+            are present in the initial HTML (the metadata export is streamed for
+            this dynamic [locale] layout, which iOS Safari does not read). */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="KoraLink" />
         <QueryProvider>
           <ObservabilityProvider>
             <IntlClientProvider locale={locale} messages={messages}>
               <AuthBootstrap />
-              <ViewportHeight />
               <div className="app-shell">{children}</div>
             </IntlClientProvider>
           </ObservabilityProvider>
