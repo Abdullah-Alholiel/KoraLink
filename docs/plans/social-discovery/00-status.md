@@ -19,19 +19,26 @@
 
 ## Slice progress
 
-| Slice | Description | Status |
-|-------|-------------|--------|
-| A1 | geolocation + clubs distance + radius 50 | ✅ DONE (`7634a48`) |
-| A2 | play distance + location persistence | ⏸️ pending |
-| B1 | all-games date sections + calendar toggle | ⏸️ pending |
-| C1 | follow graph | ⏸️ pending |
-| C2 | DM + WS rooms | ⏸️ pending |
-| D1 | activity model + feed | ⏸️ pending |
-| D2 | in-app notifications | ⏸️ pending |
+| Slice | Description | Status | Commit |
+|-------|-------------|--------|--------|
+| A1 | geolocation + clubs distance + radius 50 | ✅ DONE | `7634a48` |
+| A2 | play distance + location persistence | ✅ DONE | `fada533` |
+| B1 | all-games date sections + calendar toggle | ✅ DONE | `fada533` |
+| C1 | follow graph (schema + endpoints + UI) | ✅ DONE | `a610671` + `d0d4ab4` |
+| C2 | DM + WS rooms + conversation UI | ✅ DONE | `a610671` + `d0d4ab4` |
+| D1 | activity model + feed + triggers | ✅ DONE | `a610671` + `d0d4ab4` |
+| D2 | in-app notifications UI | ⏸️ PARTIAL | — |
+
+### D2 remaining (follow-up)
+- Backend `GET /users/me/notifications` + `POST /users/me/notifications/read` are **live** (verified).
+- `useNotifications` hook + `ActivityCard` exist; a dedicated notifications screen
+  (bell → list) is **not yet built** — the feed already surfaces the same
+  activity stream. Observability (Pino/Sentry/PostHog) is already wired via the
+  existing providers + fetcher breadcrumbs.
 
 ## Blockers
 
 - **HTTPS prerequisite** (geolocation secure context) — blocked on sudo.
-  See [04-https-prerequisite.md](./04-https-prerequisite.md).
-  Tracks A/B distance/sort won't work on-device until resolved; all code is
-  built and degrades gracefully meanwhile.
+  See [04-https-prerequisite.md](./04-https-prerequisite.md). On-device distance
+  won't render over plain HTTP; all other features work. Localhost dev is fully
+  functional.
