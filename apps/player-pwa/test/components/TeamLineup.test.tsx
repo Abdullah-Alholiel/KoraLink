@@ -57,8 +57,8 @@ describe('TeamLineup — all formats show ALL players', () => {
     roster.forEach((p) => {
       expect(screen.getByText(p.name)).toBeInTheDocument();
     });
-    // Large format: compact 2-column chip grid inside each team card
-    expect(container.querySelectorAll('.grid.grid-cols-2').length).toBe(2);
+    // Every format uses a single vertical column (no 2-column chip grid).
+    expect(container.querySelectorAll('.grid-cols-2').length).toBe(0);
   });
 
   it('renders every player for an 11v11 with a partial roster (all open slots shown)', () => {
@@ -72,12 +72,12 @@ describe('TeamLineup — all formats show ALL players', () => {
     expect(empties.length).toBe(17);
   });
 
-  it('uses the compact grid for 7v7 but tall rows for 5v5', () => {
+  it('lists players in a single vertical column for every format (7v7 and 5v5)', () => {
     const { container: c7 } = renderLineup(<TeamLineup format="7v7" roster={makeRoster(6)} />);
-    expect(c7.querySelectorAll('.grid.grid-cols-2').length).toBe(2);
+    expect(c7.querySelectorAll('.grid-cols-2').length).toBe(0);
 
     const { container: c5 } = renderLineup(<TeamLineup format="5v5" roster={makeRoster(6)} />);
-    expect(c5.querySelectorAll('.grid.grid-cols-2').length).toBe(0);
+    expect(c5.querySelectorAll('.grid-cols-2').length).toBe(0);
   });
 
   it('distributes unassigned (legacy) players across both teams', () => {

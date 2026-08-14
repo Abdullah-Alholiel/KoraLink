@@ -45,7 +45,7 @@ export default function BottomNav() {
       relative z-50
       w-full max-w-6xl mx-auto
     ">
-            <div className="flex items-center justify-around max-w-xl mx-auto">
+            <div className="grid grid-cols-5 w-full max-w-xl mx-auto">
                 {navItems.map((item) => {
                     const active = isActive(item.href);
 

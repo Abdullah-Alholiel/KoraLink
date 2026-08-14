@@ -141,6 +141,72 @@ async function seed() {
         karma_score: 3,
         rating: 3.8,
       },
+      {
+        phone: '+966500000009',
+        full_name: 'Bandar Al-Mutairi',
+        handle: 'bandar_m',
+        preferred_position: 'Forward',
+        skill_level: 'Intermediate',
+        role: 'Player',
+        wallet_balance: '250.00',
+        karma_score: 6,
+        rating: 4.0,
+      },
+      {
+        phone: '+966500000010',
+        full_name: 'Turki Al-Shehri',
+        handle: 'turki_s',
+        preferred_position: 'Midfielder',
+        skill_level: 'Advanced',
+        role: 'Player',
+        wallet_balance: '500.00',
+        karma_score: 11,
+        rating: 4.4,
+      },
+      {
+        phone: '+966500000011',
+        full_name: 'Saleh Al-Qarni',
+        handle: 'saleh_q',
+        preferred_position: 'Defender',
+        skill_level: 'Intermediate',
+        role: 'Player',
+        wallet_balance: '180.00',
+        karma_score: 4,
+        rating: 3.9,
+      },
+      {
+        phone: '+966500000012',
+        full_name: 'Majed Al-Amri',
+        handle: 'majed_a',
+        preferred_position: 'Goalkeeper',
+        skill_level: 'Advanced',
+        role: 'Player',
+        wallet_balance: '320.00',
+        karma_score: 9,
+        rating: 4.2,
+      },
+      {
+        phone: '+966500000013',
+        full_name: 'Hassan Al-Zahrani',
+        handle: 'hassan_z',
+        preferred_position: 'Defender',
+        skill_level: 'Beginner',
+        role: 'Player',
+        wallet_balance: '140.00',
+        karma_score: 2,
+        rating: 3.7,
+      },
+      {
+        phone: '+966500000014',
+        full_name: 'Waleed Al-Oufi',
+        handle: 'waleed_o',
+        preferred_position: 'Forward',
+        skill_level: 'Intermediate',
+        role: 'Player',
+        wallet_balance: '260.00',
+        karma_score: 7,
+        rating: 4.1,
+      },
     ])
     .returning({ id: schema.users.id, handle: schema.users.handle });
 
@@ -443,6 +509,10 @@ async function seed() {
       is_host: true,
     });
 
+    // The "Full" demo match is filled to its exact max_players below, so the
+    // feed's FULL badge always has a complete lineup behind it.
+    if (match.title === 'Sunset 7v7 Rooftop') continue;
+
     // Add 3-6 extra players per match
     const extraCount = 3 + (i % 4);
     for (let j = 0; j < extraCount; j++) {
@@ -459,6 +529,24 @@ async function seed() {
         });
       }
     }
+  }
+
+  // ── Fill the "Full" demo match (7v7 = 14 players) to its exact max_players.
+  // A match shown as FULL in the feed must have a complete 7-Home / 7-Away
+  // lineup; otherwise the TeamLineup shows phantom "Open" slots.
+  const fullMatchId = matchMap['Sunset 7v7 Rooftop'];
+  if (fullMatchId) {
+    const fullHostId = users['omar_s']!;
+    const others = Object.values(users).filter((id) => id !== fullHostId);
+    // Host already occupies one Home slot; 6 more Home + 7 Away = 13 = 14 total.
+    others.slice(0, 13).forEach((userId, idx) => {
+      matchPlayersData.push({
+        match_id: fullMatchId,
+        user_id: userId,
+        team: idx < 6 ? 'Home' : 'Away',
+        is_host: false,
+      });
+    });
   }
 
   await db.insert(schema.match_players).values(matchPlayersData);

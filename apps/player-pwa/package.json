@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' next dev -p 3000",
     "build": "next build",
+    "restart": "systemctl --user restart koralink-pwa.service",
+    "build-deploy": "npm run build && node scripts/sync-standalone.mjs && npm run restart",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "test": "vitest run",

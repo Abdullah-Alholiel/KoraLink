@@ -18,11 +18,10 @@ interface TeamLineupProps {
  * Players auto-assigned to Home (White) / Away (Dark) by backend.
  *
  * The two teams are ALWAYS side-by-side (classic match-sheet look) on every
- * screen and every format. Inside each team card:
- * - Small sides (≤6 per team): single column of tall rows.
- * - Large sides (7+ per team: 7v7, 8v8, 11v11): players flow in a compact
- *   2-column grid so an 11-per-side roster stays readable in a half-width
- *   column instead of becoming an 11-row tower.
+ * screen and every format. Inside each team card, players are always listed in
+ * a single vertical column — one player per row — even for 11v11. The taller
+ * list is intentional: it reads as a real team sheet and avoids cramming
+ * player names into a half-width 2-column grid.
  */
 export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmpty = false }: TeamLineupProps) {
     const t = useTranslations();
@@ -42,10 +41,6 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
     const homeOpen = Math.max(0, perSide - homePlayers.length);
     const awayOpen = Math.max(0, perSide - awayPlayers.length);
 
-    // Large formats use the compact chip grid; small formats keep tall rows.
-    const isLargeFormat = perSide >= 7;
-    const colsClass = isLargeFormat ? 'grid grid-cols-2 gap-x-2 gap-y-1' : 'space-y-2';
-
     return (
         <div>
             <div className="flex items-center justify-between mb-4">
@@ -64,13 +59,12 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
                         perSide={perSide}
                         label={t('matchDetail.teamWhite')}
                     />
-                    <div className={colsClass}>
+                    <div className="space-y-2">
                         {homePlayers.map((player) => (
                             <PlayerSlot
                                 key={player.id}
                                 player={player}
                                 onClick={onPlayerClick}
-                                compact={isLargeFormat}
                             />
                         ))}
                         {!hideEmpty && Array.from({ length: homeOpen }).map((_, i) => (
@@ -87,14 +81,13 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
                         perSide={perSide}
                         label={t('matchDetail.teamDark')}
                     />
-                    <div className={colsClass}>
+                    <div className="space-y-2">
                         {awayPlayers.map((player) => (
                             <PlayerSlot
                                 key={player.id}
                                 player={player}
                                 dark
                                 onClick={onPlayerClick}
-                                compact={isLargeFormat}
                             />
                         ))}
                         {!hideEmpty && Array.from({ length: awayOpen }).map((_, i) => (
@@ -121,13 +114,13 @@ function TeamHeader({ dark, count, perSide, label }: { dark: boolean; count: num
 }
 
 /* ─── Player Slot (filled) ─── */
-function PlayerSlot({ player, dark, onClick, compact }: { player: RosterPlayer; dark?: boolean; onClick?: (p: RosterPlayer) => void; compact?: boolean }) {
+function PlayerSlot({ player, dark, onClick }: { player: RosterPlayer; dark?: boolean; onClick?: (p: RosterPlayer) => void }) {
     return (
         <button
             onClick={() => onClick?.(player)}
-            className={`w-full flex items-center ${compact ? 'gap-1' : 'gap-1.5'} text-start transition-opacity ${dark ? 'hover:opacity-80' : 'hover:bg-gray-50'} rounded-lg ${compact ? 'px-0.5 py-0.5' : 'p-1'}`}
+            className={`w-full flex items-center gap-1.5 text-start transition-opacity ${dark ? 'hover:opacity-80' : 'hover:bg-gray-50'} rounded-lg p-1`}
         >
-            <div className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden flex-shrink-0 ${
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden flex-shrink-0 ${
                 dark ? 'bg-gray-700 text-gray-200' : 'bg-gray-200 text-gray-600'
             }`}>
                 {player.avatarUrl ? (
