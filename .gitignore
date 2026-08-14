@@ -44,8 +44,6 @@ yarn-error.log*
 next-env.d.ts
 .hermes-bootstrap/
 
-# skills
-docs/skills/*  
 
 # agents
 .agents/*
