@@ -327,7 +327,7 @@ export default function MatchDetailPage({
 
                     {isJoined ? (
                         /* ═══ JOINED STATE ═══ */
-                        <div className="pb-32">
+                        <div className="pb-44">
                             {/* 1. Game Details */}
                             <div className="mx-5 mt-2">
                                 <GameDetails
@@ -513,7 +513,7 @@ export default function MatchDetailPage({
                         </div>
                     ) : (
                         /* ═══ PRE-JOIN STATE ═══ */
-                        <div className="pb-32">
+                        <div className="pb-44">
                             {/* Organizer */}
                             <div className="flex items-center justify-between px-5 py-3">
                                 <div className="flex items-center gap-3">
