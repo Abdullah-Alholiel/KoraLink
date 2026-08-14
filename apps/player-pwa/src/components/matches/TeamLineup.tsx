@@ -13,11 +13,6 @@ interface TeamLineupProps {
     hideEmpty?: boolean;
 }
 
-/** Max number of empty-slot placeholders rendered per team. Large formats
- *  (11v11) would otherwise paint 8+ placeholder rows and dwarf the filled
- *  players. Filled players are ALWAYS all rendered. */
-const MAX_EMPTY_SLOTS = 3;
-
 /**
  * Two-team lineup with dynamic roster from DB.
  * Players auto-assigned to Home (White) / Away (Dark) by backend.
@@ -79,14 +74,9 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
                                 compact={isLargeFormat}
                             />
                         ))}
-                        {!hideEmpty && homeOpen > 0 && (
-                            <>
-                                <EmptySlot dark={false} />
-                                {Array.from({ length: Math.min(homeOpen - 1, MAX_EMPTY_SLOTS - 1) }).map((_, i) => (
-                                    <EmptySlot key={`home-empty-${i}`} dark={false} />
-                                ))}
-                            </>
-                        )}
+                        {!hideEmpty && Array.from({ length: homeOpen }).map((_, i) => (
+                            <EmptySlot key={`home-empty-${i}`} dark={false} />
+                        ))}
                     </div>
                 </div>
 
@@ -108,14 +98,9 @@ export default function TeamLineup({ format, roster = [], onPlayerClick, hideEmp
                                 compact={isLargeFormat}
                             />
                         ))}
-                        {!hideEmpty && awayOpen > 0 && (
-                            <>
-                                <EmptySlot dark />
-                                {Array.from({ length: Math.min(awayOpen - 1, MAX_EMPTY_SLOTS - 1) }).map((_, i) => (
-                                    <EmptySlot key={`away-empty-${i}`} dark />
-                                ))}
-                            </>
-                        )}
+                        {!hideEmpty && Array.from({ length: awayOpen }).map((_, i) => (
+                            <EmptySlot key={`away-empty-${i}`} dark />
+                        ))}
                     </div>
                 </div>
             </div>
@@ -167,7 +152,7 @@ function PlayerSlot({ player, dark, onClick, compact }: { player: RosterPlayer; 
 function EmptySlot({ dark }: { dark?: boolean }) {
     const t = useTranslations('matchDetail');
     return (
-        <div className={`flex items-center gap-1.5 ${dark ? 'px-0.5 py-0.5' : 'px-0.5 py-0.5'}`}>
+        <div className="flex items-center gap-1.5 px-0.5 py-0.5">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                 dark ? 'bg-gray-800' : 'bg-gray-50'
             }`}>

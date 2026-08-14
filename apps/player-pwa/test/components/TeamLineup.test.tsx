@@ -61,15 +61,15 @@ describe('TeamLineup — all formats show ALL players', () => {
     expect(container.querySelectorAll('.grid.grid-cols-2').length).toBe(2);
   });
 
-  it('renders every player for an 11v11 with a partial roster (open slots capped)', () => {
+  it('renders every player for an 11v11 with a partial roster (all open slots shown)', () => {
     const roster = makeRoster(5);
     renderLineup(<TeamLineup format="11v11" roster={roster} />);
     roster.forEach((p) => {
       expect(screen.getByText(p.name)).toBeInTheDocument();
     });
-    // Empty placeholders are capped at 3 per team — not 6+ towers
+    // Full 11-per-side structure: 5 filled + 17 open slots = 22 rows total.
     const empties = screen.getAllByText('Open');
-    expect(empties.length).toBeLessThanOrEqual(6);
+    expect(empties.length).toBe(17);
   });
 
   it('uses the compact grid for 7v7 but tall rows for 5v5', () => {
