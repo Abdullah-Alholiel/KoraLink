@@ -220,7 +220,10 @@ export class MatchesService {
                   AND (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW()
                 )
                 OR (
-                  m.scheduled_at >= CURRENT_DATE
+                  -- Matches the user played in stay visible while the POTM
+                  -- voting window (24h after the final whistle) is still open,
+                  -- even after midnight. Keep in sync with VOTING_WINDOW_HOURS.
+                  (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW() - INTERVAL '24 hours'
                   AND (mp.user_id = ${currentUserId}::text OR m.host_id = ${currentUserId}::text)
                 )
               `

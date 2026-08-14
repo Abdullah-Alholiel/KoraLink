@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import { useMyMatches } from '@/hooks/useUser';
-import { adaptMatchList, todayInRiyadh } from '@/lib/api-adapter';
+import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
 export default function MyGamesPage() {
@@ -21,10 +21,14 @@ export default function MyGamesPage() {
   const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
 
   const activeMatches = matches.filter((m) =>
-    ['open', 'full', 'in_progress'].includes(m.status) || (m.status === 'completed' && m.date === todayInRiyadh())
+    // Active = joinable OR played within the POTM voting window (24h after
+    // the final whistle) so players can still vote after midnight.
+    ['open', 'full', 'in_progress'].includes(m.status) ||
+    (m.status === 'completed' && (m.isJoined || m.isUserHost) && isPotmVotingOpen(m.scheduledAt))
   );
   const historyMatches = matches.filter((m) =>
-    ['completed', 'cancelled'].includes(m.status) && !(m.status === 'completed' && m.date === todayInRiyadh())
+    ['completed', 'cancelled'].includes(m.status) &&
+    !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isPotmVotingOpen(m.scheduledAt))
   );
 
   return (

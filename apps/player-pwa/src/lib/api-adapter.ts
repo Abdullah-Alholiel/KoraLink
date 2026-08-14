@@ -163,6 +163,17 @@ export function todayInRiyadh(): string {
   return dateInRiyadh(new Date());
 }
 
+/** POTM voting window length — must mirror MatchesService.VOTING_WINDOW_HOURS. */
+export const POTM_VOTING_WINDOW_HOURS = 24;
+
+/** True while the POTM voting window (match end + 24h) is open. */
+export function isPotmVotingOpen(scheduledAt?: string, durationMins = 60): boolean {
+  if (!scheduledAt) return false;
+  const endMs = new Date(scheduledAt).getTime() + durationMins * 60_000;
+  const closesAtMs = endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000;
+  return Date.now() < closesAtMs;
+}
+
 function fmtEnd(scheduled: Date, durationMins: number): string {
   return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000));
 }
@@ -276,6 +287,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, durationMins),
     scheduledAt: scheduled.toISOString(),
+    votingClosesAt: new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
@@ -325,6 +337,7 @@ export function adaptMatchDetail(
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, duration),
     scheduledAt: scheduled.toISOString(),
+    votingClosesAt: new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
     location: venue?.city ?? '',
     venueName: venue?.name ?? detail.pitch?.name ?? '',
     venueDetails: venue?.address ?? '',

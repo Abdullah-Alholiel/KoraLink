@@ -29,6 +29,13 @@ export interface Match {
     endTime?: string;
     /** Raw scheduled_at ISO string from the API — timezone-safe source for time math. */
     scheduledAt?: string;
+    /**
+     * ISO timestamp after which POTM voting closes (match end + 24h).
+     * Mirrors MatchesService.VOTING_WINDOW_HOURS on the API. A completed match
+     * the user played in stays actionable on cards/lists until this moment —
+     * calendar-date checks wrongly hide it after midnight.
+     */
+    votingClosesAt?: string;
     location: string;
     venueName: string;
     venueDetails?: string;

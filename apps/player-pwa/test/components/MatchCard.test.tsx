@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import type { Match } from '@/types';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
-import { todayInRiyadh } from '@/lib/api-adapter';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -124,12 +123,16 @@ describe('MatchCard', () => {
 
   // ── POTM (Player of the Match) button states ─────────────────────────────
 
-  const today = todayInRiyadh();
+  // A match that ended ~2h ago (90 min duration) — voting window open.
+  const playedRecently: Match = {
+    ...baseMatch,
+    status: 'completed',
+    scheduledAt: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(),
+    isJoined: true,
+  };
 
-  it('shows short "Vote POTM" pill on a completed-today match when not yet voted', () => {
-    renderWithProviders(
-      <MatchCard match={{ ...baseMatch, status: 'completed', date: today, isJoined: true }} currentUserId="p2" />
-    );
+  it('shows short "Vote POTM" pill on a recently-played match when not yet voted', () => {
+    renderWithProviders(<MatchCard match={playedRecently} currentUserId="p2" />);
     expect(screen.getByText('Vote POTM')).toBeInTheDocument();
     expect(screen.getByText('POTM')).toBeInTheDocument();
     // Long label must NOT be rendered anywhere on the card
@@ -138,22 +141,39 @@ describe('MatchCard', () => {
 
   it('shows voted state (View Details + POTM voted badge) when hasVotedPotm is true', () => {
     renderWithProviders(
-      <MatchCard
-        match={{ ...baseMatch, status: 'completed', date: today, isJoined: true, hasVotedPotm: true }}
-        currentUserId="p2"
-      />
+      <MatchCard match={{ ...playedRecently, hasVotedPotm: true }} currentUserId="p2" />
     );
     expect(screen.getByText('View Details')).toBeInTheDocument();
     expect(screen.getByText('POTM voted')).toBeInTheDocument();
     expect(screen.queryByText('Vote POTM')).not.toBeInTheDocument();
   });
 
-  it('shows plain View Details for a completed match from before today', () => {
+  it('shows plain View Details once the 24h voting window has closed', () => {
     renderWithProviders(
-      <MatchCard match={{ ...baseMatch, status: 'completed', date: '2026-08-01', isJoined: true }} currentUserId="p2" />
+      <MatchCard
+        match={{
+          ...baseMatch,
+          status: 'completed',
+          scheduledAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(), // ended >24h ago
+          isJoined: true,
+        }}
+        currentUserId="p2"
+      />
     );
     expect(screen.getByText('View Details')).toBeInTheDocument();
     expect(screen.queryByText('Vote POTM')).not.toBeInTheDocument();
     expect(screen.queryByText('POTM voted')).not.toBeInTheDocument();
+  });
+
+  it('keeps a match played yesterday visible across midnight while voting is open', () => {
+    // Ended at 23:30 yesterday (30 min ago crossed midnight): voting still open
+    const acrossMidnight = {
+      ...baseMatch,
+      status: 'completed' as const,
+      scheduledAt: new Date(Date.now() - 30 * 60 * 1000 - 60 * 60 * 1000).toISOString(),
+      isJoined: true,
+    };
+    renderWithProviders(<MatchCard match={acrossMidnight} currentUserId="p2" />);
+    expect(screen.getByText('Vote POTM')).toBeInTheDocument();
   });
 });

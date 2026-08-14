@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { MapPin, Users as UsersIcon, Trophy, Crown, Check } from 'lucide-react';
 import type { Match } from '@/types';
-import { todayInRiyadh } from '@/lib/api-adapter';
+import { isPotmVotingOpen } from '@/lib/api-adapter';
 
 interface MatchCardProps {
     match: Match;
@@ -26,9 +26,11 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
-    // Riyadh-day comparison — matches how match.date is now derived (dateInRiyadh).
-    const isToday = match.date === todayInRiyadh();
-    const isCompletedToday = match.status === 'completed' && isToday && (isJoined || isHost);
+    // POTM voting window — a match the user played in stays actionable for 24h
+    // after the final whistle, even across midnight. Duration defaults to 60
+    // when unknown; the API's voting guard remains authoritative on submit.
+    const votingOpen = isPotmVotingOpen(match.scheduledAt);
+    const canVotePotm = match.status === 'completed' && (isJoined || isHost) && votingOpen;
     // POTM vote state comes from the feed/my-matches SQL (has_voted) via the adapter.
     const hasVotedPotm = match.hasVotedPotm ?? false;
 
@@ -36,7 +38,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     let buttonStyle: string;
     let badge: React.ReactNode = null;
 
-    if (isCompletedToday) {
+    if (canVotePotm) {
         if (hasVotedPotm) {
             // Vote cast — quiet confirmation state; next sensible action is viewing results.
             buttonLabel = t('matchDetail.viewDetails');

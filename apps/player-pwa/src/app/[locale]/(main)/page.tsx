@@ -4,6 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
 import { MapPin, AlertCircle, WifiOff } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
+import { isPotmVotingOpen } from '@/lib/api-adapter';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 export default function CommunityFeedPage() {
@@ -101,6 +102,10 @@ export default function CommunityFeedPage() {
                         {matches.map((match) => {
                             const spotsLeft = match.totalSpots - match.filledSpots;
                             const isUrgent = spotsLeft <= 2 && spotsLeft > 0;
+                            const playedVotingOpen =
+                                match.status === 'completed' &&
+                                (match.isJoined || match.isUserHost) &&
+                                isPotmVotingOpen(match.scheduledAt);
                             const initials = match.organizer.name
                                 .split(' ')
                                 .map((n) => n[0])
@@ -111,7 +116,7 @@ export default function CommunityFeedPage() {
                                 <Link
                                     key={match.id}
                                     href={`/${locale}/match/${match.id}`}
-                                    className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent ? 'border-s-4 border-brand-red' : ''}`}
+                                    className={`block bg-white rounded-2xl shadow-card p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isUrgent && !playedVotingOpen ? 'border-s-4 border-brand-red' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
                                         {/* Avatar */}
@@ -135,19 +140,31 @@ export default function CommunityFeedPage() {
                                             </p>
                                             {/* Spots / format */}
                                             <div className="flex items-center gap-2 mt-2">
-                                                <span
-                                                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                                                        match.status === 'full'
-                                                            ? 'bg-gray-100 text-gray-500'
-                                                            : isUrgent
-                                                              ? 'bg-brand-red/10 text-brand-red'
-                                                              : 'bg-brand-green/10 text-brand-green'
-                                                    }`}
-                                                >
-                                                    {match.status === 'full'
-                                                        ? 'FULL'
-                                                        : `${spotsLeft} ${t('spotsLeft')}`}
-                                                </span>
+                                                {playedVotingOpen ? (
+                                                    <span
+                                                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                                            match.hasVotedPotm
+                                                                ? 'bg-brand-green/10 text-brand-green'
+                                                                : 'bg-amber-100 text-amber-800'
+                                                        }`}
+                                                    >
+                                                        {match.hasVotedPotm ? t('matchCard.potmVoted') : t('matchCard.votePotm')}
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                                            match.status === 'full'
+                                                                ? 'bg-gray-100 text-gray-500'
+                                                                : isUrgent
+                                                                  ? 'bg-brand-red/10 text-brand-red'
+                                                                  : 'bg-brand-green/10 text-brand-green'
+                                                        }`}
+                                                    >
+                                                        {match.status === 'full'
+                                                            ? 'FULL'
+                                                            : `${spotsLeft} ${t('spotsLeft')}`}
+                                                    </span>
+                                                )}
                                                 <span className="text-xs text-gray-400">
                                                     {match.format} • {match.surface}
                                                 </span>
