@@ -459,6 +459,9 @@ async function seed() {
   console.log(`✔ Inserted ${matchPlayersData.length} match players`);
 
   // ── 6. POM Votes (for the two completed matches) ────────────────────
+  // POTM invariant: a candidate MUST be a member of the match roster. Derive
+  // candidates from each match's actual lineup — never hardcode a user ID that
+  // may not be present in the roster.
   const completedMatch1 = matchMap['Last Week 11v11 Classic'];
   const completedMatch2 = matchMap['Last Week Indoor 5v5'];
 
@@ -468,13 +471,25 @@ async function seed() {
     candidate_id: string;
   }> = [];
 
-  // Match 1: Ahmed hosted, players vote Yousef as POM (3 votes), Khalid gets 1
+  // Pick a candidate from the lineup who is not one of the voters (the host is
+  // never a voter, so there is always at least one eligible candidate).
+  const pickCandidate = (
+    players: typeof matchPlayersData,
+    voterIds: string[],
+    skip: number,
+  ): string | undefined =>
+    players.map((mp) => mp.user_id).filter((id) => !voterIds.includes(id))[skip];
+
+  // Match 1: non-host players vote for two lineup teammates (3 votes + 1 vote).
   if (completedMatch1) {
     const m1Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch1);
     const voters1 = m1Players.filter((mp) => !mp.is_host).slice(0, 4);
+    const voterIds1 = voters1.map((v) => v.user_id);
+    const primary1 = pickCandidate(m1Players, voterIds1, 0);
+    const runnerUp1 = pickCandidate(m1Players, voterIds1, 1);
     for (let i = 0; i < voters1.length; i++) {
-      const candidateId = i < 3 ? users.yousef_q! : users.khalid_o!;
-      if (voters1[i].user_id !== candidateId) {
+      const candidateId = i < 3 ? primary1 : runnerUp1;
+      if (candidateId && voters1[i].user_id !== candidateId) {
         voteData.push({
           match_id: completedMatch1,
           voter_id: voters1[i].user_id,
@@ -484,16 +499,18 @@ async function seed() {
     }
   }
 
-  // Match 2: Yousef hosted, players vote Sultan as POM (2 votes)
+  // Match 2: non-host players vote for a lineup teammate (2-3 votes).
   if (completedMatch2) {
     const m2Players = matchPlayersData.filter((mp) => mp.match_id === completedMatch2);
     const voters2 = m2Players.filter((mp) => !mp.is_host).slice(0, 3);
+    const voterIds2 = voters2.map((v) => v.user_id);
+    const primary2 = pickCandidate(m2Players, voterIds2, 0);
     for (let i = 0; i < voters2.length; i++) {
-      if (voters2[i].user_id !== users.sultan_d!) {
+      if (primary2 && voters2[i].user_id !== primary2) {
         voteData.push({
           match_id: completedMatch2,
           voter_id: voters2[i].user_id,
-          candidate_id: users.sultan_d!,
+          candidate_id: primary2,
         });
       }
     }

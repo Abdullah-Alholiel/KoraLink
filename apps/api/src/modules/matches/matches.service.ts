@@ -1147,6 +1147,9 @@ export class MatchesService {
     }
 
     // ── Voting closed — determine winner ──
+    // POTM invariant: a winner MUST be a member of the match roster and not a
+    // no-show. Join match_players so votes cast for a player who left (or was
+    // never in the lineup) are excluded from the tally.
     const voteCounts = await this.db.execute(sql`
       SELECT
         mv.candidate_id,
@@ -1155,6 +1158,10 @@ export class MatchesService {
         COUNT(*)::int AS vote_count
       FROM ${match_votes} mv
       INNER JOIN ${users} u ON u.id = mv.candidate_id
+      INNER JOIN ${match_players} mp
+        ON mp.match_id = mv.match_id
+       AND mp.user_id = mv.candidate_id
+       AND mp.no_show = false
       WHERE mv.match_id = ${matchId}
       GROUP BY mv.candidate_id, u.full_name, u.avatar_url
       ORDER BY vote_count DESC

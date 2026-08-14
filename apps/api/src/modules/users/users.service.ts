@@ -36,6 +36,10 @@ export class UsersService {
           RANK() OVER (PARTITION BY mv.match_id ORDER BY COUNT(*) DESC) AS rnk
         FROM ${match_votes} mv
         INNER JOIN closed_matches cm ON cm.id = mv.match_id
+        INNER JOIN ${match_players} mp
+          ON mp.match_id = mv.match_id
+         AND mp.user_id = mv.candidate_id
+         AND mp.no_show = false
         GROUP BY mv.match_id, mv.candidate_id
       )
       SELECT COUNT(*)::int AS pom_count
