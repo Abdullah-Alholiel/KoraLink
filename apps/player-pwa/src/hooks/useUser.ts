@@ -19,6 +19,8 @@ export interface UserProfileApi {
   karma_score: number;
   no_show_count: number;
   pom_count: number;
+  home_lat: number | null;
+  home_lng: number | null;
   created_at: string;
 }
 
@@ -37,6 +39,9 @@ export interface PublicProfileApi {
   skill_level: string | null;
   pom_count: number;
   games_played: number;
+  isFollowing: boolean;
+  followersCount: number;
+  followingCount: number;
 }
 
 // ─── Fetch User Profile ────────────────────────────────
@@ -81,6 +86,8 @@ interface UpdateProfileInput {
   skill_level?: 'Beginner' | 'Intermediate' | 'Advanced';
   preferred_location?: string;
   preferred_position?: string;
+  home_lat?: number;
+  home_lng?: number;
 }
 
 export function useUpdateProfile() {

@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl';
 import { X, Trophy, Users, Loader2, AlertTriangle } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
+import { useFollow } from '@/hooks/useFollow';
+import FollowButton from '@/components/features/FollowButton';
 import type { RosterPlayer } from '@/types';
 
 interface PlayerProfileSheetProps {
@@ -13,6 +15,7 @@ interface PlayerProfileSheetProps {
 export default function PlayerProfileSheet({ player, onClose }: PlayerProfileSheetProps) {
     const t = useTranslations();
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
+    const { followersCount, followingCount } = useFollow(player?.userId ?? '');
 
     if (!player) return null;
 
@@ -97,6 +100,23 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                                 <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.games_played ?? 0}</p>
                                 <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.gamesPlayed')}</p>
                             </div>
+                        </div>
+                    )}
+
+                    {/* ── Follow ── */}
+                    {profile && !isLoading && (
+                        <div className="bg-white rounded-xl shadow-card p-4 mb-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-4">
+                                <span className="text-center">
+                                    <span className="block text-sm font-extrabold text-brand-black" dir="ltr">{followersCount}</span>
+                                    <span className="block text-[10px] text-gray-400">{t('follow.followers')}</span>
+                                </span>
+                                <span className="text-center">
+                                    <span className="block text-sm font-extrabold text-brand-black" dir="ltr">{followingCount}</span>
+                                    <span className="block text-[10px] text-gray-400">{t('follow.followingList')}</span>
+                                </span>
+                            </div>
+                            <FollowButton targetUserId={player.userId} size="sm" />
                         </div>
                     )}
                 </div>

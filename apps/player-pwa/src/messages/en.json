@@ -456,7 +456,8 @@
         "spots": "spots",
         "noDiscussions": "No discussions yet",
         "noDiscussionsDescription": "Join or host a match to start chatting with players!",
-        "older": "Older"
+        "older": "Older",
+        "noConversations": "No conversations yet"
     },
     "feed": {
         "title": "Community Feed",
@@ -473,7 +474,13 @@
         "details": "Details",
         "onlineIndicator": "online",
         "nearbyMatches": "Nearby Matches",
-        "goToPlay": "Discover Matches"
+        "goToPlay": "Discover Matches",
+        "createdMatch": "{name} hosted a match",
+        "joinedMatch": "{name} joined a match",
+        "followedYou": "{name} started following you",
+        "messagedYou": "{name} sent you a message",
+        "pomDecided": "{name} won Player of the Match",
+        "subtitle": "Latest activity around you"
     },
     "payment": {
         "title": "Checkout",
@@ -596,5 +603,18 @@
         "enable": "Enable",
         "later": "Not now",
         "denied": "Location is off. Enable it to see distance."
+    },
+    "follow": {
+        "follow": "Follow",
+        "following": "Following",
+        "unfollow": "Unfollow",
+        "followers": "Followers",
+        "followingList": "Following",
+        "noFollowers": "No followers yet"
+    },
+    "notifications": {
+        "title": "Notifications",
+        "empty": "No notifications",
+        "markAllRead": "Mark all read"
     }
 }

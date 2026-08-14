@@ -456,7 +456,8 @@
         "spots": "مقاعد",
         "noDiscussions": "لا توجد مناقشات بعد",
         "noDiscussionsDescription": "انضم أو استضف مباراة لبدء الدردشة مع اللاعبين!",
-        "older": "أقدم"
+        "older": "أقدم",
+        "noConversations": "لا توجد محادثات بعد"
     },
     "feed": {
         "title": "آخر الأخبار",
@@ -473,7 +474,13 @@
         "details": "التفاصيل",
         "onlineIndicator": "متصل",
         "nearbyMatches": "مباريات قريبة",
-        "goToPlay": "اكتشف المباريات"
+        "goToPlay": "اكتشف المباريات",
+        "createdMatch": "أنشأ {name} مباراة",
+        "joinedMatch": "انضم {name} إلى مباراة",
+        "followedYou": "بدأ {name} بمتابعتك",
+        "messagedYou": "أرسل لك {name} رسالة",
+        "pomDecided": "فاز {name} بجائزة أفضل لاعب",
+        "subtitle": "أحدث الأنشطة من حولك"
     },
     "payment": {
         "title": "الدفع",
@@ -596,5 +603,18 @@
         "enable": "تفعيل",
         "later": "ليس الآن",
         "denied": "الموقع معطّل. فعّله لعرض المسافة."
+    },
+    "follow": {
+        "follow": "متابعة",
+        "following": "يتابع",
+        "unfollow": "إلغاء المتابعة",
+        "followers": "المتابعون",
+        "followingList": "يتابع",
+        "noFollowers": "لا يوجد متابعون بعد"
+    },
+    "notifications": {
+        "title": "الإشعارات",
+        "empty": "لا توجد إشعارات",
+        "markAllRead": "تحديد الكل كمقروء"
     }
 }
