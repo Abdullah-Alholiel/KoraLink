@@ -9,11 +9,11 @@ interface MobileFrameProps {
 
 export default function MobileFrame({ children, className = '' }: MobileFrameProps) {
   return (
-    <div className="w-full h-[100dvh] max-h-[100dvh] bg-brand-bg flex justify-center overflow-hidden">
+    <div className="w-full h-[var(--app-height)] max-h-[var(--app-height)] bg-brand-bg flex justify-center overflow-hidden">
       <div
         className={`
           w-full max-w-6xl
-          h-[100dvh] max-h-[100dvh]
+          h-[var(--app-height)] max-h-[var(--app-height)]
           bg-white shadow-sm
           relative overflow-hidden
           flex flex-col flex-1

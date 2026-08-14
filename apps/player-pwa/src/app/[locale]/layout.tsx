@@ -4,6 +4,7 @@ import IntlClientProvider from '@/providers/IntlClientProvider';
 import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
+import ViewportHeight from '@/components/layout/ViewportHeight';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -20,39 +21,41 @@ const tajawal = Tajawal({
   weight: ['300', '400', '500', '700', '800'],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: 'KoraLink',
-    template: '%s | KoraLink',
-  },
-  description: 'منصة كرة القدم الرائدة في السعودية',
-  manifest: '/manifest.json',
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-    ],
-    shortcut: '/favicon.ico',
-    apple: [
-      { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'KoraLink',
-  },
-  formatDetection: {
-    telephone: false,
-  },
-  openGraph: {
-    type: 'website',
-    siteName: 'KoraLink',
-    title: 'KoraLink',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: {
+      default: 'KoraLink',
+      template: '%s | KoraLink',
+    },
     description: 'منصة كرة القدم الرائدة في السعودية',
-  },
-};
+    manifest: '/manifest.json',
+    icons: {
+      icon: [
+        { url: '/favicon.ico', sizes: 'any' },
+        { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+        { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+      ],
+      shortcut: '/favicon.ico',
+      apple: [
+        { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      ],
+    },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: 'KoraLink',
+    },
+    formatDetection: {
+      telephone: false,
+    },
+    openGraph: {
+      type: 'website',
+      siteName: 'KoraLink',
+      title: 'KoraLink',
+      description: 'منصة كرة القدم الرائدة في السعودية',
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#254132',
@@ -93,6 +96,7 @@ export default async function RootLayout({
           <ObservabilityProvider>
             <IntlClientProvider locale={locale} messages={messages}>
               <AuthBootstrap />
+              <ViewportHeight />
               <div className="app-shell">{children}</div>
             </IntlClientProvider>
           </ObservabilityProvider>
