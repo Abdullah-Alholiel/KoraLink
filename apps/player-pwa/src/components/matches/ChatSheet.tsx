@@ -121,7 +121,8 @@ export default function ChatSheet({
       />
 
       {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] max-h-[85vh] flex flex-col animate-slide-up">
+      <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
+        <div className="w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl animate-slide-up flex flex-col max-h-[85vh] pb-safe">
         {/* Pull handle */}
         <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
@@ -278,7 +279,7 @@ export default function ChatSheet({
         )}
 
         {/* Input row */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 flex-shrink-0 bg-white">
+        <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
             <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
             <input
@@ -314,6 +315,7 @@ export default function ChatSheet({
           </button>
         </div>
       </div>
-    </>
+    </div>
+  </>
   );
 }

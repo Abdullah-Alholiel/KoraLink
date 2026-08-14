@@ -43,3 +43,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .hermes-bootstrap/
+
+# skills
+docs/skills/*  
+
+# agents
+.agents/*

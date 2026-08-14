@@ -46,6 +46,7 @@ export function useUserProfile() {
     queryKey: ['user', 'profile'],
     queryFn: () => fetcher<UserProfileApi>('/users/me'),
     staleTime: 60_000,
+    retry: false,
   });
 }
 
@@ -67,6 +68,7 @@ export function useUserStats() {
     queryKey: ['user', 'stats'],
     queryFn: () => fetcher<UserStatsApi>('/users/me/stats'),
     staleTime: 120_000,
+    retry: false,
   });
 }
 
@@ -103,6 +105,7 @@ export function useMyMatches() {
     queryKey: ['user', 'my-matches'],
     queryFn: () => fetcher<import('@/lib/api-adapter').NearbyMatchApi[]>('/users/me/matches'),
     staleTime: 30_000,
+    retry: false,
   });
 }
 

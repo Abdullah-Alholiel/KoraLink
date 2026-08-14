@@ -4,6 +4,7 @@ import {
     Calendar,
     Clock,
     Droplets,
+    Crown,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -12,9 +13,10 @@ interface GameDetailsProps {
     time: string;
     price: number;
     hasJoined: boolean;
+    isHost?: boolean;
 }
 
-export default function GameDetails({ date, time, price, hasJoined }: GameDetailsProps) {
+export default function GameDetails({ date, time, price, hasJoined, isHost }: GameDetailsProps) {
     const t = useTranslations('gameDetails');
 
     return (
@@ -34,11 +36,25 @@ export default function GameDetails({ date, time, price, hasJoined }: GameDetail
                         <span className="text-sm text-gray-600">{t('price')}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-brand-black">{price} SAR</span>
-                        {hasJoined && (
-                            <span className="text-[10px] font-bold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">
-                                {t('paid')}
-                            </span>
+                        {isHost ? (
+                            <>
+                                <span className="text-sm font-bold text-brand-green">{t('hostFree')}</span>
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Crown className="w-3 h-3 text-amber-600 fill-amber-500" />
+                                    {t('hostBadge')}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="text-sm font-semibold text-brand-black">
+                                    {price === 0 ? t('free') : `${price} SAR`}
+                                </span>
+                                {hasJoined && (
+                                    <span className="text-[10px] font-bold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">
+                                        {t('paid')}
+                                    </span>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>

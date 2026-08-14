@@ -17,6 +17,8 @@ import {
     Users,
     Loader2,
     ChevronRight,
+    Crown,
+    ShieldAlert,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
@@ -30,12 +32,14 @@ import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
+import EmergencyCancelSheet from '@/components/matches/EmergencyCancelSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import PostMatchSection from '@/components/matches/PostMatchSection';
 import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import LocationMap from '@/components/matches/LocationMap';
+import OngoingGameJoinSheet from '@/components/matches/OngoingGameJoinSheet';
 
 export default function MatchDetailPage({
     params,
@@ -59,18 +63,24 @@ export default function MatchDetailPage({
     const walletBalance = Number(walletData?.balance ?? 0);
     const showToast = useAppStore((s) => s.showToast);
 
-    // Derived join state from match data — isJoined/isUserHost now set by
-    // adaptMatchDetail from the roster, populated consistently with MatchCard.
+    const openSpots = match ? match.totalSpots - match.filledSpots : 0;
     const isJoined = match?.isJoined ?? false;
     const isUserHost = match?.isUserHost ?? false;
-    const showJoin = !!match && !isJoined && !isUserHost && match.status === 'open';
+    const showJoin = !!match && !isJoined && !isUserHost && (match.status === 'open' || match.status === 'full' || match.status === 'in_progress') && openSpots > 0;
 
     const [showPayment, setShowPayment] = useState(false);
     const [showRules, setShowRules] = useState(false);
     const [showCancelSheet, setShowCancelSheet] = useState(false);
+    const [showEmergencyCancelSheet, setShowEmergencyCancelSheet] = useState(false);
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
     const [showChatSheet, setShowChatSheet] = useState(false);
+    const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
+
+    // Calculate if match start time has passed or status is in_progress
+    const isMatchStarted = match
+        ? match.status === 'in_progress' || (!!match.date && !!match.time && new Date() >= new Date(`${match.date}T${match.time}`))
+        : false;
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -107,7 +117,15 @@ export default function MatchDetailPage({
     const heroTranslateY = scrollY * 0.4;
 
     const handleJoinClick = () => {
-        // Free matches skip the payment sheet — join directly
+        if (isMatchStarted || match?.status === 'in_progress') {
+            setShowOngoingJoinSheet(true);
+            return;
+        }
+        proceedToJoin();
+    };
+
+    const proceedToJoin = () => {
+        setShowOngoingJoinSheet(false);
         if (match && match.price === 0) {
             joinMatch.mutate(id);
         } else {
@@ -119,8 +137,6 @@ export default function MatchDetailPage({
         setShowPayment(false);
         joinMatch.mutate(id);
     };
-
-    const openSpots = match ? match.totalSpots - match.filledSpots : 0;
 
     return (
         <MobileFrame>
@@ -188,7 +204,7 @@ export default function MatchDetailPage({
 
                     {/* Top Actions */}
                     <div
-                        className="absolute top-0 inset-x-0 flex items-center justify-between p-4 pt-safe z-10"
+                        className="absolute top-0 inset-x-0 flex items-center justify-between px-5 pt-[var(--top-safe-inset)] pb-4 z-10"
                         style={{ opacity: Math.max(0, 1 - parallaxProgress * 1.5) }}
                     >
                         <button
@@ -227,12 +243,17 @@ export default function MatchDetailPage({
                             opacity: Math.max(0, 1 - parallaxProgress * 1.2),
                         }}
                     >
-                        {isJoined && (
+                        {isUserHost ? (
+                            <div className="inline-flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 mb-3 animate-scale-in border border-amber-300/40">
+                                <Crown className="w-3.5 h-3.5 text-amber-200 fill-amber-300" />
+                                <span className="text-xs font-bold text-white">{t('matchDetail.hostBadge')}</span>
+                            </div>
+                        ) : isJoined ? (
                             <div className="inline-flex items-center gap-1.5 bg-brand-green/90 backdrop-blur-sm rounded-full px-3 py-1.5 mb-3 animate-scale-in">
                                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                                 <span className="text-xs font-bold text-white">{t('matchDetail.joined')}</span>
                             </div>
-                        )}
+                        ) : null}
                         <h1 className="text-2xl font-extrabold text-white leading-tight drop-shadow-lg">
                             {match.time} | {match.title} {t('feed.at')} {match.location}
                         </h1>
@@ -311,6 +332,7 @@ export default function MatchDetailPage({
                                     time={match.time}
                                     price={match.price}
                                     hasJoined={true}
+                                    isHost={isUserHost}
                                 />
                             </div>
 
@@ -439,20 +461,30 @@ export default function MatchDetailPage({
                                 </div>
                             )}
 
-                            {/* Cancel Match Button (Host only) */}
+                            {/* Cancel Match / Emergency Cancel Button (Host only) */}
                             {isUserHost && match.status !== 'completed' && match.status !== 'cancelled' && (
                                 <div className="px-5 pt-6">
-                                    <button
-                                        onClick={() => setShowCancelSheet(true)}
-                                        className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
-                                    >
-                                        {t('matchDetail.cancelMatch')}
-                                    </button>
+                                    {isMatchStarted ? (
+                                        <button
+                                            onClick={() => setShowEmergencyCancelSheet(true)}
+                                            className="w-full py-3.5 rounded-xl bg-brand-red/10 border border-brand-red/40 text-brand-red text-sm font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                                        >
+                                            <ShieldAlert className="w-4.5 h-4.5 text-brand-red animate-pulse" strokeWidth={2} />
+                                            <span>{t('matchDetail.emergencyCancelMatch')}</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => setShowCancelSheet(true)}
+                                            className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
+                                        >
+                                            {t('matchDetail.cancelMatch')}
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
                             {/* WhatsApp Invite CTA (Sticky at bottom) */}
-                            <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
+                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
                                         `⚽ Join me for "${match.title}" on ${match.date} at ${match.time}!\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}\n\nJoin on KoraLink!`
@@ -627,21 +659,27 @@ export default function MatchDetailPage({
                             )}
 
                             {showJoin && (
-                            <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
-                                <button
-                                    onClick={handleJoinClick}
-                                    className="
-                                        w-full py-4 rounded-2xl bg-brand-green text-white
-                                        text-sm font-bold flex items-center justify-between px-6
-                                        shadow-[0_4px_20px_rgba(37,65,50,0.4)]
-                                        active:scale-[0.98] transition-transform
-                                    "
-                                >
-                                    <span>{t('matchDetail.joinMatch')}</span>
-                                    <span className="font-extrabold">
-                                        {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
-                                    </span>
-                                </button>
+                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-6xl mx-auto px-5 z-40">
+                                <div className="max-w-xl mx-auto">
+                                    <button
+                                        onClick={handleJoinClick}
+                                        className="
+                                            w-full py-4 rounded-2xl bg-brand-green text-white
+                                            text-sm font-bold flex items-center justify-between px-6
+                                            shadow-[0_4px_20px_rgba(37,65,50,0.4)]
+                                            active:scale-[0.98] transition-transform
+                                        "
+                                    >
+                                        <span>
+                                            {isMatchStarted || match.status === 'in_progress'
+                                                ? t('matchDetail.joinOngoingMatch')
+                                                : t('matchDetail.joinMatch')}
+                                        </span>
+                                        <span className="font-extrabold">
+                                            {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                             )}
                         </div>
@@ -657,12 +695,24 @@ export default function MatchDetailPage({
                 onClose={() => setShowRules(false)}
             />
 
-            {/* Cancel Match Sheet (Host) */}
+            {/* Cancel Match Sheet (Host - Future Match) */}
             {match && (
                 <CancelMatchSheet
                     isOpen={showCancelSheet}
                     onClose={() => setShowCancelSheet(false)}
                     onConfirm={() => { cancelMatch.mutate(id); setShowCancelSheet(false); }}
+                    matchTitle={match.title}
+                    matchTime={`${match.date}, ${match.time}`}
+                    isPending={cancelMatch.isPending}
+                />
+            )}
+
+            {/* Emergency Cancel Sheet (Host - Ongoing Match) */}
+            {match && (
+                <EmergencyCancelSheet
+                    isOpen={showEmergencyCancelSheet}
+                    onClose={() => setShowEmergencyCancelSheet(false)}
+                    onConfirm={() => { cancelMatch.mutate(id); setShowEmergencyCancelSheet(false); }}
                     matchTitle={match.title}
                     matchTime={`${match.date}, ${match.time}`}
                     isPending={cancelMatch.isPending}
@@ -682,6 +732,18 @@ export default function MatchDetailPage({
             )}
 
             <BottomNav />
+
+            {/* Ongoing Game Join Sheet */}
+            {match && (
+                <OngoingGameJoinSheet
+                    isOpen={showOngoingJoinSheet}
+                    onClose={() => setShowOngoingJoinSheet(false)}
+                    onConfirm={proceedToJoin}
+                    matchTitle={match.title}
+                    price={match.price}
+                    currency={match.currency}
+                />
+            )}
 
             {/* Payment Sheet */}
             {match && (

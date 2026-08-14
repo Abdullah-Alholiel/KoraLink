@@ -234,6 +234,16 @@ export function buildComments(messages: MatchMessageApi[]): Comment[] {
 /** Adapts a NearbyMatchApi row → frontend Match (sparse fields from feed query) */
 export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): Match {
   const scheduled = new Date(row.scheduled_at);
+  const durationMins = row.duration_mins ?? 60;
+  const startMs = scheduled.getTime();
+  const endMs = startMs + durationMins * 60_000;
+  const nowMs = Date.now();
+
+  let status = mapMatchStatus(row.status);
+  if ((status === 'open' || status === 'full') && nowMs >= startMs && nowMs < endMs) {
+    status = 'in_progress';
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -245,7 +255,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     },
     date: scheduled.toISOString().split('T')[0],
     time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, row.duration_mins ?? 60),
+    endTime: fmtEnd(scheduled, durationMins),
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
@@ -257,7 +267,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     currency: 'SAR',
     totalSpots: row.max_players,
     filledSpots: row.spots_filled,
-    status: mapMatchStatus(row.status),
+    status,
     imageUrl: '',
     roster: [],
     comments: [],
@@ -273,9 +283,17 @@ export function adaptMatchDetail(
 ): Match {
   const scheduled = new Date(detail.scheduled_at);
   const duration = detail.duration_mins ?? 60;
+  const startMs = scheduled.getTime();
+  const endMs = startMs + duration * 60_000;
+  const nowMs = Date.now();
   const venue = detail.pitch?.venue;
   const players = detail.players ?? [];
   const messages = detail.messages ?? [];
+
+  let status = mapMatchStatus(detail.status);
+  if ((status === 'open' || status === 'full') && nowMs >= startMs && nowMs < endMs) {
+    status = 'in_progress';
+  }
 
   return {
     id: detail.id,
@@ -296,7 +314,7 @@ export function adaptMatchDetail(
     currency: 'SAR',
     totalSpots: detail.max_players,
     filledSpots: players.length,
-    status: mapMatchStatus(detail.status),
+    status,
     imageUrl: '',
     rules: [],
     roster: buildRoster(players),

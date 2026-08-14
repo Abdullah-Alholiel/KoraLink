@@ -8,6 +8,7 @@ const withPWA = withPWAInit({
   dest: 'public',
   register: true,
   disable: process.env.NODE_ENV === 'development',
+  fallbacks: false,
   workboxOptions: {
     skipWaiting: true,
     runtimeCaching: [
@@ -101,6 +102,17 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  serverExternalPackages: [
+    '@sentry/nextjs',
+    '@sentry/node',
+    '@sentry/core',
+    '@opentelemetry/api',
+    '@opentelemetry/core',
+    '@opentelemetry/resources',
+    '@opentelemetry/sdk-trace-base',
+    '@opentelemetry/instrumentation',
+  ],
+
 
   async headers() {
     return [
@@ -145,4 +157,7 @@ const nextConfig = {
   },
 };
 
-export default withNextIntl(withPWA(nextConfig));
+const isDev = process.env.NODE_ENV === 'development';
+const finalConfig = isDev ? nextConfig : withPWA(nextConfig);
+
+export default withNextIntl(finalConfig);

@@ -141,6 +141,11 @@
     },
     "matchDetail": {
         "joinMatch": "Join Match",
+        "joinOngoingMatch": "Join Ongoing Match",
+        "ongoingGameTitle": "Ongoing Game",
+        "ongoingMatchNotice": "This match is currently in progress. You can still join the squad and participate late!",
+        "ongoingMatchWarning": "Note: The game has already started. Please head directly to the pitch after completing registration.",
+        "ongoingGameConfirm": "Join Ongoing Match",
         "joined": "You're In",
         "viewRules": "View Match Rules",
         "matchChat": "Match Chat",
@@ -166,6 +171,8 @@
         "matchRules": "Standard rules",
         "leaveMatch": "Leave Match",
         "cancelMatch": "Cancel Match",
+        "emergencyCancelMatch": "Emergency Cancel",
+        "hostBadge": "Match Host",
         "viewDetails": "View Details",
         "yourMatch": "Your Match",
         "view": "View",
@@ -194,6 +201,14 @@
         "confirm": "Cancel Match",
         "keep": "Keep Match"
     },
+    "emergencyCancel": {
+        "title": "Emergency Match Cancellation",
+        "subtitle": "Match is in progress or scheduled right now",
+        "warning": "Cancelling an ongoing match requires urgent support intervention. An emergency ticket will be created, and KoraLink Customer Support will contact you to handle player refunds and venue coordination.",
+        "ticketInfo": "A support ticket will be opened automatically for this cancellation.",
+        "confirm": "Submit Emergency Ticket",
+        "keep": "Keep Match Running"
+    },
     "leaveMatch": {
         "title": "Leave Match?",
         "info": "Your spot will be released. You can rejoin later if spots are available. Refund policy applies.",
@@ -206,6 +221,8 @@
         "price": "Price",
         "spotsLeft": "spots left",
         "free": "Free",
+        "hostFree": "Free (Host)",
+        "hostBadge": "Host",
         "title": "Game Details",
         "paid": "Paid",
         "water": "Water",

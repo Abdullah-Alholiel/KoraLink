@@ -275,7 +275,7 @@ export default function ClubPage() {
               </div>
 
               {/* ── Host CTA ── */}
-              <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-5 z-40">
+              <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                 <Link
                   href={`/${locale}/host?venue=${venue.id}&venueName=${encodeURIComponent(venue.name)}`}
                   className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold

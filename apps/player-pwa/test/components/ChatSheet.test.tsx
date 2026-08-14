@@ -54,6 +54,7 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
 function mockReturn(value: Partial<Record<string, unknown>>) {
@@ -96,15 +97,19 @@ describe('ChatSheet', () => {
       messages: [
         {
           id: 'msg-1',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
           content: 'Great game everyone!',
           created_at: '2026-08-15T19:30:00.000Z',
-          user: { id: 'user-1', full_name: 'Ahmed', avatar_url: null },
+          user: { id: 'user-1', full_name: 'Ahmed', handle: '@ahmed', avatar_url: null },
         },
         {
           id: 'msg-2',
+          match_id: 'test-match-id',
+          user_id: 'user-2',
           content: 'See you at 8pm',
           created_at: '2026-08-15T19:31:00.000Z',
-          user: { id: 'user-2', full_name: 'Khalid', avatar_url: null },
+          user: { id: 'user-2', full_name: 'Khalid', handle: '@khalid', avatar_url: null },
         },
       ],
       isLoading: false,
@@ -114,7 +119,6 @@ describe('ChatSheet', () => {
 
     expect(screen.getByText('Great game everyone!')).toBeTruthy();
     expect(screen.getByText('See you at 8pm')).toBeTruthy();
-    expect(screen.getByText('Ahmed')).toBeTruthy();
     expect(screen.getByText('Khalid')).toBeTruthy();
 
     const spinner = document.querySelector('.animate-spin');

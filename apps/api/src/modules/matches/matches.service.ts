@@ -7,7 +7,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
@@ -104,7 +104,8 @@ export class MatchesService {
       WHERE status IN ('Open', 'Full', 'InProgress')
         AND scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval < NOW()
     `);
-    return result.rowCount ?? 0;
+    const res = result as unknown as { count?: number; length?: number };
+    return res.count ?? res.length ?? 0;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -201,13 +202,34 @@ export class MatchesService {
         p.surface_type            AS pitch_surface,
         v.name                    AS venue_name,
         v.city                    AS venue_city,
-        COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined
+        COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined,
+        EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${currentUserId}::text) AS has_voted
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id
       INNER JOIN venues  v  ON v.id  = p.venue_id
       LEFT  JOIN match_players mp ON mp.match_id = m.id
-      WHERE (${venue_id ? sql`TRUE` : sql`m.status = 'Open' AND m.scheduled_at >= NOW()`})
+      WHERE (
+        ${
+          venue_id
+            ? sql`TRUE`
+            : currentUserId
+            ? sql`
+                (
+                  m.status IN ('Open', 'Full', 'InProgress')
+                  AND (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW()
+                )
+                OR (
+                  m.scheduled_at >= CURRENT_DATE
+                  AND (mp.user_id = ${currentUserId}::text OR m.host_id = ${currentUserId}::text)
+                )
+              `
+            : sql`
+                m.status IN ('Open', 'Full', 'InProgress')
+                AND (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW()
+              `
+        }
+      )
         ${geoClause}
         ${dateClause}
         ${formatClause}
@@ -334,8 +356,8 @@ export class MatchesService {
         throw new NotFoundException(`Match ${matchId} not found.`);
       }
 
-      // Allow joining if Open, or if Full with spots available (defensive — status may be stale)
-      if (match.status !== 'Open' && match.status !== 'Full') {
+      // Allow joining if Open, Full, or InProgress with spots available
+      if (match.status !== 'Open' && match.status !== 'Full' && match.status !== 'InProgress') {
         throw new BadRequestException('This match is no longer open for joining.');
       }
       if (match.status === 'Full') {
@@ -407,7 +429,14 @@ export class MatchesService {
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
-    return this.findOne(matchId);
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on joinMatch: ${(err as Error).message}`);
+    }
+    return updatedMatch;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -461,7 +490,14 @@ export class MatchesService {
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
-    return this.findOne(matchId);
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on leaveMatch: ${(err as Error).message}`);
+    }
+    return updatedMatch;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -696,7 +732,13 @@ export class MatchesService {
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
-    return this.findOne(matchId);
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on startMatch: ${(err as Error).message}`);
+    }
+    return updatedMatch;
   }
 
   /**
@@ -731,7 +773,13 @@ export class MatchesService {
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
-    return this.findOne(matchId);
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on completeMatch: ${(err as Error).message}`);
+    }
+    return updatedMatch;
   }
 
   /**
@@ -813,7 +861,62 @@ export class MatchesService {
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
-    return this.findOne(matchId);
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on cancelMatch: ${(err as Error).message}`);
+    }
+    return updatedMatch;
+  }
+
+  /**
+   * Mark a player as no-show (or unmark). Host only.
+   */
+  async markNoShow(hostId: string, matchId: string, targetUserId: string, noShow: boolean) {
+    await this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({ id: matches.id, host_id: matches.host_id })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.host_id !== hostId) {
+        throw new ForbiddenException('Only the match host can mark no-shows.');
+      }
+
+      const [player] = await tx
+        .select({ id: schema.match_players.id })
+        .from(schema.match_players)
+        .where(
+          and(
+            eq(schema.match_players.match_id, matchId),
+            eq(schema.match_players.user_id, targetUserId),
+          ),
+        )
+        .limit(1);
+
+      if (!player) {
+        throw new NotFoundException('Player is not in the match roster.');
+      }
+
+      await tx
+        .update(schema.match_players)
+        .set({ no_show: noShow })
+        .where(eq(schema.match_players.id, player.id));
+    });
+
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on markNoShow: ${(err as Error).message}`);
+    }
+    return updatedMatch;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

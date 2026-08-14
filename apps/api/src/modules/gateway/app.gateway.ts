@@ -65,7 +65,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       .filter(Boolean);
     const allowedOrigins = [...playerUrls, ...adminUrls];
 
-    if (origin && !allowedOrigins.includes(origin)) {
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    if (origin && isProd && !allowedOrigins.includes(origin)) {
       client.disconnect(true);
       return;
     }
@@ -162,6 +163,12 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   broadcastRosterUpdate(matchId: string, payload: unknown): void {
     this.server.to(`match:${matchId}`).emit('roster-update', payload);
+  }
+
+  // ── Status update broadcast (called from MatchesService) ──────────────────
+
+  broadcastStatusUpdate(matchId: string, payload: unknown): void {
+    this.server.to(`match:${matchId}`).emit('status-update', payload);
   }
 
   // ── POTM decided broadcast (called from MatchesService) ──────────────────

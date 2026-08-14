@@ -29,7 +29,7 @@ export default function CostFooter({
     const publishDisabled = isPending || !canPublish || (hasSlot === false);
 
     return (
-        <div className="absolute bottom-0 inset-x-0 bg-white border-t border-gray-100 px-5 pt-3 pb-5 animate-slide-in-bottom">
+        <div className="absolute bottom-0 inset-x-0 bg-white border-t border-gray-100 px-5 pt-3 pb-5 pb-safe animate-slide-in-bottom">
             {/* Cost row */}
             <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-400">{t('host.playerShare')}</span>

@@ -145,7 +145,7 @@ describe('fetcher', () => {
     );
 
     await fetcher('https://external-api.example.com/data');
-    const calledUrl: string = vi.mocked(fetch).mock.calls[0][0];
+    const calledUrl = String(vi.mocked(fetch).mock.calls[0][0]);
     expect(calledUrl).toContain('https://external-api.example.com');
   });
 
@@ -163,7 +163,7 @@ describe('fetcher', () => {
     });
 
     const [, options] = vi.mocked(fetch).mock.calls[0];
-    expect(options.headers).toEqual(
+    expect(options?.headers).toEqual(
       expect.objectContaining({
         'Content-Type': 'application/json',
         'X-Custom': 'value',

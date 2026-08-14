@@ -39,7 +39,7 @@ export default function Toast() {
 
   return (
     <div
-      className={`fixed top-6 inset-x-0 z-[100] flex justify-center px-4 pointer-events-none transition-all duration-300 ${
+      className={`fixed top-[calc(1.5rem+env(safe-area-inset-top))] inset-x-0 z-[100] flex justify-center px-4 pointer-events-none transition-all duration-300 ${
         visible ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
       }`}
     >

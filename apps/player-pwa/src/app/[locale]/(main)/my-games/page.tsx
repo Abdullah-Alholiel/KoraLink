@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -19,11 +20,13 @@ export default function MyGamesPage() {
   const storeUser = useAppStore(selectUser);
   const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
 
+  const isToday = (dateStr: string) => dateStr === new Date().toISOString().split('T')[0];
+
   const activeMatches = matches.filter((m) =>
-    ['open', 'full', 'in_progress'].includes(m.status)
+    ['open', 'full', 'in_progress'].includes(m.status) || (m.status === 'completed' && isToday(m.date))
   );
   const historyMatches = matches.filter((m) =>
-    ['completed', 'cancelled'].includes(m.status)
+    ['completed', 'cancelled'].includes(m.status) && !(m.status === 'completed' && isToday(m.date))
   );
 
   return (
@@ -79,17 +82,19 @@ export default function MyGamesPage() {
                   <p className="text-sm font-semibold text-brand-black">
                     {t('myGames.emptyActive')}
                   </p>
-                  <a
+                  <Link
                     href={`/${locale}/play`}
                     className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
                   >
                     {t('myGames.emptyCta')}
-                  </a>
+                  </Link>
                 </div>
               ) : (
-                activeMatches.map((match) => (
-                  <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
-                ))
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
+                  {activeMatches.map((match) => (
+                    <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
+                  ))}
+                </div>
               )}
             </div>
 
@@ -104,9 +109,11 @@ export default function MyGamesPage() {
                 <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-5 mb-3">
                   {t('myGames.history')}
                 </h2>
-                {historyMatches.map((match) => (
-                  <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
-                ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
+                  {historyMatches.map((match) => (
+                    <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -119,12 +126,12 @@ export default function MyGamesPage() {
                 <p className="text-sm font-semibold text-brand-black">
                   {t('myGames.empty')}
                 </p>
-                <a
+                <Link
                   href={`/${locale}/play`}
                   className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
                 >
                   {t('myGames.emptyCta')}
-                </a>
+                </Link>
               </div>
             )}
           </>

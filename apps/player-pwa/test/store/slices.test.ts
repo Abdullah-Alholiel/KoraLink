@@ -13,7 +13,7 @@ function mockSet<T>() {
     const prevState = set.__prevState ?? {};
     const partial = fn(prevState as T);
     set.__prevState = { ...prevState, ...partial };
-  }) as ReturnType<typeof vi.fn> & { __prevState: Record<string, unknown> };
+  }) as ReturnType<typeof vi.fn> & { __prevState: Record<string, any> };
   set.__prevState = {};
   return set;
 }

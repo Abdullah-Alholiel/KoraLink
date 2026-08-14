@@ -23,11 +23,12 @@ export default function PublishWarningSheet({
     return (
         <>
             <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onCancel} />
-            <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] animate-slide-up">
+            <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
+                <div className="w-full max-w-xl bg-white rounded-t-3xl shadow-2xl animate-slide-up pb-safe">
                 <div className="flex justify-center pt-3 pb-2">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
                 </div>
-                <div className="px-5 pb-6">
+                <div className="px-5 pb-6 pb-safe">
                     {/* Icon + Title */}
                     <div className="flex flex-col items-center mb-4">
                         <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 ${
@@ -82,6 +83,7 @@ export default function PublishWarningSheet({
                     </div>
                 </div>
             </div>
-        </>
-    );
+        </div>
+    </>
+);
 }

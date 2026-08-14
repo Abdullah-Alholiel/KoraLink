@@ -43,8 +43,9 @@ export default function BottomNav() {
       bg-white border-t border-gray-100
       pb-safe pt-2 px-2
       relative z-50
+      w-full max-w-6xl mx-auto
     ">
-            <div className="flex items-center justify-around">
+            <div className="flex items-center justify-around max-w-xl mx-auto">
                 {navItems.map((item) => {
                     const active = isActive(item.href);
 

@@ -36,8 +36,20 @@ export async function fetcher<T>(
   path: string,
   { params, ...options }: FetchOptions = {}
 ): Promise<T> {
+  let apiBase = env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (
+      (apiBase.includes('localhost:3001') || apiBase.includes('127.0.0.1:3001')) &&
+      hostname !== 'localhost' &&
+      hostname !== '127.0.0.1'
+    ) {
+      apiBase = `http://${hostname}:3001/api/v1`;
+    }
+  }
+
   const url = new URL(
-    path.startsWith('http') ? path : `${env.NEXT_PUBLIC_API_URL}${path}`
+    path.startsWith('http') ? path : `${apiBase}${path}`
   );
 
   if (params) {

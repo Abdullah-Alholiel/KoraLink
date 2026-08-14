@@ -42,8 +42,6 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
-// @ts-expect-error - wrapper type mismatch with renderHook
-const _wrapper = wrapper;
 
 describe('useAuth hooks', () => {
   beforeEach(() => {

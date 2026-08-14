@@ -209,4 +209,17 @@ export class MatchesController {
   ) {
     return this.matchesService.getPomResult(id, user.sub);
   }
+
+  // ── POST /matches/:id/no-show — Mark player as no-show (host only) ──
+  @Post(':id/no-show')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark or unmark a player as no-show (Host only)' })
+  @ApiOkResponse({ description: 'Attendance updated.' })
+  markNoShow(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Body() dto: { targetUserId: string; noShow: boolean },
+  ) {
+    return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
+  }
 }

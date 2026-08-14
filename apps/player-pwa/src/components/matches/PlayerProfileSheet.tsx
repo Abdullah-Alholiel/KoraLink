@@ -22,7 +22,8 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
             <div className="fixed inset-0 bg-black/50 z-[60] transition-opacity" onClick={onClose} />
 
             {/* Sheet */}
-            <div className="fixed bottom-0 inset-x-0 z-[70] bg-brand-bg rounded-t-3xl max-w-md mx-auto animate-slide-up max-h-[70vh] overflow-y-auto">
+            <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
+                <div className="w-full max-w-2xl bg-brand-bg rounded-t-3xl shadow-2xl animate-slide-up max-h-[75vh] overflow-y-auto pb-safe">
                 {/* Pull handle */}
                 <div className="flex justify-center pt-3 pb-2">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
@@ -36,7 +37,7 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                     </button>
                 </div>
 
-                <div className="px-5 pb-8">
+                <div className="px-5 pb-8 pb-safe">
                     {/* ── Avatar Card ── */}
                     <div className="bg-white rounded-2xl shadow-card p-5 mb-4">
                         <div className="flex flex-col items-center">
@@ -99,6 +100,7 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                     )}
                 </div>
             </div>
-        </>
-    );
+        </div>
+    </>
+);
 }

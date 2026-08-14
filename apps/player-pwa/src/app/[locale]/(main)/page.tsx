@@ -35,8 +35,8 @@ export default function CommunityFeedPage() {
 
             {/* ── Loading State ─────────────────────── */}
             {isLoading && (
-                <div className="space-y-3 px-4" role="status" aria-label={t('loading')}>
-                    <div className="flex items-center gap-2 mb-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4" role="status" aria-label={t('loading')}>
+                    <div className="col-span-full flex items-center gap-2 mb-1">
                         <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
                     </div>
                     {[1, 2, 3, 4].map((i) => (
@@ -97,7 +97,7 @@ export default function CommunityFeedPage() {
                         </h2>
                     </div>
 
-                    <div className="space-y-3 px-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
                         {matches.map((match) => {
                             const spotsLeft = match.totalSpots - match.filledSpots;
                             const isUrgent = spotsLeft <= 2 && spotsLeft > 0;

@@ -29,12 +29,25 @@ async function bootstrap(): Promise<void> {
   const cookieSecret = configService.get<string>('COOKIE_SECRET', 'change-me');
 
   // ── Security middleware ──────────────────────────────────────────────────
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser(cookieSecret));
 
   // ── CORS — HttpOnly cookies require credentials: true ───────────────────
   app.enableCors({
-    origin: [...playerUrls, ...adminUrls],
+    origin: (origin, callback) => {
+      // In development mode, allow localhost, local Wi-Fi IPs, and Tailscale
+      if (!origin || configService.get<string>('NODE_ENV') !== 'production') {
+        return callback(null, true);
+      }
+      if (playerUrls.includes(origin) || adminUrls.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error('CORS not allowed'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],

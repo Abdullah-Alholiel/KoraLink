@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { io, Socket } from 'socket.io-client';
+import { env } from '@/env.mjs';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { useAppStore } from '@/store/useAppStore';
 import type { Match } from '@/types';
@@ -88,6 +91,43 @@ export function useMatches(filters?: {
 // ─── Fetch Single Match ───────────────────────────────
 
 export function useMatch(id: string, currentUserId?: string) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!id) return;
+
+    const token = typeof window !== 'undefined'
+      ? localStorage.getItem('koralink_token')
+      : null;
+
+    const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on('connect', () => {
+      socket.emit('join-lobby', { matchId: id });
+    });
+
+    const refreshMatchData = () => {
+      queryClient.invalidateQueries({ queryKey: ['match', id] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+    };
+
+    socket.on('status-update', refreshMatchData);
+    socket.on('roster-update', refreshMatchData);
+    socket.on('pom-decided', refreshMatchData);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id, queryClient]);
+
   return useQuery<Match, FetchError>({
     // Include currentUserId in the key so React Query re-fetches
     // when AuthBootstrap populates Zustand (cold page loads).
@@ -135,6 +175,25 @@ export function useCreateMatch() {
     },
     onError: (err) => {
       showToast(err.message || 'Failed to create match. Please try again.', 'error');
+    },
+  });
+}
+
+// ─── Mark No-Show (Host) ─────────────────────────────
+
+export function useMarkNoShow(matchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Match, Error, { targetUserId: string; noShow: boolean }>({
+    mutationFn: async ({ targetUserId, noShow }) => {
+      const raw = await fetcher<MatchDetailApi>(`/matches/${matchId}/no-show`, {
+        method: 'POST',
+        body: JSON.stringify({ targetUserId, noShow }),
+      });
+      return adaptMatchDetail(raw);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
     },
   });
 }

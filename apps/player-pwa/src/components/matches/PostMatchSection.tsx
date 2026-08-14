@@ -124,49 +124,51 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
   if (pom.status === 'completed') {
     return (
       <>
-      <button
-          onClick={() => { setShowResults(true); trackEvent('potm_results_opened', { match_id: matchId }); }}
-          className="mx-5 mt-4 w-full text-start bg-gradient-to-b from-brand-green/5 to-white rounded-2xl p-5 border border-brand-green/10 active:scale-[0.99] transition-transform"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
-              <Crown className="w-4 h-4 text-brand-green" strokeWidth={2} />
-            </div>
-            <span className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
-              {t('title')}
-            </span>
-            <ChevronRight className="w-4 h-4 text-gray-300 ms-auto" strokeWidth={2} />
-          </div>
-          <div className="flex items-center gap-3">
-            {pom.winner.avatarUrl ? (
-              <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={pom.winner.avatarUrl}
-                  alt={pom.winner.fullName}
-                  className="w-full h-full object-cover"
-                />
+        <div className="mx-5 mt-4">
+          <button
+            onClick={() => { setShowResults(true); trackEvent('potm_results_opened', { match_id: matchId }); }}
+            className="w-full text-start bg-gradient-to-b from-brand-green/5 to-white rounded-2xl p-5 border border-brand-green/10 active:scale-[0.99] transition-transform"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
+                <Crown className="w-4 h-4 text-brand-green" strokeWidth={2} />
               </div>
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-brand-green/10 flex items-center justify-center">
-                <span className="text-lg font-bold text-brand-green">
-                  {pom.winner.fullName.charAt(0).toUpperCase()}
-                </span>
+              <span className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
+                {t('title')}
+              </span>
+              <ChevronRight className="w-4 h-4 text-gray-300 ms-auto" strokeWidth={2} />
+            </div>
+            <div className="flex items-center gap-3">
+              {pom.winner.avatarUrl ? (
+                <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={pom.winner.avatarUrl}
+                    alt={pom.winner.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-brand-green/10 flex items-center justify-center">
+                  <span className="text-lg font-bold text-brand-green">
+                    {pom.winner.fullName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-brand-black">{pom.winner.fullName}</h3>
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <Trophy className="w-3 h-3 text-brand-green" strokeWidth={2} />
+                  <span dir="ltr">{pom.voteCount}</span> {t('votes')}
+                </p>
               </div>
-            )}
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-brand-black">{pom.winner.fullName}</h3>
-              <p className="text-xs text-gray-500 flex items-center gap-1">
-                <Trophy className="w-3 h-3 text-brand-green" strokeWidth={2} />
-                <span dir="ltr">{pom.voteCount}</span> {t('votes')}
-              </p>
+              <div className="w-10 h-10 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                <Crown className="w-5 h-5 text-brand-green" strokeWidth={2} />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-              <Crown className="w-5 h-5 text-brand-green" strokeWidth={2} />
-            </div>
-          </div>
-          <p className="text-[10px] font-medium text-brand-green mt-3">{t('viewResults')}</p>
-        </button>
+            <p className="text-[10px] font-medium text-brand-green mt-3">{t('viewResults')}</p>
+          </button>
+        </div>
 
         <PomResultsSheet
           open={showResults}

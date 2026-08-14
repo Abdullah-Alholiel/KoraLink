@@ -37,27 +37,36 @@ export default function AuthBootstrap() {
   useQuery({
     queryKey: ['auth', 'bootstrap'],
     queryFn: async () => {
-      const profile = await fetcher<UserProfileApi>('/users/me');
-      const skillLevel = (
-        profile.skill_level?.toLowerCase() ?? 'intermediate'
-      ) as 'beginner' | 'intermediate' | 'advanced';
-      login(
-        {
-          id: profile.id,
-          fullName: profile.full_name ?? '',
-          handle: profile.handle ?? '',
-          avatarUrl: profile.avatar_url ?? '',
-          phone: profile.phone,
-          preferredLocation: profile.preferred_location ?? '',
-          preferredPosition: profile.preferred_position ?? '',
-          skillLevel,
-          locale: 'en',
-        },
-        '', // No new token — cookie already valid
-      );
-      return profile;
+      try {
+        const profile = await fetcher<UserProfileApi>('/users/me');
+        const skillLevel = (
+          profile.skill_level?.toLowerCase() ?? 'intermediate'
+        ) as 'beginner' | 'intermediate' | 'advanced';
+        login(
+          {
+            id: profile.id,
+            fullName: profile.full_name ?? '',
+            handle: profile.handle ?? '',
+            avatarUrl: profile.avatar_url ?? '',
+            phone: profile.phone,
+            preferredLocation: profile.preferred_location ?? '',
+            preferredPosition: profile.preferred_position ?? '',
+            skillLevel,
+            locale: 'en',
+          },
+          '', // No new token — cookie already valid
+        );
+        return profile;
+      } catch {
+        // Clear stale local token on 401/404
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('koralink_token');
+        }
+        useAppStore.getState().logout();
+        return null;
+      }
     },
-    enabled: isHydrated && !user, // Only when ready and user missing
+    enabled: isHydrated && !user && typeof window !== 'undefined' && !!localStorage.getItem('koralink_token'),
     staleTime: 60_000,
     retry: false, // Do not retry 401 — user is unauthenticated
   });

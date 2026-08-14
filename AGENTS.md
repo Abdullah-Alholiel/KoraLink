@@ -263,9 +263,30 @@ Before generating any code:
 1. Read this AGENTS.md
 2. Read `apps/api/docs/FRONTEND_INTEGRATION.md` (for API contracts)
 3. Read `apps/api/src/database/schema.ts` (for DB types)
-4. Load `koralink-ui-standards` skill (for UI work)
-5. Load `koralink-api-standards` skill (for API work)
-6. Verify `npm install` is current
-7. Run `npm run build` to confirm current state is green
-8. For new features: check `docs/plans/<feature>/` for gate documents
-9. For database work: ensure `docker compose up -d postgres` is running
+4. Load the appropriate skills for your current task from `docs/skills/` (see Section 11 below).
+5. Verify `npm install` is current
+6. Run `npm run build` to confirm current state is green
+7. For new features: check `docs/plans/<feature>/` for gate documents
+8. For database work: ensure `docker compose up -d postgres` is running
+
+---
+
+## 11. Required AI Skills & Context
+
+Depending on the task at hand, the agent MUST load and follow the corresponding skill file located in `docs/skills/`:
+
+### Development & Coding
+- **Frontend UI & Design:** Load `koralink-ui-standards.md` (Tailwind, RTL, layout, colors, forms, and the 5 UX states).
+- **Frontend Logic & State:** Load `koralink-frontend-patterns.md` (Next.js App Router, Zustand, TanStack Query, i18n, bottom-sheet forms).
+- **Backend API & Database:** Load `KoraLink API Standards (NestJS).md` (NestJS modules, DTOs, Drizzle ORM, auth guards).
+
+### Reviews & Audits
+- **Pre-Cycle Audit:** Load `koralink-audit-checklist.md` (Check for z-index issues, dead UI, format mapping, DB checks before starting).
+- **Post-Cycle Review:** Load `koralink-post-cycle-review.md`, `koralink-4-lane-review.md`, or `koralink-review-workflow.md` (For the review and fix workflows).
+
+### Debugging & Workflow
+- **Development Workflow Rules:** Load `koralink-dev-workflow.md` (Cross-cutting patterns, hydration safety, infra blockers).
+- **Runtime Troubleshooting:** Load `koralink-runtime-troubleshooting.md` (Resolving CSP, hydration mismatches, Postgres, ARM, Tailscale issues).
+- **Subagent Delegation:** Load `koralink-delegation-config.md` (Model configuration to avoid provider/base_url mismatches).
+
+*(Note: `koralink-software-factory.md`, `koralink-runtime-pitfalls.md`, and `koralink-debugging.md` are placeholders for future elaboration).*

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { fetcher, setAuthToken } from '@/lib/fetcher';
 import { useAppStore } from '@/store/useAppStore';
@@ -16,17 +15,19 @@ export default function DevLoginBar() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLocalhost, setIsLocalhost] = useState(false);
-  const router = useRouter();
   const locale = useLocale();
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setIsLocalhost(
+      process.env.NODE_ENV !== 'production' ||
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
-      hostname.includes('.ts.net') ||  // Tailscale
-      hostname === 'vps' ||
-      hostname.startsWith('100.')      // Tailscale IPs
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('172.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('100.') ||
+      hostname.includes('.ts.net')
     );
   }, []);
 
@@ -53,7 +54,9 @@ export default function DevLoginBar() {
       // Populate Zustand user — cascade-fixes join detection, host check,
       // isAuthenticated, stats, and profile display.
       try {
-        const profile = await fetcher<UserProfileApi>('/users/me');
+        const profile = await fetcher<UserProfileApi>('/users/me', {
+          headers: res.token ? { Authorization: `Bearer ${res.token}` } : {},
+        });
         const skillLevel = (profile.skill_level?.toLowerCase() ?? 'intermediate') as 'beginner' | 'intermediate' | 'advanced';
         useAppStore.getState().login({
           id: profile.id,
@@ -70,7 +73,7 @@ export default function DevLoginBar() {
         // Profile fetch may fail; Zustand stays null, UI shows fallback
       }
 
-      router.push(`/${locale}/play`);
+      window.location.href = `/${locale}/play`;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Dev login failed');
     } finally {

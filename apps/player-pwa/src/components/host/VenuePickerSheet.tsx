@@ -26,11 +26,12 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
     return (
         <>
             <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
-            <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] max-h-[70vh] overflow-y-auto animate-slide-up">
+            <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
+                <div className="w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[75vh] overflow-y-auto pb-safe">
                 <div className="flex justify-center pt-3 pb-2">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
                 </div>
-                <div className="px-5 pb-6">
+                <div className="px-5 pb-6 pb-safe">
                     <h2 className="text-lg font-bold text-brand-black mb-4">
                         {filterPartnerOnly ? t('host.partnerVenuesOnly') : t('host.selectVenueTitle')}
                     </h2>
@@ -88,6 +89,7 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
                     )}
                 </div>
             </div>
-        </>
-    );
+        </div>
+    </>
+);
 }

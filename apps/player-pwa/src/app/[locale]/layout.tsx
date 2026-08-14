@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Tajawal } from 'next/font/google';
-import { notFound } from 'next/navigation';
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, setRequestLocale } from 'next-intl/server';
+import IntlClientProvider from '@/providers/IntlClientProvider';
 import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
@@ -65,16 +63,12 @@ export default async function RootLayout({
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
 }) {
-  const { locale } = await params;
+  const resolvedParams = await params;
+  const locale = (resolvedParams?.locale && locales.includes(resolvedParams.locale as (typeof locales)[number]))
+    ? (resolvedParams.locale as (typeof locales)[number])
+    : 'ar';
 
-  if (!locales.includes(locale as (typeof locales)[number])) {
-    notFound();
-  }
-
-  // Explicitly set the request locale from URL params — bypasses any
-  // stale middleware header caching on client-side navigations.
-  setRequestLocale(locale);
-  const messages = await getMessages();
+  const messages = (await import(`@/messages/${locale}.json`)).default;
   const isRtl = locale === 'ar';
 
   return (
@@ -86,10 +80,10 @@ export default async function RootLayout({
       <body className="overscroll-none">
         <QueryProvider>
           <ObservabilityProvider>
-            <NextIntlClientProvider messages={messages}>
+            <IntlClientProvider locale={locale} messages={messages}>
               <AuthBootstrap />
               <div className="app-shell">{children}</div>
-            </NextIntlClientProvider>
+            </IntlClientProvider>
           </ObservabilityProvider>
         </QueryProvider>
       </body>

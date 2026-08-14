@@ -20,7 +20,8 @@ export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle
     return (
         <>
             <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
-            <div className="fixed bottom-0 inset-x-0 z-[70] bg-white rounded-t-3xl max-w-md mx-auto animate-slide-up">
+            <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
+                <div className="w-full max-w-xl bg-white rounded-t-3xl shadow-2xl animate-slide-up pb-safe">
                 <div className="flex justify-center pt-3 pb-2">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
                 </div>
@@ -44,7 +45,7 @@ export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle
                     <p className="text-xs text-gray-500 leading-relaxed">{t('leaveMatch.info')}</p>
                 </div>
 
-                <div className="px-5 pb-8 space-y-3">
+                <div className="px-5 pb-8 pb-safe space-y-3">
                     <button
                         onClick={onConfirm}
                         disabled={isPending}
@@ -64,6 +65,7 @@ export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle
                     </button>
                 </div>
             </div>
-        </>
-    );
+        </div>
+    </>
+);
 }

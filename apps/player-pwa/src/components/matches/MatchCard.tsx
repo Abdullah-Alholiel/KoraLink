@@ -25,12 +25,22 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
+    const isToday = match.date === new Date().toISOString().split('T')[0];
+    const isCompletedToday = match.status === 'completed' && isToday && (isJoined || isHost);
 
     let buttonLabel: string;
     let buttonStyle: string;
     let badge: React.ReactNode = null;
 
-    if (isCompleted) {
+    if (isCompletedToday) {
+        buttonLabel = t('pom.votePrompt') || 'Vote POTM';
+        buttonStyle = 'bg-amber-500 text-white font-bold shadow-[0_2px_10px_rgba(245,158,11,0.4)]';
+        badge = (
+            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                🏆 {t('pom.title') || 'POTM'}
+            </span>
+        );
+    } else if (isCompleted) {
         buttonLabel = t('matchDetail.viewDetails');
         buttonStyle = 'bg-gray-100 text-gray-600';
     } else if (isHost) {
@@ -134,7 +144,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <div>
                         <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">{t('matchCard.price')}</p>
                         <p className="text-xl font-extrabold text-brand-black leading-none">
-                            {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                            {isHost ? t('gameDetails.free') : match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
                         </p>
                     </div>
                     {/* Roster preview avatars */}

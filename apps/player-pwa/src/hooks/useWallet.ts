@@ -19,6 +19,8 @@ export function useWalletBalance() {
       const raw = await fetcher<WalletBalanceApi>('/wallet/balance');
       return { balance: adaptWalletBalance(raw), currency: 'SAR' };
     },
+    staleTime: 60_000,
+    retry: false,
   });
 }
 
@@ -31,6 +33,8 @@ export function useWalletHistory() {
       const raw = await fetcher<{ transactions: TransactionApi[]; total: number; hasMore: boolean }>('/wallet/history');
       return { transactions: adaptTransactionList(raw.transactions) };
     },
+    staleTime: 60_000,
+    retry: false,
   });
 }
 

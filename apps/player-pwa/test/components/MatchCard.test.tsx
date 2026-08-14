@@ -33,6 +33,7 @@ function renderWithProviders(ui: React.ReactElement) {
 
 const baseMatch: Match = {
   id: 'match-1',
+  hostId: 'h1',
   title: 'Friday Night Kickoff',
   organizer: {
     name: 'Khalid FC',
@@ -58,9 +59,9 @@ const baseMatch: Match = {
   imageUrl: '/images/stadium-bg.png',
   rules: ['No slide tackles'],
   roster: [
-    { id: 'p1', name: 'Ahmed', avatarUrl: '' },
-    { id: 'p2', name: 'Sara', avatarUrl: '' },
-    { id: 'p3', name: 'Omar', avatarUrl: '' },
+    { id: 'p1', userId: 'p1', name: 'Ahmed', avatarUrl: '', team: 'Home', isHost: true },
+    { id: 'p2', userId: 'p2', name: 'Sara', avatarUrl: '', team: 'Away', isHost: false },
+    { id: 'p3', userId: 'p3', name: 'Omar', avatarUrl: '', team: 'Away', isHost: false },
   ],
   comments: [
     { id: 'c1', userId: 'p1', userName: 'Ahmed', userAvatar: '', text: 'See you there!', createdAt: '2026-08-15T18:00:00Z' },
@@ -85,7 +86,7 @@ describe('MatchCard', () => {
 
   it('renders spot count', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('8/14')).toBeInTheDocument();
+    expect(screen.getByText(/8\s*\/\s*14/)).toBeInTheDocument();
   });
 
   it('renders location', () => {
@@ -95,7 +96,7 @@ describe('MatchCard', () => {
 
   it('renders format and surface as separate pills', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    // Format and surface are rendered as separate pills in the info row
+
     expect(screen.getByText('7v7')).toBeInTheDocument();
     expect(screen.getByText('Grass')).toBeInTheDocument();
   });

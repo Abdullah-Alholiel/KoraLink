@@ -211,6 +211,7 @@ describe('useMatches hooks', () => {
         duration_mins: 60,
         max_players: 14,
         pitchCostSar: 37,
+        booking_mode: 'self' as const,
       };
 
       await waitFor(() => {
@@ -245,6 +246,7 @@ describe('useMatches hooks', () => {
           duration_mins: 60,
           max_players: 10,
           pitchCostSar: 30,
+          booking_mode: 'self' as const,
         });
       });
 

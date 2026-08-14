@@ -96,7 +96,7 @@ export default function ClubsPage() {
 
             {/* ── Loading ── */}
             {isLoading && (
-                <div className="space-y-3 px-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
                     {[1, 2, 3, 4].map((i) => (
                         <div key={i} className="bg-white rounded-2xl shadow-card p-4 animate-pulse">
                             <div className="flex items-start justify-between">
@@ -144,7 +144,7 @@ export default function ClubsPage() {
 
             {/* ── Populated ── */}
             {!isLoading && !error && filteredVenues.length > 0 && (
-                <div className="space-y-3 px-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
                     {filteredVenues.map((venue) => (
                         <Link
                             key={venue.id}
