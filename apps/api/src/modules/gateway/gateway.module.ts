@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AppGateway } from './app.gateway';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { AppGateway } from './app.gateway';
       }),
       inject: [ConfigService],
     }),
+    ConversationsModule,
   ],
   providers: [AppGateway],
   exports: [AppGateway],

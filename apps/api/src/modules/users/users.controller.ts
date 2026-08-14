@@ -82,7 +82,7 @@ export class UsersController {
   @Get(':id')
   @ApiOperation({ summary: 'Get public user profile by ID' })
   @ApiOkResponse({ description: 'Public user profile.' })
-  getPublicProfile(@Param('id') id: string) {
-    return this.usersService.getPublicProfile(id);
+  getPublicProfile(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.usersService.getPublicProfile(id, user.sub);
   }
 }

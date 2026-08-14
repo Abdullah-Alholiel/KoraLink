@@ -17,6 +17,7 @@ import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { match_players, match_messages, users } from '../../database/schema';
+import { ConversationsService } from '../conversations/conversations.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -46,6 +47,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly conversationsService: ConversationsService,
   ) {}
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -166,6 +168,51 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server
       .to(`match:${data.matchId}`)
       .emit('new-message', message);
+  }
+
+  // ── Join a conversation (DM room) ────────────────────────────────────────
+
+  @SubscribeMessage('join-conversation')
+  async handleJoinConversation(
+    @MessageBody() data: { conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+
+    const ok = await this.conversationsService.isParticipant(client.userId, data.conversationId);
+    if (!ok) throw new WsException('You are not a participant in this conversation.');
+
+    await client.join(`conv:${data.conversationId}`);
+    await this.conversationsService.markRead(client.userId, data.conversationId);
+  }
+
+  // ── Send a direct message ────────────────────────────────────────────────
+
+  @SubscribeMessage('send-dm')
+  async handleDm(
+    @MessageBody() data: { conversationId: string; content: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+    if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
+
+    const message = await this.conversationsService.sendMessage(
+      client.userId,
+      data.conversationId,
+      data.content,
+    );
+
+    this.server.to(`conv:${data.conversationId}`).emit('new-dm', message);
+  }
+
+  // ── Leave a conversation (DM room) ───────────────────────────────────────
+
+  @SubscribeMessage('leave-conversation')
+  async handleLeaveConversation(
+    @MessageBody() data: { conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    await client.leave(`conv:${data.conversationId}`);
   }
 
   // ── Roster update broadcast (called from MatchesService) ─────────────────

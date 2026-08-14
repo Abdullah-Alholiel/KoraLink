@@ -93,6 +93,14 @@ export const transactionStatusEnum = pgEnum('TransactionStatus', [
 
 export const teamEnum = pgEnum('Team', ['Home', 'Away']);
 
+export const activityVerbEnum = pgEnum('ActivityVerb', [
+  'created_match',
+  'joined_match',
+  'followed',
+  'messaged',
+  'pom_decided',
+]);
+
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,6 +132,8 @@ export const users = pgTable('users', {
   karma_score: integer('karma_score').notNull().default(0),
   rating: doublePrecision('rating').notNull().default(0),
   no_show_count: integer('no_show_count').notNull().default(0),
+  home_lat: doublePrecision('home_lat'),
+  home_lng: doublePrecision('home_lng'),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -512,6 +522,7 @@ export const conversation_participants = pgTable(
     joined_at: timestamp('joined_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    last_read_at: timestamp('last_read_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('conv_participants_unique_idx').on(t.conversation_id, t.user_id),
@@ -542,6 +553,68 @@ export const personal_messages = pgTable(
   ],
 );
 
+export const follows = pgTable(
+  'follows',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    follower_id: varchar('follower_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    following_id: varchar('following_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('follows_follower_following_idx').on(t.follower_id, t.following_id),
+    index('follows_following_idx').on(t.following_id),
+  ],
+);
+
+export const activities = pgTable(
+  'activities',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    actor_id: varchar('actor_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    verb: activityVerbEnum('verb').notNull(),
+    match_id: varchar('match_id', { length: 36 })
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    subject_id: varchar('subject_id', { length: 36 }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('activities_created_idx').on(t.created_at)],
+);
+
+export const feed_items = pgTable(
+  'feed_items',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    recipient_id: varchar('recipient_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    activity_id: varchar('activity_id', { length: 36 })
+      .notNull()
+      .references(() => activities.id, { onDelete: 'cascade' }),
+    is_read: boolean('is_read').notNull().default(false),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('feed_items_recipient_created_idx').on(t.recipient_id, t.created_at)],
+);
+
 // ── Personal Messages Relations ─────────────────────────────────────────────
 
 export const conversationsRelations = relations(conversations, ({ many }) => ({
@@ -568,5 +641,42 @@ export const personalMessagesRelations = relations(personal_messages, ({ one }) 
   sender: one(users, {
     fields: [personal_messages.sender_id],
     references: [users.id],
+  }),
+}));
+
+export const followsRelations = relations(follows, ({ one }) => ({
+  follower: one(users, {
+    fields: [follows.follower_id],
+    references: [users.id],
+    relationName: 'Followers',
+  }),
+  following: one(users, {
+    fields: [follows.following_id],
+    references: [users.id],
+    relationName: 'Following',
+  }),
+}));
+
+export const activitiesRelations = relations(activities, ({ one }) => ({
+  actor: one(users, {
+    fields: [activities.actor_id],
+    references: [users.id],
+    relationName: 'ActivityActor',
+  }),
+  match: one(matches, {
+    fields: [activities.match_id],
+    references: [matches.id],
+  }),
+}));
+
+export const feedItemsRelations = relations(feed_items, ({ one }) => ({
+  recipient: one(users, {
+    fields: [feed_items.recipient_id],
+    references: [users.id],
+    relationName: 'FeedRecipient',
+  }),
+  activity: one(activities, {
+    fields: [feed_items.activity_id],
+    references: [activities.id],
   }),
 }));

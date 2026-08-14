@@ -50,6 +50,13 @@
       "when": 1786607682795,
       "tag": "0006_dashing_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786744468449,
+      "tag": "0007_rich_leader",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, sql, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { users, match_players, match_votes, matches } from '../../database/schema';
+import { users, match_players, match_votes, matches, follows } from '../../database/schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
@@ -78,6 +78,8 @@ export class UsersService {
         wallet_balance: true,
         karma_score: true,
         no_show_count: true,
+        home_lat: true,
+        home_lng: true,
         created_at: true,
       },
     });
@@ -276,6 +278,8 @@ export class UsersService {
         preferred_position: users.preferred_position,
         skill_level: users.skill_level,
         role: users.role,
+        home_lat: users.home_lat,
+        home_lng: users.home_lng,
       });
 
     if (!updated) {
@@ -288,7 +292,7 @@ export class UsersService {
   /**
    * Get a public user profile by ID — visible to any authenticated user.
    */
-  async getPublicProfile(userId: string) {
+  async getPublicProfile(userId: string, currentUserId?: string) {
     const [user] = await this.db
       .select({
         id: users.id,
@@ -313,6 +317,22 @@ export class UsersService {
       .from(match_players)
       .where(eq(match_players.user_id, userId));
 
+    const [counts] = (await this.db.execute(sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM ${follows} WHERE following_id = ${userId}::text) AS followers_count,
+        (SELECT COUNT(*)::int FROM ${follows} WHERE follower_id = ${userId}::text) AS following_count
+    `)) as unknown as Array<{ followers_count: number; following_count: number }>;
+
+    let isFollowing = false;
+    if (currentUserId) {
+      const [followRow] = await this.db
+        .select({ id: follows.id })
+        .from(follows)
+        .where(and(eq(follows.follower_id, currentUserId), eq(follows.following_id, userId)))
+        .limit(1);
+      isFollowing = !!followRow;
+    }
+
     return {
       id: user.id,
       full_name: user.full_name,
@@ -322,6 +342,9 @@ export class UsersService {
       skill_level: user.skill_level,
       pom_count,
       games_played,
+      isFollowing,
+      followersCount: counts?.followers_count ?? 0,
+      followingCount: counts?.following_count ?? 0,
     };
   }
 

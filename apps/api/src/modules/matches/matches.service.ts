@@ -16,6 +16,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
 import { AppGateway } from '../gateway/app.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -55,6 +56,7 @@ export class MatchesService {
     private readonly walletService: WalletService,
     private readonly appGateway: AppGateway,
     private readonly notificationsService: NotificationsService,
+    private readonly activitiesService: ActivitiesService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -439,6 +441,21 @@ export class MatchesService {
     } catch (err) {
       this.logger.error(`WS broadcast error on joinMatch: ${(err as Error).message}`);
     }
+
+    // Fan out "joined_match" to the host + other participants (fire-and-forget).
+    const participants = await this.db
+      .select({ user_id: match_players.user_id })
+      .from(match_players)
+      .where(eq(match_players.match_id, matchId));
+    await this.activitiesService
+      .record({
+        actorId: userId,
+        verb: 'joined_match',
+        matchId,
+        recipients: participants.map((p) => p.user_id),
+      })
+      .catch(() => undefined);
+
     return updatedMatch;
   }
 
@@ -641,7 +658,23 @@ export class MatchesService {
     });
 
     // Fetch complete match with host relation so the frontend gets full_name etc.
-    return this.findOne(created.id);
+    const fullMatch = await this.findOne(created.id);
+
+    // Fan out "created_match" to the host's followers (fire-and-forget).
+    const followers = await this.db
+      .select({ follower_id: schema.follows.follower_id })
+      .from(schema.follows)
+      .where(eq(schema.follows.following_id, hostId));
+    await this.activitiesService
+      .record({
+        actorId: hostId,
+        verb: 'created_match',
+        matchId: created.id,
+        recipients: followers.map((f) => f.follower_id),
+      })
+      .catch(() => undefined);
+
+    return fullMatch;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1255,6 +1288,22 @@ export class MatchesService {
     // Web-push to attendees (fire-and-forget, config-gated).
     this.notificationsService
       .sendPomDecidedNotification(matchId, payload)
+      .catch(() => undefined);
+
+    // Fan out "pom_decided" to match participants (including the winner).
+    const participants = await this.db
+      .select({ user_id: match_players.user_id })
+      .from(match_players)
+      .where(eq(match_players.match_id, matchId));
+    await this.activitiesService
+      .record({
+        actorId: winner.id,
+        verb: 'pom_decided',
+        matchId,
+        subjectId: winner.id,
+        recipients: participants.map((p) => p.user_id),
+        excludeActor: false,
+      })
       .catch(() => undefined);
   }
 

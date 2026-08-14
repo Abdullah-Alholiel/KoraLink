@@ -4,9 +4,10 @@ import { MatchesService } from './matches.service';
 import { WalletModule } from '../wallet/wallet.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ActivitiesModule } from '../activities/activities.module';
 
 @Module({
-  imports: [WalletModule, GatewayModule, NotificationsModule],
+  imports: [WalletModule, GatewayModule, NotificationsModule, ActivitiesModule],
   controllers: [MatchesController],
   providers: [MatchesService],
   exports: [MatchesService],

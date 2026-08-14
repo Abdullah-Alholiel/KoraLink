@@ -15,6 +15,9 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthModule } from './modules/health/health.module';
+import { ActivitiesModule } from './modules/activities/activities.module';
+import { FollowsModule } from './modules/follows/follows.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
@@ -67,6 +70,9 @@ import { HealthModule } from './modules/health/health.module';
     NotificationsModule,
     GatewayModule,
     HealthModule,
+    ActivitiesModule,
+    FollowsModule,
+    ConversationsModule,
   ],
 })
 export class AppModule {}
