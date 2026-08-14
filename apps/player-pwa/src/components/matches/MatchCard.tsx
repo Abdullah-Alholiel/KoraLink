@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Trophy, Crown, Check } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
+import { formatDistance } from '@/lib/format';
 
 interface MatchCardProps {
     match: Match;
@@ -139,6 +140,12 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <MapPin className="w-3 h-3" strokeWidth={1.5} />
                     {match.location}
                 </span>
+                {match.distanceM != null && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-green bg-brand-green/10 rounded-full px-2 py-1">
+                        <Navigation className="w-3 h-3" strokeWidth={2} />
+                        {formatDistance(match.distanceM, locale === 'ar' ? 'ar' : 'en')}
+                    </span>
+                )}
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">
                     <UsersIcon className="w-3 h-3" strokeWidth={1.5} />
                     {match.format}

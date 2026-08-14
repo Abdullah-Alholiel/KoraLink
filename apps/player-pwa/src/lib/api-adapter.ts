@@ -306,6 +306,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
     hasVotedPotm: row.has_voted ?? false,
+    distanceM: row.distance_m ?? null,
   };
 }
 

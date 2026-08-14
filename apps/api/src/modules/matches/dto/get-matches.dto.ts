@@ -26,7 +26,7 @@ export class GetMatchesDto {
   lng?: number;
 
   @ApiPropertyOptional({
-    description: 'Search radius in kilometres (default 10)',
+    description: 'Search radius in kilometres (default 50)',
     example: 10,
   })
   @IsOptional()

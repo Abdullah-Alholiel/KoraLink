@@ -19,7 +19,7 @@ export class GetVenuesDto {
   @Max(180)
   lng?: number;
 
-  @ApiPropertyOptional({ description: 'Search radius in km', minimum: 1, maximum: 100, default: 10 })
+  @ApiPropertyOptional({ description: 'Search radius in km', minimum: 1, maximum: 100, default: 50 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

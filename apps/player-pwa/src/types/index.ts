@@ -41,6 +41,8 @@ export interface Match {
     venueDetails?: string;
     lat?: number;
     lng?: number;
+    /** Distance from the requesting user in metres (null when location unknown). */
+    distanceM?: number | null;
     format: string; // e.g. "7v7"
     surface: string; // e.g. "Grass", "Artificial Turf"
     gender: 'men' | 'women' | 'mixed';

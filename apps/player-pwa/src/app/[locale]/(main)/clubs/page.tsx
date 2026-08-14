@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, MapPin, Users } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
+import { useLocation } from '@/providers/LocationProvider';
+import { formatDistance } from '@/lib/format';
 
 const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
@@ -23,13 +25,14 @@ export default function ClubsPage() {
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [activeFilter, setActiveFilter] = useState<FilterKey>('Nearby');
     const [searchQuery, setSearchQuery] = useState('');
+    const { coords } = useLocation();
 
     const {
         data: venues,
         isLoading,
         error,
         refetch,
-    } = useVenues();
+    } = useVenues(coords ? { lat: coords.lat, lng: coords.lng } : undefined);
 
     const filteredVenues = (venues ?? []).filter((v) => {
         const matchesQuery =
@@ -164,7 +167,7 @@ export default function ClubsPage() {
                                         <h3 className="text-base font-bold text-brand-black truncate">{venue.name}</h3>
                                         {venue.distance_m != null && (
                                             <span className="text-[11px] font-medium text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full flex-shrink-0 ms-2">
-                                                {(venue.distance_m / 1000).toFixed(1)} km
+                                                {formatDistance(venue.distance_m, locale === 'ar' ? 'ar' : 'en')}
                                             </span>
                                         )}
                                     </div>

@@ -589,5 +589,12 @@
     },
     "datePicker": {
         "today": "TODAY"
+    },
+    "location": {
+        "permissionTitle": "Enable your location",
+        "permissionBody": "See games and clubs near you, sorted by distance.",
+        "enable": "Enable",
+        "later": "Not now",
+        "denied": "Location is off. Enable it to see distance."
     }
 }

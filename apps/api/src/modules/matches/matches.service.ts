@@ -124,7 +124,7 @@ export class MatchesService {
    * returns true when the great-circle distance (metres) is within the radius.
    */
   async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
-    const { lat, lng, radius_km = 10, date, format, gender, max_price, venue_id } = dto;
+    const { lat, lng, radius_km = 50, date, format, gender, max_price, venue_id } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');

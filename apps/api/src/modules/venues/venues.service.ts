@@ -30,7 +30,7 @@ export class VenuesService {
    * Uses PostGIS ST_DWithin for geo-filtering (same pattern as matches service).
    */
   async findNearby(dto: GetVenuesDto): Promise<NearbyVenueRow[]> {
-    const { lat, lng, radius_km = 10, city, is_koralink_partner } = dto;
+    const { lat, lng, radius_km = 50, city, is_koralink_partner } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');

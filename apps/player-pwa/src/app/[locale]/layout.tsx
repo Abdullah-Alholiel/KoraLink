@@ -3,6 +3,7 @@ import { Outfit, Tajawal } from 'next/font/google';
 import IntlClientProvider from '@/providers/IntlClientProvider';
 import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
+import { LocationProvider } from '@/providers/LocationProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import '@/styles/globals.css';
 
@@ -100,8 +101,10 @@ export default async function RootLayout({
         <QueryProvider>
           <ObservabilityProvider>
             <IntlClientProvider locale={locale} messages={messages}>
-              <AuthBootstrap />
-              <div className="app-shell">{children}</div>
+              <LocationProvider>
+                <AuthBootstrap />
+                <div className="app-shell">{children}</div>
+              </LocationProvider>
             </IntlClientProvider>
           </ObservabilityProvider>
         </QueryProvider>
