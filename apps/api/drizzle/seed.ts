@@ -408,7 +408,11 @@ async function seed() {
         completed_at: new Date(days(-2).getTime() + 50 * 60 * 1000),
       },
     ])
-    .returning({ id: schema.matches.id, title: schema.matches.title });
+    .returning({
+      id: schema.matches.id,
+      title: schema.matches.title,
+      host_id: schema.matches.host_id,
+    });
 
   console.log(`✔ Inserted ${matchRows.length} matches`);
   const matchMap = Object.fromEntries(matchRows.map((m) => [m.title, m.id]));
@@ -426,8 +430,10 @@ async function seed() {
 
   for (let i = 0; i < matchRows.length; i++) {
     const match = matchRows[i];
-    const hostHandle = allHandles[i % allHandles.length];
-    const hostId = users[hostHandle]!;
+    // Lineup invariant: the roster's is_host player MUST be the match's real
+    // host (matches.host_id), never an index-derived stand-in. Otherwise the
+    // TeamLineup crown, host-only auth, and findOne().host disagree.
+    const hostId = match.host_id;
 
     // Host joins as Home
     matchPlayersData.push({
