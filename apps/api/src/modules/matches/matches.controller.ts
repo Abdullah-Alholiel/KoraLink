@@ -27,6 +27,7 @@ import { GetMatchesDto } from './dto/get-matches.dto';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
 import { MarkNoShowDto } from './dto/mark-no-show.dto';
+import { CreateMatchMessageDto } from './dto/create-match-message.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -149,6 +150,19 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Paginated chat messages for a match.' })
   getMessages(@Param('id') id: string) {
     return this.matchesService.getMessages(id);
+  }
+
+  // ── POST /matches/:id/messages — Send match chat (REST fallback) ─────────
+  @Post(':id/messages')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Send a match chat message (REST fallback; WS is primary)' })
+  @ApiCreatedResponse({ description: 'The created message with sender.' })
+  sendMessage(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Body() dto: CreateMatchMessageDto,
+  ) {
+    return this.matchesService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);
   }
 
   // ── POST /matches/:id/start — Start a match (host only) ────────────────

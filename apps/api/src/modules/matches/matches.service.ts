@@ -747,6 +747,84 @@ export class MatchesService {
     return messages;
   }
 
+  /**
+   * Persist a match chat message with membership + idempotency checks.
+   * REST fallback to the WebSocket `send-message` path.
+   */
+  async sendMessage(
+    userId: string,
+    matchId: string,
+    content: string,
+    clientMessageId?: string,
+  ) {
+    const trimmed = content?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Message cannot be empty.');
+    }
+
+    // Only match members may post to the lobby.
+    const [membership] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, matchId),
+          eq(match_players.user_id, userId),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this match.');
+    }
+
+    const clientMessageIdValue = clientMessageId?.trim() || null;
+
+    // Idempotency — retried sends return the existing message, no duplicate.
+    if (clientMessageIdValue) {
+      const existing = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, matchId),
+          eq(match_messages.client_message_id, clientMessageIdValue),
+        ),
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              handle: true,
+              avatar_url: true,
+            },
+          },
+        },
+      });
+      if (existing) return existing;
+    }
+
+    const [inserted] = await this.db
+      .insert(match_messages)
+      .values({
+        match_id: matchId,
+        user_id: userId,
+        content: trimmed,
+        client_message_id: clientMessageIdValue,
+      })
+      .returning();
+
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        full_name: users.full_name,
+        handle: users.handle,
+        avatar_url: users.avatar_url,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    return { ...inserted, user };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Status transitions (host only)
   // ─────────────────────────────────────────────────────────────────────────

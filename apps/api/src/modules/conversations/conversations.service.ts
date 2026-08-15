@@ -48,6 +48,7 @@ export interface PersonalMessage {
   sender: ConversationParticipantView;
   content: string;
   created_at: Date;
+  client_message_id?: string | null;
 }
 
 @Injectable()
@@ -194,6 +195,7 @@ export class ConversationsService {
     userId: string,
     conversationId: string,
     content: string,
+    clientMessageId?: string,
   ): Promise<PersonalMessage> {
     const trimmed = content?.trim();
     if (!trimmed) {
@@ -201,12 +203,40 @@ export class ConversationsService {
     }
     await this.assertParticipant(userId, conversationId);
 
+    const clientMessageIdValue = clientMessageId?.trim() || null;
+
+    // Idempotency — a retried send with the same clientMessageId returns the
+    // already-persisted message instead of inserting a duplicate.
+    if (clientMessageIdValue) {
+      const existing = await this.db.query.personal_messages.findFirst({
+        where: and(
+          eq(personal_messages.sender_id, userId),
+          eq(personal_messages.conversation_id, conversationId),
+          eq(personal_messages.client_message_id, clientMessageIdValue),
+        ),
+      });
+      if (existing) {
+        const [sender] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        return { ...existing, sender };
+      }
+    }
+
     const [inserted] = await this.db
       .insert(personal_messages)
       .values({
         conversation_id: conversationId,
         sender_id: userId,
         content: trimmed,
+        client_message_id: clientMessageIdValue,
       })
       .returning();
 

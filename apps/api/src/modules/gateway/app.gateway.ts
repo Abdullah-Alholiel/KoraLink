@@ -153,20 +153,54 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   @SubscribeMessage('send-message')
   async handleMessage(
-    @MessageBody() data: { matchId: string; content: string },
+    @MessageBody() data: { matchId: string; content: string; clientMessageId?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
-    const [insertedMessage] = await this.db
-      .insert(match_messages)
-      .values({
-        match_id: data.matchId,
-        user_id: client.userId,
-        content: data.content.trim(),
-      })
-      .returning();
+    const content = data.content.trim();
+    const clientMessageId = data.clientMessageId?.trim() || null;
+
+    // Only match members may post to the lobby.
+    const [membership] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, data.matchId),
+          eq(match_players.user_id, client.userId),
+        ),
+      )
+      .limit(1);
+
+    if (!membership) throw new WsException('You are not a member of this match.');
+
+    // Idempotency — a retried send with the same clientMessageId returns the
+    // already-persisted message instead of inserting a duplicate.
+    let messageRow: typeof match_messages.$inferSelect | undefined;
+    if (clientMessageId) {
+      messageRow = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, client.userId),
+          eq(match_messages.match_id, data.matchId),
+          eq(match_messages.client_message_id, clientMessageId),
+        ),
+      });
+    }
+
+    if (!messageRow) {
+      const [insertedMessage] = await this.db
+        .insert(match_messages)
+        .values({
+          match_id: data.matchId,
+          user_id: client.userId,
+          content,
+          client_message_id: clientMessageId,
+        })
+        .returning();
+      messageRow = insertedMessage;
+    }
 
     const [user] = await this.db
       .select({
@@ -179,7 +213,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .where(eq(users.id, client.userId))
       .limit(1);
 
-    const message = { ...insertedMessage, user };
+    const message = { ...messageRow, user };
 
     this.server
       .to(`match:${data.matchId}`)
@@ -259,7 +293,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   @SubscribeMessage('send-dm')
   async handleDm(
-    @MessageBody() data: { conversationId: string; content: string },
+    @MessageBody() data: { conversationId: string; content: string; clientMessageId?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
@@ -269,6 +303,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       client.userId,
       data.conversationId,
       data.content,
+      data.clientMessageId,
     );
 
     this.server.to(`conv:${data.conversationId}`).emit('new-dm', message);

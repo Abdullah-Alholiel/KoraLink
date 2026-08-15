@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty, MaxLength, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class SendMessageDto {
+export class CreateMatchMessageDto {
   @ApiProperty({ description: 'Message content', maxLength: 2000 })
   @IsString()
   @IsNotEmpty()

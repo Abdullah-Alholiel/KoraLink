@@ -64,6 +64,13 @@
       "when": 1786748918509,
       "tag": "0008_light_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786807050742,
+      "tag": "0009_unusual_scorpion",
+      "breakpoints": true
     }
   ]
 }

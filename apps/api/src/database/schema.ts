@@ -335,6 +335,7 @@ export const match_messages = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     content: text('content').notNull(),
+    client_message_id: varchar('client_message_id', { length: 36 }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -551,6 +552,7 @@ export const personal_messages = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     content: text('content').notNull(),
+    client_message_id: varchar('client_message_id', { length: 36 }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
