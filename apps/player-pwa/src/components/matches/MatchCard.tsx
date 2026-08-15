@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2 } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
 import { formatDistance } from '@/lib/format';
@@ -106,17 +106,26 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
             {/* ── Header Row: avatar + title + time ──── */}
             <div className="flex items-start justify-between mb-2">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-500">
-                            {match.organizer.name.charAt(0)}
-                        </span>
+                    <div className="w-10 h-10 rounded-full bg-brand-green/10 flex-shrink-0 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-brand-green" strokeWidth={2} aria-hidden />
                     </div>
                     <div className="flex-1 min-w-0">
                         <h3 className="text-base font-bold text-brand-black leading-tight truncate">
                             {match.title}
                         </h3>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="text-xs text-gray-500">{match.organizer.name}</span>
+                            <span className="text-xs font-semibold text-brand-black truncate">
+                                {match.venueName || t('host.unknownVenue')}
+                            </span>
+                            {match.distanceM != null && (
+                                <>
+                                    <span className="text-gray-300" aria-hidden>·</span>
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-green">
+                                        <Navigation className="w-3 h-3" strokeWidth={2.5} />
+                                        {formatDistance(match.distanceM, locale === 'ar' ? 'ar' : 'en')}
+                                    </span>
+                                </>
+                            )}
                             {badge && <span className="ms-1">{badge}</span>}
                         </div>
                     </div>
@@ -140,12 +149,6 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <MapPin className="w-3 h-3" strokeWidth={1.5} />
                     {match.location}
                 </span>
-                {match.distanceM != null && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-green bg-brand-green/10 rounded-full px-2 py-1">
-                        <Navigation className="w-3 h-3" strokeWidth={2} />
-                        {formatDistance(match.distanceM, locale === 'ar' ? 'ar' : 'en')}
-                    </span>
-                )}
                 {match.isPrivate && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
                         <LockIcon className="w-3 h-3" strokeWidth={2} />

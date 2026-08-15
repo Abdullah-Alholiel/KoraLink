@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { Match } from '@/types';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
+import { formatDistance } from '@/lib/format';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -73,9 +74,10 @@ describe('MatchCard', () => {
     expect(screen.getByText('Friday Night Kickoff')).toBeInTheDocument();
   });
 
-  it('renders organizer name', () => {
+  it('renders club (venue) name instead of host', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('Khalid FC')).toBeInTheDocument();
+    expect(screen.getByText('Green Field Stadium')).toBeInTheDocument();
+    expect(screen.queryByText('Khalid FC')).not.toBeInTheDocument();
   });
 
   it('renders price with SAR', () => {
@@ -116,9 +118,21 @@ describe('MatchCard', () => {
     expect(screen.getByText('1 SPOT LEFT')).toBeInTheDocument();
   });
 
-  it('renders organizer avatar initial', () => {
+  it('does not render the host initial', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('K')).toBeInTheDocument();
+    expect(screen.queryByText('K')).not.toBeInTheDocument();
+  });
+
+  it('renders distance next to the club name when available', () => {
+    renderWithProviders(<MatchCard match={{ ...baseMatch, distanceM: 3200 }} />);
+    // pathname mock returns '/ar/play' → locale 'ar'
+    expect(screen.getByText(formatDistance(3200, 'ar') as string)).toBeInTheDocument();
+  });
+
+  it('omits distance when location is unknown', () => {
+    renderWithProviders(<MatchCard match={{ ...baseMatch, distanceM: null }} />);
+    expect(screen.queryByText(formatDistance(3200, 'ar') as string)).not.toBeInTheDocument();
+    expect(screen.queryByText(/km/i)).not.toBeInTheDocument();
   });
 
   // ── POTM (Player of the Match) button states ─────────────────────────────
