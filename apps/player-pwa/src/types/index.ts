@@ -29,6 +29,8 @@ export interface Match {
     endTime?: string;
     /** Raw scheduled_at ISO string from the API — timezone-safe source for time math. */
     scheduledAt?: string;
+    /** ISO timestamp of the scheduled game end (scheduled_at + duration). */
+    endsAt?: string;
     /**
      * ISO timestamp after which POTM voting closes (match end + 24h).
      * Mirrors MatchesService.VOTING_WINDOW_HOURS on the API. A completed match

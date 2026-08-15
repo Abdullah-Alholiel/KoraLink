@@ -87,6 +87,14 @@ export default function MatchDetailPage({
           (!!match.scheduledAt && new Date(match.scheduledAt).getTime() <= Date.now())
         : false;
 
+    // A finished game no longer needs squad filling — hide the invite CTA once
+    // the scheduled end time has passed (or the match was completed/cancelled).
+    const isMatchEnded = match
+        ? match.status === 'completed' ||
+          match.status === 'cancelled' ||
+          (!!match.endsAt && new Date(match.endsAt).getTime() <= Date.now())
+        : false;
+
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollY, setScrollY] = useState(0);
@@ -520,7 +528,8 @@ export default function MatchDetailPage({
                                 </div>
                             )}
 
-                            {/* WhatsApp Invite CTA (Sticky at bottom) */}
+                            {/* WhatsApp Invite CTA (Sticky at bottom) — hidden once the game ends */}
+                            {!isMatchEnded && (
                             <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
@@ -544,6 +553,7 @@ export default function MatchDetailPage({
                                     </div>
                                 </a>
                             </div>
+                            )}
                         </div>
                     ) : (
                         /* ═══ PRE-JOIN STATE ═══ */

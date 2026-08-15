@@ -293,6 +293,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, durationMins),
     scheduledAt: scheduled.toISOString(),
+    endsAt: new Date(endMs).toISOString(),
     votingClosesAt: row.voting_closes_at
       ? new Date(row.voting_closes_at).toISOString()
       : new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
@@ -347,6 +348,7 @@ export function adaptMatchDetail(
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, duration),
     scheduledAt: scheduled.toISOString(),
+    endsAt: new Date(endMs).toISOString(),
     votingClosesAt: new Date(
       (detail.completed_at ? new Date(detail.completed_at).getTime() : endMs) +
         POTM_VOTING_WINDOW_HOURS * 60 * 60_000,
