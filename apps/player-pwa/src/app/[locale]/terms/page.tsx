@@ -9,7 +9,7 @@ export default function TermsPage() {
     const t = useTranslations('legal');
 
     return (
-        <div className="min-h-screen bg-brand-bg">
+        <div className="min-h-dvh bg-brand-bg">
             <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 flex-shrink-0 bg-white">
                 <button
                     onClick={() => router.back()}

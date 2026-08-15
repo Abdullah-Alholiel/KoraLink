@@ -20,7 +20,7 @@ export default function NotFound() {
   const t = i18n[locale];
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
       <h2 className="text-4xl font-bold text-brand-black">{t.heading}</h2>
       <p className="text-lg text-gray-600">{t.message}</p>
       <Link

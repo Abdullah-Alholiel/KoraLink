@@ -30,7 +30,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
       <h2 className="text-2xl font-bold text-brand-red">{t.heading}</h2>
       <p className="text-sm text-gray-500">{error.message}</p>
       <button

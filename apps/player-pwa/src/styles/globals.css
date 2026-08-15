@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --app-height: 100vh; /* full-screen height (large viewport), not 100dvh which shrinks on iOS */
+  --app-height: 100vh; /* fallback for browsers without dynamic viewport units */
   --bottom-nav-height: calc(4.5rem + env(safe-area-inset-bottom));
   --floating-cta-bottom: calc(var(--bottom-nav-height) + 0.75rem);
   --top-safe-inset: max(1rem, env(safe-area-inset-top));
@@ -12,6 +12,16 @@
   --color-brand-red: #d4494c;
   --color-brand-black: #202124;
   --color-brand-bg: #f7f8f7;
+}
+
+/* iOS Safari + all modern browsers: use the *dynamic* viewport height so the
+   fixed app shell and bottom nav are never pushed under the Safari bottom
+   toolbar / URL bar. `100vh` is the LARGE viewport and ignores the visible
+   toolbar; `100dvh` tracks the actually-visible area on every phone. */
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
 }
 
 /* ── PWA Native Feel ───────────────────────────────── */
@@ -76,6 +86,8 @@ body {
     height: var(--app-height);
     overflow: hidden;
     position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
   }
 

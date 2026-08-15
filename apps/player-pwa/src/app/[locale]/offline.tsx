@@ -21,7 +21,7 @@ export default function Offline() {
   const t = i18n[locale];
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-bg p-8 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-brand-bg p-8 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
         {/* Wi-Fi off icon */}
         <svg
