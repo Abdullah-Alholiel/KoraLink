@@ -44,6 +44,8 @@ export interface NearbyMatchRow {
   venue_city: string;
   is_joined: boolean;
   visibility: 'public' | 'private';
+  /** Authoritative POTM voting deadline: effective completion + 24h. */
+  voting_closes_at?: Date | null;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -218,7 +220,11 @@ export class MatchesService {
         v.city                    AS venue_city,
         COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined,
         EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${currentUserId}::text) AS has_voted,
-        m.visibility               AS visibility
+        m.visibility               AS visibility,
+        COALESCE(
+          m.completed_at,
+          m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')
+        ) + INTERVAL '24 hours'    AS voting_closes_at
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id
@@ -236,9 +242,10 @@ export class MatchesService {
                 )
                 OR (
                   -- Matches the user played in stay visible while the POTM
-                  -- voting window (24h after the final whistle) is still open,
-                  -- even after midnight. Keep in sync with VOTING_WINDOW_HOURS.
-                  (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW() - INTERVAL '24 hours'
+                  -- voting window (24h after the effective completion) is
+                  -- still open, even after midnight. Keep in sync with
+                  -- VOTING_WINDOW_HOURS and effectiveCompletedAt().
+                  COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW() - INTERVAL '24 hours'
                   AND (mp.user_id = ${currentUserId}::text OR m.host_id = ${currentUserId}::text)
                 )
               `

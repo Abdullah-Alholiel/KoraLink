@@ -10,6 +10,13 @@ import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
+/** True while POTM voting is still open — uses the authoritative API deadline
+ *  when present, falling back to the coarse scheduled-end estimate otherwise. */
+const isVotingOpen = (m: { scheduledAt?: string; votingClosesAt?: string }) =>
+  m.votingClosesAt
+    ? Date.now() < new Date(m.votingClosesAt).getTime()
+    : isPotmVotingOpen(m.scheduledAt);
+
 export default function MyGamesPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -24,11 +31,11 @@ export default function MyGamesPage() {
     // Active = joinable OR played within the POTM voting window (24h after
     // the final whistle) so players can still vote after midnight.
     ['open', 'full', 'in_progress'].includes(m.status) ||
-    (m.status === 'completed' && (m.isJoined || m.isUserHost) && isPotmVotingOpen(m.scheduledAt))
+    (m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m))
   );
   const historyMatches = matches.filter((m) =>
     ['completed', 'cancelled'].includes(m.status) &&
-    !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isPotmVotingOpen(m.scheduledAt))
+    !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m))
   );
 
   return (

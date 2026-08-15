@@ -38,6 +38,8 @@ export interface NearbyMatchApi {
   /** True if the current user already voted POTM for this match. */
   has_voted?: boolean;
   last_message?: string | null;
+  /** Authoritative POTM voting deadline from the API (effective completion + 24h). */
+  voting_closes_at?: string | Date | null;
 }
 
 /** Shape returned by GET /matches/:id — Drizzle findFirst with relations */
@@ -50,6 +52,7 @@ export interface MatchDetailApi {
   status: string;
   scheduled_at: string | Date;
   duration_mins: number;
+  completed_at?: string | null;
   price_per_player: string | number;
   max_players: number;
   location?: unknown; // PostGIS geography (may be absent in JSON)
@@ -290,7 +293,9 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, durationMins),
     scheduledAt: scheduled.toISOString(),
-    votingClosesAt: new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
+    votingClosesAt: row.voting_closes_at
+      ? new Date(row.voting_closes_at).toISOString()
+      : new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
     location: row.venue_city,
     venueName: row.venue_name,
     venueDetails: row.pitch_name,
@@ -342,7 +347,10 @@ export function adaptMatchDetail(
     time: fmtTime(scheduled),
     endTime: fmtEnd(scheduled, duration),
     scheduledAt: scheduled.toISOString(),
-    votingClosesAt: new Date(endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000).toISOString(),
+    votingClosesAt: new Date(
+      (detail.completed_at ? new Date(detail.completed_at).getTime() : endMs) +
+        POTM_VOTING_WINDOW_HOURS * 60 * 60_000,
+    ).toISOString(),
     location: venue?.city ?? '',
     venueName: venue?.name ?? detail.pitch?.name ?? '',
     venueDetails: venue?.address ?? '',

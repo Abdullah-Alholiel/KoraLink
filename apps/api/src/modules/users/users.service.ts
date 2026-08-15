@@ -151,7 +151,8 @@ export class UsersService {
         EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${userId}::text) AS has_voted,
         m.visibility AS visibility,
         v.name AS venue_name,
-        v.city AS venue_city
+        v.city AS venue_city,
+        COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at
       FROM match_players my
       INNER JOIN matches m ON m.id = my.match_id
       INNER JOIN users u ON u.id = m.host_id
@@ -196,6 +197,7 @@ export class UsersService {
       has_voted: boolean;
       venue_name: string;
       venue_city: string;
+      voting_closes_at: Date;
     }>;
   }
 

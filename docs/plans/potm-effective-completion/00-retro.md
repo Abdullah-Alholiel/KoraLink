@@ -74,3 +74,16 @@ Voting window (unchanged length): `closesAt = effectiveCompletedAt(match) + 24h`
 
 1. **Slice 1:** backend `effectiveCompletedAt` + `getPomResult` + `castVote`. Verify `pom-result` for `cf88af2c` returns `voting_open` and a vote succeeds. `turbo run build` green.
 2. **Slice 2:** `MatchCard` uses `votingClosesAt`. `turbo run build` + `vitest` green.
+
+---
+
+## Follow-up (finding #4 — early-completion alignment)
+
+Implemented the deferred item: the authoritative voting deadline now flows end-to-end instead of being re-derived from `scheduled_at + duration` on the client.
+
+- `findNearby` + `getMyMatches` now `SELECT ... COALESCE(m.completed_at, m.scheduled_at + duration) + 24h AS voting_closes_at`.
+- `findNearby`'s feed-visibility window uses the same effective-completion expression.
+- `adaptNearbyMatch` / `adaptMatchDetail` consume the authoritative value (fallback to the old estimate only when absent).
+- `MatchCard` and `my-games` use `votingClosesAt`.
+
+Verified: `/matches` and `/users/me/matches` both return `voting_closes_at`; `turbo run build` + `vitest` green.
