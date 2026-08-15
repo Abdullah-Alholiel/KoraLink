@@ -91,6 +91,25 @@ export class MatchesService {
   }
 
   /**
+   * The timestamp POTM voting opens from. Persisted `completed_at` when set,
+   * otherwise the scheduled end time — matches that end *between* restarts
+   * still carry `completed_at = NULL` (auto-complete runs only at module
+   * init), so we must fall back to the scheduled end for the voting window
+   * to be correct. This keeps pre-restart (virtual) and post-restart
+   * (auto-completed) behaviour identical.
+   */
+  private static effectiveCompletedAt(match: {
+    scheduled_at: Date;
+    duration_mins: number;
+    completed_at: Date | null;
+  }): Date {
+    if (match.completed_at) return match.completed_at;
+    return new Date(
+      match.scheduled_at.getTime() + match.duration_mins * 60 * 1000,
+    );
+  }
+
+  /**
    * Bulk-update past Open/Full/InProgress matches to Completed.
    * Runs once at module init so the DB state reflects reality.
    * Query-time ``resolveEffectiveStatus`` handles the window between
@@ -1105,12 +1124,10 @@ export class MatchesService {
       );
     }
 
-    // Check voting window
-    if (!match.completed_at) {
-      throw new BadRequestException('Match completion time not recorded.');
-    }
+    // Check voting window (based on effective completion time — handles a
+    // past-due match whose completed_at has not yet been persisted).
     const votingClosesAt = new Date(
-      match.completed_at.getTime() +
+      MatchesService.effectiveCompletedAt(match).getTime() +
         MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
     );
     if (new Date() > votingClosesAt) {
@@ -1202,12 +1219,8 @@ export class MatchesService {
       return { status: 'not_completed' as const };
     }
 
-    if (!match.completed_at) {
-      return { status: 'not_completed' as const };
-    }
-
     const votingClosesAt = new Date(
-      match.completed_at.getTime() +
+      MatchesService.effectiveCompletedAt(match).getTime() +
         MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
     );
     const now = new Date();
@@ -1256,7 +1269,7 @@ export class MatchesService {
 
       return {
         status: 'voting_open' as const,
-        completedAt: match.completed_at,
+        completedAt: MatchesService.effectiveCompletedAt(match),
         votingClosesAt,
         hasVoted: !!existingVote,
         votedFor: existingVote?.candidateId ?? null,

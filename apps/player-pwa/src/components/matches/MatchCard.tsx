@@ -28,9 +28,12 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
     // POTM voting window — a match the user played in stays actionable for 24h
-    // after the final whistle, even across midnight. Duration defaults to 60
-    // when unknown; the API's voting guard remains authoritative on submit.
-    const votingOpen = isPotmVotingOpen(match.scheduledAt);
+    // after the final whistle. Prefer the adapter-computed votingClosesAt (uses
+    // the match's real duration); fall back to the coarse 60-min default only
+    // when it's absent. The API's voting guard remains authoritative on submit.
+    const votingOpen = match.votingClosesAt
+      ? Date.now() < new Date(match.votingClosesAt).getTime()
+      : isPotmVotingOpen(match.scheduledAt);
     const canVotePotm = match.status === 'completed' && (isJoined || isHost) && votingOpen;
     // POTM vote state comes from the feed/my-matches SQL (has_voted) via the adapter.
     const hasVotedPotm = match.hasVotedPotm ?? false;
