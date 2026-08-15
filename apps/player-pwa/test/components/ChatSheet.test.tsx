@@ -64,7 +64,8 @@ function mockReturn(value: Partial<Record<string, unknown>>) {
     error: null,
     refetch: vi.fn(),
     isConnected: false,
-    sendMessage: vi.fn(),
+    sendMessage: { mutate: vi.fn(), isPending: false, isError: false },
+    retryMessage: vi.fn(),
     ...value,
   });
 }
@@ -163,5 +164,54 @@ describe('ChatSheet', () => {
 
     fireEvent.click(screen.getByText('Try Again'));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('CS-7: clears the input and sends with a clientMessageId on send', () => {
+    const mutate = vi.fn();
+    mockReturn({
+      isConnected: true,
+      sendMessage: { mutate, isPending: false, isError: false },
+      retryMessage: vi.fn(),
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    const input = screen.getByPlaceholderText('Type a message...') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'hello team' } });
+    fireEvent.click(screen.getByLabelText('Send'));
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0][0]).toMatchObject({ content: 'hello team' });
+    expect(mutate.mock.calls[0][0].clientMessageId).toBeTruthy();
+    expect(input.value).toBe('');
+  });
+
+  it('CS-8: renders a failed status and retries with the same clientMessageId', () => {
+    const retryMessage = vi.fn();
+    mockReturn({
+      isConnected: true,
+      messages: [
+        {
+          id: 'local-abc',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
+          content: 'stuck message',
+          created_at: new Date().toISOString(),
+          user: { id: 'user-1', full_name: 'Test User', handle: null, avatar_url: null },
+          client_message_id: 'abc',
+          status: 'failed',
+        },
+      ],
+      sendMessage: { mutate: vi.fn(), isPending: false, isError: false },
+      retryMessage,
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    const retryButton = screen.getByLabelText('Not sent — Tap to retry');
+    fireEvent.click(retryButton);
+
+    expect(retryMessage).toHaveBeenCalledTimes(1);
+    expect(retryMessage).toHaveBeenCalledWith('abc', 'stuck message');
   });
 });

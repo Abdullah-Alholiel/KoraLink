@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, AlertCircle, Loader2 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
 import { selectUser, useAppStore } from '@/store/useAppStore';
+import { uuid } from '@/lib/uuid';
 
 export default function ConversationPage({
   params,
@@ -19,7 +20,7 @@ export default function ConversationPage({
   const storeUser = useAppStore(selectUser);
 
   const { data: conversations } = useConversations();
-  const { messages, isLoading, error, sendMessage } = useConversationMessages(id);
+  const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
 
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -34,8 +35,14 @@ export default function ConversationPage({
   const handleSend = () => {
     const content = draft.trim();
     if (!content) return;
+    sendMessage.mutate({ content, clientMessageId: uuid() });
     setDraft('');
-    sendMessage(content).catch(() => setDraft(content));
+  };
+
+  const handleRetry = (m: { clientMessageId?: string | null; content: string }) => {
+    if (m.clientMessageId) {
+      retryMessage(m.clientMessageId, m.content);
+    }
   };
 
   return (
@@ -81,7 +88,7 @@ export default function ConversationPage({
           {messages.map((m) => {
             const mine = m.sender.id === storeUser?.id;
             return (
-              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
                 <div
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
                     mine
@@ -91,6 +98,21 @@ export default function ConversationPage({
                 >
                   <p className="leading-snug break-words">{m.content}</p>
                 </div>
+                {mine && m.status === 'sending' && (
+                  <span className="mt-1 flex items-center gap-1 text-[10px] text-gray-400">
+                    <Loader2 className="w-3 h-3 animate-spin" strokeWidth={2} />
+                    {t('messages.sending')}
+                  </span>
+                )}
+                {mine && m.status === 'failed' && (
+                  <button
+                    onClick={() => handleRetry(m)}
+                    className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-brand-red"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5" strokeWidth={2} />
+                    {t('messages.failedToSend')} · {t('messages.tapToRetry')}
+                  </button>
+                )}
               </div>
             );
           })}

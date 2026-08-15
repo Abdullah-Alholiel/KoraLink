@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, MessageSquare, AlertTriangle, X, Send, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
+import { uuid } from '@/lib/uuid';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ export default function ChatSheet({
     refetch,
     isConnected,
     sendMessage,
+    retryMessage,
   } = useMatchChat(matchId);
 
   const [input, setInput] = useState('');
@@ -96,13 +98,18 @@ export default function ChatSheet({
   if (!isOpen) return null;
 
   const grouped = groupMessages(messages, t, locale);
-  const isSending = sendMessage.isPending;
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isSending) return;
-    sendMessage.mutate({ content: trimmed });
+    if (!trimmed) return;
+    sendMessage.mutate({ content: trimmed, clientMessageId: uuid() });
     setInput('');
+  };
+
+  const handleRetry = (msg: MatchMessage) => {
+    if (msg.client_message_id) {
+      retryMessage(msg.client_message_id, msg.content);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -255,9 +262,22 @@ export default function ChatSheet({
                       </p>
                     </div>
 
-                    {/* Time */}
-                    <span className={`text-[9px] text-gray-400 flex-shrink-0 mb-0.5 ${isMine ? 'text-end' : ''}`}>
-                      {timeStr}
+                    {/* Time + delivery status */}
+                    <span className={`flex items-center gap-1 flex-shrink-0 mb-0.5 ${isMine ? 'text-end' : ''}`}>
+                      <span className="text-[9px] text-gray-400">{timeStr}</span>
+                      {isMine && msg.status === 'sending' && (
+                        <Loader2 className="w-3 h-3 animate-spin text-gray-400" strokeWidth={2} />
+                      )}
+                      {isMine && msg.status === 'failed' && (
+                        <button
+                          onClick={() => handleRetry(msg)}
+                          className="flex items-center justify-center"
+                          aria-label={`${t('messages.failedToSend')} — ${t('messages.tapToRetry')}`}
+                          title={t('messages.tapToRetry')}
+                        >
+                          <AlertCircle className="w-4 h-4 text-brand-red" strokeWidth={2} />
+                        </button>
+                      )}
                     </span>
                   </div>
                 );
@@ -268,15 +288,6 @@ export default function ChatSheet({
           {/* Scroll anchor */}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Send error banner */}
-        {sendMessage.isError && (
-          <div className="px-5 py-2 bg-brand-red/5 border-t border-brand-red/10 flex-shrink-0">
-            <p className="text-xs text-brand-red text-center">
-              {t('chatSheet.sendError') || 'Failed to send. Retry?'}
-            </p>
-          </div>
-        )}
 
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
@@ -289,9 +300,8 @@ export default function ChatSheet({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t('chatSheet.sendPlaceholder')}
-              disabled={!isConnected || isSending}
               maxLength={500}
-              className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent disabled:opacity-50"
+              className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
             />
             {input.length > 0 && (
               <span className="text-[10px] text-gray-400 flex-shrink-0">{input.length}/500</span>
@@ -299,19 +309,15 @@ export default function ChatSheet({
           </div>
           <button
             onClick={handleSend}
-            disabled={!input.trim() || !isConnected || isSending}
+            disabled={!input.trim()}
             className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
-              input.trim() && isConnected && !isSending
+              input.trim()
                 ? 'bg-brand-green text-white shadow-[0_4px_12px_rgba(37,65,50,0.3)]'
                 : 'bg-gray-200 text-gray-400'
             }`}
             aria-label={t('messages.send')}
           >
-            {isSending ? (
-              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
-            ) : (
-              <Send className="w-4 h-4" strokeWidth={1.5} />
-            )}
+            <Send className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
       </div>
