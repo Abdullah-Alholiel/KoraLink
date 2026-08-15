@@ -5,7 +5,7 @@
 :root {
   --app-height: 100vh; /* full-screen height (large viewport), not 100dvh which shrinks on iOS */
   --bottom-nav-height: calc(4.5rem + env(safe-area-inset-bottom));
-  --floating-cta-bottom: calc(var(--bottom-nav-height) + 1.75rem);
+  --floating-cta-bottom: calc(var(--bottom-nav-height) + 0.75rem);
   --top-safe-inset: max(1rem, env(safe-area-inset-top));
   --color-brand-green: #254132;
   --color-brand-green-light: #2d5c3e;
