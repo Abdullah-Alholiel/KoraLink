@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
-import { pitchCostForDuration, pricePerPlayer, riyadhISO } from '@/lib/api-adapter';
+import { pitchCostForDuration, pricePerPlayer, riyadhISO, parseHostDateParam } from '@/lib/api-adapter';
 import { classifyPublishError, PUBLISH_ERROR_KEYS } from '@/lib/publish-error';
 
 import ModeToggle from './ModeToggle';
@@ -29,6 +29,10 @@ export default function HostMatchForm() {
     /* ── Venue pre-select from query params ─────────── */
     const venueIdFromQuery = searchParams?.get('venue');
     const venueNameFromQuery = searchParams?.get('venueName');
+
+    /* ── Date pre-select from query params (club calendar → "Host Here") ──
+     * Validated: YYYY-MM-DD, today-or-later in Riyadh. Past/garbage → null. */
+    const dateFromQuery = parseHostDateParam(searchParams?.get('date'));
 
     /* ── Mode State ──────────────────────────────── */
     const [mode, setMode] = useState<'koralink' | 'self'>('self');
@@ -91,7 +95,7 @@ export default function HostMatchForm() {
         if (mins <= 0) mins += 24 * 60;
         return mins;
     };
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(dateFromQuery ?? '');
     const [time, setTime] = useState('');
 
     // Derive pitch cost from the selected pitch's hourly rate, prorated by
@@ -111,11 +115,14 @@ export default function HostMatchForm() {
 
     const handleModeChange = (newMode: 'koralink' | 'self') => {
         setMode(newMode);
-        // Reset venue/pitch/slot/date/time when switching modes (different venue pools)
+        // Reset venue/pitch/slot when switching modes (different venue pools)
         setSelectedVenue(null);
         setSelectedPitch(null);
         setSelectedSlot(null);
-        setDate('');
+        // Re-apply the club-calendar date (if any) — the user's intent "I want
+        // this day" is mode-independent. Slot-driven dates re-set themselves
+        // once a slot is picked.
+        setDate(dateFromQuery ?? '');
         setTime('');
     };
 
@@ -232,9 +239,10 @@ export default function HostMatchForm() {
                                     onSelect={(pitch) => {
                                         setSelectedPitch(pitch);
                                         setSelectedSlot(null); // reset slot when pitch changes
-                                        // In koralink mode: reset date/time — will be set by slot
+                                        // In koralink mode: reset time (slot re-sets both);
+                                        // re-apply the club-calendar date if present.
                                         if (mode === 'koralink') {
-                                            setDate('');
+                                            setDate(dateFromQuery ?? '');
                                             setTime('');
                                         }
                                     }}
@@ -246,6 +254,7 @@ export default function HostMatchForm() {
                             {mode === 'koralink' && selectedPitch && (
                                 <SlotPicker
                                     pitchId={selectedPitch.id}
+                                    initialDate={dateFromQuery}
                                     selectedSlot={selectedSlot}
                                     onSelectSlot={(slot) => {
                                         setSelectedSlot(slot);

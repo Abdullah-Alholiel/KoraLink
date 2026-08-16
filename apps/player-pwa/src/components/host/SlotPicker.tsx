@@ -8,14 +8,16 @@ import { todayInRiyadh } from '@/lib/api-adapter';
 
 export interface SlotPickerProps {
     pitchId: string | null;
+    /** Seed the slot calendar with this date (e.g. club → "Host Here"). */
+    initialDate?: string | null;
     selectedSlot: PitchSlotApi | null;
     onSelectSlot: (slot: PitchSlotApi) => void;
 }
 
-export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: SlotPickerProps) {
+export default function SlotPicker({ pitchId, initialDate, selectedSlot, onSelectSlot }: SlotPickerProps) {
     const locale = useLocale();
     const t = useTranslations();
-    const [slotDate, setSlotDate] = useState('');
+    const [slotDate, setSlotDate] = useState(initialDate ?? '');
 
     const { data: slots, isLoading } = usePitchSlots(
         pitchId,

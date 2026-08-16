@@ -182,6 +182,19 @@ export function riyadhISO(date: string, time: string): string {
   return new Date(asUTC).toISOString();
 }
 
+/** Validate a `?date=` query param for the host form (e.g. passed from the
+ *  club calendar). Accepts only YYYY-MM-DD strings that are today-or-later in
+ *  Asia/Riyadh; anything else (garbage, past dates) is ignored → null, so a
+ *  bad param never blocks or corrupts the form. */
+export function parseHostDateParam(
+  raw: string | null | undefined,
+  today: string = todayInRiyadh(),
+): string | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  // ISO dates compare chronologically as strings.
+  return raw >= today ? raw : null;
+}
+
 /** POTM voting window length — must mirror MatchesService.VOTING_WINDOW_HOURS. */
 export const POTM_VOTING_WINDOW_HOURS = 24;
 
