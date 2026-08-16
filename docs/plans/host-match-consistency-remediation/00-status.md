@@ -39,3 +39,14 @@
 - ✅ I5 — `MatchDetailApi.booking_mode/booking_slot_id` typed.
 - ✅ M1 — SlotPicker "today" uses `todayInRiyadh()`.
 - ✅ M2 — title fallback uses `effectiveFormat`.
+
+## Post-cycle: `pitch_cost_sar` backfill decision (2026-08-16)
+
+**Decision: no backfill required.** Verified against the live DB:
+
+| booking_mode | statuses present | rows | with `pitch_cost_sar` |
+|---|---|---|---|
+| `self` | Open 8, Full 1, Completed 6 | 15 | 0 (NULL — correct per Gate 2: self mode has no wallet flow) |
+| `koralink` | — | **0** | — |
+
+There are **zero koralink-mode matches** in the database (the seed never sets `booking_mode`, so all seeded matches default to `self`), so no legacy row can hit the refund path with a NULL cost. New koralink matches persist `pitch_cost_sar` at create (E2E-verified: `200.00` debited → `200.00` refunded). If a koralink row were somehow NULL, `cancelMatch` defensively refunds 0 rather than over-refunding.
