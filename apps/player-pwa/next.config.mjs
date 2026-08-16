@@ -1,5 +1,6 @@
 // @ts-check
 import withPWAInit from '@ducanh2912/next-pwa';
+import { withSentryConfig } from '@sentry/nextjs';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
@@ -115,6 +116,25 @@ const nextConfig = {
 
 
   async headers() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    let apiOrigin = 'http://localhost:3001';
+    try {
+      apiOrigin = new URL(apiUrl).origin;
+    } catch {
+      // keep the localhost fallback
+    }
+    const connectSrc = [
+      "'self'",
+      'https://api.mapbox.com',
+      'https://events.mapbox.com',
+      'https://*.ingest.sentry.io',
+      'https://app.posthog.com',
+      'https://*.posthog.com',
+      apiOrigin,
+      'ws:',
+      'wss:',
+    ].join(' ');
+
     return [
       {
         source: '/(.*)',
@@ -142,7 +162,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://cdn.moyasar.com",
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://*.mapbox.com",
-              "connect-src 'self' https://api.mapbox.com https://events.mapbox.com http://localhost:* http://127.0.0.1:* http://100.93.99.24:* http://*.ts.net:* wss: ws:",
+              `connect-src ${connectSrc}`,
               "worker-src blob:",
               "font-src 'self' data:",
               "frame-src 'none'",
@@ -160,4 +180,14 @@ const nextConfig = {
 const isDev = process.env.NODE_ENV === 'development';
 const finalConfig = isDev ? nextConfig : withPWA(nextConfig);
 
-export default withNextIntl(finalConfig);
+// Sentry must be the outermost wrapper so its webpack instrumentation covers
+// server components, Route Handlers, and edge. Source-map upload is opt-in:
+// disabled unless SENTRY_AUTH_TOKEN is present (pair with SENTRY_ORG/SENTRY_PROJECT).
+export default withSentryConfig(withNextIntl(finalConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: true,
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
+});

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { captureError } from '@/providers/ObservabilityProvider';
 
 const i18n = {
   ar: {
@@ -26,8 +27,8 @@ export default function GlobalError({
   const t = i18n[locale];
 
   useEffect(() => {
-    console.error(error);
-  }, [error]);
+    captureError(error, { route: pathname, scope: 'route-error' });
+  }, [error, pathname]);
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
