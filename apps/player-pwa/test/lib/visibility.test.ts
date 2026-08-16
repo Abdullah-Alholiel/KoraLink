@@ -53,7 +53,7 @@ describe('visibility field propagation (DB → adapter → Match)', () => {
       duration_mins: 60,
       price_per_player: '37',
       max_players: 14,
-      visibility: 'private',
+      visibility: 'private' as const,
       host: { id: 'host-1', full_name: 'Host', handle: null, avatar_url: null, karma_score: 10 },
       pitch: {
         name: 'Pitch 1', size: '7v7', surface_type: 'Grass',
