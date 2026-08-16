@@ -9,8 +9,6 @@ export interface CostFooterProps {
     playerShare: number;
     canPublish: boolean;
     isPending: boolean;
-    isError: boolean;
-    hasSlot?: boolean;               // for koralink mode — slot required
     onPublish: () => void;
 }
 
@@ -20,13 +18,11 @@ export default function CostFooter({
     playerShare,
     canPublish,
     isPending,
-    isError,
-    hasSlot,
     onPublish,
 }: CostFooterProps) {
     const t = useTranslations();
 
-    const publishDisabled = isPending || !canPublish || (hasSlot === false);
+    const publishDisabled = isPending || !canPublish;
 
     return (
         <div className="absolute bottom-0 inset-x-0 bg-white border-t border-gray-100 px-5 pt-3 pb-5 pb-safe animate-slide-in-bottom">
@@ -70,12 +66,6 @@ export default function CostFooter({
                     </>
                 )}
             </button>
-
-            {isError && (
-                <p className="text-xs text-brand-red mt-2 text-center">
-                    {t('host.createError')}
-                </p>
-            )}
         </div>
     );
 }

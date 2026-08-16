@@ -15,6 +15,22 @@ export type GenderRule = (typeof GENDER_OPTIONS)[number];
 export const MATCH_TYPES = ['Casual', 'Competitive'] as const;
 export type MatchTypeValue = (typeof MATCH_TYPES)[number];
 
+/** Snap an "HH:MM" time to the nearest 10-minute mark (00/10/20/30/40/50).
+ *  Avoids awkward kick-off times like 18:37. Rounds to nearest (18:37→18:40,
+ *  18:32→18:30), wraps the hour (18:58→19:00), and caps at 23:50 so the snap
+ *  never silently moves the match to the next day. Empty input passes through. */
+export function snapTimeTo10(value: string): string {
+    if (!value) return value;
+    const [h, m] = value.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return value;
+    const total = h * 60 + m;
+    const snapped = Math.round(total / 10) * 10;
+    const capped = Math.min(snapped, 23 * 60 + 50); // never roll past 23:50
+    const hh = String(Math.floor(capped / 60)).padStart(2, '0');
+    const mm = String(capped % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
 export const GENDER_I18N_MAP: Record<GenderRule, string> = {
     'Men Only': 'host.genderMen',
     'Women Only': 'host.genderWomen',
@@ -221,11 +237,13 @@ export default function MatchDetailsForm({
                             <input
                                 type="time"
                                 value={time}
-                                onChange={(e) => setTime(e.target.value)}
+                                step={600}
+                                onChange={(e) => setTime(snapTimeTo10(e.target.value))}
                                 aria-label={t('host.time')}
                                 className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
                             />
                         </label>
+                        <p className="text-[10px] text-gray-400 mt-1.5">{t('host.timeStepHint')}</p>
                     </div>
                 )}
             </div>

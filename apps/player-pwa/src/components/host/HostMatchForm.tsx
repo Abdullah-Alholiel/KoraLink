@@ -7,6 +7,7 @@ import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-r
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
 import { pitchCostForDuration, pricePerPlayer, riyadhISO } from '@/lib/api-adapter';
+import { classifyPublishError, PUBLISH_ERROR_KEYS } from '@/lib/publish-error';
 
 import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
@@ -145,8 +146,10 @@ export default function HostMatchForm() {
         createMatch.mutate(payload, {
             onSuccess: (createdMatch) => {
                 setShowWarning(false);
-                // Navigate to the newly created match detail page
-                router.push(`/${locale}/match/${createdMatch.id}`);
+                // Replace (not push) — the host form must NOT remain in history.
+                // Back from the match detail returns to where the user came
+                // from (Play/Club), never back to a filled-out form.
+                router.replace(`/${locale}/match/${createdMatch.id}`);
             },
         });
     };
@@ -154,6 +157,12 @@ export default function HostMatchForm() {
     const canPublish = !!(selectedPitch && date && time
         && (title.length === 0 || title.length >= 3)
         && (mode === 'self' || (mode === 'koralink' && selectedSlot)));
+
+    // Classified publish error shown inside the warning sheet (localized, at
+    // the moment of failure — not a generic toast).
+    const publishErrorKey = createMatch.isError
+        ? PUBLISH_ERROR_KEYS[classifyPublishError(createMatch.error)]
+        : null;
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -317,8 +326,6 @@ export default function HostMatchForm() {
                 playerShare={playerShare}
                 canPublish={canPublish}
                 isPending={createMatch.isPending}
-                isError={createMatch.isError}
-                hasSlot={mode === 'self' ? undefined : !!selectedSlot}
                 onPublish={handlePublishClick}
             />
 
@@ -335,14 +342,18 @@ export default function HostMatchForm() {
                 filterPartnerOnly={mode === 'koralink'}
             />
 
-            {/* ══════════════════════════════════════
+            {/* ═══════════════════════════════════════
                 PUBLISH WARNING SHEET
-            ═══════════════════════════════════ */}
+            ═══════════════════════════════════════ */}
             <PublishWarningSheet
                 open={showWarning}
                 mode={mode}
+                errorKey={publishErrorKey}
                 onConfirm={doPublish}
-                onCancel={() => setShowWarning(false)}
+                onCancel={() => {
+                    createMatch.reset();
+                    setShowWarning(false);
+                }}
                 isPending={createMatch.isPending}
             />
         </div>

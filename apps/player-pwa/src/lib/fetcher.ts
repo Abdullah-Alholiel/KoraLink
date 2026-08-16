@@ -78,6 +78,19 @@ export async function fetcher<T>(
   });
 
   if (!response.ok) {
+    // Surface the API's actual error message so callers can classify it
+    // (e.g. "Insufficient wallet balance…" → specific UI). Fall back to the
+    // status text when the body isn't JSON or has no message.
+    let apiMessage = '';
+    try {
+      const body = await response.clone().json().catch(() => null);
+      apiMessage =
+        (body && (body.message ?? body.error))?.toString() ?? '';
+      // NestJS validation errors return string[] — keep the first entry
+      if (Array.isArray(body?.message)) apiMessage = body.message[0] ?? '';
+    } catch {
+      apiMessage = '';
+    }
     // Sentry breadcrumb for API failures — gives error trails across all pages
     addBreadcrumb(
       `API ${response.status}: ${options.method ?? 'GET'} ${path}`,
@@ -86,7 +99,7 @@ export async function fetcher<T>(
       { status: response.status, path, method: options.method ?? 'GET' },
     );
     throw new FetchError(
-      `Request failed with status ${response.status}`,
+      apiMessage || `Request failed with status ${response.status}`,
       response.status,
       url.toString()
     );

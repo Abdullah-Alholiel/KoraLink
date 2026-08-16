@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
-import MatchDetailsForm from '@/components/host/MatchDetailsForm';
+import MatchDetailsForm, { snapTimeTo10 } from '@/components/host/MatchDetailsForm';
 import { todayInRiyadh } from '@/lib/api-adapter';
 
 function renderForm(overrides: Partial<Parameters<typeof MatchDetailsForm>[0]> = {}) {
@@ -78,5 +78,35 @@ describe('MatchDetailsForm — iOS-safe date/time inputs', () => {
     renderForm({ readOnlyDateTime: true, date: '2026-09-01', time: '18:00' });
     expect(screen.queryByLabelText('Date')).toBeNull();
     expect(screen.queryByLabelText('Start Time')).toBeNull();
+  });
+
+  it('snaps the picked time to the nearest 10 minutes before saving', () => {
+    const setTime = vi.fn();
+    renderForm({ setTime });
+    const timeInput = screen.getByLabelText('Start Time') as HTMLInputElement;
+    fireEvent.change(timeInput, { target: { value: '18:37' } });
+    expect(setTime).toHaveBeenCalledWith('18:40');
+    fireEvent.change(timeInput, { target: { value: '18:32' } });
+    expect(setTime).toHaveBeenCalledWith('18:30');
+    fireEvent.change(timeInput, { target: { value: '18:58' } });
+    expect(setTime).toHaveBeenCalledWith('19:00');
+  });
+});
+
+describe('snapTimeTo10', () => {
+  it('rounds to the nearest 10-minute mark', () => {
+    expect(snapTimeTo10('18:37')).toBe('18:40');
+    expect(snapTimeTo10('18:32')).toBe('18:30');
+    expect(snapTimeTo10('18:30')).toBe('18:30'); // already snapped — unchanged
+    expect(snapTimeTo10('00:04')).toBe('00:00');
+  });
+
+  it('wraps the hour and never rolls past 23:50', () => {
+    expect(snapTimeTo10('18:58')).toBe('19:00');
+    expect(snapTimeTo10('23:56')).toBe('23:50');
+  });
+
+  it('passes empty/invalid input through untouched', () => {
+    expect(snapTimeTo10('')).toBe('');
   });
 });

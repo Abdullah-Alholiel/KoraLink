@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { env } from '@/env.mjs';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { useAppStore } from '@/store/useAppStore';
 import type { Match } from '@/types';
 import {
   type NearbyMatchApi,
@@ -14,7 +13,7 @@ import {
   adaptMatchList,
 } from '@/lib/api-adapter';
 import { z } from 'zod';
-import { trackEvent } from '@/providers/ObservabilityProvider';
+import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 
 // ─── API Response Types (snake_case raw) ──────────────
 
@@ -168,7 +167,6 @@ export function useMatchMessages(matchId: string) {
 
 export function useCreateMatch() {
   const queryClient = useQueryClient();
-  const showToast = useAppStore.getState().showToast;
 
   return useMutation<Match, FetchError, HostMatchInput>({
     mutationFn: async (data) => {
@@ -183,7 +181,6 @@ export function useCreateMatch() {
     onSuccess: (_match, variables) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('Match created successfully!', 'success');
       trackEvent('match_created', {
         visibility: variables.visibility ?? 'public',
         booking_mode: variables.booking_mode,
@@ -191,9 +188,13 @@ export function useCreateMatch() {
         pitch_cost_sar: variables.pitchCostSar ?? 0,
         max_players: variables.max_players,
       });
+      // No toast here — success is communicated by navigating to the match
+      // detail page (router.replace). Toasting AND navigating duplicates UX.
     },
     onError: (err) => {
-      showToast(err.message || 'Failed to create match. Please try again.', 'error');
+      // Shown contextually inside the PublishWarningSheet (classified by
+      // classifyPublishError in HostMatchForm) — no generic toast.
+      captureError(err, { scope: 'createMatch' });
     },
   });
 }
