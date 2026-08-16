@@ -47,15 +47,17 @@ export class CreateMatchDto {
   @Max(22)
   max_players: number;
 
-  @ApiProperty({ description: 'Total pitch rental cost in SAR (supports decimals)', minimum: 0 })
+  @ApiPropertyOptional({ description: 'Total pitch rental cost in SAR (supports decimals). Deprecated — the server derives this from the pitch hourly_rate × duration; any client value is ignored.', minimum: 0 })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  pitchCostSar: number;
+  pitchCostSar?: number;
 
-  @ApiProperty({ enum: ['koralink', 'self'], default: 'self',
+  @ApiPropertyOptional({ enum: ['koralink', 'self'], default: 'self',
     description: 'Who handles pitch booking — koralink = we book it, self = host books it' })
+  @IsOptional()
   @IsEnum(['koralink', 'self'])
-  booking_mode: 'koralink' | 'self';
+  booking_mode?: 'koralink' | 'self';
 
   @ApiPropertyOptional({ description: 'Slot ID — required when booking_mode = koralink' })
   @IsOptional()

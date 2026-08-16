@@ -212,6 +212,7 @@ describe('useMatches hooks', () => {
         max_players: 14,
         pitchCostSar: 37,
         booking_mode: 'self' as const,
+        visibility: 'public' as const,
       };
 
       await waitFor(() => {

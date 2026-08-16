@@ -172,9 +172,11 @@ export function useCreateMatch() {
 
   return useMutation<Match, FetchError, HostMatchInput>({
     mutationFn: async (data) => {
+      // Enforce the host-match contract before it reaches the API.
+      const parsed = hostMatchSchema.parse(data);
       const raw = await fetcher<MatchDetailApi>('/matches', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify(parsed),
       });
       return adaptMatchDetail(raw);
     },
@@ -185,6 +187,9 @@ export function useCreateMatch() {
       trackEvent('match_created', {
         visibility: variables.visibility ?? 'public',
         booking_mode: variables.booking_mode,
+        price_per_player: _match.price,
+        pitch_cost_sar: variables.pitchCostSar ?? 0,
+        max_players: variables.max_players,
       });
     },
     onError: (err) => {

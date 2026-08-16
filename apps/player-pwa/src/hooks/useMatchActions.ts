@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { useAppStore } from '@/store/useAppStore';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 // ─── Toast helper ──────────────────────────────────────
 
@@ -72,6 +73,7 @@ export function useCancelMatch() {
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       showToast('Match cancelled. Players will be notified.', 'info');
+      trackEvent('match_cancelled', { match_id: matchId });
     },
     onError: (error) => {
       showToast(

@@ -21,6 +21,9 @@ import { ActivitiesService } from '../activities/activities.service';
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
 
+/** Round a SAR amount up to 2 decimal places (money-safe, never rounds down). */
+const round2 = (n: number): number => Math.ceil(n * 100) / 100;
+
 export interface NearbyMatchRow {
   id: string;
   title: string;
@@ -43,6 +46,7 @@ export interface NearbyMatchRow {
   venue_name: string;
   venue_city: string;
   is_joined: boolean;
+  has_voted: boolean;
   visibility: 'public' | 'private';
   /** Authoritative POTM voting deadline: effective completion + 24h. */
   voting_closes_at?: Date | null;
@@ -299,7 +303,7 @@ export class MatchesService {
       throw new BadRequestException('A match requires at least 2 players.');
     }
     const raw = pitchCostSar / (players - 1) + PLATFORM_MARGIN_SAR;
-    return Math.ceil(raw * 100) / 100; // round up to 2 d.p.
+    return round2(raw); // round up to 2 d.p.
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -567,17 +571,20 @@ export class MatchesService {
       scheduled_at: string;
       duration_mins: number;
       max_players: number;
-      pitchCostSar: number;
-      booking_mode: 'koralink' | 'self';
+      pitchCostSar?: number;
+      booking_mode?: 'koralink' | 'self';
       booking_slot_id?: string;
       visibility?: 'public' | 'private';
     },
   ) {
-    // Validate pitch exists and fetch venue location for geo-discovery
+    // Validate pitch exists and fetch venue location + hourly rate.
+    // The pitch cost is DERIVED server-side from hourly_rate × duration — the
+    // client-supplied `pitchCostSar` is ignored (single source of truth).
     const [pitch] = await this.db
       .select({
         id: schema.pitches.id,
         venueLocation: schema.venues.location,
+        hourlyRate: schema.pitches.hourly_rate,
       })
       .from(schema.pitches)
       .innerJoin(schema.venues, eq(schema.pitches.venue_id, schema.venues.id))
@@ -588,14 +595,19 @@ export class MatchesService {
       throw new NotFoundException(`Pitch ${dto.pitch_id} not found.`);
     }
 
+    const bookingMode = dto.booking_mode ?? 'self';
+    const visibility = dto.visibility ?? 'public';
+    const pitchCostSar = round2(
+      parseFloat(pitch.hourlyRate) * dto.duration_mins / 60,
+    );
     const pricePerPlayer = this.calculatePricePerPlayer(
-      dto.pitchCostSar,
+      pitchCostSar,
       dto.max_players,
     );
 
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
-      if (dto.booking_mode === 'koralink') {
+      if (bookingMode === 'koralink') {
         if (!dto.booking_slot_id) {
           throw new BadRequestException('booking_slot_id is required for koralink mode');
         }
@@ -627,25 +639,26 @@ export class MatchesService {
           scheduled_at: new Date(dto.scheduled_at),
           duration_mins: dto.duration_mins,
           price_per_player: pricePerPlayer.toString(),
+          pitch_cost_sar: pitchCostSar.toString(),
           max_players: dto.max_players,
           status: 'Open',
-          visibility: dto.visibility ?? 'public',
-          booking_mode: dto.booking_mode ?? 'self',
-          booking_slot_id: dto.booking_mode === 'koralink' ? dto.booking_slot_id : null,
+          visibility,
+          booking_mode: bookingMode,
+          booking_slot_id: bookingMode === 'koralink' ? dto.booking_slot_id : null,
           // Inherit venue location so geo-discovery works for user-created matches
           ...(pitch.venueLocation ? { location: pitch.venueLocation } : {}),
         })
         .returning();
 
       // 2. Mark slot as booked (koralink mode)
-      if (dto.booking_mode === 'koralink' && dto.booking_slot_id) {
+      if (bookingMode === 'koralink' && dto.booking_slot_id) {
         await tx
           .update(pitch_slots)
           .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
           .where(eq(pitch_slots.id, dto.booking_slot_id));
 
         // 2b. Deduct pitch cost from host wallet (koralink mode)
-        if (dto.pitchCostSar && dto.pitchCostSar > 0) {
+        if (pitchCostSar > 0) {
           // Check balance first
           const [user] = await tx
             .select({ wallet_balance: users.wallet_balance })
@@ -653,9 +666,9 @@ export class MatchesService {
             .where(eq(users.id, hostId))
             .limit(1);
 
-          if (!user || parseFloat(user.wallet_balance) < dto.pitchCostSar) {
+          if (!user || parseFloat(user.wallet_balance) < pitchCostSar) {
             throw new BadRequestException(
-              `Insufficient wallet balance. Required: SAR ${dto.pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+              `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
             );
           }
 
@@ -663,7 +676,7 @@ export class MatchesService {
           await tx
             .update(users)
             .set({
-              wallet_balance: sql`${users.wallet_balance} - ${dto.pitchCostSar.toString()}`,
+              wallet_balance: sql`${users.wallet_balance} - ${pitchCostSar.toString()}`,
               updated_at: new Date(),
             })
             .where(eq(users.id, hostId));
@@ -672,7 +685,7 @@ export class MatchesService {
           await tx.insert(schema.transactions).values({
             user_id: hostId,
             type: 'DEBIT',
-            amount: dto.pitchCostSar.toString(),
+            amount: pitchCostSar.toString(),
             reference_type: 'PITCH_BOOKING',
             reference_id: dto.booking_slot_id,
             idempotency_key: `slot-booking-${dto.booking_slot_id}`,
@@ -694,6 +707,11 @@ export class MatchesService {
 
     // Fetch complete match with host relation so the frontend gets full_name etc.
     const fullMatch = await this.findOne(created.id);
+
+    this.logger.log(
+      `match_created matchId=${created.id} bookingMode=${bookingMode} pitchCostSar=${pitchCostSar} pricePerPlayer=${pricePerPlayer} maxPlayers=${dto.max_players}`,
+      MatchesService.name,
+    );
 
     // Fan out "created_match" to the host's followers (fire-and-forget).
     // Private matches NEVER fan out — they must stay invisible to
@@ -940,6 +958,7 @@ export class MatchesService {
    * In koralink mode, releases the booked slot and refunds the pitch cost.
    */
   async cancelMatch(userId: string, matchId: string) {
+    let refundedSar = 0;
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -948,6 +967,7 @@ export class MatchesService {
           status: matches.status,
           booking_mode: matches.booking_mode,
           booking_slot_id: matches.booking_slot_id,
+          pitch_cost_sar: matches.pitch_cost_sar,
           price_per_player: matches.price_per_player,
           max_players: matches.max_players,
         })
@@ -994,13 +1014,18 @@ export class MatchesService {
             .set(withTimestamp({ is_booked: false, booked_match_id: null }))
             .where(eq(pitch_slots.id, match.booking_slot_id));
 
-          // Calculate pitch cost and refund
-          const pitchCostSar = parseFloat(match.price_per_player) * (match.max_players - 1);
-          if (pitchCostSar > 0) {
+          // Refund the exact pitch cost the host was debited at create.
+          // Never derive this from price_per_player — that embeds the
+          // platform margin and would over-refund the host.
+          const refundSar = match.pitch_cost_sar
+            ? parseFloat(match.pitch_cost_sar)
+            : 0;
+          refundedSar = refundSar;
+          if (refundSar > 0) {
             await tx
               .update(users)
               .set({
-                wallet_balance: sql`${users.wallet_balance} + ${pitchCostSar.toString()}`,
+                wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
                 updated_at: new Date(),
               })
               .where(eq(users.id, userId));
@@ -1008,7 +1033,7 @@ export class MatchesService {
             await tx.insert(transactions).values({
               user_id: userId,
               type: 'CREDIT',
-              amount: pitchCostSar.toString(),
+              amount: refundSar.toString(),
               reference_type: 'REFUND',
               reference_id: matchId,
               idempotency_key: `refund-${matchId}`,
@@ -1026,6 +1051,7 @@ export class MatchesService {
     } catch (err) {
       this.logger.error(`WS broadcast error on cancelMatch: ${(err as Error).message}`);
     }
+    this.logger.log(`match_cancelled matchId=${matchId} refundSar=${refundedSar}`, MatchesService.name);
     return updatedMatch;
   }
 

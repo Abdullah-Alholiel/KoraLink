@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
+import { pitchCostForDuration, pricePerPlayer, riyadhISO } from '@/lib/api-adapter';
 
 import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
@@ -92,15 +93,18 @@ export default function HostMatchForm() {
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
 
-    // Derive cost from selected pitch's hourly rate
+    // Derive pitch cost from the selected pitch's hourly rate, prorated by
+    // duration (mirrors the server's authoritative calculation — the server
+    // ignores any client-sent pitchCostSar).
     const pitchRate = selectedPitch ? parseFloat(String(selectedPitch.hourly_rate)) : 0;
-    const pitchCostSar = pitchRate > 0 ? pitchRate : 0;
+    const pitchCostSar = pitchRate > 0 ? pitchCostForDuration(pitchRate, duration) : 0;
 
-    // Calculate player share (host plays free) — always derived from the
-    // pitch's size, never from a free-standing format choice.
+    // Calculate per-player share (host plays free) — mirrors the backend's
+    // calculatePricePerPlayer, INCLUDING the platform margin, so the footer
+    // matches what players are actually charged.
     const playersPerSide = effectiveFormat ? parseInt(effectiveFormat.split('v')[0]) : 0;
     const maxPlayers = playersPerSide * 2;
-    const playerShare = maxPlayers > 1 ? Math.ceil(pitchCostSar / (maxPlayers - 1)) : pitchCostSar;
+    const playerShare = maxPlayers > 1 ? pricePerPlayer(pitchCostSar, maxPlayers) : pitchCostSar;
 
     /* ── Handlers ────────────────────────────────── */
 
@@ -122,11 +126,11 @@ export default function HostMatchForm() {
     const doPublish = () => {
         if (!selectedPitch || !date || !time) return;
 
-        const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+        const scheduledAt = riyadhISO(date, time);
 
         const payload = {
             pitch_id: selectedPitch.id,
-            title: title.trim() || t('host.matchTitleFallback', { format, venue: selectedVenue?.name ?? t('host.unknownVenue') }),
+            title: title.trim() || t('host.matchTitleFallback', { format: effectiveFormat ?? '7v7', venue: selectedVenue?.name ?? t('host.unknownVenue') }),
             match_type: matchType,
             gender_rule: genderRule,
             scheduled_at: scheduledAt,

@@ -251,6 +251,10 @@ export const matches = pgTable(
       precision: 10,
       scale: 2,
     }).notNull(),
+    pitch_cost_sar: numeric('pitch_cost_sar', {
+      precision: 10,
+      scale: 2,
+    }),
     max_players: integer('max_players').notNull(),
     location: geography('location'),
     completed_at: timestamp('completed_at', { withTimezone: true }),

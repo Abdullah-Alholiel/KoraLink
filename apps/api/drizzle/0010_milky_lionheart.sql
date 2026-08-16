@@ -1,0 +1,1 @@
+ALTER TABLE "matches" ADD COLUMN "pitch_cost_sar" numeric(10, 2);

@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield } from 'lucide-react';
 import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
+import { todayInRiyadh } from '@/lib/api-adapter';
 
 export interface SlotPickerProps {
     pitchId: string | null;
@@ -22,8 +23,9 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
         slotDate || null,
     );
 
-    // Get today's date as min for the date picker
-    const today = new Date().toISOString().split('T')[0];
+    // Get today's date in Riyadh as the min for the date picker (the app's
+    // canonical timezone — avoids an off-by-one near midnight).
+    const today = todayInRiyadh();
 
     /* ── Collapsed: slot chosen → locked summary (US5) ── */
     if (selectedSlot) {
