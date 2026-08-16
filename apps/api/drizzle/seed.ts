@@ -211,7 +211,9 @@ async function seed() {
     .returning({ id: schema.users.id, handle: schema.users.handle });
 
   console.log(`✔ Inserted ${userRows.length} users`);
-  const users = Object.fromEntries(userRows.map((u) => [u.handle, u.id]));
+  // `handle` is nullable in the schema, but every seeded user has one — cast to
+  // Record<string, string> so Object.values() yields string[] (not unknown[]).
+  const users = Object.fromEntries(userRows.map((u) => [u.handle, u.id])) as Record<string, string>;
 
   // ── 2. Venues (3) ──────────────────────────────────────────────────────
   const venueRows = await db
