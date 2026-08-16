@@ -1,6 +1,8 @@
 import {
   Injectable,
   BadRequestException,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
   Logger,
   Inject,
@@ -35,6 +37,34 @@ export class AuthService {
   }
 
   async sendOtp(phone: string): Promise<void> {
+    // ── Abuse protection: resend cooldown + daily SMS cap ──
+    if (await this.otpStore.isCooldownActive(phone)) {
+      this.logger.warn(`send-otp blocked (cooldown) for ${phone}`);
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Please wait before requesting another code.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const dailyCount = await this.otpStore.getDailyCount(phone);
+    if (dailyCount >= OtpStoreService.DAILY_CAP) {
+      this.logger.warn(
+        `send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${phone}`,
+      );
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Daily SMS limit reached. Try again tomorrow.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const code = this.generateOtp();
 
     // Upsert user record so the phone always exists before OTP is saved.
@@ -45,6 +75,8 @@ export class AuthService {
 
     // Store OTP in Redis via cache-manager (5-minute TTL handled by store).
     await this.otpStore.setOtp(phone, code);
+    await this.otpStore.setCooldown(phone);
+    await this.otpStore.incrementDaily(phone);
 
     await this.unifonic.sendSms(phone, `Your KoraLink code: ${code}`);
   }
@@ -53,13 +85,29 @@ export class AuthService {
     phone: string,
     code: string,
   ): Promise<{ token: string; isNewUser: boolean }> {
+    // ── Abuse protection: attempt lockout ──
+    const failCount = await this.otpStore.getFailCount(phone);
+    if (failCount >= OtpStoreService.FAIL_LIMIT) {
+      this.logger.warn(`verify-otp blocked (lockout after ${failCount} fails) for ${phone}`);
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Too many attempts. Try again later.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const storedCode = await this.otpStore.getOtp(phone);
 
     if (!storedCode || storedCode !== code) {
+      await this.otpStore.incrementFail(phone);
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
     await this.otpStore.deleteOtp(phone);
+    await this.otpStore.resetFails(phone);
 
     const [user] = await this.db
       .select()
