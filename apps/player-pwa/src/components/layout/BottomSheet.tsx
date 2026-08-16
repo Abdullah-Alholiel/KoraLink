@@ -29,7 +29,10 @@ interface BottomSheetProps {
  *
  * The panel is `flex flex-col max-h-[XXdvh]`; put fixed chrome (pull handle,
  * header, footer CTA) directly as children with `flex-shrink-0`, and put
- * scrollable content in a `<div className="flex-1 overflow-y-auto scroll-container">`.
+ * scrollable content in a `<div className="flex-1 overflow-y-auto scroll-container min-h-0">`.
+ * `min-h-0` is REQUIRED on the scroll body — without it the flex item keeps its
+ * content height (Safari's `min-height: auto` quirk) and the list overflows
+ * instead of scrolling.
  */
 export default function BottomSheet({
   open,

@@ -95,7 +95,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-bold text-brand-black">
             {t('notifications.title')}
           </h2>
@@ -112,7 +112,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
         </div>
 
         {/* Body — 5 UX states */}
-        <div className="flex-1 overflow-y-auto scroll-container px-4 py-3">
+        <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-4 py-3">
           {/* 1. Loading */}
           {isLoading && (
             <div className="space-y-3">
