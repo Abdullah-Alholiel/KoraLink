@@ -90,3 +90,23 @@ strings in 12 frontend files. Build + vitest are the verification gates.
 - `npx vitest run` in `apps/player-pwa` → all green.
 - Manual: iPhone standalone PWA — open ChatSheet (keyboard), NotificationSheet,
   club calendar, Payment, TeamLineup, POM voting/results, EmergencyCancel.
+
+## 4. Round 2 — POTM sheets still clipped + "scroll anywhere"
+
+After the vh→dvh round, POTM voting/results were STILL not shown fully. Root cause
+found: `PomVotingSheet`/`PomResultsSheet` render inside `PostMatchSection`, which
+lives inside the match-detail `scroll-container` (`-webkit-overflow-scrolling:
+touch` + the parallax hero's `will-change-transform`). On iOS that container
+becomes the containing block for `position: fixed` descendants, so those sheets
+anchored/clipped to the scroll container instead of the viewport. Every *working*
+sheet rendered directly in `MobileFrame`.
+
+**Fix — shared portal-based `BottomSheet` component** (`components/layout/BottomSheet.tsx`):
+- `createPortal` to `document.body` → every sheet escapes any scroll-container/transform ancestor.
+- Backdrop `z-[60]` + fixed wrapper `z-[70]` + panel `flex flex-col max-h-[XXdvh] pb-safe animate-slide-up`.
+- Scrollable bodies use `flex-1 overflow-y-auto scroll-container min-h-0` (fixed chrome gets `flex-shrink-0`).
+- Migrated all 15+ sheets (POM voting/results, Chat, Notification, Payment, Rules,
+  Cancel/Leave/Emergency/Ongoing, PublishWarning, VenuePicker, PlayerProfile,
+  TeamLineup, FilterBar, club calendar, wallet top-up) to it.
+
+This guarantees every sheet is viewport-anchored AND scrolls when content is tall.

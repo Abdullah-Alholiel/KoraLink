@@ -19,6 +19,7 @@ import { useAppStore } from '@/store/useAppStore';
 import type { ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import BottomSheet from '@/components/layout/BottomSheet';
 
 interface NotificationSheetProps {
   open: boolean;
@@ -87,15 +88,9 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
   };
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
-
-      {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-md mx-auto">
-        <div className="w-full bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[85dvh] flex flex-col pb-safe">
+    <BottomSheet open={open} onClose={onClose} maxHeightClass="max-h-[85dvh]" widthClass="max-w-md">
         {/* Pull handle */}
-        <div className="flex justify-center pt-3 pb-2">
+        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
@@ -214,8 +209,6 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
             </div>
           )}
         </div>
-        </div>
-      </div>
-    </>
+    </BottomSheet>
   );
 }

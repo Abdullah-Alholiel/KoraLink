@@ -298,45 +298,35 @@ export default function ClubPage() {
       </div>
 
       {/* ── Calendar Bottom Sheet ── */}
-      {showCalendar && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-[60]"
-            onClick={() => setShowCalendar(false)}
-          />
-          <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-md mx-auto">
-            <div className="w-full bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[75dvh] overflow-y-auto pb-safe">
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 rounded-full bg-gray-300" />
-            </div>
+      <BottomSheet open={showCalendar} onClose={() => setShowCalendar(false)} maxHeightClass="max-h-[80dvh]" widthClass="max-w-md">
+        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
+        </div>
 
-            <div className="flex items-center justify-between px-5 pb-3">
-              <h2 className="text-lg font-bold text-brand-black">{t('clubs.selectDate')}</h2>
-              <div className="flex items-center gap-2">
-                {selectedDate && (
-                  <button
-                    onClick={handleClearDate}
-                    className="text-xs text-brand-green font-medium px-3 py-1.5 rounded-full bg-brand-green/10"
-                  >
-                    {t('clubs.showAll')}
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowCalendar(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                >
-                  <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
-                </button>
-              </div>
-            </div>
-
-            <div className="px-5 pb-8">
-              <DatePicker onDateSelect={handleDateSelect} fireOnMount={false} selectedDate={selectedDate} />
-            </div>
-            </div>
+        <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0">
+          <h2 className="text-lg font-bold text-brand-black">{t('clubs.selectDate')}</h2>
+          <div className="flex items-center gap-2">
+            {selectedDate && (
+              <button
+                onClick={handleClearDate}
+                className="text-xs text-brand-green font-medium px-3 py-1.5 rounded-full bg-brand-green/10"
+              >
+                {t('clubs.showAll')}
+              </button>
+            )}
+            <button
+              onClick={() => setShowCalendar(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            >
+              <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
+            </button>
           </div>
-        </>
-      )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-5 pb-8">
+          <DatePicker onDateSelect={handleDateSelect} fireOnMount={false} selectedDate={selectedDate} />
+        </div>
+      </BottomSheet>
 
       <BottomNav />
     </MobileFrame>

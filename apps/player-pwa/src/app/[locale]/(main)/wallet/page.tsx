@@ -19,6 +19,7 @@ import {
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import BottomSheet from '@/components/layout/BottomSheet';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -302,60 +303,54 @@ export default function WalletPage() {
             {/* ══════════════════════════════════════
                 TOP-UP MODAL
             ═══════════════════════════════════ */}
-            {showTopUpModal && (
-                <>
-                    <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }} />
-                    <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
-                        <div className="w-full max-w-xl bg-white rounded-t-3xl shadow-2xl animate-slide-up pb-safe">
-                        <div className="flex justify-center pt-3 pb-2">
-                            <div className="w-10 h-1 rounded-full bg-gray-300" />
-                        </div>
-                        <div className="px-5 pb-6 pb-safe">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-bold text-brand-black">{t('wallet.topUp')}</h2>
-                                <button
-                                    onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                                >
-                                    <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
-                                </button>
-                            </div>
-
-                            <p className="text-xs text-gray-400 mb-3">{t('wallet.topUpAmount')}</p>
-                            <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-gray-100 px-4 py-3.5 mb-3 focus-within:border-brand-green transition-colors">
-                                <span className="text-sm font-bold text-gray-500" dir="ltr">SAR</span>
-                                <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={topUpAmount}
-                                    onChange={(e) => setTopUpAmount(e.target.value)}
-                                    placeholder="0"
-                                    className="flex-1 text-lg font-bold text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
-                                    autoFocus
-                                />
-                            </div>
-
-                            <p className="text-xs text-gray-400 mb-4">{t('wallet.minTopUp')}</p>
-
-                            {topUpError && (
-                                <p className="text-sm text-brand-red mb-3 text-center">{topUpError}</p>
-                            )}
-
-                            <button
-                                onClick={handleTopUpSubmit}
-                                disabled={topup.isPending || !topUpAmount}
-                                className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
-                                    shadow-[0_4px_20px_rgba(37,65,50,0.4)]
-                                    active:scale-[0.98] transition-transform
-                                    disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
-                            >
-                                {topup.isPending ? t('payment.processing') : t('wallet.topUp')}
-                            </button>
-                        </div>
-                    </div>
+            <BottomSheet open={showTopUpModal} onClose={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }} widthClass="max-w-xl">
+                <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-gray-300" />
                 </div>
-                </>
-            )}
+
+                <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-5 pb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-bold text-brand-black">{t('wallet.topUp')}</h2>
+                        <button
+                            onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }}
+                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                        >
+                            <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
+                        </button>
+                    </div>
+
+                    <p className="text-xs text-gray-400 mb-3">{t('wallet.topUpAmount')}</p>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-gray-100 px-4 py-3.5 mb-3 focus-within:border-brand-green transition-colors">
+                        <span className="text-sm font-bold text-gray-500" dir="ltr">SAR</span>
+                        <input
+                            type="number"
+                            inputMode="decimal"
+                            value={topUpAmount}
+                            onChange={(e) => setTopUpAmount(e.target.value)}
+                            placeholder="0"
+                            className="flex-1 text-lg font-bold text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                            autoFocus
+                        />
+                    </div>
+
+                    <p className="text-xs text-gray-400 mb-4">{t('wallet.minTopUp')}</p>
+
+                    {topUpError && (
+                        <p className="text-sm text-brand-red mb-3 text-center">{topUpError}</p>
+                    )}
+
+                    <button
+                        onClick={handleTopUpSubmit}
+                        disabled={topup.isPending || !topUpAmount}
+                        className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
+                            shadow-[0_4px_20px_rgba(37,65,50,0.4)]
+                            active:scale-[0.98] transition-transform
+                            disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
+                    >
+                        {topup.isPending ? t('payment.processing') : t('wallet.topUp')}
+                    </button>
+                </div>
+            </BottomSheet>
         </div>
     );
 }

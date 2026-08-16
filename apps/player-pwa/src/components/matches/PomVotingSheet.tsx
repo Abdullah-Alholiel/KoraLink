@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Shield, Check } from 'lucide-react';
 import type { PomCandidate } from '@/hooks/usePom';
 import type { RosterPlayer } from '@/types';
+import BottomSheet from '@/components/layout/BottomSheet';
 import TeamLineup from './TeamLineup';
 import PomConfirmModal from './PomConfirmModal';
 
@@ -68,18 +69,14 @@ export default function PomVotingSheet({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
-
-      {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
-        <div className="w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[85dvh] overflow-y-auto pb-safe">
-        {/* Pull handle */}
-        <div className="flex justify-center pt-3 pb-2">
+      <BottomSheet open={open} onClose={onClose} maxHeightClass="max-h-[85dvh]">
+        {/* Pull handle (fixed) */}
+        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
-        <div className="px-5 pb-8 pb-safe">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-5 pb-8">
           {/* Header */}
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
@@ -119,8 +116,7 @@ export default function PomVotingSheet({
             />
           )}
         </div>
-      </div>
-    </div>
+      </BottomSheet>
 
       {/* Confirmation modal */}
       <PomConfirmModal

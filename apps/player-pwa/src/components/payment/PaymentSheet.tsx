@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft, Calendar, MapPin, Info, X, Plus } from 'lucide-react';
 import { usePayWallet } from '@/hooks/useWallet';
 import { uuid } from '@/lib/uuid';
+import BottomSheet from '@/components/layout/BottomSheet';
 
 interface PaymentSheetProps {
     isOpen: boolean;
@@ -67,33 +68,26 @@ export default function PaymentSheet({
     if (!isOpen) return null;
 
     return (
-        <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/50 z-[60] transition-opacity"
-                onClick={onClose}
-            />
+        <BottomSheet open={isOpen} onClose={onClose} maxHeightClass="max-h-[80dvh]">
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
 
-            {/* Bottom Sheet */}
-            <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
-                <div className="w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl animate-slide-up h-[75dvh] overflow-y-auto pb-safe">
-                <div className="flex justify-center pt-3 pb-1">
-                    <div className="w-10 h-1 rounded-full bg-gray-300" />
-                </div>
+            {/* Header */}
+            <div className="flex items-center px-5 pb-4 relative flex-shrink-0">
+                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                    <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                </button>
+                <h2 className="text-lg font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
+                    {t('payment.title')}
+                </h2>
+                <button onClick={onClose} className="ms-auto w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                    <X className="w-5 h-5 text-gray-400" strokeWidth={2} />
+                </button>
+            </div>
 
-                {/* Header */}
-                <div className="flex items-center px-5 pb-4 relative">
-                    <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
-                        <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
-                    </button>
-                    <h2 className="text-lg font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
-                        {t('payment.title')}
-                    </h2>
-                    <button onClick={onClose} className="ms-auto w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
-                        <X className="w-5 h-5 text-gray-400" strokeWidth={2} />
-                    </button>
-                </div>
-
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto scroll-container min-h-0">
                 {/* Match Card */}
                 <div className="mx-5 rounded-2xl border border-gray-100 p-3 flex items-center gap-3">
                     <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative">
@@ -174,37 +168,36 @@ export default function PaymentSheet({
                     </button>
                     <p className="text-xs text-gray-500">{t('host.disclaimer')} {t('host.disclaimerText').slice(0, 80)}...</p>
                 </div>
-
-                {/* CTA */}
-                <div className="mx-5 mt-5 pb-8 pb-safe">
-                    <button
-                        onClick={handlePay}
-                        disabled={!agreed || payWallet.isPending || !canAfford}
-                        className={`w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all ${
-                            agreed && !payWallet.isPending && canAfford
-                                ? 'bg-brand-green shadow-[0_4px_16px_rgba(27,67,50,0.3)] active:scale-[0.98]'
-                                : 'bg-gray-300 cursor-not-allowed'
-                        }`}
-                    >
-                        {payWallet.isPending ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                {t('payment.processing')}
-                            </>
-                        ) : !canAfford ? (
-                            t('payment.insufficientBalance')
-                        ) : (
-                            <>{t('payment.payWithWallet')} SAR {price.toFixed(2)}</>
-                        )}
-                    </button>
-                    {payWallet.isError && (
-                        <p className="text-xs text-brand-red mt-2 text-center">
-                            {t('payment.paymentFailed')}
-                        </p>
-                    )}
-                </div>
             </div>
-        </div>
-    </>
-);
+
+            {/* CTA */}
+            <div className="mx-5 mt-5 pb-8 flex-shrink-0">
+                <button
+                    onClick={handlePay}
+                    disabled={!agreed || payWallet.isPending || !canAfford}
+                    className={`w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all ${
+                        agreed && !payWallet.isPending && canAfford
+                            ? 'bg-brand-green shadow-[0_4px_16px_rgba(27,67,50,0.3)] active:scale-[0.98]'
+                            : 'bg-gray-300 cursor-not-allowed'
+                    }`}
+                >
+                    {payWallet.isPending ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            {t('payment.processing')}
+                        </>
+                    ) : !canAfford ? (
+                        t('payment.insufficientBalance')
+                    ) : (
+                        <>{t('payment.payWithWallet')} SAR {price.toFixed(2)}</>
+                    )}
+                </button>
+                {payWallet.isError && (
+                    <p className="text-xs text-brand-red mt-2 text-center">
+                        {t('payment.paymentFailed')}
+                    </p>
+                )}
+            </div>
+        </BottomSheet>
+    );
 }

@@ -2,6 +2,7 @@
 
 import { AlertTriangle, ShieldAlert, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import BottomSheet from '@/components/layout/BottomSheet';
 
 interface EmergencyCancelSheetProps {
     isOpen: boolean;
@@ -25,13 +26,19 @@ export default function EmergencyCancelSheet({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-xs animate-fade-in">
-            <div className="w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl animate-slide-up max-h-[85dvh] overflow-y-auto pb-safe">
-                {/* Pull Handle */}
-                <div className="flex justify-center -mt-2 mb-4">
-                    <div className="w-10 h-1 rounded-full bg-gray-300" />
-                </div>
+        <BottomSheet
+            open={isOpen}
+            onClose={onClose}
+            widthClass="max-w-md"
+            dismissOnBackdrop={false}
+        >
+            {/* Pull Handle */}
+            <div className="flex justify-center -mt-2 mb-4 flex-shrink-0">
+                <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
 
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-6 pb-6">
                 {/* Emergency Alert Header Icon */}
                 <div className="flex justify-center mb-3">
                     <div className="w-14 h-14 rounded-full bg-brand-red/10 border border-brand-red/20 flex items-center justify-center animate-pulse">
@@ -65,26 +72,26 @@ export default function EmergencyCancelSheet({
                     <span className="font-semibold text-brand-black truncate max-w-[200px]">{matchTitle}</span>
                     <span className="text-gray-500 font-medium">{matchTime}</span>
                 </div>
-
-                {/* Action buttons */}
-                <div className="space-y-2.5">
-                    <button
-                        onClick={onConfirm}
-                        disabled={isPending}
-                        className="w-full py-3.5 rounded-2xl bg-brand-red text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(212,73,76,0.3)]"
-                    >
-                        {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
-                        {t('confirm')}
-                    </button>
-                    <button
-                        onClick={onClose}
-                        disabled={isPending}
-                        className="w-full py-3 rounded-2xl bg-gray-100 text-gray-700 text-sm font-semibold active:scale-[0.98] transition-transform"
-                    >
-                        {t('keep')}
-                    </button>
-                </div>
             </div>
-        </div>
+
+            {/* Action buttons (fixed) */}
+            <div className="px-6 pb-6 space-y-2.5 flex-shrink-0">
+                <button
+                    onClick={onConfirm}
+                    disabled={isPending}
+                    className="w-full py-3.5 rounded-2xl bg-brand-red text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(212,73,76,0.3)]"
+                >
+                    {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                    {t('confirm')}
+                </button>
+                <button
+                    onClick={onClose}
+                    disabled={isPending}
+                    className="w-full py-3 rounded-2xl bg-gray-100 text-gray-700 text-sm font-semibold active:scale-[0.98] transition-transform"
+                >
+                    {t('keep')}
+                </button>
+            </div>
+        </BottomSheet>
     );
 }

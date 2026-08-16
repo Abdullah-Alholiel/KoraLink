@@ -7,6 +7,7 @@ import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import BottomSheet from '@/components/layout/BottomSheet';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -120,16 +121,7 @@ export default function ChatSheet({
   };
 
   return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/50 z-[60] animate-fade-in"
-        onClick={onClose}
-      />
-
-      {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
-        <div className="w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl animate-slide-up flex flex-col max-h-[85dvh] pb-safe">
+    <BottomSheet open={isOpen} onClose={onClose} maxHeightClass="max-h-[85dvh]">
         {/* Pull handle */}
         <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
@@ -320,8 +312,6 @@ export default function ChatSheet({
             <Send className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
-      </div>
-    </div>
-  </>
+    </BottomSheet>
   );
 }
