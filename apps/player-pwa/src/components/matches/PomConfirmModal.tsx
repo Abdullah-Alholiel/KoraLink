@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Trophy, Loader2 } from 'lucide-react';
 import type { PomCandidate } from '@/hooks/usePom';
+import Portal from '@/components/layout/Portal';
 
 interface PomConfirmModalProps {
   open: boolean;
@@ -12,6 +13,19 @@ interface PomConfirmModalProps {
   isPending: boolean;
 }
 
+/**
+ * Confirmation dialog shown ABOVE the POTM voting sheet.
+ *
+ * iOS-critical: this dialog must overlay the voting sheet (a portaled
+ * `BottomSheet` at body-level z-[70]). A `position: fixed` element rendered
+ * inline inside the page's scroll-container is trapped in that scroller's
+ * stacking context on iOS WebKit and paints BELOW the sheet — invisible and
+ * untappable. Rendering through a portal to `document.body` keeps it in the
+ * root stacking context at z-[80]/z-[90], above every sheet.
+ *
+ * The `animate-scale-in` transform lives on the inner card (never on the
+ * `fixed` wrapper — a transform on a fixed element re-anchors it on iOS).
+ */
 export default function PomConfirmModal({
   open,
   candidate,
@@ -24,16 +38,21 @@ export default function PomConfirmModal({
   if (!open || !candidate) return null;
 
   return (
-    <>
+    <Portal>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-[80]"
+        className="fixed inset-0 bg-black/50 z-[80] animate-fade-in"
         onClick={isPending ? undefined : onCancel}
       />
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-[90] flex items-center justify-center p-5 animate-scale-in">
-        <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+      {/* Modal — fixed wrapper has NO transform; inner card animates */}
+      <div className="fixed inset-0 z-[90] flex items-center justify-center p-5">
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label={t('title')}
+          className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-scale-in"
+        >
           {/* Trophy icon */}
           <div className="flex justify-center mb-3">
             <div className="w-14 h-14 rounded-full bg-brand-green/10 flex items-center justify-center">
@@ -106,6 +125,6 @@ export default function PomConfirmModal({
           </div>
         </div>
       </div>
-    </>
+    </Portal>
   );
 }

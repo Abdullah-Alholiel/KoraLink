@@ -187,6 +187,7 @@
     "addToCalendar": "Add to Calendar",
     "share": "Share",
     "linkCopied": "Link copied!",
+    "copyFailed": "Couldn't copy the link. Long-press the link below to copy it manually.",
     "statusFull": "Match Full",
     "statusFullDesc": "All spots are taken. Check back later for openings.",
     "statusCancelled": "Match Cancelled",
