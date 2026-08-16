@@ -27,6 +27,8 @@ import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useComplete
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
+import { shareOrCopy } from '@/lib/share';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import Toast from '@/components/layout/Toast';
@@ -78,6 +80,13 @@ export default function MatchDetailPage({
     const [showChatSheet, setShowChatSheet] = useState(false);
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
+
+    // Absolute match URL for sharing — computed client-side only (SSR has no
+    // window; reading it during render would cause a hydration mismatch).
+    const [shareUrl, setShareUrl] = useState('');
+    useEffect(() => {
+        setShareUrl(window.location.href);
+    }, []);
 
     // Calculate if match start time has passed or status is in_progress.
     // Uses the raw scheduled_at ISO (timezone-safe) — match.time is a display
@@ -149,6 +158,29 @@ export default function MatchDetailPage({
     const handlePaySuccess = () => {
         setShowPayment(false);
         joinMatch.mutate(id);
+    };
+
+    /* ── Universal share / copy (works on HTTP origins + iOS PWA) ──
+     * navigator.clipboard is UNDEFINED on non-secure origins (Tailscale IP
+     * over HTTP) and gated in installed iOS PWAs — the old `?.writeText`
+     * fallbacks silently no-opped while toasting "Link copied".
+     * shareOrCopy cascades: Web Share → async clipboard → legacy
+     * execCommand, and reports the honest outcome. */
+    const handleShareMatch = async (opts?: { text?: string; url?: string; context: string }) => {
+        if (!match) return;
+        const shareText =
+            opts?.text ??
+            `⚽ ${match.title}\n${match.date} at ${match.time}\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}`;
+        const url = opts?.url ?? (typeof window !== 'undefined' ? window.location.href : '');
+
+        const outcome = await shareOrCopy({ title: match.title, text: shareText, url });
+        trackEvent('match_shared', { match_id: id, context: opts?.context, outcome });
+        if (outcome === 'copied') {
+            showToast(t('matchDetail.linkCopied'), 'success');
+        } else if (outcome === 'failed') {
+            showToast(t('matchDetail.copyFailed'), 'error');
+        }
+        // 'shared' / 'dismissed' — the native sheet already gave feedback.
     };
 
     return (
@@ -230,15 +262,11 @@ export default function MatchDetailPage({
                             onClick={() => {
                                 if (isJoined) {
                                     setShowChatSheet(true);
-                                } else if (typeof navigator !== 'undefined' && navigator.share) {
-                                    navigator.share({
-                                        title: match.title,
+                                } else {
+                                    handleShareMatch({
                                         text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
-                                        url: typeof window !== 'undefined' ? window.location.href : '',
-                                    }).catch(() => {});
-                                } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                    navigator.clipboard.writeText(typeof window !== 'undefined' ? window.location.href : '');
-                                    showToast(t('matchDetail.linkCopied'), 'success');
+                                        context: 'hero',
+                                    });
                                 }
                             }}>
                             {isJoined
@@ -425,13 +453,10 @@ export default function MatchDetailPage({
                                     </div>
                                     <button
                                         onClick={() => {
-                                            const url = typeof window !== 'undefined' ? window.location.href : '';
-                                            if (navigator.share) {
-                                                navigator.share({ title: match.title, text: t('matchDetail.inviteShareText'), url });
-                                            } else {
-                                                navigator.clipboard?.writeText(url);
-                                                showToast(t('matchDetail.linkCopied'), 'success');
-                                            }
+                                            handleShareMatch({
+                                                text: t('matchDetail.inviteShareText'),
+                                                context: 'private-invite',
+                                            });
                                         }}
                                         className="mt-3 w-full flex items-center justify-center gap-2 bg-amber-500 text-white rounded-full py-2.5 text-sm font-bold active:scale-[0.98] transition-transform shadow-[0_4px_16px_rgba(245,158,11,0.35)]"
                                     >
@@ -452,15 +477,7 @@ export default function MatchDetailPage({
                                     {t('matchDetail.addToCalendar')}
                                 </a>
                                 <button
-                                    onClick={() => {
-                                        const shareText = `⚽ ${match.title}\n${match.date} at ${match.time}\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}`;
-                                        if (navigator.share) {
-                                            navigator.share({ title: match.title, text: shareText, url: window.location.href });
-                                        } else {
-                                            navigator.clipboard?.writeText(`${shareText}\n${window.location.href}`);
-                                            showToast(t('matchDetail.linkCopied'), 'success');
-                                        }
-                                    }}
+                                    onClick={() => handleShareMatch({ context: 'joined-actions' })}
                                     className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full shadow-card py-3 text-sm font-semibold text-brand-black hover:bg-gray-50 active:scale-[0.98] transition-all"
                                 >
                                     <Share2 className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
@@ -533,7 +550,7 @@ export default function MatchDetailPage({
                             <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
-                                        `⚽ Join me for "${match.title}" on ${match.date} at ${match.time}!\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}\n\nJoin on KoraLink!`
+                                        `⚽ Join me for "${match.title}" on ${match.date} at ${match.time}!\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}\n${shareUrl}\n\nJoin on KoraLink!`
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -618,17 +635,7 @@ export default function MatchDetailPage({
                                     <span className="text-sm font-semibold text-brand-black">{t('matchDetail.addToCalendar')}</span>
                                 </a>
                                 <button
-                                    onClick={() => {
-                                        if (typeof navigator !== 'undefined' && navigator.share) {
-                                            navigator.share({
-                                                title: match.title,
-                                                text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
-                                                url: window.location.href,
-                                            }).catch(() => {});
-                                        } else {
-                                            navigator.clipboard?.writeText(window.location.href);
-                                        }
-                                    }}
+                                    onClick={() => handleShareMatch({ context: 'pre-join-actions' })}
                                     className="flex-1 flex items-center justify-center gap-2 bg-white rounded-full py-3 px-4 shadow-card active:scale-[0.98] transition-transform"
                                 >
                                     <Share2 className="w-4 h-4 text-brand-green" strokeWidth={2} />

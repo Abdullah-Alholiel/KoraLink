@@ -248,6 +248,7 @@ describe('useMatches hooks', () => {
           max_players: 10,
           pitchCostSar: 30,
           booking_mode: 'self' as const,
+          visibility: 'public' as const,
         });
       });
 
