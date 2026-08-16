@@ -18,10 +18,13 @@ import {
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
 import { useMatches } from '@/hooks/useMatches';
-import MatchCard from '@/components/matches/MatchCard';
+import MatchDateSections from '@/components/matches/MatchDateSections';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import DatePicker from '@/components/matches/DatePicker';
+import { dateInRiyadh } from '@/lib/api-adapter';
+import { selectUser, useAppStore } from '@/store/useAppStore';
+import BottomSheet from '@/components/layout/BottomSheet';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -36,13 +39,6 @@ function formatDateLabel(date: Date, t: (k: string) => string): string {
   if (diff === 1) return t('clubs.tomorrow');
   if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function isToday(d: Date): boolean {
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
 }
 
 // ── Amenity icons ──────────────────────────────────────────
@@ -68,13 +64,15 @@ export default function ClubPage() {
 
   const { data: venue, isLoading, error } = useVenue(id);
 
-  // ── Date filter state ──────────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // ── Date filter state — null = "all games" first-look (matches Play) ──
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const dateStr = selectedDate.toISOString().slice(0, 10);
+  // Use Asia/Riyadh local day (NOT UTC) — same as the Play feed's dateInRiyadh.
+  const dateStr = selectedDate ? dateInRiyadh(selectedDate) : null;
 
-  // ── Fetch matches for this venue on selected date ────────
+  // ── Fetch matches for this venue ──────────────────────────
+  // No date → ALL upcoming matches (grouped by day). A date → that day only.
   const { data: matchesApi, isLoading: matchesLoading } = useMatches({
     date: dateStr,
     venue_id: id,
@@ -83,13 +81,16 @@ export default function ClubPage() {
   // useMatches already adapts + returns { matches: Match[] } — do NOT re-adapt
   const matches = matchesApi?.matches ?? [];
 
+  const storeUser = useAppStore(selectUser);
+  const currentUserId = storeUser?.id;
+
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
     setShowCalendar(false);
   }, []);
 
-  const handleGoToToday = useCallback(() => {
-    setSelectedDate(new Date());
+  const handleClearDate = useCallback(() => {
+    setSelectedDate(null);
     setShowCalendar(false);
   }, []);
 
@@ -226,14 +227,14 @@ export default function ClubPage() {
                     </p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="text-sm font-bold text-brand-black">
-                        {formatDateLabel(selectedDate, t)}
+                        {selectedDate ? formatDateLabel(selectedDate, t) : t('clubs.allMatches')}
                       </span>
-                      {!isToday(selectedDate) && (
+                      {selectedDate && (
                         <button
-                          onClick={handleGoToToday}
+                          onClick={handleClearDate}
                           className="text-[11px] text-brand-green font-medium hover:underline"
                         >
-                          {t('clubs.backToToday')}
+                          {t('clubs.showAll')}
                         </button>
                       )}
                     </div>
@@ -248,29 +249,33 @@ export default function ClubPage() {
                 </div>
               </div>
 
-              {/* ── Available Matches ── */}
-              <div className="px-5 pt-4 pb-32 space-y-3">
+              {/* ── Available Matches (grouped by day, like Play) ── */}
+              <div className="pt-4 pb-32">
                 {matchesLoading ? (
                   <div className="flex justify-center py-12">
                     <Loader2 className="w-6 h-6 text-brand-green animate-spin" strokeWidth={2} />
                   </div>
                 ) : matches.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
+                  <div className="flex flex-col items-center justify-center py-12 px-8">
                     <Calendar className="w-8 h-8 text-gray-300 mb-2" strokeWidth={1.5} />
-                    <p className="text-sm text-gray-400">{t('clubs.noMatches')}</p>
-                    {!isToday(selectedDate) && (
+                    <p className="text-sm text-gray-400">
+                      {selectedDate ? t('clubs.noMatches') : t('clubs.noMatchesAll')}
+                    </p>
+                    {selectedDate && (
                       <button
-                        onClick={handleGoToToday}
+                        onClick={handleClearDate}
                         className="mt-2 text-xs text-brand-green font-medium"
                       >
-                        {t('clubs.backToToday')}
+                        {t('clubs.showAll')}
                       </button>
                     )}
                   </div>
                 ) : (
-                  matches.map((match) => (
-                    <MatchCard key={match.id} match={match} />
-                  ))
+                  <MatchDateSections
+                    matches={matches}
+                    currentUserId={currentUserId}
+                    locale={locale === 'ar' ? 'ar' : 'en'}
+                  />
                 )}
               </div>
 
@@ -308,12 +313,12 @@ export default function ClubPage() {
             <div className="flex items-center justify-between px-5 pb-3">
               <h2 className="text-lg font-bold text-brand-black">{t('clubs.selectDate')}</h2>
               <div className="flex items-center gap-2">
-                {!isToday(selectedDate) && (
+                {selectedDate && (
                   <button
-                    onClick={handleGoToToday}
+                    onClick={handleClearDate}
                     className="text-xs text-brand-green font-medium px-3 py-1.5 rounded-full bg-brand-green/10"
                   >
-                    {t('clubs.backToToday')}
+                    {t('clubs.showAll')}
                   </button>
                 )}
                 <button

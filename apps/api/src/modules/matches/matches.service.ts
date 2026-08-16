@@ -232,9 +232,7 @@ export class MatchesService {
       LEFT  JOIN match_players mp ON mp.match_id = m.id
       WHERE (
         ${
-          venue_id
-            ? sql`TRUE`
-            : currentUserId
+          currentUserId
             ? sql`
                 (
                   m.status IN ('Open', 'Full', 'InProgress')
