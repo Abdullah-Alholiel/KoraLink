@@ -1,12 +1,14 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
+import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -27,6 +29,34 @@ async function bootstrap(): Promise<void> {
     .filter(Boolean);
   const port = configService.get<number>('PORT', 3001);
   const cookieSecret = configService.get<string>('COOKIE_SECRET', 'change-me');
+
+  // ── Sentry error tracking (env-gated — no-op without SENTRY_DSN) ────────
+  const sentryDsn = configService.get<string>('SENTRY_DSN', '');
+  if (sentryDsn) {
+    Sentry.init({
+      dsn: sentryDsn,
+      environment: configService.get('NODE_ENV', 'development'),
+      tracesSampleRate: 0.1,
+      beforeSend(event) {
+        // Strip PII before it leaves the box. `sendDefaultPii` is false, but
+        // headers (Authorization) and body data (phone) can still leak.
+        const req = event.request;
+        if (req) {
+          if (req.headers) {
+            delete req.headers['authorization'];
+            delete req.headers['cookie'];
+          }
+          if (req.data && typeof req.data === 'object') {
+            delete (req.data as Record<string, unknown>)['phone'];
+          }
+        }
+        return event;
+      },
+    });
+  }
+
+  // ── Global exception filter (Sentry + Pino correlation, Nest error shape) ──
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
 
   // ── Security middleware ──────────────────────────────────────────────────
   app.use(

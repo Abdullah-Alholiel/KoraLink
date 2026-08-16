@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'node:crypto';
 
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -30,6 +31,12 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
+          genReqId: (req, res) => {
+            const id = randomUUID();
+            res.setHeader('X-Request-Id', id);
+            return id;
+          },
+          redact: ['req.headers.authorization', 'req.headers.cookie'],
           transport:
             config.get('NODE_ENV') !== 'production'
               ? { target: 'pino-pretty', options: { colorize: true } }

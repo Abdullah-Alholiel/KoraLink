@@ -3,44 +3,20 @@
 /**
  * Observability providers for KoraLink PWA.
  *
- * - Sentry: error tracking with React error boundary integration.
- * - PostHog: product analytics (page views, user actions).
+ * - Sentry: error tracking. Initialized in `sentry.client.config.ts` (auto-loaded
+ *   by @sentry/nextjs); the helpers below are thin, env-gated wrappers.
+ * - PostHog: product analytics (page views, user actions). Initialized lazily here.
  *
- * Both are env-gated: when NEXT_PUBLIC_SENTRY_DSN / NEXT_PUBLIC_POSTHOG_KEY
- * are empty (the default), they gracefully no-op — no network calls, no
- * crashes. Dynamic imports ensure zero vendor-chunk overhead in dev mode.
+ * Both are env-gated: when NEXT_PUBLIC_SENTRY_DSN / NEXT_PUBLIC_POSTHOG_KEY are
+ * empty (the default), they gracefully no-op — no network calls, no crashes.
  */
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { env } from '@/env.mjs';
 
 let posthogInstance: typeof import('posthog-js').default | null = null;
-let sentryInstance: typeof import('@sentry/nextjs') | null = null;
 let posthogInitialized = false;
-
-async function initSentry() {
-  const dsn = env.NEXT_PUBLIC_SENTRY_DSN;
-  if (!dsn || typeof window === 'undefined') return;
-
-  try {
-    const Sentry = await import('@sentry/nextjs');
-    sentryInstance = Sentry;
-    Sentry.init({
-      dsn,
-      tracesSampleRate: 0.1,
-      replaysSessionSampleRate: 0.05,
-      replaysOnErrorSampleRate: 1.0,
-      integrations: [
-        Sentry.replayIntegration({
-          maskAllText: false,
-          blockAllMedia: false,
-        }),
-      ],
-    });
-  } catch {
-    // Graceful fallback if Sentry bundle fails to load
-  }
-}
 
 async function initPostHog() {
   const key = env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -64,12 +40,11 @@ async function initPostHog() {
 }
 
 /**
- * Initializes Sentry + PostHog on mount via dynamic imports when env vars are present.
+ * Initializes PostHog on mount via dynamic import when env vars are present.
  * Wrap the app with this provider in the root layout.
  */
 export function ObservabilityProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    initSentry();
     initPostHog();
   }, []);
 
@@ -83,11 +58,15 @@ export function ObservabilityProvider({ children }: { children: React.ReactNode 
  * Safe to call anywhere — no-ops when Sentry is not configured.
  */
 export function captureError(error: Error | unknown, context?: Record<string, unknown>) {
-  if (!env.NEXT_PUBLIC_SENTRY_DSN || !sentryInstance) return;
-  if (context) {
-    sentryInstance.captureException(error, { extra: context });
-  } else {
-    sentryInstance.captureException(error);
+  if (!env.NEXT_PUBLIC_SENTRY_DSN) return;
+  try {
+    if (context) {
+      Sentry.captureException(error, { extra: context });
+    } else {
+      Sentry.captureException(error);
+    }
+  } catch {
+    // never throw from an error reporter
   }
 }
 
@@ -100,8 +79,12 @@ export function addBreadcrumb(
   level: 'info' | 'warning' | 'error' = 'info',
   data?: Record<string, unknown>,
 ) {
-  if (!env.NEXT_PUBLIC_SENTRY_DSN || !sentryInstance) return;
-  sentryInstance.addBreadcrumb({ message, category, level, data });
+  if (!env.NEXT_PUBLIC_SENTRY_DSN) return;
+  try {
+    Sentry.addBreadcrumb({ message, category, level, data });
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -118,8 +101,12 @@ export function trackEvent(event: string, properties?: Record<string, unknown>) 
  * Identify a user in Sentry + PostHog for session correlation.
  */
 export function identifyUser(userId: string, traits?: Record<string, unknown>) {
-  if (env.NEXT_PUBLIC_SENTRY_DSN && sentryInstance) {
-    sentryInstance.setUser({ id: userId, ...traits });
+  if (env.NEXT_PUBLIC_SENTRY_DSN) {
+    try {
+      Sentry.setUser({ id: userId, ...traits });
+    } catch {
+      // ignore
+    }
   }
   if (env.NEXT_PUBLIC_POSTHOG_KEY && posthogInitialized && posthogInstance) {
     posthogInstance.identify(userId, traits);
@@ -130,8 +117,12 @@ export function identifyUser(userId: string, traits?: Record<string, unknown>) {
  * Clear user context on logout.
  */
 export function clearUser() {
-  if (env.NEXT_PUBLIC_SENTRY_DSN && sentryInstance) {
-    sentryInstance.setUser(null);
+  if (env.NEXT_PUBLIC_SENTRY_DSN) {
+    try {
+      Sentry.setUser(null);
+    } catch {
+      // ignore
+    }
   }
   if (env.NEXT_PUBLIC_POSTHOG_KEY && posthogInitialized && posthogInstance) {
     posthogInstance.reset();
