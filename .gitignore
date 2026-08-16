@@ -14,6 +14,8 @@ out/
 # causes stale service-worker precache hashes that break the installed PWA)
 apps/player-pwa/public/sw.js
 apps/player-pwa/public/workbox-*.js
+apps/player-pwa/public/worker-*.js
+apps/player-pwa/public/*.map
 
 # production
 build
