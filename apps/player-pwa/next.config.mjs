@@ -128,6 +128,7 @@ const nextConfig = {
       'https://api.mapbox.com',
       'https://events.mapbox.com',
       'https://*.ingest.sentry.io',
+      'https://*.ingest.de.sentry.io',
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
@@ -182,12 +183,18 @@ const finalConfig = isDev ? nextConfig : withPWA(nextConfig);
 
 // Sentry must be the outermost wrapper so its webpack instrumentation covers
 // server components, Route Handlers, and edge. Source-map upload is opt-in:
-// disabled unless SENTRY_AUTH_TOKEN is present (pair with SENTRY_ORG/SENTRY_PROJECT).
+// only enabled when ALL of SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT are
+// present — a partial config (token without org/project) would hard-fail the
+// build inside sentry-cli, so we gate on the complete trio.
 export default withSentryConfig(withNextIntl(finalConfig), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   silent: true,
   sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
+    disable: !(
+      process.env.SENTRY_AUTH_TOKEN &&
+      process.env.SENTRY_ORG &&
+      process.env.SENTRY_PROJECT
+    ),
   },
 });
