@@ -163,7 +163,7 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in 0.25s ease-out forwards;
+  animation: fade-in 0.25s ease-out backwards;
 }
 
 .animate-fade-in-up {
