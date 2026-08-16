@@ -92,7 +92,8 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
       <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
 
       {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white rounded-t-3xl z-[70] max-h-[85vh] flex flex-col animate-slide-up">
+      <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-md mx-auto">
+        <div className="w-full bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[85dvh] flex flex-col pb-safe">
         {/* Pull handle */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
@@ -212,6 +213,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
               })}
             </div>
           )}
+        </div>
         </div>
       </div>
     </>

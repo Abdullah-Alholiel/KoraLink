@@ -29,7 +29,7 @@ export default function TeamLineupSheet({ isOpen, onClose, format, roster = [], 
 
             {/* ── Bottom Sheet ─────────────────────── */}
             <div className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4">
-                <div className="w-full max-w-2xl bg-brand-bg rounded-t-3xl shadow-2xl animate-slide-up max-h-[80vh] overflow-y-auto pb-safe">
+                <div className="w-full max-w-2xl bg-brand-bg rounded-t-3xl shadow-2xl animate-slide-up max-h-[80dvh] overflow-y-auto pb-safe">
                     {/* Pull indicator */}
                     <div className="flex justify-center pt-3 pb-1">
                         <div className="w-10 h-1 rounded-full bg-gray-300" />

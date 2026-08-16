@@ -25,8 +25,8 @@ export default function EmergencyCancelSheet({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs animate-fade-in">
-            <div className="w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl animate-slide-up">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-xs animate-fade-in">
+            <div className="w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl animate-slide-up max-h-[85dvh] overflow-y-auto pb-safe">
                 {/* Pull Handle */}
                 <div className="flex justify-center -mt-2 mb-4">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
