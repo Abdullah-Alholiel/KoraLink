@@ -207,6 +207,17 @@ async function seed() {
         karma_score: 7,
         rating: 4.1,
       },
+      {
+        phone: '+966500000000',
+        full_name: 'KoraLink Admin',
+        handle: 'koralink_admin',
+        preferred_position: 'Admin',
+        skill_level: 'Advanced',
+        role: 'Admin',
+        wallet_balance: '0.00',
+        karma_score: 0,
+        rating: 5.0,
+      },
     ])
     .returning({ id: schema.users.id, handle: schema.users.handle });
 

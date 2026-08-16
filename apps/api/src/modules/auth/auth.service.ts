@@ -171,7 +171,7 @@ export class AuthService {
   */
  async devLogin(phone: string): Promise<string> {
    const [user] = await this.db
-     .select({ id: users.id, phone: users.phone })
+     .select({ id: users.id, phone: users.phone, role: users.role })
      .from(users)
      .where(eq(users.phone, phone))
      .limit(1);
@@ -182,6 +182,10 @@ export class AuthService {
      );
    }
 
-   return this.jwt.signAsync({ sub: user.id });
+   return this.jwt.signAsync({
+     sub: user.id,
+     phone: user.phone,
+     role: user.role,
+   });
  }
  }

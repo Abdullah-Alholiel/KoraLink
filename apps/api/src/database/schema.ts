@@ -82,6 +82,9 @@ export const referenceTypeEnum = pgEnum('ReferenceType', [
   'REFUND',
   'PRIZE',
   'PITCH_BOOKING',
+  'SETTLEMENT',
+  'PAYOUT',
+  'ADJUSTMENT',
 ]);
 
 export const transactionStatusEnum = pgEnum('TransactionStatus', [
@@ -103,12 +106,54 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
 
+export const disputeTypeEnum = pgEnum('DisputeType', [
+  'no_show',
+  'double_booking',
+  'pitch_condition',
+  'unrecognized_charge',
+  'other',
+]);
+
+export const disputeStatusEnum = pgEnum('DisputeStatus', [
+  'opened',
+  'under_review',
+  'resolved',
+  'rejected',
+]);
+
+export const settlementStatusEnum = pgEnum('SettlementStatus', [
+  'pending',
+  'paid',
+  'failed',
+]);
+
+export const verificationStatusEnum = pgEnum('VerificationStatus', [
+  'pending',
+  'approved',
+  'rejected',
+]);
+
+export const reportStatusEnum = pgEnum('ReportStatus', [
+  'open',
+  'reviewing',
+  'resolved',
+  'dismissed',
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TypeScript string-literal types (replaces @prisma/client enum imports)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type TransactionType = 'CREDIT' | 'DEBIT';
-export type ReferenceType = 'MATCH_FEE' | 'TOPUP' | 'REFUND' | 'PRIZE' | 'PITCH_BOOKING';
+export type ReferenceType =
+  | 'MATCH_FEE'
+  | 'TOPUP'
+  | 'REFUND'
+  | 'PRIZE'
+  | 'PITCH_BOOKING'
+  | 'SETTLEMENT'
+  | 'PAYOUT'
+  | 'ADJUSTMENT';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tables
@@ -134,6 +179,12 @@ export const users = pgTable('users', {
   no_show_count: integer('no_show_count').notNull().default(0),
   home_lat: doublePrecision('home_lat'),
   home_lng: doublePrecision('home_lng'),
+  banned_at: timestamp('banned_at', { withTimezone: true }),
+  suspended_until: timestamp('suspended_until', { withTimezone: true }),
+  verification_status: verificationStatusEnum('verification_status')
+    .notNull()
+    .default('pending'),
+  last_seen_at: timestamp('last_seen_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -186,6 +237,8 @@ export const pitches = pgTable('pitches', {
   surface_type: surfaceTypeEnum('surface_type').notNull(),
   environment: environmentEnum('environment').notNull(),
   hourly_rate: numeric('hourly_rate', { precision: 10, scale: 2 }).notNull(),
+  is_active: boolean('is_active').notNull().default(true),
+  images: json('images').notNull().default(sql`'[]'::json`),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -629,6 +682,173 @@ export const feed_items = pgTable(
   (t) => [index('feed_items_recipient_created_idx').on(t.recipient_id, t.created_at)],
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin / operations tables
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const disputes = pgTable(
+  'disputes',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    match_id: varchar('match_id', { length: 36 }).references(() => matches.id, {
+      onDelete: 'set null',
+    }),
+    reporter_id: varchar('reporter_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    respondent_id: varchar('respondent_id', { length: 36 }).references(
+      () => users.id,
+      { onDelete: 'set null' },
+    ),
+    type: disputeTypeEnum('type').notNull(),
+    status: disputeStatusEnum('status').notNull().default('opened'),
+    evidence: json('evidence').notNull().default(sql`'[]'::json`),
+    decision: text('decision'),
+    decided_by: varchar('decided_by', { length: 36 }).references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    internal_note: text('internal_note'),
+    policy_ref: text('policy_ref'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    index('disputes_status_idx').on(t.status),
+    index('disputes_match_idx').on(t.match_id),
+  ],
+);
+
+export const dispute_messages = pgTable(
+  'dispute_messages',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    dispute_id: varchar('dispute_id', { length: 36 })
+      .notNull()
+      .references(() => disputes.id, { onDelete: 'cascade' }),
+    author_id: varchar('author_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('dispute_messages_dispute_idx').on(t.dispute_id)],
+);
+
+export const venue_verifications = pgTable(
+  'venue_verifications',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    legal_entity_name: varchar('legal_entity_name', { length: 255 }).notNull(),
+    commercial_reg: varchar('commercial_reg', { length: 50 }),
+    tax_id: varchar('tax_id', { length: 50 }),
+    iban: varchar('iban', { length: 34 }),
+    manager_name: varchar('manager_name', { length: 255 }),
+    manager_phone: varchar('manager_phone', { length: 20 }),
+    status: verificationStatusEnum('status').notNull().default('pending'),
+    submitted_at: timestamp('submitted_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    reviewed_by: varchar('reviewed_by', { length: 36 }).references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
+  },
+  (t) => [index('venue_verifications_venue_idx').on(t.venue_id)],
+);
+
+export const settlements = pgTable(
+  'settlements',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    period_start: date('period_start').notNull(),
+    period_end: date('period_end').notNull(),
+    status: settlementStatusEnum('status').notNull().default('pending'),
+    payout_ref: varchar('payout_ref', { length: 255 }),
+    paid_at: timestamp('paid_at', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('settlements_venue_idx').on(t.venue_id)],
+);
+
+export const audit_logs = pgTable(
+  'audit_logs',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    admin_id: varchar('admin_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    action: varchar('action', { length: 100 }).notNull(),
+    entity_type: varchar('entity_type', { length: 100 }).notNull(),
+    entity_id: varchar('entity_id', { length: 36 }),
+    before: json('before'),
+    after: json('after'),
+    ip: varchar('ip', { length: 45 }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('audit_logs_admin_idx').on(t.admin_id),
+    index('audit_logs_entity_idx').on(t.entity_type, t.entity_id),
+    index('audit_logs_created_idx').on(t.created_at),
+  ],
+);
+
+export const reports = pgTable(
+  'reports',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    reporter_id: varchar('reporter_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    subject_type: varchar('subject_type', { length: 50 }).notNull(),
+    subject_id: varchar('subject_id', { length: 36 }).notNull(),
+    reason: text('reason').notNull(),
+    status: reportStatusEnum('status').notNull().default('open'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('reports_status_idx').on(t.status)],
+);
+
+export const app_settings = pgTable('app_settings', {
+  key: varchar('key', { length: 100 }).primaryKey(),
+  value: json('value').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+});
+
 // ── Personal Messages Relations ─────────────────────────────────────────────
 
 export const conversationsRelations = relations(conversations, ({ many }) => ({
@@ -692,5 +912,77 @@ export const feedItemsRelations = relations(feed_items, ({ one }) => ({
   activity: one(activities, {
     fields: [feed_items.activity_id],
     references: [activities.id],
+  }),
+}));
+
+// ── Admin / operations relations ────────────────────────────────────────────
+
+export const disputesRelations = relations(disputes, ({ one, many }) => ({
+  match: one(matches, {
+    fields: [disputes.match_id],
+    references: [matches.id],
+  }),
+  reporter: one(users, {
+    fields: [disputes.reporter_id],
+    references: [users.id],
+    relationName: 'DisputeReporter',
+  }),
+  respondent: one(users, {
+    fields: [disputes.respondent_id],
+    references: [users.id],
+    relationName: 'DisputeRespondent',
+  }),
+  decidedBy: one(users, {
+    fields: [disputes.decided_by],
+    references: [users.id],
+    relationName: 'DisputeDecider',
+  }),
+  messages: many(dispute_messages),
+}));
+
+export const disputeMessagesRelations = relations(dispute_messages, ({ one }) => ({
+  dispute: one(disputes, {
+    fields: [dispute_messages.dispute_id],
+    references: [disputes.id],
+  }),
+  author: one(users, {
+    fields: [dispute_messages.author_id],
+    references: [users.id],
+    relationName: 'DisputeMessageAuthor',
+  }),
+}));
+
+export const venueVerificationsRelations = relations(venue_verifications, ({ one }) => ({
+  venue: one(venues, {
+    fields: [venue_verifications.venue_id],
+    references: [venues.id],
+  }),
+  reviewer: one(users, {
+    fields: [venue_verifications.reviewed_by],
+    references: [users.id],
+    relationName: 'VerificationReviewer',
+  }),
+}));
+
+export const settlementsRelations = relations(settlements, ({ one }) => ({
+  venue: one(venues, {
+    fields: [settlements.venue_id],
+    references: [venues.id],
+  }),
+}));
+
+export const auditLogsRelations = relations(audit_logs, ({ one }) => ({
+  admin: one(users, {
+    fields: [audit_logs.admin_id],
+    references: [users.id],
+    relationName: 'AuditAdmin',
+  }),
+}));
+
+export const reportsRelations = relations(reports, ({ one }) => ({
+  reporter: one(users, {
+    fields: [reports.reporter_id],
+    references: [users.id],
+    relationName: 'ReportReporter',
   }),
 }));

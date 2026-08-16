@@ -19,6 +19,7 @@ import { HealthModule } from './modules/health/health.module';
 import { ActivitiesModule } from './modules/activities/activities.module';
 import { FollowsModule } from './modules/follows/follows.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
@@ -80,6 +81,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
     ActivitiesModule,
     FollowsModule,
     ConversationsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
