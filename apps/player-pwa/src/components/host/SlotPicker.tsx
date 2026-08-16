@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield } from 'lucide-react';
 import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
@@ -15,7 +15,6 @@ export interface SlotPickerProps {
 export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: SlotPickerProps) {
     const locale = useLocale();
     const t = useTranslations();
-    const dateRef = useRef<HTMLInputElement>(null);
     const [slotDate, setSlotDate] = useState('');
 
     const { data: slots, isLoading } = usePitchSlots(
@@ -64,12 +63,9 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                 {t('host.selectSlot')}
             </p>
 
-            {/* Date picker */}
-            <button
-                type="button"
-                onClick={() => dateRef.current?.showPicker()}
-                className="w-full bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
-            >
+            {/* Date picker — invisible native input overlay (iOS-safe:
+                showPicker() is unsupported on iOS WebKit) */}
+            <label className="w-full relative bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start cursor-pointer">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                     {t('host.slotDate')}
                 </p>
@@ -85,7 +81,6 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                     </span>
                 </div>
                 <input
-                    ref={dateRef}
                     type="date"
                     value={slotDate}
                     min={today}
@@ -93,9 +88,10 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                         setSlotDate(e.target.value);
                         onSelectSlot(null as unknown as PitchSlotApi); // clear selection
                     }}
-                    className="sr-only"
+                    aria-label={t('host.slotDate')}
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
                 />
-            </button>
+            </label>
 
             {/* Time slots */}
             {slotDate && (

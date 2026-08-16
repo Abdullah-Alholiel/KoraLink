@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield, MapPin } from 'lucide-react';
+import { todayInRiyadh } from '@/lib/api-adapter';
 
 /* ── Format options ─────────────────────────────── */
 export const FORMAT_OPTIONS = ['5v5', '7v7', '8v8', '11v11'] as const;
@@ -60,8 +60,6 @@ export default function MatchDetailsForm({
 }: MatchDetailsFormProps) {
     const locale = useLocale();
     const t = useTranslations();
-    const dateRef = useRef<HTMLInputElement>(null);
-    const timeRef = useRef<HTMLInputElement>(null);
 
     return (
         <>
@@ -183,12 +181,10 @@ export default function MatchDetailsForm({
                     </div>
                 ) : (
                     <div className="flex gap-3">
-                        {/* Date */}
-                        <button
-                            type="button"
-                            onClick={() => dateRef.current?.showPicker()}
-                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
-                        >
+                        {/* Date — invisible native input overlay (iOS-safe:
+                            showPicker() is unsupported on iOS WebKit, and an
+                            sr-only input inside a button can never be tapped) */}
+                        <label className="relative flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start cursor-pointer">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.date')}</p>
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
@@ -200,14 +196,17 @@ export default function MatchDetailsForm({
                                         : t('host.selectDate')}
                                 </span>
                             </div>
-                            <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="sr-only" />
-                        </button>
-                        {/* Time */}
-                        <button
-                            type="button"
-                            onClick={() => timeRef.current?.showPicker()}
-                            className="flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start"
-                        >
+                            <input
+                                type="date"
+                                value={date}
+                                min={todayInRiyadh()}
+                                onChange={(e) => setDate(e.target.value)}
+                                aria-label={t('host.date')}
+                                className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                            />
+                        </label>
+                        {/* Time — same invisible overlay pattern */}
+                        <label className="relative flex-1 bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start cursor-pointer">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('host.time')}</p>
                             <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
@@ -219,8 +218,14 @@ export default function MatchDetailsForm({
                                         : t('host.selectTime')}
                                 </span>
                             </div>
-                            <input ref={timeRef} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sr-only" />
-                        </button>
+                            <input
+                                type="time"
+                                value={time}
+                                onChange={(e) => setTime(e.target.value)}
+                                aria-label={t('host.time')}
+                                className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                            />
+                        </label>
                     </div>
                 )}
             </div>
