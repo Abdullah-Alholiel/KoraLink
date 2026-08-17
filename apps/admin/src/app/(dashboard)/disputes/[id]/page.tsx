@@ -24,10 +24,22 @@ interface DisputeDetail {
   messages: { id: string; content: string; created_at: string; author: { full_name: string | null } }[];
 }
 
-function parseEvidence(evidence: unknown): { reason?: string; at?: string }[] {
-  if (Array.isArray(evidence)) return evidence as { reason?: string; at?: string }[];
+interface EvidenceEntry {
+  action?: string;
+  reason?: string;
+  by?: string;
+  at?: string;
+}
+
+function parseEvidence(evidence: unknown): EvidenceEntry[] {
+  if (Array.isArray(evidence)) return evidence as EvidenceEntry[];
   return [];
 }
+
+const EVIDENCE_LABELS: Record<string, string> = {
+  marked_no_show: 'Host marked no-show',
+  appeal: 'Player appealed',
+};
 
 export default function DisputeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -127,21 +139,27 @@ export default function DisputeDetailPage() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Appeal evidence</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-900">Case timeline</h2>
             <div className="space-y-3">
-              {parseEvidence(data.evidence).map((e, i) => (
-                <div key={i} className="rounded-lg bg-gray-50 p-3">
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-900">
-                      {data.reporter?.full_name ?? 'Reporter'}
-                    </span>
-                    {e.at && <span className="text-xs text-gray-400">{formatDate(e.at)}</span>}
+              {parseEvidence(data.evidence).map((e, i) => {
+                const label = EVIDENCE_LABELS[e.action ?? ''] ?? (e.reason ? 'Player appealed' : 'Evidence');
+                return (
+                  <div key={i} className="rounded-lg bg-gray-50 p-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-900">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${e.action === 'appeal' ? 'bg-blue-500' : 'bg-amber-500'}`}
+                        />
+                        {label}
+                      </span>
+                      {e.at && <span className="text-xs text-gray-400">{formatDate(e.at)}</span>}
+                    </div>
+                    {e.reason && <p className="text-sm text-gray-700">{e.reason}</p>}
                   </div>
-                  <p className="text-sm text-gray-700">{e.reason ?? '—'}</p>
-                </div>
-              ))}
+                );
+              })}
               {!parseEvidence(data.evidence).length && (
-                <p className="text-sm text-gray-400">No evidence submitted with this dispute.</p>
+                <p className="text-sm text-gray-400">No evidence recorded on this dispute.</p>
               )}
             </div>
 

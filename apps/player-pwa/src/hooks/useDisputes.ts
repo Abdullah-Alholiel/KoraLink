@@ -11,6 +11,8 @@ export interface MyDispute {
     type: string;
     status: 'opened' | 'under_review' | 'resolved' | 'rejected';
     decision: string | null;
+    /** True once the player attached their appeal to the auto-opened dispute. */
+    has_appealed: boolean;
     created_at: string;
     updated_at: string;
 }

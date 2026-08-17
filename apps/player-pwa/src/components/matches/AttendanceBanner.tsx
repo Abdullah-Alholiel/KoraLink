@@ -56,8 +56,11 @@ export default function AttendanceBanner({
 
     // ── Player: marked no-show ──
     if (myRoster?.noShow) {
-        // Open dispute → under review
-        if (dispute && (dispute.status === 'opened' || dispute.status === 'under_review')) {
+        const openDispute = dispute && (dispute.status === 'opened' || dispute.status === 'under_review');
+        // "Under review" only after the PLAYER appealed (the mark itself
+        // auto-opens a dispute for the admin queue — before an appeal it
+        // still shows the appeal CTA).
+        if (openDispute && dispute.has_appealed) {
             return (
                 <div className="mx-5 mt-4 bg-blue-50/60 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">

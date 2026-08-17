@@ -1141,6 +1141,61 @@ export class MatchesService {
             }),
           )
           .where(eq(schema.users.id, targetUserId));
+
+        if (noShow) {
+          // The mark itself auto-opens a dispute so it lands in the admin
+          // review queue immediately — the player attaches their appeal to
+          // it afterwards. Without this, marks silently pile up with no
+          // operator visibility.
+          const [existingOpen] = await tx
+            .select({ id: disputes.id })
+            .from(disputes)
+            .where(
+              and(
+                eq(disputes.match_id, matchId),
+                eq(disputes.reporter_id, targetUserId),
+                eq(disputes.type, 'no_show'),
+                inArray(disputes.status, ['opened', 'under_review']),
+              ),
+            )
+            .limit(1);
+
+          if (!existingOpen) {
+            await tx.insert(disputes).values({
+              match_id: matchId,
+              reporter_id: targetUserId,
+              respondent_id: match.host_id,
+              type: 'no_show',
+              status: 'opened',
+              evidence: [
+                {
+                  action: 'marked_no_show',
+                  by: match.host_id,
+                  at: new Date().toISOString(),
+                },
+              ],
+            });
+          }
+        } else {
+          // Host cleared the mark — close the auto-opened dispute so the
+          // admin queue never shows stale entries.
+          await tx
+            .update(disputes)
+            .set(
+              withTimestamp({
+                status: 'rejected',
+                decision: 'Host cleared the no-show mark.',
+              }),
+            )
+            .where(
+              and(
+                eq(disputes.match_id, matchId),
+                eq(disputes.reporter_id, targetUserId),
+                eq(disputes.type, 'no_show'),
+                inArray(disputes.status, ['opened', 'under_review']),
+              ),
+            );
+        }
       }
     });
 
@@ -1189,7 +1244,7 @@ export class MatchesService {
     }
 
     const [existing] = await this.db
-      .select({ id: disputes.id })
+      .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
       .from(disputes)
       .where(
         and(
@@ -1202,7 +1257,20 @@ export class MatchesService {
       .limit(1);
 
     if (existing) {
-      throw new ConflictException('You already have an open dispute for this match.');
+      // The host's mark already auto-opened this dispute — attach the
+      // player's appeal as evidence instead of creating a duplicate.
+      const evidence = Array.isArray(existing.evidence) ? [...existing.evidence] : [];
+      evidence.push({
+        action: 'appeal',
+        reason: dto.reason ?? '(no reason provided)',
+        at: new Date().toISOString(),
+      });
+      const [updated] = await this.db
+        .update(disputes)
+        .set({ evidence: evidence as never })
+        .where(eq(disputes.id, existing.id))
+        .returning();
+      return updated;
     }
 
     const [created] = await this.db
@@ -1229,6 +1297,8 @@ export class MatchesService {
   /**
    * The current user's most recent dispute on a match (any status), or null.
    * Powers the PWA appeal banner: "under review", "resolved", etc.
+   * `has_appealed` distinguishes the host's auto-opened mark dispute from one
+   * the player has actually attached their appeal to.
    */
   async findMyDispute(userId: string, matchId: string) {
     const [dispute] = await this.db
@@ -1237,6 +1307,7 @@ export class MatchesService {
         type: disputes.type,
         status: disputes.status,
         decision: disputes.decision,
+        evidence: disputes.evidence,
         created_at: disputes.created_at,
         updated_at: disputes.updated_at,
       })
@@ -1245,7 +1316,22 @@ export class MatchesService {
       .orderBy(sql`${disputes.created_at} DESC`)
       .limit(1);
 
-    return dispute ?? null;
+    if (!dispute) return null;
+
+    const evidence = Array.isArray(dispute.evidence) ? dispute.evidence : [];
+    const hasAppealed = evidence.some(
+      (e) => (e as { action?: string }).action === 'appeal',
+    );
+
+    return {
+      id: dispute.id,
+      type: dispute.type,
+      status: dispute.status,
+      decision: dispute.decision,
+      has_appealed: hasAppealed,
+      created_at: dispute.created_at,
+      updated_at: dispute.updated_at,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
