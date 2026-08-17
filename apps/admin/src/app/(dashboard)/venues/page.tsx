@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
 import { useAdminData } from '@/lib/use-data';
 import { api } from '@/lib/api';
@@ -101,7 +102,9 @@ export default function VenuesPage() {
                   return (
                     <tr key={v.id} className="hover:bg-gray-50">
                       <td className="px-8 py-3">
-                        <div className="font-medium text-gray-900">{v.name}</div>
+                        <Link href={`/venues/${v.id}`} className="font-medium text-gray-900 hover:text-brand-600">
+                          {v.name}
+                        </Link>
                         <div className="text-xs text-gray-500">{v.address}</div>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{v.city}</td>

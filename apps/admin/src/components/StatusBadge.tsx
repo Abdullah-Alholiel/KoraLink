@@ -10,6 +10,8 @@ const styles: Record<string, string> = {
   opened: 'bg-blue-100 text-blue-700',
   open: 'bg-blue-100 text-blue-700',
   under_review: 'bg-blue-100 text-blue-700',
+  full: 'bg-purple-100 text-purple-700',
+  inprogress: 'bg-blue-100 text-blue-700',
   rejected: 'bg-red-100 text-red-700',
   banned: 'bg-red-100 text-red-700',
   failed: 'bg-red-100 text-red-700',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
 import { useAdminData } from '@/lib/use-data';
 import { api } from '@/lib/api';
@@ -130,7 +131,9 @@ export default function UsersPage() {
                   return (
                     <tr key={u.id} className="hover:bg-gray-50">
                       <td className="px-8 py-3">
-                        <div className="font-medium text-gray-900">{u.full_name ?? '—'}</div>
+                        <Link href={`/users/${u.id}`} className="font-medium text-gray-900 hover:text-brand-600">
+                          {u.full_name ?? '—'}
+                        </Link>
                         <div className="text-xs text-gray-500">@{u.handle ?? 'no-handle'}</div>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{u.phone}</td>

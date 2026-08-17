@@ -11,6 +11,7 @@ import {
   ScrollText,
   Settings,
   ShieldAlert,
+  Trophy,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils';
 const adminNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/users', label: 'Users', icon: Users },
+  { href: '/matches', label: 'Matches', icon: Trophy },
   { href: '/venues', label: 'Venues', icon: MapPin },
   { href: '/disputes', label: 'Disputes', icon: ShieldAlert },
   { href: '/transactions', label: 'Transactions', icon: CreditCard },

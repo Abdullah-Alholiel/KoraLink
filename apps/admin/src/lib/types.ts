@@ -51,6 +51,52 @@ export interface AdminVenue {
   verification_status?: string;
 }
 
+export interface AdminMatch {
+  id: string;
+  title: string;
+  status: string;
+  match_type: string;
+  gender_rule: string;
+  scheduled_at: string;
+  duration_mins: number;
+  price_per_player: number;
+  max_players: number;
+  booking_mode: string;
+  created_at: string;
+  pitch_name: string | null;
+  venue_name: string | null;
+  host_name: string | null;
+  spots_filled: number;
+}
+
+export interface AdminVenueVerification {
+  id: string;
+  venue_id: string;
+  legal_entity_name: string;
+  commercial_reg: string | null;
+  tax_id: string | null;
+  iban: string | null;
+  manager_name: string | null;
+  manager_phone: string | null;
+  status: string;
+  submitted_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+export interface AdminVenueDetail {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  is_approved: boolean;
+  is_koralink_partner: boolean;
+  rating: number | string;
+  owner: { id: string; full_name: string | null; handle: string | null; phone: string | null } | null;
+  pitches: { id: string; name: string; size: string; surface_type: string; hourly_rate: string | number }[];
+  verification: AdminVenueVerification | null;
+}
+
 export interface DisputeListItem {
   id: string;
   type: string;

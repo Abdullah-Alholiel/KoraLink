@@ -16,6 +16,7 @@ export default function SettlementsPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
@@ -32,6 +33,16 @@ export default function SettlementsPage() {
     }
   }
 
+  async function generate() {
+    setGenerating(true);
+    try {
+      await api.post('/admin/settlements/generate');
+      reload();
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Settlements" subtitle="Venue payouts and earnings" />
@@ -43,6 +54,14 @@ export default function SettlementsPage() {
           <option value="paid">Paid</option>
           <option value="failed">Failed</option>
         </select>
+        <button
+          onClick={generate}
+          disabled={generating}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          Generate payouts
+        </button>
       </div>
 
       {loading ? (
