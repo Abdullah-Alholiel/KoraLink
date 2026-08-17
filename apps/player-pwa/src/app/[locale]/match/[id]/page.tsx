@@ -30,6 +30,15 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
 import { shareOrCopy } from '@/lib/share';
+import { formatClockTime, type AppLocale } from '@/lib/format';
+import {
+    matchHasStarted,
+    matchHasEnded,
+    canStartMatch,
+    canEndMatch,
+    startEarliestAt,
+    endEarliestAt,
+} from '@/lib/match-timing';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
@@ -55,7 +64,7 @@ export default function MatchDetailPage({
 }: {
     params: Promise<{ id: string; locale: string }>;
 }) {
-    const { id } = use(params);
+    const { id, locale } = use(params);
     const router = useRouter();
     const t = useTranslations();
 
@@ -102,21 +111,14 @@ export default function MatchDetailPage({
         setShareUrl(window.location.href);
     }, []);
 
-    // Calculate if match start time has passed or status is in_progress.
-    // Uses the raw scheduled_at ISO (timezone-safe) — match.time is a display
-    // string ("7:30 PM") that cannot be parsed reliably.
-    const isMatchStarted = match
-        ? match.status === 'in_progress' ||
-          (!!match.scheduledAt && new Date(match.scheduledAt).getTime() <= Date.now())
-        : false;
-
-    // A finished game no longer needs squad filling — hide the invite CTA once
-    // the scheduled end time has passed (or the match was completed/cancelled).
-    const isMatchEnded = match
-        ? match.status === 'completed' ||
-          match.status === 'cancelled' ||
-          (!!match.endsAt && new Date(match.endsAt).getTime() <= Date.now())
-        : false;
+    // Match lifecycle timing — centralized in `lib/match-timing.ts` (single
+    // source of truth, mirrored by the API's lifecycle windows).
+    const isMatchStarted = match ? matchHasStarted(match) : false;
+    const isMatchEnded = match ? matchHasEnded(match) : false;
+    const startEarliest = match ? startEarliestAt(match) : null;
+    const endEarliest = match ? endEarliestAt(match) : null;
+    const canStart = match ? canStartMatch(match) : false;
+    const canEnd = match ? canEndMatch(match) : false;
 
     /* ── Scroll Parallax ─────────────────────────────── */
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -527,24 +529,34 @@ export default function MatchDetailPage({
                                 <div className="px-5 pt-6">
                                     <button
                                         onClick={() => startMatch.mutate(id)}
-                                        disabled={startMatch.isPending}
+                                        disabled={!canStart || startMatch.isPending}
                                         className="w-full py-3 rounded-xl bg-brand-green text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {startMatch.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                                         {t('matchDetail.startMatch')}
                                     </button>
+                                    {!canStart && startEarliest && (
+                                        <p className="text-center text-xs text-gray-400 mt-2">
+                                            {t('matchDetail.startAvailableAt', { time: formatClockTime(startEarliest, locale as AppLocale) })}
+                                        </p>
+                                    )}
                                 </div>
                             )}
                             {isUserHost && match.status === 'in_progress' && (
                                 <div className="px-5 pt-6">
                                     <button
                                         onClick={() => completeMatch.mutate(id)}
-                                        disabled={completeMatch.isPending}
+                                        disabled={!canEnd || completeMatch.isPending}
                                         className="w-full py-3 rounded-xl bg-brand-green text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {completeMatch.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                                         {t('matchDetail.completeMatch')}
                                     </button>
+                                    {!canEnd && endEarliest && (
+                                        <p className="text-center text-xs text-gray-400 mt-2">
+                                            {t('matchDetail.endAvailableAt', { time: formatClockTime(endEarliest, locale as AppLocale) })}
+                                        </p>
+                                    )}
                                 </div>
                             )}
 

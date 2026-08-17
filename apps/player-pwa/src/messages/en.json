@@ -181,6 +181,8 @@
     "view": "View",
     "startMatch": "Start Match",
     "completeMatch": "End Match",
+    "startAvailableAt": "Can start at {time}",
+    "endAvailableAt": "Can end at {time}",
     "teamWhite": "Team White",
     "teamDark": "Team Dark",
     "playerProfile": "Player Profile",

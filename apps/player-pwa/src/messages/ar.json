@@ -181,6 +181,8 @@
     "view": "عرض",
     "startMatch": "ابدأ المباراة",
     "completeMatch": "إنهاء المباراة",
+    "startAvailableAt": "يمكن البدء عند {time}",
+    "endAvailableAt": "يمكن الإنهاء عند {time}",
     "teamWhite": "الفريق الأبيض",
     "teamDark": "الفريق الأسود",
     "playerProfile": "ملف اللاعب",

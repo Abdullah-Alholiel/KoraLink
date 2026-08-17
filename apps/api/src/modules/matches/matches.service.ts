@@ -881,12 +881,28 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Host lifecycle timing windows — mirrored in the PWA `lib/match-timing.ts`.
+   * Keep these values in sync across both codebases.
+   */
+
+  /** Host may start a match this many minutes before kick-off (no earlier). */
+  private static readonly START_EARLY_WINDOW_MINUTES = 30;
+
+  /** Host may end a match this many minutes before the scheduled end (no earlier). */
+  private static readonly END_EARLY_WINDOW_MINUTES = 30;
+
+  /**
    * Start a match: Full → InProgress. Only the host may transition.
    */
   async startMatch(userId: string, matchId: string) {
     await this.db.transaction(async (tx) => {
       const [match] = await tx
-        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .select({
+          id: matches.id,
+          host_id: matches.host_id,
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+        })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -902,6 +918,17 @@ export class MatchesService {
       if (match.status !== 'Full') {
         throw new BadRequestException(
           `Cannot start a match with status "${match.status}". Match must be Full.`,
+        );
+      }
+
+      // Timing gate: a match cannot be started earlier than 30 minutes before
+      // kick-off. Mirrored in the PWA `lib/match-timing.ts`.
+      const earliestStart =
+        match.scheduled_at.getTime() -
+        MatchesService.START_EARLY_WINDOW_MINUTES * 60_000;
+      if (Date.now() < earliestStart) {
+        throw new BadRequestException(
+          `Match can only be started ${MatchesService.START_EARLY_WINDOW_MINUTES} minutes before kick-off.`,
         );
       }
 
@@ -927,7 +954,13 @@ export class MatchesService {
   async completeMatch(userId: string, matchId: string) {
     await this.db.transaction(async (tx) => {
       const [match] = await tx
-        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .select({
+          id: matches.id,
+          host_id: matches.host_id,
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+          duration_mins: matches.duration_mins,
+        })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -943,6 +976,18 @@ export class MatchesService {
       if (match.status !== 'InProgress') {
         throw new BadRequestException(
           `Cannot complete a match with status "${match.status}". Match must be InProgress.`,
+        );
+      }
+
+      // Timing gate: a match cannot be ended earlier than 30 minutes before its
+      // scheduled end. Mirrored in the PWA `lib/match-timing.ts`.
+      const scheduledEndMs =
+        match.scheduled_at.getTime() + match.duration_mins * 60_000;
+      const earliestEnd =
+        scheduledEndMs - MatchesService.END_EARLY_WINDOW_MINUTES * 60_000;
+      if (Date.now() < earliestEnd) {
+        throw new BadRequestException(
+          `Match can only be ended ${MatchesService.END_EARLY_WINDOW_MINUTES} minutes before the scheduled end.`,
         );
       }
 

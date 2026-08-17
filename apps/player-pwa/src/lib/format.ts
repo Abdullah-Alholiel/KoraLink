@@ -83,3 +83,17 @@ export function formatRelativeTime(iso: string, locale: AppLocale): string {
     month: 'short',
   }).format(date);
 }
+
+/**
+ * Formats a clock time in Asia/Riyadh (the app's display timezone) for the
+ * active locale — e.g. "7:00 PM" (en) / "٧:٠٠ م" (ar). Used for the host's
+ * "available at {time}" lifecycle hints on the match detail page.
+ */
+export function formatClockTime(date: Date, locale: AppLocale): string {
+  return new Intl.DateTimeFormat(dateLocale(locale), {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Riyadh',
+  }).format(date);
+}
