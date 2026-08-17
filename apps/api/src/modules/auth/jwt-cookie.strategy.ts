@@ -15,6 +15,12 @@ export interface JwtPayload {
   exp?: number;
 }
 
+/** The request-side user shape guards consume (`req.user`). */
+export interface AuthenticatedUser extends JwtPayload {
+  /** Role as it is RIGHT NOW in the DB — overrides the stale token claim. */
+  role: string;
+}
+
 /**
  * Passport strategy that extracts the JWT from either:
  * 1. The `access_token` HttpOnly cookie (same-origin production), OR
@@ -47,6 +53,7 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
     const [user] = await this.db
       .select({
         id: schema.users.id,
+        role: schema.users.role,
         banned_at: schema.users.banned_at,
         suspended_until: schema.users.suspended_until,
       })
@@ -68,6 +75,10 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
       throw new UnauthorizedException('Account suspended.');
     }
 
-    return payload;
+    // Role changes (promotion/demotion) must also apply immediately — the
+    // token's role claim can be up to 7 days stale. Guards read req.user.role,
+    // so returning the DB role makes an admin demotion revoke /admin access
+    // on the very next request without waiting for re-login.
+    return { ...payload, role: user.role };
   }
 }

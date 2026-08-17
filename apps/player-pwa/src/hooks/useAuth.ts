@@ -86,7 +86,7 @@ export function useVerifyOtp() {
     mutationFn: ({ phone, otp }) =>
       fetcher<VerifyOtpResponse>('/auth/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: `+966${phone}`, code: otp }),
+        body: JSON.stringify({ phone: `+966${phone}`, code: otp, surface: 'player' }),
       }),
   });
 }

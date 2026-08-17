@@ -109,6 +109,43 @@ export class AdminUsersService {
   async update(id: string, dto: UpdateUserAdminDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
 
+    // ── Self-moderation guards ──
+    if (id === adminId) {
+      if (dto.banned === true) {
+        throw new BadRequestException('You cannot ban your own account.');
+      }
+      if (dto.suspendedUntil) {
+        throw new BadRequestException('You cannot suspend your own account.');
+      }
+      if (dto.role !== undefined && dto.role !== 'Admin') {
+        throw new BadRequestException('You cannot demote your own admin account.');
+      }
+    }
+
+    // ── Last-admin protection ──
+    // Demoting or banning the final Admin would lock everyone out of the HQ
+    // console — block both mutations.
+    if (
+      before.role === 'Admin' &&
+      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true)
+    ) {
+      const [{ count }] = await this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users)
+        .where(
+          and(
+            eq(users.role, 'Admin'),
+            sql`${users.banned_at} IS NULL`,
+            sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
+          ),
+        );
+      if (count <= 1) {
+        throw new BadRequestException(
+          'Cannot demote or ban the last active admin account.',
+        );
+      }
+    }
+
     const updates: {
       role?: 'Player' | 'VenueOwner' | 'Admin';
       banned_at?: Date | null;

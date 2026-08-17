@@ -1,8 +1,8 @@
-import { IsPhoneNumber, IsString, Length } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsPhoneNumber, IsString, Length, IsIn, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class VerifyOtpDto {
-  @ApiProperty({ example: '+966501234567' })
+  @ApiProperty({ example: '+966****4567' })
   @IsPhoneNumber('SA')
   phone: string;
 
@@ -10,4 +10,11 @@ export class VerifyOtpDto {
   @IsString()
   @Length(6, 6)
   code: string;
+
+  /** Which app is logging in — enforces surface-level role separation:
+   *  PWA (player) rejects staff roles; ops console rejects Players. */
+  @ApiPropertyOptional({ enum: ['player', 'ops'], description: 'Calling surface' })
+  @IsOptional()
+  @IsIn(['player', 'ops'])
+  surface?: 'player' | 'ops';
 }

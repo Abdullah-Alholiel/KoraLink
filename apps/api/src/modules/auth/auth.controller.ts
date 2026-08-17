@@ -67,6 +67,7 @@ export class AuthController {
     const { token, isNewUser } = await this.authService.verifyOtp(
       dto.phone,
       dto.code,
+      dto.surface,
     );
 
     const isProd =
@@ -115,7 +116,7 @@ export class AuthController {
       throw new ForbiddenException('dev-login is disabled in production');
     }
 
-    const token = await this.authService.devLogin(dto.phone);
+    const token = await this.authService.devLogin(dto.phone, dto.surface);
 
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,

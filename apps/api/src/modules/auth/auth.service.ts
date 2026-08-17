@@ -23,6 +23,24 @@ import { randomInt } from 'node:crypto';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
+/** Roles allowed per calling surface — hard product rule:
+ *  the PWA is player-only, the ops console is staff-only. */
+const SURFACE_ROLES: Record<'player' | 'ops', string[]> = {
+  player: ['Player'],
+  ops: ['Admin', 'VenueOwner'],
+};
+
+function assertSurfaceRole(surface: 'player' | 'ops' | undefined, role: string): void {
+  if (!surface) return; // legacy/internal calls without a surface
+  if (!SURFACE_ROLES[surface].includes(role)) {
+    throw new ForbiddenException(
+      surface === 'player'
+        ? 'This account is not a player account. Use the ops console.'
+        : 'This console is for admins and venue owners only. Players use the KoraLink app.',
+    );
+  }
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -85,6 +103,7 @@ export class AuthService {
   async verifyOtp(
     phone: string,
     code: string,
+    surface?: 'player' | 'ops',
   ): Promise<{ token: string; isNewUser: boolean }> {
     // ── Abuse protection: attempt lockout ──
     const failCount = await this.otpStore.getFailCount(phone);
@@ -129,6 +148,10 @@ export class AuthService {
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
       throw new ForbiddenException('Account suspended.');
     }
+
+    // Surface separation — the PWA never issues sessions for staff roles and
+    // vice versa (hard product rule).
+    assertSurfaceRole(surface, user.role);
 
     const isNewUser = !user.full_name;
 
@@ -180,7 +203,7 @@ export class AuthService {
   * DEV ONLY — Returns a JWT for a seeded user by phone number.
   * Skips OTP entirely. Blocked in production by the controller.
   */
- async devLogin(phone: string): Promise<string> {
+ async devLogin(phone: string, surface?: 'player' | 'ops'): Promise<string> {
    const [user] = await this.db
      .select({
        id: users.id,
@@ -205,6 +228,8 @@ export class AuthService {
    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
      throw new ForbiddenException('Account suspended.');
    }
+
+   assertSurfaceRole(surface, user.role);
 
    return this.jwt.signAsync({
      sub: user.id,

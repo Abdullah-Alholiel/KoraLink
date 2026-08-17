@@ -80,7 +80,7 @@ describe('useAuth hooks', () => {
 
       expect(mockFetcher).toHaveBeenCalledWith('/auth/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: '+966512345678', code: '123456' }),
+        body: JSON.stringify({ phone: '+966512345678', code: '123456', surface: 'player' }),
       });
     });
 

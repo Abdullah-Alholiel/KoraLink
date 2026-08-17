@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, Loader2 } from 'lucide-react';
+import { Activity, Loader2, ShieldAlert } from 'lucide-react';
 import { api, defaultRoute, setToken } from '@/lib/api';
 
 export default function LoginPage() {
@@ -13,11 +13,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Surface the "players have no console" redirect reason as a banner.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'player') {
+      setError(
+        'This console is for admins and venue owners only. Players use the KoraLink app.',
+      );
+    }
+  }, []);
+
   async function handleDevLogin() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<{ token: string }>('/auth/dev-login', { phone });
+      const res = await api.post<{ token: string }>('/auth/dev-login', { phone, surface: 'ops' });
       setToken(res.token);
       router.replace(defaultRoute());
     } catch (e) {
@@ -44,7 +54,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<{ token?: string }>('/auth/verify-otp', { phone, code });
+      const res = await api.post<{ token?: string }>('/auth/verify-otp', { phone, code, surface: 'ops' });
       if (res.token) {
         setToken(res.token);
         router.replace(defaultRoute());
@@ -120,6 +130,19 @@ export default function LoginPage() {
         {error && (
           <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
         )}
+
+        <div className="mt-6 rounded-lg bg-gray-50 px-3 py-2.5 text-xs leading-relaxed text-gray-500">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold text-gray-700">
+            <ShieldAlert className="h-3.5 w-3.5" /> Roles
+          </div>
+          <div>
+            <span className="font-medium text-gray-700">Admin</span> — HQ console (users, matches, disputes, money)
+          </div>
+          <div>
+            <span className="font-medium text-gray-700">Venue Owner</span> — partner portal (venues, pitches, earnings)
+          </div>
+          <div className="mt-1 text-gray-400">Players sign in via the KoraLink app.</div>
+        </div>
       </div>
     </div>
   );

@@ -47,7 +47,7 @@ export default function DevLoginBar() {
     try {
       const res = await fetcher<{ message: string; token?: string }>(
         '/auth/dev-login',
-        { method: 'POST', body: JSON.stringify({ phone }) }
+        { method: 'POST', body: JSON.stringify({ phone, surface: 'player' }) }
       );
       if (res.token) setAuthToken(res.token);
 
