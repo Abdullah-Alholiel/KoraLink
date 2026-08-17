@@ -16,6 +16,7 @@ import { PartnerService } from './partner.service';
 import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
+import { CreateVenueDto } from './dto/create-venue.dto';
 
 @Controller('partner')
 @UseGuards(JwtCookieAuthGuard, RolesGuard)
@@ -31,6 +32,11 @@ export class PartnerController {
   @Get('venues')
   venues(@CurrentUser() user: { sub: string }) {
     return this.partner.getVenues(user.sub);
+  }
+
+  @Post('venues')
+  createVenue(@CurrentUser() user: { sub: string }, @Body() dto: CreateVenueDto) {
+    return this.partner.createVenue(user.sub, dto);
   }
 
   @Get('pitches')

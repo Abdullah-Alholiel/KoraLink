@@ -19,6 +19,8 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
+import { CreateVenueDto } from './dto/create-venue.dto';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -26,7 +28,10 @@ const UPCOMING_STATUSES = sql`${matches.status} IN ('Open', 'Full', 'InProgress'
 
 @Injectable()
 export class PartnerService {
-  constructor(@Inject('DB_CONNECTION') private readonly db: DB) {}
+  constructor(
+    @Inject('DB_CONNECTION') private readonly db: DB,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   private async ownedVenueIds(ownerId: string): Promise<string[]> {
     const rows = await this.db
@@ -51,6 +56,24 @@ export class PartnerService {
       .from(venues)
       .where(eq(venues.owner_id, ownerId))
       .orderBy(venues.created_at);
+  }
+
+  /** Owner-created venue — starts unapproved (admin approval queue). */
+  async createVenue(ownerId: string, dto: CreateVenueDto) {
+    const [created] = await this.db
+      .insert(venues)
+      .values({
+        owner_id: ownerId,
+        name: dto.name,
+        city: dto.city,
+        address: dto.address,
+        is_approved: false,
+      })
+      .returning({ id: venues.id, name: venues.name, city: venues.city });
+
+    this.realtime.broadcastOps('venues');
+
+    return created;
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
@@ -218,6 +241,8 @@ export class PartnerService {
       })
       .returning({ id: pitches.id });
 
+    this.realtime.broadcastOps('venues');
+
     return this.findOnePitch(created.id);
   }
 
@@ -244,6 +269,8 @@ export class PartnerService {
         .set(withTimestamp(updates) as never)
         .where(eq(pitches.id, pitchId));
     }
+
+    this.realtime.broadcastOps('venues');
 
     return this.findOnePitch(pitchId);
   }

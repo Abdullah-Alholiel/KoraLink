@@ -25,6 +25,7 @@ import { RealtimeService } from './realtime.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
+  role?: string;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -104,15 +105,22 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
       if (!token) throw new Error('No token');
 
-      const payload = this.jwt.verify<{ sub: string }>(token, {
+      const payload = this.jwt.verify<{ sub: string; role?: string }>(token, {
         secret: this.config.get<string>('JWT_SECRET', 'fallback-dev-secret'),
       });
 
       client.userId = payload.sub;
+      client.role = payload.role;
 
       // Every authenticated socket joins the user's personal room so the
       // server can push notifications/badge updates at any time.
       await client.join(this.realtime.userRoom(payload.sub));
+
+      // Ops consoles (admin HQ + partner portal) get live data-change pings
+      // so tables/metrics refresh without manual reload.
+      if (payload.role === 'Admin' || payload.role === 'VenueOwner') {
+        await client.join('ops');
+      }
     } catch {
       client.disconnect(true);
     }
@@ -335,5 +343,15 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   broadcastPomDecided(matchId: string, payload: unknown): void {
     this.server.to(`match:${matchId}`).emit('pom-decided', payload);
+  }
+
+  // ── Ops console ping (admin HQ + partner portal live refresh) ────────────
+  //
+  // Emitted after ANY mutation the ops consoles display. Payload is a bare
+  // entity name — clients refetch their own (role-scoped) data; no row data
+  // is pushed, so a partner socket never receives admin-only rows.
+
+  broadcastOps(entity: 'users' | 'matches' | 'venues' | 'disputes' | 'transactions' | 'settlements'): void {
+    this.server.to('ops').emit('ops-data-changed', { entity });
   }
 }

@@ -17,6 +17,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
 import { AppGateway } from '../gateway/app.gateway';
+import { RealtimeService } from '../gateway/realtime.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ActivitiesService } from '../activities/activities.service';
 
@@ -67,6 +68,7 @@ export class MatchesService {
     private readonly notificationsService: NotificationsService,
     private readonly activitiesService: ActivitiesService,
     private readonly settings: PlatformSettingsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1145,6 +1147,9 @@ export class MatchesService {
     const updatedMatch = await this.findOne(matchId);
     try {
       this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
+      // Ops consoles (no-show counts show in the admin users/matches tables).
+      this.realtime.broadcastOps('users');
+      this.realtime.broadcastOps('matches');
     } catch (err) {
       this.logger.error(`WS broadcast error on markNoShow: ${(err as Error).message}`);
     }
@@ -1212,7 +1217,35 @@ export class MatchesService {
       })
       .returning();
 
+    try {
+      this.realtime.broadcastOps('disputes');
+    } catch (err) {
+      this.logger.warn(`ops ping failed on createDispute: ${(err as Error).message}`);
+    }
+
     return created;
+  }
+
+  /**
+   * The current user's most recent dispute on a match (any status), or null.
+   * Powers the PWA appeal banner: "under review", "resolved", etc.
+   */
+  async findMyDispute(userId: string, matchId: string) {
+    const [dispute] = await this.db
+      .select({
+        id: disputes.id,
+        type: disputes.type,
+        status: disputes.status,
+        decision: disputes.decision,
+        created_at: disputes.created_at,
+        updated_at: disputes.updated_at,
+      })
+      .from(disputes)
+      .where(and(eq(disputes.match_id, matchId), eq(disputes.reporter_id, userId)))
+      .orderBy(sql`${disputes.created_at} DESC`)
+      .limit(1);
+
+    return dispute ?? null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

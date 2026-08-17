@@ -44,6 +44,16 @@ export class RealtimeService {
     return `user:${userId}`;
   }
 
+  /**
+   * Ping connected ops consoles (admin HQ + partner portal sockets in the
+   * `ops` room) that an entity changed. Clients refetch their own role-scoped
+   * data — no row payloads are pushed, so partners never receive admin rows.
+   */
+  broadcastOps(entity: 'users' | 'matches' | 'venues' | 'disputes' | 'transactions' | 'settlements' | 'settings'): void {
+    if (!this.server) return;
+    this.server.to('ops').emit('ops-data-changed', { entity });
+  }
+
   /** True when at least one socket is currently connected in the user's room. */
   isUserOnline(userId: string): boolean {
     if (!this.server) return false;

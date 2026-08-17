@@ -11,6 +11,7 @@ import { settlements } from '../../database/schema';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -20,6 +21,7 @@ export class AdminSettlementsService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly settings: PlatformSettingsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(dto: ListSettlementsDto) {
@@ -84,6 +86,7 @@ export class AdminSettlementsService {
       after,
       ip,
     });
+    this.realtime.broadcastOps('settlements');
 
     return after;
   }
@@ -141,6 +144,7 @@ export class AdminSettlementsService {
         ip,
       });
     }
+    this.realtime.broadcastOps('settlements');
 
     return { generated: created.length, settlements: created };
   }

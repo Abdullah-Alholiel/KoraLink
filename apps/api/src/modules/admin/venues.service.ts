@@ -6,6 +6,7 @@ import { venues, venue_verifications } from '../../database/schema';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { AuditService } from './audit.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -14,6 +15,7 @@ export class AdminVenuesService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private buildWhere(dto: ListVenuesDto): SQL {
@@ -129,6 +131,7 @@ export class AdminVenuesService {
       after: { ...after, note: dto.note ?? null },
       ip,
     });
+    this.realtime.broadcastOps('venues');
 
     return after;
   }

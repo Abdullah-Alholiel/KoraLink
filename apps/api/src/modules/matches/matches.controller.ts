@@ -251,4 +251,15 @@ export class MatchesController {
   ) {
     return this.matchesService.createDispute(user.sub, id, dto);
   }
+
+  // ── GET /matches/:id/my-dispute — Current user's dispute on this match ──
+  @Get(':id/my-dispute')
+  @ApiOperation({ summary: "Get the current user's dispute on this match (or null)" })
+  @ApiOkResponse({ description: 'Dispute or null.' })
+  findMyDispute(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.findMyDispute(user.sub, id);
+  }
 }

@@ -7,6 +7,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { ListDisputesDto } from './dto/list-disputes.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { AuditService } from './audit.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -15,6 +16,7 @@ export class AdminDisputesService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(dto: ListDisputesDto) {
@@ -123,6 +125,8 @@ export class AdminDisputesService {
       after,
       ip,
     });
+    this.realtime.broadcastOps('disputes');
+    this.realtime.broadcastOps('users');
 
     return after;
   }

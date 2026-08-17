@@ -6,6 +6,7 @@ import { matches } from '../../database/schema';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { AuditService } from './audit.service';
 import { MatchesService } from '../matches/matches.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -15,6 +16,7 @@ export class AdminMatchesService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly matchesService: MatchesService,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(dto: ListMatchesDto) {
@@ -80,6 +82,7 @@ export class AdminMatchesService {
       after,
       ip,
     });
+    this.realtime.broadcastOps('matches');
 
     return after;
   }

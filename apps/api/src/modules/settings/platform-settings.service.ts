@@ -34,6 +34,12 @@ export class PlatformSettingsService {
     return typeof value === 'string' && value.length > 0 ? value : fallback;
   }
 
+  /** Drop the cache so the next read hits the DB (called after admin writes). */
+  invalidate(): void {
+    this.cache = {};
+    this.loadedAt = 0;
+  }
+
   private async get(key: string): Promise<unknown> {
     if (Date.now() - this.loadedAt > this.TTL_MS) {
       await this.reload();

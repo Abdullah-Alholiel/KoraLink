@@ -12,6 +12,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserAdminDto } from './dto/update-user.dto';
 import { AuditService } from './audit.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -38,6 +39,7 @@ export class AdminUsersService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private buildWhere(dto: ListUsersDto): SQL | undefined {
@@ -138,6 +140,7 @@ export class AdminUsersService {
       after,
       ip,
     });
+    this.realtime.broadcastOps('users');
 
     return after;
   }

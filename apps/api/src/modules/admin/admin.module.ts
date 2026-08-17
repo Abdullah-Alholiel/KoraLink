@@ -18,9 +18,10 @@ import { AdminAuditController } from './audit.controller';
 import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
 import { MatchesModule } from '../matches/matches.module';
+import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
-  imports: [MatchesModule],
+  imports: [MatchesModule, GatewayModule],
   controllers: [
     MetricsController,
     AdminUsersController,
