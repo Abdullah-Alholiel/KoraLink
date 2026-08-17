@@ -15,8 +15,12 @@ import { AdminSettlementsController } from './settlements.controller';
 import { AdminSettingsService } from './settings.service';
 import { AdminSettingsController } from './settings.controller';
 import { AdminAuditController } from './audit.controller';
+import { AdminMatchesService } from './matches.service';
+import { AdminMatchesController } from './matches.controller';
+import { MatchesModule } from '../matches/matches.module';
 
 @Module({
+  imports: [MatchesModule],
   controllers: [
     MetricsController,
     AdminUsersController,
@@ -26,6 +30,7 @@ import { AdminAuditController } from './audit.controller';
     AdminSettlementsController,
     AdminSettingsController,
     AdminAuditController,
+    AdminMatchesController,
   ],
   providers: [
     AuditService,
@@ -36,6 +41,7 @@ import { AdminAuditController } from './audit.controller';
     AdminTransactionsService,
     AdminSettlementsService,
     AdminSettingsService,
+    AdminMatchesService,
   ],
   exports: [AuditService],
 })

@@ -10,6 +10,7 @@ import * as schema from '../../database/schema';
 import { settlements } from '../../database/schema';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -18,6 +19,7 @@ export class AdminSettlementsService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   async list(dto: ListSettlementsDto) {
@@ -84,5 +86,62 @@ export class AdminSettlementsService {
     });
 
     return after;
+  }
+
+  /**
+   * Generates a `pending` settlement per venue for completed KoraLink-booked
+   * matches within the configured payout cadence window. Venues already
+   * settled for the window are skipped (no double-payout).
+   */
+  async generatePending(adminId: string, ip?: string) {
+    const cadenceDays = await this.settings.getNumber('payout_cadence_days', 7);
+    const windowStart = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000);
+    const windowStartIso = windowStart.toISOString();
+
+    const rows = (await this.db.execute(sql`
+      SELECT
+        v.id AS venue_id,
+        COALESCE(SUM(m.pitch_cost_sar), 0)::float AS amount
+      FROM matches m
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN venues v ON v.id = p.venue_id
+      WHERE m.status = 'Completed'
+        AND m.booking_mode = 'koralink'
+        AND m.scheduled_at >= ${windowStartIso}
+        AND NOT EXISTS (
+          SELECT 1 FROM settlements s
+          WHERE s.venue_id = v.id AND s.period_start >= ${windowStartIso}::date
+        )
+      GROUP BY v.id
+      HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
+    `)) as unknown as Array<{ venue_id: string; amount: number }>;
+
+    const created: Array<Record<string, unknown>> = [];
+    for (const row of rows) {
+      const amount = Math.round(row.amount * 100) / 100;
+      if (amount <= 0) continue;
+      const [settlement] = await this.db
+        .insert(settlements)
+        .values({
+          venue_id: row.venue_id,
+          amount: amount.toFixed(2),
+          period_start: windowStartIso.slice(0, 10),
+          period_end: new Date().toISOString().slice(0, 10),
+          status: 'pending',
+        })
+        .returning();
+      created.push(settlement);
+      await this.audit.log({
+        adminId,
+        action: 'settlement.generate',
+        entityType: 'settlement',
+        entityId: settlement.id,
+        before: null,
+        after: settlement,
+        ip,
+      });
+    }
+
+    return { generated: created.length, settlements: created };
   }
 }

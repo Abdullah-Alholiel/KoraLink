@@ -45,13 +45,27 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
     // fail downstream foreign keys (e.g. transactions.user_id in createMatch)
     // as an opaque 500. Reject it here with a clean 401 instead.
     const [user] = await this.db
-      .select({ id: schema.users.id })
+      .select({
+        id: schema.users.id,
+        banned_at: schema.users.banned_at,
+        suspended_until: schema.users.suspended_until,
+      })
       .from(schema.users)
       .where(eq(schema.users.id, payload.sub))
       .limit(1);
 
     if (!user) {
       throw new UnauthorizedException('Account no longer exists.');
+    }
+
+    // A JWT can outlive an admin moderation action. Ban/suspend must take
+    // effect immediately (not at token expiry) — reject the session here so
+    // every guarded endpoint 401s and the client logs the user out.
+    if (user.banned_at) {
+      throw new UnauthorizedException('Account banned.');
+    }
+    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+      throw new UnauthorizedException('Account suspended.');
     }
 
     return payload;

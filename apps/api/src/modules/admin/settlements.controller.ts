@@ -32,4 +32,10 @@ export class AdminSettlementsController {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.settlements.pay(id, adminId, req.ip);
   }
+
+  @Post('generate')
+  generate(@Req() req: Request) {
+    const adminId = (req as unknown as { user: { sub: string } }).user.sub;
+    return this.settlements.generatePending(adminId, req.ip);
+  }
 }

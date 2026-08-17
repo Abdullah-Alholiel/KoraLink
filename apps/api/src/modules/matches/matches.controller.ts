@@ -27,6 +27,7 @@ import { GetMatchesDto } from './dto/get-matches.dto';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
 import { MarkNoShowDto } from './dto/mark-no-show.dto';
+import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { CreateMatchMessageDto } from './dto/create-match-message.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -236,5 +237,18 @@ export class MatchesController {
     @Body() dto: MarkNoShowDto,
   ) {
     return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
+  }
+
+  // ── POST /matches/:id/dispute — Open a dispute (e.g. appeal a no-show) ──
+  @Post(':id/dispute')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Open a dispute on a match (e.g. appeal a no-show)' })
+  @ApiCreatedResponse({ description: 'Dispute created.' })
+  createDispute(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Body() dto: CreateDisputeDto,
+  ) {
+    return this.matchesService.createDispute(user.sub, id, dto);
   }
 }

@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   UnauthorizedException,
+  ForbiddenException,
   Logger,
   Inject,
   NotFoundException,
@@ -119,6 +120,16 @@ export class AuthService {
       throw new NotFoundException('User not found.');
     }
 
+    // Moderation enforcement at login: a banned/suspended account must not be
+    // able to mint a fresh 7-day JWT (the guard alone would just log them out,
+    // which they could defeat by re-authenticating).
+    if (user.banned_at) {
+      throw new ForbiddenException('Account banned.');
+    }
+    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+      throw new ForbiddenException('Account suspended.');
+    }
+
     const isNewUser = !user.full_name;
 
     const token = this.jwt.sign(
@@ -171,7 +182,13 @@ export class AuthService {
   */
  async devLogin(phone: string): Promise<string> {
    const [user] = await this.db
-     .select({ id: users.id, phone: users.phone, role: users.role })
+     .select({
+       id: users.id,
+       phone: users.phone,
+       role: users.role,
+       banned_at: users.banned_at,
+       suspended_until: users.suspended_until,
+     })
      .from(users)
      .where(eq(users.phone, phone))
      .limit(1);
@@ -180,6 +197,13 @@ export class AuthService {
      throw new NotFoundException(
        `No user found with phone ${phone}. Seed the database first.`,
      );
+   }
+
+   if (user.banned_at) {
+     throw new ForbiddenException('Account banned.');
+   }
+   if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+     throw new ForbiddenException('Account suspended.');
    }
 
    return this.jwt.signAsync({

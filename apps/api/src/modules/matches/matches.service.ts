@@ -7,11 +7,13 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { eq, sql, and } from 'drizzle-orm';
+import { eq, sql, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
+import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
 import { GetMatchesDto } from './dto/get-matches.dto';
+import { CreateDisputeDto } from './dto/create-dispute.dto';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
 import { AppGateway } from '../gateway/app.gateway';
@@ -64,6 +66,7 @@ export class MatchesService {
     private readonly appGateway: AppGateway,
     private readonly notificationsService: NotificationsService,
     private readonly activitiesService: ActivitiesService,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -295,14 +298,18 @@ export class MatchesService {
    *
    * Formula: (pitchCost / (players - 1)) + platformMargin
    *
+   * The platform margin is read from `app_settings` (`platform_margin_sar`)
+   * so admins can tune pricing from the Settings screen without a redeploy.
+   *
    * @param pitchCostSar  Total hourly pitch rental cost in SAR.
    * @param players       Expected number of players (must be ≥ 2).
    */
-  calculatePricePerPlayer(pitchCostSar: number, players: number): number {
+  async calculatePricePerPlayer(pitchCostSar: number, players: number): Promise<number> {
     if (players < 2) {
       throw new BadRequestException('A match requires at least 2 players.');
     }
-    const raw = pitchCostSar / (players - 1) + PLATFORM_MARGIN_SAR;
+    const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
+    const raw = pitchCostSar / (players - 1) + margin;
     return round2(raw); // round up to 2 d.p.
   }
 
@@ -600,7 +607,7 @@ export class MatchesService {
     const pitchCostSar = round2(
       parseFloat(pitch.hourlyRate) * dto.duration_mins / 60,
     );
-    const pricePerPlayer = this.calculatePricePerPlayer(
+    const pricePerPlayer = await this.calculatePricePerPlayer(
       pitchCostSar,
       dto.max_players,
     );
@@ -1059,9 +1066,15 @@ export class MatchesService {
    * Mark a player as no-show (or unmark). Host only.
    */
   async markNoShow(hostId: string, matchId: string, targetUserId: string, noShow: boolean) {
+    const graceMins = await this.settings.getNumber('grace_period_mins', 0);
     await this.db.transaction(async (tx) => {
       const [match] = await tx
-        .select({ id: matches.id, host_id: matches.host_id, status: matches.status })
+        .select({
+          id: matches.id,
+          host_id: matches.host_id,
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+        })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -1081,8 +1094,19 @@ export class MatchesService {
         );
       }
 
+      // Respect the no-show grace window from Settings — hosts can't mark a
+      // player no-show before the scheduled start plus the grace period.
+      if (graceMins > 0) {
+        const deadline = new Date(match.scheduled_at.getTime() + graceMins * 60_000);
+        if (Date.now() < deadline.getTime()) {
+          throw new BadRequestException(
+            `Attendance can only be marked ${graceMins} minutes after the scheduled start time.`,
+          );
+        }
+      }
+
       const [player] = await tx
-        .select({ id: schema.match_players.id })
+        .select({ id: schema.match_players.id, no_show: schema.match_players.no_show })
         .from(schema.match_players)
         .where(
           and(
@@ -1100,6 +1124,22 @@ export class MatchesService {
         .update(schema.match_players)
         .set({ no_show: noShow })
         .where(eq(schema.match_players.id, player.id));
+
+      // Keep the user's running no-show count in sync (admin dashboard +
+      // reputation). Only adjust when the flag actually flips so repeated
+      // host actions stay idempotent.
+      if (player.no_show !== noShow) {
+        await tx
+          .update(schema.users)
+          .set(
+            withTimestamp({
+              no_show_count: noShow
+                ? sql`${schema.users.no_show_count} + 1`
+                : sql`GREATEST(${schema.users.no_show_count} - 1, 0)`,
+            }),
+          )
+          .where(eq(schema.users.id, targetUserId));
+      }
     });
 
     const updatedMatch = await this.findOne(matchId);
@@ -1109,6 +1149,70 @@ export class MatchesService {
       this.logger.error(`WS broadcast error on markNoShow: ${(err as Error).message}`);
     }
     return updatedMatch;
+  }
+
+  /**
+   * Opens a dispute on a match (most commonly a player appealing a no-show
+   * mark). Only match participants can open one, and a `no_show` appeal
+   * requires the player to actually have been marked no-show.
+   */
+  async createDispute(userId: string, matchId: string, dto: CreateDisputeDto) {
+    const type = dto.type ?? 'no_show';
+
+    const [match] = await this.db
+      .select({ id: matches.id, host_id: matches.host_id })
+      .from(matches)
+      .where(eq(matches.id, matchId))
+      .limit(1);
+
+    if (!match) {
+      throw new NotFoundException(`Match ${matchId} not found.`);
+    }
+
+    const [player] = await this.db
+      .select({ id: match_players.id, no_show: match_players.no_show })
+      .from(match_players)
+      .where(and(eq(match_players.match_id, matchId), eq(match_players.user_id, userId)))
+      .limit(1);
+
+    if (!player) {
+      throw new ForbiddenException('Only match participants can open a dispute.');
+    }
+
+    if (type === 'no_show' && !player.no_show) {
+      throw new BadRequestException('You have not been marked no-show for this match.');
+    }
+
+    const [existing] = await this.db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(
+        and(
+          eq(disputes.match_id, matchId),
+          eq(disputes.reporter_id, userId),
+          eq(disputes.type, type),
+          inArray(disputes.status, ['opened', 'under_review']),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new ConflictException('You already have an open dispute for this match.');
+    }
+
+    const [created] = await this.db
+      .insert(disputes)
+      .values({
+        match_id: matchId,
+        reporter_id: userId,
+        respondent_id: match.host_id,
+        type,
+        status: 'opened',
+        evidence: dto.reason ? [{ reason: dto.reason, at: new Date().toISOString() }] : [],
+      })
+      .returning();
+
+    return created;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
