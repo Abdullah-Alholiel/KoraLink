@@ -33,7 +33,32 @@ support it).
   ban → populated response + `audit_logs` entry; settings upsert 200.
 
 ## Follow-ups (next cycle)
-- Venue Partner portal UI (screens 2/5) — schema/RBAC ready.
-- Admin Sentry/PostHog instrumentation (observability slice).
 - Admin email/password + 2FA login (currently phone-OTP reuse).
-- systemd service + deploy wiring for `apps/admin`.
+- Admin Sentry project + PostHog key wiring (code is env-gated and ready; just add keys).
+
+## Cycle 2 — Venue Partner portal + observability + deploy (done 2026-08-17)
+- **Partner backend** (`PartnerModule`): `/api/v1/partner/*` role-gated
+  (`@Roles('VenueOwner','Admin')`), every query scoped by `owner_id` — a venue
+  owner can only see their own venues/pitches/earnings/verification.
+  Endpoints: dashboard, venues, pitches (CRUD), earnings, verification (upsert).
+- **Partner frontend** (in `apps/admin`, role-scoped): `Sidebar` switches between
+  HQ nav (Admin) and Partner nav (VenueOwner) from the JWT `role` claim;
+  `defaultRoute()` + layout guard route each role to its portal. Pages: partner
+  dashboard, my-pitches (add + availability toggle), earnings, settings (business
+  profile).
+- **Schema**: `venue_verifications.venue_id` → unique index (one verification per
+  venue) — migration `0012_sturdy_shriek.sql`.
+- **Observability**: Sentry (`sentry.*.config.ts`, `instrumentation.ts`,
+  `withSentryConfig`, `global-error.tsx`, replay disabled for admin) + PostHog
+  (`ObservabilityProvider`), both env-gated no-ops without keys.
+- **Deploy**: `output: 'standalone'` + `scripts/sync-standalone.mjs` (postbuild
+  hook) + `deploy/koralink-admin.service` (systemd user unit, :3002). Installed,
+  enabled, and live (`systemctl --user status koralink-admin`).
+
+## Verification (real terminal output, Cycle 2)
+- `npm run build` → **3/3 tasks, exit 0** · API jest **11/11** · PWA vitest **175/175**
+- Admin app serving on `:3002` (systemd `koralink-admin.service` active).
+- Live smoke: VenueOwner login → `/partner/dashboard` (3 venues, 4 upcoming, today's
+  schedule), `/partner/pitches` (5 pitches); verification upsert → `pending`;
+  pitch toggle → on/off. RBAC: VenueOwner → `/admin/*` **403**; Player →
+  `/partner/*` **403**.

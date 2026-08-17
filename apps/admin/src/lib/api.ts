@@ -60,3 +60,30 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
 };
+
+function decodeJwt(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split('.')[1];
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+export type Role = 'Player' | 'VenueOwner' | 'Admin';
+
+/** Reads the signed `role` claim from the stored JWT (no extra network call). */
+export function getRole(): Role | null {
+  const token = getToken();
+  if (!token) return null;
+  const payload = decodeJwt(token);
+  const role = payload?.role;
+  return role === 'VenueOwner' || role === 'Admin' || role === 'Player' ? role : null;
+}
+
+/** Where to send a freshly-authenticated user based on their role. */
+export function defaultRoute(): string {
+  return getRole() === 'VenueOwner' ? '/partner' : '/dashboard';
+}

@@ -769,7 +769,7 @@ export const venue_verifications = pgTable(
     }),
     reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
   },
-  (t) => [index('venue_verifications_venue_idx').on(t.venue_id)],
+  (t) => [uniqueIndex('venue_verifications_venue_idx').on(t.venue_id)],
 );
 
 export const settlements = pgTable(

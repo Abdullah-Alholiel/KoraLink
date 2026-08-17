@@ -109,3 +109,68 @@ export interface ListResponse<T> {
   page: number;
   perPage: number;
 }
+
+export interface PartnerDashboard {
+  venueNames: string[];
+  todayUtilization: number;
+  upcomingMatches: number;
+  revenueToday: number;
+  nextMatchInMinutes: number | null;
+  scheduleToday: {
+    pitchName: string | null;
+    startTime: string;
+    endTime: string;
+    isBooked: boolean;
+    matchTitle: string | null;
+  }[];
+  recentDeposits: {
+    id: string;
+    amount: string | number;
+    status: string;
+    created_at: string;
+    venueName: string | null;
+  }[];
+}
+
+export interface PartnerPitch {
+  id: string;
+  name: string;
+  size: string;
+  surface_type: string;
+  environment: string;
+  hourly_rate: string | number;
+  is_active: boolean;
+  images: unknown;
+  venue_id: string;
+  venue_name: string | null;
+}
+
+export interface PartnerVerificationRow {
+  venue_id: string;
+  venue_name: string | null;
+  verification: {
+    legal_entity_name: string;
+    commercial_reg: string | null;
+    tax_id: string | null;
+    iban: string | null;
+    manager_name: string | null;
+    manager_phone: string | null;
+    status: string;
+  } | null;
+}
+
+export interface PartnerEarnings {
+  settlements: {
+    id: string;
+    amount: string | number;
+    status: string;
+    period_start: string;
+    period_end: string;
+    payout_ref: string | null;
+    paid_at: string | null;
+    created_at: string;
+    venue_name: string | null;
+  }[];
+  totalPending: number;
+  totalPaid: number;
+}

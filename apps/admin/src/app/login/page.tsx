@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, Loader2 } from 'lucide-react';
-import { api, setToken } from '@/lib/api';
+import { api, defaultRoute, setToken } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function LoginPage() {
     try {
       const res = await api.post<{ token: string }>('/auth/dev-login', { phone });
       setToken(res.token);
-      router.replace('/dashboard');
+      router.replace(defaultRoute());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
@@ -47,7 +47,7 @@ export default function LoginPage() {
       const res = await api.post<{ token?: string }>('/auth/verify-otp', { phone, code });
       if (res.token) {
         setToken(res.token);
-        router.replace('/dashboard');
+        router.replace(defaultRoute());
       } else {
         setError('OTP verified but no token returned (production uses cookies).');
       }

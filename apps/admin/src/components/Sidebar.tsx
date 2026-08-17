@@ -14,10 +14,10 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
-import { clearToken } from '@/lib/api';
+import { clearToken, getRole } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-const nav = [
+const adminNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/users', label: 'Users', icon: Users },
   { href: '/venues', label: 'Venues', icon: MapPin },
@@ -28,9 +28,19 @@ const nav = [
   { href: '/audit', label: 'Audit Log', icon: ScrollText },
 ];
 
+const partnerNav = [
+  { href: '/partner', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/partner/pitches', label: 'My Pitches', icon: MapPin },
+  { href: '/partner/earnings', label: 'Earnings', icon: Wallet },
+  { href: '/partner/settings', label: 'Settings', icon: Settings },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const role = getRole();
+  const isPartner = role === 'VenueOwner';
+  const nav = isPartner ? partnerNav : adminNav;
 
   function logout() {
     clearToken();
@@ -43,7 +53,7 @@ export default function Sidebar() {
         <Activity className="h-6 w-6 text-brand-500" />
         <span className="text-lg font-semibold text-white">KoraLink</span>
         <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-          HQ
+          {isPartner ? 'Partner' : 'HQ'}
         </span>
       </div>
 

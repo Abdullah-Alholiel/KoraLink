@@ -1,0 +1,24 @@
+[Unit]
+Description=KoraLink Admin Console (Next.js standalone)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/projects/koralink/apps/admin/.next/standalone/apps/admin
+Environment=NODE_ENV=production
+Environment=PORT=3002
+Environment=HOSTNAME=0.0.0.0
+ExecStart=/home/ubuntu/.local/bin/node server.js
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=koralink-admin
+
+[Install]
+WantedBy=default.target
