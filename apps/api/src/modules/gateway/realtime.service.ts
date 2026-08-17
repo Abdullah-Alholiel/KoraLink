@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Server } from 'socket.io';
+import type { Server, Namespace } from 'socket.io';
 
 /**
  * Single choke point for emitting real-time events to connected clients.
@@ -14,9 +14,16 @@ import type { Server } from 'socket.io';
 @Injectable()
 export class RealtimeService {
   private readonly logger = new Logger(RealtimeService.name);
-  private server: Server | null = null;
 
-  registerServer(server: Server): void {
+  /**
+   * `@WebSocketServer()` on a NAMESPACED gateway (`/lobby`) injects the
+   * socket.io Namespace, not the top-level io Server. Both expose `.to()` for
+   * emits, but their room maps live in different places (see isUserOnline),
+   * so the field is typed as the union.
+   */
+  private server: Server | Namespace | null = null;
+
+  registerServer(server: Server | Namespace): void {
     this.server = server;
   }
 
@@ -40,7 +47,18 @@ export class RealtimeService {
   /** True when at least one socket is currently connected in the user's room. */
   isUserOnline(userId: string): boolean {
     if (!this.server) return false;
-    const room = this.server.sockets.adapter.rooms?.get(this.userRoom(userId));
+
+    // The injected object can be either a Namespace (namespaced gateway) or a
+    // bare Server. A Namespace exposes its rooms on `.adapter.rooms`, while a
+    // Server exposes them via `.sockets.adapter.rooms`. Reading `.sockets.adapter`
+    // on a Namespace throws `Cannot read properties of undefined (reading 'rooms')`
+    // because `Namespace.sockets` is a Map, not a nested server. Handle both.
+    const srv = this.server as unknown as {
+      adapter?: { rooms?: Map<string, Set<string>> };
+      sockets?: { adapter?: { rooms?: Map<string, Set<string>> } };
+    };
+    const rooms = srv.adapter?.rooms ?? srv.sockets?.adapter?.rooms;
+    const room = rooms?.get(this.userRoom(userId));
     return !!room && room.size > 0;
   }
 }
