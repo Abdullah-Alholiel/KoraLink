@@ -23,6 +23,8 @@ import {
     UserPlus,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
+import { useMarkNoShow } from '@/hooks/useMatches';
+import { useAppeal } from '@/hooks/useDisputes';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
@@ -44,6 +46,9 @@ import PostMatchSection from '@/components/matches/PostMatchSection';
 import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import LocationMap from '@/components/matches/LocationMap';
 import OngoingGameJoinSheet from '@/components/matches/OngoingGameJoinSheet';
+import AttendanceSheet from '@/components/matches/AttendanceSheet';
+import AttendanceBanner from '@/components/matches/AttendanceBanner';
+import AppealSheet from '@/components/matches/AppealSheet';
 
 export default function MatchDetailPage({
     params,
@@ -63,6 +68,8 @@ export default function MatchDetailPage({
     const cancelMatch = useCancelMatch();
     const startMatch = useStartMatch();
     const completeMatch = useCompleteMatch();
+    const markNoShow = useMarkNoShow(id);
+    const appeal = useAppeal(id);
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
     const showToast = useAppStore((s) => s.showToast);
@@ -79,7 +86,14 @@ export default function MatchDetailPage({
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
     const [showChatSheet, setShowChatSheet] = useState(false);
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
+    const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
+    const [showAppealSheet, setShowAppealSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
+
+    // The current user's roster entry (for no-show state + appeals).
+    const myRosterEntry = match && currentUserId
+        ? match.roster.find((p) => p.userId === currentUserId) ?? null
+        : null;
 
     // Absolute match URL for sharing — computed client-side only (SSR has no
     // window; reading it during render would cause a hydration mismatch).
@@ -366,6 +380,17 @@ export default function MatchDetailPage({
                     {isJoined ? (
                         /* ═══ JOINED STATE ═══ */
                         <div className="pb-32">
+                            {/* 0. Attendance / Appeal banners (host CTA + player no-show states) */}
+                            <AttendanceBanner
+                                matchId={match.id}
+                                isHost={isUserHost}
+                                isJoined={isJoined}
+                                status={match.status}
+                                myRoster={myRosterEntry ? { userId: myRosterEntry.userId, noShow: !!myRosterEntry.noShow } : null}
+                                onOpenAttendance={() => setShowAttendanceSheet(true)}
+                                onOpenAppeal={() => setShowAppealSheet(true)}
+                            />
+
                             {/* 1. Game Details */}
                             <div className="mx-5 mt-2">
                                 <GameDetails
@@ -821,6 +846,37 @@ export default function MatchDetailPage({
                     onClose={() => setShowChatSheet(false)}
                     matchId={match.id}
                     matchTitle={match.title}
+                />
+            )}
+
+            {/* Attendance Sheet (Host) */}
+            {match && (
+                <AttendanceSheet
+                    isOpen={showAttendanceSheet}
+                    onClose={() => setShowAttendanceSheet(false)}
+                    roster={match.roster}
+                    currentUserId={currentUserId}
+                    busyUserId={markNoShow.isPending ? markNoShow.variables?.targetUserId ?? null : null}
+                    onToggle={(player) => markNoShow.mutate({ targetUserId: player.userId, noShow: !player.noShow })}
+                />
+            )}
+
+            {/* Appeal Sheet (Player) */}
+            {match && (
+                <AppealSheet
+                    isOpen={showAppealSheet}
+                    onClose={() => setShowAppealSheet(false)}
+                    matchTitle={match.title}
+                    isPending={appeal.isPending}
+                    error={appeal.isError ? appeal.error?.message ?? null : null}
+                    onSubmit={(reason) => {
+                        appeal.mutate({ reason }, {
+                            onSuccess: () => {
+                                setShowAppealSheet(false);
+                                showToast(t('appeal.submittedToast'), 'success');
+                            },
+                        });
+                    }}
                 />
             )}
 

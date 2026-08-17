@@ -75,6 +75,8 @@ export interface RosterPlayer {
     avatarUrl: string;
     team: 'Home' | 'Away' | null;
     isHost: boolean;
+    /** Marked no-show by the host (attendance tracking). */
+    noShow?: boolean;
 }
 
 export interface Comment {

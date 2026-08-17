@@ -293,6 +293,7 @@ function buildRoster(players: MatchPlayerApi[]): RosterPlayer[] {
     avatarUrl: p.user.avatar_url ?? '',
     team: p.team as 'Home' | 'Away' | null,
     isHost: p.is_host,
+    noShow: p.no_show ?? false,
   }));
 }
 

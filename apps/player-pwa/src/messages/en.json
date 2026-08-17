@@ -658,5 +658,31 @@
     "createdMatch": "{name} is hosting: {title}",
     "createdMatchTitle": "{name} created a new match",
     "seeAll": "See all"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "hint": "Tap a player to toggle no-show. Marked players can appeal through support. You can change marks until the match is archived.",
+    "you": "you",
+    "attended": "Attended",
+    "markedNoShow": "Marked no-show",
+    "markedNoShowYou": "You were marked no-show",
+    "takeAttendance": "Take Attendance",
+    "takeAttendanceDesc": "Mark who showed up — protects your spot pricing",
+    "done": "Done"
+  },
+  "appeal": {
+    "title": "Appeal No-Show",
+    "subtitle": "Tell us what happened. An admin will review your appeal and the no-show mark can be reversed.",
+    "reasonLabel": "What happened?",
+    "reasonPlaceholder": "e.g. I arrived 10 minutes late but played the full match…",
+    "submit": "Submit Appeal",
+    "submittedToast": "Appeal submitted — under review",
+    "underReviewTitle": "Appeal under review",
+    "underReviewDesc": "An admin is reviewing your appeal. You'll see the outcome here.",
+    "resolvedTitle": "No-show reversed",
+    "resolvedDesc": "Your appeal was upheld — attendance corrected.",
+    "rejectedDesc": "A previous appeal on this match was rejected.",
+    "appealHint": "Disagree with this mark? Appeal it and admins will review.",
+    "appealCta": "Appeal No-Show"
   }
 }

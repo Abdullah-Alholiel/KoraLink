@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { X, Clock, Shield, RotateCcw, Footprints, AlertTriangle, Banknote } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
+import { usePublicSettings } from '@/hooks/useDisputes';
 
 interface MatchRulesSheetProps {
   isOpen: boolean;
@@ -20,6 +21,10 @@ const RULES = [
 
 export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProps) {
   const t = useTranslations();
+  // Admin-configurable refund policy (Settings → refund_policy). Falls back
+  // to the default i18n text when the admin hasn't set one.
+  const { data: publicSettings } = usePublicSettings();
+  const refundOverride = publicSettings?.refund_policy?.trim() || null;
 
   if (!isOpen) return null;
 
@@ -49,6 +54,10 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
         <div className="grid grid-cols-2 gap-2.5">
           {RULES.map((rule) => {
             const Icon = rule.icon;
+            const body =
+              rule.key === 'refund' && refundOverride
+                ? refundOverride
+                : t(`matchRules.${rule.key}.body`);
             return (
               <div
                 key={rule.key}
@@ -62,8 +71,8 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
                     {t(`matchRules.${rule.key}.title`)}
                   </h3>
                 </div>
-                <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">
-                  {t(`matchRules.${rule.key}.body`)}
+                <p className="text-[11px] text-gray-500 leading-snug">
+                  {body}
                 </p>
               </div>
             );
