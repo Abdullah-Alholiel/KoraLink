@@ -1,7 +1,7 @@
 'use client';
 
 import { Wallet } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import type { PartnerEarnings } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -9,7 +9,7 @@ import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerEarningsPage() {
-  const { data, loading, error } = useAdminData<PartnerEarnings>('/partner/earnings');
+  const { data, loading, error } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
 
   return (
     <div>

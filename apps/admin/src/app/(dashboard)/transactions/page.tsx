@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminTransaction, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -22,7 +22,7 @@ export default function TransactionsPage() {
   if (status) qs.set('status', status);
   if (type) qs.set('type', type);
 
-  const { data, loading, error, reload } = useAdminData<TxResponse>(`/admin/transactions?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<TxResponse>(`/admin/transactions?${qs.toString()}`);
 
   async function refund(id: string) {
     setBusyId(id);

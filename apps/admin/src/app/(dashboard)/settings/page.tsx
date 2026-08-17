@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import PageHeader from '@/components/PageHeader';
 
@@ -18,7 +18,7 @@ const KNOWN_SETTINGS: { key: string; label: string; type: 'number' | 'text' }[] 
 ];
 
 export default function SettingsPage() {
-  const { data, loading, error, reload } = useAdminData<SettingsResponse>('/admin/settings');
+  const { data, loading, error, reload } = useLiveAdminData<SettingsResponse>('/admin/settings', ['settings']);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

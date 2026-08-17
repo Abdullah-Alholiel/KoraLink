@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { Settlement, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -21,7 +21,7 @@ export default function SettlementsPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
 
-  const { data, loading, error, reload } = useAdminData<SettlementsResponse>(`/admin/settlements?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<SettlementsResponse>(`/admin/settlements?${qs.toString()}`);
 
   async function pay(id: string) {
     setBusyId(id);

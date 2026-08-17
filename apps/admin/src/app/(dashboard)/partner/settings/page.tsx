@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { PartnerVerificationRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerSettingsPage() {
-  const { data, loading, error, reload } = useAdminData<PartnerVerificationRow[]>('/partner/verification');
+  const { data, loading, error, reload } = useLiveAdminData<PartnerVerificationRow[]>('/partner/verification', ['venues']);
   const [selected, setSelected] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

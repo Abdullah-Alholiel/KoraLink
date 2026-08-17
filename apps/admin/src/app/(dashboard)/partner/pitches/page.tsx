@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { Loader2, Plus, X } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { PartnerPitch } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
+import EditPitchSheet from '@/components/EditPitchSheet';
 
 interface OwnedVenue {
   id: string;
@@ -16,11 +17,12 @@ interface OwnedVenue {
 }
 
 export default function MyPitchesPage() {
-  const { data, loading, error, reload } = useAdminData<PartnerPitch[]>('/partner/pitches');
-  const venues = useAdminData<OwnedVenue[]>('/partner/venues');
+  const { data, loading, error, reload } = useLiveAdminData<PartnerPitch[]>('/partner/pitches', ['venues']);
+  const venues = useLiveAdminData<OwnedVenue[]>('/partner/venues', ['venues']);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<PartnerPitch | null>(null);
   const [form, setForm] = useState({
     venue_id: '',
     name: '',
@@ -52,6 +54,11 @@ export default function MyPitchesPage() {
     }
   }
 
+  async function savePitch(pitchId: string, values: { name: string; size: string; surface_type: string; environment: string; hourly_rate: number }) {
+    await api.patch(`/partner/pitches/${pitchId}`, values);
+    reload();
+  }
+
   return (
     <div>
       <PageHeader
@@ -69,6 +76,8 @@ export default function MyPitchesPage() {
       />
 
       <div className="p-8">
+        <EditPitchSheet pitch={editing} onClose={() => setEditing(null)} onSave={savePitch} />
+
         {showForm && (
           <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="mb-4 text-sm font-semibold text-gray-900">Add New Pitch</h2>
@@ -181,6 +190,12 @@ export default function MyPitchesPage() {
                   ) : (
                     'Set available'
                   )}
+                </button>
+                <button
+                  onClick={() => setEditing(editing?.id === p.id ? null : p)}
+                  className="mt-2 w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                >
+                  {editing?.id === p.id ? 'Close editor' : 'Edit details'}
                 </button>
               </div>
             ))}

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminVenueDetail } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -14,7 +14,7 @@ export default function VenueDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params.id;
-  const { data, loading, error, reload } = useAdminData<AdminVenueDetail>(`/admin/venues/${id}`);
+  const { data, loading, error, reload } = useLiveAdminData<AdminVenueDetail>(`/admin/venues/${id}`);
   const [busy, setBusy] = useState(false);
 
   async function decide(decision: 'approve' | 'reject') {

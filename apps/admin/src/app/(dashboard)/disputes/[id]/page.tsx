@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -16,7 +16,7 @@ interface DisputeDetail {
   decision: string | null;
   internal_note: string | null;
   policy_ref: string | null;
-  evidence: unknown;
+  evidence: { reason?: string; at?: string }[] | unknown;
   created_at: string;
   reporter: { full_name: string | null; phone: string | null } | null;
   respondent: { full_name: string | null; phone: string | null } | null;
@@ -24,12 +24,17 @@ interface DisputeDetail {
   messages: { id: string; content: string; created_at: string; author: { full_name: string | null } }[];
 }
 
+function parseEvidence(evidence: unknown): { reason?: string; at?: string }[] {
+  if (Array.isArray(evidence)) return evidence as { reason?: string; at?: string }[];
+  return [];
+}
+
 export default function DisputeDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params.id;
 
-  const { data, loading, error, reload } = useAdminData<DisputeDetail>(`/admin/disputes/${id}`);
+  const { data, loading, error, reload } = useLiveAdminData<DisputeDetail>(`/admin/disputes/${id}`, ['disputes']);
 
   const [outcome, setOutcome] = useState<'resolved' | 'rejected'>('resolved');
   const [decision, setDecision] = useState('');
@@ -122,21 +127,42 @@ export default function DisputeDetailPage() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Conversation</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-900">Appeal evidence</h2>
             <div className="space-y-3">
-              {(data.messages ?? []).map((m) => (
-                <div key={m.id} className="rounded-lg bg-gray-50 p-3">
+              {parseEvidence(data.evidence).map((e, i) => (
+                <div key={i} className="rounded-lg bg-gray-50 p-3">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-900">{m.author?.full_name ?? 'Unknown'}</span>
-                    <span className="text-xs text-gray-400">{formatDate(m.created_at)}</span>
+                    <span className="text-xs font-medium text-gray-900">
+                      {data.reporter?.full_name ?? 'Reporter'}
+                    </span>
+                    {e.at && <span className="text-xs text-gray-400">{formatDate(e.at)}</span>}
                   </div>
-                  <p className="text-sm text-gray-700">{m.content}</p>
+                  <p className="text-sm text-gray-700">{e.reason ?? '—'}</p>
                 </div>
               ))}
-              {!data.messages?.length && (
-                <p className="text-sm text-gray-400">No messages recorded.</p>
+              {!parseEvidence(data.evidence).length && (
+                <p className="text-sm text-gray-400">No evidence submitted with this dispute.</p>
               )}
             </div>
+
+            {data.messages?.length > 0 && (
+              <>
+                <h3 className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Follow-up messages
+                </h3>
+                <div className="space-y-3">
+                  {data.messages.map((m) => (
+                    <div key={m.id} className="rounded-lg bg-gray-50 p-3">
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-900">{m.author?.full_name ?? 'Unknown'}</span>
+                        <span className="text-xs text-gray-400">{formatDate(m.created_at)}</span>
+                      </div>
+                      <p className="text-sm text-gray-700">{m.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

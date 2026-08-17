@@ -1,7 +1,7 @@
 'use client';
 
 import { CalendarClock, TrendingUp, Wallet } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import type { PartnerDashboard } from '@/lib/types';
 import { formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -9,7 +9,7 @@ import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerDashboardPage() {
-  const { data, loading, error } = useAdminData<PartnerDashboard>('/partner/dashboard');
+  const { data, loading, error } = useLiveAdminData<PartnerDashboard>('/partner/dashboard', ['matches', 'settlements', 'venues']);
 
   if (loading) {
     return (

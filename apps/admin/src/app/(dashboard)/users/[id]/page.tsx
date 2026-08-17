@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Ban, CheckCircle2, Loader2, TimerOff } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminUser } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
+
+const ROLES: AdminUser['role'][] = ['Player', 'VenueOwner', 'Admin'];
 
 function userStatus(u: AdminUser): string {
   if (u.banned_at) return 'banned';
@@ -20,7 +22,7 @@ export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params.id;
-  const { data, loading, error, reload } = useAdminData<AdminUser>(`/admin/users/${id}`);
+  const { data, loading, error, reload } = useLiveAdminData<AdminUser>(`/admin/users/${id}`);
   const [busy, setBusy] = useState(false);
 
   async function act(body: Record<string, unknown>) {
@@ -51,10 +53,30 @@ export default function UserDetailPage() {
   }
 
   const st = userStatus(data);
-  const rows: [string, string][] = [
+  const busyState = busy;
+  const rows: [string, React.ReactNode][] = [
     ['Phone', data.phone],
     ['Handle', data.handle ? `@${data.handle}` : '—'],
-    ['Role', data.role],
+    [
+      'Role',
+      (
+        <div className="relative inline-flex">
+          <select
+            value={data.role}
+            onChange={(e) => act({ role: e.target.value as AdminUser['role'] })}
+            disabled={busyState}
+            className="appearance-none rounded-lg border border-gray-300 bg-white py-1 pe-7 ps-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none disabled:opacity-50"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute end-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        </div>
+      ),
+    ],
     ['Wallet', formatMoney(data.wallet_balance)],
     ['Karma', String(data.karma_score)],
     ['Rating', String(data.rating)],
@@ -91,6 +113,10 @@ export default function UserDetailPage() {
             </div>
           ))}
         </dl>
+
+        <p className="mt-4 text-xs text-gray-400">
+          Changing the role takes effect on the user's next sign-in (the JWT carries the role claim).
+        </p>
 
         <div className="mt-6 flex items-center gap-3">
           {busy ? (

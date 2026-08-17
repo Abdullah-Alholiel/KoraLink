@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import type { AuditLog, ListResponse } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -14,7 +14,7 @@ export default function AuditPage() {
 
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
 
-  const { data, loading, error } = useAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
+  const { data, loading, error } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
   return (
     <div>

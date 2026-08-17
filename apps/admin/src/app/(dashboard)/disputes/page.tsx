@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import type { DisputeListItem, ListResponse } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -18,7 +18,7 @@ export default function DisputesPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
 
-  const { data, loading, error } = useAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
+  const { data, loading, error } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
 
   return (
     <div>

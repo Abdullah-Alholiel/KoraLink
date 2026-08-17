@@ -32,6 +32,7 @@ const adminNav = [
 
 const partnerNav = [
   { href: '/partner', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/partner/venues', label: 'My Venues', icon: MapPin },
   { href: '/partner/pitches', label: 'My Pitches', icon: MapPin },
   { href: '/partner/earnings', label: 'Earnings', icon: Wallet },
   { href: '/partner/settings', label: 'Settings', icon: Settings },

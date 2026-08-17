@@ -20,7 +20,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import type { AdminMetrics } from '@/lib/types';
 import { formatMoney, formatPercent } from '@/lib/utils';
 import MetricCard from '@/components/MetricCard';
@@ -28,13 +28,13 @@ import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function DashboardPage() {
-  const { data, loading, error } = useAdminData<AdminMetrics>('/admin/metrics');
-  const recentTx = useAdminData<{ transactions: { id: string; user_name: string | null; reference_type: string; amount: number; status: string }[] }>(
+  const { data, loading, error } = useLiveAdminData<AdminMetrics>('/admin/metrics', ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
+  const recentTx = useLiveAdminData<{ transactions: { id: string; user_name: string | null; reference_type: string; amount: number; status: string }[] }>(
     '/admin/transactions?page=1&perPage=5',
-  );
-  const activeDisputes = useAdminData<{ disputes: { id: string; type: string; status: string; reporter_name: string | null }[] }>(
+    ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
+  const activeDisputes = useLiveAdminData<{ disputes: { id: string; type: string; status: string; reporter_name: string | null }[] }>(
     '/admin/disputes?page=1&perPage=5',
-  );
+    ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
 
   if (loading) {
     return (

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminVenue, ListResponse } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -23,7 +23,7 @@ export default function VenuesPage() {
   if (search) qs.set('search', search);
   if (status !== 'all') qs.set('status', status);
 
-  const { data, loading, error, reload } = useAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
 
   async function decide(id: string, decision: 'approve' | 'reject') {
     setBusyId(id);

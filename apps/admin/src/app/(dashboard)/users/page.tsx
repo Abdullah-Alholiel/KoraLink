@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminUser, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -32,7 +32,7 @@ export default function UsersPage() {
   if (role) qs.set('role', role);
   if (status && status !== 'all') qs.set('status', status);
 
-  const { data, loading, error, reload } = useAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusyId(id);

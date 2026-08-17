@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Ban, Loader2 } from 'lucide-react';
-import { useAdminData } from '@/lib/use-data';
+import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminMatch, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -22,7 +22,7 @@ export default function MatchesPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
 
-  const { data, loading, error, reload } = useAdminData<MatchesResponse>(`/admin/matches?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<MatchesResponse>(`/admin/matches?${qs.toString()}`);
 
   async function cancel(id: string) {
     setBusyId(id);
