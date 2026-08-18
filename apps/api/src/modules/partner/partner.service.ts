@@ -3,8 +3,10 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -12,6 +14,7 @@ import {
   pitch_slots,
   pitches,
   settlements,
+  users,
   venue_verifications,
   venues,
 } from '../../database/schema';
@@ -20,6 +23,7 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
+import { CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -50,12 +54,27 @@ export class PartnerService {
     return rows.map((r) => r.id);
   }
 
-  async getVenues(ownerId: string) {
-    return this.db
-      .select({ id: venues.id, name: venues.name, city: venues.city })
+  async getVenues(ownerId: string, actorRole?: string) {
+    // Admins inspecting the partner portal see ALL venues (support/moderation);
+    // owners see only their own.
+    const rows = await this.db
+      .select({
+        id: venues.id,
+        name: venues.name,
+        city: venues.city,
+        address: venues.address,
+        amenities: venues.amenities,
+        is_approved: venues.is_approved,
+        is_koralink_partner: venues.is_koralink_partner,
+        owner_id: venues.owner_id,
+        owner_name: users.full_name,
+        pitch_count: sql<number>`(select count(*)::int from ${pitches} p where p.venue_id = ${venues.id})`,
+      })
       .from(venues)
-      .where(eq(venues.owner_id, ownerId))
+      .innerJoin(users, eq(users.id, venues.owner_id))
+      .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId))
       .orderBy(venues.created_at);
+    return rows;
   }
 
   /** Owner-created venue — starts unapproved (admin approval queue). */
@@ -74,6 +93,55 @@ export class PartnerService {
     this.realtime.broadcastOps('venues');
 
     return created;
+  }
+
+  /**
+   * Update venue profile. Owners may edit their own venues; Admins may edit
+   * any venue (support workflows). Only ever touches profile fields —
+   * approval status stays under the admin decision endpoint.
+   */
+  async updateVenue(actorId: string, actorRole: string, venueId: string, dto: UpdateVenuePartnerDto) {
+    const [venue] = await this.db
+      .select({ id: venues.id, owner_id: venues.owner_id })
+      .from(venues)
+      .where(eq(venues.id, venueId))
+      .limit(1);
+    if (!venue) throw new NotFoundException('Venue not found.');
+
+    if (actorRole !== 'Admin' && venue.owner_id !== actorId) {
+      throw new ForbiddenException('You can only edit your own venues.');
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (dto.name !== undefined) updates.name = dto.name;
+    if (dto.city !== undefined) updates.city = dto.city;
+    if (dto.address !== undefined) updates.address = dto.address;
+    if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+
+    if (Object.keys(updates).length) {
+      await this.db
+        .update(venues)
+        .set(withTimestamp(updates) as never)
+        .where(eq(venues.id, venueId));
+    }
+
+    const [updated] = await this.db
+      .select({
+        id: venues.id,
+        name: venues.name,
+        city: venues.city,
+        address: venues.address,
+        amenities: venues.amenities,
+        is_approved: venues.is_approved,
+        owner_id: venues.owner_id,
+      })
+      .from(venues)
+      .where(eq(venues.id, venueId))
+      .limit(1);
+
+    this.realtime.broadcastOps('venues');
+
+    return updated;
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
@@ -201,13 +269,13 @@ export class PartnerService {
     venue_name: venues.name,
   };
 
-  async getPitches(ownerId: string) {
+  async getPitches(ownerId: string, actorRole?: string) {
     return this.db
       .select(this.pitchColumns)
       .from(pitches)
       .innerJoin(venues, eq(pitches.venue_id, venues.id))
-      .where(eq(venues.owner_id, ownerId))
-      .orderBy(pitches.created_at);
+      .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId))
+      .orderBy(venues.name, pitches.created_at);
   }
 
   private async findOnePitch(id: string) {
@@ -273,6 +341,32 @@ export class PartnerService {
     this.realtime.broadcastOps('venues');
 
     return this.findOnePitch(pitchId);
+  }
+
+  /**
+   * Delete a pitch. BLOCKED when any match has ever been played on it —
+   * the FK cascades pitch → matches, which would erase match history,
+   * rosters, and wallet ledger references. Pitches with history must be
+   * deactivated (is_active=false) instead.
+   */
+  async deletePitch(actorId: string, actorRole: string, pitchId: string) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    const [{ count }] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.matches)
+      .where(eq(schema.matches.pitch_id, pitchId));
+
+    if (count > 0) {
+      throw new BadRequestException(
+        `This pitch has ${count} match(es) in its history and cannot be deleted — set it unavailable instead.`,
+      );
+    }
+
+    await this.db.delete(pitches).where(eq(pitches.id, pitchId));
+    this.realtime.broadcastOps('venues');
+
+    return { deleted: true };
   }
 
   // ── Earnings ──────────────────────────────────────────────────────────────
@@ -361,5 +455,178 @@ export class PartnerService {
       });
 
     return this.getVerification(ownerId);
+  }
+
+  // ── Slot management ───────────────────────────────────────────────────────
+
+  /** Assert the actor owns the pitch (Admin bypasses for support). */
+  private async assertPitchAccess(actorId: string, actorRole: string, pitchId: string) {
+    const [row] = await this.db
+      .select({ id: pitches.id, owner_id: venues.owner_id })
+      .from(pitches)
+      .innerJoin(venues, eq(pitches.venue_id, venues.id))
+      .where(eq(pitches.id, pitchId))
+      .limit(1);
+    if (!row) throw new NotFoundException('Pitch not found.');
+    if (actorRole !== 'Admin' && row.owner_id !== actorId) {
+      throw new ForbiddenException('You can only manage slots on your own pitches.');
+    }
+    return row;
+  }
+
+  /**
+   * List a pitch's slots in a date window (inclusive). Includes booking state
+   * + the booked match title so the schedule grid shows what occupies a slot.
+   */
+  async listSlots(
+    actorId: string,
+    actorRole: string,
+    pitchId: string,
+    fromDate: string,
+    toDate: string,
+  ) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    const rows = await this.db
+      .select({
+        id: pitch_slots.id,
+        slot_date: pitch_slots.slot_date,
+        start_time: pitch_slots.start_time,
+        end_time: pitch_slots.end_time,
+        is_booked: pitch_slots.is_booked,
+        match_title: matches.title,
+        match_id: matches.id,
+      })
+      .from(pitch_slots)
+      .leftJoin(matches, eq(pitch_slots.booked_match_id, matches.id))
+      .where(
+        and(
+          eq(pitch_slots.pitch_id, pitchId),
+          gte(pitch_slots.slot_date, fromDate),
+          lte(pitch_slots.slot_date, toDate),
+        ),
+      )
+      .orderBy(pitch_slots.slot_date, pitch_slots.start_time);
+
+    return { slots: rows };
+  }
+
+  /**
+   * Generate recurring slots from a weekly pattern. Ownership enforced —
+   * previously ANY authenticated user could slot-bomb any pitch.
+   */
+  async generateSlots(
+    actorId: string,
+    actorRole: string,
+    pitchId: string,
+    pattern: GenerateSlotsDto,
+  ) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    const rows: Array<{
+      pitch_id: string;
+      slot_date: string;
+      start_time: string;
+      end_time: string;
+    }> = [];
+
+    const [sh, sm] = pattern.start_time.split(':').map(Number);
+    const [eh, em] = pattern.end_time.split(':').map(Number);
+    const startMins = sh * 60 + sm;
+    const endMins = eh * 60 + em;
+    if (endMins <= startMins) {
+      throw new BadRequestException('end_time must be after start_time.');
+    }
+    const dur = pattern.slot_duration_mins;
+
+    const today = new Date();
+    for (let w = 0; w < pattern.weeks_ahead; w++) {
+      for (const dow of pattern.days_of_week) {
+        const date = new Date(today);
+        const dayDiff = (dow - date.getDay() + 7) % 7;
+        date.setDate(date.getDate() + dayDiff + w * 7);
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+        for (let m = startMins; m + dur <= endMins; m += dur) {
+          const hh = String(Math.floor(m / 60)).padStart(2, '0');
+          const mm = String(m % 60).padStart(2, '0');
+          const ehh = String(Math.floor((m + dur) / 60)).padStart(2, '0');
+          const emm = String((m + dur) % 60).padStart(2, '0');
+          rows.push({
+            pitch_id: pitchId,
+            slot_date: dateStr,
+            start_time: `${hh}:${mm}:00`,
+            end_time: `${ehh}:${emm}:00`,
+          });
+        }
+      }
+    }
+
+    // Set-based upsert: one round-trip, conflicts skipped atomically.
+    let created = 0;
+    let skipped = 0;
+    if (rows.length) {
+      const inserted = await this.db
+        .insert(pitch_slots)
+        .values(rows)
+        .onConflictDoNothing({
+          target: [pitch_slots.pitch_id, pitch_slots.slot_date, pitch_slots.start_time],
+        })
+        .returning({ id: pitch_slots.id });
+      created = inserted.length;
+      skipped = rows.length - created;
+    }
+
+    this.realtime.broadcastOps('venues');
+
+    return { created, skipped };
+  }
+
+  /** Create one specific slot (odd days, one-off sessions). */
+  async createSlot(actorId: string, actorRole: string, pitchId: string, dto: CreateSlotDto) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    if (dto.end_time <= dto.start_time) {
+      throw new BadRequestException('end_time must be after start_time.');
+    }
+
+    try {
+      const [slot] = await this.db
+        .insert(pitch_slots)
+        .values({
+          pitch_id: pitchId,
+          slot_date: dto.slot_date,
+          start_time: `${dto.start_time}:00`,
+          end_time: `${dto.end_time}:00`,
+        })
+        .returning();
+      this.realtime.broadcastOps('venues');
+      return slot;
+    } catch {
+      throw new ConflictException('A slot already exists at that date and time.');
+    }
+  }
+
+  /** Delete an unbooked slot. Booked slots must be cancelled via the match. */
+  async deleteSlot(actorId: string, actorRole: string, slotId: string) {
+    const [slot] = await this.db
+      .select({ id: pitch_slots.id, pitch_id: pitch_slots.pitch_id, is_booked: pitch_slots.is_booked })
+      .from(pitch_slots)
+      .where(eq(pitch_slots.id, slotId))
+      .limit(1);
+    if (!slot) throw new NotFoundException('Slot not found.');
+
+    await this.assertPitchAccess(actorId, actorRole, slot.pitch_id);
+
+    if (slot.is_booked) {
+      throw new BadRequestException(
+        'This slot is booked by a match — cancel the match first to release it.',
+      );
+    }
+
+    await this.db.delete(pitch_slots).where(eq(pitch_slots.id, slotId));
+    this.realtime.broadcastOps('venues');
+
+    return { deleted: true };
   }
 }

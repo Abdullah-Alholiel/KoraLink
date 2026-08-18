@@ -34,20 +34,4 @@ export class PitchesController {
   getSlots(@Param('id') id: string, @Query() dto: GetSlotsDto) {
     return this.matchesService.getPitchSlots(id, dto.date);
   }
-
-  @Post(':id/recurring-slots')
-  @ApiOperation({ summary: 'Generate recurring time slots for a pitch' })
-  @ApiOkResponse({ description: 'Count of slots created and skipped.' })
-  generateRecurringSlots(
-    @Param('id') id: string,
-    @Body() pattern: {
-      days_of_week: number[];
-      start_time: string;
-      end_time: string;
-      slot_duration_mins: number;
-      weeks_ahead: number;
-    },
-  ) {
-    return this.pitchesService.generateRecurringSlots(id, pattern);
-  }
 }

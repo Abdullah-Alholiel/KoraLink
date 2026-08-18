@@ -205,6 +205,29 @@ export interface PartnerVerificationRow {
   } | null;
 }
 
+export interface PartnerVenueRow {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  amenities: unknown;
+  is_approved: boolean;
+  is_koralink_partner: boolean;
+  owner_id?: string;
+  owner_name?: string | null;
+  pitch_count?: number;
+}
+
+export interface PartnerSlot {
+  id: string;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+  is_booked: boolean;
+  match_title: string | null;
+  match_id: string | null;
+}
+
 export interface PartnerEarnings {
   settlements: {
     id: string;
