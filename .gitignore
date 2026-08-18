@@ -49,3 +49,8 @@ next-env.d.ts
 
 # agents
 .agents/*
+
+# graphify (knowledge graph) — commit graph.json/report/html, not local/cache/backups
+graphify-out/cost.json
+graphify-out/cache/
+graphify-out/20*-*-*/

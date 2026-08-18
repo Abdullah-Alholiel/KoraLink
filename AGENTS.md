@@ -260,6 +260,9 @@ Before claiming ANY work complete:
 ## 10. Pre-Work Checklist
 
 Before generating any code:
+
+**Graphify-first rule:** if `graphify-out/graph.json` exists, consult the knowledge graph first — `graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"` — before grepping or reading raw files (see the `## graphify` section below).
+
 1. Read this AGENTS.md
 2. Read `apps/api/docs/FRONTEND_INTEGRATION.md` (for API contracts)
 3. Read `apps/api/src/database/schema.ts` (for DB types)
@@ -280,6 +283,8 @@ Depending on the task at hand, the agent MUST load and follow the corresponding 
 - **Frontend Logic & State:** Load `koralink-frontend-patterns.md` (Next.js App Router, Zustand, TanStack Query, i18n, bottom-sheet forms).
 - **Backend API & Database:** Load `KoraLink API Standards (NestJS).md` (NestJS modules, DTOs, Drizzle ORM, auth guards).
 
+- **Codebase Navigation:** Load the `graphify` skill — use `graphify query`/`path`/`explain` against `graphify-out/graph.json` before grepping raw files.
+
 ### Reviews & Audits
 - **Pre-Cycle Audit:** Load `koralink-audit-checklist.md` (Check for z-index issues, dead UI, format mapping, DB checks before starting).
 - **Post-Cycle Review:** Load `koralink-post-cycle-review.md`, `koralink-4-lane-review.md`, or `koralink-review-workflow.md` (For the review and fix workflows).
@@ -290,3 +295,23 @@ Depending on the task at hand, the agent MUST load and follow the corresponding 
 - **Subagent Delegation:** Load `koralink-delegation-config.md` (Model configuration to avoid provider/base_url mismatches).
 
 *(Note: `koralink-software-factory.md`, `koralink-runtime-pitfalls.md`, and `koralink-debugging.md` are placeholders for future elaboration).*
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+### KoraLink-specific
+
+- **Live DB schema** is mapped into the graph via `graphify extract . --postgres "postgresql://koralink:koralink_dev@localhost:5432/koralink"` (tables, views, functions, FK relationships). The Drizzle schema `apps/api/src/database/schema.ts` is also indexed as code. Re-run the `--postgres` extraction after schema migrations.
+- **MCP tools** are registered for this profile (`mcp_graphify_*`): `query_graph`, `get_node`, `get_neighbors`, `get_community`, `god_nodes`, `graph_stats`, `shortest_path`. Use them for structured graph access; fall back to the CLI for `path`/`explain`.
+- **Ignored:** `.graphifyignore` excludes `graphify-out/`, lockfiles, build caches, and agent sidecars. `graphify-out/` (except `cost.json` and `cache/`) is committed so subagents and fresh clones start with a ready map.
+- **After a big refactor or deletion:** run `graphify update . --force` (or set `GRAPHIFY_FORCE=1`) if the graph unexpectedly shrank.

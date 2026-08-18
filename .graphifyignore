@@ -1,0 +1,16 @@
+# graphify self-output — never index the previous graph
+graphify-out/
+
+# Agent/skill sidecars — not part of the app codebase
+.hermes/
+.hermes-bootstrap
+
+# Lockfiles / generated JSON — noisy, not meaningful graph nodes
+package-lock.json
+
+# Build caches (also gitignored; listed for safety on --no-gitignore runs)
+node_modules/
+.next/
+.turbo/
+dist/
+build/
