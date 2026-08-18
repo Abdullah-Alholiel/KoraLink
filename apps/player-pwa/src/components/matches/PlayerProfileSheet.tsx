@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { X, Trophy, Users, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Trophy, Users, Loader2, AlertTriangle, Flag } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
 import FollowButton from '@/components/features/FollowButton';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ReportSheet from '@/components/matches/ReportSheet';
 import type { RosterPlayer } from '@/types';
 
 interface PlayerProfileSheetProps {
@@ -20,6 +22,7 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
     const storeUser = useAppStore(selectUser);
     const isSelf = player?.userId === storeUser?.id;
+    const [showReport, setShowReport] = useState(false);
 
     if (!player) return null;
 
@@ -118,7 +121,26 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                         <FollowButton targetUserId={player.userId} size="sm" />
                     </div>
                 )}
+
+                {/* ── Report (hidden for self) ── */}
+                {!isSelf && (
+                    <button
+                        onClick={() => setShowReport(true)}
+                        className="w-full bg-white rounded-xl shadow-card p-4 mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-brand-red"
+                    >
+                        <Flag className="w-4 h-4" strokeWidth={2} />
+                        {t('report.reportUser')}
+                    </button>
+                )}
             </div>
+
+            <ReportSheet
+                open={showReport}
+                onClose={() => setShowReport(false)}
+                subjectType="user"
+                subjectId={player.userId}
+                subjectLabel={player.name}
+            />
         </BottomSheet>
     );
 }

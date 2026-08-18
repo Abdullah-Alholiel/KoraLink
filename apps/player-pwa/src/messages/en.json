@@ -686,5 +686,16 @@
     "rejectedDesc": "A previous appeal on this match was rejected.",
     "appealHint": "Disagree with this mark? Appeal it and admins will review.",
     "appealCta": "Appeal No-Show"
+  },
+  "report": {
+    "title": "Report",
+    "subtitle": "Tell us what's wrong. Our team will review your report.",
+    "reasonLabel": "What happened?",
+    "reasonPlaceholder": "e.g. This user was abusive in the match chat…",
+    "submit": "Submit Report",
+    "submittedTitle": "Report submitted",
+    "submittedDesc": "Thanks — our team will review it.",
+    "reportMatch": "Report match",
+    "reportUser": "Report user"
   }
 }

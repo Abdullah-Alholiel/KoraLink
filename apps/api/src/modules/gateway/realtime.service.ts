@@ -49,7 +49,7 @@ export class RealtimeService {
    * `ops` room) that an entity changed. Clients refetch their own role-scoped
    * data — no row payloads are pushed, so partners never receive admin rows.
    */
-  broadcastOps(entity: 'users' | 'matches' | 'venues' | 'disputes' | 'transactions' | 'settlements' | 'settings'): void {
+  broadcastOps(entity: 'users' | 'matches' | 'venues' | 'disputes' | 'transactions' | 'settlements' | 'settings' | 'reports'): void {
     if (!this.server) return;
     this.server.to('ops').emit('ops-data-changed', { entity });
   }

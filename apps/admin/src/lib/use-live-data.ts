@@ -14,7 +14,8 @@ export type OpsEntity =
   | 'disputes'
   | 'transactions'
   | 'settlements'
-  | 'settings';
+  | 'settings'
+  | 'reports';
 
 /**
  * Live admin/partner data hook.

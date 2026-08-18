@@ -111,6 +111,39 @@ export interface DisputeListItem {
   match_title: string | null;
 }
 
+export interface AdminReportListItem {
+  id: string;
+  subject_type: 'user' | 'match' | 'venue';
+  subject_id: string;
+  reason: string;
+  status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  resolution: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  reporter_name: string | null;
+  reporter_handle: string | null;
+  subject_label: string | null;
+}
+
+export interface ReportSubject {
+  type: 'user' | 'match' | 'venue';
+  id: string;
+  label: string;
+  status: string;
+}
+
+export interface AdminReportDetail extends AdminReportListItem {
+  reporter: {
+    id: string;
+    full_name: string | null;
+    handle: string | null;
+    avatar_url: string | null;
+    phone: string | null;
+  };
+  resolvedBy: { id: string; full_name: string | null } | null;
+  subject: ReportSubject;
+}
+
 export interface AdminTransaction {
   id: string;
   user_id: string;

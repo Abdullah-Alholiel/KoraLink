@@ -22,6 +22,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
 import { AdminModule } from './modules/admin/admin.module';
 import { PartnerModule } from './modules/partner/partner.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
@@ -86,6 +87,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     AdminModule,
     PartnerModule,
     SettingsModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

@@ -14,6 +14,7 @@ export type ConsoleSection =
   | 'matches'
   | 'venues'
   | 'disputes'
+  | 'reports'
   | 'transactions'
   | 'settlements'
   | 'settings'
@@ -32,6 +33,7 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
     'matches',
     'venues',
     'disputes',
+    'reports',
     'transactions',
     'settlements',
     'settings',
@@ -70,6 +72,7 @@ export function sectionForPath(pathname: string): ConsoleSection | null {
     'matches',
     'venues',
     'disputes',
+    'reports',
     'transactions',
     'settlements',
     'settings',
@@ -94,6 +97,7 @@ export type ConsoleAction =
   | 'user.setRole'
   | 'venue.approve'
   | 'dispute.resolve'
+  | 'report.resolve'
   | 'transaction.refund'
   | 'settlement.pay'
   | 'settlement.generate'
@@ -111,6 +115,7 @@ const ACTIONS_BY_ROLE: Record<Role, ConsoleAction[]> = {
     'user.setRole',
     'venue.approve',
     'dispute.resolve',
+    'report.resolve',
     'transaction.refund',
     'settlement.pay',
     'settlement.generate',

@@ -833,11 +833,23 @@ export const reports = pgTable(
     subject_id: varchar('subject_id', { length: 36 }).notNull(),
     reason: text('reason').notNull(),
     status: reportStatusEnum('status').notNull().default('open'),
+    resolution: text('resolution'),
+    resolved_by: varchar('resolved_by', { length: 36 }).references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    resolved_at: timestamp('resolved_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
   },
-  (t) => [index('reports_status_idx').on(t.status)],
+  (t) => [
+    index('reports_status_idx').on(t.status),
+    index('reports_subject_type_idx').on(t.subject_type),
+  ],
 );
 
 export const app_settings = pgTable('app_settings', {
@@ -984,5 +996,10 @@ export const reportsRelations = relations(reports, ({ one }) => ({
     fields: [reports.reporter_id],
     references: [users.id],
     relationName: 'ReportReporter',
+  }),
+  resolvedBy: one(users, {
+    fields: [reports.resolved_by],
+    references: [users.id],
+    relationName: 'ReportResolvedBy',
   }),
 }));

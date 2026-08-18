@@ -8,6 +8,8 @@ import { AdminVenuesService } from './venues.service';
 import { AdminVenuesController } from './venues.controller';
 import { AdminDisputesService } from './disputes.service';
 import { AdminDisputesController } from './disputes.controller';
+import { AdminReportsService } from './reports.service';
+import { AdminReportsController } from './reports.controller';
 import { AdminTransactionsService } from './transactions.service';
 import { AdminTransactionsController } from './transactions.controller';
 import { AdminSettlementsService } from './settlements.service';
@@ -27,6 +29,7 @@ import { GatewayModule } from '../gateway/gateway.module';
     AdminUsersController,
     AdminVenuesController,
     AdminDisputesController,
+    AdminReportsController,
     AdminTransactionsController,
     AdminSettlementsController,
     AdminSettingsController,
@@ -39,6 +42,7 @@ import { GatewayModule } from '../gateway/gateway.module';
     AdminUsersService,
     AdminVenuesService,
     AdminDisputesService,
+    AdminReportsService,
     AdminTransactionsService,
     AdminSettlementsService,
     AdminSettingsService,

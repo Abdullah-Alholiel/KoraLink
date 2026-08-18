@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   CreditCard,
+  Flag,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -25,6 +26,7 @@ const SECTION_META: Record<ConsoleSection, { href: string; label: string; icon: 
   matches: { href: '/matches', label: 'Matches', icon: Trophy },
   venues: { href: '/venues', label: 'Venues', icon: MapPin },
   disputes: { href: '/disputes', label: 'Disputes', icon: ShieldAlert },
+  reports: { href: '/reports', label: 'Reports', icon: Flag },
   transactions: { href: '/transactions', label: 'Transactions', icon: CreditCard },
   settlements: { href: '/settlements', label: 'Settlements', icon: Wallet },
   settings: { href: '/settings', label: 'Settings', icon: Settings },

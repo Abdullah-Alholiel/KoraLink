@@ -58,6 +58,7 @@ import OngoingGameJoinSheet from '@/components/matches/OngoingGameJoinSheet';
 import AttendanceSheet from '@/components/matches/AttendanceSheet';
 import AttendanceBanner from '@/components/matches/AttendanceBanner';
 import AppealSheet from '@/components/matches/AppealSheet';
+import ReportSheet from '@/components/matches/ReportSheet';
 
 export default function MatchDetailPage({
     params,
@@ -97,6 +98,7 @@ export default function MatchDetailPage({
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
     const [showAppealSheet, setShowAppealSheet] = useState(false);
+    const [showReportSheet, setShowReportSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
 
     // The current user's roster entry (for no-show state + appeals).
@@ -405,10 +407,14 @@ export default function MatchDetailPage({
                             </div>
 
                             {/* 2. Match Rules */}
-                            <div className="flex items-center justify-center gap-2 py-4">
+                            <div className="flex items-center justify-center gap-4 py-4">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}
+                                </button>
+                                <span className="text-gray-200">·</span>
+                                <button onClick={() => setShowReportSheet(true)} className="text-sm font-semibold text-brand-red">
+                                    {t('report.reportMatch')}
                                 </button>
                             </div>
 
@@ -711,10 +717,14 @@ export default function MatchDetailPage({
                             </div>
 
                             {/* View Match Rules (accessible before join) */}
-                            <div className="flex items-center justify-center gap-2 py-4">
+                            <div className="flex items-center justify-center gap-4 py-4">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}
+                                </button>
+                                <span className="text-gray-200">·</span>
+                                <button onClick={() => setShowReportSheet(true)} className="text-sm font-semibold text-brand-red">
+                                    {t('report.reportMatch')}
                                 </button>
                             </div>
 
@@ -889,6 +899,17 @@ export default function MatchDetailPage({
                             },
                         });
                     }}
+                />
+            )}
+
+            {/* Report Sheet */}
+            {match && (
+                <ReportSheet
+                    open={showReportSheet}
+                    onClose={() => setShowReportSheet(false)}
+                    subjectType="match"
+                    subjectId={match.id}
+                    subjectLabel={match.title}
                 />
             )}
 
