@@ -51,7 +51,7 @@ export default function InstallPrompt() {
             <div
                 role="dialog"
                 aria-label={t('title')}
-                className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md mx-auto px-5 z-[70]"
+                className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-[70]"
             >
             <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(32,33,36,0.18)] border border-gray-100 p-4 animate-slide-up">
                 <div className="flex items-start gap-3">

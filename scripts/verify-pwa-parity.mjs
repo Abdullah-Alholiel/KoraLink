@@ -45,28 +45,40 @@ const browser = await chromium.launch({
 });
 
 try {
-  // ── 1. Desktop shell width parity ─────────────────────────
+  // ── 1. Desktop shell — RESPONSIVE, not phone-narrow ─────────
+  // Shell is fluid up to max-w-6xl (1152px): phone/tablet full-bleed,
+  // desktop capped+centered. (Abdullah's explicit standard — do NOT cap at
+  // max-w-md; that recreates the phone-frame-on-desktop regression.)
   let page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(`${PWA}/ar/play`, { waitUntil: 'domcontentloaded' });
   await devLogin(page);
   await page.goto(`${PWA}/ar/play`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3500);
+  for (let i = 0; i < 5; i++) {
+    if (page.url().includes('/login')) {
+      await page.evaluate(() => {}, {});
+      await devLogin(page);
+      await page.goto(`${PWA}/ar/play`, { waitUntil: 'domcontentloaded' });
+    }
+    try { await page.waitForSelector('nav', { timeout: 6000 }); } catch { continue; }
+    await page.waitForTimeout(2500);
+    if (page.url().includes('/play') && (await page.$('nav'))) break;
+  }
+  await page.waitForTimeout(800);
   console.log(`  [debug] landed on: ${page.url()}`);
 
   const shell = await page.evaluate(() => {
-    // MobileFrame renders the app column: find the max-w constrained child of app-shell
     const el = document.querySelector('.app-shell > div > div') || document.querySelector('.app-shell > div');
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { width: Math.round(r.width), left: Math.round(r.left), vw: window.innerWidth };
   });
   report(
-    'desktop: shell column ≤ 448px (max-w-md)',
-    shell && shell.width <= 448,
+    'desktop: shell flexes wide (max-w-6xl responsive, ≥1000px on 1280 viewport)',
+    shell && shell.width >= 1000 && shell.width <= 1152,
     shell ? `width=${shell.width}px left=${shell.left} viewport=${shell.vw}` : 'shell not found',
   );
   report(
-    'desktop: column centered',
+    'desktop: wide shell centered',
     shell && Math.abs(shell.left - (shell.vw - shell.width) / 2) <= 2,
     shell ? `left offset=${shell.left}px (center=${Math.round((shell.vw - shell.width) / 2)})` : '',
   );
@@ -78,8 +90,8 @@ try {
     return { width: Math.round(r.width), left: Math.round(r.left) };
   });
   report(
-    'desktop: bottom nav aligned to same column',
-    nav && shell && Math.abs(nav.left - shell.left) <= 2 && nav.width <= 448,
+    'desktop: bottom nav spans the same wide shell',
+    nav && shell && Math.abs(nav.left - shell.left) <= 2 && nav.width >= 1000,
     nav ? `nav width=${nav.width}px left=${nav.left}px` : 'nav not found',
   );
 

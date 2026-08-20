@@ -164,7 +164,7 @@ export default function BottomSheet({
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-md mx-auto px-0"
+        className="fixed bottom-0 inset-x-0 z-[70] flex justify-center max-w-6xl mx-auto px-0 md:px-4"
       >
         <div
           className={`w-full ${widthClass} bg-white rounded-t-3xl shadow-2xl animate-slide-up flex flex-col ${maxHeightClass} pb-safe ${panelClassName}`}
