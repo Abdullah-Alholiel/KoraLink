@@ -13,6 +13,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -22,6 +23,7 @@ export class AdminTransactionsService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async list(dto: ListTransactionsDto) {
@@ -107,6 +109,18 @@ export class AdminTransactionsService {
       ip,
     });
     this.realtime.broadcastOps('transactions');
+
+    // ── Player notification: their money came back ──
+    try {
+      await this.activities.record({
+        actorId: adminId,
+        verb: 'wallet_refunded',
+        recipients: [original.user_id],
+        excludeActor: false,
+      });
+    } catch {
+      // best-effort
+    }
 
     return after;
   }

@@ -86,6 +86,14 @@ export default function NotificationProvider({ children }: { children: React.Rea
         pom_decided: t('pomDecidedTitle'),
         joined_match: t('joinedYourMatch', { name: actorName }),
         created_match: t('createdMatchTitle', { name: actorName }),
+        // ── Admin/ops → player ──
+        dispute_resolved: t('disputeResolved'),
+        dispute_rejected: t('disputeRejected'),
+        wallet_refunded: t('walletRefunded'),
+        match_cancelled_admin: t('matchCancelledAdmin'),
+        account_suspended: t('accountSuspended'),
+        account_banned: t('accountBanned'),
+        no_show_marked: t('noShowMarked'),
       };
       const message = copy[payload.verb] ?? t('newActivity');
       const href = payload.verb === 'followed'

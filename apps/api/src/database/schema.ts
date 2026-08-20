@@ -102,6 +102,14 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'followed',
   'messaged',
   'pom_decided',
+  // ── Admin→player notifications (ops console actions) ──
+  'dispute_resolved',
+  'dispute_rejected',
+  'wallet_refunded',
+  'match_cancelled_admin',
+  'account_suspended',
+  'account_banned',
+  'no_show_marked',
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

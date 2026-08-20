@@ -1114,6 +1114,7 @@ export class MatchesService {
    */
   async markNoShow(hostId: string, matchId: string, targetUserId: string, noShow: boolean) {
     const graceMins = await this.settings.getNumber('grace_period_mins', 0);
+    let wasFlagged = false; // player's no_show state BEFORE this call
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -1162,6 +1163,7 @@ export class MatchesService {
           ),
         )
         .limit(1);
+      wasFlagged = player.no_show;
 
       if (!player) {
         throw new NotFoundException('Player is not in the match roster.');
@@ -1253,6 +1255,23 @@ export class MatchesService {
     } catch (err) {
       this.logger.error(`WS broadcast error on markNoShow: ${(err as Error).message}`);
     }
+
+    // ── Marked player notification — the banner only reaches them if they
+    // reopen the match; the bell reaches them anywhere. Best-effort. ──
+    if (wasFlagged !== noShow) {
+      try {
+        await this.activitiesService.record({
+          actorId: hostId,
+          verb: 'no_show_marked',
+          matchId,
+          recipients: [targetUserId],
+          excludeActor: false,
+        });
+      } catch {
+        // best-effort
+      }
+    }
+
     return updatedMatch;
   }
 

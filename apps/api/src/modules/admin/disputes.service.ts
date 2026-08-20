@@ -8,6 +8,7 @@ import { ListDisputesDto } from './dto/list-disputes.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -17,6 +18,7 @@ export class AdminDisputesService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async list(dto: ListDisputesDto) {
@@ -127,6 +129,20 @@ export class AdminDisputesService {
     });
     this.realtime.broadcastOps('disputes');
     this.realtime.broadcastOps('users');
+
+    // ── Player notification (the reporter must learn the outcome) ──
+    // Best-effort: a notification failure must never fail the resolution.
+    try {
+      await this.activities.record({
+        actorId: adminId,
+        verb: dto.outcome === 'resolved' ? 'dispute_resolved' : 'dispute_rejected',
+        matchId: before.match_id,
+        recipients: [before.reporter_id],
+        excludeActor: false,
+      });
+    } catch {
+      // swallow — feed/WS fan-out is supplementary
+    }
 
     return after;
   }

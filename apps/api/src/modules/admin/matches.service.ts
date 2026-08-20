@@ -7,6 +7,7 @@ import { ListMatchesDto } from './dto/list-matches.dto';
 import { AuditService } from './audit.service';
 import { MatchesService } from '../matches/matches.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -17,6 +18,7 @@ export class AdminMatchesService {
     private readonly matchesService: MatchesService,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async list(dto: ListMatchesDto) {
@@ -83,6 +85,25 @@ export class AdminMatchesService {
       ip,
     });
     this.realtime.broadcastOps('matches');
+
+    // ── Roster notification: HQ cancelled the match, refunds issued ──
+    try {
+      const roster = await this.db
+        .select({ user_id: schema.match_players.user_id })
+        .from(schema.match_players)
+        .where(eq(schema.match_players.match_id, id));
+      if (roster.length) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: 'match_cancelled_admin',
+          matchId: id,
+          recipients: roster.map((r) => r.user_id),
+          excludeActor: false,
+        });
+      }
+    } catch {
+      // best-effort
+    }
 
     return after;
   }

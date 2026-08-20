@@ -20,7 +20,32 @@ export type ActivityVerb =
   | 'joined_match'
   | 'followed'
   | 'messaged'
-  | 'pom_decided';
+  | 'pom_decided'
+  // ── Admin→player (ops console actions) ──
+  | 'dispute_resolved'
+  | 'dispute_rejected'
+  | 'wallet_refunded'
+  | 'match_cancelled_admin'
+  | 'account_suspended'
+  | 'account_banned'
+  | 'no_show_marked';
+
+/** Verbs that appear in the bell (directed notifications), not just the feed. */
+const DIRECTED_VERBS = [
+  'followed',
+  'messaged',
+  'pom_decided',
+  'dispute_resolved',
+  'dispute_rejected',
+  'wallet_refunded',
+  'match_cancelled_admin',
+  'account_suspended',
+  'account_banned',
+  'no_show_marked',
+] as const;
+
+/** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */
+const DIRECTED_VERBS_SQL = `ARRAY['${DIRECTED_VERBS.join("','")}']::"ActivityVerb"[]`;
 
 interface RecordParams {
   actorId: string;
@@ -151,7 +176,7 @@ export class ActivitiesService {
       WHERE fi.recipient_id = ${userId}::text
         AND fi.is_read = FALSE
         AND (
-          a.verb IN ('followed','messaged','pom_decided')
+          a.verb = ANY(${sql.raw(DIRECTED_VERBS_SQL)})
           OR (a.verb = 'joined_match' AND m.host_id = ${userId}::text)
         )
     `)) as unknown as Array<{ n: number }>;
@@ -177,7 +202,7 @@ export class ActivitiesService {
     const directedClause =
       filter === 'directed'
         ? sql`AND (
-            a.verb IN ('followed','messaged','pom_decided')
+            a.verb = ANY(${sql.raw(DIRECTED_VERBS_SQL)})
             OR (a.verb = 'joined_match' AND m.host_id = ${userId}::text)
           )`
         : sql``;
@@ -211,7 +236,7 @@ export class ActivitiesService {
         (
           3.0 * exp(-1.0 * EXTRACT(EPOCH FROM (NOW() - a.created_at)) / 86400.0)
           + CASE
-              WHEN a.verb IN ('followed','messaged','pom_decided') THEN 3.0
+              WHEN a.verb = ANY(${sql.raw(DIRECTED_VERBS_SQL)}) THEN 3.0
               WHEN a.verb = 'joined_match' AND m.host_id = ${userId}::text THEN 3.0
               WHEN EXISTS (
                 SELECT 1 FROM ${follows} f

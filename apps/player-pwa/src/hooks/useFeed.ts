@@ -8,7 +8,15 @@ export type ActivityVerb =
   | 'joined_match'
   | 'followed'
   | 'messaged'
-  | 'pom_decided';
+  | 'pom_decided'
+  // ── Admin/ops → player ──
+  | 'dispute_resolved'
+  | 'dispute_rejected'
+  | 'wallet_refunded'
+  | 'match_cancelled_admin'
+  | 'account_suspended'
+  | 'account_banned'
+  | 'no_show_marked';
 
 export interface FeedItem {
   id: string;

@@ -12,6 +12,12 @@ import {
   Trophy,
   CheckCheck,
   AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
+  Wallet,
+  XCircle,
+  PauseCircle,
+  Ban,
   type LucideIcon,
 } from 'lucide-react';
 import { useNotificationsFeed, useMarkNotificationsRead } from '@/hooks/useNotificationsFeed';
@@ -32,6 +38,13 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   followed: UserPlus,
   messaged: MessageSquare,
   pom_decided: Trophy,
+  dispute_resolved: ShieldCheck,
+  dispute_rejected: ShieldAlert,
+  wallet_refunded: Wallet,
+  match_cancelled_admin: XCircle,
+  account_suspended: PauseCircle,
+  account_banned: Ban,
+  no_show_marked: AlertTriangle,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -40,6 +53,13 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   followed: 'notifications.followedYou',
   messaged: 'notifications.messagedYou',
   pom_decided: 'notifications.pomDecided',
+  dispute_resolved: 'notifications.disputeResolved',
+  dispute_rejected: 'notifications.disputeRejected',
+  wallet_refunded: 'notifications.walletRefunded',
+  match_cancelled_admin: 'notifications.matchCancelledAdmin',
+  account_suspended: 'notifications.accountSuspended',
+  account_banned: 'notifications.accountBanned',
+  no_show_marked: 'notifications.noShowMarked',
 };
 
 /**

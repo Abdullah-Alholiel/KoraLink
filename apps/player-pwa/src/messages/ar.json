@@ -513,7 +513,14 @@
     "subtitle": "أحدث الأنشطة من حولك",
     "newActivities": "أنشطة جديدة",
     "newDivider": "جديد",
-    "updatedJustNow": "تم التحديث الآن"
+    "updatedJustNow": "تم التحديث الآن",
+    "disputeResolved": "تم قبول اعتراضك لصالحك",
+    "disputeRejected": "تمت مراجعة اعتراضك ورفضه",
+    "walletRefunded": "تم إرجاع مبلغ إلى محفظتك",
+    "matchCancelledAdmin": "تم إلغاء مباراتك من قبل KoraLink وأُرجعت المدفوعات",
+    "accountSuspended": "تم إيقاف حسابك مؤقتًا",
+    "accountBanned": "تم حظر حسابك",
+    "noShowMarked": "تم تسجيلك كمتغيب"
   },
   "payment": {
     "title": "الدفع",
@@ -659,7 +666,14 @@
     "pomDecidedTitle": "تم اختيار رجل المباراة",
     "createdMatch": "{name} يستضيف: {title}",
     "createdMatchTitle": "{name} أنشأ مباراة جديدة",
-    "seeAll": "عرض الكل"
+    "seeAll": "عرض الكل",
+    "disputeResolved": "تم قبول اعتراضك لصالحك",
+    "disputeRejected": "تمت مراجعة اعتراضك ورفضه",
+    "walletRefunded": "تم إرجاع مبلغ إلى محفظتك",
+    "matchCancelledAdmin": "تم إلغاء مباراتك من قبل KoraLink وأُرجعت المدفوعات",
+    "accountSuspended": "تم إيقاف حسابك مؤقتًا",
+    "accountBanned": "تم حظر حسابك",
+    "noShowMarked": "تم تسجيلك كمتغيب"
   },
   "attendance": {
     "title": "الحضور والغياب",

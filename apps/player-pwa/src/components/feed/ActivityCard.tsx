@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Plus, Users, UserPlus, MessageSquare, Trophy, type LucideIcon } from 'lucide-react';
+import { Plus, Users, UserPlus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, type LucideIcon } from 'lucide-react';
 import type { FeedItem, ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
 
@@ -17,6 +17,13 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   followed: UserPlus,
   messaged: MessageSquare,
   pom_decided: Trophy,
+  dispute_resolved: ShieldCheck,
+  dispute_rejected: ShieldAlert,
+  wallet_refunded: Wallet,
+  match_cancelled_admin: XCircle,
+  account_suspended: PauseCircle,
+  account_banned: Ban,
+  no_show_marked: AlertTriangle,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -25,6 +32,13 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   followed: 'feed.followedYou',
   messaged: 'feed.messagedYou',
   pom_decided: 'feed.pomDecided',
+  dispute_resolved: 'feed.disputeResolved',
+  dispute_rejected: 'feed.disputeRejected',
+  wallet_refunded: 'feed.walletRefunded',
+  match_cancelled_admin: 'feed.matchCancelledAdmin',
+  account_suspended: 'feed.accountSuspended',
+  account_banned: 'feed.accountBanned',
+  no_show_marked: 'feed.noShowMarked',
 };
 
 export default function ActivityCard({ item, locale }: ActivityCardProps) {

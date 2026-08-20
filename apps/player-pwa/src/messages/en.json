@@ -513,7 +513,14 @@
     "subtitle": "Latest activity around you",
     "newActivities": "New activities",
     "newDivider": "New",
-    "updatedJustNow": "Updated just now"
+    "updatedJustNow": "Updated just now",
+    "disputeResolved": "Your dispute was resolved in your favour",
+    "disputeRejected": "Your dispute was reviewed and rejected",
+    "walletRefunded": "A refund was issued to your wallet",
+    "matchCancelledAdmin": "Your match was cancelled by KoraLink — payments refunded",
+    "accountSuspended": "Your account has been suspended",
+    "accountBanned": "Your account has been banned",
+    "noShowMarked": "You were marked as a no-show"
   },
   "payment": {
     "title": "Checkout",
@@ -659,7 +666,14 @@
     "pomDecidedTitle": "Player of the Match decided",
     "createdMatch": "{name} is hosting: {title}",
     "createdMatchTitle": "{name} created a new match",
-    "seeAll": "See all"
+    "seeAll": "See all",
+    "disputeResolved": "Your dispute was resolved in your favour",
+    "disputeRejected": "Your dispute was reviewed and rejected",
+    "walletRefunded": "A refund was issued to your wallet",
+    "matchCancelledAdmin": "Your match was cancelled by KoraLink — payments refunded",
+    "accountSuspended": "Your account has been suspended",
+    "accountBanned": "Your account has been banned",
+    "noShowMarked": "You were marked as a no-show"
   },
   "attendance": {
     "title": "Attendance",

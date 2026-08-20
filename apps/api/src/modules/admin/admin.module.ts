@@ -21,9 +21,10 @@ import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
 import { MatchesModule } from '../matches/matches.module';
 import { GatewayModule } from '../gateway/gateway.module';
+import { ActivitiesModule } from '../activities/activities.module';
 
 @Module({
-  imports: [MatchesModule, GatewayModule],
+  imports: [MatchesModule, GatewayModule, ActivitiesModule],
   controllers: [
     MetricsController,
     AdminUsersController,

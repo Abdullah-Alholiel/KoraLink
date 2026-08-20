@@ -13,6 +13,7 @@ import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserAdminDto } from './dto/update-user.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -40,6 +41,7 @@ export class AdminUsersService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   private buildWhere(dto: ListUsersDto): SQL | undefined {
@@ -178,6 +180,29 @@ export class AdminUsersService {
       ip,
     });
     this.realtime.broadcastOps('users');
+
+    // ── Player notification for moderation actions ──
+    // A ban/suspension ends the player's session on their next request (guard
+    // rejects the JWT) — this notification is what they see explaining why.
+    try {
+      if (updates.banned_at !== undefined) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: updates.banned_at ? 'account_banned' : 'account_suspended',
+          recipients: [id],
+          excludeActor: false,
+        });
+      } else if (updates.suspended_until !== undefined) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: 'account_suspended',
+          recipients: [id],
+          excludeActor: false,
+        });
+      }
+    } catch {
+      // best-effort
+    }
 
     return after;
   }
