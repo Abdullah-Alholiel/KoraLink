@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/ar/offline',
 }));
 
-import Offline from '@/app/[locale]/offline';
+import Offline from '@/app/[locale]/offline/page';
 
 describe('Offline page', () => {
   beforeEach(() => {

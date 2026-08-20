@@ -45,7 +45,7 @@ export default function BottomNav() {
       bg-white border-t border-gray-100
       pb-safe pt-2 px-2
       relative z-50
-      w-full max-w-6xl mx-auto
+      w-full max-w-md mx-auto
     ">
             <div className="grid grid-cols-5 w-full max-w-xl mx-auto">
                 {navItems.map((item) => {

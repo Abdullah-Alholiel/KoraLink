@@ -7,6 +7,7 @@ import { LocationProvider } from '@/providers/LocationProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import ServiceWorkerUpdater from '@/components/auth/ServiceWorkerUpdater';
 import ChunkLoadErrorHandler from '@/components/auth/ChunkLoadErrorHandler';
+import InstallPrompt from '@/components/pwa/InstallPrompt';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -108,6 +109,7 @@ export default async function RootLayout({
                 <AuthBootstrap />
                 <ServiceWorkerUpdater />
                 <ChunkLoadErrorHandler />
+                <InstallPrompt />
                 <div className="app-shell">{children}</div>
               </LocationProvider>
             </IntlClientProvider>

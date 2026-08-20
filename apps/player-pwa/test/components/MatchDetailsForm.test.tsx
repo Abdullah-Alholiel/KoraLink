@@ -80,6 +80,41 @@ describe('MatchDetailsForm — iOS-safe date/time inputs', () => {
     expect(screen.queryByLabelText('Start Time')).toBeNull();
   });
 
+  it('opens the picker on click via guarded showPicker (desktop Chromium)', () => {
+    const showPickerSpy = vi.fn();
+    // jsdom's HTMLInputElement has no showPicker — define it like desktop
+    Object.defineProperty(HTMLInputElement.prototype, 'showPicker', {
+      configurable: true,
+      writable: true,
+      value: showPickerSpy,
+    });
+    try {
+      renderForm();
+      const dateInput = screen.getByLabelText('Date') as HTMLInputElement;
+      fireEvent.click(dateInput);
+      expect(showPickerSpy).toHaveBeenCalledTimes(1);
+      const timeInput = screen.getByLabelText('Start Time') as HTMLInputElement;
+      fireEvent.click(timeInput);
+      expect(showPickerSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (HTMLInputElement.prototype as unknown as Record<string, unknown>).showPicker;
+    }
+  });
+
+  it('is a silent no-op on click when showPicker is undefined (iOS WebKit)', () => {
+    // iOS: showPicker doesn't exist — delete any prototype residue and click
+    // must not throw (native tap path handles opening the wheel).
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'showPicker');
+    delete (HTMLInputElement.prototype as unknown as Record<string, unknown>).showPicker;
+    try {
+      renderForm();
+      const dateInput = screen.getByLabelText('Date') as HTMLInputElement;
+      expect(() => fireEvent.click(dateInput)).not.toThrow();
+    } finally {
+      if (desc) Object.defineProperty(HTMLInputElement.prototype, 'showPicker', desc);
+    }
+  });
+
   it('snaps the picked time to the nearest 10 minutes before saving', () => {
     const setTime = vi.fn();
     renderForm({ setTime });

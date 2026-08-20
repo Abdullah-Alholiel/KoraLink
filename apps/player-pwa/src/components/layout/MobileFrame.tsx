@@ -12,7 +12,7 @@ export default function MobileFrame({ children, className = '' }: MobileFramePro
     <div className="w-full h-[var(--app-height)] max-h-[var(--app-height)] bg-brand-bg flex justify-center overflow-hidden">
       <div
         className={`
-          w-full max-w-6xl
+          w-full max-w-md
           h-[var(--app-height)] max-h-[var(--app-height)]
           bg-white shadow-sm
           relative overflow-hidden

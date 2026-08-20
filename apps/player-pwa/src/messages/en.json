@@ -697,5 +697,16 @@
     "submittedDesc": "Thanks — our team will review it.",
     "reportMatch": "Report match",
     "reportUser": "Report user"
+  },
+  "pwa": {
+    "install": {
+      "title": "Install KoraLink",
+      "bodyDesktop": "Get the full-screen app experience — installs in seconds.",
+      "bodyIos": "Add KoraLink to your home screen for the full app experience.",
+      "install": "Install",
+      "notNow": "Not now",
+      "iosStepShare": "Tap the Share button in Safari's toolbar",
+      "iosStepAdd": "Tap “Add to Home Screen”"
+    }
   }
 }

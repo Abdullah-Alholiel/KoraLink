@@ -760,7 +760,7 @@ export default function MatchDetailPage({
                             )}
 
                             {showJoin && (
-                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-6xl mx-auto px-5 z-40">
+                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md mx-auto px-5 z-40">
                                 <div className="max-w-xl mx-auto">
                                     <button
                                         onClick={handleJoinClick}

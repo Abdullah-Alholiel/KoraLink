@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield } from 'lucide-react';
 import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
 import { todayInRiyadh } from '@/lib/api-adapter';
+import DateTimeOverlayInput from '@/components/host/DateTimeOverlayInput';
 
 export interface SlotPickerProps {
     pitchId: string | null;
@@ -65,35 +66,32 @@ export default function SlotPicker({ pitchId, initialDate, selectedSlot, onSelec
                 {t('host.selectSlot')}
             </p>
 
-            {/* Date picker — invisible native input overlay (iOS-safe:
-                showPicker() is unsupported on iOS WebKit) */}
-            <label className="w-full relative bg-gray-50 rounded-xl border border-gray-100 p-3.5 text-start cursor-pointer">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                    {t('host.slotDate')}
-                </p>
-                <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                    <span className="text-sm font-bold text-brand-black">
-                        {slotDate
-                            ? new Date(slotDate + 'T00:00:00').toLocaleDateString(
-                                locale === 'ar' ? 'ar-SA' : 'en-US',
-                                { month: 'short', day: 'numeric', weekday: 'short' },
-                            )
-                            : t('host.pickDateFirst')}
-                    </span>
-                </div>
-                <input
-                    type="date"
-                    value={slotDate}
-                    min={today}
-                    onChange={(e) => {
-                        setSlotDate(e.target.value);
-                        onSelectSlot(null as unknown as PitchSlotApi); // clear selection
-                    }}
-                    aria-label={t('host.slotDate')}
-                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                />
-            </label>
+            {/* Date picker — shared cross-platform overlay (iOS tap opens the
+                wheel natively; desktop opens the calendar via guarded
+                showPicker()) */}
+            <DateTimeOverlayInput
+                type="date"
+                value={slotDate}
+                onChange={(v) => {
+                    setSlotDate(v);
+                    onSelectSlot(null as unknown as PitchSlotApi); // clear selection
+                }}
+                label={t('host.slotDate')}
+                min={today}
+                display={
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                        <span className="text-sm font-bold text-brand-black">
+                            {slotDate
+                                ? new Date(slotDate + 'T00:00:00').toLocaleDateString(
+                                    locale === 'ar' ? 'ar-SA' : 'en-US',
+                                    { month: 'short', day: 'numeric', weekday: 'short' },
+                                )
+                                : t('host.pickDateFirst')}
+                        </span>
+                    </div>
+                }
+            />
 
             {/* Time slots */}
             {slotDate && (

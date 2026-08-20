@@ -9,7 +9,15 @@ const withPWA = withPWAInit({
   dest: 'public',
   register: true,
   disable: process.env.NODE_ENV === 'development',
-  fallbacks: false,
+  // Offline fallback: serve /ar/offline when a navigation fails (both cache
+  // and network). The page is a client component that re-detects the locale
+  // from the ACTUAL pathname (the browser URL stays the original request when
+  // the SW serves a cached response), so English users get English after
+  // hydration. One shell is the next-pwa pattern — only ONE document fallback
+  // is supported. Verified post-build: `grep -c setCatchHandler public/sw.js`.
+  fallbacks: {
+    document: '/ar/offline',
+  },
   workboxOptions: {
     skipWaiting: true,
     runtimeCaching: [
@@ -164,7 +172,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://*.mapbox.com",
               `connect-src ${connectSrc}`,
-              "worker-src blob:",
+              "worker-src 'self' blob:",
               "font-src 'self' data:",
               "frame-src 'none'",
               "object-src 'none'",
