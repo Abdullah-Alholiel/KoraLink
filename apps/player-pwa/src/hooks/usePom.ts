@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { captureError, addBreadcrumb, trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -48,6 +48,26 @@ export interface VoteResult {
   message: string;
 }
 
+/**
+ * Optimistically applies a POTM vote to a `voting_open` result: flips
+ * `hasVoted`, records `votedFor`, and increments `votedCount` only on a first
+ * vote (changing an existing vote keeps the count). Non-`voting_open` states
+ * pass through untouched. Pure + exported for unit tests.
+ */
+export function optimisticallyCastVote(
+  result: PomResult,
+  candidateId: string,
+): PomResult {
+  if (result.status !== 'voting_open') return result;
+  const isNewVote = !result.hasVoted;
+  return {
+    ...result,
+    hasVoted: true,
+    votedFor: candidateId,
+    votedCount: isNewVote ? result.votedCount + 1 : result.votedCount,
+  };
+}
+
 // ─── Hooks ─────────────────────────────────────────────
 
 export function usePomResult(matchId: string, currentUserId?: string) {
@@ -69,7 +89,12 @@ export function usePomResult(matchId: string, currentUserId?: string) {
 export function useVote(matchId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<VoteResult, FetchError, string>({
+  return useMutation<
+    VoteResult,
+    FetchError,
+    string,
+    { snapshot: [QueryKey, PomResult | undefined][] }
+  >({
     mutationFn: async (candidateId: string) => {
       addBreadcrumb('POTM vote submitted', 'potm', 'info', { matchId, candidateId });
       try {
@@ -85,6 +110,21 @@ export function useVote(matchId: string) {
       } catch (err) {
         captureError(err, { hook: 'useVote', matchId, candidateId });
         throw err;
+      }
+    },
+    onMutate: async (candidateId) => {
+      await queryClient.cancelQueries({ queryKey: ['pom', matchId] });
+      const snapshot = queryClient.getQueriesData<PomResult>({ queryKey: ['pom', matchId] });
+      queryClient.setQueriesData<PomResult>({ queryKey: ['pom', matchId] }, (old) =>
+        old ? optimisticallyCastVote(old, candidateId) : old,
+      );
+      return { snapshot };
+    },
+    onError: (_err, _candidateId, context) => {
+      if (context?.snapshot) {
+        for (const [key, data] of context.snapshot) {
+          queryClient.setQueryData(key, data);
+        }
       }
     },
     onSuccess: () => {

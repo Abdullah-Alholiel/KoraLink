@@ -54,6 +54,17 @@ function makeApiTransaction(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+// Helper: controllable promise for asserting optimistic (in-flight) state
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('useWallet hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -158,6 +169,41 @@ describe('useWallet hooks', () => {
         method: 'POST',
         body: JSON.stringify({ amount: 100, idempotencyKey: 'test-key-001' }),
       });
+    });
+
+    it('optimistically credits the balance and rolls back on failure', async () => {
+      const { wrapper, queryClient } = createWrapper();
+      queryClient.setQueryData(['wallet', 'balance'], { balance: 100, currency: 'SAR' });
+
+      const d = deferred<unknown>();
+      mockFetcher.mockReturnValue(d.promise);
+
+      const { result } = renderHook(() => useTopupWallet(), { wrapper });
+
+      act(() => {
+        result.current.mutate({ amount: 50, idempotencyKey: 'ik-opt' });
+      });
+
+      // Optimistic credit is visible while the request is still in flight.
+      await waitFor(() =>
+        expect(queryClient.getQueryData(['wallet', 'balance'])).toEqual({
+          balance: 150,
+          currency: 'SAR',
+        }),
+      );
+
+      await act(async () => {
+        d.reject(new Error('payment failed'));
+      });
+      await waitFor(() => expect(result.current.isError).toBe(true));
+
+      // Rolled back to the pre-mutation balance.
+      await waitFor(() =>
+        expect(queryClient.getQueryData(['wallet', 'balance'])).toEqual({
+          balance: 100,
+          currency: 'SAR',
+        }),
+      );
     });
   });
 });

@@ -6,6 +6,7 @@ import { Logger } from 'nestjs-pino';
 import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
+import * as compression from 'compression';
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -65,6 +66,12 @@ async function bootstrap(): Promise<void> {
     }),
   );
   app.use(cookieParser(cookieSecret));
+
+  // ── Response compression (gzip) — cuts JSON payload ~80% ────────────────
+  // App-level because KoraLink is served directly by Node (systemd), not behind
+  // a reverse proxy. The `compression` middleware skips SSE/WebSocket and
+  // already-encoded responses, so realtime + static flows are unaffected.
+  app.use(compression());
 
   // ── CORS — HttpOnly cookies require credentials: true ───────────────────
   // Strict allowlist from PLAYER_URL/ADMIN_URL (comma-separated origins are

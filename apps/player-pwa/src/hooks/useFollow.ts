@@ -24,10 +24,13 @@ interface PublicProfileShape {
   followingCount: number;
 }
 
+type FollowMutationContext = { previous: PublicProfileShape | undefined };
+
 /**
  * Follow state + toggle for a target user. Reads isFollowing/counts from the
- * public profile and updates the React Query cache directly on mutation
- * success (no refetch needed — the mutation returns the new counts).
+ * public profile, flips them optimistically on tap (instant feedback), and
+ * reconciles with the authoritative server response on success — rolling back
+ * the optimistic flip if the request fails.
  */
 export function useFollow(targetUserId: string) {
   const queryClient = useQueryClient();
@@ -40,8 +43,19 @@ export function useFollow(targetUserId: string) {
     staleTime: 60_000,
   });
 
-  const followMutation = useMutation<FollowState, FetchError, void>({
+  const followMutation = useMutation<FollowState, FetchError, void, FollowMutationContext>({
     mutationFn: () => fetcher<FollowState>(`/users/${targetUserId}/follow`, { method: 'POST' }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: cacheKey });
+      const previous = queryClient.getQueryData<PublicProfileShape>(cacheKey);
+      queryClient.setQueryData<PublicProfileShape>(cacheKey, (old) =>
+        old ? { ...old, isFollowing: true, followersCount: old.followersCount + 1 } : old,
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(cacheKey, context.previous);
+    },
     onSuccess: (data) => {
       queryClient.setQueryData<PublicProfileShape>(cacheKey, (old) => ({
         ...old,
@@ -53,8 +67,19 @@ export function useFollow(targetUserId: string) {
     },
   });
 
-  const unfollowMutation = useMutation<FollowState, FetchError, void>({
+  const unfollowMutation = useMutation<FollowState, FetchError, void, FollowMutationContext>({
     mutationFn: () => fetcher<FollowState>(`/users/${targetUserId}/follow`, { method: 'DELETE' }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: cacheKey });
+      const previous = queryClient.getQueryData<PublicProfileShape>(cacheKey);
+      queryClient.setQueryData<PublicProfileShape>(cacheKey, (old) =>
+        old ? { ...old, isFollowing: false, followersCount: Math.max(0, old.followersCount - 1) } : old,
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(cacheKey, context.previous);
+    },
     onSuccess: (data) => {
       queryClient.setQueryData<PublicProfileShape>(cacheKey, (old) => ({
         ...old,
