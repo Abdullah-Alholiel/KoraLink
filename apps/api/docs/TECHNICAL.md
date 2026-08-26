@@ -200,6 +200,7 @@ All variables are read from `.env` or injected at container start. See `apps/api
 | `REDIS_HOST`             | yes           | `localhost`              | Redis hostname                                           |
 | `REDIS_PORT`             | no            | `6379`                   | Redis port                                               |
 | `REDIS_PASSWORD`         | no            | —                        | Redis AUTH password                                      |
+| `WS_REDIS_ADAPTER`       | no            | `false`                  | `true` = Socket.IO Redis adapter (multi-instance scale)  |
 | `UNIFONIC_APP_SID`       | yes (prod)    | —                        | Unifonic account SID — SMS skipped if absent             |
 | `UNIFONIC_SENDER_ID`     | no            | `KoraLink`               | SMS sender ID shown on the recipient's handset           |
 | `MOYASAR_SECRET_KEY`     | yes (prod)    | —                        | Moyasar payment secret (wallet top-up)                   |

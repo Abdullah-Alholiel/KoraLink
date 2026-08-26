@@ -10,6 +10,7 @@ import * as compression from 'compression';
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -121,6 +122,22 @@ async function bootstrap(): Promise<void> {
   SwaggerModule.setup('api/docs', app, document, {
     swaggerOptions: { withCredentials: true },
   });
+
+  // ── Socket.IO Redis adapter (env-gated — in-memory unless WS_REDIS_ADAPTER=true) ──
+  // Reuses the same Redis as CacheModule/Bull (REDIS_HOST/PORT/PASSWORD). Opt-in so
+  // dev stays on the in-memory adapter with zero config.
+  if (configService.get<string>('WS_REDIS_ADAPTER', 'false') === 'true') {
+    const ioAdapter = new RedisIoAdapter(app);
+    await ioAdapter.connectToRedis(
+      configService.get<string>('REDIS_HOST', 'localhost'),
+      configService.get<number>('REDIS_PORT', 6379),
+      configService.get<string>('REDIS_PASSWORD', ''),
+    );
+    app.useWebSocketAdapter(ioAdapter);
+  }
+
+  // ── Graceful shutdown — drains HTTP + Socket.IO on SIGTERM (systemd restart) ──
+  app.enableShutdownHooks();
 
   await app.listen(port);
 }

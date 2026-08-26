@@ -131,6 +131,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  // ── Graceful shutdown ────────────────────────────────────────────────────
+  // Runs on SIGTERM (systemd restart) once enableShutdownHooks() is set in
+  // main.ts. Closes the io Server so active sockets drain instead of being cut.
+
+  beforeApplicationShutdown(signal?: string): void {
+    // this.server is the /lobby Namespace; its `.server` is the parent io Server.
+    const io = (this.server as unknown as import('socket.io').Namespace).server;
+    io.close();
+    this.logger.log(`Socket.IO server closed (${signal ?? 'shutdown'})`);
+  }
+
   // ── Join a match lobby ───────────────────────────────────────────────────
 
   @SubscribeMessage('join-lobby')
