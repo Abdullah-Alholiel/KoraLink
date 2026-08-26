@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "loop": "koralink-factory-5h",
+  "last_run": null,
+  "last_run_at": null,
+  "last_run_commits": [],
+  "last_run_report": null,
+  "in_review_items": [],
+  "open_blockers": [],
+  "consecutive_skip_count": 0,
+  "initialized_at": "2026-08-26T00:00:00Z",
+  "notes": "Bootstrap state. Run #1 performs the full product-gap + code review and populates BOARD.md. Lock guard lives in kanban/LOCK.json (gitignored, transient)."
+}
