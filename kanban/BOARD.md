@@ -4,7 +4,7 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-26T17:00Z (run #1 — bootstrap review)
+**Last updated:** 2026-08-26T17:30Z (run #1 + parent-session fix 65bac93/6351726 — P1-3 idempotency landed)
 **Last run:** #1 (see `kanban/RUNS/2026-08-26T16-31-54Z.md`)
 
 ---
@@ -22,7 +22,7 @@
 |---|------|------|----------|--------|-------|
 | P1-1 | API | **No scheduler/cron anywhere** (grep `@nestjs/schedule\|cron\|setInterval` → 0): web-push send path exists but match reminders never fire; POTM 24h window never finalized by a job (lazy compute only on `GET /matches/:id/pom-result`); past-match auto-complete only runs at module init (restarts only). | notifications.service.ts:125-166; matches.service.ts:131,1649 | TODO | — |
 | P1-2 | API | **Discovery filters incomplete**: no `skill_level` filter in GetMatchesDto; `radius_km` destructured but UNUSED — distance is a soft sort, never a hard radius cutoff. | get-matches.dto.ts; matches.service.ts:163,176-184 | TODO | — |
-| P1-3 | API/Chat | **Chat pagination + media + idempotency race**: history hard-capped `limit: 50` asc, no cursor; `match_messages.content` text-only (no attachment table); `client_message_id` dedup is findFirst→insert with NO unique index (concurrent retry duplicates). | matches.service.ts:781-799,834-863; schema.ts:390 | TODO | — |
+| P1-3 | API/Chat | **Chat idempotency + pagination indexes — idempotency PARTIALLY DONE**: `client_message_id` dedup now backed by unique index `match_messages_client_msg_uidx` (partial, WHERE NOT NULL) + keyset index `match_messages_match_created_idx` (migration 0014), and REST (`matches.service.ts:sendMessage`) + WS (`app.gateway.ts:handleMessage`) both `onConflictDoNothing` + winner re-read (commits 6351726, 65bac93 — live-verified, jest 28/28, build 3/3). **Remaining**: history still hard-capped `limit: 50` asc no cursor pagination; `match_messages.content` text-only (no attachment table). | matches.service.ts:781-799,834-863; schema.ts:390 | WIP (idempotency done; pagination + media TODO) | docs/plans/ (run #1 report; parent-session fix 65bac93) |
 | P1-4 | DB | **Missing hot-FK indexes** (matches has only status+scheduled_at): `matches.host_id`, `matches.pitch_id`, `activities.actor_id`, `disputes.reporter_id`, `reports.reporter_id`, `venues.owner_id`, `transactions.reference_id`, and `match_messages(match_id, created_at)` for chat history. | schema.ts:336-339 | TODO | — |
 | P1-5 | PWA | **SW push deep-link hardcodes `locale='en'`** — Arabic users (primary market) tapping a push notification land on the English page. | apps/player-pwa/worker/index.js:19 | TODO | — |
 
