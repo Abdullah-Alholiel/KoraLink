@@ -107,8 +107,18 @@ export default function WalletPage() {
                     setShowTopUpModal(false);
                     setTopUpAmount('');
                 },
-                onError: () => {
-                    setTopUpError(t('common.error'));
+                onError: (err: unknown) => {
+                    // FetchError carries the HTTP status — 403 means the dummy
+                    // top-up is production-gated (P0-2); show the specific message.
+                    if (
+                        err instanceof Error &&
+                        'status' in err &&
+                        (err as { status: number }).status === 403
+                    ) {
+                        setTopUpError(t('wallet.topupDisabled'));
+                    } else {
+                        setTopUpError(t('common.error'));
+                    }
                 },
             }
         );

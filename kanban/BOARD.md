@@ -4,7 +4,7 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-26T17:30Z (run #1 + parent-session fix 65bac93/6351726 — P1-3 idempotency landed)
+**Last updated:** 2026-08-26T18:00Z (P0-2 interim: dummy top-up prod-gated per Abdullah — keep dummy)
 **Last run:** #1 (see `kanban/RUNS/2026-08-26T16-31-54Z.md`)
 
 ---
@@ -14,7 +14,7 @@
 | # | Area | Item | Evidence | Status | Cycle |
 |---|------|------|----------|--------|-------|
 | P0-1 | API | **REST chat reads leaked every match conversation** — `messages` relation in GET /matches/:id + GET /:id/messages had no membership check while WS already enforced it. FIXED by run #1. | matches.controller.ts:108-112,149-153; matches.service.ts:322,781 | IN-REVIEW (run #1: 19041aa, 005dec0, 4b87a9f) | docs/plans/private-match-access-control/ |
-| P0-2 | API/Wallet | **Fake self-credit top-up**: `POST /wallet/topup` credits the caller's wallet with no payment provider behind it (grep `moyasar\|stripe\|tap\|hyperpay` in apps/api/src → 0 hits); PWA wallet page calls it directly up to SAR 10,000. | wallet.controller.ts:53-68; wallet/page.tsx:87-103; topup-wallet.dto.ts:23 | BLOCKED — needs Abdullah's decision on payment provider (Moyasar/HyperPay/Tap) + credentials. Interim option: gate endpoint behind NODE_ENV like dev-login. | — |
+| P0-2 | API/Wallet | **Fake self-credit top-up**: `POST /wallet/topup` credits the caller's wallet with no payment provider behind it (grep `moyasar\|stripe\|tap\|hyperpay` in apps/api/src → 0 hits); PWA wallet page calls it directly up to SAR 10,000. **Interim MITIGATION LANDED (Abdullah: "keep dummy for now")**: endpoint now 403s when `NODE_ENV=production` (mirrors dev-login gating); dummy path intact in dev/test (live-verified: 201 + credit). | wallet.controller.ts:53-68; wallet/page.tsx:87-103; topup-wallet.dto.ts:23 | WIP — dummy kept in dev; **real payment provider still needed** (Moyasar/HyperPay/Tap) | docs/plans/wallet-topup-dummy-gate/ |
 
 ## 🟠 P1 — High-value missing functionality
 

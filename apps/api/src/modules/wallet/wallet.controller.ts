@@ -7,6 +7,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +16,7 @@ import {
   ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 
 import { WalletService } from './wallet.service';
 import { WalletHistoryDto } from './dto/wallet-history.dto';
@@ -27,7 +29,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(JwtCookieAuthGuard)
 @Controller('wallet')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // ── GET /wallet/balance ──────────────────────────────────────
   @Get('balance')
@@ -58,6 +63,17 @@ export class WalletController {
     @CurrentUser() user: { sub: string },
     @Body() dto: TopupWalletDto,
   ) {
+    // Dummy self-credit path (no payment provider yet — P0-2). Keep available
+    // in dev/test; never allow free credits in production. Mirror dev-login
+    // gating (auth.controller.ts).
+    const isProd =
+      this.configService.get<string>('NODE_ENV') === 'production';
+    if (isProd) {
+      throw new ForbiddenException(
+        'Wallet top-up is disabled in production until a payment provider is integrated',
+      );
+    }
+
     return this.walletService.recordTransaction(user.sub, {
       type: 'CREDIT',
       amount: dto.amount,
