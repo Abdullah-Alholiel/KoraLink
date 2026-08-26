@@ -1,33 +1,17 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 1,
-  "last_run_at": "2026-08-26T16:31:54Z",
+  "last_run": 2,
+  "last_run_at": "2026-08-26T22:29:09Z",
   "last_run_commits": [
-    "19041aa",
-    "005dec0",
-    "4b87a9f",
-    "baed2af",
-    "6351726",
-    "65bac93",
-    "3875864",
-    "f109cf6",
-    "974c449",
-    "9e8b967",
-    "0953c4b",
-    "2752c27",
-    "89193e3"
+    "42d2d86"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-26T18-30Z-parent-work.md",
-  "in_review_items": [
-    "P1-4 hot-FK indexes (commit 0953c4b — verify: 7 indexes in pg_indexes, migrations applied)",
-    "P1-5 SW push locale (commit 2752c27 — verify: push_subscriptions.locale column live, subscribe stores ar/en)",
-    "P1-1 scheduler (commit 89193e3 — verify: 3 cron jobs registered, POTM finalize already live-announced 2 winners at 18:40Z, reminders_sent_at guard works)"
-  ],
+  "last_run_report": "kanban/RUNS/2026-08-26T22-29Z.md",
+  "in_review_items": [],
   "open_blockers": [
-    "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending as the eventual fix."
+    "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Parent session built P1-1 scheduler (89193e3): @nestjs/schedule with 3 idempotent jobs — auto-complete past matches (*/5), POTM finalize (*/5, live-announced 2 winners at 18:40Z), start reminders (*/15, reminders_sent_at migration 0017). Drizzle isNull() pitfall learned (eq(col,null) = SQL = NULL = never matches) and added to runbook. Board: P0-1, P1-1, P1-3-idempotency, P1-4, P1-5 all DONE; P1-2 discovery filters is the only remaining P1 feature (full vertical slice). Tree clean. Next: verify P1-1/P1-4/P1-5, then P1-2 discovery filters."
+  "notes": "Run #2: verified P1-1/P1-4/P1-5 live (all DONE), built P0-3 env-secret hardening (42d2d86). New board items: P0-3 (DONE), P1-6 admin partner-portal scope, P2-8 POTM locale, P2-9 settlement/refund tx races + Backlog section. CRITICAL finding: JWT_SECRET/COOKIE_SECRET were 'change-me' placeholders in the live .env — fixed with assertBootstrapSecrets() bootstrap guard + regenerated real secrets + .env.example guidance. Next: P1-6 (admin partner-portal scope), then P1-2 discovery filters."
 }
