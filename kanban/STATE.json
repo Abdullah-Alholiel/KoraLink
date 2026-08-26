@@ -15,17 +15,19 @@
     "974c449",
     "9e8b967",
     "0953c4b",
-    "2752c27"
+    "2752c27",
+    "89193e3"
   ],
   "last_run_report": "kanban/RUNS/2026-08-26T18-30Z-parent-work.md",
   "in_review_items": [
     "P1-4 hot-FK indexes (commit 0953c4b — verify: 7 indexes in pg_indexes, migrations applied)",
-    "P1-5 SW push locale (commit 2752c27 — verify: push_subscriptions.locale column live, subscribe stores ar/en)"
+    "P1-5 SW push locale (commit 2752c27 — verify: push_subscriptions.locale column live, subscribe stores ar/en)",
+    "P1-1 scheduler (commit 89193e3 — verify: 3 cron jobs registered, POTM finalize already live-announced 2 winners at 18:40Z, reminders_sent_at guard works)"
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending as the eventual fix."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Parent session continued factory work between ticks: P0-1 + P1-3 idempotency verified LIVE and promoted to DONE; P1-4 hot-FK indexes built (0953c4b, migration 0015); P1-5 SW push locale built (2752c27, migration 0016). Tree clean at 2752c27. Provider: deepseek-v4-pro primary → deepseek-v4-flash fallback, cron pinned. Next: verify P1-4 + P1-5, then P1-1 scheduler (dedicated run) or P1-2 discovery filters (full vertical slice)."
+  "notes": "Parent session built P1-1 scheduler (89193e3): @nestjs/schedule with 3 idempotent jobs — auto-complete past matches (*/5), POTM finalize (*/5, live-announced 2 winners at 18:40Z), start reminders (*/15, reminders_sent_at migration 0017). Drizzle isNull() pitfall learned (eq(col,null) = SQL = NULL = never matches) and added to runbook. Board: P0-1, P1-1, P1-3-idempotency, P1-4, P1-5 all DONE; P1-2 discovery filters is the only remaining P1 feature (full vertical slice). Tree clean. Next: verify P1-1/P1-4/P1-5, then P1-2 discovery filters."
 }
