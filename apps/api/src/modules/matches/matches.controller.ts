@@ -107,8 +107,13 @@ export class MatchesController {
   // ── GET /matches/:id — Match details ──────────────────────────────────
   @Get(':id')
   @ApiOperation({ summary: 'Get full match details including lobby roster' })
-  findOne(@Param('id') id: string) {
-    return this.matchesService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    // P0-1: viewer-scoped — chat history is stripped for non-members
+    // (metadata stays readable for invite-link holders of private matches).
+    return this.matchesService.findOne(id, user.sub);
   }
 
   // ── POST /matches — Create (host) a match ─────────────────────────────
@@ -149,8 +154,12 @@ export class MatchesController {
   @Get(':id/messages')
   @ApiOperation({ summary: 'Get match chat message history' })
   @ApiOkResponse({ description: 'Paginated chat messages for a match.' })
-  getMessages(@Param('id') id: string) {
-    return this.matchesService.getMessages(id);
+  getMessages(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    // P0-1: members-only, mirroring the WS gateway's join-lobby check.
+    return this.matchesService.getMessages(id, user.sub);
   }
 
   // ── POST /matches/:id/messages — Send match chat (REST fallback) ─────────

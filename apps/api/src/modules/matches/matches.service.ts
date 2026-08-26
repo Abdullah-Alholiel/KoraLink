@@ -319,7 +319,7 @@ export class MatchesService {
   // Single match detail (with relations)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async findOne(matchId: string) {
+  async findOne(matchId: string, viewerId?: string) {
     const match = await this.db.query.matches.findFirst({
       where: eq(matches.id, matchId),
       with: {
@@ -383,7 +383,40 @@ export class MatchesService {
       completed_at: match.completed_at,
     }) as typeof match.status;
 
+    // Access control (P0-1): chat is members-only — the WS layer already enforces
+    // membership on every chat path (join-lobby, send-message); the REST read path
+    // must match. Non-member viewers (invite-link holders browsing a private match,
+    // or the public browsing an open one) still get full match metadata, but the
+    // embedded chat history is stripped. Internal callers pass no viewer and are
+    // unaffected.
+    if (viewerId) {
+      const isMember = await this.isMatchMember(matchId, viewerId);
+      if (!isMember) {
+        match.messages = [];
+      }
+    }
+
     return match;
+  }
+
+  /**
+   * Membership probe shared by REST chat reads. Host counts as a member.
+   */
+  private async isMatchMember(
+    matchId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const [membership] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, matchId),
+          eq(match_players.user_id, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(membership);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -778,7 +811,19 @@ export class MatchesService {
    * Complements the gateway's real-time `new-message` events with history
    * for initial render and offline caching.
    */
-  async getMessages(matchId: string) {
+  async getMessages(matchId: string, viewerId?: string) {
+    // Access control (P0-1): chat history is members-only, mirroring the WS
+    // gateway's join-lobby/send-message membership enforcement. Internal
+    // callers (none today) may omit the viewer.
+    if (viewerId) {
+      const isMember = await this.isMatchMember(matchId, viewerId);
+      if (!isMember) {
+        throw new ForbiddenException(
+          'You are not a member of this match.',
+        );
+      }
+    }
+
     const messages = await this.db.query.match_messages.findMany({
       where: eq(match_messages.match_id, matchId),
       orderBy: (msg, { asc }) => [asc(msg.created_at)],
