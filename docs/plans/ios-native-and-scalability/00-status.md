@@ -2,9 +2,9 @@
 
 | Gate | Name | Status | Approved | Artifact |
 |------|------|--------|----------|----------|
-| 0 | Retrospective | ⏸️ PENDING APPROVAL | — | [00-retro.md](./00-retro.md) |
-| 1 | Product Spec | ⏸️ PENDING APPROVAL | — | [01-product.md](./01-product.md) |
-| 2 | Architecture | 🔒 BLOCKED | — | — |
+| 0 | Retrospective | ✅ APPROVED | 2026-08-26 | [00-retro.md](./00-retro.md) |
+| 1 | Product Spec | ✅ APPROVED (Path C) | 2026-08-26 | [01-product.md](./01-product.md) |
+| 2 | Architecture | ⏸️ PENDING APPROVAL | — | [02-architecture.md](./02-architecture.md) |
 | 3 | Program Design | 🔒 BLOCKED | — | — |
 | 4 | Vertical Slices | 🔒 BLOCKED | — | — |
 
