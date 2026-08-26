@@ -423,8 +423,11 @@ export default function MatchDetailPage({
                                 <TeamLineup format={match.format} roster={match.roster} hostId={match.hostId} onPlayerClick={setSelectedPlayer} />
                             </div>
 
-                            {/* 4. Chat / Discussion Preview */}
+                            {/* 4. Chat / Discussion Preview — members only (P0-1):
+                                chat reads now 403 for non-members server-side;
+                                non-members see a join prompt instead of chat UI */}
                             <div className="mx-5 mt-5">
+                                {isJoined ? (
                                 <button
                                     onClick={() => setShowChatSheet(true)}
                                     className="w-full bg-white rounded-2xl shadow-card p-4 text-start hover:bg-gray-50/80 active:scale-[0.99] transition-all"
@@ -459,6 +462,15 @@ export default function MatchDetailPage({
                                         <p className="text-xs text-gray-400 mt-1">{t('messages.noMessages')}</p>
                                     )}
                                 </button>
+                                ) : (
+                                    <div className="w-full bg-white rounded-2xl shadow-card p-4 text-start">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <MessageSquare className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
+                                            <h3 className="text-sm font-bold text-brand-black">{t('matchDetail.matchChat')}</h3>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-1">{t('matchDetail.joinToChat')}</p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 5. Location / Map */}
