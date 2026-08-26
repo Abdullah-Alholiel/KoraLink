@@ -43,7 +43,7 @@ export class NotificationsService {
    * Store a push subscription for a user.
    * Uses upsert on endpoint to handle re-subscriptions.
    */
-  async subscribe(userId: string, sub: PushSubscriptionDto, userAgent?: string) {
+  async subscribe(userId: string, sub: PushSubscriptionDto, userAgent?: string, locale = 'en') {
     await this.db
       .insert(push_subscriptions)
       .values({
@@ -52,6 +52,7 @@ export class NotificationsService {
         p256dh: sub.keys.p256dh,
         auth: sub.keys.auth,
         user_agent: userAgent ?? null,
+        locale,
       })
       .onConflictDoUpdate({
         target: [push_subscriptions.endpoint],
@@ -59,6 +60,7 @@ export class NotificationsService {
           p256dh: sub.keys.p256dh,
           auth: sub.keys.auth,
           user_agent: userAgent ?? null,
+          locale,
           updated_at: new Date(),
         },
       });
@@ -135,15 +137,21 @@ export class NotificationsService {
         endpoint: push_subscriptions.endpoint,
         p256dh: push_subscriptions.p256dh,
         auth: push_subscriptions.auth,
+        locale: push_subscriptions.locale,
       })
       .from(push_subscriptions)
       .where(inArray(push_subscriptions.user_id, userIds));
 
     let sent = 0;
-    const body = JSON.stringify(payload);
 
     for (const sub of subs) {
       try {
+        // P1-5: per-subscription locale so the SW deep-link preserves ar/en.
+        const locale = sub.locale || 'en';
+        const body = JSON.stringify({
+          ...payload,
+          data: { ...payload.data, locale },
+        });
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           body,

@@ -24,6 +24,7 @@ interface SubscribeBody {
     p256dh: string;
     auth: string;
   };
+  locale?: string;
 }
 
 @ApiTags('notifications')
@@ -45,6 +46,7 @@ export class NotificationsController {
       user.sub,
       body,
       req.headers['user-agent'],
+      body.locale ?? 'en',
     );
   }
 

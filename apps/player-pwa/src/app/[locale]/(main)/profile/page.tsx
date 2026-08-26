@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import {
     User,
     Wallet,
@@ -95,7 +95,7 @@ export default function ProfilePage() {
     const {
         isSubscribed, isSubscribing, isSupported,
         subscribe, unsubscribe,
-    } = usePushNotifications();
+    } = usePushNotifications(useLocale());
 
     // Merge store + API data. API takes priority when available.
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');

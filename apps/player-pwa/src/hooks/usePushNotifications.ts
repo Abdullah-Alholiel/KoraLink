@@ -18,7 +18,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 const VAPID_PUBLIC_KEY =
   'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
 
-export function usePushNotifications() {
+export function usePushNotifications(locale: string = 'en') {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isSubscribing, setIsSubscribing] = useState(false);
@@ -62,10 +62,11 @@ export function usePushNotifications() {
 
       setSubscription(sub);
 
-      // Send to backend
+      // Send to backend, including the active locale so push deep-links
+      // preserve ar/en (P1-5).
       await fetcher('/notifications/subscribe', {
         method: 'POST',
-        body: JSON.stringify(sub.toJSON()),
+        body: JSON.stringify({ ...sub.toJSON(), locale }),
       });
 
       return true;

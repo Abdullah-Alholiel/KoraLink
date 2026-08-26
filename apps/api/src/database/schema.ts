@@ -560,6 +560,7 @@ export const push_subscriptions = pgTable(
     p256dh: text('p256dh').notNull(),
     auth: text('auth').notNull(),
     user_agent: text('user_agent'),
+    locale: varchar('locale', { length: 5 }).notNull().default('en'),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

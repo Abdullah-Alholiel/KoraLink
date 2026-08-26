@@ -16,7 +16,8 @@ self.addEventListener('push', (event) => {
   const { title = 'KoraLink', body = '', data = {} } = payload;
 
   // Resolve the installed locale so the deep link preserves ar/en.
-  const locale = 'en';
+  // Server injects the subscriber's locale per-push (P1-5); fall back to en.
+  const locale = data.locale || 'en';
 
   let url = '/';
   if (data.type === 'match-chat' && data.matchId) url = `/${locale}/match/${data.matchId}`;
