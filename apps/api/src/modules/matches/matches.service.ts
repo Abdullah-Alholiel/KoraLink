@@ -905,7 +905,33 @@ export class MatchesService {
         content: trimmed,
         client_message_id: clientMessageIdValue,
       })
+      .onConflictDoNothing()
       .returning();
+
+    // Concurrent retry won the race (unique index match_messages_client_msg_uidx
+    // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
+    // return the row the winner inserted instead of raising a unique-violation 500.
+    if (!inserted) {
+      const existing = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, matchId),
+          eq(match_messages.client_message_id, clientMessageIdValue),
+        ),
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              handle: true,
+              avatar_url: true,
+            },
+          },
+        },
+      });
+      if (existing) return existing;
+      throw new ConflictException('Message send conflicted; retry.');
+    }
 
     const [user] = await this.db
       .select({

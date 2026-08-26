@@ -217,8 +217,20 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
           content,
           client_message_id: clientMessageId,
         })
+        .onConflictDoNothing()
         .returning();
       messageRow = insertedMessage;
+      // Concurrent retry won the race (unique index match_messages_client_msg_uidx):
+      // re-read the winner's row instead of raising a unique-violation 500.
+      if (!messageRow && clientMessageId) {
+        messageRow = await this.db.query.match_messages.findFirst({
+          where: and(
+            eq(match_messages.user_id, client.userId),
+            eq(match_messages.match_id, data.matchId),
+            eq(match_messages.client_message_id, clientMessageId),
+          ),
+        });
+      }
     }
 
     const [user] = await this.db
