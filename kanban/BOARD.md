@@ -4,7 +4,7 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-26T18:00Z (P0-2 interim: dummy top-up prod-gated per Abdullah — keep dummy)
+**Last updated:** 2026-08-26T18:30Z (parent session: P0-1 ✅ P1-3-idempotency ✅ P1-4 ✅ P1-5 ✅)
 **Last run:** #1 (see `kanban/RUNS/2026-08-26T16-31-54Z.md`)
 
 ---

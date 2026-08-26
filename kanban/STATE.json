@@ -12,17 +12,20 @@
     "65bac93",
     "3875864",
     "f109cf6",
-    "974c449"
+    "974c449",
+    "9e8b967",
+    "0953c4b",
+    "2752c27"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-26T16-31-54Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-26T18-30Z-parent-work.md",
   "in_review_items": [
-    "P0-1 private-match chat access control (commits 19041aa, 005dec0, 4b87a9f — verify: jest 30/30, vitest 217/217, live outsider 403 on GET /matches/:id/messages, detail messages stripped)",
-    "P1-3 chat idempotency + keyset indexes (commits 6351726, 65bac93 — verify: unique index live on match_messages, onConflictDoNothing in REST+WS send paths, no duplicate rows on concurrent retry)"
+    "P1-4 hot-FK indexes (commit 0953c4b — verify: 7 indexes in pg_indexes, migrations applied)",
+    "P1-5 SW push locale (commit 2752c27 — verify: push_subscriptions.locale column live, subscribe stores ar/en)"
   ],
   "open_blockers": [
-    "P0-2 wallet top-up: Abdullah chose 'keep dummy for now' (2026-08-26) — interim prod-gate landed (f109cf6: 403 when NODE_ENV=production). REAL payment provider integration still pending as the eventual fix; dev dummy path unchanged."
+    "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending as the eventual fix."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #1 bootstrap complete (P0-1 built+pushed). Parent session closed two left-behind items before run #2: (1) P1-3 migration 0014 + conflict-handling code committed (was applied to live DB but uncommitted — half-slice rule added to runbook Phase 4.5), (2) graphify-out refreshed+committed (974c449). Working tree CLEAN at handoff. Next: verify P0-1 + P1-3 claims, then P1-4 hot-FK indexes or P1-1 scheduler. deepseek delegation WORKED in run #1 (recovered from 402) — re-probe each run."
+  "notes": "Parent session continued factory work between ticks: P0-1 + P1-3 idempotency verified LIVE and promoted to DONE; P1-4 hot-FK indexes built (0953c4b, migration 0015); P1-5 SW push locale built (2752c27, migration 0016). Tree clean at 2752c27. Provider: deepseek-v4-pro primary → deepseek-v4-flash fallback, cron pinned. Next: verify P1-4 + P1-5, then P1-1 scheduler (dedicated run) or P1-2 discovery filters (full vertical slice)."
 }
