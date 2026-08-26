@@ -3,9 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { useTranslations } from 'next-intl';
-import { env } from '@/env.mjs';
+import { createLobbySocket } from '@/lib/socket';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -50,18 +50,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
-    const token =
-      typeof window !== 'undefined' ? localStorage.getItem('koralink_token') : null;
-
-    const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
-      path: '/socket.io',
-      transports: ['websocket'],
-      withCredentials: true,
-      auth: token ? { token } : undefined,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
+    const socket: Socket = createLobbySocket(10);
     socketRef.current = socket;
 
     socket.on('notification', (payload: NotificationEvent) => {

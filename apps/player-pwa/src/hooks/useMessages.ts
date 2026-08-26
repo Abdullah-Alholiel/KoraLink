@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { env } from '@/env.mjs';
+import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
@@ -152,20 +152,7 @@ export function useMatchChat(matchId: string | null) {
     if (!matchId) return;
     const ackTimers = ackTimersRef.current;
 
-    // Read auth token for cross-origin WebSocket handshake (Tailscale/remote).
-    const token = typeof window !== 'undefined'
-      ? localStorage.getItem('koralink_token')
-      : null;
-
-    const socket: Socket = io(`${env.NEXT_PUBLIC_API_URL ?? ''}/lobby`, {
-      path: '/socket.io',
-      transports: ['websocket'],
-      withCredentials: true,
-      auth: token ? { token } : undefined,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+    const socket: Socket = createLobbySocket(5);
 
     socket.on('connect', () => {
       setIsConnected(true);
