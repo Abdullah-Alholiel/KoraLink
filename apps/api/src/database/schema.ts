@@ -230,7 +230,11 @@ export const venues = pgTable(
       .defaultNow()
       .$onUpdateFn(() => new Date()),
   },
-  (t) => [index('venues_city_idx').on(t.city)],
+  (t) => [
+    index('venues_city_idx').on(t.city),
+    // P1-4 hot-FK index: partner portal venue listing by owner
+    index('venues_owner_id_idx').on(t.owner_id),
+  ],
 );
 
 export const pitches = pgTable('pitches', {
@@ -336,6 +340,9 @@ export const matches = pgTable(
   (t) => [
     index('matches_status_idx').on(t.status),
     index('matches_scheduled_at_idx').on(t.scheduled_at),
+    // P1-4 hot-FK indexes: my-matches by host, pitch availability lookups
+    index('matches_host_id_idx').on(t.host_id),
+    index('matches_pitch_id_idx').on(t.pitch_id),
   ],
 );
 
@@ -384,6 +391,8 @@ export const transactions = pgTable(
   },
   (t) => [
     index('transactions_user_created_idx').on(t.user_id, t.created_at),
+    // P1-4 hot-FK index: settlement/refund lookups by reference
+    index('transactions_reference_id_idx').on(t.reference_id),
   ],
 );
 
@@ -678,7 +687,10 @@ export const activities = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('activities_created_idx').on(t.created_at)],
+  (t) => [index('activities_created_idx').on(t.created_at),
+    // P1-4 hot-FK index: activity feed per actor
+    index('activities_actor_id_idx').on(t.actor_id),
+  ],
 );
 
 export const feed_items = pgTable(
@@ -741,6 +753,8 @@ export const disputes = pgTable(
   (t) => [
     index('disputes_status_idx').on(t.status),
     index('disputes_match_idx').on(t.match_id),
+    // P1-4 hot-FK index: admin disputes queue by reporter
+    index('disputes_reporter_id_idx').on(t.reporter_id),
   ],
 );
 
@@ -868,6 +882,8 @@ export const reports = pgTable(
   (t) => [
     index('reports_status_idx').on(t.status),
     index('reports_subject_type_idx').on(t.subject_type),
+    // P1-4 hot-FK index: reports moderation queue by reporter
+    index('reports_reporter_id_idx').on(t.reporter_id),
   ],
 );
 
