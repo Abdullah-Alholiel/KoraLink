@@ -111,6 +111,22 @@ iPhone (installed PWA)
 
 ---
 
+## Port reality (discovered during the 2026-08-26 cutover)
+
+Port 443 on this VPS is owned by a **Docker Traefik** (docker-proxy, running
+since April) serving its self-signed default cert; port 8444 is owned by a
+**Docker Kong** doing the same. The pre-existing `tailscale serve` 443 config
+was therefore inert — tailscaled could never bind it. Final working topology:
+
+```
+PWA  https://aa.tail2948f9.ts.net:9450  (tailscale serve → localhost:3000)
+API  https://aa.tail2948f9.ts.net:8443  (tailscale serve → localhost:3001, LE cert)
+```
+
+Both proxied by tailscaled on the Tailscale IP only (tailnet-scoped, LE certs,
+auto-renewed). Any future port choice must first check
+`sudo ss -tlnp | grep ':<port>'` for docker-proxy ownership.
+
 ## Risks & mitigations
 
 | Risk | Mitigation |
