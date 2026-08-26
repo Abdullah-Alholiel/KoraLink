@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -27,6 +28,9 @@ import { ReportsModule } from './modules/reports/reports.module';
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
   imports: [
+    // ── Scheduling (P1-1: match auto-complete, POTM finalize, reminders) ──
+    ScheduleModule.forRoot(),
+
     // ── Config ──────────────────────────────────────────────────────────
     ConfigModule.forRoot({ isGlobal: true }),
 

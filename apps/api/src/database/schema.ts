@@ -326,6 +326,9 @@ export const matches = pgTable(
     pom_winner_id: varchar('pom_winner_id', { length: 36 })
       .references(() => users.id, { onDelete: 'set null' }),
     pom_announced_at: timestamp('pom_announced_at', { withTimezone: true }),
+    // P1-1 scheduler: set once when the "match starting soon" reminder fires,
+    // so each match is reminded exactly once (NULL = not yet reminded).
+    reminders_sent_at: timestamp('reminders_sent_at', { withTimezone: true }),
     booking_mode: bookingModeEnum('booking_mode').notNull().default('self'),
     booking_slot_id: varchar('booking_slot_id', { length: 36 })
       .references(() => pitch_slots.id, { onDelete: 'set null' }),

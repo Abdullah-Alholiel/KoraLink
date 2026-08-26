@@ -7,7 +7,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { eq, sql, and, inArray } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
@@ -139,6 +139,183 @@ export class MatchesService {
     `);
     const res = result as unknown as { count?: number; length?: number };
     return res.count ?? res.length ?? 0;
+  }
+
+  /**
+   * P1-1 scheduler: finalize POTM voting for every Completed match whose
+   * 24h voting window has closed and whose winner was never announced.
+   *
+   * Idempotent: guarded by `pom_winner_id IS NULL AND pom_announced_at IS NULL`,
+   * and `announcePomWinner` itself no-ops once announced. Tie → earliest vote
+   * wins (POTM invariant: winner must be a roster member, not a no-show).
+   *
+   * @returns number of matches finalized this tick.
+   */
+  async finalizePomVoting(): Promise<number> {
+    const due = await this.db
+      .select({
+        id: matches.id,
+        status: matches.status,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
+        completed_at: matches.completed_at,
+        pom_winner_id: matches.pom_winner_id,
+        pom_announced_at: matches.pom_announced_at,
+      })
+      .from(matches)
+      .where(
+        and(
+          isNull(matches.pom_winner_id),
+          isNull(matches.pom_announced_at),
+          sql`${matches.scheduled_at} + (COALESCE(${matches.duration_mins}, 60) * INTERVAL '1 minute') + (${MatchesService.VOTING_WINDOW_HOURS} * INTERVAL '1 hour') < NOW()`,
+        ),
+      )
+      .limit(50);
+
+    let finalized = 0;
+    for (const match of due) {
+      try {
+        const winner = await this.tallyPomVotes(match.id);
+        if (winner.length > 0) {
+          const topCount = winner[0].vote_count;
+          const tied = winner.filter((r) => r.vote_count === topCount);
+          if (tied.length === 1) {
+            await this.announcePomWinner(match.id, null, null, {
+              id: winner[0].candidate_id,
+              fullName: winner[0].full_name ?? 'Player',
+              avatarUrl: winner[0].avatar_url,
+              voteCount: winner[0].vote_count,
+            });
+            finalized += 1;
+            continue;
+          }
+        }
+        // No votes, or a tie at the top: voting is closed with nothing to
+        // announce. Stamp pom_announced_at so this match drops out of the
+        // per-tick scan (votes cannot change after the window closes).
+        await this.db
+          .update(matches)
+          .set(withTimestamp({ pom_announced_at: new Date() }))
+          .where(eq(matches.id, match.id));
+      } catch (err) {
+        this.logger.error(
+          `POTM finalize failed for match ${match.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+    if (finalized > 0) {
+      this.logger.log(`POTM scheduler: finalized ${finalized} match(es).`);
+    }
+    return finalized;
+  }
+
+  /**
+   * P1-1 scheduler: push a "match starting soon" reminder to confirmed players
+   * of matches starting within [15m, 45m). Each match is reminded exactly once
+   * (reminders_sent_at guard).
+   *
+   * @returns number of matches reminded this tick.
+   */
+  async sendMatchStartReminders(): Promise<number> {
+    const soon = await this.db
+      .select({
+        id: matches.id,
+        title: matches.title,
+        scheduled_at: matches.scheduled_at,
+      })
+      .from(matches)
+      .where(
+        and(
+          isNull(matches.reminders_sent_at),
+          inArray(matches.status, ['Open', 'Full']),
+          sql`${matches.scheduled_at} > NOW() + INTERVAL '15 minutes'`,
+          sql`${matches.scheduled_at} <= NOW() + INTERVAL '45 minutes'`,
+        ),
+      )
+      .limit(50);
+
+    let reminded = 0;
+    for (const match of soon) {
+      try {
+        const players = await this.db
+          .select({ user_id: match_players.user_id })
+          .from(match_players)
+          .where(
+            and(
+              eq(match_players.match_id, match.id),
+              eq(match_players.no_show, false),
+            ),
+          );
+
+        if (players.length > 0) {
+          const kickoff = new Date(match.scheduled_at);
+          await this.notificationsService.sendPushToUsers(
+            players.map((p) => p.user_id),
+            {
+              title: '⏰ Match starting soon',
+              body: `"${match.title}" kicks off at ${kickoff.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Riyadh',
+              })} — see you there!`,
+              data: { type: 'match-chat', matchId: match.id },
+            },
+          );
+        }
+
+        await this.db
+          .update(matches)
+          .set(
+            withTimestamp({
+              reminders_sent_at: new Date(),
+            }),
+          )
+          .where(eq(matches.id, match.id));
+        reminded += 1;
+      } catch (err) {
+        this.logger.error(
+          `Reminder failed for match ${match.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+    if (reminded > 0) {
+      this.logger.log(`Reminder scheduler: reminded ${reminded} match(es).`);
+    }
+    return reminded;
+  }
+
+  /** Tally POTM votes for one match (POTM invariant: roster member, no no-show). */
+  private async tallyPomVotes(matchId: string): Promise<
+    Array<{
+      candidate_id: string;
+      full_name: string | null;
+      avatar_url: string | null;
+      vote_count: number;
+    }>
+  > {
+    const voteCounts = await this.db.execute(sql`
+      SELECT
+        mv.candidate_id,
+        u.full_name,
+        u.avatar_url,
+        COUNT(*)::int AS vote_count
+      FROM ${match_votes} mv
+      INNER JOIN ${users} u ON u.id = mv.candidate_id
+      INNER JOIN ${match_players} mp
+        ON mp.match_id = mv.match_id
+       AND mp.user_id = mv.candidate_id
+       AND mp.no_show = false
+      WHERE mv.match_id = ${matchId}
+      GROUP BY mv.candidate_id, u.full_name, u.avatar_url
+      ORDER BY vote_count DESC
+      LIMIT 5
+    `);
+    return voteCounts as unknown as Array<{
+      candidate_id: string;
+      full_name: string | null;
+      avatar_url: string | null;
+      vote_count: number;
+    }>;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,1 @@
+ALTER TABLE "matches" ADD COLUMN "reminders_sent_at" timestamp with time zone;

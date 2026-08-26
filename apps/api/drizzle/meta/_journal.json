@@ -120,6 +120,13 @@
       "when": 1787768411419,
       "tag": "0016_faithful_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787769053942,
+      "tag": "0017_grey_fixer",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { Module, OnModuleInit, Logger } from '@nestjs/common';
 import { MatchesController } from './matches.controller';
 import { MatchesService } from './matches.service';
+import { MatchesScheduler } from './matches.scheduler';
 import { WalletModule } from '../wallet/wallet.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -9,7 +10,7 @@ import { ActivitiesModule } from '../activities/activities.module';
 @Module({
   imports: [WalletModule, GatewayModule, NotificationsModule, ActivitiesModule],
   controllers: [MatchesController],
-  providers: [MatchesService],
+  providers: [MatchesService, MatchesScheduler],
   exports: [MatchesService],
 })
 export class MatchesModule implements OnModuleInit {
