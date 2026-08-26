@@ -1,0 +1,56 @@
+/* KoraLink landing — Draft B (partner) · custom theme · dark match-night
+ * Hallmark · macrostructure: Narrative Workflow · theme: custom
+ * vibe: "match-night operations, calm confidence" · paper: oklch(16% 0.010 150) · accent: oklch(64% 0.10 152)
+ * display: Fraunces 600 roman · body: Geist · outlier: JetBrains Mono
+ * axes: dark / roman-serif / chromatic-green ~152°
+ */
+:root {
+  --color-paper:     oklch(16%  0.010 150);
+  --color-paper-2:   oklch(20%  0.012 150);
+  --color-paper-3:   oklch(25%  0.013 150);
+  --color-rule:      oklch(31%  0.014 150);
+  --color-rule-2:    oklch(44%  0.020 152);
+  --color-muted:     oklch(58%  0.012 150);
+  --color-neutral:   oklch(70%  0.012 150);
+  --color-ink-2:     oklch(77%  0.012 150);
+  --color-ink:       oklch(94%  0.008 150);
+  --color-accent:    oklch(64%  0.10  152);
+  --color-accent-2:  oklch(62%  0.16  22);
+  --color-accent-ink:oklch(16%  0.010 150);
+  --color-focus:     oklch(70%  0.14  152);
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body:    "Geist", "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+  --text-xs:  0.75rem;
+  --text-sm:  0.875rem;
+  --text-base:1rem;
+  --text-md:  1.25rem;
+  --text-lg:  1.5625rem;
+  --text-xl:  1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-display:   clamp(2.5rem, 5vw + 1rem, 5rem);
+  --text-display-s: clamp(2rem, 4vw + 0.75rem, 3.5rem);
+
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+  --space-4xl: 6.5rem;
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --measure: 62ch;
+  --page-max: 84rem;
+}

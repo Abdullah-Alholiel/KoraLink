@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KoraLink for Venue Owners</title>
+<meta name="description" content="KoraLink brings the pickup-football players already looking for a pitch. List your venue, get booked, get paid through your wallet.">
+<!-- Google Fonts: Fraunces (display, roman) + Geist (body) + JetBrains Mono (stage numerals) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Geist:wght@400;500&family=Albert+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Narrative Workflow · F4 knobs: numbering=1.0/2.0/3.0, layout=vertical, connector=none
+ * theme: custom · vibe: "match-night operations, calm confidence" · paper: oklch(16% 0.010 150) · accent: oklch(64% 0.10 152)
+ * display: Fraunces 600 roman · body: Geist · axes: dark / roman-serif / chromatic-green ~152°
+ * accent-2: brand red (dark-lifted) oklch(62% 0.16 22) · enrichment: none (typography + Tier-A CSS slot mocks) · nav: N1a Wordmark+2 links · footer: Ft1 Mast-headed
+ * studied: no · context: inferred (KoraLink partner programme, Saudi venue owners) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 50–57)
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+
+/* ── Token block · dark, green-tinted, brand-anchored ── */
+:root {
+  --color-paper:     oklch(16%  0.010 150);
+  --color-paper-2:   oklch(20%  0.012 150);
+  --color-paper-3:   oklch(25%  0.013 150);
+  --color-rule:      oklch(31%  0.014 150);
+  --color-rule-2:    oklch(44%  0.020 152);
+  --color-muted:     oklch(58%  0.012 150);
+  --color-neutral:   oklch(70%  0.012 150);
+  --color-ink-2:     oklch(77%  0.012 150);
+  --color-ink:       oklch(94%  0.008 150);
+  --color-accent:    oklch(64%  0.10  152);   /* KoraLink green, lifted for dark paper */
+  --color-accent-2:  oklch(62%  0.16  22);    /* KoraLink red, lifted for dark paper */
+  --color-accent-ink:oklch(16%  0.010 150);
+  --color-focus:     oklch(70%  0.14  152);
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body:    "Geist", "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+  --text-xs:  0.75rem;
+  --text-sm:  0.875rem;
+  --text-base:1rem;
+  --text-md:  1.25rem;
+  --text-lg:  1.5625rem;
+  --text-xl:  1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-display:   clamp(2.5rem, 5vw + 1rem, 5rem);
+  --text-display-s: clamp(2rem, 4vw + 0.75rem, 3.5rem);
+
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+  --space-4xl: 6.5rem;
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --measure: 62ch;
+  --page-max: 84rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { overflow-x: clip; }
+body {
+  overflow-x: clip;
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+img, svg { display: block; max-width: 100%; }
+a { color: var(--color-accent); text-underline-offset: 3px; }
+::selection { background: var(--color-accent); color: var(--color-accent-ink); }
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-style: normal;               /* gate 38a — roman headers only */
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  margin: 0;
+  overflow-wrap: anywhere;          /* gate 51 */
+  min-width: 0;
+}
+p { margin: 0; }
+.container {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.mono {
+  font-family: var(--font-outlier);
+  font-size: var(--text-xs);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+/* ── Nav · N1a Wordmark + 2 links (page genuinely has 2 destinations) ── */
+.nav-min {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-block: var(--space-lg);
+}
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.wordmark::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+.nav-min__links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nav-min__links a {
+  color: var(--color-ink-2);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  white-space: nowrap;              /* gate 49 */
+  padding-block: 0.5rem;            /* 44px-class touch target */
+  text-underline-offset: 4px;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+.nav-min__links a:hover { color: var(--color-ink); text-decoration: underline; text-decoration-thickness: 1px; }
+.nav-min__links .nav-min__cta {
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  padding: 0.55rem 1.1rem;
+  line-height: 1;
+}
+.nav-min__links .nav-min__cta:hover { background: var(--color-accent); color: var(--color-accent-ink); text-decoration: none; }
+
+/* ── Header ── */
+.header {
+  padding-block: var(--space-2xl) var(--space-3xl);
+  max-width: var(--measure);
+}
+.header__title {
+  font-size: var(--text-display);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  max-width: 20ch;   /* two deliberate lines: "Your pitch, filled." / "Your time, paid." */
+}
+.header__lede {
+  margin-top: var(--space-lg);
+  color: var(--color-muted);
+  max-width: 52ch;
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.header__lede strong { color: var(--color-ink); font-weight: 500; }
+
+/* ── Stages · Narrative Workflow, vertical, numbered, stacked heads (gate 54) ── */
+.stages { padding-block: 0 var(--space-4xl); }
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2xs);
+  padding-block: var(--space-2xl);
+  border-top: 1px solid var(--color-rule);
+  position: relative;
+}
+.stage:first-child { border-top: 2px solid var(--color-ink); }
+.stage__num {
+  font-family: var(--font-outlier);        /* outlier slot 1 of 2 */
+  font-size: var(--text-xs);
+  letter-spacing: 0.16em;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.stage__title { font-size: var(--text-xl); }
+.stage__body {
+  margin-top: var(--space-xs);
+  color: var(--color-muted);
+  max-width: 56ch;
+}
+.stage__body strong { color: var(--color-ink-2); font-weight: 500; }
+.stage__visual { margin-top: var(--space-xl); }
+
+/* Tier-A CSS mocks — floating no-frame (gate 47 pass) */
+.mock {
+  border: 1px solid var(--color-rule);
+  border-radius: 14px;
+  background: var(--color-paper-2);
+  padding: var(--space-md) var(--space-lg);
+  max-width: 30rem;
+  font-size: var(--text-sm);
+}
+.mock__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-block: 0.55rem;
+  border-bottom: 1px solid var(--color-rule);
+}
+.mock__row:last-child { border-bottom: 0; }
+.mock__name { font-weight: 500; color: var(--color-ink); }
+.mock__meta { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.mock__tag {
+  font-family: var(--font-outlier);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--color-rule-2);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  line-height: 1.4;
+  color: var(--color-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.mock__tag--accent { border-color: var(--color-accent); color: var(--color-accent); }
+.mock__tag--booked { border-color: var(--color-accent-2); color: var(--color-accent-2); }
+.mock__amount { font-weight: 500; color: var(--color-accent); font-variant-numeric: tabular-nums; }
+.mock__state { color: var(--color-muted); }
+.mock__state--ok { color: var(--color-accent); }
+
+/* Trust grid — 2-col typographic grid, no cards, no icons */
+.trust {
+  padding-block: var(--space-2xl);
+  border-top: 2px solid var(--color-ink);
+}
+.trust__head { margin-bottom: var(--space-xl); }
+.trust__title { font-size: var(--text-2xl); }
+.trust__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--color-rule);
+}
+.trust__item {
+  padding: var(--space-lg) var(--space-lg) var(--space-lg) 0;
+  border-bottom: 1px solid var(--color-rule);
+}
+.trust__item:nth-child(odd) { border-inline-end: 1px solid var(--color-rule); padding-inline-end: var(--space-lg); }
+.trust__item h3 { font-family: var(--font-display); font-size: var(--text-md); }
+.trust__item p { margin-top: var(--space-xs); color: var(--color-muted); font-size: var(--text-sm); }
+
+/* Final CTA */
+.cta-foot {
+  padding-block: var(--space-4xl);
+  border-top: 1px solid var(--color-rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  align-items: flex-start;
+}
+.cta-foot__title { font-size: var(--text-display-s); max-width: 15ch; }
+.cta-foot__actions { display: flex; flex-wrap: wrap; gap: var(--space-md); align-items: center; }
+.btn-primary {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border: 0;
+  border-radius: 999px;
+  padding: 0.9rem 1.9rem;
+  white-space: nowrap;
+  line-height: 1;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+}
+.btn-primary:hover { background: var(--color-ink-2); color: var(--color-paper); }
+.btn-primary:active { transform: translateY(1px); }
+.link-arrow {
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  white-space: nowrap;
+  padding-block: 0.5rem;
+}
+.cta-foot__note { font-size: var(--text-sm); color: var(--color-muted); }
+
+/* ── Footer · Ft1 Mast-headed ── */
+.foot-mast {
+  border-top: 2px solid var(--color-ink);
+  padding-block: var(--space-3xl) var(--space-2xl);
+  display: grid;
+  gap: var(--space-md);
+}
+.foot-mast__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md) var(--space-xl);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.foot-mast__links a {
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  padding-block: 0.5rem;
+  text-underline-offset: 3px;
+}
+.foot-mast__links a:hover { color: var(--color-ink); text-decoration: underline; text-decoration-thickness: 1px; }
+.foot-mast__legal { font-size: var(--text-xs); color: var(--color-muted); font-family: var(--font-outlier); letter-spacing: 0.04em; }
+
+/* ── Responsive · mobile-first ── */
+@media (max-width: 40rem) {
+  .header__title { font-size: clamp(2.25rem, 11vw, 3.25rem); }
+  .nav-min__links { gap: var(--space-sm); }
+  .nav-min__links a { font-size: 0.875rem; }
+  .nav-min__links .nav-min__cta { display: none; }   /* collapse to brand + 1 link; CTA lives in header flow */
+  .trust__grid { grid-template-columns: minmax(0, 1fr); }
+  .trust__item:nth-child(odd) { border-inline-end: 0; padding-inline-end: 0; }
+  .cta-foot__title { font-size: var(--text-2xl); }
+  .btn-primary { min-height: 44px; }
+  .stage__title { font-size: var(--text-lg); }
+}
+@media (min-width: 40rem) and (max-width: 60rem) {
+  .trust__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- Nav · N1a — wordmark + two real destinations -->
+<nav class="nav-min container" aria-label="Primary">
+  <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">KoraLink</a>
+  <ul class="nav-min__links">
+    <li><a href="https://aa.tail2948f9.ts.net:9450">For players</a></li>
+    <li><a class="nav-min__cta" href="https://aa.tail2948f9.ts.net:3002/partner">Partner sign in</a></li>
+  </ul>
+</nav>
+
+<main>
+  <!-- Header -->
+  <header class="header container">
+    <h1 class="header__title">Your pitch, filled. Your time, paid.</h1>
+    <p class="header__lede">KoraLink is where pickup football happens in Saudi Arabia. <strong>The players are already in the app, looking for a pitch</strong> — you bring the venue, the floodlights, and the nets.</p>
+  </header>
+
+  <!-- Workflow stages -->
+  <section class="stages container" aria-label="How partnering works">
+    <div class="stage">
+      <span class="stage__num">1.0 — List your pitch</span>
+      <h2 class="stage__title">Put your venue on the map once.</h2>
+      <p class="stage__body">Add the name, location, pitch sizes, surfaces and prices. KoraLink verifies the listing and marks it with a partner badge — so players know who they’re booking with.</p>
+      <div class="stage__visual">
+        <div class="mock" role="img" aria-label="Sample venue listing with verified partner badge">
+          <div class="mock__row">
+            <p class="mock__name">District Pitch · Riyadh</p>
+            <span class="mock__tag mock__tag--accent">Verified</span>
+          </div>
+          <div class="mock__row">
+            <span class="mock__meta">5v5 · 7v7 · 8v8</span>
+            <span class="mock__meta">Grass / Indoor</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <span class="stage__num">2.0 — Get booked</span>
+      <h2 class="stage__title">Open slots fill themselves.</h2>
+      <p class="stage__body">Players nearby filter by pitch size, surface and time. The moment someone books, the slot locks — no double bookings, no missed messages.</p>
+      <div class="stage__visual">
+        <div class="mock" role="img" aria-label="Sample evening slot grid: twenty hundred open, twenty-one hundred booked, twenty-two hundred open">
+          <div class="mock__row">
+            <span class="mock__meta">20:00</span>
+            <span class="mock__meta">5v5 · 10 slots</span>
+            <span class="mock__state">OPEN</span>
+          </div>
+          <div class="mock__row">
+            <span class="mock__meta">21:00</span>
+            <span class="mock__meta">5v5 · 10 slots</span>
+            <span class="mock__tag mock__tag--booked">BOOKED</span>
+          </div>
+          <div class="mock__row">
+            <span class="mock__meta">22:00</span>
+            <span class="mock__meta">7v7 · 14 slots</span>
+            <span class="mock__state">OPEN</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <span class="stage__num">3.0 — Get paid</span>
+      <h2 class="stage__title">Every booking settles to your wallet.</h2>
+      <p class="stage__body">Match fees flow through KoraLink’s wallet system with a transaction record for each booking. Two booking modes: <strong>KoraLink handles scheduling and payment end to end</strong>, or you run the pitch your own way and use the app for discovery.</p>
+      <div class="stage__visual">
+        <div class="mock" role="img" aria-label="Sample wallet settlement: booking at twenty-one hundred, plus settlement amount, balance updated">
+          <div class="mock__row">
+            <span class="mock__name">21:00 · 5v5 booking</span>
+            <span class="mock__amount">+SAR —</span>
+          </div>
+          <div class="mock__row">
+            <span class="mock__name">Wallet balance</span>
+            <span class="mock__meta">SAR —</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <span class="stage__num">4.0 — Stay full</span>
+      <h2 class="stage__title">Regulars come back. Friction doesn’t.</h2>
+      <p class="stage__body">Repeat players become your regulars. No-shows and disputes are handled inside the app — with records and receipts — so the pitch stays about football, not admin.</p>
+    </div>
+  </section>
+
+  <!-- Trust strip -->
+  <section class="trust container" aria-labelledby="trust-title">
+    <header class="trust__head">
+      <h2 class="trust__title" id="trust-title">What partners get</h2>
+    </header>
+    <div class="trust__grid">
+      <div class="trust__item">
+        <h3>Verified badge</h3>
+        <p>KoraLink checks every listing before it goes live. The badge tells players your venue is real.</p>
+      </div>
+      <div class="trust__item">
+        <h3>Wallet settlements</h3>
+        <p>Fees land in your wallet with a record per booking. No chasing, no IOUs.</p>
+      </div>
+      <div class="trust__item">
+        <h3>No-show &amp; dispute handling</h3>
+        <p>Missed matches and disagreements are resolved inside the app, with the facts attached.</p>
+      </div>
+      <div class="trust__item">
+        <h3>Your booking mode</h3>
+        <p>Full service through KoraLink, or self-managed with app discovery. You choose how the pitch runs.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="cta-foot container" aria-labelledby="cta-title">
+    <h2 class="cta-foot__title" id="cta-title">Start at stage one.</h2>
+    <div class="cta-foot__actions">
+      <a class="btn-primary" href="https://aa.tail2948f9.ts.net:3002/partner">List your pitch →</a>
+      <a class="link-arrow" href="https://aa.tail2948f9.ts.net:9450">See the player app ↓</a>
+    </div>
+    <p class="cta-foot__note">Built for Saudi venue owners — the app and the partner console both ship in Arabic and English.</p>
+  </section>
+</main>
+
+<!-- Footer · Ft1 Mast-headed -->
+<footer class="foot-mast container">
+  <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">KoraLink</a>
+  <p class="mono" style="letter-spacing:0.06em">Pickup football, made dependable.</p>
+  <ul class="foot-mast__links">
+    <li><a href="https://aa.tail2948f9.ts.net:9450">For players</a></li>
+    <li><a href="https://aa.tail2948f9.ts.net:3002/partner">Partner sign in</a></li>
+    <li><a href="https://aa.tail2948f9.ts.net:9450/en/terms">Terms</a></li>
+    <li><a href="https://aa.tail2948f9.ts.net:9450/en/privacy">Privacy</a></li>
+  </ul>
+  <p class="foot-mast__legal">© 2026 KoraLink</p>
+</footer>
+
+</body>
+</html>
