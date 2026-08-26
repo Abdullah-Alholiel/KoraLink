@@ -1,13 +1,15 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": null,
-  "last_run_at": null,
-  "last_run_commits": [],
-  "last_run_report": null,
+  "last_run": 1,
+  "last_run_at": "2026-08-26T16:31:54Z",
+  "last_run_commits": ["85c3ca0", "19d610c"],
+  "last_run_report": "kanban/RUNS/2026-08-26T16-31-54Z.md",
   "in_review_items": [],
-  "open_blockers": [],
+  "open_blockers": [
+    "P0-2 wallet top-up: needs Abdullah's payment-provider decision (Moyasar/HyperPay/Tap) + credentials before real integration; interim NODE_ENV-gating option recorded on board"
+  ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Bootstrap state. Run #1 performs the full product-gap + code review and populates BOARD.md. Lock guard lives in kanban/LOCK.json (gitignored, transient)."
+  "notes": "Run #1 = bootstrap. Board populated from delegated reviewer (deepseek-v4-pro, 2 passes) + parent self-review, all findings parent-verified. Runbook note: deepseek delegation worked fine this run (two 402s were on 2026-08-26 earlier attempts with stale glm config) — provider status may have recovered; keep zai/glm-5.3 as session model regardless. No auto-stash was used (sibling graphify-out edits left in place, unstaged)."
 }
