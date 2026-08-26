@@ -405,7 +405,18 @@ export const match_messages = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('match_messages_match_idx').on(t.match_id)],
+  (t) => [
+    // Keyset pagination for chat history: a page is `WHERE match_id = ? AND
+    // (created_at, id) < (cursor)` — the composite serves both the match filter
+    // and the row-value ordering. Subsumes the old (match_id)-only index.
+    index('match_messages_match_created_idx').on(t.match_id, t.created_at, t.id),
+    // Idempotent sends (P1-3): a retried send must never duplicate. The
+    // partial predicate keeps rows without a client id (NULL) out of the
+    // index entirely — multiple NULLs are fine.
+    uniqueIndex('match_messages_client_msg_uidx')
+      .on(t.user_id, t.match_id, t.client_message_id)
+      .where(sql`client_message_id IS NOT NULL`),
+  ],
 );
 
 export const match_votes = pgTable(
