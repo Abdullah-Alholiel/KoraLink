@@ -13,7 +13,7 @@
 
 | # | Area | Item | Evidence | Status | Cycle |
 |---|------|------|----------|--------|-------|
-| P0-1 | API | **Private-match data leak**: `GET /matches/:id`, `GET /matches/:id/messages`, `GET /matches/:id/calendar` serve PRIVATE matches (details, players, location, full chat history) to ANY authenticated user — no visibility/membership check. Feed correctly filters `visibility='public'` (matches.service.ts:269) and WS `join-lobby`/`sendMessage` enforce membership, so only these REST reads leak. | matches.controller.ts:108-112,149-153,57-66 → matches.service.ts:322 (`findOne(matchId)` no viewer), :781 (`getMessages(matchId)` no userId) | WIP (run #1) | `docs/plans/private-match-access-control/` |
+| P0-1 | API | **REST chat reads leaked every match conversation** — `messages` relation in GET /matches/:id + GET /:id/messages had no membership check while WS already enforced it. FIXED by run #1. | matches.controller.ts:108-112,149-153; matches.service.ts:322,781 | IN-REVIEW (run #1: 19041aa, 005dec0, 4b87a9f) | docs/plans/private-match-access-control/ |
 | P0-2 | API/Wallet | **Fake self-credit top-up**: `POST /wallet/topup` credits the caller's wallet with no payment provider behind it (grep `moyasar\|stripe\|tap\|hyperpay` in apps/api/src → 0 hits); PWA wallet page calls it directly up to SAR 10,000. | wallet.controller.ts:53-68; wallet/page.tsx:87-103; topup-wallet.dto.ts:23 | BLOCKED — needs Abdullah's decision on payment provider (Moyasar/HyperPay/Tap) + credentials. Interim option: gate endpoint behind NODE_ENV like dev-login. | — |
 
 ## 🟠 P1 — High-value missing functionality

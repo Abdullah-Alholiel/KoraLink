@@ -3,13 +3,19 @@
   "loop": "koralink-factory-5h",
   "last_run": 1,
   "last_run_at": "2026-08-26T16:31:54Z",
-  "last_run_commits": ["85c3ca0", "19d610c"],
+  "last_run_commits": [
+    "19041aa",
+    "005dec0",
+    "4b87a9f"
+  ],
   "last_run_report": "kanban/RUNS/2026-08-26T16-31-54Z.md",
-  "in_review_items": [],
+  "in_review_items": [
+    "P0-1 private-match chat access control (commits 19041aa, 005dec0, 4b87a9f \u2014 verify: jest 11/11, vitest 217/217, live outsider 403 on GET /matches/:id/messages, detail messages stripped)"
+  ],
   "open_blockers": [
     "P0-2 wallet top-up: needs Abdullah's payment-provider decision (Moyasar/HyperPay/Tap) + credentials before real integration; interim NODE_ENV-gating option recorded on board"
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #1 = bootstrap. Board populated from delegated reviewer (deepseek-v4-pro, 2 passes) + parent self-review, all findings parent-verified. Runbook note: deepseek delegation worked fine this run (two 402s were on 2026-08-26 earlier attempts with stale glm config) — provider status may have recovered; keep zai/glm-5.3 as session model regardless. No auto-stash was used (sibling graphify-out edits left in place, unstaged)."
+  "notes": "Run #1 bootstrap complete. deepseek delegation WORKED (recovered from 402) \u2014 re-probe each run. Reviewer summaries must stay <10k chars or the live-log pipe truncates them. Next: verify P0-1, then P1-3 chat idempotency index or P1-6 hot-FK indexes; P1-1 scheduler worth a dedicated run; P0-2 awaits Abdullah payment-provider decision."
 }
