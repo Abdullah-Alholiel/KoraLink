@@ -10,6 +10,7 @@ import * as compression from 'compression';
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -19,6 +20,16 @@ async function bootstrap(): Promise<void> {
   app.useLogger(app.get(Logger));
 
   const configService = app.get(ConfigService);
+
+  // ── P0-3: refuse to boot with placeholder/weak auth secrets ─────────────
+  // Throws BEFORE app.listen so a misconfigured .env can never serve traffic
+  // with a forgeable JWT/cookie secret. See common/security/bootstrap-secrets.ts.
+  assertBootstrapSecrets({
+    jwtSecret: configService.get<string>('JWT_SECRET'),
+    cookieSecret: configService.get<string>('COOKIE_SECRET'),
+    nodeEnv: configService.get<string>('NODE_ENV', 'development'),
+  });
+
   const playerUrls = configService
     .get<string>('PLAYER_URL', 'http://localhost:3000')
     .split(',')
