@@ -1,39 +1,40 @@
-/* KoraLink landing — Draft A (player) · custom theme · light pitch-green
- * Hallmark · macrostructure: Marquee Hero · theme: custom
- * vibe: "match-night energy, pitch green" · paper: oklch(97.5% 0.010 145) · accent: oklch(50% 0.09 152)
+/* KoraLink landing — Draft A (player) · custom theme · premium-booking, floodlit night pitch
+ * Hallmark · macrostructure: Photographic Hero (transformed) · theme: custom
+ * vibe: "premium booking, floodlit night pitch" · paper: oklch(97.5% 0.005 140) · accent: oklch(33% 0.055 155)
  * display: Outfit 800 · body: Albert Sans · outlier: JetBrains Mono
- * axes: light / geometric-sans / chromatic-green ~152°
+ * axes: light / geometric-sans / chromatic-green ~155° · night hero band
+ * transformed per user reference (2026-08-27)
  */
 :root {
-  --color-paper:     oklch(97.5% 0.010 145);
-  --color-paper-2:   oklch(95%   0.012 145);
-  --color-paper-3:   oklch(91.5% 0.014 145);
-  --color-rule:      oklch(84%   0.012 145);
-  --color-rule-2:    oklch(60%   0.030 152);
-  --color-muted:     oklch(52%   0.015 150);
-  --color-neutral:   oklch(38%   0.016 150);
-  --color-ink-2:     oklch(30%   0.016 150);
-  --color-ink:       oklch(19%   0.014 150);
-  --color-accent:    oklch(50%   0.09  152);
-  --color-accent-2:  oklch(50%   0.19  22);
-  --color-accent-ink:oklch(97.5% 0.010 145);
-  --color-focus:     oklch(55%   0.13  152);
+  --color-paper:     oklch(97.5% 0.005 140);
+  --color-paper-2:   oklch(99%   0.004 140);
+  --color-paper-3:   oklch(95.5% 0.006 140);
+  --color-rule:      oklch(90%   0.006 140);
+  --color-muted:     oklch(53.5% 0.012 140);
+  --color-ink-2:     oklch(38%   0.010 140);
+  --color-ink:       oklch(24%   0.006 140);
+  --color-accent:    oklch(33%   0.055 155);
+  --color-accent-2:  oklch(55%   0.16  22);
+  --color-gold:      oklch(60%   0.13  75);
+  --color-mint:      oklch(62%   0.14 160);
+  --color-night:     oklch(15%   0.030 160);
+  --color-night-2:   oklch(21%   0.040 158);
+  --color-accent-ink:oklch(99%   0.004 140);
+  --color-focus:     oklch(45%   0.09  155);
 
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-body:    "Albert Sans", ui-sans-serif, system-ui, sans-serif;
   --font-outlier: "JetBrains Mono", ui-monospace, monospace;
 
-  --text-xs:  0.75rem;
-  --text-sm:  0.875rem;
-  --text-base:1rem;
-  --text-md:  1.25rem;
-  --text-lg:  1.5625rem;
-  --text-xl:  1.9531rem;
-  --text-2xl: 2.4414rem;
-  --text-display:   clamp(3.5rem, 10vw + 1rem, 8rem);
-  --text-display-s: clamp(2.25rem, 4.5vw + 0.75rem, 4rem);
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.25rem;
+  --text-lg:   1.5625rem;
+  --text-xl:   1.9531rem;
+  --text-2xl:  2.4414rem;
+  --text-display: clamp(1.8125rem, 6.5vw + 0.25rem, 3.5rem);
 
-  --space-2xs: 0.25rem;
   --space-xs:  0.5rem;
   --space-sm:  0.75rem;
   --space-md:  1rem;
@@ -41,16 +42,15 @@
   --space-xl:  2rem;
   --space-2xl: 3rem;
   --space-3xl: 4.5rem;
-  --space-4xl: 6.5rem;
 
-  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-micro: 120ms;
   --dur-short: 220ms;
   --dur-long:  420ms;
 
-  --gutter: clamp(1.25rem, 4vw, 3rem);
-  --measure: 62ch;
+  --radius-card: 16px;
+  --radius-cta: 14px;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --column: 44rem;
   --page-max: 84rem;
 }
