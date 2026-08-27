@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>KoraLink — Play Anywhere. Commit to Nothing.</title>
-<meta name="description" content="Join premium football matches across Saudi Arabia instantly. No subscriptions. 5v5 to 11v11, grass or artificial, indoor or outdoor.">
+<meta name="description" content="Find and join premium football matches across Saudi Arabia — 5v5 to 11v11, grass or artificial, indoor or outdoor. Book in seconds, pay from your KoraLink wallet. No subscriptions.">
+<meta property="og:title" content="KoraLink — Play Anywhere. Commit to Nothing.">
+<meta property="og:description" content="Join premium football matches across Saudi Arabia instantly. No subscriptions.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0c1f16">
 <!-- KoraLink brand fonts: Outfit (display) + Albert Sans (body) + JetBrains Mono (meta) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,11 +17,12 @@
 /* Hallmark · macrostructure: Photographic Hero (transformed) · H6 knobs: image=CSS-art-night-stadium, caption=eyebrow-pill, overlay=text
  * theme: custom · vibe: "premium booking, floodlit night pitch" · paper: oklch(97.5% 0.005 140) · accent: oklch(33% 0.055 155)
  * display: Outfit 800 · body: Albert Sans · axes: light / geometric-sans / chromatic-green ~155°
- * accent-2: brand red oklch(55% 0.16 22) · gold star: oklch(75% 0.15 75) (decorative only)
+ * accent-2: brand red oklch(55% 0.16 22) · gold star: oklch(60% 0.13 75) · mint NEW badge: oklch(62% 0.14 160)
  * enrichment: Tier-A CSS night-stadium hero + pitch-art club cards (no external photos)
- * nav: N1a minimal (globe wordmark + bell) · footer: Ft1 mast-headed + payment chips
- * transformed per user reference (premium-booking mobile design, 2026-08-27)
- * contrast: pass (40–41) · honest: pass (46 — sample cards carry user-supplied values; payment copy reflects real wallet) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30 — one hand-built inline SVG set) · mobile: pass (34, 50–57) · pre-emit critique: P4 H5 E5 S5 R4 V5
+ * nav: N1a sticky minimal (globe wordmark + bell, blur) · footer: Ft1 mast-headed + payment chips
+ * UX audit applied (2026-08-27): 44px touch targets (HIG), sticky nav, load entrance,
+ * NEW badge on section head, pointer-fine hover lift, escape-hatch link, og meta, honest copy.
+ * contrast: pass (40–41) · honest: pass (46 — sample cards carry user-supplied values) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 50–57) · pre-emit critique: P4 H5 E5 S5 R4 V5
  */
 
 :root {
@@ -25,12 +30,12 @@
   --color-paper-2:   oklch(99%   0.004 140);   /* card white */
   --color-paper-3:   oklch(95.5% 0.006 140);
   --color-rule:      oklch(90%   0.006 140);   /* #E5E7EB */
-  --color-muted:     oklch(53.5% 0.012 140);   /* #6B7280 darkened to clear 4.5:1 on paper */
+  --color-muted:     oklch(53.5% 0.012 140);   /* clears 4.5:1 on paper */
   --color-ink-2:     oklch(38%   0.010 140);
   --color-ink:       oklch(24%   0.006 140);   /* #202124 brand black */
   --color-accent:    oklch(33%   0.055 155);   /* brand green #254132 */
   --color-accent-2:  oklch(55%   0.16  22);    /* brand red #d4494c */
-  --color-gold:      oklch(60%   0.13  75);    /* star decoration, clears 3:1 on white */
+  --color-gold:      oklch(60%   0.13  75);    /* star, clears 3:1 on white */
   --color-mint:      oklch(62%   0.14 160);    /* NEW badge */
   --color-night:     oklch(15%   0.030 160);   /* hero base */
   --color-night-2:   oklch(21%   0.040 158);
@@ -66,12 +71,13 @@
   --radius-card: 16px;
   --radius-cta: 14px;
   --gutter: clamp(1.25rem, 4vw, 2.5rem);
-  --column: 44rem;           /* single-column premium feel, like the reference */
+  --column: 44rem;
   --page-max: 84rem;
+  --nav-h: 64px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { overflow-x: clip; }
+html { overflow-x: clip; scroll-behavior: smooth; }
 body {
   overflow-x: clip;
   margin: 0;
@@ -85,7 +91,11 @@ body {
 img, svg { display: block; max-width: 100%; }
 a { color: var(--color-accent); text-underline-offset: 3px; }
 ::selection { background: var(--color-accent); color: var(--color-accent-ink); }
-:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; }
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 
 h1, h2, h3 {
   font-family: var(--font-display);
@@ -99,20 +109,23 @@ h1, h2, h3 {
 }
 p { margin: 0; }
 .container { width: 100%; max-width: var(--column); margin-inline: auto; padding-inline: var(--gutter); }
-.mono {
-  font-family: var(--font-outlier);
-  font-size: var(--text-xs);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-}
 
-/* ── Nav · N1a minimal: globe wordmark + bell ── */
+/* ── Nav · N1a sticky: globe wordmark + bell, blur on scroll state via :has? keep simple: always-blur ── */
+.nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: oklch(97.5% 0.005 140 / 0.82);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-rule);
+}
 .nav-min {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block: var(--space-md);
+  gap: var(--space-md);
+  min-height: var(--nav-h);
 }
 .wordmark {
   display: inline-flex;
@@ -124,18 +137,20 @@ p { margin: 0; }
   color: var(--color-ink);
   text-decoration: none;
   letter-spacing: -0.01em;
+  padding-block: 0.5rem;             /* 44px-class hit target */
 }
 .wordmark svg { width: 22px; height: 22px; }
 .bell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px; height: 40px;          /* 40px + padding = 44px-class target */
+  width: 44px; height: 44px;          /* HIG min touch target */
   border-radius: 999px;
   color: var(--color-ink-2);
-  transition: background-color var(--dur-micro) var(--ease-out);
+  transition: background-color var(--dur-micro) var(--ease-out),
+              color var(--dur-micro) var(--ease-out);
 }
-.bell:hover { background: var(--color-paper-3); }
+.bell:hover { background: var(--color-paper-3); color: var(--color-ink); }
 .bell svg { width: 22px; height: 22px; }
 
 /* ── Hero · night-stadium CSS art, eyebrow pill, headline, CTA ── */
@@ -170,14 +185,14 @@ p { margin: 0; }
   align-items: center;
   gap: 0.45rem;
   font-family: var(--font-outlier);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--color-paper-2);
   background: oklch(99% 0.004 140 / 0.14);
   border: 1px solid oklch(99% 0.004 140 / 0.28);
   border-radius: 999px;
-  padding: 0.4rem 0.85rem;
+  padding: 0.45rem 0.9rem;
   line-height: 1;
 }
 .hero__eyebrow::before {
@@ -192,17 +207,22 @@ p { margin: 0; }
   line-height: 1.06;
   letter-spacing: -0.035em;
   color: var(--color-paper-2);
-  /* explicit <br> controls the two-line break; no max-width needed */
 }
 .hero__sub {
   margin-top: var(--space-md);
   color: oklch(90% 0.01 140);
-  max-width: 38ch;
+  max-width: 40ch;
   font-size: var(--text-md);
   line-height: 1.5;
 }
-.hero__cta {
+.hero__cta-row {
   margin-top: var(--space-xl);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+}
+.hero__cta {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
@@ -214,6 +234,7 @@ p { margin: 0; }
   border: 0;
   border-radius: var(--radius-cta);
   padding: 1rem 1.75rem;
+  min-height: 50px;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
@@ -224,6 +245,23 @@ p { margin: 0; }
 .hero__cta:hover { background: oklch(28% 0.05 155); }
 .hero__cta:active { transform: translateY(1px); }
 .hero__cta svg { width: 18px; height: 18px; }
+.hero__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--text-sm);
+  color: oklch(82% 0.01 140);
+  line-height: 1.4;
+}
+.hero__note svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--color-mint); }
+
+/* Load entrance — one orchestrated moment (HIG motion restraint) */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { opacity: 0; animation: rise var(--dur-long) var(--ease-out) forwards; }
+.rise-1 { animation-delay: 80ms; }
+.rise-2 { animation-delay: 160ms; }
+.rise-3 { animation-delay: 240ms; }
+.rise-4 { animation-delay: 320ms; }
 
 /* ── Sections ── */
 .section { padding-block: var(--space-2xl) 0; }
@@ -234,16 +272,27 @@ p { margin: 0; }
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
 }
-.section__title { font-size: var(--text-xl); }
+.section__title {
+  font-size: var(--text-xl);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
 .section__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-muted);
   text-decoration: none;
   white-space: nowrap;
-  padding-block: 0.35rem;
+  min-height: 44px;                 /* HIG touch target */
+  padding-inline: 0.25rem;
+  transition: color var(--dur-micro) var(--ease-out);
 }
-.section__link:hover { color: var(--color-ink); text-decoration: underline; text-decoration-thickness: 1px; }
+.section__link:hover { color: var(--color-ink); }
+.section__link svg { width: 15px; height: 15px; }
 .section__sub { color: var(--color-muted); max-width: 52ch; margin-bottom: var(--space-lg); }
 
 /* How it works — vertical steps with icon chips */
@@ -256,6 +305,7 @@ p { margin: 0; }
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-lg);
+  transition: border-color var(--dur-short) var(--ease-out);
 }
 .step__icon {
   flex-shrink: 0;
@@ -271,7 +321,7 @@ p { margin: 0; }
 .step__title { font-size: 1.0625rem; font-weight: 700; }
 .step__body { margin-top: 0.15rem; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.55; }
 
-/* Why KoraLink — 2-up feature cards */
+/* Why KoraLink — 2×2 feature cards */
 .why-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -282,8 +332,13 @@ p { margin: 0; }
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-lg);
+  transition: border-color var(--dur-short) var(--ease-out);
 }
-.why-card svg { width: 24px; height: 24px; }
+@media (hover: hover) and (pointer: fine) {
+  .why-card:hover, .step:hover { border-color: oklch(33% 0.055 155 / 0.45); }
+  .club-card:hover { transform: translateY(-2px); border-color: var(--color-accent); }
+}
+.why-card svg { width: 24px; height: 24px; color: var(--color-accent); }
 .why-card__title { margin-top: var(--space-sm); font-size: 1.0625rem; font-weight: 700; }
 .why-card__body { margin-top: 0.3rem; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.55; }
 
@@ -302,9 +357,9 @@ p { margin: 0; }
   color: inherit;
   display: flex;
   flex-direction: column;
-  transition: border-color var(--dur-short) var(--ease-out);
+  transition: transform var(--dur-short) var(--ease-out),
+              border-color var(--dur-short) var(--ease-out);
 }
-.club-card:hover { border-color: var(--color-accent); }
 .club-card__art {
   position: relative;
   aspect-ratio: 16 / 10;
@@ -313,6 +368,21 @@ p { margin: 0; }
     linear-gradient(180deg, var(--color-night) 0%, oklch(26% 0.05 158) 100%);
 }
 .club-card__art svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.55; }
+.club-card__tag {
+  position: absolute;
+  top: 0.6rem;
+  inset-inline-start: 0.6rem;
+  font-family: var(--font-outlier);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-paper-2);
+  background: oklch(15% 0.03 160 / 0.72);
+  border: 1px solid oklch(99% 0.004 140 / 0.25);
+  border-radius: 999px;
+  padding: 0.32rem 0.6rem;
+  line-height: 1;
+}
 .club-card__body { padding: var(--space-md) var(--space-md) var(--space-md); display: flex; flex-direction: column; gap: 0.3rem; }
 .club-card__name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; }
 .club-card__meta { display: flex; align-items: center; gap: 0.4rem; color: var(--color-muted); font-size: var(--text-xs); }
@@ -350,9 +420,24 @@ p { margin: 0; }
   isolation: isolate;
 }
 .cta-band__pitch { position: absolute; inset: auto 0 0 0; height: 60%; opacity: 0.35; z-index: -1; width: 100%; }
-.cta-band__title { font-size: var(--text-xl); max-width: 18ch; color: var(--color-paper-2); }
-.cta-band__sub { margin-top: var(--space-sm); color: oklch(88% 0.01 140); font-size: var(--text-sm); max-width: 44ch; }
+.cta-band__title { font-size: var(--text-xl); max-width: 20ch; color: var(--color-paper-2); }
+.cta-band__sub { margin-top: var(--space-sm); color: oklch(88% 0.01 140); font-size: var(--text-sm); max-width: 46ch; }
 .cta-band .hero__cta { margin-top: var(--space-lg); }
+.cta-band__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: var(--space-md);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: oklch(88% 0.01 140);
+  text-decoration: none;
+  min-height: 44px;
+  padding-inline: 0.25rem;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+.cta-band__link:hover { color: var(--color-paper-2); }
+.cta-band__link svg { width: 15px; height: 15px; }
 
 /* ── Footer · Ft1 mast-headed + payment chips ── */
 .foot-mast {
@@ -377,7 +462,7 @@ p { margin: 0; }
   color: var(--color-ink-2);
   border: 1px solid var(--color-rule);
   border-radius: 8px;
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.65rem;
   line-height: 1;
   white-space: nowrap;
 }
@@ -386,12 +471,13 @@ p { margin: 0; }
 /* ── Responsive ── */
 @media (max-width: 30rem) {
   .why-grid, .clubs-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero__cta-row { flex-direction: column; align-items: stretch; }
   .hero__cta { width: 100%; justify-content: center; }
+  .hero__note { justify-content: flex-start; }
   .hero__inner { padding-inline: 1.25rem; }
-  .hero__title { font-size: 1.6875rem; }  /* "Commit to Nothing." stays on one line at 320px */
 }
 @media (min-width: 60rem) {
-  /* desktop: keep the reference's single-column premium feel, widen hero art */
+  /* keep the reference's single-column premium feel */
   .hero { max-width: calc(var(--column) - 2 * var(--gutter)); }
 }
 
@@ -402,212 +488,237 @@ p { margin: 0; }
     animation-iteration-count: 1 !important;
     transition-duration: 150ms !important;
   }
+  .rise { opacity: 1 !important; transform: none !important; animation: none !important; }
+  html { scroll-behavior: auto; }
 }
 </style>
 </head>
 <body>
 
-<div class="container">
-
-  <!-- Nav · globe wordmark + bell -->
-  <header class="nav-min">
+<!-- Nav · sticky, blur backdrop, globe wordmark + bell -->
+<header class="nav-wrap">
+  <div class="container nav-min">
     <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450" aria-label="KoraLink home">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
       KoraLink
     </a>
-    <a class="bell" href="https://aa.tail2948f9.ts.net:9450" aria-label="Open KoraLink">
+    <a class="bell" href="https://aa.tail2948f9.ts.net:9450" aria-label="Open the KoraLink app">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
     </a>
-  </header>
+  </div>
+</header>
 
-  <main>
+<main class="container">
 
-    <!-- Hero · night stadium -->
-    <section class="hero" aria-label="KoraLink premium booking">
-      <svg class="hero__pitch" viewBox="0 0 640 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-        <g fill="none" stroke="oklch(85% 0.06 140 / 0.5)" stroke-width="2">
-          <rect x="40" y="30" width="560" height="220" rx="4"/>
-          <line x1="320" y1="30" x2="320" y2="250"/>
-          <circle cx="320" cy="140" r="52"/>
-          <rect x="40" y="85" width="85" height="110"/>
-          <rect x="515" y="85" width="85" height="110"/>
-        </g>
-      </svg>
-      <div class="hero__inner">
-        <p class="hero__eyebrow">Premium Booking</p>
-        <h1 class="hero__title">Play Anywhere.<br>Commit to Nothing.</h1>
-        <p class="hero__sub">Join premium football matches across Saudi Arabia instantly. No subscriptions — pay per match, from 5v5 to a full 11v11.</p>
+  <!-- Hero · night stadium -->
+  <section class="hero" aria-label="KoraLink premium booking">
+    <svg class="hero__pitch" viewBox="0 0 640 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <g fill="none" stroke="oklch(85% 0.06 140 / 0.5)" stroke-width="2">
+        <rect x="40" y="30" width="560" height="220" rx="4"/>
+        <line x1="320" y1="30" x2="320" y2="250"/>
+        <circle cx="320" cy="140" r="52"/>
+        <rect x="40" y="85" width="85" height="110"/>
+        <rect x="515" y="85" width="85" height="110"/>
+      </g>
+    </svg>
+    <div class="hero__inner">
+      <p class="hero__eyebrow rise rise-1">Premium Booking</p>
+      <h1 class="hero__title rise rise-2">Play Anywhere.<br>Commit to Nothing.</h1>
+      <p class="hero__sub rise rise-3">Find open football matches near you — from a quick 5v5 after work to a full 11v11 on Friday. Book your spot in seconds, pay from your KoraLink wallet. No subscriptions, no cash at the pitch.</p>
+      <div class="hero__cta-row rise rise-4">
         <a class="hero__cta" href="https://aa.tail2948f9.ts.net:9450/en/play">
           Find a Match
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
         </a>
+        <p class="hero__note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Installs like an app — works offline
+        </p>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- How it works -->
-    <section class="section" aria-labelledby="how-title">
-      <div class="section__head">
-        <h2 class="section__title" id="how-title">How It Works</h2>
-      </div>
-      <div class="steps">
-        <div class="step">
-          <span class="step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-          </span>
-          <div>
-            <h3 class="step__title">Discover</h3>
-            <p class="step__body">Find premium games nearby — filter by pitch size, surface and time. Grass or artificial, indoor or outdoor.</p>
-          </div>
-        </div>
-        <div class="step">
-          <span class="step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-          </span>
-          <div>
-            <h3 class="step__title">Book</h3>
-            <p class="step__body">Lock your spot in one tap and pay from your KoraLink wallet. Your booking and receipt live in the app.</p>
-          </div>
-        </div>
-        <div class="step">
-          <span class="step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7a5 5 0 0 1 5 5c0 2.76-2.79 5-5 5s-5-2.24-5-5a5 5 0 0 1 5-5z"/><path d="M12 2v4M2 12h4M18 12h4M12 18v4"/></svg>
-          </span>
-          <div>
-            <h3 class="step__title">Play</h3>
-            <p class="step__body">Show up and enjoy the beautiful game. Chat with the squad before kickoff, vote best player after.</p>
-          </div>
+  <!-- How it works -->
+  <section class="section" aria-labelledby="how-title" id="how">
+    <div class="section__head">
+      <h2 class="section__title" id="how-title">How It Works</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">Discover</h3>
+          <p class="step__body">Browse open matches near you — 5v5, 7v7, 8v8 or 11v11, grass or artificial, indoor or outdoor, casual or competitive.</p>
         </div>
       </div>
-    </section>
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">Book</h3>
+          <p class="step__body">Lock your spot in one tap and pay from your KoraLink wallet. Your booking and receipt live in the app — no cash at the pitch.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7a5 5 0 0 1 5 5c0 2.76-2.79 5-5 5s-5-2.24-5-5a5 5 0 0 1 5-5z"/><path d="M12 2v4M2 12h4M18 12h4M12 18v4"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">Play</h3>
+          <p class="step__body">Turn up and enjoy the beautiful game. Chat with the squad before kickoff, vote the best player after — and host matches to earn credits.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <!-- Why KoraLink -->
-    <section class="section" aria-labelledby="why-title">
-      <div class="section__head">
-        <h2 class="section__title" id="why-title">Why KoraLink?</h2>
+  <!-- Why KoraLink -->
+  <section class="section" aria-labelledby="why-title">
+    <div class="section__head">
+      <h2 class="section__title" id="why-title">Why KoraLink?</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.2a.53.53 0 0 1 1 0l2.1 5.1 5.5.4a.53.53 0 0 1 .3 0.94l-4.2 3.6 1.3 5.4a.53.53 0 0 1-0.8.57L12 16.7l-4.7 2.5a.53.53 0 0 1-0.8-0.57l1.3-5.4-4.2-3.6a.53.53 0 0 1 0.3-0.94l5.5-0.4z"/></svg>
+        <h3 class="why-card__title">Host for Free</h3>
+        <p class="why-card__body">Run matches and earn host credits for every game you organize.</p>
       </div>
-      <div class="why-grid">
-        <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.2a.53.53 0 0 1 1 0l2.1 5.1 5.5.4a.53.53 0 0 1 .3 0.94l-4.2 3.6 1.3 5.4a.53.53 0 0 1-0.8.57L12 16.7l-4.7 2.5a.53.53 0 0 1-0.8-0.57l1.3-5.4-4.2-3.6a.53.53 0 0 1 0.3-0.94l5.5-0.4z"/></svg>
-          <h3 class="why-card__title">Host for Free</h3>
-          <p class="why-card__body">Organize matches and earn host credits for every game you run.</p>
-        </div>
-        <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <h3 class="why-card__title">Social Feed</h3>
-          <p class="why-card__body">Follow players and clubs, share highlights, and build your rep.</p>
-        </div>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <h3 class="why-card__title">Social Feed</h3>
+        <p class="why-card__body">Follow players and clubs, share highlights, and build your rep.</p>
       </div>
-    </section>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21 1.18.54 2.03 2.03 2.03 3.79"/></svg>
+        <h3 class="why-card__title">Best-Player Vote</h3>
+        <p class="why-card__body">After the final whistle, the team votes — the result lands on the match card.</p>
+      </div>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+        <h3 class="why-card__title">Arabic &amp; English</h3>
+        <p class="why-card__body">The full app speaks both languages — and keeps working offline.</p>
+      </div>
+    </div>
+  </section>
 
-    <!-- Top clubs -->
-    <section class="section" aria-labelledby="clubs-title">
-      <div class="section__head">
-        <h2 class="section__title" id="clubs-title">Top Clubs</h2>
-        <a class="section__link" href="https://aa.tail2948f9.ts.net:9450/en/clubs">See All</a>
-      </div>
-      <div class="clubs-grid">
-        <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/en/clubs">
-          <div class="club-card__art" role="img" aria-label="Floodlit pitch at Al-Nasr Academy">
-            <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-              <g fill="none" stroke="oklch(85% 0.06 140 / 0.45)" stroke-width="1.5">
-                <rect x="30" y="60" width="260" height="130" rx="3"/>
-                <line x1="160" y1="60" x2="160" y2="190"/>
-                <circle cx="160" cy="125" r="30"/>
-                <rect x="30" y="92" width="42" height="66"/>
-                <rect x="248" y="92" width="42" height="66"/>
-              </g>
-              <circle cx="70" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
-              <circle cx="250" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.4)"/>
-            </svg>
-          </div>
-          <div class="club-card__body">
-            <h3 class="club-card__name">Al-Nasr Academy</h3>
-            <p class="club-card__meta">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-              Riyadh
-            </p>
-            <div class="club-card__row">
-              <p class="club-card__rating">
-                <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
-                4.9 <span>(100)</span>
-              </p>
-              <p class="club-card__price">35 ﷼</p>
-            </div>
-          </div>
-        </a>
-        <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/en/clubs">
-          <div class="club-card__art" role="img" aria-label="Floodlit pitch at King's Dome">
-            <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-              <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="1.5">
-                <rect x="30" y="60" width="260" height="130" rx="3"/>
-                <line x1="160" y1="60" x2="160" y2="190"/>
-                <circle cx="160" cy="125" r="30"/>
-                <rect x="30" y="92" width="42" height="66"/>
-                <rect x="248" y="92" width="42" height="66"/>
-              </g>
-              <circle cx="110" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.45)"/>
-              <circle cx="210" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
-            </svg>
-          </div>
-          <div class="club-card__body">
-            <h3 class="club-card__name">King’s Dome</h3>
-            <p class="club-card__meta">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-              Jeddah
-            </p>
-            <div class="club-card__row">
-              <p class="club-card__rating">
-                <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
-                4.7 <span>(80)</span>
-              </p>
-              <p class="club-card__price">﷼ —</p>
-            </div>
-          </div>
-        </a>
-      </div>
-      <p class="notice-pill">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        Full-pitch bookings coming soon. Social games available now.
-      </p>
-      <p class="sample-note">Sample club cards — names, ratings and prices shown as placeholders.</p>
-    </section>
-
-    <!-- Final CTA -->
-    <section class="cta-band" aria-labelledby="cta-title">
-      <svg class="cta-band__pitch" viewBox="0 0 640 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-        <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="2">
-          <rect x="40" y="20" width="560" height="190" rx="4"/>
-          <line x1="320" y1="20" x2="320" y2="210"/>
-          <circle cx="320" cy="115" r="45"/>
-        </g>
-      </svg>
-      <h2 class="cta-band__title" id="cta-title">Your next match is one tap away.</h2>
-      <p class="cta-band__sub">Add KoraLink to your home screen — it installs like an app, works offline, and speaks Arabic and English.</p>
-      <a class="hero__cta" href="https://aa.tail2948f9.ts.net:9450">
-        Get the App
+  <!-- Top clubs -->
+  <section class="section" aria-labelledby="clubs-title">
+    <div class="section__head">
+      <h2 class="section__title" id="clubs-title">Top Clubs</h2>
+      <a class="section__link" href="https://aa.tail2948f9.ts.net:9450/en/clubs">
+        See All
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </a>
-    </section>
-
-  </main>
-
-  <!-- Footer -->
-  <footer class="foot-mast">
-    <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
-      KoraLink
-    </a>
-    <p class="foot-mast__tagline">The premium way to book football matches in Saudi Arabia. Simple, secure, and social.</p>
-    <div class="foot-mast__pay" aria-label="Payment methods">
-      <span class="pay-chip">Apple&nbsp;Pay</span>
-      <span class="pay-chip">Google&nbsp;Pay</span>
-      <span class="pay-chip">STC&nbsp;Pay</span>
-      <span class="pay-chip">mada</span>
     </div>
-    <p class="foot-mast__legal">© 2026 KoraLink. All rights reserved.</p>
-  </footer>
+    <div class="clubs-grid">
+      <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/en/clubs">
+        <div class="club-card__art" role="img" aria-label="Floodlit pitch at Al-Nasr Academy">
+          <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g fill="none" stroke="oklch(85% 0.06 140 / 0.45)" stroke-width="1.5">
+              <rect x="30" y="60" width="260" height="130" rx="3"/>
+              <line x1="160" y1="60" x2="160" y2="190"/>
+              <circle cx="160" cy="125" r="30"/>
+              <rect x="30" y="92" width="42" height="66"/>
+              <rect x="248" y="92" width="42" height="66"/>
+            </g>
+            <circle cx="70" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
+            <circle cx="250" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.4)"/>
+          </svg>
+          <span class="club-card__tag">Sample</span>
+        </div>
+        <div class="club-card__body">
+          <h3 class="club-card__name">Al-Nasr Academy</h3>
+          <p class="club-card__meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            Riyadh
+          </p>
+          <div class="club-card__row">
+            <p class="club-card__rating">
+              <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              4.9 <span>(100)</span>
+            </p>
+            <p class="club-card__price">35 ﷼</p>
+          </div>
+        </div>
+      </a>
+      <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/en/clubs">
+        <div class="club-card__art" role="img" aria-label="Floodlit pitch at King's Dome">
+          <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="1.5">
+              <rect x="30" y="60" width="260" height="130" rx="3"/>
+              <line x1="160" y1="60" x2="160" y2="190"/>
+              <circle cx="160" cy="125" r="30"/>
+              <rect x="30" y="92" width="42" height="66"/>
+              <rect x="248" y="92" width="42" height="66"/>
+            </g>
+            <circle cx="110" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.45)"/>
+            <circle cx="210" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
+          </svg>
+          <span class="club-card__tag">Sample</span>
+        </div>
+        <div class="club-card__body">
+          <h3 class="club-card__name">King’s Dome</h3>
+          <p class="club-card__meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            Jeddah
+          </p>
+          <div class="club-card__row">
+            <p class="club-card__rating">
+              <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              4.7 <span>(80)</span>
+            </p>
+            <p class="club-card__price">﷼ —</p>
+          </div>
+        </div>
+      </a>
+    </div>
+    <p class="notice-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      Full-pitch bookings coming soon. Social games available now.
+    </p>
+    <p class="sample-note">Club cards are samples showing the app’s layout — names, ratings and prices come from live hosts.</p>
+  </section>
 
-</div>
+  <!-- Final CTA -->
+  <section class="cta-band" aria-labelledby="cta-title">
+    <svg class="cta-band__pitch" viewBox="0 0 640 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="2">
+        <rect x="40" y="20" width="560" height="190" rx="4"/>
+        <line x1="320" y1="20" x2="320" y2="210"/>
+        <circle cx="320" cy="115" r="45"/>
+      </g>
+    </svg>
+    <h2 class="cta-band__title" id="cta-title">Your next match is one tap away.</h2>
+    <p class="cta-band__sub">Install from your browser in one tap — it works offline and speaks Arabic and English. Pay per match from your wallet; you’re never locked into a subscription.</p>
+    <a class="hero__cta" href="https://aa.tail2948f9.ts.net:9450">
+      Get the App
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </a>
+    <a class="cta-band__link" href="#how">
+      See how it works
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+    </a>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="container foot-mast">
+  <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+    KoraLink
+  </a>
+  <p class="foot-mast__tagline">The premium way to book football matches in Saudi Arabia. Simple, secure, and social.</p>
+  <div class="foot-mast__pay" aria-label="Payment methods">
+    <span class="pay-chip">Apple&nbsp;Pay</span>
+    <span class="pay-chip">Google&nbsp;Pay</span>
+    <span class="pay-chip">STC&nbsp;Pay</span>
+    <span class="pay-chip">mada</span>
+  </div>
+  <p class="foot-mast__legal">© 2026 KoraLink. All rights reserved.</p>
+</footer>
 
 </body>
 </html>
