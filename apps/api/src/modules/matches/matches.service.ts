@@ -1411,11 +1411,12 @@ export class MatchesService {
           ),
         )
         .limit(1);
-      wasFlagged = player.no_show;
 
       if (!player) {
         throw new NotFoundException('Player is not in the match roster.');
       }
+
+      wasFlagged = player.no_show;
 
       await tx
         .update(schema.match_players)
