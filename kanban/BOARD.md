@@ -4,8 +4,8 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-27T09:3xZ (run #4: built settlement/report write-race fixes + account_unbanned verb)
-**Last run:** #4 (see `kanban/RUNS/2026-08-27T09-06Z.md`)
+**Last updated:** 2026-08-27T14:5xZ (run #5: fixed POTM realtime namespace bug)
+**Last run:** #5 (see `kanban/RUNS/2026-08-27T14-42Z.md`)
 
 ---
 
@@ -29,6 +29,7 @@
 | P1-6 | Admin | **Admin partner-portal scope inconsistency — FIXED + VERIFIED**: `updatePitch` routes through `assertPitchAccess` (Admin bypass, 403 non-owner non-admin, 404 only if missing); `getDashboard`/`getEarnings` accept `actorRole` and scope to ALL venues for Admin via `scopedVenueIds`/`scopedPitchIds`. Controller forwards `user.role`. | partner.service.ts:57-68,149,317,374,463; partner.controller.ts:31,103,120 | **DONE ✅** (run #3: d93e1ea; run #4 re-verified: jest 71/71, build 3/3) | docs/plans/partner-portal-admin-scope/ |
 | P1-7 | API | **markNoShow 500 for non-roster target — FIXED + VERIFIED**: `wasFlagged = player.no_show` was read BEFORE the `if (!player)` guard → `TypeError` 500 instead of `NotFoundException` 404 when a host marks a user not in the roster. Guard reordered. | matches.service.ts:1414-1419 | **DONE ✅** (run #3: ccfeeb7; run #4 re-verified: guard precedes deref) | docs/plans/partner-portal-admin-scope/ (run #3 slice 2) |
 | P1-8 | API/Wallet | **`joinMatch` never debits the joiner's `price_per_player`** — joiners join paid matches free; only the host is charged pitch cost (koralink mode). **Blocked on P0-2** (no real payment provider — wallet is dummy self-credit). Correct once real payments land. | matches.service.ts:603-716,879-894 | BLOCKED (P0-2) | — |
+| P1-9 | PWA/Realtime | **POTM realtime socket dialed the wrong namespace — FIXED (run #5, 58b3ba3)**: `PostMatchSection` used a raw `io()` with the pathful `NEXT_PUBLIC_API_URL` base → namespace `/api/v1/lobby` → gateway rejects the handshake ("Invalid namespace") → the `pom-decided` winner toast silently never fired for users viewing the match-detail page. All 5 other realtime call sites already used `createLobbySocket()`. Now routes through the shared helper (origin `/lobby`) + regression test. Live probe: `/lobby` → CONNECTED, `/api/v1/lobby` → Invalid namespace. | PostMatchSection.tsx:45 | **IN-REVIEW** (run #5: 58b3ba3; build 3/3, vitest 218/218, type-check 0) | docs/plans/run5-pom-realtime-namespace/ |
 
 ## 🟡 P2 — Polish & tech debt
 
@@ -37,7 +38,7 @@
 | P2-1 | Admin | No generic "refund player" tool — refunds only via dispute no-show reversal + host cancelMatch; payouts = manual status flip with synthetic `PO-` reference, no provider. | admin/settlements.service.ts:65-92,99-150 | TODO | — |
 | P2-2 | Admin | `dispute_messages` table exists but NO endpoint posts a reply — admin dispute view is read-only. | admin/disputes.service.ts:67-71 | TODO | — |
 | P2-3 | Partner | Payout flow not partner-initiated; partner earnings view read-only. | partner.service.ts:374-405 | TODO | — |
-| P2-4 | API | Money aggregated via `::float` casts in settlement/user totals — rounding risk in sums. | matches.service.ts:198; admin/users.service.ts:103; admin/settlements.service.ts:36,107 | TODO | — |
+| P2-4 | API | Money aggregated via `::float` casts in settlement/user totals — rounding risk in sums. **run #5 reviewer added**: `settlements.service.ts:115` `COALESCE(SUM(pitch_cost_sar),0)::float` feeds `amount.toFixed(2)` (float precision risk on large payout sums). | matches.service.ts:198; admin/users.service.ts:103; admin/settlements.service.ts:36,107,115 | TODO | — |
 | P2-5 | API | Bare mutation responses (contract §2): `castVote` → `{matchId,votedFor,message}` (matches.service.ts:1752), `createDispute` → bare row (:1585/:1606), `createVenue` → partial `{id,name,city}` (partner.service.ts:91), `deletePitch`/`deleteSlot` → `{deleted:true}` (:369/:630), `createSlot` → bare row (:604), wallet topup/pay → `{ledgerEntry, wallet_balance}`. Matches join/leave/start/complete/cancel are compliant ✅. | matches.service.ts:1752,1585,1606; partner.service.ts:91,369,604,630; wallet.controller.ts:61-67 | TODO | — |
 | P2-6 | API | WS `leave-conversation` unguarded (no auth/participant check) — inconsistent with its siblings. | app.gateway.ts:333-339 | TODO | — |
 | P2-7 | PWA | Offline is read-only cache + banner; no offline mutation queue / background sync (grep `outbox\|BackgroundSync` → 0). | worker/index.js; play/page.tsx:188 | TODO | — |
@@ -60,6 +61,9 @@
 - WS gateway `JWT_SECRET` fallback `'fallback-dev-secret'` (app.gateway.ts:109) survives the P0-3 bootstrap hardening — dev-only fallback, but should be flagged/removed for prod parity.
 - Zustand persists server cache (`balance`, `paymentMethods`, `bookedMatchIds`, useAppStore.ts:90-99) — server state shouldn't live in the persisted store.
 - `GetMatchesDto.format`/`gender` typed `string` not union (get-matches.dto.ts:55,64) — weak DTO enum typing (body DTOs use proper unions).
+- Notifications subscribe/unsubscribe accept a raw `SubscribeBody` interface, no class-validator DTO (notifications.controller.ts:21-28). Minor parity gap.
+- Dead `rating` column persists after the reviews removal (schema.ts:187,222) — dropped in code, not in schema. Minor.
+- `POST /wallet/pay` reuses `TopupWalletDto` (wallet.controller.ts:93) — should have its own DTO. Minor.
 
 ---
 
