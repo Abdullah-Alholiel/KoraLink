@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>كورالينك — العب في أي مكان. بدون أي التزام.</title>
+<meta name="description" content="اعثر على مباريات كرة قدم مفتوحة وانضم إليها في السعودية — من 5 ضد 5 إلى 11 ضد 11، عشبي أو صناعي، داخلي أو خارجي. احجز في ثوانٍ وادفع من محفظة كورالينك. بدون اشتراكات.">
+<meta property="og:title" content="كورالينك — العب في أي مكان. بدون أي التزام.">
+<meta property="og:description" content="انضم إلى مباريات كرة القدم المتميزة في السعودية فوراً. بدون اشتراكات.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0c1f16">
+<!-- خطوط كورالينك: تجوال (عربي) + JetBrains Mono للرموز -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Photographic Hero (transformed, Arabic) · H6 knobs: image=CSS-art-night-stadium, caption=eyebrow-pill, overlay=text
+ * theme: custom · vibe: "premium booking, floodlit night pitch" · paper: oklch(97.5% 0.005 140) · accent: oklch(33% 0.055 155)
+ * display: Tajawal 700 (Arabic — Tajawal reads heavier, per koralink-ui-standards) · body: Tajawal · axes: light / geometric-sans / chromatic-green ~155°
+ * accent-2: brand red oklch(55% 0.16 22) · gold star: oklch(60% 0.13 75) · mint NEW badge: oklch(62% 0.14 160)
+ * enrichment: Tier-A CSS night-stadium hero + pitch-art club cards (no external photos)
+ * nav: N1a sticky minimal · footer: Ft1 mast-headed + payment chips · RTL: dir=rtl, Arabic-Indic numerals, flipped arrows
+ * contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 50–57) · pre-emit critique: P4 H5 E5 S5 R4 V5
+ */
+
+:root {
+  --color-paper:     oklch(97.5% 0.005 140);
+  --color-paper-2:   oklch(99%   0.004 140);
+  --color-paper-3:   oklch(95.5% 0.006 140);
+  --color-rule:      oklch(90%   0.006 140);
+  --color-muted:     oklch(53.5% 0.012 140);
+  --color-ink-2:     oklch(38%   0.010 140);
+  --color-ink:       oklch(24%   0.006 140);
+  --color-accent:    oklch(33%   0.055 155);
+  --color-accent-2:  oklch(55%   0.16  22);
+  --color-gold:      oklch(60%   0.13  75);
+  --color-mint:      oklch(62%   0.14 160);
+  --color-night:     oklch(15%   0.030 160);
+  --color-night-2:   oklch(21%   0.040 158);
+  --color-accent-ink:oklch(99%   0.004 140);
+  --color-focus:     oklch(45%   0.09  155);
+
+  --font-display: "Tajawal", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Tajawal", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: "Tajawal", ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-md:   1.25rem;
+  --text-lg:   1.5625rem;
+  --text-xl:   1.9531rem;
+  --text-2xl:  2.4414rem;
+  --text-display: clamp(1.75rem, 6vw + 0.25rem, 3.25rem);
+
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  --radius-card: 16px;
+  --radius-cta: 14px;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --column: 44rem;
+  --page-max: 84rem;
+  --nav-h: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { overflow-x: clip; scroll-behavior: smooth; }
+body {
+  overflow-x: clip;
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.7;               /* Arabic needs taller leading */
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { display: block; max-width: 100%; }
+a { color: var(--color-accent); text-underline-offset: 3px; }
+::selection { background: var(--color-accent); color: var(--color-accent-ink); }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; }
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;               /* Tajawal reads heavy — 700 instead of 800 */
+  font-style: normal;
+  letter-spacing: 0;              /* no tracking on Arabic — breaks the script */
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+p { margin: 0; }
+.container { width: 100%; max-width: var(--column); margin-inline: auto; padding-inline: var(--gutter); }
+
+/* ── Nav · sticky ── */
+.nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: oklch(97.5% 0.005 140 / 0.82);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-rule);
+}
+.nav-min {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: var(--nav-h);
+}
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1875rem;
+  color: var(--color-ink);
+  text-decoration: none;
+  letter-spacing: 0;
+  padding-block: 0.5rem;
+}
+.wordmark svg { width: 22px; height: 22px; }
+.bell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  color: var(--color-ink-2);
+  transition: background-color var(--dur-micro) var(--ease-out),
+              color var(--dur-micro) var(--ease-out);
+}
+.bell:hover { background: var(--color-paper-3); color: var(--color-ink); }
+.bell svg { width: 22px; height: 22px; }
+
+/* ── Hero ── */
+.hero {
+  position: relative;
+  border-radius: var(--radius-card);
+  max-width: calc(var(--column) - 2 * var(--gutter));
+  margin-inline: auto;
+  background:
+    radial-gradient(ellipse 60% 45% at 18% 0%, oklch(80% 0.05 90 / 0.14), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 85% 4%, oklch(80% 0.05 90 / 0.11), transparent 55%),
+    linear-gradient(180deg, var(--color-night) 0%, var(--color-night-2) 100%);
+  color: var(--color-paper-2);
+  overflow: hidden;
+  isolation: isolate;
+}
+.hero__pitch {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  width: 100%;
+  height: 52%;
+  opacity: 0.5;
+  z-index: -1;
+}
+.hero__inner {
+  position: relative;
+  padding: clamp(1.75rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 3rem) clamp(2rem, 5vw, 3.25rem);
+}
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-outlier);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+  color: var(--color-paper-2);
+  background: oklch(99% 0.004 140 / 0.14);
+  border: 1px solid oklch(99% 0.004 140 / 0.28);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  line-height: 1;
+}
+.hero__eyebrow::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: var(--color-mint);
+}
+.hero__title {
+  margin-top: var(--space-lg);
+  font-size: var(--text-display);
+  line-height: 1.15;
+  letter-spacing: 0;
+  color: var(--color-paper-2);
+}
+.hero__sub {
+  margin-top: var(--space-md);
+  color: oklch(90% 0.01 140);
+  max-width: 40ch;
+  font-size: var(--text-md);
+  line-height: 1.65;
+}
+.hero__cta-row {
+  margin-top: var(--space-xl);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+}
+.hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.0625rem;
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  border: 0;
+  border-radius: var(--radius-cta);
+  padding: 1rem 1.75rem;
+  min-height: 50px;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px oklch(15% 0.03 160 / 0.35);
+  transition: background-color var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+}
+.hero__cta:hover { background: oklch(28% 0.05 155); }
+.hero__cta:active { transform: translateY(1px); }
+.hero__cta svg { width: 18px; height: 18px; }
+.hero__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--text-sm);
+  color: oklch(82% 0.01 140);
+  line-height: 1.4;
+}
+.hero__note svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--color-mint); }
+
+/* RTL arrow flip */
+[dir="rtl"] .rtl-flip { transform: scaleX(-1); }
+
+/* Load entrance */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { opacity: 0; animation: rise var(--dur-long) var(--ease-out) forwards; }
+.rise-1 { animation-delay: 80ms; }
+.rise-2 { animation-delay: 160ms; }
+.rise-3 { animation-delay: 240ms; }
+.rise-4 { animation-delay: 320ms; }
+
+/* ── Sections ── */
+.section { padding-block: var(--space-2xl) 0; }
+.section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+.section__title { font-size: var(--text-xl); display: inline-flex; align-items: center; gap: var(--space-sm); }
+.section__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 44px;
+  padding-inline: 0.25rem;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+.section__link:hover { color: var(--color-ink); }
+.section__link svg { width: 15px; height: 15px; }
+.section__sub { color: var(--color-muted); max-width: 52ch; margin-bottom: var(--space-lg); }
+
+/* Steps */
+.steps { display: grid; gap: var(--space-md); }
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  padding: var(--space-lg);
+  transition: border-color var(--dur-short) var(--ease-out);
+}
+.step__icon {
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.step__icon svg { width: 20px; height: 20px; }
+.step__title { font-size: 1.0625rem; font-weight: 700; }
+.step__body { margin-top: 0.15rem; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.65; }
+
+/* Why grid */
+.why-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.why-card {
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  padding: var(--space-lg);
+  transition: border-color var(--dur-short) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .why-card:hover, .step:hover { border-color: oklch(33% 0.055 155 / 0.45); }
+  .club-card:hover { transform: translateY(-2px); border-color: var(--color-accent); }
+}
+.why-card svg { width: 24px; height: 24px; color: var(--color-accent); }
+.why-card__title { margin-top: var(--space-sm); font-size: 1.0625rem; font-weight: 700; }
+.why-card__body { margin-top: 0.3rem; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.65; }
+
+/* Clubs */
+.clubs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.club-card {
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--dur-short) var(--ease-out),
+              border-color var(--dur-short) var(--ease-out);
+}
+.club-card__art {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% -12%, oklch(80% 0.06 90 / 0.22), transparent 60%),
+    linear-gradient(180deg, var(--color-night) 0%, oklch(26% 0.05 158) 100%);
+}
+.club-card__art svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.55; }
+.club-card__tag {
+  position: absolute;
+  top: 0.6rem;
+  inset-inline-start: 0.6rem;
+  font-family: var(--font-outlier);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+  color: var(--color-paper-2);
+  background: oklch(15% 0.03 160 / 0.72);
+  border: 1px solid oklch(99% 0.004 140 / 0.25);
+  border-radius: 999px;
+  padding: 0.32rem 0.6rem;
+  line-height: 1;
+}
+.club-card__body { padding: var(--space-md) var(--space-md) var(--space-md); display: flex; flex-direction: column; gap: 0.3rem; }
+.club-card__name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; letter-spacing: 0; }
+.club-card__meta { display: flex; align-items: center; gap: 0.4rem; color: var(--color-muted); font-size: var(--text-xs); }
+.club-card__meta svg { width: 13px; height: 13px; color: var(--color-muted); }
+.club-card__row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.45rem; }
+.club-card__rating { display: inline-flex; align-items: center; gap: 0.3rem; font-weight: 700; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.club-card__rating svg { width: 15px; height: 15px; }
+.club-card__rating span { color: var(--color-muted); font-weight: 400; }
+.club-card__price { font-family: var(--font-display); font-weight: 700; color: var(--color-accent-2); font-variant-numeric: tabular-nums; }
+.notice-pill {
+  margin-top: var(--space-lg);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule);
+  border-radius: 12px;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+}
+.notice-pill svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; color: var(--color-accent); }
+.sample-note { margin-top: var(--space-sm); font-size: var(--text-xs); color: var(--color-muted); }
+
+/* CTA band */
+.cta-band {
+  margin-top: var(--space-3xl);
+  border-radius: var(--radius-card);
+  background: linear-gradient(180deg, var(--color-night) 0%, var(--color-night-2) 100%);
+  color: var(--color-paper-2);
+  padding: clamp(1.75rem, 5vw, 3rem);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.cta-band__pitch { position: absolute; inset: auto 0 0 0; height: 60%; opacity: 0.35; z-index: -1; width: 100%; }
+.cta-band__title { font-size: var(--text-xl); max-width: 20ch; color: var(--color-paper-2); }
+.cta-band__sub { margin-top: var(--space-sm); color: oklch(88% 0.01 140); font-size: var(--text-sm); max-width: 46ch; line-height: 1.65; }
+.cta-band .hero__cta { margin-top: var(--space-lg); }
+.cta-band__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: var(--space-md);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: oklch(88% 0.01 140);
+  text-decoration: none;
+  min-height: 44px;
+  padding-inline: 0.25rem;
+  transition: color var(--dur-micro) var(--ease-out);
+}
+.cta-band__link:hover { color: var(--color-paper-2); }
+.cta-band__link svg { width: 15px; height: 15px; }
+
+/* Footer */
+.foot-mast {
+  margin-top: var(--space-3xl);
+  border-top: 1px solid var(--color-rule);
+  padding-block: var(--space-2xl) var(--space-xl);
+  display: grid;
+  gap: var(--space-sm);
+}
+.foot-mast__tagline { color: var(--color-muted); font-size: var(--text-sm); max-width: 46ch; }
+.foot-mast__pay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+.pay-chip {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+  color: var(--color-ink-2);
+  border: 1px solid var(--color-rule);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+.foot-mast__legal { margin-top: var(--space-md); font-size: 0.6875rem; color: var(--color-muted); }
+
+/* Responsive */
+@media (max-width: 30rem) {
+  .why-grid, .clubs-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero__cta-row { flex-direction: column; align-items: stretch; }
+  .hero__cta { width: 100%; justify-content: center; }
+  .hero__note { justify-content: flex-start; }
+  .hero__inner { padding-inline: 1.25rem; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+  }
+  .rise { opacity: 1 !important; transform: none !important; animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<header class="nav-wrap">
+  <div class="container nav-min">
+    <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450" aria-label="كورالينك — الرئيسية">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+      كورالينك
+    </a>
+    <a class="bell" href="https://aa.tail2948f9.ts.net:9450" aria-label="افتح تطبيق كورالينك">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    </a>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Hero -->
+  <section class="hero" aria-label="كورالينك — حجز متميز">
+    <svg class="hero__pitch" viewBox="0 0 640 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <g fill="none" stroke="oklch(85% 0.06 140 / 0.5)" stroke-width="2">
+        <rect x="40" y="30" width="560" height="220" rx="4"/>
+        <line x1="320" y1="30" x2="320" y2="250"/>
+        <circle cx="320" cy="140" r="52"/>
+        <rect x="40" y="85" width="85" height="110"/>
+        <rect x="515" y="85" width="85" height="110"/>
+      </g>
+    </svg>
+    <div class="hero__inner">
+      <p class="hero__eyebrow rise rise-1">حجز متميز</p>
+      <h1 class="hero__title rise rise-2">العب في أي مكان.<br>بدون أي التزام.</h1>
+      <p class="hero__sub rise rise-3">اعثر على مباريات مفتوحة قريبة منك — من 5 ضد 5 بعد الدوام إلى 11 ضد 11 يوم الجمعة. احجز مكانك في ثوانٍ وادفع من محفظة كورالينك. بدون اشتراكات، وبدون دفع نقدي في الملعب.</p>
+      <div class="hero__cta-row rise rise-4">
+        <a class="hero__cta" href="https://aa.tail2948f9.ts.net:9450/ar/play">
+          اعثر على مباراة
+          <svg class="rtl-flip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+        <p class="hero__note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          يُثبَّت كتطبيق — ويعمل دون اتصال
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="section" aria-labelledby="how-title" id="how">
+    <div class="section__head">
+      <h2 class="section__title" id="how-title">كيف تعمل؟</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">اكتشف</h3>
+          <p class="step__body">تصفح المباريات المفتوحة القريبة منك — 5 ضد 5 أو 7 ضد 7 أو 8 ضد 8 أو 11 ضد 11، عشبي أو صناعي، داخلي أو خارجي، ودّية أو تنافسية.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">احجز</h3>
+          <p class="step__body">أكّد مكانك بلمسة واحدة وادفع من محفظة كورالينك. حجزك وإيصالك محفوظان في التطبيق — لا نقدي في الملعب.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7a5 5 0 0 1 5 5c0 2.76-2.79 5-5 5s-5-2.24-5-5a5 5 0 0 1 5-5z"/><path d="M12 2v4M2 12h4M18 12h4M12 18v4"/></svg>
+        </span>
+        <div>
+          <h3 class="step__title">العب</h3>
+          <p class="step__body">احضر واستمتع باللعبة الجميلة. تواصل مع الفريق قبل انطلاق المباراة، وصوّت لأفضل لاعب بعدها — واستضف مباريات لتكسب نقاط استضافة.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why KoraLink -->
+  <section class="section" aria-labelledby="why-title">
+    <div class="section__head">
+      <h2 class="section__title" id="why-title">لماذا كورالينك؟</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.2a.53.53 0 0 1 1 0l2.1 5.1 5.5.4a.53.53 0 0 1 .3 0.94l-4.2 3.6 1.3 5.4a.53.53 0 0 1-0.8.57L12 16.7l-4.7 2.5a.53.53 0 0 1-0.8-0.57l1.3-5.4-4.2-3.6a.53.53 0 0 1 0.3-0.94l5.5-0.4z"/></svg>
+        <h3 class="why-card__title">استضافة مجانية</h3>
+        <p class="why-card__body">نظّم المباريات واكسب نقاط استضافة عن كل مباراة تديرها.</p>
+      </div>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <h3 class="why-card__title">الخلاصة الاجتماعية</h3>
+        <p class="why-card__body">تابع اللاعبين والأندية، شارك اللقطات المميزة، وابنِ سمعتك.</p>
+      </div>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21 1.18.54 2.03 2.03 2.03 3.79"/></svg>
+        <h3 class="why-card__title">التصويت لأفضل لاعب</h3>
+        <p class="why-card__body">بعد صافرة النهاية يصوّت الفريق — وتظهر النتيجة على بطاقة المباراة.</p>
+      </div>
+      <div class="why-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+        <h3 class="why-card__title">العربية والإنجليزية</h3>
+        <p class="why-card__body">التطبيق الكامل يتحدث اللغتين — ويعمل دون اتصال.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Top clubs -->
+  <section class="section" aria-labelledby="clubs-title">
+    <div class="section__head">
+      <h2 class="section__title" id="clubs-title">أفضل الأندية</h2>
+      <a class="section__link" href="https://aa.tail2948f9.ts.net:9450/ar/clubs">
+        عرض الكل
+        <svg class="rtl-flip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+    </div>
+    <div class="clubs-grid">
+      <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/ar/clubs">
+        <div class="club-card__art" role="img" aria-label="ملعب مضاء في أكاديمية النصر">
+          <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g fill="none" stroke="oklch(85% 0.06 140 / 0.45)" stroke-width="1.5">
+              <rect x="30" y="60" width="260" height="130" rx="3"/>
+              <line x1="160" y1="60" x2="160" y2="190"/>
+              <circle cx="160" cy="125" r="30"/>
+              <rect x="30" y="92" width="42" height="66"/>
+              <rect x="248" y="92" width="42" height="66"/>
+            </g>
+            <circle cx="70" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
+            <circle cx="250" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.4)"/>
+          </svg>
+          <span class="club-card__tag">نموذج</span>
+        </div>
+        <div class="club-card__body">
+          <h3 class="club-card__name">أكاديمية النصر</h3>
+          <p class="club-card__meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            الرياض
+          </p>
+          <div class="club-card__row">
+            <p class="club-card__rating">
+              <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              ٤٫٩ <span>(١٠٠)</span>
+            </p>
+            <p class="club-card__price">٣٥ ﷼</p>
+          </div>
+        </div>
+      </a>
+      <a class="club-card" href="https://aa.tail2948f9.ts.net:9450/ar/clubs">
+        <div class="club-card__art" role="img" aria-label="ملعب مضاء في قبة الملك">
+          <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="1.5">
+              <rect x="30" y="60" width="260" height="130" rx="3"/>
+              <line x1="160" y1="60" x2="160" y2="190"/>
+              <circle cx="160" cy="125" r="30"/>
+              <rect x="30" y="92" width="42" height="66"/>
+              <rect x="248" y="92" width="42" height="66"/>
+            </g>
+            <circle cx="110" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.45)"/>
+            <circle cx="210" cy="26" r="16" fill="oklch(90% 0.06 90 / 0.5)"/>
+          </svg>
+          <span class="club-card__tag">نموذج</span>
+        </div>
+        <div class="club-card__body">
+          <h3 class="club-card__name">قبة الملك</h3>
+          <p class="club-card__meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            جدة
+          </p>
+          <div class="club-card__row">
+            <p class="club-card__rating">
+              <svg viewBox="0 0 24 24" fill="var(--color-gold)" stroke="var(--color-gold)" stroke-width="1" aria-hidden="true"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.37L18 20.5 12 17l-6 3.5 1.25-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              ٤٫٧ <span>(٨٠)</span>
+            </p>
+            <p class="club-card__price">﷼ —</p>
+          </div>
+        </div>
+      </a>
+    </div>
+    <p class="notice-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      حجوزات الملاعب الكاملة قادمة قريباً. المباريات الاجتماعية متاحة الآن.
+    </p>
+    <p class="sample-note">بطاقات الأندية نماذج توضح شكل التطبيق — الأسماء والتقييمات والأسعار يحددها المستضيفون.</p>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="cta-band" aria-labelledby="cta-title">
+    <svg class="cta-band__pitch" viewBox="0 0 640 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <g fill="none" stroke="oklch(85% 0.06 140 / 0.4)" stroke-width="2">
+        <rect x="40" y="20" width="560" height="190" rx="4"/>
+        <line x1="320" y1="20" x2="320" y2="210"/>
+        <circle cx="320" cy="115" r="45"/>
+      </g>
+    </svg>
+    <h2 class="cta-band__title" id="cta-title">مباراتك القادمة على بُعد لمسة واحدة.</h2>
+    <p class="cta-band__sub">ثبّت التطبيق من متصفحك بلمسة واحدة — يعمل دون اتصال ويدعم العربية والإنجليزية. ادفع لكل مباراة من محفظتك، دون أي اشتراك.</p>
+    <a class="hero__cta" href="https://aa.tail2948f9.ts.net:9450">
+      حمّل التطبيق
+      <svg class="rtl-flip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </a>
+    <a class="cta-band__link" href="#how">
+      شاهد كيف يعمل
+      <svg class="rtl-flip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+    </a>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="container foot-mast">
+  <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+    كورالينك
+  </a>
+  <p class="foot-mast__tagline">الطريقة المتميزة لحجز مباريات كرة القدم في السعودية. بسيطة وآمنة واجتماعية.</p>
+  <div class="foot-mast__pay" aria-label="وسائل الدفع">
+    <span class="pay-chip" dir="ltr">Apple&nbsp;Pay</span>
+    <span class="pay-chip" dir="ltr">Google&nbsp;Pay</span>
+    <span class="pay-chip" dir="ltr">STC&nbsp;Pay</span>
+    <span class="pay-chip" dir="ltr">mada</span>
+  </div>
+  <p class="foot-mast__legal">© ٢٠٢٦ كورالينك. جميع الحقوق محفوظة.</p>
+</footer>
+
+</body>
+</html>
