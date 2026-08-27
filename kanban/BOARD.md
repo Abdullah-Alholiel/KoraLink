@@ -4,8 +4,8 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-27T14:5xZ (run #5: fixed POTM realtime namespace bug)
-**Last run:** #5 (see `kanban/RUNS/2026-08-27T14-42Z.md`)
+**Last updated:** 2026-08-27T20:2xZ (run #6: WS ban/suspend enforcement)
+**Last run:** #6 (see `kanban/RUNS/2026-08-27T20-2xZ.md`)
 
 ---
 
@@ -29,7 +29,12 @@
 | P1-6 | Admin | **Admin partner-portal scope inconsistency — FIXED + VERIFIED**: `updatePitch` routes through `assertPitchAccess` (Admin bypass, 403 non-owner non-admin, 404 only if missing); `getDashboard`/`getEarnings` accept `actorRole` and scope to ALL venues for Admin via `scopedVenueIds`/`scopedPitchIds`. Controller forwards `user.role`. | partner.service.ts:57-68,149,317,374,463; partner.controller.ts:31,103,120 | **DONE ✅** (run #3: d93e1ea; run #4 re-verified: jest 71/71, build 3/3) | docs/plans/partner-portal-admin-scope/ |
 | P1-7 | API | **markNoShow 500 for non-roster target — FIXED + VERIFIED**: `wasFlagged = player.no_show` was read BEFORE the `if (!player)` guard → `TypeError` 500 instead of `NotFoundException` 404 when a host marks a user not in the roster. Guard reordered. | matches.service.ts:1414-1419 | **DONE ✅** (run #3: ccfeeb7; run #4 re-verified: guard precedes deref) | docs/plans/partner-portal-admin-scope/ (run #3 slice 2) |
 | P1-8 | API/Wallet | **`joinMatch` never debits the joiner's `price_per_player`** — joiners join paid matches free; only the host is charged pitch cost (koralink mode). **Blocked on P0-2** (no real payment provider — wallet is dummy self-credit). Correct once real payments land. | matches.service.ts:603-716,879-894 | BLOCKED (P0-2) | — |
-| P1-9 | PWA/Realtime | **POTM realtime socket dialed the wrong namespace — FIXED (run #5, 58b3ba3)**: `PostMatchSection` used a raw `io()` with the pathful `NEXT_PUBLIC_API_URL` base → namespace `/api/v1/lobby` → gateway rejects the handshake ("Invalid namespace") → the `pom-decided` winner toast silently never fired for users viewing the match-detail page. All 5 other realtime call sites already used `createLobbySocket()`. Now routes through the shared helper (origin `/lobby`) + regression test. Live probe: `/lobby` → CONNECTED, `/api/v1/lobby` → Invalid namespace. | PostMatchSection.tsx:45 | **IN-REVIEW** (run #5: 58b3ba3; build 3/3, vitest 218/218, type-check 0) | docs/plans/run5-pom-realtime-namespace/ |
+| P1-9 | PWA/Realtime | **POTM realtime socket dialed the wrong namespace — FIXED (run #5, 58b3ba3)**: `PostMatchSection` used a raw `io()` with the pathful `NEXT_PUBLIC_API_URL` base → namespace `/api/v1/lobby` → gateway rejects the handshake ("Invalid namespace") → the `pom-decided` winner toast silently never fired for users viewing the match-detail page. All 5 other realtime call sites already used `createLobbySocket()`. Now routes through the shared helper (origin `/lobby`) + regression test. Live probe: `/lobby` → CONNECTED, `/api/v1/lobby` → Invalid namespace. | PostMatchSection.tsx:45 | **DONE ✅** (run #6 verified: reviewer CONFIRMED + regression test present; build 3/3, vitest 218/218). Note: commit msg said "6 call sites" — actual is 5 (overcount, substance correct). | docs/plans/run5-pom-realtime-namespace/ |
+| P1-10 | API/Security | **WS handshake skipped ban/suspend + role-staleness — FIXED (run #6, 4df0d4d)**: `handleConnection` verified only the JWT signature, so a banned/suspended user kept full chat/DM/lobby access over the socket until token expiry (≤7d) while REST 401'd immediately (`jwt-cookie.strategy.ts:71-76`). Also the `ops` room join used the stale token `role`, so a demoted admin retained live console pings. Now re-reads the user row (id/role/banned_at/suspended_until) on every handshake, mirrors the strategy, disconnects banned/future-suspended/missing accounts with a Pino warn, and joins `ops` by DB role. +7 jest cases. | app.gateway.ts:108-154 (was 108-123); jwt-cookie.strategy.ts:48-83 | **IN-REVIEW** (run #6: 4df0d4d; build 3/3, jest 78/78, vitest 218/218, tsc 0) | docs/plans/run6-ws-moderation-enforcement/ |
+| P1-11 | API/Chat | **DM send idempotency is SELECT-then-INSERT (TOCTOU), no unique index** — `personal_messages` has only `conv_idx`/`conv_created_idx` (schema.ts:651-652); no partial unique on `(sender_id, conversation_id, client_message_id)`. `sendMessage` does findFirst→insert (`conversations.service.ts:210-241`), so concurrent retried DMs can duplicate. Match chat has the partial unique index (`match_messages_client_msg_uidx`); DMs don't. | conversations.service.ts:210-241; schema.ts:632-652 | TODO | — |
+| P1-12 | Admin | **Admin/partner console is English-only** — `apps/admin` has no i18n; Arabic-first venue owners cannot operate the partner portal in their language. | apps/admin (no i18n layer) | TODO | — |
+| P1-13 | API | **No match reschedule/edit-after-create** — hosts can cancel but cannot move time/venue; forces cancel+recreate (loses roster/payments). | matches.service.ts (no update-scheduled route) | TODO | — |
+| P1-14 | API/Wallet | **Settlement payout never executes** — settlements track `pending/paid` but no actual bank payout; IBAN collected at verification but unused. Venue owners never receive earnings. | admin/settlements.service.ts:99-150 | BLOCKED (P0-2 — needs real payment/payout provider) | — |
 
 ## 🟡 P2 — Polish & tech debt
 
@@ -49,6 +54,8 @@
 | P2-12 | API/Admin | **Admin scope `sql\`true\`` inconsistent** — `scopedVenueIds`/`scopedPitchIds`/`getDashboard` use it but `getVenues`/`getPitches` inline the ternary. | partner.service.ts:45,55,155,279 | TODO | — |
 | P2-13 | PWA | **Dead UI MapPin** in clubs header — no onClick/href. | clubs/page.tsx:64 | TODO | — |
 | P2-14 | API/Moderation | **Unban wrong verb — FIXED (run #4, 3377567)**: `verb: updates.banned_at ? 'account_banned' : 'account_suspended'` fired `account_suspended` on unban → a reinstated user told they were suspended. Now emits `account_unbanned` (enum + type + PWA feed/bell/toast + ar/en i18n). | users.service.ts:188-194; activities.service.ts:18-31; ActivityCard.tsx; NotificationSheet.tsx; NotificationProvider.tsx | **DONE ✅** (run #4: 3377567; build 3/3, jest 71/71, vitest 217/217) | docs/plans/run4-data-integrity-races/ |
+| P2-15 | PWA/Wallet | **Wallet history queryKey omits page/perPage** — `useWalletHistory` `queryKey: ['wallet','history']` (useWallet.ts:29-38) → history silently capped at API default (20 rows); pagination params never invalidate the cache. | useWallet.ts:29-38 | TODO | — |
+| P2-16 | Observability | **`console.error` instead of Sentry `captureError`** — `usePushNotifications.ts:74,92` and `ErrorBoundary.tsx:30` log to console, bypassing the AGENTS.md §4 Sentry standard. | usePushNotifications.ts:74,92; ErrorBoundary.tsx:30 | TODO | — |
 
 ---
 
@@ -64,6 +71,10 @@
 - Notifications subscribe/unsubscribe accept a raw `SubscribeBody` interface, no class-validator DTO (notifications.controller.ts:21-28). Minor parity gap.
 - Dead `rating` column persists after the reviews removal (schema.ts:187,222) — dropped in code, not in schema. Minor.
 - `POST /wallet/pay` reuses `TopupWalletDto` (wallet.controller.ts:93) — should have its own DTO. Minor.
+- Play search bar is decorative dead UI — `<span>"Where to play?"</span>` in `TopAppBar.tsx:31`, no input/handler (run #6 reviewer).
+- No per-category notification preferences — only a global push toggle in profile (run #6 reviewer).
+- CSP `script-src` includes `'unsafe-eval' 'unsafe-inline'` (`next.config.mjs:171`) — weakens CSP; narrow via nonces later (run #6 reviewer).
+- `personal_messages` DM idempotency TOCTOU — tracked as P1-11 (run #6 reviewer).
 
 ---
 
