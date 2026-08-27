@@ -28,8 +28,8 @@ export class PartnerController {
   constructor(private readonly partner: PartnerService) {}
 
   @Get('dashboard')
-  dashboard(@CurrentUser() user: { sub: string }) {
-    return this.partner.getDashboard(user.sub);
+  dashboard(@CurrentUser() user: { sub: string; role: string }) {
+    return this.partner.getDashboard(user.sub, user.role);
   }
 
   @Get('venues')
@@ -101,11 +101,11 @@ export class PartnerController {
 
   @Patch('pitches/:id')
   updatePitch(
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: { sub: string; role: string },
     @Param('id') id: string,
     @Body() dto: UpdatePitchDto,
   ) {
-    return this.partner.updatePitch(user.sub, id, dto);
+    return this.partner.updatePitch(user.sub, user.role, id, dto);
   }
 
   @Delete('pitches/:id')
@@ -117,8 +117,8 @@ export class PartnerController {
   }
 
   @Get('earnings')
-  earnings(@CurrentUser() user: { sub: string }) {
-    return this.partner.getEarnings(user.sub);
+  earnings(@CurrentUser() user: { sub: string; role: string }) {
+    return this.partner.getEarnings(user.sub, user.role);
   }
 
   @Get('verification')

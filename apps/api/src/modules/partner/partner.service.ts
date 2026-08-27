@@ -37,20 +37,22 @@ export class PartnerService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  private async ownedVenueIds(ownerId: string): Promise<string[]> {
+  /** Venue ids an actor may see — Admins scope to ALL venues (support/moderation). */
+  private async scopedVenueIds(ownerId: string, actorRole?: string): Promise<string[]> {
     const rows = await this.db
       .select({ id: venues.id })
       .from(venues)
-      .where(eq(venues.owner_id, ownerId));
+      .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId));
     return rows.map((r) => r.id);
   }
 
-  private async ownedPitchIds(ownerId: string): Promise<string[]> {
+  /** Pitch ids an actor may see — Admins scope to ALL pitches (support/moderation). */
+  private async scopedPitchIds(ownerId: string, actorRole?: string): Promise<string[]> {
     const rows = await this.db
       .select({ id: pitches.id })
       .from(pitches)
       .innerJoin(venues, eq(pitches.venue_id, venues.id))
-      .where(eq(venues.owner_id, ownerId));
+      .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId));
     return rows.map((r) => r.id);
   }
 
@@ -146,11 +148,11 @@ export class PartnerService {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
 
-  async getDashboard(ownerId: string) {
+  async getDashboard(ownerId: string, actorRole?: string) {
     const owned = await this.db
       .select({ id: venues.id, name: venues.name })
       .from(venues)
-      .where(eq(venues.owner_id, ownerId));
+      .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId));
 
     const venueIds = owned.map((v) => v.id);
     if (!venueIds.length) {
@@ -165,7 +167,7 @@ export class PartnerService {
       };
     }
 
-    const pitchIds = await this.ownedPitchIds(ownerId);
+    const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
 
     const [util] = await this.db
       .select({
@@ -314,14 +316,8 @@ export class PartnerService {
     return this.findOnePitch(created.id);
   }
 
-  async updatePitch(ownerId: string, pitchId: string, dto: UpdatePitchDto) {
-    const [pitch] = await this.db
-      .select({ id: pitches.id })
-      .from(pitches)
-      .innerJoin(venues, eq(pitches.venue_id, venues.id))
-      .where(and(eq(pitches.id, pitchId), eq(venues.owner_id, ownerId)))
-      .limit(1);
-    if (!pitch) throw new NotFoundException('Pitch not found.');
+  async updatePitch(actorId: string, actorRole: string, pitchId: string, dto: UpdatePitchDto) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
 
     const updates: Record<string, unknown> = {};
     if (dto.name !== undefined) updates.name = dto.name;
@@ -371,8 +367,8 @@ export class PartnerService {
 
   // ── Earnings ──────────────────────────────────────────────────────────────
 
-  async getEarnings(ownerId: string) {
-    const venueIds = await this.ownedVenueIds(ownerId);
+  async getEarnings(ownerId: string, actorRole?: string) {
+    const venueIds = await this.scopedVenueIds(ownerId, actorRole);
     if (!venueIds.length) {
       return { settlements: [], totalPending: 0, totalPaid: 0 };
     }
