@@ -44,6 +44,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   match_cancelled_admin: XCircle,
   account_suspended: PauseCircle,
   account_banned: Ban,
+  account_unbanned: ShieldCheck,
   no_show_marked: AlertTriangle,
 };
 
@@ -59,6 +60,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   match_cancelled_admin: 'notifications.matchCancelledAdmin',
   account_suspended: 'notifications.accountSuspended',
   account_banned: 'notifications.accountBanned',
+  account_unbanned: 'notifications.accountUnbanned',
   no_show_marked: 'notifications.noShowMarked',
 };
 

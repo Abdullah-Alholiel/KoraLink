@@ -109,6 +109,7 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'match_cancelled_admin',
   'account_suspended',
   'account_banned',
+  'account_unbanned',
   'no_show_marked',
 ]);
 
@@ -828,7 +829,12 @@ export const settlements = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('settlements_venue_idx').on(t.venue_id)],
+  (t) => [
+    index('settlements_venue_idx').on(t.venue_id),
+    // P2-9: one pending/paid settlement per venue per period — closes the
+    // generatePending double-insert race under concurrency.
+    uniqueIndex('settlements_venue_period_uidx').on(t.venue_id, t.period_start),
+  ],
 );
 
 export const audit_logs = pgTable(
@@ -888,6 +894,12 @@ export const reports = pgTable(
     index('reports_subject_type_idx').on(t.subject_type),
     // P1-4 hot-FK index: reports moderation queue by reporter
     index('reports_reporter_id_idx').on(t.reporter_id),
+    // Dedup: at most one open/reviewing report per (reporter, subject). Partial
+    // so a resolved report does not block re-reporting. Closes the create()
+    // TOCTOU race — concurrent duplicate submits hit this constraint.
+    uniqueIndex('reports_open_subject_uidx')
+      .on(t.reporter_id, t.subject_type, t.subject_id)
+      .where(sql`${t.status} IN ('open','reviewing')`),
   ],
 );
 

@@ -16,6 +16,7 @@ export type ActivityVerb =
   | 'match_cancelled_admin'
   | 'account_suspended'
   | 'account_banned'
+  | 'account_unbanned'
   | 'no_show_marked';
 
 export interface FeedItem {

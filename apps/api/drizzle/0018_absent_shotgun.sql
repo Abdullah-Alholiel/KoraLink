@@ -1,0 +1,3 @@
+ALTER TYPE "public"."ActivityVerb" ADD VALUE 'account_unbanned' BEFORE 'no_show_marked';--> statement-breakpoint
+CREATE UNIQUE INDEX "reports_open_subject_uidx" ON "reports" USING btree ("reporter_id","subject_type","subject_id") WHERE "reports"."status" IN ('open','reviewing');--> statement-breakpoint
+CREATE UNIQUE INDEX "settlements_venue_period_uidx" ON "settlements" USING btree ("venue_id","period_start");

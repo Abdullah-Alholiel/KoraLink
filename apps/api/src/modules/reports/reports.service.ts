@@ -41,6 +41,10 @@ export class ReportsService {
       throw new BadRequestException('You have already reported this subject.');
     }
 
+    // Insert guarded by a partial unique index on
+    // (reporter_id, subject_type, subject_id) WHERE status IN ('open','reviewing').
+    // `onConflictDoNothing` makes the write atomic — a concurrent duplicate submit
+    // returns zero rows instead of inserting a second report.
     const [report] = await this.db
       .insert(reports)
       .values({
@@ -50,7 +54,12 @@ export class ReportsService {
         reason: dto.reason.trim(),
         status: 'open',
       })
+      .onConflictDoNothing()
       .returning();
+
+    if (!report) {
+      throw new BadRequestException('You have already reported this subject.');
+    }
 
     return report;
   }

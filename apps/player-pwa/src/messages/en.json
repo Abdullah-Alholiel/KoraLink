@@ -522,6 +522,7 @@
         "matchCancelledAdmin": "Your match was cancelled by KoraLink — payments refunded",
         "accountSuspended": "Your account has been suspended",
         "accountBanned": "Your account has been banned",
+        "accountUnbanned": "Your account ban has been lifted",
         "noShowMarked": "You were marked as a no-show"
     },
     "payment": {
@@ -675,6 +676,7 @@
         "matchCancelledAdmin": "Your match was cancelled by KoraLink — payments refunded",
         "accountSuspended": "Your account has been suspended",
         "accountBanned": "Your account has been banned",
+        "accountUnbanned": "Your account ban has been lifted",
         "noShowMarked": "You were marked as a no-show"
     },
     "attendance": {

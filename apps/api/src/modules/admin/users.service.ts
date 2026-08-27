@@ -188,7 +188,7 @@ export class AdminUsersService {
       if (updates.banned_at !== undefined) {
         await this.activities.record({
           actorId: adminId,
-          verb: updates.banned_at ? 'account_banned' : 'account_suspended',
+          verb: updates.banned_at ? 'account_banned' : 'account_unbanned',
           recipients: [id],
           excludeActor: false,
         });

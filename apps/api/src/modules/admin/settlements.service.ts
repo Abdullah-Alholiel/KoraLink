@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SQL, eq, sql } from 'drizzle-orm';
+import { SQL, and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { settlements } from '../../database/schema';
@@ -71,10 +71,18 @@ export class AdminSettlementsService {
 
     const payoutRef = `PO-${id.slice(0, 8).toUpperCase()}`;
 
-    await this.db
+    // Conditional update — only `pending` rows flip to `paid`. A concurrent pay
+    // that already flipped the row matches zero rows here, closing the TOCTOU
+    // race (the read above + this write cannot double-pay).
+    const updated = await this.db
       .update(settlements)
       .set({ status: 'paid', payout_ref: payoutRef, paid_at: new Date() })
-      .where(eq(settlements.id, id));
+      .where(and(eq(settlements.id, id), eq(settlements.status, 'pending')))
+      .returning({ id: settlements.id });
+
+    if (updated.length === 0) {
+      throw new BadRequestException('Only pending settlements can be paid.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
@@ -120,19 +128,31 @@ export class AdminSettlementsService {
     `)) as unknown as Array<{ venue_id: string; amount: number }>;
 
     const created: Array<Record<string, unknown>> = [];
-    for (const row of rows) {
-      const amount = Math.round(row.amount * 100) / 100;
-      if (amount <= 0) continue;
-      const [settlement] = await this.db
-        .insert(settlements)
-        .values({
-          venue_id: row.venue_id,
-          amount: amount.toFixed(2),
-          period_start: windowStartIso.slice(0, 10),
-          period_end: new Date().toISOString().slice(0, 10),
-          status: 'pending',
-        })
-        .returning();
+    // Insert inside a transaction and rely on the `(venue_id, period_start)`
+    // unique index via `onConflictDoNothing` — concurrent generatePending runs
+    // (or a re-run for an already-settled window) can no longer double-insert.
+    const inserted = await this.db.transaction(async (tx) => {
+      const out: Array<Record<string, unknown>> = [];
+      for (const row of rows) {
+        const amount = Math.round(row.amount * 100) / 100;
+        if (amount <= 0) continue;
+        const [settlement] = await tx
+          .insert(settlements)
+          .values({
+            venue_id: row.venue_id,
+            amount: amount.toFixed(2),
+            period_start: windowStartIso.slice(0, 10),
+            period_end: new Date().toISOString().slice(0, 10),
+            status: 'pending',
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (settlement) out.push(settlement);
+      }
+      return out;
+    });
+
+    for (const settlement of inserted) {
       created.push(settlement);
       await this.audit.log({
         adminId,

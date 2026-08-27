@@ -28,6 +28,7 @@ export type ActivityVerb =
   | 'match_cancelled_admin'
   | 'account_suspended'
   | 'account_banned'
+  | 'account_unbanned'
   | 'no_show_marked';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
@@ -41,6 +42,7 @@ const DIRECTED_VERBS = [
   'match_cancelled_admin',
   'account_suspended',
   'account_banned',
+  'account_unbanned',
   'no_show_marked',
 ] as const;
 

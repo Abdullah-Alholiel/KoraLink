@@ -522,6 +522,7 @@
         "matchCancelledAdmin": "تم إلغاء مباراتك من قبل KoraLink وأُرجعت المدفوعات",
         "accountSuspended": "تم إيقاف حسابك مؤقتًا",
         "accountBanned": "تم حظر حسابك",
+        "accountUnbanned": "تم رفع الحظر عن حسابك",
         "noShowMarked": "تم تسجيلك كمتغيب"
     },
     "payment": {
@@ -675,6 +676,7 @@
         "matchCancelledAdmin": "تم إلغاء مباراتك من قبل KoraLink وأُرجعت المدفوعات",
         "accountSuspended": "تم إيقاف حسابك مؤقتًا",
         "accountBanned": "تم حظر حسابك",
+        "accountUnbanned": "تم رفع الحظر عن حسابك",
         "noShowMarked": "تم تسجيلك كمتغيب"
     },
     "attendance": {
