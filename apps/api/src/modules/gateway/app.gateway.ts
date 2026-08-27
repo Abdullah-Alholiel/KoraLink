@@ -109,8 +109,44 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         secret: this.config.get<string>('JWT_SECRET', 'fallback-dev-secret'),
       });
 
+      // Re-read the user row so moderation actions (ban/suspend) and role
+      // changes apply IMMEDIATELY on the socket — a JWT can outlive them.
+      // Mirrors jwt-cookie.strategy.validate(): REST 401s banned/suspended
+      // users; the socket must refuse the handshake just as strictly, else a
+      // banned user keeps chat/DM access until token expiry (up to 7 days).
+      const [user] = await this.db
+        .select({
+          id: users.id,
+          role: users.role,
+          banned_at: users.banned_at,
+          suspended_until: users.suspended_until,
+        })
+        .from(users)
+        .where(eq(users.id, payload.sub))
+        .limit(1);
+
+      if (!user) {
+        this.logger.warn(`WS connection rejected: account ${payload.sub} no longer exists`);
+        client.disconnect(true);
+        return;
+      }
+      if (user.banned_at) {
+        this.logger.warn(`WS connection rejected: account ${payload.sub} is banned`);
+        client.disconnect(true);
+        return;
+      }
+      if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+        this.logger.warn(
+          `WS connection rejected: account ${payload.sub} suspended until ${user.suspended_until.toISOString()}`,
+        );
+        client.disconnect(true);
+        return;
+      }
+
       client.userId = payload.sub;
-      client.role = payload.role;
+      // DB role (fresh), never the stale token claim — an admin demotion must
+      // revoke /ops access on the very next socket connect, not at re-login.
+      client.role = user.role;
 
       // Every authenticated socket joins the user's personal room so the
       // server can push notifications/badge updates at any time.
@@ -118,7 +154,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
       // Ops consoles (admin HQ + partner portal) get live data-change pings
       // so tables/metrics refresh without manual reload.
-      if (payload.role === 'Admin' || payload.role === 'VenueOwner') {
+      if (user.role === 'Admin' || user.role === 'VenueOwner') {
         await client.join('ops');
       }
     } catch {
