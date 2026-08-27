@@ -4,8 +4,8 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-26T22:3xZ (run #2: verified P1-1/P1-4/P1-5, built P0-3 env-secret hardening)
-**Last run:** #2 (see `kanban/RUNS/2026-08-26T22-*.md`)
+**Last updated:** 2026-08-27T04:0xZ (run #3: built P1-6 partner-portal Admin scope + markNoShow 404 fix)
+**Last run:** #3 (see `kanban/RUNS/2026-08-27T*.md`)
 
 ---
 
@@ -26,7 +26,8 @@
 | P1-3 | API/Chat | **Chat idempotency + pagination indexes — idempotency DONE + VERIFIED**: `client_message_id` dedup backed by unique index `match_messages_client_msg_uidx` (partial, WHERE NOT NULL) + keyset index `match_messages_match_created_idx` (migration 0014); REST + WS both `onConflictDoNothing` + winner re-read (commits 6351726, 65bac93). **Remaining**: history hard-capped `limit: 50` asc no cursor pagination; `match_messages.content` text-only (no attachment table). | matches.service.ts:781-799,834-863; schema.ts:390 | WIP (idempotency DONE; pagination + media TODO) | docs/plans/ (run #1 report) |
 | P1-4 | DB | **Missing hot-FK indexes — DONE + APPLIED**: `matches.host_id`/`pitch_id`, `activities.actor_id`, `disputes.reporter_id`, `reports.reporter_id`, `venues.owner_id`, `transactions.reference_id` — all 7 indexes via migration `0015_bored_wraith` (drizzle-kit generated, applied to live DB). **run #2 re-verified live: 7/7 in pg_indexes.** | schema.ts:336-339; drizzle/0015 | **DONE ✅** (run #2 re-verified 2026-08-26T22:2xZ) | docs/plans/hot-fk-indexes/ |
 | P1-5 | PWA | **SW push deep-link hardcodes `locale='en'` — FIXED + VERIFIED**: SW reads `data.locale` (fallback en); API stores per-subscription locale (`push_subscriptions.locale`, migration 0016) captured at subscribe time; `sendPushToUsers` injects the subscriber's locale. **run #2 re-verified: `locale` col live (varchar)**. ⚠️ caveat: `sendPomDecidedNotification` (notifications.service.ts:192-196) builds its own payload and OMITS locale → POTM pushes always deep-link `en`. Tracked as P2-8. | apps/player-pwa/worker/index.js:19; notifications.service.ts:125-166,192-196 | **DONE ✅** (run #2 re-verified; POTM-locale caveat → P2-8) | docs/plans/ (P1-5 slice) |
-| P1-6 | Admin | **Admin partner-portal scope inconsistency**: `updatePitch` (partner.service.ts:317) omits `actorRole` so Admin cannot edit a pitch via the partner portal (inconsistent with `deletePitch:352` which allows Admin bypass); `getDashboard`/`getEarnings` (partner.service.ts:149,374) are always owner-scoped so an Admin opening `/partner` sees an empty dashboard/earnings while `/partner/venues`+`/pitches` correctly list all. | partner.service.ts:149,317,374; partner.controller.ts:102-109 | TODO | — |
+| P1-6 | Admin | **Admin partner-portal scope inconsistency — FIXED**: `updatePitch` now routes through `assertPitchAccess` (Admin bypass, 403 non-owner non-admin, 404 only if missing); `getDashboard`/`getEarnings` accept `actorRole` and scope to ALL venues for Admin via `scopedVenueIds`/`scopedPitchIds`. Controller forwards `user.role`. | partner.service.ts:57-68,149,317,374,463; partner.controller.ts:31,103,120 | **IN-REVIEW** (run #3: d93e1ea; jest 64/64, build 3/3; live: Admin dashboard → 5 venues, Admin PATCH pitch → 200) | docs/plans/partner-portal-admin-scope/ |
+| P1-7 | API | **markNoShow 500 for non-roster target — FIXED**: `wasFlagged = player.no_show` was read BEFORE the `if (!player)` guard → `TypeError` 500 instead of `NotFoundException` 404 when a host marks a user not in the roster. Guard reordered before the dereference. | matches.service.ts:1414-1419 | **IN-REVIEW** (run #3: ccfeeb7; jest 64/64; live: non-roster target → 404 NotFound) | docs/plans/partner-portal-admin-scope/ (run #3 slice 2) |
 
 ## 🟡 P2 — Polish & tech debt
 
@@ -36,11 +37,11 @@
 | P2-2 | Admin | `dispute_messages` table exists but NO endpoint posts a reply — admin dispute view is read-only. | admin/disputes.service.ts:67-71 | TODO | — |
 | P2-3 | Partner | Payout flow not partner-initiated; partner earnings view read-only. | partner.service.ts:374-405 | TODO | — |
 | P2-4 | API | Money aggregated via `::float` casts in settlement/user totals — rounding risk in sums. | matches.service.ts:198; admin/users.service.ts:103; admin/settlements.service.ts:36,107 | TODO | — |
-| P2-5 | API | Bare mutation responses (contract §2): `castVote` → `{message}`, `createDispute` → bare row, wallet topup/pay → `{ledgerEntry, wallet_balance}`. Matches join/leave/start/complete/cancel are compliant ✅. | matches.service.ts:1504,1358; wallet.controller.ts:61-67 | TODO | — |
+| P2-5 | API | Bare mutation responses (contract §2): `castVote` → `{matchId,votedFor,message}` (matches.service.ts:1752), `createDispute` → bare row (:1585/:1606), `createVenue` → partial `{id,name,city}` (partner.service.ts:91), `deletePitch`/`deleteSlot` → `{deleted:true}` (:369/:630), `createSlot` → bare row (:604), wallet topup/pay → `{ledgerEntry, wallet_balance}`. Matches join/leave/start/complete/cancel are compliant ✅. | matches.service.ts:1752,1585,1606; partner.service.ts:91,369,604,630; wallet.controller.ts:61-67 | TODO | — |
 | P2-6 | API | WS `leave-conversation` unguarded (no auth/participant check) — inconsistent with its siblings. | app.gateway.ts:333-339 | TODO | — |
 | P2-7 | PWA | Offline is read-only cache + banner; no offline mutation queue / background sync (grep `outbox\|BackgroundSync` → 0). | worker/index.js; play/page.tsx:188 | TODO | — |
-| P2-8 | API | `sendPomDecidedNotification` builds its own push payload and OMITS locale — POTM winner pushes always deep-link `en` even for Arabic users (regression vs P1-5 fix). | notifications.service.ts:192-196 | TODO | — |
-| P2-9 | API | Money/state races: settlement `generatePending` not in a tx (concurrent runs double-insert); transactions refund double-submit → unhandled unique-violation 500; no-show reversal + dispute-status update run as separate statements (partial-failure window). | admin/settlements.service.ts:99-150; admin/transactions.service.ts:78-99; admin/disputes.service.ts:87-118 | TODO | — |
+| P2-8 | API | Push text not localized: `sendPomDecidedNotification` builds its own payload and OMITS locale (notifications.service.ts:192-196); match-start reminder title/body hardcoded English `'⏰ Match starting soon'` + `en-GB` (matches.service.ts:255-260). Deep-link locale plumbing (P1-5) works, but the notification TEXT itself is English-only for Arabic users. | notifications.service.ts:189-196; matches.service.ts:255-260 | TODO | — |
+| P2-9 | API | Money/state races: settlement `generatePending` NOT-EXISTS+insert not in a tx and no `unique(venue_id, period_start)` → concurrent runs double-insert; `settlement.pay()` TOCTOU (reads status, updates with no `WHERE status='pending'`) → concurrent pays double-succeed; transactions refund double-submit → unique-violation 500; no-show reversal + dispute-status update not atomic. **Fix plan**: unique-index migration + tx-wrap `generatePending` + conditional `pay`. | admin/settlements.service.ts:65-92,99-150; admin/transactions.service.ts:78-99; admin/disputes.service.ts:87-118 | TODO | — |
 
 ---
 
@@ -50,6 +51,9 @@
 - Admin settings mutations not audit-logged and never capture `adminId`. `settings.service.ts:27-40`.
 - `users.service.ts:191` unban emits verb `'account_suspended'` (ternary misuse). Minor.
 - `drizzle/seed.ts:8,10` doc drift: header says "8 users" (inserts 15) and stale "reviews" mention. Cosmetic.
+- WS gateway `JWT_SECRET` fallback `'fallback-dev-secret'` (app.gateway.ts:109) survives the P0-3 bootstrap hardening — dev-only fallback, but should be flagged/removed for prod parity.
+- Zustand persists server cache (`balance`, `paymentMethods`, `bookedMatchIds`, useAppStore.ts:90-99) — server state shouldn't live in the persisted store.
+- `GetMatchesDto.format`/`gender` typed `string` not union (get-matches.dto.ts:55,64) — weak DTO enum typing (body DTOs use proper unions).
 
 ---
 

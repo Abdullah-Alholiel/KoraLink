@@ -1,17 +1,21 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 2,
-  "last_run_at": "2026-08-26T22:29:09Z",
+  "last_run": 3,
+  "last_run_at": "2026-08-27T04:05:00Z",
   "last_run_commits": [
-    "42d2d86"
+    "d93e1ea",
+    "ccfeeb7"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-26T22-29Z.md",
-  "in_review_items": [],
+  "last_run_report": "kanban/RUNS/2026-08-27T04-05Z.md",
+  "in_review_items": [
+    "P1-6 Admin partner-portal scope (d93e1ea)",
+    "P1-7 markNoShow 404 not 500 (ccfeeb7)"
+  ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #2: verified P1-1/P1-4/P1-5 live (all DONE), built P0-3 env-secret hardening (42d2d86). New board items: P0-3 (DONE), P1-6 admin partner-portal scope, P2-8 POTM locale, P2-9 settlement/refund tx races + Backlog section. CRITICAL finding: JWT_SECRET/COOKIE_SECRET were 'change-me' placeholders in the live .env — fixed with assertBootstrapSecrets() bootstrap guard + regenerated real secrets + .env.example guidance. Next: P1-6 (admin partner-portal scope), then P1-2 discovery filters."
+  "notes": "Run #3: built P1-6 Admin partner-portal scope (updatePitch via assertPitchAccess + getDashboard/getEarnings Admin-wide scoping, d93e1ea) and P1-7 markNoShow 404-vs-500 fix (ccfeeb7) — both live-verified (Admin dashboard → 5 venues, Admin PATCH pitch → 200; markNoShow non-roster → 404). Reviewer (deepseek-v4-pro deleg_7c3b893b) surfaced settlement double-payout race (P2-9, bookkeeping-only, fix plan recorded), expanded P2-5 bare-mutation list, confirmed P2-6/P2-8. Next: P2-9 settlement/refund tx races (unique index + tx wrap), then P1-2 discovery filters (skill_level + radius_km), then P1-3 chat pagination/media."
 }
