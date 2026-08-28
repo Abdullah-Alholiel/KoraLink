@@ -1,21 +1,26 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 8,
-  "last_run_at": "2026-08-28T06:59:00Z",
+  "last_run": 9,
+  "last_run_at": "2026-08-28T12:58:00Z",
   "last_run_commits": [
-    "8fa95f9"
+    "306c74c",
+    "b9ef749"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-28T06-59Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-28T12-40Z.md",
   "in_review_items": [
-    "P1-15 createDispute idempotency (8fa95f9)"
+    "P1-18 deleteSlot booking TOCTOU (b9ef749)",
+    "P2-21 admin 403 handling (b9ef749)",
+    "P1-2 partial: discovery gender filter + limit param (306c74c)"
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch never debits joiner's price_per_player — BLOCKED on P0-2 (no real payment provider; wallet is dummy self-credit).",
-    "P1-14 settlement payout never executes (IBAN collected, unused) — BLOCKED on P0-2 (needs real payout provider)."
+    "P1-14 settlement payout never executes (IBAN collected, unused) — BLOCKED on P0-2 (needs real payout provider).",
+    "P1-16 padel support — needs Abdullah's scope decision (whole-sport slice if in scope).",
+    "P1-2 remainder skill_level discovery filter — needs product decision on semantics (host skill vs match-declared level) before building."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #8: verified P1-11 DM idempotency → DONE. Built P1-15 createDispute idempotency (partial unique index disputes_open_uidx + onConflictDoNothing + winner re-read, migration 0020, 8fa95f9). Also reconciled stale migration tracking (drizzle.__drizzle_migrations 0002/0008 hashes were missing after in-place file edits; db:migrate re-verified working). New board: P1-16 no padel support, P1-17 no waitlist, P2-18 no recurring matches. Next: verify P1-15, then P1-2 discovery filters / P1-16 padel scope decision / P2-17 auth bootstrap."
+  "notes": "Run #9: verified P1-15 → DONE. Built 3 fixes: discovery gender filter (PWA tokens men|women|mixed 400'd the feed — normalizeGenderRule + limit param, 306c74c, live E2E-probed), deleteSlot booking TOCTOU (conditional DELETE, b9ef749), admin 403-as-401 logout bug (b9ef749). jest 105/105, vitest 218/218, build 3/3, services restarted + healthy. New: P2-19 (send-otp throttle), P2-20 (param allowlist audit), P2-21 (DONE), P1-18 (DONE). 09:09Z boot-crash incident (52min downtime) fixed by parent 1bccdb0 — verified live; post-mortem in backlog. GLM reviewer children hit 600s cap twice (one recovered with full report; findings-only-at-end pattern) — run #10 should demand incremental output. Next: P1-2 skill_level (needs semantics decision), P2-17 AuthBootstrap, PWA search (new product gap)."
 }
