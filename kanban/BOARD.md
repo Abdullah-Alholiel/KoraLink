@@ -4,8 +4,8 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-28T01:36Z (run #7: DM send idempotency)
-**Last run:** #7 (see `kanban/RUNS/2026-08-28T01-36Z.md`)
+**Last updated:** 2026-08-28T06:59Z (run #8: createDispute idempotency + migration-tracking reconcile)
+**Last run:** #8 (see `kanban/RUNS/2026-08-28T06-59Z.md`)
 
 ---
 
@@ -31,10 +31,13 @@
 | P1-8 | API/Wallet | **`joinMatch` never debits the joiner's `price_per_player`** — joiners join paid matches free; only the host is charged pitch cost (koralink mode). **Blocked on P0-2** (no real payment provider — wallet is dummy self-credit). Correct once real payments land. | matches.service.ts:603-716,879-894 | BLOCKED (P0-2) | — |
 | P1-9 | PWA/Realtime | **POTM realtime socket dialed the wrong namespace — FIXED (run #5, 58b3ba3)**: `PostMatchSection` used a raw `io()` with the pathful `NEXT_PUBLIC_API_URL` base → namespace `/api/v1/lobby` → gateway rejects the handshake ("Invalid namespace") → the `pom-decided` winner toast silently never fired for users viewing the match-detail page. All 5 other realtime call sites already used `createLobbySocket()`. Now routes through the shared helper (origin `/lobby`) + regression test. Live probe: `/lobby` → CONNECTED, `/api/v1/lobby` → Invalid namespace. | PostMatchSection.tsx:45 | **DONE ✅** (run #6 verified: reviewer CONFIRMED + regression test present; build 3/3, vitest 218/218). Note: commit msg said "6 call sites" — actual is 5 (overcount, substance correct). | docs/plans/run5-pom-realtime-namespace/ |
 | P1-10 | API/Security | **WS handshake skipped ban/suspend + role-staleness — FIXED (run #6, 4df0d4d)**: `handleConnection` verified only the JWT signature, so a banned/suspended user kept full chat/DM/lobby access over the socket until token expiry (≤7d) while REST 401'd immediately (`jwt-cookie.strategy.ts:71-76`). Also the `ops` room join used the stale token `role`, so a demoted admin retained live console pings. Now re-reads the user row (id/role/banned_at/suspended_until) on every handshake, mirrors the strategy, disconnects banned/future-suspended/missing accounts with a Pino warn, and joins `ops` by DB role. +7 jest cases. | app.gateway.ts:108-154 (was 108-123); jwt-cookie.strategy.ts:48-83 | **DONE ✅** (run #7 verified: handleConnection re-reads the user row and disconnects banned/future-suspended/missing accounts; joins `ops` by DB role; spec 7 cases; build 3/3, jest 83/83, vitest 218/218) | docs/plans/run6-ws-moderation-enforcement/ |
-| P1-11 | API/Chat | **DM send idempotency is SELECT-then-INSERT (TOCTOU), no unique index** — `personal_messages` has only `conv_idx`/`conv_created_idx` (schema.ts:651-652); no partial unique on `(sender_id, conversation_id, client_message_id)`. `sendMessage` does findFirst→insert (`conversations.service.ts:210-241`), so concurrent retried DMs can duplicate. Match chat has the partial unique index (`match_messages_client_msg_uidx`); DMs don't. | conversations.service.ts:210-241; schema.ts:632-652 | **IN-REVIEW** (run #7: dfc671f; partial unique index `personal_messages_client_msg_uidx` + `onConflictDoNothing` + winner re-read; migration 0019 applied live; jest 83/83) | docs/plans/run7-dm-idempotency/ |
+| P1-11 | API/Chat | **DM send idempotency is SELECT-then-INSERT (TOCTOU), no unique index** — `personal_messages` had only `conv_idx`/`conv_created_idx` (schema.ts:651-652); no partial unique on `(sender_id, conversation_id, client_message_id)`. `sendMessage` did findFirst→insert (`conversations.service.ts:210-241`), so concurrent retried DMs could duplicate. | conversations.service.ts:210-241; schema.ts:632-652 | **DONE ✅** (run #7 built dfc671f; run #8 verified: `onConflictDoNothing`+winner re-read+side-effect skip confirmed in code, live `personal_messages_client_msg_uidx` in pg_indexes, reviewer CONFIRMED; build 3/3, jest 87/87, vitest 218/218) | docs/plans/run7-dm-idempotency/ |
 | P1-12 | Admin | **Admin/partner console is English-only** — `apps/admin` has no i18n; Arabic-first venue owners cannot operate the partner portal in their language. | apps/admin (no i18n layer) | TODO | — |
 | P1-13 | API | **No match reschedule/edit-after-create** — hosts can cancel but cannot move time/venue; forces cancel+recreate (loses roster/payments). | matches.service.ts (no update-scheduled route) | TODO | — |
 | P1-14 | API/Wallet | **Settlement payout never executes** — settlements track `pending/paid` but no actual bank payout; IBAN collected at verification but unused. Venue owners never receive earnings. | admin/settlements.service.ts:99-150 | BLOCKED (P0-2 — needs real payment/payout provider) | — |
+| P1-15 | API | **createDispute TOCTOU duplicate race — FIXED (run #8, 8fa95f9)**: `createDispute` deduped with a non-atomic select-then-insert (`matches.service.ts:1559-1607`) and no unique index on `(match_id, reporter_id, type)`, so a concurrent double-tap opened two identical disputes. Now `disputes_open_uidx` (partial, WHERE status IN ('opened','under_review')) + `onConflictDoNothing` + winner re-read attaches the appeal as evidence. Migration 0020. | matches.service.ts:1559-1607; schema.ts:731-770 | **IN-REVIEW** (run #8: 8fa95f9; index live in pg_indexes; jest 87/87, build 3/3, vitest 218/218) | docs/plans/run8-dispute-idempotency/ |
+| P1-16 | PWA/API | **No padel support — product is football-only** despite "padel/football" framing: `pitchSizeEnum = ['5v5','7v7','8v8','11v11']` (schema.ts:47-52), `surfaceTypeEnum = ['Grass','Artificial']` (:54), no `sport_type` column, zero "padel"/"2v2"/"doubles" strings in en.json/ar.json. Whole-sport gap if padel is in scope (2v2 size, glass/padel surface, doubles format). | schema.ts:47-54; en.json/ar.json | TODO (needs Abdullah scope decision) | — |
+| P1-17 | PWA/API | **No waitlist/overflow for full matches** — 0 hits for "waitlist" across apps/; a Full match gives players no queue path (churn point for popular padel/football slots). | apps/ (grep waitlist → 0) | TODO | — |
 
 ## 🟡 P2 — Polish & tech debt
 
@@ -57,6 +60,7 @@
 | P2-15 | PWA/Wallet | **Wallet history queryKey omits page/perPage** — `useWalletHistory` `queryKey: ['wallet','history']` (useWallet.ts:29-38) → history silently capped at API default (20 rows); pagination params never invalidate the cache. | useWallet.ts:29-38 | TODO | — |
 | P2-16 | Observability | **`console.error` instead of Sentry `captureError`** — `usePushNotifications.ts:74,92` and `ErrorBoundary.tsx:30` log to console, bypassing the AGENTS.md §4 Sentry standard. | usePushNotifications.ts:74,92; ErrorBoundary.tsx:30 | TODO | — |
 | P2-17 | PWA/Auth | **AuthBootstrap skips `/users/me` when a persisted `user` exists** — `enabled: isHydrated && !user` (AuthBootstrap.tsx:72) means an expired-cookie return visit (persisted `user` + `isAuthenticated`, dead cookie) never revalidates → stale authed shell while every fetch 401s. `fetcher` throws `FetchError` with no 401→logout interceptor (fetcher.ts:80-106). Edge case, self-heals on explicit logout/login. | AuthBootstrap.tsx:72; fetcher.ts:80-106 | TODO | — |
+| P2-18 | API | **No recurring/standing player matches** — only venue-level weekly slot generation (partner.service.ts:511, SlotManager.tsx:145); players can't set up a repeating booking. | partner.service.ts:511; SlotManager.tsx:145 | TODO | — |
 
 ---
 
@@ -80,6 +84,9 @@
 - `mark-no-show.dto.ts:6` uses `@IsUUID()` while every other ID DTO uses varchar(36)/`@IsString` — rejects non-UUID-format IDs (run #7 reviewer).
 - `castVote` upsert resets `created_at` on a vote change (matches.service.ts:1750) — minor (run #7 reviewer).
 - `seed.ts` still seeds `rating` (seed.ts:65,76,87,239) after the reviews removal — dead column (run #7 reviewer).
+- **Migration files 0002/0008 were edited in-place after apply**; tracking reconciled manually run #8 (`drizzle.__drizzle_migrations` now 22 rows, `db:migrate` re-verified working). Do NOT edit applied migration .sql files — generate a new migration instead (run #8).
+- `TopAppBar.tsx` is wholly orphaned dead code (imported nowhere) with no-op bell/`+`/search (run #8 reviewer).
+- `reports.service.ts:64` create() returns bare report row; `settlements.service.ts:155` generatePending returns bare array — bare-return contract (P2-5 class), low impact (run #8 reviewer).
 
 ---
 
