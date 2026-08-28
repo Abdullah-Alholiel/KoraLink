@@ -1,5 +1,8 @@
 import { env } from '@/env.mjs';
 import { addBreadcrumb } from '@/providers/ObservabilityProvider';
+// Direct store access for the 401 self-heal — the store imports nothing from
+// this module, so no cycle (AuthBootstrap composes both, which is fine).
+import { useAppStore } from '@/store/useAppStore';
 
 type FetchOptions = RequestInit & {
   params?: Record<string, string>;
@@ -98,12 +101,31 @@ export async function fetcher<T>(
       response.status >= 500 ? 'error' : 'warning',
       { status: response.status, path, method: options.method ?? 'GET' },
     );
-    throw new FetchError(
-      apiMessage || `Request failed with status ${response.status}`,
-      response.status,
-      url.toString()
-    );
+  // ── 401 self-heal (P2-17, run #10) ─────────────────────────────────────
+  // A stored Bearer (dev-login) or HttpOnly cookie can silently expire or the
+  // account can be banned — until now every query just 401'd forever and the
+  // user stayed trapped in an authed shell with error states everywhere.
+  // Global handler: clear the stale auth state and bounce to /login (the
+  // next-intl middleware resolves the locale-prefixed route). Auth endpoints
+  // are excluded — login/OTP flows surface their own 401 inline (wrong code),
+  // and the AuthBootstrap probe handles /users/me itself.
+  if (response.status === 401 && typeof window !== 'undefined') {
+    const isAuthPath = path.startsWith('/auth/');
+    if (!isAuthPath) {
+      clearAuthToken();
+      useAppStore.getState().logout();
+      if (!window.location.pathname.endsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
   }
+
+  throw new FetchError(
+    apiMessage || `Request failed with status ${response.status}`,
+    response.status,
+    url.toString()
+  );
+}
 
   // 204 No Content — return empty (e.g. DELETE /matches/:id/leave)
   if (response.status === 204) return undefined as T;

@@ -2,10 +2,19 @@
 
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, clearAuthToken } from '@/lib/fetcher';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { identifyUser, clearUser } from '@/providers/ObservabilityProvider';
 import type { UserProfileApi } from '@/hooks/useUser';
+
+/**
+ * One probe per browser session for persisted users. A persisted Zustand user
+ * may be stale (JWT expired, account banned) — if we never verify it, the
+ * whole shell renders error states forever. The sessionStorage flag makes the
+ * probe run once per tab session (success keeps it set for the session; a
+ * failed probe clears auth, so a fresh session starts clean).
+ */
+const BOOTSTRAP_FLAG = 'koralink_bootstrap_run';
 
 /**
  * No-UI component that populates Zustand auth state on cold page loads.
@@ -56,11 +65,19 @@ export default function AuthBootstrap() {
           },
           '', // No new token — cookie already valid
         );
+        // Verified this session — don't re-probe on in-app navigation remounts.
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(BOOTSTRAP_FLAG, '1');
+        }
         return profile;
       } catch {
-        // Clear stale local token on 401/404
+        // Probe failed with a persisted user → auth is stale (401 expired /
+        // banned, 404 deleted). Clear the local token + store (the fetcher's
+        // global 401 handler already redirected to /login for the 401 case;
+        // this catch covers 403/404 and non-window contexts).
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('koralink_token');
+          sessionStorage.removeItem(BOOTSTRAP_FLAG);
+          clearAuthToken();
         }
         useAppStore.getState().logout();
         return null;
@@ -68,8 +85,16 @@ export default function AuthBootstrap() {
     },
     // Bootstrap whenever we might have a session: a stored Bearer token OR the
     // HttpOnly cookie set by the real OTP flow (which never writes localStorage).
-    // A 401 for genuine guests is handled by the catch below (logout, no retry).
-    enabled: isHydrated && !user && typeof window !== 'undefined',
+    //
+    // Stale-user self-heal (P2-17, run #10): previously skipped entirely when a
+    // persisted user existed (`!user` short-circuit) — an expired JWT or banned
+    // account left the shell authed-looking but 401ing on every query. Now a
+    // persisted user gets exactly ONE /users/me probe per browser session; a
+    // failure logs them out cleanly instead of trapping them in error states.
+    enabled:
+      isHydrated &&
+      typeof window !== 'undefined' &&
+      (!user || !sessionStorage.getItem(BOOTSTRAP_FLAG)),
     staleTime: 60_000,
     retry: false, // Do not retry 401 — user is unauthenticated
   });
