@@ -1556,6 +1556,24 @@ export class MatchesService {
       throw new BadRequestException('You have not been marked no-show for this match.');
     }
 
+    // Attach the player's appeal as evidence on an existing open/reviewing
+    // dispute (e.g. the host's mark already auto-opened it) rather than
+    // creating a duplicate row.
+    const attachAppeal = async (disputeId: string, existingEvidence: unknown) => {
+      const evidence = Array.isArray(existingEvidence) ? [...existingEvidence] : [];
+      evidence.push({
+        action: 'appeal',
+        reason: dto.reason ?? '(no reason provided)',
+        at: new Date().toISOString(),
+      });
+      const [updated] = await this.db
+        .update(disputes)
+        .set({ evidence: evidence as never })
+        .where(eq(disputes.id, disputeId))
+        .returning();
+      return updated;
+    };
+
     const [existing] = await this.db
       .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
       .from(disputes)
@@ -1570,22 +1588,13 @@ export class MatchesService {
       .limit(1);
 
     if (existing) {
-      // The host's mark already auto-opened this dispute — attach the
-      // player's appeal as evidence instead of creating a duplicate.
-      const evidence = Array.isArray(existing.evidence) ? [...existing.evidence] : [];
-      evidence.push({
-        action: 'appeal',
-        reason: dto.reason ?? '(no reason provided)',
-        at: new Date().toISOString(),
-      });
-      const [updated] = await this.db
-        .update(disputes)
-        .set({ evidence: evidence as never })
-        .where(eq(disputes.id, existing.id))
-        .returning();
-      return updated;
+      return attachAppeal(existing.id, existing.evidence);
     }
 
+    // Insert guarded by the partial unique index `disputes_open_uidx` on
+    // (match_id, reporter_id, type) WHERE status IN ('opened','under_review').
+    // `onConflictDoNothing` makes the write atomic — a concurrent duplicate
+    // appeal returns zero rows instead of inserting a second dispute.
     const [created] = await this.db
       .insert(disputes)
       .values({
@@ -1596,7 +1605,30 @@ export class MatchesService {
         status: 'opened',
         evidence: dto.reason ? [{ reason: dto.reason, at: new Date().toISOString() }] : [],
       })
+      .onConflictDoNothing()
       .returning();
+
+    if (!created) {
+      // A concurrent appeal won the race — re-read the winner's row and attach
+      // this appeal as evidence instead of duplicating the dispute.
+      const [winner] = await this.db
+        .select({ id: disputes.id, evidence: disputes.evidence })
+        .from(disputes)
+        .where(
+          and(
+            eq(disputes.match_id, matchId),
+            eq(disputes.reporter_id, userId),
+            eq(disputes.type, type),
+            inArray(disputes.status, ['opened', 'under_review']),
+          ),
+        )
+        .limit(1);
+
+      if (winner) {
+        return attachAppeal(winner.id, winner.evidence);
+      }
+      throw new ConflictException('Dispute conflicted; retry.');
+    }
 
     try {
       this.realtime.broadcastOps('disputes');

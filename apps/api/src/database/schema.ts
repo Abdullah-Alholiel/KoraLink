@@ -766,6 +766,14 @@ export const disputes = pgTable(
     index('disputes_match_idx').on(t.match_id),
     // P1-4 hot-FK index: admin disputes queue by reporter
     index('disputes_reporter_id_idx').on(t.reporter_id),
+    // Dedup: at most one open/reviewing dispute per (match, reporter, type).
+    // Partial so a resolved dispute does not block a new dispute on the same
+    // match. Closes the createDispute TOCTOU race — a concurrent duplicate
+    // appeal hits this constraint instead of inserting a second dispute row
+    // (mirrors `reports_open_subject_uidx`, schema.ts reports table).
+    uniqueIndex('disputes_open_uidx')
+      .on(t.match_id, t.reporter_id, t.type)
+      .where(sql`${t.status} IN ('opened','under_review')`),
   ],
 );
 

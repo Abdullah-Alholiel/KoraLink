@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "disputes_open_uidx" ON "disputes" USING btree ("match_id","reporter_id","type") WHERE "disputes"."status" IN ('opened','under_review');
