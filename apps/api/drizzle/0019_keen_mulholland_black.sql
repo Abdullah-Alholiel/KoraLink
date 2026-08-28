@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "personal_messages_client_msg_uidx" ON "personal_messages" USING btree ("sender_id","conversation_id","client_message_id") WHERE client_message_id IS NOT NULL;

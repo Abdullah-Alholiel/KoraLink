@@ -650,6 +650,12 @@ export const personal_messages = pgTable(
   (t) => [
     index('personal_messages_conv_idx').on(t.conversation_id),
     index('personal_messages_conv_created_idx').on(t.conversation_id, t.created_at),
+    // Idempotent sends (P1-11): a retried DM must never duplicate. The partial
+    // predicate keeps rows without a client id (NULL) out of the index entirely —
+    // multiple NULLs are fine. Mirrors match_messages_client_msg_uidx.
+    uniqueIndex('personal_messages_client_msg_uidx')
+      .on(t.sender_id, t.conversation_id, t.client_message_id)
+      .where(sql`client_message_id IS NOT NULL`),
   ],
 );
 

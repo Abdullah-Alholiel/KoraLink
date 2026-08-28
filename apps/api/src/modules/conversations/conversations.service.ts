@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -238,7 +239,37 @@ export class ConversationsService {
         content: trimmed,
         client_message_id: clientMessageIdValue,
       })
+      .onConflictDoNothing()
       .returning();
+
+    // Concurrent retry won the race (unique index personal_messages_client_msg_uidx
+    // on (sender_id, conversation_id, client_message_id) WHERE client_message_id
+    // IS NOT NULL): return the row the winner inserted instead of raising a
+    // unique-violation 500 — and skip the side effects below (read receipt,
+    // "messaged" activity, push) so a duplicate retry never double-fires them.
+    if (!inserted) {
+      const existing = await this.db.query.personal_messages.findFirst({
+        where: and(
+          eq(personal_messages.sender_id, userId),
+          eq(personal_messages.conversation_id, conversationId),
+          eq(personal_messages.client_message_id, clientMessageIdValue),
+        ),
+      });
+      if (existing) {
+        const [sender] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        return { ...existing, sender };
+      }
+      throw new ConflictException('Message send conflicted; retry.');
+    }
 
     // Sender has read up to this point.
     await this.markRead(userId, conversationId);
