@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 6,
-  "last_run_at": "2026-08-27T20:15:00Z",
+  "last_run": 7,
+  "last_run_at": "2026-08-28T01:36:00Z",
   "last_run_commits": [
-    "4df0d4d"
+    "dfc671f"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-27T20-15Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-28T01-36Z.md",
   "in_review_items": [
-    "P1-10 WS ban/suspend + role parity (4df0d4d)"
+    "P1-11 DM idempotency (dfc671f)"
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
@@ -17,5 +17,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #6: built P1-10 WS ban/suspend + DB-role parity (app.gateway.ts handleConnection now re-reads users row, disconnects banned/future-suspended/missing, joins ops by DB role; +7 jest cases, 4df0d4d). Verified prior run P1-9 → DONE (reviewer CONFIRMED; note commit overcounted call sites 6 vs 5). New items: P1-11 DM idempotency TOCTOU, P1-12 admin console English-only, P1-13 no match reschedule, P1-14 settlement payout (blocked P0-2), P2-15 wallet pagination, P2-16 console.error vs Sentry. Next: verify P1-10, build P1-11 DM idempotency, P1-2 discovery filters, P2-4 money-as-numeric."
+  "notes": "Run #7: built P1-11 DM idempotency (partial unique index personal_messages_client_msg_uidx + onConflictDoNothing + winner re-read, migration 0019, dfc671f). Verified prior run P1-10 → DONE. New items: P2-17 AuthBootstrap stale-persisted-user; backlog systemd units/mark-no-show @IsUUID/castVote created_at/seed rating. Next: verify P1-11, build P1-2 discovery filters or P2-17 auth bootstrap."
 }
