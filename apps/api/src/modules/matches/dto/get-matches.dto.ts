@@ -2,6 +2,41 @@ import { IsNumber, IsOptional, IsString, Matches, Min, Max, IsIn } from 'class-v
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
+/**
+ * Gender filter values accepted on the query string. The PWA FilterBar sends
+ * lowercase tokens (`men|women|mixed`, FilterBar.tsx GENDER_KEYS); the DB
+ * pgEnum `GenderRule` uses `'Men Only' | 'Women Only' | 'Mixed'`. Both are
+ * accepted and normalized server-side — see `normalizeGenderRule`.
+ */
+export const GENDER_QUERY_VALUES = [
+  'men',
+  'women',
+  'mixed',
+  'Men Only',
+  'Women Only',
+  'Mixed',
+] as const;
+
+export type GenderQuery = (typeof GENDER_QUERY_VALUES)[number];
+
+/**
+ * Maps a query-string gender filter to the DB `GenderRule` enum value.
+ *
+ * NOTE: 'women' is checked before 'men' — not because equality matching needs
+ * it (these are exact === comparisons, no substring matching), but to keep the
+ * `"women only".includes("men")` trap visibly guarded against if this is ever
+ * refactored to `includes`-style matching (hit historically, see
+ * koralink-review-workflow Known bugs: mapGender substring bug).
+ */
+export function normalizeGenderRule(
+  value: GenderQuery,
+): 'Men Only' | 'Women Only' | 'Mixed' {
+  if (value === 'women' || value === 'Women Only') return 'Women Only';
+  if (value === 'men') return 'Men Only';
+  if (value === 'mixed') return 'Mixed';
+  return value;
+}
+
 export class GetMatchesDto {
   @ApiPropertyOptional({
     description: 'Latitude of the player (WGS-84)',
@@ -55,13 +90,14 @@ export class GetMatchesDto {
   format?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by gender rule',
-    example: 'Men Only',
+    description: 'Filter by gender rule (PWA tokens or DB enum values)',
+    example: 'women',
+    enum: GENDER_QUERY_VALUES,
   })
   @IsOptional()
   @IsString()
-  @IsIn(['Men Only', 'Women Only', 'Mixed'])
-  gender?: string;
+  @IsIn(GENDER_QUERY_VALUES)
+  gender?: GenderQuery;
 
   @ApiPropertyOptional({
     description: 'Filter by max price per player (SAR)',
@@ -80,4 +116,15 @@ export class GetMatchesDto {
   @IsOptional()
   @IsString()
   venue_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of matches to return (1-50, default 50)',
+    example: 20,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  @Max(50)
+  limit?: number;
 }

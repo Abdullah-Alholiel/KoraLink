@@ -11,7 +11,10 @@ import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
-import { GetMatchesDto } from './dto/get-matches.dto';
+import {
+  GetMatchesDto,
+  normalizeGenderRule,
+} from './dto/get-matches.dto';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
@@ -337,7 +340,17 @@ export class MatchesService {
    * returns true when the great-circle distance (metres) is within the radius.
    */
   async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
-    const { lat, lng, radius_km = 50, date, format, gender, max_price, venue_id } = dto;
+    const {
+      lat,
+      lng,
+      radius_km = 50,
+      date,
+      format,
+      gender,
+      max_price,
+      venue_id,
+      limit,
+    } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -365,9 +378,11 @@ export class MatchesService {
       ? sql`AND p.size = ${format}`
       : sql``;
 
-    // ── Gender filter ──────────────────────────────────────────────────────
+    // ── Gender filter — normalize PWA tokens (men|women|mixed) to the DB
+    // GenderRule enum ('Men Only' | 'Women Only' | 'Mixed') before matching.
+    // The query contract accepts both forms; see GetMatchesDto.GENDER_QUERY_VALUES.
     const genderClause = gender
-      ? sql`AND m.gender_rule = ${gender}`
+      ? sql`AND m.gender_rule = ${normalizeGenderRule(gender)}`
       : sql``;
 
     // ── Max price filter ──────────────────────────────────────────────────
@@ -462,7 +477,7 @@ export class MatchesService {
             ? sql`distance_m ASC NULLS LAST, m.scheduled_at ASC`
             : sql`m.scheduled_at ASC`
         }
-      LIMIT 50
+      LIMIT ${limit ?? 50}
     `);
 
     return rows as unknown as NearbyMatchRow[];
