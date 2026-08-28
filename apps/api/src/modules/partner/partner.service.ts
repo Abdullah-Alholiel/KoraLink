@@ -620,7 +620,20 @@ export class PartnerService {
       );
     }
 
-    await this.db.delete(pitch_slots).where(eq(pitch_slots.id, slotId));
+    // Conditional DELETE closes the TOCTOU between the is_booked SELECT above
+    // and the DELETE: a match that books the slot in between makes the
+    // predicate match zero rows, so a booked slot can never be deleted here
+    // (booked slots are released via match cancellation only).
+    const deleted = await this.db
+      .delete(pitch_slots)
+      .where(and(eq(pitch_slots.id, slotId), eq(pitch_slots.is_booked, false)))
+      .returning({ id: pitch_slots.id });
+
+    if (deleted.length === 0) {
+      throw new ConflictException(
+        'This slot was just booked by a match — cancel the match first to release it.',
+      );
+    }
     this.realtime.broadcastOps('venues');
 
     return { deleted: true };

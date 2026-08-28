@@ -33,7 +33,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     credentials: 'include',
   });
 
-  if (res.status === 401 || res.status === 403) {
+  // 401 = session invalid/expired → clear token and bounce to /login.
+  // 403 = authenticated but not permitted (role downgraded, partner-only
+  // action) → surface the error; killing the whole session here logged
+  // admins out on any single forbidden response (run #9 reviewer).
+  if (res.status === 401) {
     if (typeof window !== 'undefined') {
       clearToken();
       if (!window.location.pathname.startsWith('/login')) {
@@ -41,6 +45,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       }
     }
     throw new Error('Unauthorized');
+  }
+
+  if (res.status === 403) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(
+      body.message ?? 'You do not have permission to perform this action.',
+    );
   }
 
   if (!res.ok) {
