@@ -30,7 +30,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request & { id?: string; user?: { sub?: string } }>();
     const response = ctx.getResponse();
 
-    if (Sentry.isInitialized()) {
+    const httpStatus =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    // Only report server errors (5xx) and unexpected errors to Sentry. Expected
+    // 4xx client/business rejections (validation, auth, not-found, forbidden,
+    // conflict) are handled by the app and are pure noise in Sentry — they still
+    // get Pino-logged below for debugging. This is what keeps the error stream
+    // readable so real 5xx/crash bugs surface instead of drowning in 401/404s.
+    if (Sentry.isInitialized() && httpStatus >= 500) {
       Sentry.captureException(exception, {
         extra: {
           requestId: request?.id,
@@ -46,11 +56,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else {
       this.logger.error(JSON.stringify(exception), undefined, AllExceptionsFilter.name);
     }
-
-    const httpStatus =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const responseBody =
       exception instanceof HttpException

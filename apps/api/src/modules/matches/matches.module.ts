@@ -19,9 +19,20 @@ export class MatchesModule implements OnModuleInit {
   constructor(private readonly matchesService: MatchesService) {}
 
   async onModuleInit() {
-    const count = await this.matchesService.autoCompletePastMatches();
-    if (count > 0) {
-      this.logger.log(`Auto-completed ${count} past matches → Completed`);
+    try {
+      const count = await this.matchesService.autoCompletePastMatches();
+      if (count > 0) {
+        this.logger.log(`Auto-completed ${count} past matches → Completed`);
+      }
+    } catch (err) {
+      // Transient DB connection resets (e.g. ECONNRESET during a deploy/restart)
+      // must not fail boot or surface as an unhandled rejection (Sentry noise).
+      // The 5-min scheduler tick retries; log and continue booting.
+      this.logger.error(
+        `autoCompletePastMatches at init failed (will retry via scheduler): ${
+          (err as Error).message
+        }`,
+      );
     }
   }
 }

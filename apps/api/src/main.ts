@@ -117,6 +117,14 @@ async function bootstrap(): Promise<void> {
   // ── API prefix ───────────────────────────────────────────────────────────
   app.setGlobalPrefix('api/v1');
 
+  // ── Root /health alias (bypasses the /api/v1 prefix) ─────────────────────
+  // Probes (Coolify/Traefik/uptime monitors) that hit GET /health instead of
+  // the prefixed GET /api/v1/health would otherwise 404. Mirror the liveness
+  // response so any prober gets 200 regardless of which path it uses.
+  app.getHttpAdapter().get('/health', (_req: unknown, res: { json: (b: unknown) => void }) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // ── Swagger (Cookie-Auth configured) ────────────────────────────────────
   const swaggerConfig = new DocumentBuilder()
     .setTitle('KoraLink API')
