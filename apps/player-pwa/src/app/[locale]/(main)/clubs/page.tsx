@@ -8,6 +8,7 @@ import { Search, MapPin, Users } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
 import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance } from '@/lib/format';
+import { isVenueOpenNow } from '@/lib/venue-hours';
 
 const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
@@ -179,7 +180,7 @@ export default function ClubsPage() {
                                         </span>
                                     </div>
 
-                                    {/* Pitch count */}
+                                    {/* Pitch count + P1-25 open/closed badge */}
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="flex items-center gap-0.5">
                                             <Users className="w-3.5 h-3.5 text-brand-green" />
@@ -187,6 +188,21 @@ export default function ClubsPage() {
                                                 {venue.pitch_count} {t('clubs.pitches')}
                                             </span>
                                         </div>
+                                        {(() => {
+                                            const openNow = isVenueOpenNow(venue);
+                                            return (
+                                                <span
+                                                    role="status"
+                                                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                                        openNow
+                                                            ? 'text-green-700 bg-green-100'
+                                                            : 'text-gray-500 bg-gray-100'
+                                                    }`}
+                                                >
+                                                    {openNow ? t('clubs.openNow') : t('clubs.closed')}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Amenities badges */}

@@ -112,7 +112,18 @@
       "loading": "Loading venues…",
       "error": "Failed to load: {error}",
       "createFailed": "Failed to create venue",
-      "updateFailed": "Failed to update venue"
+      "updateFailed": "Failed to update venue",
+      "openHour": "Opens",
+      "closeHour": "Closes",
+      "closedDays": "Closed days",
+      "closedDay0": "Sun",
+      "closedDay1": "Mon",
+      "closedDay2": "Tue",
+      "closedDay3": "Wed",
+      "closedDay4": "Thu",
+      "closedDay5": "Fri",
+      "closedDay6": "Sat",
+      "hoursSummary": "{open, number}–{close, number} open"
     },
     "pitches": {
       "title": "My Pitches",

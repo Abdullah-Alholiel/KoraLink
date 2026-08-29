@@ -249,6 +249,16 @@ export interface PartnerVenueRow {
   owner_id?: string;
   owner_name?: string | null;
   pitch_count?: number;
+  // P1-25 operating hours (Riyadh-local; close exclusive, 24 = midnight)
+  open_hour?: number;
+  close_hour?: number;
+  closed_day_0?: boolean;
+  closed_day_1?: boolean;
+  closed_day_2?: boolean;
+  closed_day_3?: boolean;
+  closed_day_4?: boolean;
+  closed_day_5?: boolean;
+  closed_day_6?: boolean;
 }
 
 export interface PartnerSlot {

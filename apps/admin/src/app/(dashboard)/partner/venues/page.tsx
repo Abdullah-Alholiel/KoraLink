@@ -21,7 +21,15 @@ export default function PartnerVenuesPage() {
   const [editing, setEditing] = useState<PartnerVenueRow | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', city: '', address: '' });
-  const [editValues, setEditValues] = useState({ name: '', city: '', address: '', amenities: '' });
+  const [editValues, setEditValues] = useState({
+    name: '',
+    city: '',
+    address: '',
+    amenities: '',
+    open: '8',
+    close: '23',
+    closedDays: [false, false, false, false, false, false, false],
+  });
 
   async function create() {
     setSaving(true);
@@ -40,7 +48,23 @@ export default function PartnerVenuesPage() {
 
   function startEdit(v: PartnerVenueRow) {
     const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]).join(', ') : '';
-    setEditValues({ name: v.name, city: v.city, address: v.address, amenities });
+    setEditValues({
+      name: v.name,
+      city: v.city,
+      address: v.address,
+      amenities,
+      open: String(v.open_hour ?? 8),
+      close: String(v.close_hour ?? 23),
+      closedDays: [
+        Boolean(v.closed_day_0),
+        Boolean(v.closed_day_1),
+        Boolean(v.closed_day_2),
+        Boolean(v.closed_day_3),
+        Boolean(v.closed_day_4),
+        Boolean(v.closed_day_5),
+        Boolean(v.closed_day_6),
+      ],
+    });
     setEditing(v);
   }
 
@@ -57,6 +81,12 @@ export default function PartnerVenuesPage() {
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
+        // P1-25 operating hours (API validates the cross-field close > open rule)
+        open_hour: Number(editValues.open),
+        close_hour: Number(editValues.close),
+        ...Object.fromEntries(
+          editValues.closedDays.map((closed, day) => [`closed_day_${day}`, closed]),
+        ),
       });
       setEditing(null);
       reload();
@@ -115,6 +145,56 @@ export default function PartnerVenuesPage() {
               <input value={editValues.address} onChange={(e) => setEditValues((v) => ({ ...v, address: e.target.value }))} placeholder={t('phAddressShort')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               <input value={editValues.amenities} onChange={(e) => setEditValues((v) => ({ ...v, amenities: e.target.value }))} placeholder={t('phAmenities')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
+
+            {/* P1-25 operating hours */}
+            <div className="mt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
+                  {t('openHour')}
+                  <select
+                    value={editValues.open}
+                    onChange={(e) => setEditValues((v) => ({ ...v, open: e.target.value }))}
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={String(h)}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
+                  {t('closeHour')}
+                  <select
+                    value={editValues.close}
+                    onChange={(e) => setEditValues((v) => ({ ...v, close: e.target.value }))}
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const h = i + 1; // 1..24 (24 = midnight)
+                      return <option key={h} value={String(h)}>{h === 24 ? '24:00' : `${String(h).padStart(2, '0')}:00`}</option>;
+                    })}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="text-xs font-medium text-gray-600">{t('closedDays')}</span>
+                {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                  <label key={day} className="flex items-center gap-1 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={editValues.closedDays[day]}
+                      onChange={(e) =>
+                        setEditValues((v) => ({
+                          ...v,
+                          closedDays: v.closedDays.map((c, i) => (i === day ? e.target.checked : c)),
+                        }))
+                      }
+                      className="h-3.5 w-3.5 rounded border-gray-300"
+                    />
+                    {t(`closedDay${day}`)}
+                  </label>
+                ))}
+              </div>
+            </div>
             {formError && <p className="mt-3 text-xs text-red-600">{formError}</p>}
             <button onClick={saveEdit} disabled={saving} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
@@ -161,7 +241,12 @@ export default function PartnerVenuesPage() {
                 )}
 
                 <div className="mt-auto flex items-center justify-between pt-4">
-                  <span className="text-xs text-gray-500">{t('pitchCount', { count: v.pitch_count ?? 0 })}</span>
+                  <span className="text-xs text-gray-500">
+                    {t('pitchCount', { count: v.pitch_count ?? 0 })}
+                    {v.open_hour !== undefined && v.close_hour !== undefined && (
+                      <> · {t('hoursSummary', { open: v.open_hour, close: v.close_hour })}</>
+                    )}
+                  </span>
                   <button onClick={() => startEdit(v)} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700">
                     <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
                   </button>

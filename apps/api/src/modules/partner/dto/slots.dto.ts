@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -84,4 +85,54 @@ export class UpdateVenuePartnerDto {
   @IsArray()
   @IsString({ each: true })
   amenities?: string[];
+
+  // P1-25 venue operating hours (Riyadh-local 24h ints; close exclusive, 24 = midnight).
+  @ApiPropertyOptional({ example: 8, description: 'Daily opening hour 0-23' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(23)
+  open_hour?: number;
+
+  @ApiPropertyOptional({ example: 23, description: 'Daily closing hour 1-24 (exclusive; 24 = midnight)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  close_hour?: number;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Sunday (0=Sun … 6=Sat)' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_0?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Monday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_1?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Tuesday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_2?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Wednesday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_3?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Thursday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_4?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Friday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_5?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Venue closed all day on Saturday' })
+  @IsOptional()
+  @IsBoolean()
+  closed_day_6?: boolean;
 }

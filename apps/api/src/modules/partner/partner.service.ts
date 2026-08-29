@@ -31,6 +31,11 @@ type DB = PostgresJsDatabase<typeof schema>;
 
 const UPCOMING_STATUSES = sql`${matches.status} IN ('Open', 'Full', 'InProgress')`;
 
+/** P1-25: how many dur-minute slots fit in [startMins, endMins). */
+function windowCapacity(startMins: number, endMins: number, dur: number): number {
+  return endMins > startMins ? Math.floor((endMins - startMins) / dur) : 0;
+}
+
 @Injectable()
 export class PartnerService {
   constructor(
@@ -72,6 +77,16 @@ export class PartnerService {
         owner_id: venues.owner_id,
         owner_name: users.full_name,
         pitch_count: sql<number>`(select count(*)::int from ${pitches} p where p.venue_id = ${venues.id})`,
+        // P1-25: hours + closed days for the partner venues edit form.
+        open_hour: venues.open_hour,
+        close_hour: venues.close_hour,
+        closed_day_0: venues.closed_day_0,
+        closed_day_1: venues.closed_day_1,
+        closed_day_2: venues.closed_day_2,
+        closed_day_3: venues.closed_day_3,
+        closed_day_4: venues.closed_day_4,
+        closed_day_5: venues.closed_day_5,
+        closed_day_6: venues.closed_day_6,
       })
       .from(venues)
       .innerJoin(users, eq(users.id, venues.owner_id))
@@ -105,7 +120,12 @@ export class PartnerService {
    */
   async updateVenue(actorId: string, actorRole: string, venueId: string, dto: UpdateVenuePartnerDto) {
     const [venue] = await this.db
-      .select({ id: venues.id, owner_id: venues.owner_id })
+      .select({
+        id: venues.id,
+        owner_id: venues.owner_id,
+        open_hour: venues.open_hour,
+        close_hour: venues.close_hour,
+      })
       .from(venues)
       .where(eq(venues.id, venueId))
       .limit(1);
@@ -120,6 +140,22 @@ export class PartnerService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    // P1-25 operating hours (partial update semantics, validated in the DTO;
+    // cross-field rule enforced here: close must be after open, 24 = midnight allowed).
+    if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
+      const openHour = dto.open_hour ?? Number(venue.open_hour ?? 8);
+      const closeHour = dto.close_hour ?? Number(venue.close_hour ?? 23);
+      if (closeHour <= openHour) {
+        throw new BadRequestException('close_hour must be after open_hour.');
+      }
+      updates.open_hour = dto.open_hour;
+      updates.close_hour = dto.close_hour;
+    }
+    for (const day of [0, 1, 2, 3, 4, 5, 6]) {
+      const key = `closed_day_${day}` as keyof UpdateVenuePartnerDto;
+      const value = dto[key];
+      if (value !== undefined) updates[`closed_day_${day}`] = value;
+    }
 
     if (Object.keys(updates).length) {
       await this.db
@@ -137,6 +173,15 @@ export class PartnerService {
         amenities: venues.amenities,
         is_approved: venues.is_approved,
         owner_id: venues.owner_id,
+        open_hour: venues.open_hour,
+        close_hour: venues.close_hour,
+        closed_day_0: venues.closed_day_0,
+        closed_day_1: venues.closed_day_1,
+        closed_day_2: venues.closed_day_2,
+        closed_day_3: venues.closed_day_3,
+        closed_day_4: venues.closed_day_4,
+        closed_day_5: venues.closed_day_5,
+        closed_day_6: venues.closed_day_6,
       })
       .from(venues)
       .where(eq(venues.id, venueId))
@@ -520,6 +565,27 @@ export class PartnerService {
   ) {
     await this.assertPitchAccess(actorId, actorRole, pitchId);
 
+    // P1-25: clamp slot generation to the venue's operating hours. Riyadh-local
+    // by product convention (slots are wall-clock strings on slot_date).
+    const [venueRow] = await this.db
+      .select({
+        open_hour: venues.open_hour,
+        close_hour: venues.close_hour,
+        closed_day_0: venues.closed_day_0,
+        closed_day_1: venues.closed_day_1,
+        closed_day_2: venues.closed_day_2,
+        closed_day_3: venues.closed_day_3,
+        closed_day_4: venues.closed_day_4,
+        closed_day_5: venues.closed_day_5,
+        closed_day_6: venues.closed_day_6,
+      })
+      .from(pitches)
+      .innerJoin(venues, eq(pitches.venue_id, venues.id))
+      .where(eq(pitches.id, pitchId))
+      .limit(1);
+    const openMins = Number(venueRow?.open_hour ?? 0) * 60;
+    const closeMins = Number(venueRow?.close_hour ?? 24) * 60;
+
     const rows: Array<{
       pitch_id: string;
       slot_date: string;
@@ -536,15 +602,34 @@ export class PartnerService {
     }
     const dur = pattern.slot_duration_mins;
 
+    // P1-25: requested capacity before hours-clamping (for skipped accounting).
+    const totalCapacity =
+      pattern.weeks_ahead *
+      pattern.days_of_week.reduce(
+        (sum, dow) => sum + windowCapacity(startMins, endMins, dur),
+        0,
+      );
+
+    const closedDay = (dow: number) =>
+      Boolean(venueRow?.[`closed_day_${dow}` as keyof typeof venueRow]);
+
     const today = new Date();
     for (let w = 0; w < pattern.weeks_ahead; w++) {
       for (const dow of pattern.days_of_week) {
+        // P1-25: whole-day closure → nothing bookable on this weekday.
+        if (closedDay(dow)) continue;
+
         const date = new Date(today);
         const dayDiff = (dow - date.getDay() + 7) % 7;
         date.setDate(date.getDate() + dayDiff + w * 7);
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-        for (let m = startMins; m + dur <= endMins; m += dur) {
+        // P1-25: intersect the requested window with the venue's hours for
+        // that day — slots never spill outside opening time.
+        const from = Math.max(startMins, openMins);
+        const to = Math.min(endMins, closeMins);
+
+        for (let m = from; m + dur <= to; m += dur) {
           const hh = String(Math.floor(m / 60)).padStart(2, '0');
           const mm = String(m % 60).padStart(2, '0');
           const ehh = String(Math.floor((m + dur) / 60)).padStart(2, '0');
@@ -573,6 +658,9 @@ export class PartnerService {
       created = inserted.length;
       skipped = rows.length - created;
     }
+    // P1-25: report hour-clamped / closed-day slots as skipped so the partner
+    // sees why fewer slots appeared than the pattern requested.
+    skipped += totalCapacity - rows.length;
 
     this.realtime.broadcastOps('venues');
 
@@ -585,6 +673,43 @@ export class PartnerService {
 
     if (dto.end_time <= dto.start_time) {
       throw new BadRequestException('end_time must be after start_time.');
+    }
+
+    // P1-25: one-off slots must sit inside the venue's operating hours on an
+    // open day (slot dates/times are Riyadh-local wall clock by convention;
+    // the calendar weekday of the date string is exact via UTC midnight).
+    const [venueHours] = await this.db
+      .select({
+        open_hour: venues.open_hour,
+        close_hour: venues.close_hour,
+        closed_day_0: venues.closed_day_0,
+        closed_day_1: venues.closed_day_1,
+        closed_day_2: venues.closed_day_2,
+        closed_day_3: venues.closed_day_3,
+        closed_day_4: venues.closed_day_4,
+        closed_day_5: venues.closed_day_5,
+        closed_day_6: venues.closed_day_6,
+      })
+      .from(pitches)
+      .innerJoin(venues, eq(pitches.venue_id, venues.id))
+      .where(eq(pitches.id, pitchId))
+      .limit(1);
+    if (venueHours) {
+      const dow = new Date(`${dto.slot_date}T00:00:00Z`).getUTCDay();
+      if (venueHours[`closed_day_${dow}` as keyof typeof venueHours]) {
+        throw new BadRequestException('The venue is closed on that day.');
+      }
+      const toMins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const openMins = Number(venueHours.open_hour) * 60;
+      const closeMins = Number(venueHours.close_hour) * 60;
+      if (toMins(dto.start_time) < openMins || toMins(dto.end_time) > closeMins) {
+        throw new BadRequestException(
+          `Slot must sit inside venue opening hours (${venueHours.open_hour}:00–${venueHours.close_hour}:00).`,
+        );
+      }
     }
 
     try {

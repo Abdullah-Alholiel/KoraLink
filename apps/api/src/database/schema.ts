@@ -13,6 +13,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  smallint,
 } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -233,6 +234,18 @@ export const venues = pgTable(
     rating: doublePrecision('rating').notNull().default(0),
     is_approved: boolean('is_approved').notNull().default(false),
     is_koralink_partner: boolean('is_koralink_partner').notNull().default(false),
+    // P1-25 venue operating hours — Riyadh-local wall clock, 24h ints.
+    // open_hour/close_hour bound the bookable day (close exclusive; 24 = midnight);
+    // closed_day_N (N=0 Sunday … 6 Saturday) marks a fully closed weekday.
+    open_hour: smallint('open_hour').notNull().default(8),
+    close_hour: smallint('close_hour').notNull().default(23),
+    closed_day_0: boolean('closed_day_0').notNull().default(false),
+    closed_day_1: boolean('closed_day_1').notNull().default(false),
+    closed_day_2: boolean('closed_day_2').notNull().default(false),
+    closed_day_3: boolean('closed_day_3').notNull().default(false),
+    closed_day_4: boolean('closed_day_4').notNull().default(false),
+    closed_day_5: boolean('closed_day_5').notNull().default(false),
+    closed_day_6: boolean('closed_day_6').notNull().default(false),
     location: geography('location'),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()

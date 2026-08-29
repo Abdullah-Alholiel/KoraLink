@@ -112,7 +112,18 @@
       "loading": "جارٍ تحميل المنشآت…",
       "error": "تعذّر تحميل البيانات: {error}",
       "createFailed": "تعذّر إنشاء المنشأة",
-      "updateFailed": "تعذّر تحديث المنشأة"
+      "updateFailed": "تعذّر تحديث المنشأة",
+      "openHour": "يفتح",
+      "closeHour": "يغلق",
+      "closedDays": "أيام الإغلاق",
+      "closedDay0": "الأحد",
+      "closedDay1": "الاثنين",
+      "closedDay2": "الثلاثاء",
+      "closedDay3": "الأربعاء",
+      "closedDay4": "الخميس",
+      "closedDay5": "الجمعة",
+      "closedDay6": "السبت",
+      "hoursSummary": "يفتح {open, number}–يغلق {close, number}"
     },
     "pitches": {
       "title": "ملاعبـي",
