@@ -135,7 +135,8 @@
         "noMatchesDescription": "Try adjusting your filters or check back later.",
         "emptyMatches": "No matches yet",
         "emptyMatchesDescription": "Be the first to host a match in your area!",
-        "hostMatch": "Host a Match"
+        "hostMatch": "Host a Match",
+        "loadMore": "Load More"
     },
     "matchCard": {
         "price": "Price",

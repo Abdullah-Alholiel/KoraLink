@@ -108,11 +108,13 @@ describe('useMatches hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/matches', expect.objectContaining({}));
-      // Should return adapted matches
-      expect(result.current.data?.matches).toHaveLength(1);
-      expect(result.current.data?.matches[0].id).toBe('m1');
-      expect(result.current.data?.matches[0].title).toBe('Test Match');
-      expect(result.current.data?.matches[0].organizer.name).toBe('Ahmed');
+      // Should return adapted matches (aggregated across pages)
+      expect(result.current.matches).toHaveLength(1);
+      expect(result.current.matches[0].id).toBe('m1');
+      expect(result.current.matches[0].title).toBe('Test Match');
+      expect(result.current.matches[0].organizer.name).toBe('Ahmed');
+      // Legacy array responses carry no hasMore — paging stays disabled.
+      expect(result.current.hasMore).toBe(false);
     });
 
     it('passes date filter as query param when provided', async () => {
@@ -127,8 +129,26 @@ describe('useMatches hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockFetcher).toHaveBeenCalledWith('/matches', {
-        params: { date: '2026-08-10' },
+        params: { date: '2026-08-10', limit: '50' },
       });
+    });
+
+    it('passes the time-of-day filter through as a query param', async () => {
+      mockFetcher.mockResolvedValue([]);
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useMatches({ time: 'evening' }), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockFetcher).toHaveBeenCalledWith(
+        '/matches',
+        expect.objectContaining({
+          params: expect.objectContaining({ time: 'evening' }),
+        }),
+      );
     });
 
     it('handles error state when fetch fails', async () => {
@@ -138,10 +158,10 @@ describe('useMatches hooks', () => {
       const { result } = renderHook(() => useMatches(), { wrapper });
 
       await waitFor(() => expect(result.current.isError).toBe(true));
-      expect(result.current.data).toBeUndefined();
+      expect(result.current.matches).toHaveLength(0);
     });
 
-    it('does not pass empty filters as params', async () => {
+    it('does not pass empty filters as params (page size is always sent)', async () => {
       mockFetcher.mockResolvedValue([]);
 
       const { wrapper } = createWrapper();
@@ -152,7 +172,9 @@ describe('useMatches hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockFetcher).toHaveBeenCalledWith('/matches', {});
+      expect(mockFetcher).toHaveBeenCalledWith('/matches', {
+        params: { limit: '50' },
+      });
     });
 
     it('handles wrapped response format', async () => {
@@ -163,8 +185,40 @@ describe('useMatches hooks', () => {
       const { result } = renderHook(() => useMatches(), { wrapper });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data?.matches).toHaveLength(1);
-      expect(result.current.data?.matches[0].id).toBe('m2');
+      expect(result.current.matches).toHaveLength(1);
+      expect(result.current.matches[0].id).toBe('m2');
+      expect(result.current.total).toBe(1);
+      expect(result.current.hasMore).toBe(false);
+    });
+
+    it('flags hasMore on a full page and fetches the next page with offset', async () => {
+      const page1 = Array.from({ length: 50 }, (_, i) =>
+        makeApiMatch({ id: `m${i}` }),
+      );
+      const page2 = [makeApiMatch({ id: 'm-last' })];
+      mockFetcher
+        .mockResolvedValueOnce({ matches: page1, total: 51, hasMore: true })
+        .mockResolvedValueOnce({ matches: page2, total: 51, hasMore: false });
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useMatches(), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.matches).toHaveLength(50);
+      expect(result.current.hasMore).toBe(true);
+
+      result.current.fetchNextPage();
+
+      await waitFor(() => expect(result.current.matches).toHaveLength(51));
+      expect(result.current.matches[50].id).toBe('m-last');
+      expect(result.current.hasMore).toBe(false);
+      // Second call must carry the offset (first page had 50 rows).
+      expect(mockFetcher).toHaveBeenLastCalledWith(
+        '/matches',
+        expect.objectContaining({
+          params: expect.objectContaining({ offset: '50', limit: '50' }),
+        }),
+      );
     });
   });
 

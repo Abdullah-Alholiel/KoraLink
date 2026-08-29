@@ -29,10 +29,13 @@ export default function PlayPage() {
 
     // ── Data fetching via React Query ──
     const {
-        data,
+        matches,
         isLoading,
         error,
         refetch,
+        hasMore,
+        fetchNextPage,
+        isFetchingNextPage,
     } = useMatches({
         date: selectedDate,
         lat: coords?.lat ?? null,
@@ -40,9 +43,9 @@ export default function PlayPage() {
         format: filters.format,
         gender: filters.gender,
         maxPrice: filters.maxPrice,
+        time: filters.time,
     });
 
-    const matches = data?.matches ?? [];
     const storeUser = useAppStore(selectUser);
     const currentUserId = storeUser?.id;
 
@@ -157,7 +160,7 @@ export default function PlayPage() {
             )}
 
             {/* 3. Empty State (only when API returns empty array or search has no results) */}
-            {!isLoading && !error && data && filteredMatches.length === 0 && (
+            {!isLoading && !error && filteredMatches.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 px-8">
                     <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <Trophy className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
@@ -186,8 +189,22 @@ export default function PlayPage() {
                 />
             )}
 
+            {/* 6. Load More — server-side pagination (P1-19); hidden when the
+                last page is reached. */}
+            {!isLoading && !error && filteredMatches.length > 0 && hasMore && (
+                <div className="flex justify-center py-6">
+                    <button
+                        onClick={fetchNextPage}
+                        disabled={isFetchingNextPage}
+                        className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                        {isFetchingNextPage ? t('common.loading') : t('play.loadMore')}
+                    </button>
+                </div>
+            )}
+
             {/* 5. Edge Case — offline/connection error indicator */}
-            {error && !isLoading && !data && (
+            {error && !isLoading && (
                 <div className="mx-4 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
                     <p className="text-xs text-amber-700 font-medium">
                         {t('common.offlineBanner')}

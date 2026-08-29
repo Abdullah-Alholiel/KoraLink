@@ -163,4 +163,15 @@ export class GetMatchesDto {
   @Min(1)
   @Max(50)
   limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Number of matches to skip (keyset-free paging; default 0)',
+    example: 50,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  @Max(100000)
+  offset?: number;
 }

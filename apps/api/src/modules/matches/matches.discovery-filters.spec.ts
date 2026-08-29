@@ -184,3 +184,47 @@ describe('MatchesService.findNearby gender + limit', () => {
     expect(params).toContain(50);
   });
 });
+
+describe('MatchesService.findNearby pagination envelope (run #13, P1-19)', () => {
+  it('applies the offset param to the SQL OFFSET', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({ offset: 50 } as GetMatchesDto, 'user-1');
+    expect(params).toContain(50); // offset bound value
+  });
+
+  it('defaults to OFFSET 0 and returns an empty envelope for an empty page', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    const result = await svc.findNearby({} as GetMatchesDto, 'user-1');
+    expect(params).toContain(0); // OFFSET 0 default
+    expect(result).toEqual({ matches: [], total: undefined, hasMore: false });
+  });
+
+  it('exposes the window-function total and computes hasMore from offset+rows', async () => {
+    const db = {
+      execute: async () => [
+        { id: 'm1', total_count: 120 },
+        { id: 'm2', total_count: 120 },
+      ],
+    };
+    const svc = new MatchesService(
+      db as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { getNumber: async () => 0 } as never,
+      {} as never,
+    );
+    const result = await svc.findNearby({} as GetMatchesDto, 'user-1');
+    expect(result.total).toBe(120);
+    expect(result.matches).toHaveLength(2);
+    expect(result.matches[0]).not.toHaveProperty('total_count'); // stripped
+    expect(result.hasMore).toBe(true); // 0 + 2 < 120
+  });
+});

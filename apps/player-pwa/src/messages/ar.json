@@ -135,7 +135,8 @@
         "noMatchesDescription": "حاول تعديل التصفية أو تحقق لاحقاً.",
         "emptyMatches": "لا توجد مباريات بعد",
         "emptyMatchesDescription": "كن أول من يستضيف مباراة في منطقتك!",
-        "hostMatch": "استضف مباراة"
+        "hostMatch": "استضف مباراة",
+        "loadMore": "عرض المزيد"
     },
     "matchCard": {
         "price": "السعر",

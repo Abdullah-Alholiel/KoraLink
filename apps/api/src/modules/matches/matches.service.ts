@@ -553,7 +553,10 @@ export class MatchesService {
    *   ST_DWithin(m.location, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, radiusMetres)
    * returns true when the great-circle distance (metres) is within the radius.
    */
-  async findNearby(dto: GetMatchesDto, currentUserId?: string): Promise<NearbyMatchRow[]> {
+  async findNearby(
+    dto: GetMatchesDto,
+    currentUserId?: string,
+  ): Promise<{ matches: NearbyMatchRow[]; total?: number; hasMore: boolean }> {
     const {
       lat,
       lng,
@@ -565,6 +568,7 @@ export class MatchesService {
       venue_id,
       time,
       limit,
+      offset,
     } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
@@ -650,7 +654,8 @@ export class MatchesService {
         COALESCE(
           m.completed_at,
           m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')
-        ) + INTERVAL '24 hours'    AS voting_closes_at
+        ) + INTERVAL '24 hours'    AS voting_closes_at,
+        COUNT(*) OVER()::int       AS total_count
       FROM matches m
       INNER JOIN users   u  ON u.id  = m.host_id
       INNER JOIN pitches p  ON p.id  = m.pitch_id
@@ -704,9 +709,20 @@ export class MatchesService {
             : sql`m.scheduled_at ASC`
         }
       LIMIT ${limit ?? 50}
+      OFFSET ${offset ?? 0}
     `);
 
-    return rows as unknown as NearbyMatchRow[];
+    // Envelope contract (P1-19): total_count is the pre-LIMIT match count
+    // (window function, computed after WHERE/GROUP BY), so the client can
+    // page without a second COUNT query. hasMore ⇒ another page exists.
+    const list = rows as unknown as (NearbyMatchRow & { total_count?: number })[];
+    const total = typeof list[0]?.total_count === 'number' ? list[0].total_count : undefined;
+    const items = list.map(({ total_count: _tc, ...rest }) => rest);
+    return {
+      matches: items as NearbyMatchRow[],
+      total,
+      hasMore: (offset ?? 0) + items.length < (total ?? 0),
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

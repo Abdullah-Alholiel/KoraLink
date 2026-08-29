@@ -73,13 +73,12 @@ export default function ClubPage() {
 
   // ── Fetch matches for this venue ──────────────────────────
   // No date → ALL upcoming matches (grouped by day). A date → that day only.
-  const { data: matchesApi, isLoading: matchesLoading } = useMatches({
+  const { matches, isLoading: matchesLoading } = useMatches({
     date: dateStr,
     venue_id: id,
   });
 
-  // useMatches already adapts + returns { matches: Match[] } — do NOT re-adapt
-  const matches = matchesApi?.matches ?? [];
+  // useMatches returns adapted Match[] already — do NOT re-adapt
 
   const storeUser = useAppStore(selectUser);
   const currentUserId = storeUser?.id;
