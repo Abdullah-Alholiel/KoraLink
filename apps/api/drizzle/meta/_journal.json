@@ -169,6 +169,13 @@
       "when": 1788019023940,
       "tag": "0023_ordinary_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788041082195,
+      "tag": "0024_lazy_stellaris",
+      "breakpoints": true
     }
   ]
 }
