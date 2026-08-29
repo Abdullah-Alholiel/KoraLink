@@ -32,6 +32,8 @@ export type ActivityVerb =
   | 'no_show_marked'
   // ── Underfill protection (system→host / system→players) ──
   | 'host_underfilled_nudge'
+  // ── Host moderation ──
+  | 'player_removed'
   | 'match_auto_cancelled';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
@@ -48,6 +50,7 @@ const DIRECTED_VERBS = [
   'account_unbanned',
   'no_show_marked',
   'host_underfilled_nudge',
+  'player_removed',
   'match_auto_cancelled',
 ] as const;
 

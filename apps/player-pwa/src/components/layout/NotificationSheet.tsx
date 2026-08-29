@@ -8,6 +8,7 @@ import {
   Plus,
   Users,
   UserPlus,
+  UserMinus,
   MessageSquare,
   Trophy,
   CheckCheck,
@@ -47,6 +48,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   account_unbanned: ShieldCheck,
   no_show_marked: AlertTriangle,
   host_underfilled_nudge: UserPlus,
+  player_removed: UserMinus,
   match_auto_cancelled: XCircle,
 };
 
@@ -65,6 +67,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   account_unbanned: 'notifications.accountUnbanned',
   no_show_marked: 'notifications.noShowMarked',
   host_underfilled_nudge: 'notifications.hostUnderfilledNudge',
+  player_removed: 'notifications.playerRemoved',
   match_auto_cancelled: 'notifications.matchAutoCancelled',
 };
 

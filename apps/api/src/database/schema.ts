@@ -111,6 +111,11 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'account_banned',
   'account_unbanned',
   'no_show_marked',
+  // ── Out-of-band applied (present in live DB, see run #14 notes) ──
+  'host_underfilled_nudge',
+  'match_auto_cancelled',
+  // ── Host moderation ──
+  'player_removed',
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

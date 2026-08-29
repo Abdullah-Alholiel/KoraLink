@@ -252,6 +252,18 @@ export class MatchesController {
     return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
   }
 
+  // ── DELETE /matches/:id/players/:playerId — Host removes a player ──────
+  @Delete(':id/players/:playerId')
+  @ApiOperation({ summary: 'Remove a player from the roster (Host only, pre-match)' })
+  @ApiOkResponse({ description: 'Player removed; fully populated match returned.' })
+  removePlayer(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Param('playerId') playerId: string,
+  ) {
+    return this.matchesService.removePlayer(user.sub, id, playerId);
+  }
+
   // ── POST /matches/:id/dispute — Open a dispute (e.g. appeal a no-show) ──
   @Post(':id/dispute')
   @HttpCode(HttpStatus.CREATED)

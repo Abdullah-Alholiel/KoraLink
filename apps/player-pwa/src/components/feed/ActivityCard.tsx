@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Plus, Users, UserPlus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, type LucideIcon } from 'lucide-react';
+import { Plus, Users, UserPlus, UserMinus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, type LucideIcon } from 'lucide-react';
 import type { FeedItem, ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
 
@@ -26,6 +26,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   account_unbanned: ShieldCheck,
   no_show_marked: AlertTriangle,
   host_underfilled_nudge: UserPlus,
+  player_removed: UserMinus,
   match_auto_cancelled: XCircle,
 };
 
@@ -44,6 +45,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   account_unbanned: 'feed.accountUnbanned',
   no_show_marked: 'feed.noShowMarked',
   host_underfilled_nudge: 'feed.hostUnderfilledNudge',
+  player_removed: 'feed.playerRemoved',
   match_auto_cancelled: 'feed.matchAutoCancelled',
 };
 

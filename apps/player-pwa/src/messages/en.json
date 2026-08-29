@@ -208,6 +208,9 @@
         "statusInProgressDesc": "This match is currently in progress.",
         "matchFull": "Match Full",
         "openSlot": "Open",
+        "removeFromMatch": "Remove from match",
+        "confirmRemove": "Tap again to confirm removal",
+        "playerRemovedToast": "Player removed from the match",
         "private": "Private",
         "privateBannerTitle": "Private match",
         "privateBannerText": "Only people with this link can see the match. Share the invite link to bring players in.",
@@ -539,7 +542,8 @@
         "accountUnbanned": "Your account ban has been lifted",
         "noShowMarked": "You were marked as a no-show",
         "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
-        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached"
+        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
+        "playerRemoved": "{name} removed you from a match"
     },
     "payment": {
         "title": "Checkout",
@@ -695,7 +699,8 @@
         "accountUnbanned": "Your account ban has been lifted",
         "noShowMarked": "You were marked as a no-show",
         "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
-        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached"
+        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
+        "playerRemoved": "{name} removed you from a match"
     },
     "attendance": {
         "title": "Attendance",

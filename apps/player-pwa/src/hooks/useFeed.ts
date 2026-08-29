@@ -19,6 +19,7 @@ export type ActivityVerb =
   | 'account_unbanned'
   | 'no_show_marked'
   | 'host_underfilled_nudge'
+  | 'player_removed'
   | 'match_auto_cancelled';
 
 export interface FeedItem {

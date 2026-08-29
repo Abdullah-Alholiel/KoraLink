@@ -1901,6 +1901,105 @@ export class MatchesService {
   }
 
   /**
+   * Host removes a player from the roster (P1-24). Pre-match only: once a
+   * match is InProgress/Completed the roster is the attendance record and
+   * the no-show flow (markNoShow + dispute) is the correct lever instead.
+   * The host cannot "remove" themselves — cancelling is that flow's exit.
+   * Full → Open so the freed spot is immediately joinable; the removed
+   * player is told via a directed activity (bell/feed) + best-effort push.
+   * Returns the fully populated match (API Contract Rule §2), findOne OUTSIDE tx.
+   */
+  async removePlayer(hostId: string, matchId: string, targetUserId: string) {
+    if (targetUserId === hostId) {
+      throw new BadRequestException(
+        'Hosts cannot remove themselves — cancel the match instead.',
+      );
+    }
+
+    await this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({
+          id: matches.id,
+          host_id: matches.host_id,
+          status: matches.status,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+
+      if (match.host_id !== hostId) {
+        throw new ForbiddenException('Only the match host can remove players.');
+      }
+
+      if (match.status === 'InProgress' || match.status === 'Completed') {
+        throw new BadRequestException(
+          'Players can only be removed before the match starts.',
+        );
+      }
+
+      const [player] = await tx
+        .select({ id: schema.match_players.id })
+        .from(schema.match_players)
+        .where(
+          and(
+            eq(schema.match_players.match_id, matchId),
+            eq(schema.match_players.user_id, targetUserId),
+          ),
+        )
+        .limit(1);
+
+      if (!player) {
+        throw new NotFoundException('Player is not in the match roster.');
+      }
+
+      await tx
+        .delete(schema.match_players)
+        .where(eq(schema.match_players.id, player.id));
+
+      if (match.status === 'Full') {
+        await tx
+          .update(matches)
+          .set(withTimestamp({ status: 'Open' }))
+          .where(eq(matches.id, matchId));
+      }
+    });
+
+    const updatedMatch = await this.findOne(matchId);
+    try {
+      this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on removePlayer: ${(err as Error).message}`);
+    }
+
+    // Removed-player notification — record() fans out to feed + bell. The
+    // recipient is the TARGET (not the actor), so excludeActor stays false.
+    // Best-effort: the removal itself is already committed.
+    try {
+      await this.activitiesService.record({
+        actorId: hostId,
+        verb: 'player_removed',
+        matchId,
+        recipients: [targetUserId],
+        excludeActor: false,
+      });
+      await this.notificationsService.sendPushToUsers([targetUserId], {
+        title: '⚠️ Removed from match',
+        body: `The host removed you from "${updatedMatch.title}".`,
+        data: { type: 'match-chat', matchId },
+      });
+    } catch (err) {
+      this.logger.error(`removePlayer notification failed for ${matchId}: ${(err as Error).message}`);
+    }
+
+    return updatedMatch;
+  }
+
+  /**
    * Opens a dispute on a match (most commonly a player appealing a no-show
    * mark). Only match participants can open one, and a `no_show` appeal
    * requires the player to actually have been marked no-show.

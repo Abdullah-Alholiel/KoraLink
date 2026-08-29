@@ -268,3 +268,22 @@ export function useMarkNoShow(matchId: string) {
     },
   });
 }
+
+// ─── Remove Player (Host, pre-match) ─────────────────
+
+export function useRemovePlayer(matchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Match, Error, { targetUserId: string }>({
+    mutationFn: async ({ targetUserId }) => {
+      const raw = await fetcher<MatchDetailApi>(
+        `/matches/${matchId}/players/${targetUserId}`,
+        { method: 'DELETE' },
+      );
+      return adaptMatchDetail(raw);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+    },
+  });
+}

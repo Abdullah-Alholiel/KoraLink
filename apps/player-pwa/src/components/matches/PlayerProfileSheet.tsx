@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { X, Trophy, Users, Loader2, AlertTriangle, Flag } from 'lucide-react';
+import { X, Trophy, Users, Loader2, AlertTriangle, Flag, UserMinus } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
 import FollowButton from '@/components/features/FollowButton';
@@ -14,15 +14,26 @@ import type { RosterPlayer } from '@/types';
 interface PlayerProfileSheetProps {
     player: RosterPlayer | null;
     onClose: () => void;
+    /** Host-only: show the roster-removal action for this player (pre-match). */
+    showRemove?: boolean;
+    removePending?: boolean;
+    onRemove?: () => void;
 }
 
-export default function PlayerProfileSheet({ player, onClose }: PlayerProfileSheetProps) {
+export default function PlayerProfileSheet({ player, onClose, showRemove = false, removePending = false, onRemove }: PlayerProfileSheetProps) {
     const t = useTranslations();
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
     const storeUser = useAppStore(selectUser);
     const isSelf = player?.userId === storeUser?.id;
     const [showReport, setShowReport] = useState(false);
+    const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+    // Reset the two-step confirm whenever the sheet opens for another player.
+    const playerId = player?.userId ?? null;
+    useEffect(() => {
+        setConfirmingRemove(false);
+    }, [playerId]);
 
     if (!player) return null;
 
@@ -120,6 +131,33 @@ export default function PlayerProfileSheet({ player, onClose }: PlayerProfileShe
                         </div>
                         <FollowButton targetUserId={player.userId} size="sm" />
                     </div>
+                )}
+
+                {/* ── Host moderation: remove from roster (pre-match, host only) ── */}
+                {showRemove && !isSelf && (
+                    <button
+                        onClick={() => {
+                            if (!confirmingRemove) {
+                                setConfirmingRemove(true);
+                                return;
+                            }
+                            setConfirmingRemove(false);
+                            onRemove?.();
+                        }}
+                        disabled={removePending}
+                        className={`w-full rounded-xl shadow-card p-4 mb-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors ${
+                            confirmingRemove
+                                ? 'bg-brand-red text-white'
+                                : 'bg-white text-brand-red'
+                        } disabled:opacity-50`}
+                    >
+                        {removePending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+                        ) : (
+                            <UserMinus className="w-4 h-4" strokeWidth={2} />
+                        )}
+                        {confirmingRemove ? t('matchDetail.confirmRemove') : t('matchDetail.removeFromMatch')}
+                    </button>
                 )}
 
                 {/* ── Report (hidden for self) ── */}

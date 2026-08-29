@@ -162,6 +162,13 @@
       "when": 1788002590285,
       "tag": "0022_slimy_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788019023940,
+      "tag": "0023_ordinary_korvac",
+      "breakpoints": true
     }
   ]
 }

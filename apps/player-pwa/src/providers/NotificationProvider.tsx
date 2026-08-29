@@ -85,6 +85,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
         account_unbanned: t('accountUnbanned'),
         no_show_marked: t('noShowMarked'),
         host_underfilled_nudge: t('hostUnderfilledNudge'),
+        player_removed: t('playerRemoved'),
         match_auto_cancelled: t('matchAutoCancelled'),
       };
       const message = copy[payload.verb] ?? t('newActivity');

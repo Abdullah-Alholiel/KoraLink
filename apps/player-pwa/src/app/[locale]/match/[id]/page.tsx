@@ -23,7 +23,7 @@ import {
     UserPlus,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
-import { useMarkNoShow } from '@/hooks/useMatches';
+import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
 import { useAppeal } from '@/hooks/useDisputes';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
@@ -79,6 +79,7 @@ export default function MatchDetailPage({
     const startMatch = useStartMatch();
     const completeMatch = useCompleteMatch();
     const markNoShow = useMarkNoShow(id);
+    const removePlayer = useRemovePlayer(id);
     const appeal = useAppeal(id);
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
@@ -929,6 +930,26 @@ export default function MatchDetailPage({
             <PlayerProfileSheet
                 player={selectedPlayer}
                 onClose={() => setSelectedPlayer(null)}
+                showRemove={
+                    isUserHost &&
+                    !!selectedPlayer &&
+                    !selectedPlayer.isHost &&
+                    match?.status === 'open'
+                }
+                removePending={removePlayer.isPending}
+                onRemove={() => {
+                    if (!selectedPlayer) return;
+                    const target = selectedPlayer;
+                    removePlayer.mutate(
+                        { targetUserId: target.userId },
+                        {
+                            onSuccess: () => {
+                                setSelectedPlayer(null);
+                                showToast(t('matchDetail.playerRemovedToast'), 'success');
+                            },
+                        },
+                    );
+                }}
             />
 
             <Toast />
