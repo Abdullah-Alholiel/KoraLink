@@ -407,39 +407,59 @@ export class MatchesService {
       min_players: number; total_players: number;
     }>)) {
       try {
-        // Guarded single-shot transition: rowcount 0 ⇒ cancelled concurrently.
-        const guard = await this.db.execute(sql`
-          UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
-          WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
-        `);
-        if ((guard as unknown as { rowCount?: number }).rowCount === 0) continue;
-
-        // Release a koralink slot + refund the host exactly what he was
-        // debited (same semantics as manual cancelMatch).
-        if (row.booking_mode === 'koralink' && row.booking_slot_id) {
-          const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
-          if (refundSar > 0) {
-            await this.db.execute(sql`
-              UPDATE ${users}
-              SET wallet_balance = wallet_balance + ${refundSar.toString()},
-                  updated_at = NOW()
-              WHERE id = ${row.host_id}::text
-            `);
-            await this.db.insert(transactions).values({
-              user_id: row.host_id,
-              type: 'CREDIT',
-              amount: refundSar.toString(),
-              reference_type: 'REFUND',
-              reference_id: row.id,
-              idempotency_key: `refund-${row.id}`,
-              status: 'Completed',
-            });
-          }
-          await this.db.execute(sql`
-            UPDATE pitch_slots SET is_booked = FALSE, booked_match_id = NULL,
-                   updated_at = NOW()
-            WHERE id = ${row.booking_slot_id}::text
+        // Atomic single-shot transition (P0-4): status flip + refund + ledger +
+        // slot release commit together or not at all. Before run #13 the guard
+        // UPDATE committed FIRST and the money/slot side-effects ran as separate
+        // auto-committed statements — a failure in between left a cancelled
+        // match with a permanently booked slot and a host who was never
+        // refunded (silent money loss in an automated path, no retry possible
+        // once status left Open/Full). Mirrors manual cancelMatch (in-tx
+        // release + refund from pitch_cost_sar, `refund-<id>` idempotency key).
+        let guardWon = false;
+        let releasedSlot = false;
+        let refundedSar = 0;
+        await this.db.transaction(async (tx) => {
+          const guard = await tx.execute(sql`
+            UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
+            WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
           `);
+          if ((guard as unknown as { rowCount?: number }).rowCount === 0) return;
+          guardWon = true;
+
+          // Release a koralink slot + refund the host exactly what he was
+          // debited (same semantics as manual cancelMatch).
+          if (row.booking_mode === 'koralink' && row.booking_slot_id) {
+            const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
+            if (refundSar > 0) {
+              await tx
+                .update(users)
+                .set({
+                  wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
+                  updated_at: new Date(),
+                })
+                .where(eq(users.id, row.host_id));
+
+              await tx.insert(transactions).values({
+                user_id: row.host_id,
+                type: 'CREDIT',
+                amount: refundSar.toString(),
+                reference_type: 'REFUND',
+                reference_id: row.id,
+                idempotency_key: `refund-${row.id}`,
+                status: 'Completed',
+              });
+              refundedSar = refundSar;
+            }
+            await tx
+              .update(pitch_slots)
+              .set(withTimestamp({ is_booked: false, booked_match_id: null }))
+              .where(eq(pitch_slots.id, row.booking_slot_id));
+            releasedSlot = true;
+          }
+        });
+        if (!guardWon) {
+          // Guard lost the race — the match was cancelled concurrently.
+          continue;
         }
 
         // Notify every roster player (host included) — bell + push.
@@ -464,7 +484,7 @@ export class MatchesService {
         }
         cancelled += 1;
         this.logger.log(
-          `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players).`,
+          `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players, refunded=${refundedSar} SAR, slotReleased=${releasedSlot}).`,
         );
       } catch (err) {
         this.logger.error(
@@ -1758,7 +1778,10 @@ export class MatchesService {
           }
         } else {
           // Host cleared the mark — close the auto-opened dispute so the
-          // admin queue never shows stale entries.
+          // admin queue never shows stale entries. Only 'opened' rows close
+          // (P1-21): a dispute already taken by an admin ('under_review') is
+          // an in-flight human review and must not be silently rejected just
+          // because the host backed out.
           await tx
             .update(disputes)
             .set(
@@ -1772,7 +1795,7 @@ export class MatchesService {
                 eq(disputes.match_id, matchId),
                 eq(disputes.reporter_id, targetUserId),
                 eq(disputes.type, 'no_show'),
-                inArray(disputes.status, ['opened', 'under_review']),
+                eq(disputes.status, 'opened'),
               ),
             );
         }

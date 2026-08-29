@@ -1,6 +1,8 @@
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { MatchesService } from './matches.service';
 import { matches, match_players, disputes } from '../../database/schema';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 /**
  * markNoShow roster-guard regression specs. Before the fix, the service read
@@ -90,5 +92,65 @@ describe('MatchesService.markNoShow roster guard', () => {
     const svc = makeService({ id: 'mp-1', no_show: false });
     const result = await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
     expect(result.id).toBe(MATCH_ID);
+  });
+
+  /**
+   * P1-21 regression (run #13): clearing the mark used to close the
+   * auto-opened dispute with `status IN ('opened','under_review')`, silently
+   * rejecting a dispute an admin had already picked up ('under_review').
+   * The closure must now target `status = 'opened'` only.
+   */
+  it('clearing a mark closes only OPEN disputes, never admin under_review rows', async () => {
+    let capturedWhere: unknown;
+    function thenable(): { then: (r: (v: unknown) => void) => void } {
+      return { then: (r: (v: unknown) => void) => r([]) };
+    }
+    const tx = {
+      select: () => ({
+        from: (table: unknown) => {
+          const chain: any = { where: () => chain, limit: () => chain };
+          chain.then = (resolve: (v: unknown) => void) => {
+            if (table === matches) resolve([baseMatch]);
+            else if (table === match_players) resolve([{ id: 'mp-1', no_show: true }]);
+            else resolve([]); // disputes select → no existing open row
+          };
+          return chain;
+        },
+      }),
+      update: (table: unknown) => ({
+        set: () => ({
+          where: (whereArg: unknown) => {
+            if (table === disputes) capturedWhere = whereArg;
+            return thenable();
+          },
+        }),
+      }),
+      insert: () => ({ values: () => thenable() }),
+    };
+    const db = {
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
+      query: {
+        matches: {
+          findFirst: async () => ({ id: MATCH_ID, status: 'Completed', messages: [] }),
+        },
+      },
+    };
+    const svc = new MatchesService(
+      db as never,
+      {} as never,
+      { broadcastRosterUpdate: () => {} } as never,
+      {} as never,
+      { record: async () => {} } as never,
+      { getNumber: async () => 0 } as never,
+      { broadcastOps: () => {} } as never,
+    );
+
+    // Host CLEARS the mark (noShow=false) on a currently-marked player.
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
+
+    expect(capturedWhere).toBeDefined();
+    const sqlText = new PgDialect().sqlToQuery(capturedWhere as SQL).sql;
+    expect(sqlText).toContain('"disputes"."status" =');
+    expect(sqlText).not.toContain('in (');
   });
 });
