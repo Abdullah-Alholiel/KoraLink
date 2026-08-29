@@ -276,32 +276,42 @@ export default function ProfilePage() {
                                         </span>
                                     </button>
                                     {prefs.quiet_hours_enabled && (
-                                        <div className="mt-3 flex items-center justify-center gap-3" dir="ltr">
-                                            <select
-                                                aria-label={t('profile.quietFrom')}
-                                                value={prefs.quiet_start_hour}
-                                                onChange={(e) =>
-                                                    mutatePrefs({ quietStartHour: Number(e.target.value) })
-                                                }
-                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
-                                            >
-                                                {HOURS.map((h) => (
-                                                    <option key={h} value={h}>{h}:00</option>
-                                                ))}
-                                            </select>
-                                            <span className="text-sm text-gray-400">→</span>
-                                            <select
-                                                aria-label={t('profile.quietTo')}
-                                                value={prefs.quiet_end_hour}
-                                                onChange={(e) =>
-                                                    mutatePrefs({ quietEndHour: Number(e.target.value) })
-                                                }
-                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
-                                            >
-                                                {HOURS.map((h) => (
-                                                    <option key={h} value={h}>{h}:00</option>
-                                                ))}
-                                            </select>
+                                        <div className="mt-3">
+                                            <div className="flex items-center justify-center gap-3" dir="ltr">
+                                                <select
+                                                    aria-label={t('profile.quietFrom')}
+                                                    value={prefs.quiet_start_hour}
+                                                    onChange={(e) =>
+                                                        mutatePrefs({ quietStartHour: Number(e.target.value) })
+                                                    }
+                                                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
+                                                >
+                                                    {HOURS.map((h) => (
+                                                        <option key={h} value={h}>{h}:00</option>
+                                                    ))}
+                                                </select>
+                                                <span className="text-sm text-gray-400">→</span>
+                                                <select
+                                                    aria-label={t('profile.quietTo')}
+                                                    value={prefs.quiet_end_hour}
+                                                    onChange={(e) =>
+                                                        mutatePrefs({ quietEndHour: Number(e.target.value) })
+                                                    }
+                                                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
+                                                >
+                                                    {HOURS.map((h) => (
+                                                        <option key={h} value={h}>{h}:00</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {prefs.quiet_start_hour === prefs.quiet_end_hour && (
+                                                <p
+                                                    role="status"
+                                                    className="mt-2 text-center text-xs text-amber-600"
+                                                >
+                                                    {t('profile.quietEqualWarn')}
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>

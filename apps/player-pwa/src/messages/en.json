@@ -370,6 +370,7 @@
         "quietHours": "Quiet hours",
         "quietFrom": "Quiet from",
         "quietTo": "Quiet until",
+        "quietEqualWarn": "Same start and end time mutes notifications all day.",
         "language": "Language",
         "theme": "Theme",
         "dark": "Dark",
