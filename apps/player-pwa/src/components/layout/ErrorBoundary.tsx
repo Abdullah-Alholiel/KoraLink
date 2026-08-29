@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { captureError } from '@/providers/ObservabilityProvider';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -27,6 +28,11 @@ export default class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // P2-16: ship to Sentry (console kept for local dev visibility).
+    captureError(error, {
+      scope: 'errorBoundary',
+      componentStack: errorInfo.componentStack ?? undefined,
+    });
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
   }
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetcher } from '@/lib/fetcher';
+import { captureError } from '@/providers/ObservabilityProvider';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -71,6 +72,8 @@ export function usePushNotifications(locale: string = 'en') {
 
       return true;
     } catch (err) {
+      // P2-16: ship to Sentry (console kept for local dev visibility).
+      captureError(err, { scope: 'pushSubscribe' });
       console.error('[Push] Failed to subscribe:', err);
       return false;
     } finally {
@@ -89,6 +92,8 @@ export function usePushNotifications(locale: string = 'en') {
         setSubscription(null);
       }
     } catch (err) {
+      // P2-16: ship to Sentry (console kept for local dev visibility).
+      captureError(err, { scope: 'pushUnsubscribe' });
       console.error('[Push] Failed to unsubscribe:', err);
     }
   }, [subscription]);

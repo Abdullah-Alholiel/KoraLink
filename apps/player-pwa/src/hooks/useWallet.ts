@@ -26,12 +26,24 @@ export function useWalletBalance() {
 
 // ─── Fetch Wallet History ───────────────────────────
 
-export function useWalletHistory() {
-  return useQuery<{ transactions: Transaction[] }, FetchError>({
-    queryKey: ['wallet', 'history'],
+export function useWalletHistory(params?: { page?: number; perPage?: number }) {
+  const { page = 1, perPage = 20 } = params ?? {};
+  return useQuery<{ transactions: Transaction[]; total?: number }, FetchError>({
+    // P2-15: the key MUST carry page/perPage — a bare ['wallet','history']
+    // cached page 1 forever and changing the page never refetched.
+    queryKey: ['wallet', 'history', { page, perPage }],
     queryFn: async () => {
-      const raw = await fetcher<{ transactions: TransactionApi[]; total: number; hasMore: boolean }>('/wallet/history');
-      return { transactions: adaptTransactionList(raw.transactions) };
+      const raw = await fetcher<{
+        transactions: TransactionApi[];
+        total: number;
+        hasMore: boolean;
+      }>('/wallet/history', {
+        params: { page: String(page), perPage: String(perPage) },
+      });
+      return {
+        transactions: adaptTransactionList(raw.transactions),
+        total: raw.total,
+      };
     },
     staleTime: 60_000,
     retry: false,

@@ -383,6 +383,12 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @MessageBody() data: { conversationId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
+    // P2-6: every handler authenticates — no exceptions (also closes the
+    // window where an event arrives before handleConnection's async
+    // disconnect completes). A participant check is DELIBERATELY omitted:
+    // leave only shrinks the caller's own event surface, and blocking the
+    // leave of a since-removed participant would trap them in the room.
+    if (!client.userId) throw new WsException('Unauthenticated');
     await client.leave(`conv:${data.conversationId}`);
   }
 

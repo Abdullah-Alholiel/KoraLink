@@ -107,7 +107,10 @@ describe('useWallet hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockFetcher).toHaveBeenCalledWith('/wallet/history');
+      // P2-15: paging params are ALWAYS sent and are part of the query key.
+      expect(mockFetcher).toHaveBeenCalledWith('/wallet/history', {
+        params: { page: '1', perPage: '20' },
+      });
       expect(result.current.data?.transactions).toHaveLength(1);
       const txn = result.current.data!.transactions[0];
       expect(txn.id).toBe('txn_1');
@@ -115,6 +118,22 @@ describe('useWallet hooks', () => {
       expect(txn.category).toBe('match_payment');
       expect(txn.amount).toBe(45);
       expect(txn.currency).toBe('SAR');
+    });
+
+    it('sends page 2 params when asked (query key varies by page)', async () => {
+      mockFetcher.mockResolvedValue({ transactions: [], total: 0, hasMore: false });
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(
+        () => useWalletHistory({ page: 2, perPage: 50 }),
+        { wrapper },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockFetcher).toHaveBeenCalledWith('/wallet/history', {
+        params: { page: '2', perPage: '50' },
+      });
     });
 
     it('handles empty transaction history', async () => {

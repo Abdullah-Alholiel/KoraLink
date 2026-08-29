@@ -352,6 +352,7 @@ export class MatchesService {
              OR m.last_nudge_at < NOW() - INTERVAL '1 hour')
         AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
               < m.min_players
+      ORDER BY m.scheduled_at ASC
       LIMIT 50
     `);
 
@@ -398,6 +399,7 @@ export class MatchesService {
         AND m.scheduled_at <= NOW() + INTERVAL '60 minutes'
         AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
               < m.min_players
+      ORDER BY m.scheduled_at ASC
       LIMIT 50
     `);
 
