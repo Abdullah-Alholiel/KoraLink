@@ -1,14 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 11,
-  "last_run_at": "2026-08-28T23:22:19Z",
+  "last_run": 12,
+  "last_run_at": "2026-08-29T01:15:00Z",
   "last_run_commits": [
-    "6ad7524"
+    "12f9f2d",
+    "035bad9",
+    "96440d3",
+    "156775d"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-28T23-22Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-29T01-15Z.md",
   "in_review_items": [
-    "P2-10 wallet recordTransaction idempotent replay (6ad7524): replay returns 201 {replayed:true, original entry} + race-path replay — verify gates + re-probe same-key topup double-fire (balance must move once)"
+    "P1-2 time-of-day discovery filter (12f9f2d): API ?time=morning|afternoon|evening|night (Riyadh TZ, night wraps midnight) + FilterBar chips + en/ar i18n — next run: re-run gates (jest+vitest+tsc+build) and one live probe (e.g. ?time=evening on restarted service); expect bogus token 400",
+    "035bad9 eslint fixes: usePushNotifications locale dep + PostMatchSection mock rewrite + unused import — verify lint stays clean and PostMatchSection URL assertion still passes"
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
@@ -19,5 +23,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #11 (manual early, 23:22Z, time-boxed to 01:05Z): TWO-scoped-reviewer dispatch WORKED (141s/137s, no timeout — fixes runs #9/#10). Run #10's P2-17 verified PASS (Reviewer B independent + vitest 227/227 + health clean) → t_cc69d8d4 mirror card stale (5th stale card found; 4 in run #10). KEY DISCOVERY: my own tool output display-masks phone numbers (+966 5x xxx 0001 shows as +966****0001) — this generated 2 false-positive reviewer findings (seed phones, push handler) and nearly a wasted build slice; VERIFY SUSPICIOUS STRING FINDINGS WITH od -c BEFORE BOARDING. Built P2-10 (6ad7524): recordTransaction replay returns 201 {replayed:true, ORIGINAL entry, current balance} for both sequential pre-check and unique-violation race (re-select outside aborted tx); isUniqueViolation() 23505 guard; 5 jest cases; jest 112/112, vitest 227/227, tsc 0, build 3/3; live probe dev-login→topup→same-key replay: 201 replayed:true same ledger id, balance 725→726→726 (no double-credit); API restarted AFTER build. Stale-card sweep: t_546c5bc1 (unban) + t_cc69d8d4 (AuthBootstrap) confirmed stale via grep. Sentry 24h: only known signatures (+1 CORS evil.example blip from run #10's own probe). Next-run priority: PWA search (top product gap, needs full 3.5h budget) > P1-12 admin i18n scaffolding > P2-12 scope-helper consistency; re-run od -c spot-checks on any phone/string finding before boarding."
+  "notes": "Run #12 (01:15Z, ~50min): GLM probe 200, two scoped reviewers returned <4min (3rd consecutive no-timeout run). Built time-of-day discovery filter (12f9f2d): TIME_WINDOWS presets -> additive Riyadh-TZ clause in findNearby (night OR-wrap), FilterBar chips + hook + en/ar i18n, 4 jest + 4 vitest cases; NO migration (pure query slice). Live-verified on restarted service: evening->18:36 match exactly, morning->0, bogus->400, filtered strict subsets of unfiltered. Fixed 3 PRE-EXISTING eslint violations in committed files (CI --max-warnings-0 gate was red: usePushNotifications locale dep, PostMatchSection mock unused params -> socket.test.ts wrapper pattern, usePwaInstall React import) = 035bad9. Boarded P1-19 (feed capped at 50, no pagination), P1-20 (no push prefs/quiet hours), P2-23 (reporters get no closure); expanded P2-13 (clubs Nearby/AvailableNow/TopRated pills are no-ops, 3 of 4 decorative). REFUTED Reviewer-B P0 'no notifications inbox' (activities.controller.ts:16 /users/me/notifications exists; NotificationSheet/Bell/BadgeHydrator consume it) — verified in code BEFORE boarding; wallet-replay verification section was accurate. P2-10 re-verified live (replay 201 replayed:true, balance moves once). TRAP RECUR: HERMES_DELEGATED_CHILD_CONTEXT=1 inherited -> kanban calls need env -u prefix. Route note: discovery is GET /matches (controller matches.controller.ts:46), NOT /matches/nearby. API tests run via jest (not vitest). allFormats ar.json drift (كل الصيغ) caught+restored to جميع الصيغ. Next-run priority: P1-19 feed pagination (full 2h slice) > P1-20 push prefs or P1-12 admin i18n."
 }
