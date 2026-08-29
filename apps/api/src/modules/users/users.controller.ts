@@ -16,6 +16,7 @@ import {
 
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -76,6 +77,17 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  // ── PATCH /users/me/push-preferences — P1-20 (run #13) ──
+  @Patch('me/push-preferences')
+  @ApiOperation({ summary: 'Update push delivery preferences (mute, quiet hours)' })
+  @ApiOkResponse({ description: 'Full push preference set after the update.' })
+  updatePushPreferences(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: UpdatePushPreferencesDto,
+  ) {
+    return this.usersService.updatePushPreferences(user.sub, dto);
   }
 
   // ── GET /users/:id — Public profile ──────────────────────

@@ -190,6 +190,12 @@ export const users = pgTable('users', {
   home_lng: doublePrecision('home_lng'),
   banned_at: timestamp('banned_at', { withTimezone: true }),
   suspended_until: timestamp('suspended_until', { withTimezone: true }),
+  // ── Push delivery preferences (P1-20, run #13) ──
+  // Global kill-switch; quiet hours are Riyadh-local wall-clock hours.
+  push_muted: boolean('push_muted').notNull().default(false),
+  quiet_hours_enabled: boolean('quiet_hours_enabled').notNull().default(false),
+  quiet_start_hour: integer('quiet_start_hour').notNull().default(23),
+  quiet_end_hour: integer('quiet_end_hour').notNull().default(7),
   verification_status: verificationStatusEnum('verification_status')
     .notNull()
     .default('pending'),

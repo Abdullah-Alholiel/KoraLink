@@ -16,9 +16,11 @@ import {
     ChevronRight,
     Camera,
     Bell,
+    BellOff,
+    Moon,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
-import { useUserStats, useUserProfile } from '@/hooks/useUser';
+import { useUserStats, useUserProfile, useUpdatePushPreferences, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
@@ -96,6 +98,20 @@ export default function ProfilePage() {
         isSubscribed, isSubscribing, isSupported,
         subscribe, unsubscribe,
     } = usePushNotifications(useLocale());
+
+    // ── Push delivery preferences (P1-20) ──
+    const updatePrefs = useUpdatePushPreferences();
+    const mutatePrefs = (data: PushPreferencesInput) => updatePrefs.mutate(data);
+    const HOURS = Array.from({ length: 24 }, (_, i) => i);
+    const profileForPrefs = apiUser as
+        | (Partial<PushPreferences> & Record<string, unknown>)
+        | undefined;
+    const prefs: PushPreferences = {
+        push_muted: profileForPrefs?.push_muted ?? false,
+        quiet_hours_enabled: profileForPrefs?.quiet_hours_enabled ?? false,
+        quiet_start_hour: profileForPrefs?.quiet_start_hour ?? 23,
+        quiet_end_hour: profileForPrefs?.quiet_end_hour ?? 7,
+    };
 
     // Merge store + API data. API takes priority when available.
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
@@ -224,6 +240,73 @@ export default function ProfilePage() {
                             endText={isSubscribed ? t('profile.notificationsOn') : t('profile.notificationsOff')}
                             onClick={() => isSubscribed ? unsubscribe() : subscribe()}
                         />
+                        {mounted && isSubscribed && (
+                            <>
+                                <div className="h-px bg-gray-50 mx-4" />
+                                <MenuItem
+                                    icon={<BellOff className="w-5 h-5" strokeWidth={1.5} />}
+                                    label={t('profile.pushMute')}
+                                    endText={prefs.push_muted ? t('profile.pushOn') : t('profile.pushOff')}
+                                    onClick={() =>
+                                        mutatePrefs({ pushMuted: !prefs.push_muted })
+                                    }
+                                />
+                                <div className="px-4 py-3">
+                                    <button
+                                        type="button"
+                                        className="flex w-full items-center justify-between"
+                                        onClick={() =>
+                                            mutatePrefs({
+                                                quietHoursEnabled: !prefs.quiet_hours_enabled,
+                                            })
+                                        }
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-medium text-brand-black">
+                                            <Moon className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
+                                            {t('profile.quietHours')}
+                                        </span>
+                                        <span
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${prefs.quiet_hours_enabled ? 'bg-brand-green' : 'bg-gray-200'}`}
+                                            role="switch"
+                                            aria-checked={prefs.quiet_hours_enabled}
+                                        >
+                                            <span
+                                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${prefs.quiet_hours_enabled ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5'}`}
+                                            />
+                                        </span>
+                                    </button>
+                                    {prefs.quiet_hours_enabled && (
+                                        <div className="mt-3 flex items-center justify-center gap-3" dir="ltr">
+                                            <select
+                                                aria-label={t('profile.quietFrom')}
+                                                value={prefs.quiet_start_hour}
+                                                onChange={(e) =>
+                                                    mutatePrefs({ quietStartHour: Number(e.target.value) })
+                                                }
+                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
+                                            >
+                                                {HOURS.map((h) => (
+                                                    <option key={h} value={h}>{h}:00</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-sm text-gray-400">→</span>
+                                            <select
+                                                aria-label={t('profile.quietTo')}
+                                                value={prefs.quiet_end_hour}
+                                                onChange={(e) =>
+                                                    mutatePrefs({ quietEndHour: Number(e.target.value) })
+                                                }
+                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-brand-black"
+                                            >
+                                                {HOURS.map((h) => (
+                                                    <option key={h} value={h}>{h}:00</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
                 <div className="h-px bg-gray-50 mx-4" />

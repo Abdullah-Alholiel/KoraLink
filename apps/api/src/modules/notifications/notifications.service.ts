@@ -4,7 +4,7 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
 import * as schema from '../../database/schema';
-import { push_subscriptions, match_players } from '../../database/schema';
+import { push_subscriptions, match_players, users } from '../../database/schema';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -120,9 +120,39 @@ export class NotificationsService {
   }
 
   /**
+   * Quiet-hours test (P1-20). Riyadh-local wall clock; supports windows that
+   * wrap midnight (e.g. 23→07: quiet when hour >= 23 OR hour < 07) and
+   * same-hour windows (start === end ⇒ always quiet).
+   */
+  static isInQuietHours(
+    now: Date,
+    startHour: number,
+    endHour: number,
+    timeZone = 'Asia/Riyadh',
+  ): boolean {
+    const hour = parseInt(
+      new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        hour12: false,
+        timeZone,
+      }).format(now),
+      10,
+    );
+    if (startHour === endHour) return true;
+    if (startHour < endHour) {
+      return hour >= startHour && hour < endHour;
+    }
+    return hour >= startHour || hour < endHour; // wraps midnight
+  }
+
+  /**
    * Generic web-push to a list of users' subscribed devices (US10).
    * Gracefully no-ops when VAPID keys are not configured or the users have
    * no subscriptions. Invalid/expired subscriptions are pruned.
+   *
+   * P1-20: per-user delivery preferences are joined in and enforced —
+   * `push_muted` silences a user entirely; an enabled quiet-hours window
+   * (Riyadh-local, may wrap midnight) suppresses deliveries inside it.
    */
   async sendPushToUsers(
     userIds: string[],
@@ -138,13 +168,28 @@ export class NotificationsService {
         p256dh: push_subscriptions.p256dh,
         auth: push_subscriptions.auth,
         locale: push_subscriptions.locale,
+        push_muted: users.push_muted,
+        quiet_enabled: users.quiet_hours_enabled,
+        quiet_start: users.quiet_start_hour,
+        quiet_end: users.quiet_end_hour,
       })
       .from(push_subscriptions)
+      .innerJoin(users, eq(users.id, push_subscriptions.user_id))
       .where(inArray(push_subscriptions.user_id, userIds));
+
+    const now = new Date();
 
     let sent = 0;
 
     for (const sub of subs) {
+      // P1-20 delivery preferences.
+      if (sub.push_muted) continue;
+      if (
+        sub.quiet_enabled &&
+        NotificationsService.isInQuietHours(now, sub.quiet_start, sub.quiet_end)
+      ) {
+        continue;
+      }
       try {
         // P1-5: per-subscription locale so the SW deep-link preserves ar/en.
         const locale = sub.locale || 'en';

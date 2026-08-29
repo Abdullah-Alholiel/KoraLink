@@ -55,6 +55,42 @@ export function useUserProfile() {
   });
 }
 
+// ─── Push Delivery Preferences (P1-20) ─────────────────
+
+export interface PushPreferences {
+  push_muted: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_start_hour: number;
+  quiet_end_hour: number;
+}
+
+/** PATCH body — camelCase, matching UpdatePushPreferencesDto on the API. */
+export type PushPreferencesInput = Partial<{
+  pushMuted: boolean;
+  quietHoursEnabled: boolean;
+  quietStartHour: number;
+  quietEndHour: number;
+}>;
+
+export function useUpdatePushPreferences() {
+  const queryClient = useQueryClient();
+
+  return useMutation<PushPreferences, FetchError, PushPreferencesInput>({
+    mutationFn: (data) =>
+      fetcher<PushPreferences>('/users/me/push-preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (prefs) => {
+      // Write-through: the profile query feeds the preferences UI.
+      queryClient.setQueryData<Record<string, unknown>>(
+        ['user', 'profile'],
+        (old) => (old ? { ...old, ...prefs } : old),
+      );
+    },
+  });
+}
+
 // ─── Fetch Public Profile ──────────────────────────────
 
 export function usePublicProfile(userId: string) {

@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users, match_players, match_votes, matches, follows } from '../../database/schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -80,6 +81,10 @@ export class UsersService {
         no_show_count: true,
         home_lat: true,
         home_lng: true,
+        push_muted: true,
+        quiet_hours_enabled: true,
+        quiet_start_hour: true,
+        quiet_end_hour: true,
         created_at: true,
       },
     });
@@ -291,6 +296,48 @@ export class UsersService {
     }
 
     return updated;
+  }
+
+  /**
+   * Update the authenticated user's push delivery preferences
+   * (P1-20, run #13). Only the provided fields change. Returns the full
+   * preference set so the client can reconcile its UI in one round-trip.
+   */
+  async updatePushPreferences(
+    userId: string,
+    dto: UpdatePushPreferencesDto,
+  ) {
+    const set: Record<string, unknown> = {};
+    if (dto.pushMuted !== undefined) set.push_muted = dto.pushMuted;
+    if (dto.quietHoursEnabled !== undefined)
+      set.quiet_hours_enabled = dto.quietHoursEnabled;
+    if (dto.quietStartHour !== undefined)
+      set.quiet_start_hour = dto.quietStartHour;
+    if (dto.quietEndHour !== undefined) set.quiet_end_hour = dto.quietEndHour;
+
+    if (Object.keys(set).length > 0) {
+      await this.db
+        .update(users)
+        .set(withTimestamp(set))
+        .where(eq(users.id, userId));
+    }
+
+    const [prefs] = await this.db
+      .select({
+        push_muted: users.push_muted,
+        quiet_hours_enabled: users.quiet_hours_enabled,
+        quiet_start_hour: users.quiet_start_hour,
+        quiet_end_hour: users.quiet_end_hour,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!prefs) {
+      throw new NotFoundException('User not found.');
+    }
+
+    return prefs;
   }
 
   /**
