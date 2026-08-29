@@ -4,8 +4,8 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-29T17:5xZ (run #15 — policy change: schedule 4→3 runs/day, each run now gets the full ~3h build budget; glm-5.3 ADOPTED as permanent review model after 3-run trial; run #14 items re-verified green)
-**Last run:** #14 (see `kanban/RUNS/2026-08-29T15-15Z.md`)
+**Last updated:** 2026-08-29T20:2xZ (run #16 — first full-3h-budget run; reviewers clean, P1-27/P1-28/P2-26 added)
+**Last run:** #15 (see `kanban/RUNS/2026-08-29T17-35Z.md`)
 
 ---
 
@@ -46,6 +46,8 @@
 | P1-24 | API/Moderation | **Host cannot remove a player from a roster — FIXED run #14 (b4d098b)**: `DELETE /matches/:id/players/:playerId` (host only, pre-match only — once InProgress/Completed the no-show/dispute flow owns the roster). Ordered guards in tx (self-remove 400 → match 404 → non-host 403 → status 400 → roster 404); Full → Open flip keeps the freed spot joinable; returns populated `findOne` outside tx (contract §2); removed player notified via new `player_removed` ActivityVerb (schema + migration 0023 `ADD VALUE IF NOT EXISTS`, reconciled out-of-band live verbs) + push. PWA: `useRemovePlayer`, two-tap Remove in PlayerProfileSheet (host, open matches, non-host targets), verb wired in feed/bell/toast maps, en/ar i18n (655/655 parity). 7 jest specs. **Live E2E PASS**: create(self-mode)→join→joiner-remove-host 403→host-remove-joiner 200 (roster 2→1, populated response, status Open)→feed shows player_removed→cleanup cancel 200. (Reviewer B finding, run #14.) | matches.controller.ts:255-266; matches.service.ts removePlayer; matches.remove-player.spec.ts; drizzle/0023; PlayerProfileSheet.tsx | **DONE ✅** (run #14: b4d098b, live E2E PASS; run #15 RE-VERIFIED: jest 151/151, vitest 234/234, tsc 0, build 3/3, feed.playerRemoved en/ar labels confirmed) | — |
 | P1-25 | API/Venues | **No venue operating-hours / blockout support** — venues have no open/close times, holiday closures, or prayer/Ramadan blackouts (grep `open_hours\|operating` in schema.ts → 0); partners generate slots 24/7 and players can book 3am slots at a closed venue. Saudi-market venue-ops basic. (Reviewer B, run #14.) | schema.ts (venues table); run #14 review | TODO | — |
 | P1-26 | API/Partner | **Partner console has no match/roster visibility** — partner.controller.ts routes cover venues/pitches/slots/earnings/verification only; a venue owner cannot see today's matches, rosters, or no-shows on their own pitches (ops run blind; dispute context admin-only). (Reviewer B, run #14.) | partner.controller.ts (route inventory); run #14 review | TODO | — |
+| P1-27 | PWA/Wallet | **No wallet withdrawal / cash-out** — withdraw button only shows a `wallet.comingSoon` toast; API has no withdraw/refund endpoints (wallet.controller.ts: balance/history/topup/pay only). Hosts/partners who earn cannot cash out. (Reviewer B, run #16.) | wallet/page.tsx:178; wallet.controller.ts (route grep) | TODO | — |
+| P1-28 | API/Venues | **Venue-level discovery missing** — venues.controller.ts exposes only `GET /` and `GET /:id`: no search, city/geo filter, or pitch-availability query at venue level; match discovery filters exist but users cannot browse "pitches near me in Riyadh". (Reviewer B, run #16.) | venues.controller.ts (route inventory) | TODO | — |
 
 ## 🟡 P2 — Polish & tech debt
 
@@ -76,10 +78,13 @@
 | P2-23 | PWA/API | **Reporters never learn the outcome** — dispute/report resolution is admin-only with no user-facing "my report status" surface; the reporter gets no closure notification. Fold into a future notifications/moderation slice. | reports.service.ts (no reporter-facing read); PWA (no my-reports screen) | TODO | — |
 | P2-24 | Admin | **`apiFetch` crashes on empty/204 bodies + no timeout — FIXED run #14 (24c7388) + run #15 hardening**: 204/zero-length/non-JSON success bodies now resolve `undefined` instead of throwing SyntaxError on unconditional `res.json()`; 30s AbortController timeout surfaces "Request timed out" instead of perpetual loading. **Run #15 (Reviewer A follow-ups):** caller-supplied `signal` previously DISABLED the 30s timeout entirely — now linked via `AbortSignal.any` (with fallback to old precedence where unsupported); caller-initiated aborts are rethrown as cancellations instead of being mislabeled "timed out". (Reviewer A run #14 + run #15.) | apps/admin/src/lib/api.ts:33-60 | **DONE ✅** (run #14: 24c7388; run #15 re-verified + hardened: admin tsc 0, build 3/3, service live 200) | — |
 | P2-25 | PWA/API | **Quiet hours with equal start/end (e.g. 23→23) means muted 24/7 with no warning** — `isInQuietHours` treats `start === end` as always-quiet (notifications.service.ts:135) and the profile selects don't warn or prevent the combination; a user picking equal hours gets total silence. Add a UI hint/validation ("23:00–23:00 = always muted") or treat equal as no-op. **Run #15 addendum (Reviewer B):** quiet hours are deliverability-only — no match-critical exceptions (kickoff reminders, roster changes like `player_removed`) or per-category granularity; a user in quiet hours learns they were removed from a match only when they open the app. Category exceptions are a design decision for Abdullah. (Reviewer A run #14 + Reviewer B run #15.) | notifications.service.ts:135; profile/page.tsx quiet selects | TODO | — |
+| P2-26 | PWA | **Profile + host screens missing UX states** — `(main)/profile/page.tsx` (341 lines) has zero loading/error/empty branches (unlike wallet/messages/my-games which all implement them); `host/page.tsx:9` uses `<Suspense fallback={null}>` → blank flash instead of a skeleton. (Reviewer A, run #16, rotation focus PWA.) | apps/player-pwa/src/app/[locale]/(main)/profile/page.tsx; host/page.tsx:9 | TODO | — |
 
 ---
 
 ## Backlog (overflow — minor polish, revisit when P-lanes clear)
+
+- **OS research (run #16)**: `@serwist/background-sync` (`BackgroundSyncPlugin` + `registerRoute`, MIT, Workbox-lineage) is the natural path for P2-7 offline mutation queue — same API family the PWA's SW already uses. Caveat: the PWA worker is hand-written `worker/index.js` (not Serwist-generated), so it's either a Serwist migration or a hand-rolled IDB queue + sync-event replay. Adoption goes through a normal Gate cycle.
 
 - Admin `useLiveAdminData` opens a separate Socket.IO connection per hook instance (dashboard mounts 3 → 3 sockets + 3×30s intervals); should share one socket. `use-live-data.ts:61-86`.
 - Admin settings mutations not audit-logged and never capture `adminId`. `settings.service.ts:27-40`.
