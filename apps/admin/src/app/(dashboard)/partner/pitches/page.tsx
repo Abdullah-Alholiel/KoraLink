@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
@@ -17,6 +18,8 @@ interface SlotsResponse {
 }
 
 export default function MyPitchesPage() {
+  const t = useTranslations('partner.pitches');
+  const tc = useTranslations('common');
   const { data, loading, error, reload } = useLiveAdminData<PartnerPitch[]>('/partner/pitches', ['venues']);
   const venues = useLiveAdminData<PartnerVenueRow[]>('/partner/venues', ['venues']);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -75,7 +78,7 @@ export default function MyPitchesPage() {
       setForm((f) => ({ ...f, name: '' }));
       reload();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : 'Failed to create pitch');
+      setFormError(e instanceof Error ? e.message : t('createFailed'));
     } finally {
       setSaving(false);
     }
@@ -87,14 +90,14 @@ export default function MyPitchesPage() {
   }
 
   async function deletePitch(p: PartnerPitch) {
-    if (!window.confirm(`Delete pitch "${p.name}"? This removes its slots too.`)) return;
+    if (!window.confirm(t('deleteConfirm', { name: p.name }))) return;
     setBusyId(p.id);
     try {
       await api.delete(`/partner/pitches/${p.id}`);
       if (schedulePitchId === p.id) setSchedulePitchId(null);
       reload();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Delete failed');
+      window.alert(e instanceof Error ? e.message : t('deleteFailed'));
     } finally {
       setBusyId(null);
     }
@@ -103,15 +106,15 @@ export default function MyPitchesPage() {
   return (
     <div>
       <PageHeader
-        title="My Pitches"
-        subtitle="Configure details, pricing, availability, and bookable time slots"
+        title={t('title')}
+        subtitle={t('subtitle')}
         actions={
           <button
             onClick={() => { setShowForm((v) => !v); setFormError(null); }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? 'Cancel' : 'Add New Pitch'}
+            {showForm ? tc('cancel') : t('addNewPitch')}
           </button>
         }
       />
@@ -120,14 +123,14 @@ export default function MyPitchesPage() {
         {/* Create form */}
         {showForm && (
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Add New Pitch</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('addNewTitle')}</h2>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <select
                 value={form.venue_id}
                 onChange={(e) => setForm((f) => ({ ...f, venue_id: e.target.value }))}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
-                <option value="">Select venue…</option>
+                <option value="">{t('selectVenue')}</option>
                 {(venues.data ?? []).map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
@@ -137,25 +140,25 @@ export default function MyPitchesPage() {
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Pitch name (e.g. North Wing)"
+                placeholder={t('phPitchName')}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <select value={form.size} onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 {['5v5', '7v7', '8v8', '11v11'].map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
               <select value={form.surface_type} onChange={(e) => setForm((f) => ({ ...f, surface_type: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option value="Artificial">Artificial turf</option>
-                <option value="Grass">Grass</option>
+                <option value="Artificial">{t('surfaceArtificial')}</option>
+                <option value="Grass">{t('surfaceGrass')}</option>
               </select>
               <select value={form.environment} onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option value="Outdoor">Outdoor</option>
-                <option value="Indoor">Indoor</option>
+                <option value="Outdoor">{t('envOutdoor')}</option>
+                <option value="Indoor">{t('envIndoor')}</option>
               </select>
               <input
                 type="number"
                 value={form.hourly_rate}
                 onChange={(e) => setForm((f) => ({ ...f, hourly_rate: Number(e.target.value) }))}
-                placeholder="Hourly rate (SAR)"
+                placeholder={t('phHourlyRate')}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
             </div>
@@ -166,7 +169,7 @@ export default function MyPitchesPage() {
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create pitch
+              {t('createPitch')}
             </button>
           </div>
         )}
@@ -187,9 +190,9 @@ export default function MyPitchesPage() {
 
         {/* Pitch cards */}
         {loading ? (
-          <div className="py-10 text-sm text-gray-500">Loading pitches…</div>
+          <div className="py-10 text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="py-10 text-sm text-red-600">Failed to load: {error}</div>
+          <div className="py-10 text-sm text-red-600">{t('error', { error })}</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(data ?? []).map((p) => {
@@ -206,19 +209,19 @@ export default function MyPitchesPage() {
 
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <dt className="text-xs text-gray-500">Size</dt>
-                      <dd className="text-gray-900">{p.size}</dd>
+                      <dt className="text-xs text-gray-500">{t('size')}</dt>
+                      <dd className="text-gray-900" dir="ltr">{p.size}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-gray-500">Surface</dt>
-                      <dd className="text-gray-900">{p.surface_type}</dd>
+                      <dt className="text-xs text-gray-500">{t('surface')}</dt>
+                      <dd className="text-gray-900">{p.surface_type === 'Artificial' ? t('surfaceArtificial') : p.surface_type === 'Grass' ? t('surfaceGrass') : p.surface_type}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-gray-500">Environment</dt>
-                      <dd className="text-gray-900">{p.environment}</dd>
+                      <dt className="text-xs text-gray-500">{t('environment')}</dt>
+                      <dd className="text-gray-900">{p.environment === 'Outdoor' ? t('envOutdoor') : p.environment === 'Indoor' ? t('envIndoor') : p.environment}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-gray-500">Hourly rate</dt>
+                      <dt className="text-xs text-gray-500">{t('hourlyRate')}</dt>
                       <dd className="text-gray-900">{formatMoney(p.hourly_rate)}</dd>
                     </div>
                   </dl>
@@ -234,7 +237,7 @@ export default function MyPitchesPage() {
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <Zap className="h-4 w-4" />
-                        {schedulePitchId === p.id ? 'Close schedule' : 'Manage schedule'}
+                        {schedulePitchId === p.id ? t('closeSchedule') : t('manageSchedule')}
                       </span>
                     </button>
                     <div className="flex gap-2">
@@ -243,21 +246,21 @@ export default function MyPitchesPage() {
                         disabled={busy}
                         className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
-                        {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : p.is_active ? 'Set unavailable' : 'Set available'}
+                        {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : p.is_active ? t('setUnavailable') : t('setAvailable')}
                       </button>
                       <button
                         onClick={() => setEditing(editing?.id === p.id ? null : p)}
                         className="flex-1 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-700"
                       >
                         <span className="inline-flex items-center justify-center gap-1.5 w-full">
-                          <Pencil className="h-3.5 w-3.5" /> Edit
+                          <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
                         </span>
                       </button>
                       <button
                         onClick={() => deletePitch(p)}
                         disabled={busy}
                         className="rounded-lg border border-red-200 px-2.5 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        aria-label="Delete pitch"
+                        aria-label={t('deletePitchAria')}
                       >
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </button>
@@ -266,7 +269,7 @@ export default function MyPitchesPage() {
                 </div>
               );
             })}
-            {!data?.length && <div className="text-sm text-gray-400">No pitches yet — add one above.</div>}
+            {!data?.length && <div className="text-sm text-gray-400">{t('empty')}</div>}
           </div>
         )}
       </div>

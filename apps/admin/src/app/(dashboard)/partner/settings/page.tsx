@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { PartnerVerificationRow } from '@/lib/types';
@@ -9,6 +10,7 @@ import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerSettingsPage() {
+  const t = useTranslations('partner.settings');
   const { data, loading, error, reload } = useLiveAdminData<PartnerVerificationRow[]>('/partner/verification', ['venues']);
   const [selected, setSelected] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -56,21 +58,21 @@ export default function PartnerSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Business profile and verification" />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <div className="max-w-2xl p-8">
         {loading ? (
-          <div className="text-sm text-gray-500">Loading…</div>
+          <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">Failed to load: {error}</div>
+          <div className="text-sm text-red-600">{t('error', { error })}</div>
         ) : !data?.length ? (
-          <div className="text-sm text-gray-400">No venues associated with your account.</div>
+          <div className="text-sm text-gray-400">{t('noVenues')}</div>
         ) : (
           <div className="space-y-5">
-            {saved && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Verification submitted.</p>}
+            {saved && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{t('submitted')}</p>}
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Venue</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('venueLabel')}</label>
               <select
                 value={selectedRow?.venue_id ?? ''}
                 onChange={(e) => {
@@ -88,23 +90,23 @@ export default function PartnerSettingsPage() {
             </div>
 
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">Verification status:</span>
+              <span className="text-gray-500">{t('verificationStatus')}</span>
               <StatusBadge status={existing?.status ?? 'pending'} />
             </div>
 
             <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Legal entity name</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('legalEntityName')}</label>
                 <input
                   value={form.legal_entity_name}
                   onChange={(e) => setForm((f) => ({ ...f, legal_entity_name: e.target.value }))}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="e.g. Al-Nassr Sports Club Co."
+                  placeholder={t('phLegalEntity')}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Commercial registration</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">{t('commercialReg')}</label>
                   <input
                     value={form.commercial_reg}
                     onChange={(e) => setForm((f) => ({ ...f, commercial_reg: e.target.value }))}
@@ -112,7 +114,7 @@ export default function PartnerSettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Tax ID</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">{t('taxId')}</label>
                   <input
                     value={form.tax_id}
                     onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))}
@@ -120,15 +122,16 @@ export default function PartnerSettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">IBAN</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">{t('iban')}</label>
                   <input
                     value={form.iban}
                     onChange={(e) => setForm((f) => ({ ...f, iban: e.target.value }))}
+                    dir="ltr"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Manager name</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">{t('managerName')}</label>
                   <input
                     value={form.manager_name}
                     onChange={(e) => setForm((f) => ({ ...f, manager_name: e.target.value }))}
@@ -136,10 +139,11 @@ export default function PartnerSettingsPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Manager phone</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">{t('managerPhone')}</label>
                   <input
                     value={form.manager_phone}
                     onChange={(e) => setForm((f) => ({ ...f, manager_phone: e.target.value }))}
+                    dir="ltr"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     placeholder="+9665xxxxxxxx"
                   />
@@ -151,7 +155,7 @@ export default function PartnerSettingsPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Submit verification
+                {t('submitVerification')}
               </button>
             </div>
           </div>

@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 const styles: Record<string, string> = {
@@ -20,9 +23,18 @@ const styles: Record<string, string> = {
   suspended: 'bg-orange-100 text-orange-700',
 };
 
+/** Known wire statuses get catalog labels; unknowns fall back to the raw value. */
+const KNOWN = new Set([
+  'approved', 'active', 'completed', 'paid', 'resolved', 'pending', 'opened', 'open',
+  'under_review', 'full', 'inprogress', 'rejected', 'banned', 'failed', 'reversed',
+  'cancelled', 'suspended', 'booked', 'available', 'inactive',
+]);
+
 export default function StatusBadge({ status }: { status: string | null | undefined }) {
-  const label = status ? String(status).replace(/_/g, ' ') : 'unknown';
-  const key = (status ?? 'unknown').toLowerCase();
+  const t = useTranslations('status');
+  const raw = status ? String(status) : 'unknown';
+  const key = raw.toLowerCase();
+  const label = KNOWN.has(key) ? t(key) : raw.replace(/_/g, ' ');
   return (
     <span
       className={cn(

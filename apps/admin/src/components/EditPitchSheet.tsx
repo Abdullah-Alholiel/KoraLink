@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, Save, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { PartnerPitch } from '@/lib/types';
 
 interface EditPitchSheetProps {
@@ -18,8 +19,9 @@ export interface EditPitchValues {
   hourly_rate: number;
 }
 
-/** Inline edit panel for a pitch (PATCH /partner/pitches/:id). */
+/** Inline edit panel for a pitch (PATCH /partner/pitches/:id). Localized (en/ar). */
 export default function EditPitchSheet({ pitch, onClose, onSave }: EditPitchSheetProps) {
+  const t = useTranslations('editPitch');
   const [values, setValues] = useState<EditPitchValues | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -42,8 +44,8 @@ export default function EditPitchSheet({ pitch, onClose, onSave }: EditPitchShee
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900">Edit “{pitch.name}”</h2>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100" aria-label="Close">
+        <h2 className="text-sm font-semibold text-gray-900">{t('title', { name: pitch.name })}</h2>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100" aria-label={t('closeAria')}>
           <X className="h-4 w-4 text-gray-500" />
         </button>
       </div>
@@ -52,7 +54,7 @@ export default function EditPitchSheet({ pitch, onClose, onSave }: EditPitchShee
         <input
           value={values.name}
           onChange={(e) => setValues((v) => (v ? { ...v, name: e.target.value } : v))}
-          placeholder="Pitch name"
+          placeholder={t('phPitchName')}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
         <select
@@ -70,22 +72,22 @@ export default function EditPitchSheet({ pitch, onClose, onSave }: EditPitchShee
           onChange={(e) => setValues((v) => (v ? { ...v, surface_type: e.target.value } : v))}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="Artificial">Artificial turf</option>
-          <option value="Grass">Grass</option>
+          <option value="Artificial">{t('surfaceArtificial')}</option>
+          <option value="Grass">{t('surfaceGrass')}</option>
         </select>
         <select
           value={values.environment}
           onChange={(e) => setValues((v) => (v ? { ...v, environment: e.target.value } : v))}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="Outdoor">Outdoor</option>
-          <option value="Indoor">Indoor</option>
+          <option value="Outdoor">{t('envOutdoor')}</option>
+          <option value="Indoor">{t('envIndoor')}</option>
         </select>
         <input
           type="number"
           value={values.hourly_rate}
           onChange={(e) => setValues((v) => (v ? { ...v, hourly_rate: Number(e.target.value) } : v))}
-          placeholder="Hourly rate (SAR)"
+          placeholder={t('phHourlyRate')}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
       </div>
@@ -104,7 +106,7 @@ export default function EditPitchSheet({ pitch, onClose, onSave }: EditPitchShee
         className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-        Save changes
+        {t('saveChanges')}
       </button>
     </div>
   );
