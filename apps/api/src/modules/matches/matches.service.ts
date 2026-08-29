@@ -14,6 +14,7 @@ import { disputes, matches, match_messages, match_players, match_votes, pitch_sl
 import {
   GetMatchesDto,
   normalizeGenderRule,
+  TIME_WINDOWS,
 } from './dto/get-matches.dto';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -349,6 +350,7 @@ export class MatchesService {
       gender,
       max_price,
       venue_id,
+      time,
       limit,
     } = dto;
 
@@ -361,6 +363,16 @@ export class MatchesService {
     // ── Date window filter (Riyadh local day, matches the PWA's dateInRiyadh) ──
     const dateClause = date
       ? sql`AND (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')::date = ${date}::date`
+      : sql``;
+
+    // ── Time-of-day window filter (Riyadh local hour of scheduled_at; run #12).
+    // `night` wraps past midnight ([23→04)) so the OR-form is used there.
+    const timeClause = time
+      ? TIME_WINDOWS[time].startHour <= TIME_WINDOWS[time].endHour
+        ? sql`AND EXTRACT(HOUR FROM (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')) >= ${TIME_WINDOWS[time].startHour}
+             AND EXTRACT(HOUR FROM (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')) < ${TIME_WINDOWS[time].endHour}`
+        : sql`AND (EXTRACT(HOUR FROM (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')) >= ${TIME_WINDOWS[time].startHour}
+             OR EXTRACT(HOUR FROM (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')) < ${TIME_WINDOWS[time].endHour})`
       : sql``;
 
     // ── Geo: SOFT — distance is computed for sorting/badging only. Discovery
@@ -466,6 +478,7 @@ export class MatchesService {
           )
         )
         ${dateClause}
+        ${timeClause}
         ${formatClause}
         ${genderClause}
         ${priceClause}

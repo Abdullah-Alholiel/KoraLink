@@ -113,6 +113,13 @@
             "surface": "Surface",
             "gender": "Gender",
             "intensity": "Intensity",
+            "time": {
+                "title": "Time of day",
+                "morning": "Morning",
+                "afternoon": "Afternoon",
+                "evening": "Evening",
+                "night": "Night"
+            },
             "allFormats": "All Formats",
             "allCities": "All Cities",
             "allSurfaces": "All Surfaces",

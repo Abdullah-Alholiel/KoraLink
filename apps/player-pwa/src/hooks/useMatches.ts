@@ -53,6 +53,7 @@ export function useMatches(filters?: {
   format?: string | null;
   maxPrice?: number | null;
   gender?: string | null;
+  time?: string | null;
   venue_id?: string | null;
 }) {
   return useQuery<{
@@ -72,6 +73,7 @@ export function useMatches(filters?: {
         }
         if (filters.format) params.format = filters.format;
         if (filters.gender) params.gender = filters.gender;
+        if (filters.time) params.time = filters.time;
         if (filters.maxPrice != null) params.max_price = String(filters.maxPrice);
         if (filters.venue_id) params.venue_id = filters.venue_id;
       }

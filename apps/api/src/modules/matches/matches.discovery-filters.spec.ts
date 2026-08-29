@@ -108,6 +108,50 @@ describe('GetMatchesDto query contract', () => {
   });
 });
 
+describe('MatchesService.findNearby time-of-day window (run #12)', () => {
+  it('binds the morning window bounds 4 and 12 (Riyadh local hours)', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({ time: 'morning' } as GetMatchesDto, 'user-1');
+    expect(params).toContain(4);
+    expect(params).toContain(12);
+  });
+
+  it('binds the evening window bounds 17 and 23', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({ time: 'evening' } as GetMatchesDto, 'user-1');
+    expect(params).toContain(17);
+    expect(params).toContain(23);
+  });
+
+  it('night wraps midnight — binds 23 and 4 (OR-form)', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({ time: 'night' } as GetMatchesDto, 'user-1');
+    expect(params).toContain(23);
+    expect(params).toContain(4);
+  });
+
+  it('no time param → no window bounds in the SQL', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({} as GetMatchesDto, 'user-1');
+    expect(params).not.toContain(4);
+    expect(params).not.toContain(12);
+    expect(params).not.toContain(17);
+    expect(params).not.toContain(23);
+  });
+});
+
 describe('MatchesService.findNearby gender + limit', () => {
   it('filters by the NORMALIZED gender value, not the raw token', async () => {
     let params: unknown[] = [];

@@ -23,6 +23,7 @@ export default function PlayPage() {
         format: null,
         gender: null,
         maxPrice: null,
+        time: null,
     });
     const { coords } = useLocation();
 

@@ -20,6 +20,31 @@ export const GENDER_QUERY_VALUES = [
 export type GenderQuery = (typeof GENDER_QUERY_VALUES)[number];
 
 /**
+ * Time-of-day discovery presets (run #12). The PWA FilterBar sends one of
+ * these tokens as `time`; the service filters on the Riyadh-local hour of
+ * `scheduled_at`. `night` deliberately wraps past midnight ([23→04)).
+ */
+export const TIME_WINDOW_KEYS = [
+  'morning',
+  'afternoon',
+  'evening',
+  'night',
+] as const;
+
+export type TimeWindowKey = (typeof TIME_WINDOW_KEYS)[number];
+
+/** Riyadh-local wall-clock windows per preset (start inclusive, end exclusive). */
+export const TIME_WINDOWS: Record<
+  TimeWindowKey,
+  { startHour: number; endHour: number }
+> = {
+  morning: { startHour: 4, endHour: 12 },
+  afternoon: { startHour: 12, endHour: 17 },
+  evening: { startHour: 17, endHour: 23 },
+  night: { startHour: 23, endHour: 4 },
+};
+
+/**
  * Maps a query-string gender filter to the DB `GenderRule` enum value.
  *
  * NOTE: 'women' is checked before 'men' — not because equality matching needs
@@ -116,6 +141,17 @@ export class GetMatchesDto {
   @IsOptional()
   @IsString()
   venue_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter by time of day (Riyadh local): morning|afternoon|evening|night',
+    example: 'evening',
+    enum: TIME_WINDOW_KEYS,
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(TIME_WINDOW_KEYS)
+  time?: TimeWindowKey;
 
   @ApiPropertyOptional({
     description: 'Maximum number of matches to return (1-50, default 50)',

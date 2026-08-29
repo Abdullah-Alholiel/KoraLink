@@ -113,6 +113,13 @@
             "surface": "السطح",
             "gender": "الجنس",
             "intensity": "الشدة",
+            "time": {
+                "title": "وقت اليوم",
+                "morning": "صباحاً",
+                "afternoon": "عصراً",
+                "evening": "مساءً",
+                "night": "ليلاً"
+            },
             "allFormats": "جميع الصيغ",
             "allCities": "جميع المدن",
             "allSurfaces": "جميع الأسطح",

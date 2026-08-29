@@ -9,6 +9,7 @@ export interface PlayFilters {
     format: string | null;
     gender: string | null;
     maxPrice: number | null;
+    time: string | null;
 }
 
 interface FilterBarProps {
@@ -23,6 +24,13 @@ const GENDER_KEYS = [
     { value: 'women', labelKey: 'matchDetail.gender.women' },
     { value: 'mixed', labelKey: 'matchDetail.gender.mixed' },
 ] as const;
+// API time-of-day presets (GetMatchesDto TIME_WINDOW_KEYS) → i18n keys.
+const TIME_KEYS = [
+    { value: 'morning', labelKey: 'play.filters.time.morning' },
+    { value: 'afternoon', labelKey: 'play.filters.time.afternoon' },
+    { value: 'evening', labelKey: 'play.filters.time.evening' },
+    { value: 'night', labelKey: 'play.filters.time.night' },
+] as const;
 const PRICE_OPTIONS = [25, 50, 100];
 
 export default function FilterBar({ filters, onChange }: FilterBarProps) {
@@ -32,7 +40,8 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
     const activeCount =
         (filters.format ? 1 : 0) +
         (filters.gender ? 1 : 0) +
-        (filters.maxPrice != null ? 1 : 0);
+        (filters.maxPrice != null ? 1 : 0) +
+        (filters.time ? 1 : 0);
 
     // Quick format toggle chips (inline)
     const toggleFormat = (f: string) => {
@@ -123,6 +132,33 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                         </div>
                     </div>
 
+                    {/* Time of day */}
+                    <div className="mb-6">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
+                            {t('play.filters.time.title')}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {TIME_KEYS.map((tk) => (
+                                <button
+                                    key={tk.value}
+                                    onClick={() =>
+                                        onChange({
+                                            ...filters,
+                                            time: filters.time === tk.value ? null : tk.value,
+                                        })
+                                    }
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 ${
+                                        filters.time === tk.value
+                                            ? 'bg-brand-green text-white'
+                                            : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                    }`}
+                                >
+                                    {t(tk.labelKey)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Max Price */}
                     <div className="mb-6">
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
@@ -154,7 +190,7 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                     {activeCount > 0 && (
                         <button
                             onClick={() => {
-                                onChange({ format: null, gender: null, maxPrice: null });
+                                onChange({ format: null, gender: null, maxPrice: null, time: null });
                             }}
                             className="w-full py-3 rounded-xl text-sm font-semibold text-brand-red border border-brand-red/20 active:scale-[0.98] transition-transform"
                         >
