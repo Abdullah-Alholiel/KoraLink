@@ -1,18 +1,23 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 12,
-  "last_run_at": "2026-08-29T01:15:00Z",
+  "last_run": 13,
+  "last_run_at": "2026-08-29T10:15:00Z",
   "last_run_commits": [
-    "12f9f2d",
-    "035bad9",
-    "96440d3",
-    "156775d"
+    "ecdf29c",
+    "6b0ffab",
+    "b3c7445",
+    "24e59af",
+    "2b520e3"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-29T01-15Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-29T10-15Z.md",
   "in_review_items": [
-    "P1-2 time-of-day discovery filter (12f9f2d): API ?time=morning|afternoon|evening|night (Riyadh TZ, night wraps midnight) + FilterBar chips + en/ar i18n — next run: re-run gates (jest+vitest+tsc+build) and one live probe (e.g. ?time=evening on restarted service); expect bogus token 400",
-    "035bad9 eslint fixes: usePushNotifications locale dep + PostMatchSection mock rewrite + unused import — verify lint stays clean and PostMatchSection URL assertion still passes"
+    "P0-4 auto-cancel refund atomicity (ecdf29c): tx-wrapped guard+refund+ledger+slot-release, 5 jest specs — next run: re-run gates, spot-check a real auto-cancel log line (refunded=SAR, slotReleased) or simulate one underfilled koralink match.",
+    "P1-21 clear-mark spares under_review disputes (ecdf29c): narrowed to status='opened' — next run: re-run gates; optional live check: mark→dispute→admin under_review→host clears→dispute stays under_review.",
+    "P1-19 feed pagination (6b0ffab): envelope {matches,total,hasMore} + offset + useInfiniteQuery + Load More; time-filter dead wire fixed — next run: re-run gates + one live probe (?limit=2&offset=2 envelope) + eyeball Load More in the PWA.",
+    "P1-20 push prefs (2b520e3): users.push_muted/quiet_* columns (migration 0022 applied), PATCH /users/me/push-preferences, sendPushToUsers filtering, profile UI, en/ar i18n — next run: re-run gates + verify night suppression path (unit-pinned; observe one live quiet-window skip if feasible).",
+    "P2-22 members-only private calendar export (24e59af): getCalendarMatch projection + 5 specs — next run: re-run gates; live probe outsider-403 if a private match exists (else skip).",
+    "P2-15/P2-16/P2-6 micro-fixes (b3c7445): wallet history paging key, captureError in PWA error paths, WS leave-conversation auth, underfill ORDER BY — next run: re-run gates only."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
@@ -23,5 +28,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #12 (01:15Z, ~50min): GLM probe 200, two scoped reviewers returned <4min (3rd consecutive no-timeout run). Built time-of-day discovery filter (12f9f2d): TIME_WINDOWS presets -> additive Riyadh-TZ clause in findNearby (night OR-wrap), FilterBar chips + hook + en/ar i18n, 4 jest + 4 vitest cases; NO migration (pure query slice). Live-verified on restarted service: evening->18:36 match exactly, morning->0, bogus->400, filtered strict subsets of unfiltered. Fixed 3 PRE-EXISTING eslint violations in committed files (CI --max-warnings-0 gate was red: usePushNotifications locale dep, PostMatchSection mock unused params -> socket.test.ts wrapper pattern, usePwaInstall React import) = 035bad9. Boarded P1-19 (feed capped at 50, no pagination), P1-20 (no push prefs/quiet hours), P2-23 (reporters get no closure); expanded P2-13 (clubs Nearby/AvailableNow/TopRated pills are no-ops, 3 of 4 decorative). REFUTED Reviewer-B P0 'no notifications inbox' (activities.controller.ts:16 /users/me/notifications exists; NotificationSheet/Bell/BadgeHydrator consume it) — verified in code BEFORE boarding; wallet-replay verification section was accurate. P2-10 re-verified live (replay 201 replayed:true, balance moves once). TRAP RECUR: HERMES_DELEGATED_CHILD_CONTEXT=1 inherited -> kanban calls need env -u prefix. Route note: discovery is GET /matches (controller matches.controller.ts:46), NOT /matches/nearby. API tests run via jest (not vitest). allFormats ar.json drift (كل الصيغ) caught+restored to جميع الصيغ. Next-run priority: P1-19 feed pagination (full 2h slice) > P1-20 push prefs or P1-12 admin i18n."
+  "notes": "Run #13 (10:15Z, ~1h25m — stopped early on the 3-item quota guardrail): GLM probes 200 (flash + glm-5.3); 5.3-as-reviewer TRIAL data point 1/3 — both reviewers completed in 150s/119s, no timeout, findings mostly survived verification (slot-double-booking P0 REFUTED: create books slot in-tx). Built 5 slices: P0-4 auto-cancel refund tx (ecdf29c) + P1-21 clear-mark dispute scope + P1-19 feed pagination envelope/offset/useInfiniteQuery/Load More + time-filter dead-wire fix (6b0ffab) + micro-batch P2-15/P2-16/P2-6/underfill ORDER BY (b3c7445) + P2-22 members-only calendar export (24e59af) + P1-20 push mute/quiet-hours with migration 0022 committed BEFORE db:migrate and live-verified (2b520e3). Final gates: build 3/3, jest 144/144, vitest 234/234, tsc 0 x2, lint clean. All slices live-probed on restarted services. TRAPS: run #13 had NO delegated-child marker (kanban bare calls fine); giant inline grep/sed one-liners trip the terminal hardline parser — use short grep -n + read_file instead; heredoc python blocked. Origin advanced mid-run (sibling docs commits) — push fast-forwarded clean. Next-run priority: verify run #13 claims (esp. Load More render + quiet-window suppression), then P1-12 admin i18n or P2-13 clubs pills, then P2-23. Trial data point 2/3 due."
 }
