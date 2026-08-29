@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 15,
-  "last_run_at": "2026-08-29T17:35:00Z",
-  "last_run_commits": ["0245e27"],
-  "last_run_report": "kanban/RUNS/2026-08-29T17-35Z.md",
+  "last_run": 16,
+  "last_run_at": "2026-08-29T20:15:00Z",
+  "last_run_commits": ["4e7ad44", "6171bd4", "cda3833"],
+  "last_run_report": "kanban/RUNS/2026-08-29T20-15Z.md",
   "in_review_items": [
-    "P1-12 admin i18n partner-portal slice (c4b92b0): re-verified run #15 (gates green, 198/198 parity, Reviewer B BUILT-AS-CLAIMED). Remaining: visual RTL check — no browser on box; Abdullah sets admin_locale=ar and eyeballs /partner + /partner/pitches, then promote to DONE (HQ console strings are the next slice).",
-    "Schedule policy (run #15): cron 03ed02bc8d04 now 15 10,15,20 * * * (3 runs/day, no 01:15 fire); each run has the full ~3h budget; expect 4-6 items per run. Reviewer model glm-5.3 ADOPTED permanently after 3-run trial (0-2 false positives vs 3 on flash, P0-4 critical catch); probe target is now glm-5.3, fallback deepseek-v4-flash unchanged.",
-    "First 3h-budget run is #16 at 20:15Z today: anchor P1-26 (partner match visibility, needs scoped GET /partner/matches) or P1-25 (venue operating hours, schema slice), fillers P2-13, P2-25, P2-23."
+    "P1-26 partner match/roster visibility (4e7ad44 API + 6171bd4 admin): gates green (build 3/3, jest 18/18, vitest 234/234) + live E2E PASS (owner list/detail 200 with real rosters; player 403, bogus scope 400, anon 401). Verify in run #17: re-run gates, re-probe GET /partner/matches?scope=upcoming as owner +966500000003/surface=ops (expect 2 Cancelled rows), then promote to DONE.",
+    "P2-25 equal-hours UI warning built (cda3833, vitest 234/234 + tsc 0). Remaining half: category exceptions (kickoff/roster-change pushes bypassing quiet hours) — needs Abdullah's design decision, do NOT build without it.",
+    "P1-12 admin i18n stays IN-REVIEW: visual RTL check still needs Abdullah's eyes (admin_locale=ar → eyeball /partner); browserless box unchanged."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
@@ -16,9 +16,11 @@
     "P1-14 settlement payout never executes (IBAN collected, unused) — BLOCKED on P0-2 (needs real payout provider).",
     "P1-16 padel support — needs Abdullah's scope decision (whole-sport slice if in scope).",
     "P1-2 remainder skill_level discovery filter — needs product decision on semantics (host skill vs match-declared level) before building.",
-    "Headless browser unavailable on VPS (run #14 and #15 both failed: harness chrome-not-running; only Chromium belongs to user 'opc', no debug port, no DISPLAY) — P1-12 visual RTL check needs Abdullah's eyes or a working browser."
+    "P2-25 category exceptions + P2-13 wire-vs-remove — both need Abdullah's product decisions.",
+    "Headless browser unavailable on VPS — P1-12 visual RTL check needs Abdullah's eyes or a working browser.",
+    "Sibling PWA agents were actively editing en.json/ar.json/profile-page during run #16 build phase (3 write-guard collision warnings) — run #17 must re-check git status before picking P2-23 (same files)."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #15 (17:35Z, ~45m — manual inter-run policy session, Abdullah-directed): (1) SCHEDULE CHANGED — cron 03ed02bc8d04 edited live to '15 10,15,20 * * *' (dropped the 01:15 fire; 3 runs/day, gaps 5h/5h/14h, all slots fully off-peak); each run now carries the full ~3h build budget instead of stopping at the 3-item guardrail with ~2h unused; weekly EST drops 90%->67% of the 10k cap. (2) REVIEWER MODEL DECIDED — glm-5.3 ADOPTED permanently after the 3-run trial (runs #13-#15): wall-clock 93-150s (tie with flash), false positives 0/0 in dp2-dp3 vs 3 across flash baseline, plus the P0-4 CRITICAL refund-atomicity catch that flash missed; delegation stays glm-5.3/zai/coding-base, probe target is now glm-5.3, fallback deepseek-v4-flash unchanged. (3) Run #14 claims RE-VERIFIED (build 3/3, jest 151/151, vitest 234/234, tsc 0 x3): P1-24 and P2-24 promoted with run #15 evidence; P1-12 re-verified at code level (198/198 parity re-counted, hydration-safe) but visual RTL check STILL pending — headless browser unavailable on box (harness chrome-not-running; sole Chromium is opc's, no debug port), Abdullah to eyeball /partner with admin_locale=ar. (4) Reviewers ran 93s/112s — fastest of trial; zero timeouts across all 3 trial runs. Next: run #16 (20:15Z) is the first full-3h run — anchor P1-26 or P1-25, fillers P2-13/P2-25/P2-23; watch weekly credits on the new cadence (~67% expected)."
+  "notes": "Run #16 (20:15Z, first full-3h run, ~55m actual): reviewers (glm-5.3, probe 200, 117s+177s sync) clean on bug classes; run #15 claims 100% BUILT-AS-CLAIMED. Sentry triage: zero new clusters (all issues pre-08-28, known). Built P1-26 (partner match/roster visibility: API + admin console, live E2E PASS) and the P2-25 UI-warning half. Board +3 (P1-27 wallet withdrawal, P1-28 venue discovery, P2-26 profile/host UX states), mirror cards gated. Stopped at 2 items with budget left: P2-23 collides with sibling PWA edits in flight; P2-13 needs Abdullah's decision; P1-25 (next anchor) is a migration slice not started late in a shared-tree session. Next run #17 (10:15Z Aug 30): P2-23 first (after git status check), then P1-25 anchor."
 }
