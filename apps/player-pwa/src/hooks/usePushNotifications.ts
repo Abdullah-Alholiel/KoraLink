@@ -76,7 +76,7 @@ export function usePushNotifications(locale: string = 'en') {
     } finally {
       setIsSubscribing(false);
     }
-  }, [requestPermission]);
+  }, [requestPermission, locale]);
 
   const unsubscribe = useCallback(async () => {
     try {

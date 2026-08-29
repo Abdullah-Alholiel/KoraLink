@@ -4,13 +4,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
 // socket.io-client must be mocked so we can assert the URL the client dials.
-const ioMock = vi.fn((..._args: unknown[]) => ({
-  on: vi.fn(),
-  emit: vi.fn(),
-  disconnect: vi.fn(),
-}));
+const ioMock = vi.fn();
 vi.mock('socket.io-client', () => ({
-  io: (...args: unknown[]) => ioMock(...args),
+  io: (...args: unknown[]) => {
+    ioMock(...args);
+    return {
+      on: vi.fn(),
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+  },
 }));
 
 // Reproduce the production shape: a *pathful* base URL. createLobbySocket must
