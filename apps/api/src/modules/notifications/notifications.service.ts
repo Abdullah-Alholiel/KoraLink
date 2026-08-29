@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
 import * as schema from '../../database/schema';
@@ -99,24 +99,17 @@ export class NotificationsService {
   }
 
   /**
-   * Get subscriptions for all users in a match (for match-level notifications).
+   * Get the distinct set of users on a match's roster (POTM push audience).
+   * Delivery preferences (mute / quiet hours) are enforced downstream by
+   * sendPushToUsers — do NOT re-join push_subscriptions here.
    */
-  async getMatchSubscriptions(matchId: string) {
-    const result = await this.db.execute(
-      // Use raw SQL to join match_players + push_subscriptions
-      sql`
-        SELECT ps.endpoint, ps.p256dh, ps.auth
-        FROM ${match_players} mp
-        INNER JOIN ${push_subscriptions} ps ON ps.user_id = mp.user_id
-        WHERE mp.match_id = ${matchId}
-      `,
-    );
+  private async getMatchRosterUserIds(matchId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ user_id: match_players.user_id })
+      .from(match_players)
+      .where(eq(match_players.match_id, matchId));
 
-    return result as unknown as Array<{
-      endpoint: string;
-      p256dh: string;
-      auth: string;
-    }>;
+    return rows.map((r) => r.user_id);
   }
 
   /**
@@ -219,9 +212,16 @@ export class NotificationsService {
   }
 
   /**
-   * Send a "Player of the Match decided" push notification to every
-   * attendee of a match. Gracefully no-ops when VAPID keys are not configured
-   * (in-app WebSocket broadcast still delivers the result to open clients).
+   * Send a "Player of the Match decided" push notification to every attendee
+   * of a match. Gracefully no-ops when VAPID keys are not configured (in-app
+   * WebSocket broadcast still delivers the result to open clients).
+   *
+   * P2-27 (run #17): routes through sendPushToUsers so POTM pushes honor the
+   * same per-user delivery preferences as every other push — push_muted users
+   * are skipped, enabled quiet-hours windows (Riyadh-local) suppress delivery,
+   * and each subscription's stored locale is injected (worker/index.js reads
+   * data.locale for the deep-link; previously POTM deep-links always defaulted
+   * to /en). The winner object lives in the WS broadcast payload, not here.
    */
   async sendPomDecidedNotification(
     matchId: string,
@@ -231,31 +231,12 @@ export class NotificationsService {
       return 0;
     }
 
-    const subs = await this.getMatchSubscriptions(matchId);
-    let sent = 0;
+    const userIds = await this.getMatchRosterUserIds(matchId);
 
-    const body = JSON.stringify({
+    return this.sendPushToUsers(userIds, {
       title: '🏆 Player of the Match',
       body: `${payload.winner.fullName} was voted Player of the Match!`,
-      data: { type: 'pom-decided', matchId: payload.matchId, winnerId: payload.winner.id },
+      data: { type: 'pom-decided', matchId: payload.matchId },
     });
-
-    for (const sub of subs) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          body,
-        );
-        sent += 1;
-      } catch (err) {
-        // Invalid/expired subscription — ignore and continue.
-        this.logger.debug(`Push failed for ${sub.endpoint.slice(0, 20)}…: ${(err as Error).message}`);
-      }
-    }
-
-    return sent;
   }
 }

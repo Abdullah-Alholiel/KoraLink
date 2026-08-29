@@ -143,3 +143,117 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
     expect(sendNotification).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('NotificationsService.sendPomDecidedNotification preference filtering (P2-27, run #17)', () => {
+  /**
+   * P2-27: POTM pushes previously iterated raw match subscriptions and sent
+   * unconditionally — the only push path ignoring push_muted/quiet hours.
+   * Now routed through sendPushToUsers, so the same per-user preferences apply.
+   */
+  function makePomService(
+    rosterRows: Array<{ user_id: string }>,
+    subRows: Array<Record<string, unknown>>,
+  ) {
+    const svc = new NotificationsService(
+      {
+        selectDistinct: () => ({
+          from: () => ({
+            where: async () => rosterRows,
+          }),
+        }),
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({
+              where: async () => subRows,
+            }),
+          }),
+        }),
+        delete: () => ({
+          where: async () => [],
+        }),
+      } as never,
+      {
+        get: (key: string) =>
+          key === 'VAPID_PUBLIC_KEY'
+            ? 'pub'
+            : key === 'VAPID_PRIVATE_KEY'
+              ? 'priv'
+              : key === 'VAPID_SUBJECT'
+                ? 'mailto:t@example.com'
+                : undefined,
+      } as never,
+    );
+    return { svc };
+  }
+
+  const POM_PAYLOAD = {
+    matchId: 'm1',
+    winner: { id: 'w1', fullName: 'Saud Al-Otaibi', avatarUrl: null },
+    voteCount: 3,
+  };
+
+  beforeEach(() => {
+    sendNotification.mockClear();
+  });
+
+  it('skips muted roster users', async () => {
+    const { svc } = makePomService([{ user_id: 'u1' }], [
+      {
+        endpoint: 'ep-pom-muted',
+        p256dh: 'k',
+        auth: 'a',
+        locale: 'en',
+        push_muted: true,
+        quiet_enabled: false,
+        quiet_start: 23,
+        quiet_end: 7,
+      },
+    ]);
+    const sent = await svc.sendPomDecidedNotification('m1', POM_PAYLOAD);
+    expect(sent).toBe(0);
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it('skips roster users inside their quiet-hours window', async () => {
+    const { svc } = makePomService([{ user_id: 'u1' }], [
+      {
+        endpoint: 'ep-pom-quiet',
+        p256dh: 'k',
+        auth: 'a',
+        locale: 'en',
+        push_muted: false,
+        quiet_enabled: true,
+        quiet_start: 0,
+        quiet_end: 23, // covers all Riyadh hours
+      },
+    ]);
+    const sent = await svc.sendPomDecidedNotification('m1', POM_PAYLOAD);
+    expect(sent).toBe(0);
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it('delivers to unrestricted roster users with per-subscription locale and no winnerId', async () => {
+    const { svc } = makePomService([{ user_id: 'u1' }], [
+      {
+        endpoint: 'ep-pom-active',
+        p256dh: 'k',
+        auth: 'a',
+        locale: 'ar',
+        push_muted: false,
+        quiet_enabled: false,
+        quiet_start: 23,
+        quiet_end: 7,
+      },
+    ]);
+    const sent = await svc.sendPomDecidedNotification('m1', POM_PAYLOAD);
+    expect(sent).toBe(1);
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    const sendMock = sendNotification as unknown as jest.Mock;
+    const body = JSON.parse(sendMock.mock.calls[0][1] as string);
+    expect(body.title).toBe('🏆 Player of the Match');
+    expect(body.data.type).toBe('pom-decided');
+    expect(body.data.matchId).toBe('m1');
+    expect(body.data.locale).toBe('ar'); // P1-5: deep-link keeps the subscriber's locale
+    expect(body.data.winnerId).toBeUndefined(); // dead field dropped (0 PWA consumers)
+  });
+});
