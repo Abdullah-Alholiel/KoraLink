@@ -47,6 +47,8 @@ export default function ClubsPage() {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
             return amenities.includes('indoors') || amenities.includes('indoor');
         }
+        // P2-13 (run #17): real open-now logic backed by venue hours (P1-25).
+        if (activeFilter === 'Available Now') return isVenueOpenNow(v);
         return true;
     });
 
@@ -62,9 +64,9 @@ export default function ClubsPage() {
                         </p>
                     )}
                 </div>
-                <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50">
-                    <MapPin className="w-5 h-5 text-brand-black" strokeWidth={1.5} />
-                </button>
+                {/* P2-13 (run #17): decorative MapPin button removed — it had no
+                    onClick/href (dead UI); the page already uses device coords
+                    automatically when location permission is granted. */}
             </div>
 
             {/* ── Search ── */}
