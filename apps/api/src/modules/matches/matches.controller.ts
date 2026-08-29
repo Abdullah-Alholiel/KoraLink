@@ -58,10 +58,14 @@ export class MatchesController {
   @ApiOperation({ summary: 'Download match as ICS calendar file' })
   async getCalendar(
     @Param('id') id: string,
+    @CurrentUser() user: { sub: string },
     @Query('format') format: 'ics' | 'google' = 'ics',
     @Res() res: Response,
   ) {
-    const match = await this.matchesService.findOne(id);
+    // P2-22: viewer-scoped — private matches are members-only here (the
+    // calendar file carries the venue ADDRESS and leaves the user's control,
+    // so it is an export, not a page view).
+    const match = await this.matchesService.getCalendarMatch(id, user.sub);
 
     const startDate = new Date(match.scheduled_at);
     const endDate = new Date(startDate.getTime() + (match.duration_mins ?? 60) * 60 * 1000);

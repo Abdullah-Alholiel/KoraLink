@@ -853,6 +853,54 @@ export class MatchesService {
     return Boolean(membership);
   }
 
+  /**
+   * Minimal match projection for the ICS/calendar route (P2-22, run #13).
+   * Private matches are MEMBERS-ONLY here — unlike findOne, whose metadata
+   * stays readable for invite-link holders. A calendar file/redirect carries
+   * the title + venue ADDRESS and leaves the user's control (downloaded or
+   * handed to Google), so it is an export, not a page view: the venue address
+   * must not leak to non-members. Public matches need no membership.
+   */
+  async getCalendarMatch(matchId: string, viewerId: string) {
+    const match = await this.db.query.matches.findFirst({
+      where: eq(matches.id, matchId),
+      columns: {
+        id: true,
+        title: true,
+        match_type: true,
+        gender_rule: true,
+        scheduled_at: true,
+        duration_mins: true,
+        visibility: true,
+        host_id: true,
+      },
+      with: {
+        pitch: {
+          with: {
+            venue: {
+              columns: { name: true, address: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!match) {
+      throw new NotFoundException(`Match ${matchId} not found.`);
+    }
+
+    if (match.visibility === 'private' && match.host_id !== viewerId) {
+      const isMember = await this.isMatchMember(matchId, viewerId);
+      if (!isMember) {
+        throw new ForbiddenException(
+          'This match is private — only its players can export the calendar.',
+        );
+      }
+    }
+
+    return match;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Join a match (add player to roster)
   // ─────────────────────────────────────────────────────────────────────────
