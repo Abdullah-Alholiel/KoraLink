@@ -32,17 +32,29 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   // body reads share the same controller via the signal.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
+  // Link the caller's signal with our timeout controller so passing
+  // options.signal no longer disables the 30s guard (run #15 Reviewer A:
+  // `signal: options.signal ?? controller.signal` let a caller-supplied
+  // signal hang forever). AbortSignal.any is Node 20.3+/evergreen browsers;
+  // if unavailable, degrade to the old precedence (caller signal wins).
+  const signal =
+    options.signal != null && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([options.signal, controller.signal])
+      : (options.signal ?? controller.signal);
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
       credentials: 'include',
-      signal: options.signal ?? controller.signal,
+      signal,
     });
   } catch (err) {
     clearTimeout(timer);
     if (err instanceof DOMException && err.name === 'AbortError') {
+      // A caller-initiated abort is a cancellation, not a timeout —
+      // rethrow it untouched so the caller's own handling sees it.
+      if (options.signal?.aborted) throw err;
       throw new Error('Request timed out. Check your connection and try again.');
     }
     throw err;

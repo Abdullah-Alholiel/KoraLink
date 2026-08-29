@@ -29,6 +29,7 @@ interface SlotManagerProps {
  */
 export default function SlotManager({ pitchId, pitchName, slots, loading, onChanged }: SlotManagerProps) {
   const t = useTranslations('slotManager');
+  const tc = useTranslations('common');
   const [weekStart, setWeekStart] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString().slice(0, 10);
@@ -170,7 +171,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('recurringPattern')}</h3>
-            <button onClick={() => setShowGenerator(false)} className="text-gray-400 hover:text-gray-600" aria-label="Close"><X className="h-4 w-4" /></button>
+            <button onClick={() => setShowGenerator(false)} className="text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {dayLabels.map((label, i) => {
@@ -231,7 +232,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('addSingleTitle')}</h3>
-            <button onClick={() => setShowAddSlot(false)} className="text-gray-400 hover:text-gray-600" aria-label="Close"><X className="h-4 w-4" /></button>
+            <button onClick={() => setShowAddSlot(false)} className="text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <label className="text-xs text-gray-500">
