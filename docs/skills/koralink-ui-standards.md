@@ -550,3 +550,8 @@ These are the **design authority** — all UI work must match these exactly.
 4. **Match typography** — compare font sizes, weights, and alignment
 5. **Match component shape** — border radius, shadows, icon sizes
 6. **All 5 UX states must match screenshot quality** — not just "functional"
+
+## Layout invariants (session-proven regressions — never violate)
+
+- **TeamLineup**: FULL per-side slots; teams ALWAYS side-by-side flex — never cap slots or stack large formats (caused the 52c85bc regression).
+- **iOS PWA**: `apple-mobile-web-app-capable` + `status-bar-style` meta directly in layout JSX; `--app-height=100dvh` via `@supports` (not 100vh); top bars `pt-[var(--top-safe-inset)]`, bottom nav `pb-safe`. Reinstall PWA after changes to these metas.
