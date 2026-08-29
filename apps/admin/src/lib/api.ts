@@ -27,11 +27,27 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     ...((options.headers as Record<string, string>) ?? {}),
   };
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  // Abort a hung request after 30s so pages surface an error instead of
+  // spinning forever (P2-24). The timeout is cleared once headers arrive;
+  // body reads share the same controller via the signal.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out. Check your connection and try again.');
+    }
+    throw err;
+  }
+  clearTimeout(timer);
 
   // 401 = session invalid/expired → clear token and bounce to /login.
   // 403 = authenticated but not permitted (role downgraded, partner-only
@@ -59,7 +75,20 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     throw new Error(body.message ?? `Request failed (${res.status})`);
   }
 
-  return res.json() as Promise<T>;
+  // 204 / empty body → resolve undefined instead of throwing SyntaxError
+  // on res.json() (P2-24: DELETE flows survive today only because Nest
+  // happens to always return bodies — that contract is not guaranteed).
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+  const text = await res.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Non-JSON success body (proxy/banner injection) — don't crash the UI.
+    return undefined as T;
+  }
 }
 
 export const api = {
