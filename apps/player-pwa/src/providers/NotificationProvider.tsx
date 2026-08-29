@@ -84,6 +84,8 @@ export default function NotificationProvider({ children }: { children: React.Rea
         account_banned: t('accountBanned'),
         account_unbanned: t('accountUnbanned'),
         no_show_marked: t('noShowMarked'),
+        host_underfilled_nudge: t('hostUnderfilledNudge'),
+        match_auto_cancelled: t('matchAutoCancelled'),
       };
       const message = copy[payload.verb] ?? t('newActivity');
       const href = payload.verb === 'followed'

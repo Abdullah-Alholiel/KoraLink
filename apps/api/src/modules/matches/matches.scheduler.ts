@@ -45,4 +45,13 @@ export class MatchesScheduler {
       this.logger.error(`sendMatchStartReminders tick failed: ${(err as Error).message}`);
     }
   }
+
+  @Cron('*/10 * * * *', { name: 'check-min-players' })
+  async handleMinPlayers(): Promise<void> {
+    try {
+      await this.matchesService.checkMinPlayers();
+    } catch (err) {
+      this.logger.error(`checkMinPlayers tick failed: ${(err as Error).message}`);
+    }
+  }
 }

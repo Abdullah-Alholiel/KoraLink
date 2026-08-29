@@ -530,7 +530,9 @@
         "accountSuspended": "Your account has been suspended",
         "accountBanned": "Your account has been banned",
         "accountUnbanned": "Your account ban has been lifted",
-        "noShowMarked": "You were marked as a no-show"
+        "noShowMarked": "You were marked as a no-show",
+        "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
+        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached"
     },
     "payment": {
         "title": "Checkout",
@@ -684,7 +686,9 @@
         "accountSuspended": "Your account has been suspended",
         "accountBanned": "Your account has been banned",
         "accountUnbanned": "Your account ban has been lifted",
-        "noShowMarked": "You were marked as a no-show"
+        "noShowMarked": "You were marked as a no-show",
+        "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
+        "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached"
     },
     "attendance": {
         "title": "Attendance",

@@ -322,6 +322,13 @@ export const matches = pgTable(
       scale: 2,
     }),
     max_players: integer('max_players').notNull(),
+    // Minimum total players (host included) required for the match to be
+    // played. Computed server-side at create from max_players (always even:
+    // max−2, floor 2). 0 disables nudging/auto-cancel (legacy rows).
+    min_players: integer('min_players').notNull().default(0),
+    // Last time the host received an underfilled nudge on match day (hourly
+    // cap). NULL = armed; cleared again whenever the match reaches minimum.
+    last_nudge_at: timestamp('last_nudge_at', { withTimezone: true }),
     location: geography('location'),
     completed_at: timestamp('completed_at', { withTimezone: true }),
     pom_winner_id: varchar('pom_winner_id', { length: 36 })

@@ -46,6 +46,8 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   account_banned: Ban,
   account_unbanned: ShieldCheck,
   no_show_marked: AlertTriangle,
+  host_underfilled_nudge: UserPlus,
+  match_auto_cancelled: XCircle,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -62,6 +64,8 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   account_banned: 'notifications.accountBanned',
   account_unbanned: 'notifications.accountUnbanned',
   no_show_marked: 'notifications.noShowMarked',
+  host_underfilled_nudge: 'notifications.hostUnderfilledNudge',
+  match_auto_cancelled: 'notifications.matchAutoCancelled',
 };
 
 /**

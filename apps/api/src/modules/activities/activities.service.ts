@@ -29,7 +29,10 @@ export type ActivityVerb =
   | 'account_suspended'
   | 'account_banned'
   | 'account_unbanned'
-  | 'no_show_marked';
+  | 'no_show_marked'
+  // ── Underfill protection (system→host / system→players) ──
+  | 'host_underfilled_nudge'
+  | 'match_auto_cancelled';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
 const DIRECTED_VERBS = [
@@ -44,6 +47,8 @@ const DIRECTED_VERBS = [
   'account_banned',
   'account_unbanned',
   'no_show_marked',
+  'host_underfilled_nudge',
+  'match_auto_cancelled',
 ] as const;
 
 /** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */
@@ -85,9 +90,15 @@ export class ActivitiesService {
    */
   async record(params: RecordParams): Promise<void> {
     const { excludeActor = true } = params;
-    const recipients = [...new Set(params.recipients)].filter(
+    let recipients = [...new Set(params.recipients)].filter(
       (r) => r && (excludeActor ? r !== params.actorId : true),
     );
+    // HARD RULE: a host who marks a player no-show never receives the
+    // "you were marked" notification himself — even when the marked target IS
+    // the host (self-mark). This choke-point guards every call site.
+    if (params.verb === 'no_show_marked') {
+      recipients = recipients.filter((r) => r !== params.actorId);
+    }
     if (recipients.length === 0) return;
 
     const [activity] = await this.db

@@ -148,6 +148,13 @@
       "when": 1787900172172,
       "tag": "0020_medical_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787994433406,
+      "tag": "0021_famous_snowbird",
+      "breakpoints": true
     }
   ]
 }

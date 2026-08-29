@@ -75,6 +75,17 @@ export class MatchesService {
     private readonly realtime: RealtimeService,
   ) {}
 
+  /**
+   * Underfill protection: minimum total players (host included) for a match
+   * format. Product rule — always even, two fewer than the format capacity:
+   * 5v5 (10) → 8, 7v7 (14) → 12, 11v11 (22) → 20. Floored at 2 so tiny
+   * formats still have a meaningful minimum.
+   */
+  static minPlayersFor(maxPlayers: number): number {
+    const even = Math.floor((maxPlayers - 2) / 2) * 2;
+    return Math.max(2, even);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Match Lifecycle — Auto-complete past matches
   // ─────────────────────────────────────────────────────────────────────────
@@ -286,6 +297,188 @@ export class MatchesService {
       this.logger.log(`Reminder scheduler: reminded ${reminded} match(es).`);
     }
     return reminded;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Underfill protection — match-day nudges + auto-cancel below minimum
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Scheduler-driven underfill protection. Two passes per tick:
+   *
+   * 1. HOST NUDGE — on match day (Asia/Riyadh), while the roster total is
+   *    below `min_players`, remind the host to invite players (bell + push),
+   *    at most once per hour (`last_nudge_at`). Reaching minimum clears the
+   *    timestamp, so a later drop (withdrawal) nudges again immediately from
+   *    `leaveMatch` and hourly nudging resumes.
+   * 2. AUTO-CANCEL — a match still below minimum when kick-off is within the
+   *    next hour is cancelled automatically (status → Cancelled, koralink slot
+   *    released, host refunded exactly `pitch_cost_sar`) and every roster
+   *    player is notified. Guarded UPDATE makes it single-shot even if ticks
+   *    overlap.
+   *
+   * Legacy rows (`min_players = 0`) are exempt from both passes.
+   */
+  async checkMinPlayers(): Promise<{ nudged: number; cancelled: number }> {
+    let nudged = 0;
+    let cancelled = 0;
+
+    // ── Pass 0: re-arm nudges for matches that reached minimum. ──
+    await this.db.execute(sql`
+      UPDATE ${matches}
+      SET last_nudge_at = NULL, updated_at = NOW()
+      WHERE min_players > 0
+        AND last_nudge_at IS NOT NULL
+        AND status IN ('Open', 'Full')
+        AND (
+          SELECT COUNT(*)::int FROM ${match_players} mp
+          WHERE mp.match_id = ${matches.id}
+        ) >= ${matches.min_players}
+    `);
+
+    // ── Pass 1: hourly host nudges on match day (below minimum). ──
+    const due = await this.db.execute(sql`
+      SELECT m.id, m.title, m.host_id, m.min_players,
+             m.scheduled_at, m.last_nudge_at,
+             (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+               AS total_players
+      FROM matches m
+      WHERE m.status IN ('Open', 'Full')
+        AND m.min_players > 0
+        AND (m.scheduled_at AT TIME ZONE 'Asia/Riyadh')::date
+              = (NOW() AT TIME ZONE 'Asia/Riyadh')::date
+        AND m.scheduled_at > NOW() + INTERVAL '61 minutes'
+        AND (m.last_nudge_at IS NULL
+             OR m.last_nudge_at < NOW() - INTERVAL '1 hour')
+        AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+              < m.min_players
+      LIMIT 50
+    `);
+
+    for (const row of (due as unknown as Array<{
+      id: string; title: string; host_id: string; min_players: number;
+      total_players: number;
+    }>)) {
+      try {
+        const needed = row.min_players - row.total_players;
+        await this.activitiesService.record({
+          actorId: row.host_id,
+          verb: 'host_underfilled_nudge',
+          matchId: row.id,
+          recipients: [row.host_id],
+          excludeActor: false,
+        });
+        await this.notificationsService.sendPushToUsers([row.host_id], {
+          title: '📣 Players needed',
+          body: `"${row.title}" still needs ${needed} more player${needed === 1 ? '' : 's'} — invite them before kick-off.`,
+          data: { type: 'match-chat', matchId: row.id },
+        });
+        await this.db.execute(sql`
+          UPDATE ${matches} SET last_nudge_at = NOW(), updated_at = NOW()
+          WHERE id = ${row.id}::text
+        `);
+        nudged += 1;
+      } catch (err) {
+        this.logger.error(
+          `Underfill nudge failed for match ${row.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // ── Pass 2: auto-cancel matches below minimum within the hour. ──
+    const expiring = await this.db.execute(sql`
+      SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
+             m.pitch_cost_sar, m.min_players,
+             (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+               AS total_players
+      FROM matches m
+      WHERE m.status IN ('Open', 'Full')
+        AND m.min_players > 0
+        AND m.scheduled_at > NOW()
+        AND m.scheduled_at <= NOW() + INTERVAL '60 minutes'
+        AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+              < m.min_players
+      LIMIT 50
+    `);
+
+    for (const row of (expiring as unknown as Array<{
+      id: string; title: string; host_id: string; booking_mode: string;
+      booking_slot_id: string | null; pitch_cost_sar: string | null;
+      min_players: number; total_players: number;
+    }>)) {
+      try {
+        // Guarded single-shot transition: rowcount 0 ⇒ cancelled concurrently.
+        const guard = await this.db.execute(sql`
+          UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
+          WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
+        `);
+        if ((guard as unknown as { rowCount?: number }).rowCount === 0) continue;
+
+        // Release a koralink slot + refund the host exactly what he was
+        // debited (same semantics as manual cancelMatch).
+        if (row.booking_mode === 'koralink' && row.booking_slot_id) {
+          const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
+          if (refundSar > 0) {
+            await this.db.execute(sql`
+              UPDATE ${users}
+              SET wallet_balance = wallet_balance + ${refundSar.toString()},
+                  updated_at = NOW()
+              WHERE id = ${row.host_id}::text
+            `);
+            await this.db.insert(transactions).values({
+              user_id: row.host_id,
+              type: 'CREDIT',
+              amount: refundSar.toString(),
+              reference_type: 'REFUND',
+              reference_id: row.id,
+              idempotency_key: `refund-${row.id}`,
+              status: 'Completed',
+            });
+          }
+          await this.db.execute(sql`
+            UPDATE pitch_slots SET is_booked = FALSE, booked_match_id = NULL,
+                   updated_at = NOW()
+            WHERE id = ${row.booking_slot_id}::text
+          `);
+        }
+
+        // Notify every roster player (host included) — bell + push.
+        const players = await this.db
+          .select({ user_id: match_players.user_id })
+          .from(match_players)
+          .where(eq(match_players.match_id, row.id));
+        const rosterIds = players.map((p) => p.user_id);
+        if (rosterIds.length > 0) {
+          await this.activitiesService.record({
+            actorId: row.host_id,
+            verb: 'match_auto_cancelled',
+            matchId: row.id,
+            recipients: rosterIds,
+            excludeActor: false,
+          });
+          await this.notificationsService.sendPushToUsers(rosterIds, {
+            title: '🚫 Match cancelled',
+            body: `"${row.title}" was cancelled — the minimum number of players wasn't reached.`,
+            data: { type: 'match-cancelled', matchId: row.id },
+          });
+        }
+        cancelled += 1;
+        this.logger.log(
+          `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players).`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Auto-cancel failed for match ${row.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    if (nudged > 0 || cancelled > 0) {
+      this.logger.log(
+        `Underfill scheduler: nudged ${nudged} host(s), auto-cancelled ${cancelled} match(es).`,
+      );
+    }
+    return { nudged, cancelled };
   }
 
   /** Tally POTM votes for one match (POTM invariant: roster member, no no-show). */
@@ -748,6 +941,9 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async leaveMatch(userId: string, matchId: string) {
+    // Set inside the tx when this withdrawal drops the roster below minimum —
+    // drives the immediate host re-nudge after commit.
+    let needsRenudge: { hostId: string; needed: number } | null = null;
     await this.db.transaction(async (tx) => {
       // 1. Verify user is in the match
       const [membership] = await tx
@@ -778,9 +974,16 @@ export class MatchesService {
           sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.user_id} = ${userId}`,
         );
 
-      // 3. If match was Full, revert to Open
+      // 3. If match was Full, revert to Open. Also capture host/min info so
+      //    the post-tx underfill re-nudge can fire when the total drops below
+      //    minimum (armed hourly nudge resets → host hears about it now).
       const [match] = await tx
-        .select({ status: matches.status })
+        .select({
+          status: matches.status,
+          host_id: matches.host_id,
+          min_players: matches.min_players,
+          total_players: sql<number>`(SELECT COUNT(*)::int FROM ${schema.match_players} mp WHERE mp.match_id = ${matches.id})`,
+        })
         .from(matches)
         .where(eq(matches.id, matchId))
         .limit(1);
@@ -791,7 +994,49 @@ export class MatchesService {
           .set(withTimestamp({ status: 'Open' }))
           .where(eq(matches.id, matchId));
       }
+
+      // Below minimum after this withdrawal → re-arm the hourly nudge clock
+      // so the scheduler's next tick may nudge again, and remember the state
+      // for the immediate post-tx notification.
+      if (match && match.min_players > 0 && match.total_players < match.min_players) {
+        await tx
+          .update(matches)
+          .set(withTimestamp({ last_nudge_at: null }))
+          .where(eq(matches.id, matchId));
+        needsRenudge = {
+          hostId: match.host_id,
+          needed: match.min_players - match.total_players,
+        };
+      }
     });
+
+    // Underfill re-nudge: tell the host immediately that the match dropped
+    // below minimum (bell + push). Best-effort. (Re-annotate to defeat TS
+    // closure-narrowing: the assignment happens inside the tx callback.)
+    const renudge = needsRenudge as { hostId: string; needed: number } | null;
+    if (renudge) {
+      const [hostMatch] = await this.db
+        .select({ title: matches.title })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+      try {
+        await this.activitiesService.record({
+          actorId: userId,
+          verb: 'host_underfilled_nudge',
+          matchId,
+          recipients: [renudge.hostId],
+          excludeActor: false,
+        });
+        await this.notificationsService.sendPushToUsers([renudge.hostId], {
+          title: '📣 Players needed',
+          body: `"${hostMatch?.title ?? 'Your match'}" dropped to ${renudge.needed} below the minimum after a withdrawal — invite more players.`,
+          data: { type: 'match-chat', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`Underfill re-nudge failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
 
     // Return fully populated match with relations (API Contract Rule §2)
     const updatedMatch = await this.findOne(matchId);
@@ -851,6 +1096,11 @@ export class MatchesService {
       pitchCostSar,
       dto.max_players,
     );
+    // Underfill protection: minimum total players (host included) needed for
+    // the match to be played. Always even, max−2 by product rule
+    // (5v5→8, 7v7→12, 11v11→20), floored at 2. Server-authoritative —
+    // the client never sets it.
+    const minPlayers = MatchesService.minPlayersFor(dto.max_players);
 
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
@@ -888,6 +1138,7 @@ export class MatchesService {
           price_per_player: pricePerPlayer.toString(),
           pitch_cost_sar: pitchCostSar.toString(),
           max_players: dto.max_players,
+          min_players: minPlayers,
           status: 'Open',
           visibility,
           booking_mode: bookingMode,
@@ -1390,6 +1641,11 @@ export class MatchesService {
    */
   async markNoShow(hostId: string, matchId: string, targetUserId: string, noShow: boolean) {
     const graceMins = await this.settings.getNumber('grace_period_mins', 0);
+    // A host can never be a no-show in his own match — the roster row is his
+    // attendance record, not a target. Reject early, before any side effects.
+    if (targetUserId === hostId) {
+      throw new BadRequestException('You cannot mark yourself as a no-show.');
+    }
     let wasFlagged = false; // player's no_show state BEFORE this call
     await this.db.transaction(async (tx) => {
       const [match] = await tx
@@ -1534,8 +1790,11 @@ export class MatchesService {
     }
 
     // ── Marked player notification — the banner only reaches them if they
-    // reopen the match; the bell reaches them anywhere. Best-effort. ──
-    if (wasFlagged !== noShow) {
+    // reopen the match; the bell reaches them anywhere. Best-effort.
+    // Only on an actual new MARK — clearing a mark must not say "you were
+    // marked". (record() additionally never delivers no_show_marked to the
+    // actor, so a self-mark can never notify the host either.) ──
+    if (noShow && !wasFlagged) {
       try {
         await this.activitiesService.record({
           actorId: hostId,

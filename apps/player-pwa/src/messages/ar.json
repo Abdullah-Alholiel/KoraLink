@@ -530,7 +530,9 @@
         "accountSuspended": "تم إيقاف حسابك مؤقتًا",
         "accountBanned": "تم حظر حسابك",
         "accountUnbanned": "تم رفع الحظر عن حسابك",
-        "noShowMarked": "تم تسجيلك كمتغيب"
+        "noShowMarked": "تم تسجيلك كمتغيب",
+        "hostUnderfilledNudge": "مباراتك ما زالت تحتاج لاعبين إضافيين — قم بدعوتهم قبل انطلاق المباراة",
+        "matchAutoCancelled": "تم إلغاء المباراة — لم يتم الوصول إلى الحد الأدنى من عدد اللاعبين"
     },
     "payment": {
         "title": "الدفع",
@@ -684,7 +686,9 @@
         "accountSuspended": "تم إيقاف حسابك مؤقتًا",
         "accountBanned": "تم حظر حسابك",
         "accountUnbanned": "تم رفع الحظر عن حسابك",
-        "noShowMarked": "تم تسجيلك كمتغيب"
+        "noShowMarked": "تم تسجيلك كمتغيب",
+        "hostUnderfilledNudge": "مباراتك ما زالت تحتاج لاعبين إضافيين — قم بدعوتهم قبل انطلاق المباراة",
+        "matchAutoCancelled": "تم إلغاء المباراة — لم يتم الوصول إلى الحد الأدنى من عدد اللاعبين"
     },
     "attendance": {
         "title": "الحضور والغياب",

@@ -25,6 +25,8 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   account_banned: Ban,
   account_unbanned: ShieldCheck,
   no_show_marked: AlertTriangle,
+  host_underfilled_nudge: UserPlus,
+  match_auto_cancelled: XCircle,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -41,6 +43,8 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   account_banned: 'feed.accountBanned',
   account_unbanned: 'feed.accountUnbanned',
   no_show_marked: 'feed.noShowMarked',
+  host_underfilled_nudge: 'feed.hostUnderfilledNudge',
+  match_auto_cancelled: 'feed.matchAutoCancelled',
 };
 
 export default function ActivityCard({ item, locale }: ActivityCardProps) {
