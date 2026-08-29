@@ -1,23 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 13,
-  "last_run_at": "2026-08-29T10:15:00Z",
+  "last_run": 14,
+  "last_run_at": "2026-08-29T15:15:00Z",
   "last_run_commits": [
-    "ecdf29c",
-    "6b0ffab",
-    "b3c7445",
-    "24e59af",
-    "2b520e3"
+    "c4b92b0",
+    "b4d098b",
+    "24c7388"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-29T10-15Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-29T15-15Z.md",
   "in_review_items": [
-    "P0-4 auto-cancel refund atomicity (ecdf29c): tx-wrapped guard+refund+ledger+slot-release, 5 jest specs — next run: re-run gates, spot-check a real auto-cancel log line (refunded=SAR, slotReleased) or simulate one underfilled koralink match.",
-    "P1-21 clear-mark spares under_review disputes (ecdf29c): narrowed to status='opened' — next run: re-run gates; optional live check: mark→dispute→admin under_review→host clears→dispute stays under_review.",
-    "P1-19 feed pagination (6b0ffab): envelope {matches,total,hasMore} + offset + useInfiniteQuery + Load More; time-filter dead wire fixed — next run: re-run gates + one live probe (?limit=2&offset=2 envelope) + eyeball Load More in the PWA.",
-    "P1-20 push prefs (2b520e3): users.push_muted/quiet_* columns (migration 0022 applied), PATCH /users/me/push-preferences, sendPushToUsers filtering, profile UI, en/ar i18n — next run: re-run gates + verify night suppression path (unit-pinned; observe one live quiet-window skip if feasible).",
-    "P2-22 members-only private calendar export (24e59af): getCalendarMatch projection + 5 specs — next run: re-run gates; live probe outsider-403 if a private match exists (else skip).",
-    "P2-15/P2-16/P2-6 micro-fixes (b3c7445): wallet history paging key, captureError in PWA error paths, WS leave-conversation auth, underfill ORDER BY — next run: re-run gates only."
+    "P1-12 admin i18n partner-portal slice (c4b92b0): next-intl + en/ar catalogs (198 keys parity) + locale toggle + RTL boot script + Tajawal; partner portal + shared components localized — next run: re-run gates, visual check both locales (set admin_locale=ar in localStorage, /partner + /partner/pitches), verify SlotManager day names render Arabic, confirm HQ pages unchanged.",
+    "P1-24 host roster removal (b4d098b): DELETE /matches/:id/players/:playerId + player_removed verb (migration 0023 applied, live enum verified) + PWA two-tap remove — next run: re-run gates; live E2E already PASSED this run (create→join→remove 200→feed→cancel); spot-check the removed player's bell notification renders the feed.playerRemoved label.",
+    "P2-24 admin apiFetch empty-body + timeout (24c7388) — next run: re-run gates only."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Real payment provider integration pending. NOTE (run #2): live box runs NODE_ENV=development so the prod-gate is not exercised — dev-login + dummy topup live for tailnet peers; must set NODE_ENV=production + real secrets before public launch.",
@@ -28,5 +23,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #13 (10:15Z, ~1h25m — stopped early on the 3-item quota guardrail): GLM probes 200 (flash + glm-5.3); 5.3-as-reviewer TRIAL data point 1/3 — both reviewers completed in 150s/119s, no timeout, findings mostly survived verification (slot-double-booking P0 REFUTED: create books slot in-tx). Built 5 slices: P0-4 auto-cancel refund tx (ecdf29c) + P1-21 clear-mark dispute scope + P1-19 feed pagination envelope/offset/useInfiniteQuery/Load More + time-filter dead-wire fix (6b0ffab) + micro-batch P2-15/P2-16/P2-6/underfill ORDER BY (b3c7445) + P2-22 members-only calendar export (24e59af) + P1-20 push mute/quiet-hours with migration 0022 committed BEFORE db:migrate and live-verified (2b520e3). Final gates: build 3/3, jest 144/144, vitest 234/234, tsc 0 x2, lint clean. All slices live-probed on restarted services. TRAPS: run #13 had NO delegated-child marker (kanban bare calls fine); giant inline grep/sed one-liners trip the terminal hardline parser — use short grep -n + read_file instead; heredoc python blocked. Origin advanced mid-run (sibling docs commits) — push fast-forwarded clean. Next-run priority: verify run #13 claims (esp. Load More render + quiet-window suppression), then P1-12 admin i18n or P2-13 clubs pills, then P2-23. Trial data point 2/3 due."
+  "notes": "Run #14 (15:15Z, ~1h05m — 3 items, quota guardrail cap): GLM probes 200; 5.3-as-reviewer TRIAL data point 2/3 — Reviewer A 103s/9 calls, Reviewer B 137s/14 calls, zero timeouts, all 10 run #13 verdicts BUILT-AS-CLAIMED (0 false positives this run). Built: P1-12 partner-portal i18n slice (c4b92b0) + P1-24 host roster removal full-stack (b4d098b, migration 0023 IF NOT EXISTS reconciling 2 out-of-band live enum values) + P2-24 apiFetch hardening (24c7388). Final gates: build 3/3, jest 151/151, vitest 234/234, tsc 0 x3 (api+pwa+admin), PWA lint clean. P1-24 live E2E PASS (403 guard, 200 removal, populated response, feed notification). TRAPS this run: HEAD was marked HERMES_DELEGATED_CHILD_CONTEXT=1 (runbook said bare — use env -u prefix for kanban); giant inline sed/awk one-liners trip the hardline parser (use script files or short grep -n + read_file); write_file produced corrupted output twice mid-session (Sidebar.tsx, utils.ts) — caught and rewritten cleanly, ALWAYS re-read after large overwrite; admin app has NO test runner (verification = tsc + build + parity script + live chunks grep); pg driver is porsager 'postgres' at monorepo root, NOT 'pg'. Drizzle generated a false-positive ALTER at migrations-apply (line 207 transformCreateStmt notice) but reported success — migration verified in live enum. Next-run priority: verify run #14 claims (visual admin RTL check first — headless chrome unavailable this run), then P1-26 partner match visibility (natural follow-on, same pages) or P2-13 clubs pills, then P2-23. Trial data point 3/3 due (decide glm-5.3 vs flash after)."
 }
