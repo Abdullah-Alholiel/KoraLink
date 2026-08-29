@@ -261,6 +261,42 @@ export interface PartnerSlot {
   match_id: string | null;
 }
 
+/** P1-26: one row of GET /partner/matches (partner ops view). */
+export interface PartnerMatchRow {
+  id: string;
+  title: string;
+  status: string;
+  scheduled_at: string;
+  duration_mins: number;
+  booking_mode: string;
+  spots_filled: number;
+  max_players: number;
+  no_show_count: number;
+  pitch_id: string;
+  pitch_name: string | null;
+  venue_id: string;
+  venue_name: string | null;
+  host_name: string | null;
+}
+
+export interface PartnerMatchList {
+  matches: PartnerMatchRow[];
+  total: number;
+  hasMore: boolean;
+}
+
+export interface PartnerMatchDetail extends Omit<PartnerMatchRow, 'pitch_id'> {
+  visibility: string;
+  players: {
+    user_id: string;
+    full_name: string | null;
+    phone: string;
+    team: string | null;
+    is_host: boolean;
+    no_show: boolean;
+  }[];
+}
+
 export interface PartnerEarnings {
   settlements: {
     id: string;

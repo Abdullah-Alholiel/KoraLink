@@ -22,6 +22,7 @@ export type ConsoleSection =
   | 'partner.dashboard'
   | 'partner.venues'
   | 'partner.pitches'
+  | 'partner.matches'
   | 'partner.earnings'
   | 'partner.settings';
 
@@ -43,6 +44,7 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
     'partner.dashboard',
     'partner.venues',
     'partner.pitches',
+    'partner.matches',
     'partner.earnings',
     'partner.settings',
   ],
@@ -50,6 +52,7 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
     'partner.dashboard',
     'partner.venues',
     'partner.pitches',
+    'partner.matches',
     'partner.earnings',
     'partner.settings',
   ],

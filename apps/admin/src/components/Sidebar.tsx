@@ -36,6 +36,7 @@ const SECTION_META: Record<ConsoleSection, { href: string; labelKey: string; ico
   'partner.dashboard': { href: '/partner', labelKey: 'dashboard', icon: LayoutDashboard },
   'partner.venues': { href: '/partner/venues', labelKey: 'myVenues', icon: MapPin },
   'partner.pitches': { href: '/partner/pitches', labelKey: 'myPitches', icon: MapPin },
+  'partner.matches': { href: '/partner/matches', labelKey: 'partnerMatches', icon: Trophy },
   'partner.earnings': { href: '/partner/earnings', labelKey: 'earnings', icon: Wallet },
   'partner.settings': { href: '/partner/settings', labelKey: 'settings', icon: Settings },
 };
