@@ -20,7 +20,8 @@ export type ActivityVerb =
   | 'no_show_marked'
   | 'host_underfilled_nudge'
   | 'player_removed'
-  | 'match_auto_cancelled';
+  | 'match_auto_cancelled'
+  | 'report_resolved';
 
 export interface FeedItem {
   id: string;

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ActivityVerb" ADD VALUE 'report_resolved';

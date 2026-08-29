@@ -1,38 +1,52 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 
+/** P2-23 (run #17): reporter closure — the caller's own reports + outcomes. */
+
+export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
 export type ReportSubjectType = 'user' | 'match' | 'venue';
 
-export interface Report {
+export interface MyReportApi {
   id: string;
   subject_type: ReportSubjectType;
   subject_id: string;
+  subject_label: string;
   reason: string;
-  status: string;
+  status: ReportStatus;
+  resolution: string | null;
+  resolved_at: string | null;
   created_at: string;
 }
 
-/** Submit a report against a user / match / venue (POST /reports). */
+export function useMyReports() {
+  return useQuery<{ reports: MyReportApi[] }, FetchError>({
+    queryKey: ['reports', 'mine'],
+    queryFn: () => fetcher<{ reports: MyReportApi[] }>('/reports'),
+    staleTime: 30_000,
+  });
+}
+
+/** Submit a report (POST /reports). On success, invalidates the mine-list. */
 export function useReport() {
+  const queryClient = useQueryClient();
   return useMutation<
-    Report,
+    { id: string; status: string },
     FetchError,
     { subjectType: ReportSubjectType; subjectId: string; reason: string }
   >({
-    mutationFn: ({ subjectType, subjectId, reason }) =>
-      fetcher<Report>('/reports', {
+    mutationFn: (input) =>
+      fetcher<{ id: string; status: string }>('/reports', {
         method: 'POST',
-        body: JSON.stringify({ subjectType, subjectId, reason }),
+        body: JSON.stringify({
+          subjectType: input.subjectType,
+          subjectId: input.subjectId,
+          reason: input.reason,
+        }),
       }),
-    onSuccess: (_data, vars) => {
-      trackEvent('report_submitted', {
-        subject_type: vars.subjectType,
-        subject_id: vars.subjectId,
-      });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['reports', 'mine'] });
     },
-    onError: (err) => captureError(err, { scope: 'report' }),
   });
 }

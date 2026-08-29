@@ -117,6 +117,7 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'match_auto_cancelled',
   // ── Host moderation ──
   'player_removed',
+  'report_resolved',
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

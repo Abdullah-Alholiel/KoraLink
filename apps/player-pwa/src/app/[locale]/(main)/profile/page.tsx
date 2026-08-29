@@ -18,6 +18,7 @@ import {
     Bell,
     BellOff,
     Moon,
+    Flag,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -197,6 +198,12 @@ export default function ProfilePage() {
                     icon={<Trophy className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.myGames')}
                     href={`/${locale}/my-games`}
+                />
+                <div className="h-px bg-gray-50 mx-4" />
+                <MenuItem
+                    icon={<Flag className="w-5 h-5" strokeWidth={1.5} />}
+                    label={t('profile.myReports')}
+                    href={`/${locale}/reports`}
                 />
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem

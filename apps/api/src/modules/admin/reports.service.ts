@@ -9,6 +9,8 @@ import { ResolveReportDto } from './dto/resolve-report.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { AdminUsersService } from './users.service';
+import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -19,6 +21,8 @@ export class AdminReportsService {
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
     private readonly adminUsers: AdminUsersService,
+    private readonly activities: ActivitiesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(dto: ListReportsDto) {
@@ -116,6 +120,28 @@ export class AdminReportsService {
     });
     this.realtime.broadcastOps('reports');
     if (dto.banSubject) this.realtime.broadcastOps('users');
+
+    // P2-23 (run #17): reporter closure — in-app activity (feed + bell) and a
+    // web-push that honors the reporter's delivery preferences (P1-20/P2-27).
+    // Best-effort: a notification failure must never fail the resolution.
+    try {
+      await this.activities.record({
+        actorId: adminId,
+        verb: 'report_resolved',
+        recipients: [before.reporter.id],
+        excludeActor: false,
+      });
+      await this.notifications.sendPushToUsers([before.reporter.id], {
+        title: 'Report update',
+        body:
+          dto.outcome === 'resolved'
+            ? 'Your report was resolved. Thank you for helping keep KoraLink safe.'
+            : 'Your report was reviewed and dismissed.',
+        data: { type: 'report-resolved' },
+      });
+    } catch {
+      // best-effort — resolution already committed and audited
+    }
 
     return after;
   }

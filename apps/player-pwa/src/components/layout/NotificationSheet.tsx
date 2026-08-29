@@ -19,6 +19,7 @@ import {
   XCircle,
   PauseCircle,
   Ban,
+  Flag,
   type LucideIcon,
 } from 'lucide-react';
 import { useNotificationsFeed, useMarkNotificationsRead } from '@/hooks/useNotificationsFeed';
@@ -50,6 +51,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   host_underfilled_nudge: UserPlus,
   player_removed: UserMinus,
   match_auto_cancelled: XCircle,
+  report_resolved: Flag,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -69,6 +71,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   host_underfilled_nudge: 'notifications.hostUnderfilledNudge',
   player_removed: 'notifications.playerRemoved',
   match_auto_cancelled: 'notifications.matchAutoCancelled',
+  report_resolved: 'notifications.reportResolved',
 };
 
 /**

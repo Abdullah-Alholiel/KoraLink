@@ -22,9 +22,10 @@ import { AdminMatchesController } from './matches.controller';
 import { MatchesModule } from '../matches/matches.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { ActivitiesModule } from '../activities/activities.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [MatchesModule, GatewayModule, ActivitiesModule],
+  imports: [MatchesModule, GatewayModule, ActivitiesModule, NotificationsModule],
   controllers: [
     MetricsController,
     AdminUsersController,

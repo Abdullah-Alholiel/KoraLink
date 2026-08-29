@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Plus, Users, UserPlus, UserMinus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, type LucideIcon } from 'lucide-react';
+import { Plus, Users, UserPlus, UserMinus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, Flag, type LucideIcon } from 'lucide-react';
 import type { FeedItem, ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
 
@@ -28,6 +28,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   host_underfilled_nudge: UserPlus,
   player_removed: UserMinus,
   match_auto_cancelled: XCircle,
+  report_resolved: Flag,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -47,6 +48,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   host_underfilled_nudge: 'feed.hostUnderfilledNudge',
   player_removed: 'feed.playerRemoved',
   match_auto_cancelled: 'feed.matchAutoCancelled',
+  report_resolved: 'feed.reportResolved',
 };
 
 export default function ActivityCard({ item, locale }: ActivityCardProps) {

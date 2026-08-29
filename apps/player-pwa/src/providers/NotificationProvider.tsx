@@ -87,6 +87,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
         host_underfilled_nudge: t('hostUnderfilledNudge'),
         player_removed: t('playerRemoved'),
         match_auto_cancelled: t('matchAutoCancelled'),
+        report_resolved: t('reportResolved'),
       };
       const message = copy[payload.verb] ?? t('newActivity');
       const href = payload.verb === 'followed'

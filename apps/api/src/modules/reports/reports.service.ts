@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches, reports, users, venues } from '../../database/schema';
@@ -62,6 +62,49 @@ export class ReportsService {
     }
 
     return report;
+  }
+
+  /**
+   * P2-23 (run #17): the reporter's own reports, newest first — closes the
+   * "reporters never learn the outcome" gap. Subject labels only (no
+   * contact data); resolution text only once the report is closed.
+   */
+  async listMine(reporterId: string) {
+    const rows = await this.db
+      .select({
+        id: reports.id,
+        subject_type: reports.subject_type,
+        subject_id: reports.subject_id,
+        reason: reports.reason,
+        status: reports.status,
+        resolution: reports.resolution,
+        resolved_at: reports.resolved_at,
+        created_at: reports.created_at,
+        user_name: users.full_name,
+        match_title: matches.title,
+        venue_name: venues.name,
+      })
+      .from(reports)
+      .leftJoin(users, and(eq(reports.subject_type, 'user'), eq(users.id, reports.subject_id)))
+      .leftJoin(matches, and(eq(reports.subject_type, 'match'), eq(matches.id, reports.subject_id)))
+      .leftJoin(venues, and(eq(reports.subject_type, 'venue'), eq(venues.id, reports.subject_id)))
+      .where(eq(reports.reporter_id, reporterId))
+      .orderBy(desc(reports.created_at))
+      .limit(50);
+
+    return {
+      reports: rows.map((r) => ({
+        id: r.id,
+        subject_type: r.subject_type,
+        subject_id: r.subject_id,
+        subject_label: r.user_name ?? r.match_title ?? r.venue_name ?? r.subject_id,
+        reason: r.reason,
+        status: r.status,
+        resolution: r.resolution,
+        resolved_at: r.resolved_at,
+        created_at: r.created_at,
+      })),
+    };
   }
 
   private async assertSubjectExists(type: ReportSubjectType, id: string) {
