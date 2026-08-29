@@ -20,6 +20,7 @@ import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
+import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
 
 @Controller('partner')
 @UseGuards(JwtCookieAuthGuard, RolesGuard)
@@ -124,6 +125,29 @@ export class PartnerController {
   @Get('verification')
   getVerification(@CurrentUser() user: { sub: string }) {
     return this.partner.getVerification(user.sub);
+  }
+
+  // ── Match / roster visibility (P1-26) ─────────────────────────────────────
+
+  @Get('matches')
+  matches(
+    @CurrentUser() user: { sub: string; role: string },
+    @Query() q: GetPartnerMatchesDto,
+  ) {
+    return this.partner.getPartnerMatches(user.sub, user.role, {
+      scope: q.scope ?? 'today',
+      status: q.status,
+      limit: q.limit ?? 50,
+      offset: q.offset ?? 0,
+    });
+  }
+
+  @Get('matches/:id')
+  matchDetail(
+    @CurrentUser() user: { sub: string; role: string },
+    @Param('id') id: string,
+  ) {
+    return this.partner.getPartnerMatch(user.sub, user.role, id);
   }
 
   @Put('verification')

@@ -11,6 +11,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
   matches,
+  match_players,
   pitch_slots,
   pitches,
   settlements,
@@ -637,5 +638,126 @@ export class PartnerService {
     this.realtime.broadcastOps('venues');
 
     return { deleted: true };
+  }
+
+  // ── Match visibility (P1-26) ────────────────────────────────────────────────
+
+  /**
+   * Matches on the actor's pitches — the partner's ops view. Scoping mirrors
+   * getDashboard/getEarnings: owners see their venues' pitches, Admins see all
+   * (support/moderation). Both scopes return ALL statuses by default (today's
+   * view includes cancelled/completed — an ops surface, not a feed); `?status=`
+   * narrows. "today" is the Riyadh-local calendar day (app display TZ).
+   */
+  async getPartnerMatches(
+    ownerId: string,
+    actorRole: string | undefined,
+    q: { scope: 'today' | 'upcoming'; status?: string; limit: number; offset: number },
+  ) {
+    const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
+    if (!pitchIds.length) {
+      return { matches: [], total: 0, hasMore: false };
+    }
+
+    const timeScope =
+      q.scope === 'upcoming'
+        ? sql`${matches.scheduled_at} >= now()`
+        : sql`(${matches.scheduled_at} AT TIME ZONE 'Asia/Riyadh')::date = (now() AT TIME ZONE 'Asia/Riyadh')::date`;
+
+    const statusFilter =
+      q.status && q.status.length
+        ? sql`${matches.status} = ${q.status}`
+        : sql`true`;
+
+    const rows = await this.db
+      .select({
+        id: matches.id,
+        title: matches.title,
+        status: matches.status,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
+        booking_mode: matches.booking_mode,
+        spots_filled: sql<number>`count(${match_players.id})::int`,
+        max_players: matches.max_players,
+        no_show_count: sql<number>`count(${match_players.id}) filter (where ${match_players.no_show})::int`,
+        pitch_id: matches.pitch_id,
+        pitch_name: pitches.name,
+        venue_id: venues.id,
+        venue_name: venues.name,
+        host_name: users.full_name,
+        total: sql<number>`count(*) over ()::int`,
+      })
+      .from(matches)
+      .innerJoin(pitches, eq(matches.pitch_id, pitches.id))
+      .innerJoin(venues, eq(pitches.venue_id, venues.id))
+      .innerJoin(users, eq(matches.host_id, users.id))
+      .leftJoin(match_players, eq(match_players.match_id, matches.id))
+      .where(and(inArray(matches.pitch_id, pitchIds), timeScope, statusFilter))
+      .groupBy(
+        matches.id,
+        pitches.name,
+        venues.id,
+        venues.name,
+        users.full_name,
+      )
+      .orderBy(matches.scheduled_at)
+      .limit(q.limit)
+      .offset(q.offset);
+
+    const total = rows.length > 0 ? Number(rows[0].total) : 0;
+    return {
+      matches: rows.map(({ total: _t, ...m }) => m),
+      total,
+      hasMore: q.offset + rows.length < total,
+    };
+  }
+
+  /** One scoped match with its full roster (names, phones, teams, no-shows). */
+  async getPartnerMatch(actorId: string, actorRole: string, matchId: string) {
+    const [match] = await this.db
+      .select({
+        id: matches.id,
+        pitch_id: matches.pitch_id,
+        title: matches.title,
+        status: matches.status,
+        visibility: matches.visibility,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
+        booking_mode: matches.booking_mode,
+        spots_filled: sql<number>`(select count(*)::int from ${match_players} mp where mp.match_id = ${matches.id})`,
+        max_players: matches.max_players,
+        no_show_count: sql<number>`(select count(*)::int from ${match_players} mp where mp.match_id = ${matches.id} and mp.no_show)`,
+        pitch_name: pitches.name,
+        venue_id: venues.id,
+        venue_name: venues.name,
+        host_name: users.full_name,
+      })
+      .from(matches)
+      .innerJoin(pitches, eq(matches.pitch_id, pitches.id))
+      .innerJoin(venues, eq(pitches.venue_id, venues.id))
+      .innerJoin(users, eq(matches.host_id, users.id))
+      .where(eq(matches.id, matchId))
+      .limit(1);
+    if (!match) throw new NotFoundException('Match not found.');
+
+    // Same access rule as pitch mutations: owner or Admin.
+    await this.assertPitchAccess(actorId, actorRole, match.pitch_id);
+
+    const players = await this.db
+      .select({
+        user_id: match_players.user_id,
+        full_name: users.full_name,
+        phone: sql<string>`${users.phone}::text`,
+        team: match_players.team,
+        is_host: match_players.is_host,
+        no_show: match_players.no_show,
+      })
+      .from(match_players)
+      .innerJoin(users, eq(match_players.user_id, users.id))
+      .where(eq(match_players.match_id, matchId))
+      .orderBy(desc(match_players.is_host), users.full_name);
+
+    const { pitch_id: _pid, ...detail } = match;
+    return { ...detail, players };
   }
 }
