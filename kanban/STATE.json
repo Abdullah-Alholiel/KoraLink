@@ -3,7 +3,7 @@
   "loop": "koralink-factory-5h",
   "last_run": 15,
   "last_run_at": "2026-08-29T17:35:00Z",
-  "last_run_commits": [],
+  "last_run_commits": ["0245e27"],
   "last_run_report": "kanban/RUNS/2026-08-29T17-35Z.md",
   "in_review_items": [
     "P1-12 admin i18n partner-portal slice (c4b92b0): re-verified run #15 (gates green, 198/198 parity, Reviewer B BUILT-AS-CLAIMED). Remaining: visual RTL check — no browser on box; Abdullah sets admin_locale=ar and eyeballs /partner + /partner/pitches, then promote to DONE (HQ console strings are the next slice).",
