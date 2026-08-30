@@ -772,9 +772,10 @@ export class PartnerService {
   /**
    * Matches on the actor's pitches — the partner's ops view. Scoping mirrors
    * getDashboard/getEarnings: owners see their venues' pitches, Admins see all
-   * (support/moderation). Both scopes return ALL statuses by default (today's
-   * view includes cancelled/completed — an ops surface, not a feed); `?status=`
-   * narrows. "today" is the Riyadh-local calendar day (app display TZ).
+   * (support/moderation). Default statuses differ by scope (P1-34): "today" is
+   * the Riyadh-local recap and includes cancelled/completed (ops surface, not a
+   * feed); "upcoming" is forward-looking and excludes Cancelled by default —
+   * dead matches listed as upcoming are noise. `?status=` narrows either scope.
    */
   async getPartnerMatches(
     ownerId: string,
@@ -801,7 +802,11 @@ export class PartnerService {
     const statusFilter =
       q.status && q.status.length
         ? sql`${matches.status} = ${q.status}`
-        : sql`true`;
+        : q.scope === 'upcoming'
+          ? // P1-34: forward-looking view lists playable matches only — an
+            // explicit ?status= (incl. 'Cancelled') still wins above.
+            sql`${matches.status} <> ${'Cancelled'}`
+          : sql`true`;
 
     // P2-30: additive venue/pitch narrowing (venueId implies its pitches;
     // explicit pitchId wins). Never short-circuits the scope/status predicates.

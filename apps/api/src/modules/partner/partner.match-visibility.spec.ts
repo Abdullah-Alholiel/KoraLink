@@ -1,4 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { PartnerService } from './partner.service';
 import { match_players, matches, pitches } from '../../database/schema';
 
@@ -179,6 +180,48 @@ describe('PartnerService match visibility (P1-26)', () => {
         offset: 0,
       });
       expect(result).toEqual({ matches: [], total: 0, hasMore: false });
+    });
+
+    it('upcoming excludes Cancelled by default; explicit ?status= wins (P1-34)', async () => {
+      const rowsByTable = new Map<unknown, unknown[]>([
+        [pitches, [{ id: PITCH_1, owner_id: OWNER }]],
+        [matches, []],
+      ]);
+      const { service, captured } = makeService(rowsByTable);
+      const dialect = new PgDialect();
+
+      // Default upcoming: WHERE must reference the status column with the
+      // 'Cancelled' exclusion bound as a parameter (PgDialect materializes the
+      // build-time params — the raw chunk walker cannot see them).
+      await service.getPartnerMatches(OWNER, 'VenueOwner', {
+        scope: 'upcoming',
+        limit: 50,
+        offset: 0,
+      });
+      const defaultQuery = dialect.sqlToQuery(captured.get(matches));
+      expect(defaultQuery.sql).toContain('"matches"."status"');
+      expect(defaultQuery.params).toContain('Cancelled');
+
+      // Explicit ?status= replaces the default exclusion (Open proves precedence —
+      // the default would have forced 'Cancelled').
+      await service.getPartnerMatches(OWNER, 'VenueOwner', {
+        scope: 'upcoming',
+        status: 'Open',
+        limit: 50,
+        offset: 0,
+      });
+      const explicitQuery = dialect.sqlToQuery(captured.get(matches));
+      expect(explicitQuery.params).toContain('Open');
+      expect(explicitQuery.params).not.toContain('Cancelled');
+
+      // Today recap keeps the all-status default: no status predicate at all.
+      await service.getPartnerMatches(OWNER, 'VenueOwner', {
+        scope: 'today',
+        limit: 50,
+        offset: 0,
+      });
+      const todayQuery = dialect.sqlToQuery(captured.get(matches));
+      expect(todayQuery.sql).not.toContain('"matches"."status"');
     });
   });
 
