@@ -12,7 +12,7 @@ import StatusBadge from '@/components/StatusBadge';
 export default function PartnerMatchDetailPage() {
   const t = useTranslations('partner.matches');
   const params = useParams<{ id: string }>();
-  const id = params.id;
+  const id = params?.id ?? '';
 
   const { data, loading, error } = useLiveAdminData<PartnerMatchDetail>(
     `/partner/matches/${id}`,

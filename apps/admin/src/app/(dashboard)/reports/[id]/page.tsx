@@ -13,7 +13,7 @@ import StatusBadge from '@/components/StatusBadge';
 export default function ReportDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const id = params.id;
+  const id = params?.id ?? '';
 
   const { data, loading, error, reload } = useLiveAdminData<AdminReportDetail>(
     `/admin/reports/${id}`,

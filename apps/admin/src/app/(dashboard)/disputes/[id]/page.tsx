@@ -44,7 +44,8 @@ const EVIDENCE_LABELS: Record<string, string> = {
 export default function DisputeDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const id = params.id;
+  // React 19 types: useParams() is nullable — match the PWA's defensive read.
+  const id = params?.id ?? '';
 
   const { data, loading, error, reload } = useLiveAdminData<DisputeDetail>(`/admin/disputes/${id}`, ['disputes']);
 

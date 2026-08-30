@@ -43,7 +43,7 @@ const SECTION_META: Record<ConsoleSection, { href: string; labelKey: string; ico
 
 export default function Sidebar() {
   const t = useTranslations('nav');
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const router = useRouter();
   const role = getRole();
   const isPartner = role === 'VenueOwner';

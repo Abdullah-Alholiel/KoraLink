@@ -21,7 +21,7 @@ function userStatus(u: AdminUser): string {
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const id = params.id;
+  const id = params?.id ?? '';
   const { data, loading, error, reload } = useLiveAdminData<AdminUser>(`/admin/users/${id}`);
   const [busy, setBusy] = useState(false);
 
