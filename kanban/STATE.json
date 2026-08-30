@@ -1,16 +1,14 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 19,
-  "last_run_at": "2026-08-30T16:55:00Z",
-  "last_run_commits": ["17d8e78", "06976ab", "6c34730", "357c543", "515908e", "2d715a1"],
-  "last_run_report": "kanban/RUNS/2026-08-30T15-16Z.md",
+  "last_run": 20,
+  "last_run_at": "2026-08-30T21:30:00Z",
+  "last_run_commits": ["644ab89", "aa7a2d2", "f772b78", "4150fb8", "c9e9b0b", "a5b9251"],
+  "last_run_report": "kanban/RUNS/2026-08-30T20-16Z.md",
   "in_review_items": [
-    "P1-33 orphan-migration fix (17d8e78): migration 0026_rapid_vin_gonzales (ADD VALUE IF NOT EXISTS x4) journaled idx 26, applied live (4 'already exists' NOTICEs, enum 17 values no dupes, migrations=28). Verify in run #20: journal last tag + enum values + count.",
-    "P1-34 partner upcoming excludes Cancelled (06976ab): jest 165/165 + live probe (default 0 cancelled, ?status=Cancelled 2, today unrestricted). Verify in run #20: re-run gates + one live upcoming probe.",
-    "P1-32 club hours+pitches (6c34730 + 515908e): badge/hours/pitch-cards on clubs/[id]; i18n 679/679; route 200 live; post-cycle review clean. Verify in run #20: gates + grep perHour in fresh .next chunks + route probe.",
-    "P2-26 profile/host UX states (357c543): stats skeleton + error/retry; host Suspense skeleton. Verify in run #20: gates + /en/host HTML contains animate-pulse.",
-    "P2-33 admin fresh-build repair (2d715a1): nullable params/pathname guards + not-found.tsx. Verify in run #20: rm -rf apps/admin/.next && npm run build (fresh, clean env) + admin service 200."
+    "P1-13 match reschedule (644ab89 + f772b78 + 4150fb8 + a5b9251): PATCH /matches/:id/schedule + RescheduleSheet, migration 0027 applied live. Verify in run #21: re-run gates (jest/vitest/build) + live probe: non-host 403, move on a fresh slot 200 (slot swap + wallet delta), invalid body 400. Use /tmp/run20-e2e.sh as the recipe (provision a fresh slot first — 64d1479a was freed and remains free).",
+    "P2-31(1) admin venue hours guard (c9e9b0b): client-side open/close validation + venues.hoursInvalid en/ar. Verify in run #21: gates + grep hoursInvalid in admin messages + i18n parity 240/240.",
+    "Quiet-hours spec wall-clock fix (aa7a2d2): quiet_end 23→0 in two specs (window is end-exclusive; old fixture failed 23:00-23:59 AST daily). Verify in run #21: jest notifications.push-preferences green at any hour."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -22,9 +20,9 @@
     "P2-29 host page nav placement — Abdullah to confirm intent (CTAs exist on feed).",
     "P2-32 foreign pitchId silent-ignore — decide document-or-404.",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
-    "RUNBOOK (run #19 incident): sourcing apps/api/.env leaks NODE_ENV=development into the persistent shell — turbo env-hash then forces fresh builds that prerender with the DEV runtime and crash. NEVER source app .env in the run shell; probe DB via one-shot `node --env-file=` subprocess instead. Unset NODE_ENV before gates."
+    "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #19 (15:16Z scheduled, ~1h50m): glm-5.3 reviewers (probe 200, 233s+335s) + post-cycle pair (69s+83s) — zero timeouts, 5th consecutive clean review run. All 4 run-#18 claims VERIFIED live (P1-31/P2-30/P2-28/A1 → DONE). Built: P1-33 migration 0026 (fresh-env enum convergence), P1-34 upcoming-excludes-Cancelled, P1-32 club hours+pitch list (RE-SCOPED: reviewer-B run #18 'no detail page' was a misdiagnosis — page existed outside (main); real gap was content), P2-26 profile/host UX states, P2-33 admin fresh-build repair (React-19 nullable params — latent since 2026-08-29 lockfile sync, masked by turbo cache). Incident: sourced apps/api/.env → NODE_ENV leak → dev-runtime prerender crash → misread as admin breakage; contained (unset), root cause separate, lesson in open_blockers + BOARD P2-33. Quota note: two micro-slices (P1-32/P2-26) cost ~one normal item; effective 4-item run ≈ 3-item budget. Next run #20: verify the 5 in_review items, then P1-13 (reschedule) → P1-28 (venue discovery)."
+  "notes": "Run #20 (20:16Z scheduled, ~1h20m): glm-5.3 reviewers (probe 200; 111s + 143s) + post-cycle review (78s) — zero timeouts, 6th consecutive clean review run. ALL 5 run-#19 claims verified live by Reviewer B (code+jest+DB probe+HTTP). Sentry/journal clean (no new signatures). BUILT P1-13 match reschedule end-to-end (API tx with FOR UPDATE row+slot locks, exact refund/charge/net-delta, server-authoritative schedule re-derivation, migration 0027 ActivityVerb match_rescheduled, PWA RescheduleSheet 5 UX states, i18n 683/683). TWO bugs caught by the run's own live E2E (never trust green unit tests alone): ReferenceType 'BOOKING' is not an enum value (spec had enshrined it — fixed to PITCH_BOOKING), and per-(match,slot) idempotency keys collide on legal A→B→A (now UUID-per-attempt). Post-cycle reviewer caught a REAL CRITICAL: cancelMatch read the match unlocked → reschedule-in-between could skip the refund (silent money loss); fixed with FOR UPDATE + proven by live create→reschedule→cancel drill (wallet arithmetic exact to the sar). Also built P2-31(1) admin hours guard; fixed 2 wall-clock-dependent quiet-hours specs (failed 23:00-23:59 AST daily). Boarded P2-34 (bell only on feed page — Reviewer B's 'no notifications surface' over-ranked, grounded as reachability gap) + P2-35 (clubs date labels en-US hardcode). Next run #21: verify the 3 in_review items, then P1-28 (venue discovery: search/city filter at venue level) or P2-34 bell placement — both finishable single-run slices."
 }
