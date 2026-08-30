@@ -203,18 +203,22 @@ export default function ClubPage() {
                     </div>
                   </div>
 
-                  {/* P1-32: operating hours row (Riyadh-local wall clock). */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                  {/* P1-32: operating hours row (Riyadh-local wall clock).
+                      Hidden when the venue defines no hours — never invent
+                      0:00–24:00 (post-cycle review, run #19). */}
+                  {(venue.open_hour !== undefined || venue.close_hour !== undefined) && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-400">{t('clubs.hours')}</p>
+                        <p className="text-sm font-semibold text-brand-black" dir="ltr">
+                          {String(venue.open_hour ?? 0).padStart(2, '0')}:00 – {String(venue.close_hour ?? 24).padStart(2, '0')}:00
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-400">{t('clubs.hours')}</p>
-                      <p className="text-sm font-semibold text-brand-black" dir="ltr">
-                        {String(venue.open_hour ?? 0).padStart(2, '0')}:00 – {String(venue.close_hour ?? 24).padStart(2, '0')}:00
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Owner */}
                   {venue.owner && (
