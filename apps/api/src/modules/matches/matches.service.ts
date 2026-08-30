@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -1628,20 +1629,22 @@ export class MatchesService {
   async cancelMatch(userId: string, matchId: string) {
     let refundedSar = 0;
     await this.db.transaction(async (tx) => {
-      const [match] = await tx
-        .select({
-          id: matches.id,
-          host_id: matches.host_id,
-          status: matches.status,
-          booking_mode: matches.booking_mode,
-          booking_slot_id: matches.booking_slot_id,
-          pitch_cost_sar: matches.pitch_cost_sar,
-          price_per_player: matches.price_per_player,
-          max_players: matches.max_players,
-        })
-        .from(matches)
-        .where(eq(matches.id, matchId))
-        .limit(1);
+      // FOR UPDATE row lock — serializes against rescheduleMatch, which moves
+      // booking_slot_id between this read and the release below. Without the
+      // lock, a committed reschedule in between leaves cancel holding a STALE
+      // slot id: the (now-freed) old slot fails the is_booked check and the
+      // host's refund is silently skipped while the match still cancels.
+      const [match] = await tx.execute(sql`
+        SELECT id, host_id, status, booking_mode, booking_slot_id,
+               pitch_cost_sar, price_per_player, max_players
+        FROM matches
+        WHERE id = ${matchId}::text
+        FOR UPDATE
+      `).then((r: unknown) => (r as { rows?: unknown[] }).rows ?? r) as Array<{
+        id: string; host_id: string; status: string;
+        booking_mode: string; booking_slot_id: string | null;
+        pitch_cost_sar: string | null; price_per_player: string; max_players: number;
+      }>;
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
@@ -1742,7 +1745,8 @@ export class MatchesService {
     // its target slot and 400s BEFORE any money moves), so keys must NOT be
     // deterministic per (match, slot): a host legally moving A→B→A would
     // otherwise hit the transactions unique constraint on the second visit.
-    const attemptId = Date.now();
+    // UUID suffix — collision-free even in the same millisecond (reviewer).
+    const attemptId = randomUUID();
     // Hoisted from the tx closure so the post-commit return can reference
     // them (closure-scoped lets would fall out of scope).
     let oldSlotId: string | null = null;
@@ -1843,20 +1847,24 @@ export class MatchesService {
       walletDeltaSar = round2(newCost - oldCost);
 
       // Release old slot + refund the host the exact debited amount.
+      // Guarded: a null/zero pitch_cost_sar (legacy rows) must not produce a
+      // zero-amount CREDIT row (post-cycle review, run #20).
       await tx
         .update(pitch_slots)
         .set(withTimestamp({ is_booked: false, booked_match_id: null }))
         .where(eq(pitch_slots.id, oldSlot.id));
 
-      await tx.insert(transactions).values({
-        user_id: userId,
-        type: 'CREDIT',
-        amount: oldCost.toString(),
-        reference_type: 'REFUND',
-        reference_id: matchId,
-        idempotency_key: `reschedule-refund-${matchId}-${newSlot.id}-${attemptId}`,
-        status: 'Completed',
-      });
+      if (oldCost > 0) {
+        await tx.insert(transactions).values({
+          user_id: userId,
+          type: 'CREDIT',
+          amount: oldCost.toString(),
+          reference_type: 'REFUND',
+          reference_id: matchId,
+          idempotency_key: `reschedule-refund-${matchId}-${newSlot.id}-${attemptId}`,
+          status: 'Completed',
+        }).onConflictDoNothing();
+      }
 
       // Book new slot + charge the new cost.
       await tx
@@ -1872,7 +1880,7 @@ export class MatchesService {
         reference_id: matchId,
         idempotency_key: `reschedule-charge-${matchId}-${newSlot.id}-${attemptId}`,
         status: 'Completed',
-      });
+      }).onConflictDoNothing();
 
       // Net wallet movement with a balance floor (a reschedule may cost MORE
       // if the new slot is longer / pricier — the host must cover it).

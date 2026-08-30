@@ -98,7 +98,10 @@ describe('MatchesService.rescheduleMatch', () => {
       insert: (table: unknown) => ({
         values: (v: Record<string, unknown>) => {
           if (table === transactions) insertedTransactions.push(v);
-          return { then: (r: (v: unknown) => void) => r([]) };
+          return {
+            then: (r: (v: unknown) => void) => r([]),
+            onConflictDoNothing: () => ({ then: (r: (v: unknown) => void) => r([]) }),
+          };
         },
       }),
     };
@@ -199,9 +202,9 @@ describe('MatchesService.rescheduleMatch', () => {
     const credit = h.insertedTransactions.find((t) => t.type === 'CREDIT');
     const debit = h.insertedTransactions.find((t) => t.type === 'DEBIT');
     expect(credit).toMatchObject({ amount: '100', reference_type: 'REFUND', reference_id: MATCH_ID });
-    expect(credit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-refund-match-1-slot-new-\d+$/));
+    expect(credit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-refund-match-1-slot-new-[0-9a-f-]{36}$/));
     expect(debit).toMatchObject({ amount: '150', reference_type: 'PITCH_BOOKING', reference_id: MATCH_ID });
-    expect(debit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-charge-match-1-slot-new-\d+$/));
+    expect(debit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-charge-match-1-slot-new-[0-9a-f-]{36}$/));
 
     // Slot swap: old released, new booked.
     expect(h.slotUpdates.length).toBe(2);
