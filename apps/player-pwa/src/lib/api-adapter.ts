@@ -76,6 +76,7 @@ export interface MatchHostApi {
 }
 
 export interface MatchPitchApi {
+  id?: string;
   name: string;
   surface_type?: string;
   size?: string; // e.g. '5v5', '7v7'
@@ -421,6 +422,9 @@ export function adaptMatchDetail(
       ? detail.host_id === currentUserId
       : false,
     isPrivate: detail.visibility === 'private',
+    bookingMode: detail.booking_mode,
+    pitchId: detail.pitch?.id,
+    bookingSlotId: detail.booking_slot_id ?? null,
   };
 }
 

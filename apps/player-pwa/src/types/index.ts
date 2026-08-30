@@ -66,6 +66,12 @@ export interface Match {
     hasVotedPotm?: boolean;
     /** True when the match is invite-link only (visibility = 'private'). */
     isPrivate?: boolean;
+    /** koralink matches occupy a bookable pitch slot — enables host reschedule. */
+    bookingMode?: 'koralink' | 'self';
+    /** The pitch the match occupies (reschedule offers this pitch's slots). */
+    pitchId?: string;
+    /** The slot currently holding the match (excluded from reschedule picker). */
+    bookingSlotId?: string | null;
 }
 
 export interface RosterPlayer {

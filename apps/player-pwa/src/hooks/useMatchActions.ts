@@ -248,3 +248,37 @@ export function useCompleteMatch() {
     },
   });
 }
+
+// ─── Reschedule Match (Host: moves a koralink match to a new slot) ──────
+
+export interface RescheduleMatchInput {
+  matchId: string;
+  bookingSlotId: string;
+}
+
+export function useRescheduleMatch() {
+  const queryClient = useQueryClient();
+  const showToast = useToast();
+
+  return useMutation<unknown, FetchError, RescheduleMatchInput>({
+    mutationFn: ({ matchId, bookingSlotId }) =>
+      fetcher(`/matches/${matchId}/schedule`, {
+        method: 'PATCH',
+        body: JSON.stringify({ booking_slot_id: bookingSlotId }),
+      }),
+    onSuccess: (_, { matchId }) => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['pitch-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+      showToast('Match rescheduled. Players will be notified.', 'success');
+      trackEvent('match_rescheduled', { match_id: matchId });
+    },
+    onError: (error) => {
+      showToast(
+        error.message || 'Failed to reschedule match.',
+        'error'
+      );
+    },
+  });
+}

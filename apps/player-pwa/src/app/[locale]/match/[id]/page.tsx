@@ -9,6 +9,7 @@ import {
     Share2,
     MessageSquare,
     Calendar,
+    CalendarClock,
     MapPin,
     Trophy,
     AlertTriangle,
@@ -25,7 +26,7 @@ import {
 import { useMatch } from '@/hooks/useMatches';
 import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
 import { useAppeal } from '@/hooks/useDisputes';
-import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch } from '@/hooks/useMatchActions';
+import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch, useRescheduleMatch } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
@@ -47,6 +48,7 @@ import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
+import RescheduleSheet from '@/components/matches/RescheduleSheet';
 import EmergencyCancelSheet from '@/components/matches/EmergencyCancelSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
 import ChatSheet from '@/components/matches/ChatSheet';
@@ -76,6 +78,7 @@ export default function MatchDetailPage({
     const joinMatch = useJoinMatch();
     const leaveMatch = useLeaveMatch();
     const cancelMatch = useCancelMatch();
+    const rescheduleMatch = useRescheduleMatch();
     const startMatch = useStartMatch();
     const completeMatch = useCompleteMatch();
     const markNoShow = useMarkNoShow(id);
@@ -93,6 +96,7 @@ export default function MatchDetailPage({
     const [showPayment, setShowPayment] = useState(false);
     const [showRules, setShowRules] = useState(false);
     const [showCancelSheet, setShowCancelSheet] = useState(false);
+    const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
     const [showEmergencyCancelSheet, setShowEmergencyCancelSheet] = useState(false);
     const [showLeaveSheet, setShowLeaveSheet] = useState(false);
     const [showChatSheet, setShowChatSheet] = useState(false);
@@ -579,6 +583,25 @@ export default function MatchDetailPage({
                                 </div>
                             )}
 
+                            {/* Reschedule Button (Host only — koralink matches,
+                                pre-match; the slot swap keeps roster + chat) */}
+                            {isUserHost &&
+                                !isMatchStarted &&
+                                match.bookingMode === 'koralink' &&
+                                !!match.pitchId &&
+                                match.status !== 'completed' &&
+                                match.status !== 'cancelled' && (
+                                <div className="px-5 pt-3">
+                                    <button
+                                        onClick={() => setShowRescheduleSheet(true)}
+                                        className="w-full py-3 rounded-xl border border-brand-green/40 text-brand-green text-sm font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                                    >
+                                        <CalendarClock className="w-4.5 h-4.5" strokeWidth={2} />
+                                        <span>{t('matchDetail.reschedule')}</span>
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Cancel Match / Emergency Cancel Button (Host only) */}
                             {isUserHost && match.status !== 'completed' && match.status !== 'cancelled' && (
                                 <div className="px-5 pt-6">
@@ -818,6 +841,24 @@ export default function MatchDetailPage({
                     matchTitle={match.title}
                     matchTime={`${match.date}, ${match.time}`}
                     isPending={cancelMatch.isPending}
+                />
+            )}
+
+            {/* Reschedule Sheet (Host - koralink matches, pre-match) */}
+            {match && match.pitchId && (
+                <RescheduleSheet
+                    isOpen={showRescheduleSheet}
+                    onClose={() => setShowRescheduleSheet(false)}
+                    onConfirm={(slot) => {
+                        rescheduleMatch.mutate(
+                            { matchId: id, bookingSlotId: slot.id },
+                            { onSuccess: () => setShowRescheduleSheet(false) },
+                        );
+                    }}
+                    currentSlotId={match.bookingSlotId}
+                    pitchId={match.pitchId}
+                    matchTitle={match.title}
+                    isPending={rescheduleMatch.isPending}
                 />
             )}
 

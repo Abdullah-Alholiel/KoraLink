@@ -216,13 +216,19 @@
     "privateBannerText": "Only people with this link can see the match. Share the invite link to bring players in.",
     "copyInviteLink": "Share invite link",
     "inviteShareText": "You're invited to a private KoraLink match!",
-    "joinToChat": "Join the match to see and send messages."
+    "joinToChat": "Join the match to see and send messages.",
+    "reschedule": "Reschedule"
   },
   "cancelMatch": {
     "title": "Cancel Match?",
     "warning": "All players will be notified and refunded. This action cannot be undone.",
     "confirm": "Cancel Match",
     "keep": "Keep Match"
+  },
+  "reschedule": {
+    "title": "Reschedule Match",
+    "noSlots": "No free slots left on this pitch today. Try again tomorrow.",
+    "confirm": "Move Match"
   },
   "emergencyCancel": {
     "title": "Emergency Match Cancellation",
