@@ -1,15 +1,15 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 17,
-  "last_run_at": "2026-08-29T21:19:00Z",
-  "last_run_commits": ["b12d13e", "7c5a6e1", "1141b40", "14ab3a2", "088942c"],
-  "last_run_report": "kanban/RUNS/2026-08-29T21-19Z.md",
+  "last_run": 18,
+  "last_run_at": "2026-08-30T11:10:00Z",
+  "last_run_commits": ["89acff8", "e50c727", "0b7b8cb", "695c896", "589cd2d", "86b927c"],
+  "last_run_report": "kanban/RUNS/2026-08-30T10-16Z.md",
   "in_review_items": [
-    "P1-25 venue operating hours (7c5a6e1 + migration 1141b40): gates green (build 3/3, jest 18/18, vitest 238/238, tsc 0) + live E2E PASS (closed-Friday generate skipped, clamping, createSlot 400s outside hours / 201 inside, migration applied + columns verified). Verify in run #18: re-run gates + live spot-check PATCH venue hours → generate skips out-of-hours.",
-    "P2-23 reporter closure (14ab3a2): gates green (build 3/3, vitest 238/238, jest 160/160, tsc 0) + live E2E PASS (player report → mine-list open → admin resolve → mine-list resolved → bell shows report_resolved; migration 0025 applied). Verify in run #18: re-run gates + GET /reports as +966500000001 shows the E2E report resolved.",
-    "P2-27 POTM push prefs (b12d13e): jest 9/9, build 3/3, dist-grep + restart verified. Verify in run #18: code read (sendPomDecidedNotification routes through sendPushToUsers) + jest re-run.",
-    "P2-13 partial (088942c): Available Now pill wired to venue hours, dead MapPin removed; vitest 238/238. Verify in run #18: pill filters on live box."
+    "P1-31 chat message reports (e50c727 + 0b7b8cb + 695c896, with 89acff8 A1 fix): gates green (build 3/3, jest 164/164, vitest 241/241, tsc 0) + live E2E PASS (report 201 / dup 400 / own-msg 400 / mine-list label / admin queue+detail snippet / resolve / closure). Verify in run #19: re-run gates + GET /reports as +966****0001 shows the resolved message report + admin queue ?subjectType=message non-empty.",
+    "P2-30 partner matches filters+pager (589cd2d): gates green (build 3/3, jest 18/18, tsc 0) + live verify PASS (venue containment 0 wrong rows on KSU/Olaya, pitch filter 1/0, pager distinct rows, fake venueId 0 rows). Verify in run #19: re-run gates + one filtered live probe.",
+    "P2-28 SW match-feed NetworkFirst (86b927c): build 3/3, vitest 241/241, sw.js grep NetworkFirst verified post-build. Verify in run #19: grep apps/player-pwa/public/sw.js for NetworkFirst after a fresh build.",
+    "A1 venue hours merged-pair fix (89acff8): tsc 0 + partner jest 18/18. Verify in run #19: code read partner.service.ts updates use openHour/closeHour not dto values."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -23,5 +23,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #17 (21:19Z off-schedule one-off, ~1h20m actual): glm-5.3 reviewers (probe 200, 92s+141s) — Reviewer A found 2 IMPORTANT in notifications (both fixed as P2-27), Reviewer B verified run #16 BUILT-AS-CLAIMED (P1-26 → DONE) + found P1-29/P2-28/P2-29/P2-30. Sentry clean (all issues pre-08-28). Built 4 items: P1-25 venue operating hours (full stack + migration 0024 + live E2E), P2-23 reporter closure (full stack + migration 0025 + live E2E), P2-27 POTM push prefs fix, P2-13 partial (Available Now + dead button). P2-25 closed by Abdullah decision (sibling commit e0867a8). Sibling agents VERY active (schema/activities/profile/admin-types/ReportSheet/BOARD) — one build caught their ReportSheet importing useReport; matched the interface. systemctl direct call approval-gated → use npm run restart. Next run #18 (10:15Z Aug 30): verify in_review items, then P2-30 → P2-28 → P1-27 or P2-26."
+  "notes": "Run #18 (10:16Z scheduled, ~55m actual): glm-5.3 reviewers (probe 200, 131s+184s, 3rd consecutive no-timeout run). Reviewer A found 2 IMPORTANT (both fixed: A1 merged-pair hours PATCH 89acff8, A2 report observability restore folded into P1-31) + 1 REFUTED (A3 skipped double-count — disjoint accounting, exact). Reviewer B verified ALL 4 run-#17 claims + found P1-31 (chat message reports — BUILT, live E2E PASS) and P1-32 (club detail page — boarded). P2-28 root cause bigger than boarded (SWR was stale-first always) — fixed NetworkFirst at source next.config.mjs; public/sw.js is gitignored, config is the tracked source. P2-30 built (filters+pager, live containment verified). E2E gotcha: admin dev-login needs surface:'ops'. Probe artifacts: 2 message reports left (1 resolved, 1 dismissed — real data), E2E msg IDs in run report. HERMES_DELEGATED_CHILD_CONTEXT inherited again — kanban calls under env -u. Next run #19 (15:15Z Aug 30): verify in_review, then P1-32 → P2-26 → P1-27."
 }
