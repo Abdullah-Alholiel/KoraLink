@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { REPORT_SUBJECT_TYPES, ReportSubjectType } from '../../reports/dto/create-report.dto';
 
 export class ListReportsDto {
   @ApiPropertyOptional({ enum: ['open', 'reviewing', 'resolved', 'dismissed'] })
@@ -8,10 +9,10 @@ export class ListReportsDto {
   @IsIn(['open', 'reviewing', 'resolved', 'dismissed'])
   status?: 'open' | 'reviewing' | 'resolved' | 'dismissed';
 
-  @ApiPropertyOptional({ enum: ['user', 'match', 'venue'] })
+  @ApiPropertyOptional({ enum: REPORT_SUBJECT_TYPES })
   @IsOptional()
-  @IsIn(['user', 'match', 'venue'])
-  subjectType?: 'user' | 'match' | 'venue';
+  @IsIn(REPORT_SUBJECT_TYPES)
+  subjectType?: ReportSubjectType;
 
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
