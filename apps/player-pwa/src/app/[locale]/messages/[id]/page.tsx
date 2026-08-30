@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Send, AlertCircle, Loader2, MoreVertical } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
+import ReportSheet from '@/components/matches/ReportSheet';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 
@@ -23,6 +24,8 @@ export default function ConversationPage({
   const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
 
   const [draft, setDraft] = useState('');
+  // P1-31: the message being reported (overflow ⋯ on a received bubble).
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const conversation = conversations?.find((c) => c.id === id);
@@ -89,14 +92,26 @@ export default function ConversationPage({
             const mine = m.sender.id === storeUser?.id;
             return (
               <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                    mine
-                      ? 'bg-brand-green text-white rounded-br-md'
-                      : 'bg-white text-brand-black rounded-bl-md shadow-card'
-                  }`}
-                >
-                  <p className="leading-snug break-words">{m.content}</p>
+                <div className={`flex items-center gap-1.5 ${mine ? 'flex-row-reverse' : ''}`}>
+                  <div
+                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                      mine
+                        ? 'bg-brand-green text-white rounded-br-md'
+                        : 'bg-white text-brand-black rounded-bl-md shadow-card'
+                    }`}
+                  >
+                    <p className="leading-snug break-words">{m.content}</p>
+                  </div>
+                  {/* P1-31: report an abusive received message (overflow menu). */}
+                  {!mine && (
+                    <button
+                      onClick={() => setReportTargetId(m.id)}
+                      className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all flex-shrink-0"
+                      aria-label={t('report.reportMessage')}
+                    >
+                      <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  )}
                 </div>
                 {mine && m.status === 'sending' && (
                   <span className="mt-1 flex items-center gap-1 text-[10px] text-gray-400">
@@ -140,6 +155,16 @@ export default function ConversationPage({
             </button>
           </div>
         </div>
+
+        {/* P1-31: report sheet for a received message. */}
+        <ReportSheet
+          open={reportTargetId !== null}
+          onClose={() => setReportTargetId(null)}
+          subjectType="message"
+          subjectId={reportTargetId ?? ''}
+          subjectLabel={t('report.subjectMessage')}
+          title={t('report.messageSheetTitle')}
+        />
       </div>
     </MobileFrame>
   );

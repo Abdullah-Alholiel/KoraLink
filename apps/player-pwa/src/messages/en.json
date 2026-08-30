@@ -741,7 +741,10 @@
     "submittedTitle": "Report submitted",
     "submittedDesc": "Thanks — our team will review it.",
     "reportMatch": "Report match",
-    "reportUser": "Report user"
+    "reportUser": "Report user",
+    "reportMessage": "Report message",
+    "subjectMessage": "Direct message",
+    "messageSheetTitle": "Report this message"
   },
   "pwa": {
     "install": {
@@ -765,7 +768,8 @@
     "subjectType": {
       "user": "Player",
       "match": "Match",
-      "venue": "Venue"
+      "venue": "Venue",
+      "message": "Message"
     },
     "status": {
       "open": "Submitted",

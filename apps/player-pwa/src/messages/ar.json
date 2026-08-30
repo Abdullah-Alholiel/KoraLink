@@ -741,7 +741,10 @@
     "submittedTitle": "تم إرسال البلاغ",
     "submittedDesc": "شكرًا لك — سيراجع فريقنا البلاغ.",
     "reportMatch": "الإبلاغ عن المباراة",
-    "reportUser": "الإبلاغ عن المستخدم"
+    "reportUser": "الإبلاغ عن المستخدم",
+    "reportMessage": "الإبلاغ عن الرسالة",
+    "subjectMessage": "رسالة مباشرة",
+    "messageSheetTitle": "الإبلاغ عن هذه الرسالة"
   },
   "pwa": {
     "install": {
@@ -765,7 +768,8 @@
     "subjectType": {
       "user": "لاعب",
       "match": "مباراة",
-      "venue": "منشأة"
+      "venue": "منشأة",
+      "message": "رسالة"
     },
     "status": {
       "open": "مُقدَّم",

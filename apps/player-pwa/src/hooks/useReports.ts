@@ -2,11 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 
 /** P2-23 (run #17): reporter closure — the caller's own reports + outcomes. */
 
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
-export type ReportSubjectType = 'user' | 'match' | 'venue';
+export type ReportSubjectType = 'user' | 'match' | 'venue' | 'message';
 
 export interface MyReportApi {
   id: string;
@@ -45,8 +46,16 @@ export function useReport() {
           reason: input.reason,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
+      // Observability (AGENTS.md §4): restored in run #18 — the P2-23 rewrite
+      // had dropped tracking; report submissions must be counted, failures
+      // must reach Sentry.
+      trackEvent('report_submitted', {
+        subject_type: vars.subjectType,
+        subject_id: vars.subjectId,
+      });
       void queryClient.invalidateQueries({ queryKey: ['reports', 'mine'] });
     },
+    onError: (err) => captureError(err, { scope: 'report' }),
   });
 }

@@ -12,11 +12,13 @@ interface ReportSheetProps {
   subjectType: ReportSubjectType;
   subjectId: string;
   subjectLabel: string;
+  /** Optional sheet title override (e.g. "Report this message" for chat). */
+  title?: string;
 }
 
 /**
  * Reusable report sheet — submits POST /reports for a given subject
- * (user / match / venue). Shows a success state once submitted.
+ * (user / match / venue / chat message). Shows a success state once submitted.
  */
 export default function ReportSheet({
   open,
@@ -24,6 +26,7 @@ export default function ReportSheet({
   subjectType,
   subjectId,
   subjectLabel,
+  title,
 }: ReportSheetProps) {
   const t = useTranslations('report');
   const [reason, setReason] = useState('');
@@ -55,7 +58,7 @@ export default function ReportSheet({
 
       <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
         <div className="w-8" />
-        <h2 className="text-lg font-bold text-brand-black">{t('title')}</h2>
+        <h2 className="text-lg font-bold text-brand-black">{title ?? t('title')}</h2>
         <button
           onClick={onClose}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
