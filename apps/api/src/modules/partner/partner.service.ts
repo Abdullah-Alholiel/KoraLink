@@ -148,8 +148,10 @@ export class PartnerService {
       if (closeHour <= openHour) {
         throw new BadRequestException('close_hour must be after open_hour.');
       }
-      updates.open_hour = dto.open_hour;
-      updates.close_hour = dto.close_hour;
+      // Set the MERGED pair, not the raw dto — a partial update (only one of
+      // the two sent) must not write an undefined key over the resolved value.
+      updates.open_hour = openHour;
+      updates.close_hour = closeHour;
     }
     for (const day of [0, 1, 2, 3, 4, 5, 6]) {
       const key = `closed_day_${day}` as keyof UpdateVenuePartnerDto;
