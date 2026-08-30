@@ -117,7 +117,7 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
         push_muted: false,
         quiet_enabled: true,
         quiet_start: 0,
-        quiet_end: 23, // window covers all Riyadh hours
+        quiet_end: 0, // 0→0 = muted 24/7 (end-exclusive; hour 23 is NOT inside 0→23)
       },
     ]);
     const sent = await svc.sendPushToUsers(['u1'], PAYLOAD);
@@ -224,7 +224,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
         push_muted: false,
         quiet_enabled: true,
         quiet_start: 0,
-        quiet_end: 23, // covers all Riyadh hours
+        quiet_end: 0, // 0→0 = muted 24/7 (end-exclusive; hour 23 is NOT inside 0→23)
       },
     ]);
     const sent = await svc.sendPomDecidedNotification('m1', POM_PAYLOAD);
