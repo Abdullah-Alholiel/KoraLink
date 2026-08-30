@@ -70,6 +70,21 @@ export default function PartnerVenuesPage() {
 
   async function saveEdit() {
     if (!editing) return;
+    const openHour = Number(editValues.open);
+    const closeHour = Number(editValues.close);
+    // P2-31(1): validate BEFORE the request — empty/NaN no longer serialize
+    // as JSON null, and the partner sees a localized message instead of the
+    // API's raw close>open error.
+    if (
+      Number.isNaN(openHour) ||
+      Number.isNaN(closeHour) ||
+      openHour < 0 || openHour > 23 ||
+      closeHour < 1 || closeHour > 24 ||
+      closeHour <= openHour
+    ) {
+      setFormError(t('hoursInvalid'));
+      return;
+    }
     setSaving(true);
     setFormError(null);
     try {
@@ -82,8 +97,8 @@ export default function PartnerVenuesPage() {
           .map((s) => s.trim())
           .filter(Boolean),
         // P1-25 operating hours (API validates the cross-field close > open rule)
-        open_hour: Number(editValues.open),
-        close_hour: Number(editValues.close),
+        open_hour: openHour,
+        close_hour: closeHour,
         ...Object.fromEntries(
           editValues.closedDays.map((closed, day) => [`closed_day_${day}`, closed]),
         ),

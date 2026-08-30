@@ -128,7 +128,8 @@
       "closedDay4": "Thu",
       "closedDay5": "Fri",
       "closedDay6": "Sat",
-      "hoursSummary": "{open, number}–{close, number} open"
+      "hoursSummary": "{open, number}–{close, number} open",
+      "hoursInvalid": "Closing time must be after opening time"
     },
     "pitches": {
       "title": "My Pitches",

@@ -128,7 +128,8 @@
       "closedDay4": "الخميس",
       "closedDay5": "الجمعة",
       "closedDay6": "السبت",
-      "hoursSummary": "يفتح {open, number}–يغلق {close, number}"
+      "hoursSummary": "يفتح {open, number}–يغلق {close, number}",
+      "hoursInvalid": "يجب أن يكون وقت الإغلاق بعد وقت الافتتاح"
     },
     "pitches": {
       "title": "ملاعبـي",
