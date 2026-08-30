@@ -1737,6 +1737,12 @@ export class MatchesService {
    */
   async rescheduleMatch(userId: string, matchId: string, dto: UpdateMatchScheduleDto) {
     let walletDeltaSar = 0;
+    // Per-attempt ledger keys. The slot-state check + match-row FOR UPDATE
+    // lock already serialize concurrent attempts (a loser sees the match on
+    // its target slot and 400s BEFORE any money moves), so keys must NOT be
+    // deterministic per (match, slot): a host legally moving A→B→A would
+    // otherwise hit the transactions unique constraint on the second visit.
+    const attemptId = Date.now();
     // Hoisted from the tx closure so the post-commit return can reference
     // them (closure-scoped lets would fall out of scope).
     let oldSlotId: string | null = null;
@@ -1848,7 +1854,7 @@ export class MatchesService {
         amount: oldCost.toString(),
         reference_type: 'REFUND',
         reference_id: matchId,
-        idempotency_key: `reschedule-refund-${matchId}-${newSlot.id}`,
+        idempotency_key: `reschedule-refund-${matchId}-${newSlot.id}-${attemptId}`,
         status: 'Completed',
       });
 
@@ -1862,9 +1868,9 @@ export class MatchesService {
         user_id: userId,
         type: 'DEBIT',
         amount: newCost.toString(),
-        reference_type: 'BOOKING',
+        reference_type: 'PITCH_BOOKING',
         reference_id: matchId,
-        idempotency_key: `reschedule-charge-${matchId}-${newSlot.id}`,
+        idempotency_key: `reschedule-charge-${matchId}-${newSlot.id}-${attemptId}`,
         status: 'Completed',
       });
 

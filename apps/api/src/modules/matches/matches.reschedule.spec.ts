@@ -199,9 +199,9 @@ describe('MatchesService.rescheduleMatch', () => {
     const credit = h.insertedTransactions.find((t) => t.type === 'CREDIT');
     const debit = h.insertedTransactions.find((t) => t.type === 'DEBIT');
     expect(credit).toMatchObject({ amount: '100', reference_type: 'REFUND', reference_id: MATCH_ID });
-    expect(credit?.idempotency_key).toBe('reschedule-refund-match-1-slot-new');
-    expect(debit).toMatchObject({ amount: '150', reference_type: 'BOOKING', reference_id: MATCH_ID });
-    expect(debit?.idempotency_key).toBe('reschedule-charge-match-1-slot-new');
+    expect(credit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-refund-match-1-slot-new-\d+$/));
+    expect(debit).toMatchObject({ amount: '150', reference_type: 'PITCH_BOOKING', reference_id: MATCH_ID });
+    expect(debit?.idempotency_key).toStrictEqual(expect.stringMatching(/^reschedule-charge-match-1-slot-new-\d+$/));
 
     // Slot swap: old released, new booked.
     expect(h.slotUpdates.length).toBe(2);
