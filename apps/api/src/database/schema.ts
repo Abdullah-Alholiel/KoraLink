@@ -118,6 +118,8 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   // ── Host moderation ──
   'player_removed',
   'report_resolved',
+  // ── Host scheduling ──
+  'match_rescheduled',
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

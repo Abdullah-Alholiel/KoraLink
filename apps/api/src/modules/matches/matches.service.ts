@@ -10,7 +10,7 @@ import {
 import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, transactions, users } from '../../database/schema';
+import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, pitches, transactions, users } from '../../database/schema';
 import {
   GetMatchesDto,
   normalizeGenderRule,
@@ -24,6 +24,7 @@ import { AppGateway } from '../gateway/app.gateway';
 import { RealtimeService } from '../gateway/realtime.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -1720,6 +1721,233 @@ export class MatchesService {
     }
     this.logger.log(`match_cancelled matchId=${matchId} refundSar=${refundedSar}`, MatchesService.name);
     return updatedMatch;
+  }
+
+  /**
+   * Reschedule a koralink match: move it to a different FREE slot on the SAME
+   * pitch (roster, chat and title preserved — the cancel+recreate path loses
+   * all three). Host only, pre-match only (Open/Full).
+   *
+   * One transaction: lock old+new slots FOR UPDATE, release old + refund the
+   * host exactly the persisted `pitch_cost_sar`, book new + charge the new
+   * slot's cost (net delta applied to the wallet with a balance-floor check),
+   * update scheduled_at/duration_mins/price_per_player with the SAME server-
+   * authoritative derivation createMatch uses (so the scheduler's ticks and
+   * the pricing tests keep holding). findOne OUTSIDE tx (contract §2).
+   */
+  async rescheduleMatch(userId: string, matchId: string, dto: UpdateMatchScheduleDto) {
+    let walletDeltaSar = 0;
+    // Hoisted from the tx closure so the post-commit return can reference
+    // them (closure-scoped lets would fall out of scope).
+    let oldSlotId: string | null = null;
+    let newSlotId = dto.booking_slot_id;
+
+    await this.db.transaction(async (tx) => {
+      // ── 0. Lock the match row + authorize ────────────────────────────
+      const [match] = await tx.execute(sql`
+        SELECT id, host_id, status, booking_mode, booking_slot_id,
+               pitch_id, pitch_cost_sar, price_per_player, max_players
+        FROM matches
+        WHERE id = ${matchId}::text
+        FOR UPDATE
+      `).then((r: unknown) => (r as { rows?: unknown[] }).rows ?? r) as Array<{
+        id: string; host_id: string; status: string;
+        booking_mode: string; booking_slot_id: string | null;
+        pitch_id: string; pitch_cost_sar: string | null;
+        price_per_player: string; max_players: number;
+      }>;
+
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+      if (match.host_id !== userId) {
+        throw new ForbiddenException('Only the match host can reschedule the match.');
+      }
+      if (match.booking_mode !== 'koralink' || !match.booking_slot_id) {
+        throw new BadRequestException(
+          'Only koralink-booked matches (with a pitch slot) can be rescheduled.',
+        );
+      }
+      if (match.status !== 'Open' && match.status !== 'Full') {
+        throw new BadRequestException(
+          `Cannot reschedule a match with status "${match.status}". Match must be Open or Full.`,
+        );
+      }
+      if (dto.booking_slot_id === match.booking_slot_id) {
+        throw new BadRequestException('The match is already booked on that slot.');
+      }
+
+      // ── 1. Lock BOTH slots FOR UPDATE (old + new, ordered by id — no
+      //      lock-order deadlocks between concurrent reschedules) ────────
+      const slotRows = await tx.execute(sql`
+        SELECT id, pitch_id, slot_date, start_time, end_time, is_booked
+        FROM pitch_slots
+        WHERE id IN (${match.booking_slot_id}::text, ${dto.booking_slot_id}::text)
+        ORDER BY id
+        FOR UPDATE
+      `).then((r: unknown) => (r as { rows?: unknown[] }).rows ?? r) as Array<{
+        id: string; pitch_id: string; slot_date: string;
+        start_time: string; end_time: string; is_booked: boolean;
+      }>;
+
+      const oldSlot = slotRows.find((s) => s.id === match.booking_slot_id);
+      const newSlot = slotRows.find((s) => s.id === dto.booking_slot_id);
+
+      if (!oldSlot) {
+        throw new NotFoundException(`Slot ${match.booking_slot_id} not found.`);
+      }
+      if (!newSlot) {
+        throw new NotFoundException(`Slot ${dto.booking_slot_id} not found.`);
+      }
+      oldSlotId = oldSlot.id;
+      newSlotId = newSlot.id;
+      if (newSlot.pitch_id !== match.pitch_id) {
+        throw new BadRequestException('Slots can only be swapped within the same pitch.');
+      }
+      if (newSlot.is_booked) {
+        throw new ConflictException('This slot has already been booked by another host');
+      }
+
+      // ── 2. Derive the new schedule exactly like createMatch does ──────
+      // slot_date = YYYY-MM-DD (Riyadh-local), start/end = HH:MM(:SS). The
+      // same local wall clock → UTC mapping the PWA uses at create time
+      // (Riyadh is UTC+3, DST-free → fixed offset is exact).
+      const newScheduledAt = new Date(`${newSlot.slot_date}T${newSlot.start_time.slice(0, 5)}:00+03:00`);
+      const toMins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const newDuration = toMins(newSlot.end_time) - toMins(newSlot.start_time);
+      if (newDuration <= 0) {
+        throw new BadRequestException('Slot window is invalid (end must be after start).');
+      }
+
+      // ── 3. Money: refund old cost, charge new cost, net the wallet ────
+      const oldCost = match.pitch_cost_sar ? parseFloat(match.pitch_cost_sar) : 0;
+      const [pitch] = await tx
+        .select({ hourly_rate: pitches.hourly_rate })
+        .from(pitches)
+        .where(eq(pitches.id, match.pitch_id))
+        .limit(1);
+      if (!pitch) {
+        throw new NotFoundException(`Pitch ${match.pitch_id} not found.`);
+      }
+      const newCost = round2(parseFloat(String(pitch.hourly_rate)) * (newDuration / 60));
+
+      walletDeltaSar = round2(newCost - oldCost);
+
+      // Release old slot + refund the host the exact debited amount.
+      await tx
+        .update(pitch_slots)
+        .set(withTimestamp({ is_booked: false, booked_match_id: null }))
+        .where(eq(pitch_slots.id, oldSlot.id));
+
+      await tx.insert(transactions).values({
+        user_id: userId,
+        type: 'CREDIT',
+        amount: oldCost.toString(),
+        reference_type: 'REFUND',
+        reference_id: matchId,
+        idempotency_key: `reschedule-refund-${matchId}-${newSlot.id}`,
+        status: 'Completed',
+      });
+
+      // Book new slot + charge the new cost.
+      await tx
+        .update(pitch_slots)
+        .set(withTimestamp({ is_booked: true, booked_match_id: matchId }))
+        .where(eq(pitch_slots.id, newSlot.id));
+
+      await tx.insert(transactions).values({
+        user_id: userId,
+        type: 'DEBIT',
+        amount: newCost.toString(),
+        reference_type: 'BOOKING',
+        reference_id: matchId,
+        idempotency_key: `reschedule-charge-${matchId}-${newSlot.id}`,
+        status: 'Completed',
+      });
+
+      // Net wallet movement with a balance floor (a reschedule may cost MORE
+      // if the new slot is longer / pricier — the host must cover it).
+      if (walletDeltaSar !== 0) {
+        const [wallet] = await tx
+          .select({ wallet_balance: users.wallet_balance })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        if (walletDeltaSar > 0 && (!wallet || parseFloat(wallet.wallet_balance) < walletDeltaSar)) {
+          throw new BadRequestException(
+            `Insufficient wallet balance for the reschedule. Required: SAR ${walletDeltaSar.toFixed(2)}, Available: SAR ${parseFloat(wallet?.wallet_balance ?? '0').toFixed(2)}`,
+          );
+        }
+
+        await tx
+          .update(users)
+          .set({
+            wallet_balance: sql`${users.wallet_balance} + ${walletDeltaSar.toString()}`,
+            updated_at: new Date(),
+          })
+          .where(eq(users.id, userId));
+      }
+
+      // ── 4. Update the match row (server-authoritative pricing mirror) ──
+      const newMax = match.max_players;
+      const newPricePerPlayer = round2(newCost / (newMax - 1) + PLATFORM_MARGIN_SAR);
+
+      await tx
+        .update(matches)
+        .set(
+          withTimestamp({
+            scheduled_at: newScheduledAt,
+            duration_mins: newDuration,
+            pitch_cost_sar: newCost.toString(),
+            price_per_player: newPricePerPlayer.toString(),
+            booking_slot_id: newSlot.id,
+          }),
+        )
+        .where(eq(matches.id, matchId));
+    });
+
+    // ── 5. Post-commit: populated response + fan-out (best-effort) ──────
+    const updatedMatch = await this.findOne(matchId);
+
+    try {
+      this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
+    } catch (err) {
+      this.logger.error(`WS broadcast error on rescheduleMatch: ${(err as Error).message}`);
+    }
+
+    // Roster notification — recipients are the players (the actor is the
+    // host), so excludeActor=true; the host already knows he moved it.
+    try {
+      const rosterIds = (updatedMatch.players ?? [])
+        .map((p) => p.user.id)
+        .filter((pid) => pid !== userId);
+
+      await this.activitiesService.record({
+        actorId: userId,
+        verb: 'match_rescheduled',
+        matchId,
+        recipients: rosterIds,
+        excludeActor: true,
+      });
+      await this.notificationsService.sendPushToUsers(rosterIds, {
+        title: '🕒 Match rescheduled',
+        body: `The host moved "${updatedMatch.title}" to a new time. Check the match for details.`,
+        data: { type: 'match-chat', matchId },
+      });
+    } catch (err) {
+      this.logger.error(`rescheduleMatch notification failed for ${matchId}: ${(err as Error).message}`);
+    }
+
+    this.logger.log(
+      `match_rescheduled matchId=${matchId} newSlot=${dto.booking_slot_id} walletDeltaSar=${walletDeltaSar}`,
+      MatchesService.name,
+    );
+
+    return { ...updatedMatch, reschedule: { old_slot_id: oldSlotId, new_slot_id: newSlotId, wallet_delta_sar: walletDeltaSar } };
   }
 
   /**

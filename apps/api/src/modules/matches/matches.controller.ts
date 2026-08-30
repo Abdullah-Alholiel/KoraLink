@@ -4,6 +4,7 @@ import {
   Param,
   Query,
   Post,
+  Patch,
   Delete,
   Body,
   Res,
@@ -28,6 +29,7 @@ import { CreateMatchDto } from './dto/create-match.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
 import { MarkNoShowDto } from './dto/mark-no-show.dto';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
+import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
 import { CreateMatchMessageDto } from './dto/create-match-message.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -203,7 +205,7 @@ export class MatchesController {
     return this.matchesService.completeMatch(user.sub, id);
   }
 
-  // ── POST /matches/:id/cancel — Cancel a match (host only) ──────────────
+  // ── POST /matches/:id/cancel — Cancel the match (host only) ───────────
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel the match (Open/Full → Cancelled). Host only.' })
@@ -213,6 +215,21 @@ export class MatchesController {
     @Param('id') id: string,
   ) {
     return this.matchesService.cancelMatch(user.sub, id);
+  }
+
+  // ── PATCH /matches/:id/schedule — Reschedule to a new slot (host only) ─
+  @Patch(':id/schedule')
+  @ApiOperation({
+    summary:
+      'Reschedule a koralink match to a different free slot on the same pitch (Open/Full only). Host only.',
+  })
+  @ApiOkResponse({ description: 'Fully populated match after the move, plus a reschedule summary block.' })
+  rescheduleMatch(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateMatchScheduleDto,
+  ) {
+    return this.matchesService.rescheduleMatch(user.sub, id, dto);
   }
 
   // ── POST /matches/:id/vote — Vote for Player of the Match ─────────────

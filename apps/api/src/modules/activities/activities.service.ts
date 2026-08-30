@@ -36,7 +36,9 @@ export type ActivityVerb =
   | 'player_removed'
   | 'match_auto_cancelled'
   // ── Moderation closure (system→reporter) ──
-  | 'report_resolved';
+  | 'report_resolved'
+  // ── Host scheduling ──
+  | 'match_rescheduled';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
 const DIRECTED_VERBS = [
@@ -55,6 +57,7 @@ const DIRECTED_VERBS = [
   'player_removed',
   'match_auto_cancelled',
   'report_resolved',
+  'match_rescheduled',
 ] as const;
 
 /** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */
