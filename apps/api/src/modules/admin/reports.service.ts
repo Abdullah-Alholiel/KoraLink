@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { SQL, and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, reports, users, venues } from '../../database/schema';
+import { matches, personal_messages, reports, users, venues } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListReportsDto } from './dto/list-reports.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
@@ -39,12 +39,14 @@ export class AdminReportsService {
         r.id, r.subject_type, r.subject_id, r.reason, r.status, r.resolution,
         r.resolved_at, r.created_at,
         rep.full_name AS reporter_name, rep.handle AS reporter_handle,
-        COALESCE(u.full_name, u.handle, m.title, v.name) AS subject_label
+        COALESCE(u.full_name, u.handle, m.title, v.name, 'Message from ' || COALESCE(su.full_name, su.handle, 'unknown user')) AS subject_label
       FROM reports r
       LEFT JOIN users rep ON rep.id = r.reporter_id
       LEFT JOIN users u ON u.id = r.subject_id AND r.subject_type = 'user'
       LEFT JOIN matches m ON m.id = r.subject_id AND r.subject_type = 'match'
       LEFT JOIN venues v ON v.id = r.subject_id AND r.subject_type = 'venue'
+      LEFT JOIN personal_messages pm ON r.subject_type = 'message' AND pm.id = r.subject_id
+      LEFT JOIN users su ON su.id = pm.sender_id
       ${where}
       ORDER BY
         CASE r.status WHEN 'open' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END ASC,
@@ -178,6 +180,25 @@ export class AdminReportsService {
         .where(eq(matches.id, id))
         .limit(1);
       return { type, id, label: m?.title ?? id, status: m?.status ?? 'missing' };
+    }
+
+    if (type === 'message') {
+      // P1-31: admin sees sender + a content snippet (admin console only —
+      // the player-facing mine-list never exposes message content).
+      const [pm] = await this.db
+        .select({ id: personal_messages.id, content: personal_messages.content, sender_id: personal_messages.sender_id })
+        .from(personal_messages)
+        .where(eq(personal_messages.id, id))
+        .limit(1);
+      if (!pm) return { type, id, label: id, status: 'missing' };
+      const [sender] = await this.db
+        .select({ full_name: users.full_name, handle: users.handle })
+        .from(users)
+        .where(eq(users.id, pm.sender_id))
+        .limit(1);
+      const senderName = sender?.full_name ?? sender?.handle ?? 'unknown user';
+      const snippet = pm.content.length > 60 ? `${pm.content.slice(0, 60)}…` : pm.content;
+      return { type, id, label: `Message from ${senderName} · "${snippet}"`, status: 'sent' };
     }
 
     const [v] = await this.db

@@ -5,12 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, reports, users, venues } from '../../database/schema';
+import { matches, personal_messages, reports, users, venues } from '../../database/schema';
 import { CreateReportDto, ReportSubjectType } from './dto/create-report.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
+
+/** Second join over `users` for message reports (the message sender). */
+const message_sender = alias(users, 'message_sender');
 
 @Injectable()
 export class ReportsService {
@@ -19,6 +23,18 @@ export class ReportsService {
   async create(reporterId: string, dto: CreateReportDto) {
     if (dto.subjectType === 'user' && dto.subjectId === reporterId) {
       throw new BadRequestException('You cannot report yourself.');
+    }
+    // P1-31: a player cannot report their OWN chat message — the subject of a
+    // message report must be someone else's message.
+    if (dto.subjectType === 'message') {
+      const [msg] = await this.db
+        .select({ sender_id: personal_messages.sender_id })
+        .from(personal_messages)
+        .where(eq(personal_messages.id, dto.subjectId))
+        .limit(1);
+      if (msg && msg.sender_id === reporterId) {
+        throw new BadRequestException('You cannot report your own message.');
+      }
     }
 
     await this.assertSubjectExists(dto.subjectType, dto.subjectId);
@@ -83,11 +99,25 @@ export class ReportsService {
         user_name: users.full_name,
         match_title: matches.title,
         venue_name: venues.name,
+        message_sender_name: message_sender.full_name,
       })
       .from(reports)
       .leftJoin(users, and(eq(reports.subject_type, 'user'), eq(users.id, reports.subject_id)))
       .leftJoin(matches, and(eq(reports.subject_type, 'match'), eq(matches.id, reports.subject_id)))
       .leftJoin(venues, and(eq(reports.subject_type, 'venue'), eq(venues.id, reports.subject_id)))
+      // P1-31: message reports resolve to the SENDER's name — never the raw
+      // message id, and message content stays admin-only.
+      .leftJoin(
+        personal_messages,
+        and(eq(reports.subject_type, 'message'), eq(personal_messages.id, reports.subject_id)),
+      )
+      .leftJoin(
+        message_sender,
+        and(
+          eq(reports.subject_type, 'message'),
+          eq(message_sender.id, personal_messages.sender_id),
+        ),
+      )
       .where(eq(reports.reporter_id, reporterId))
       .orderBy(desc(reports.created_at))
       .limit(50);
@@ -97,7 +127,13 @@ export class ReportsService {
         id: r.id,
         subject_type: r.subject_type,
         subject_id: r.subject_id,
-        subject_label: r.user_name ?? r.match_title ?? r.venue_name ?? r.subject_id,
+        subject_label:
+          r.user_name ??
+          r.match_title ??
+          r.venue_name ??
+          (r.message_sender_name != null
+            ? `Message from ${r.message_sender_name}`
+            : r.subject_id),
         reason: r.reason,
         status: r.status,
         resolution: r.resolution,
@@ -124,6 +160,15 @@ export class ReportsService {
         .where(eq(matches.id, id))
         .limit(1);
       if (!row) throw new NotFoundException('Match not found.');
+      return;
+    }
+    if (type === 'message') {
+      const [row] = await this.db
+        .select({ id: personal_messages.id })
+        .from(personal_messages)
+        .where(eq(personal_messages.id, id))
+        .limit(1);
+      if (!row) throw new NotFoundException('Message not found.');
       return;
     }
     const [row] = await this.db

@@ -113,7 +113,7 @@ export interface DisputeListItem {
 
 export interface AdminReportListItem {
   id: string;
-  subject_type: 'user' | 'match' | 'venue';
+  subject_type: 'user' | 'match' | 'venue' | 'message';
   subject_id: string;
   reason: string;
   status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
@@ -126,7 +126,7 @@ export interface AdminReportListItem {
 }
 
 export interface ReportSubject {
-  type: 'user' | 'match' | 'venue';
+  type: 'user' | 'match' | 'venue' | 'message';
   id: string;
   label: string;
   status: string;

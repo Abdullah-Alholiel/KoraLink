@@ -56,6 +56,7 @@ export default function ReportsPage() {
           <option value="user">User</option>
           <option value="match">Match</option>
           <option value="venue">Venue</option>
+          <option value="message">Message</option>
         </select>
       </div>
 
