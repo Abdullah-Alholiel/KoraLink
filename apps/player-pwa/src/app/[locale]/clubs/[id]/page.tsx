@@ -204,9 +204,10 @@ export default function ClubPage() {
                   </div>
 
                   {/* P1-32: operating hours row (Riyadh-local wall clock).
-                      Hidden when the venue defines no hours — never invent
-                      0:00–24:00 (post-cycle review, run #19). */}
-                  {(venue.open_hour !== undefined || venue.close_hour !== undefined) && (
+                      Rendered only when BOTH bounds exist — never invent
+                      0:00 or 24:00 defaults for a missing half (post-cycle
+                      review, run #19; `||` guard fixed run #20). */}
+                  {venue.open_hour !== undefined && venue.close_hour !== undefined && (
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
                         <Clock className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
