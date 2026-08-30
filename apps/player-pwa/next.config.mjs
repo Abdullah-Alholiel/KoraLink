@@ -22,18 +22,18 @@ const withPWA = withPWAInit({
     skipWaiting: true,
     runtimeCaching: [
       {
-        // Match feed API: StaleWhileRevalidate, 60s TTL.
-        // Intentionally mirrors React Query's staleTime (60s):
-        //   - Service worker serves cached response instantly (offline resilience)
-        //     while always revalidating in the background.
-        //   - React Query's in-memory cache prevents redundant component-level
-        //     re-fetches within the same 60-second window.
-        // The two layers are complementary: Workbox handles network/offline,
-        // React Query handles in-memory de-duplication across components.
+        // Match feed API: NetworkFirst (P2-28, run #18 — was StaleWhileRevalidate).
+        // SWR served the cached response FIRST on every load, so players could
+        // see up to 60s-old availability even on a perfect connection (React
+        // Query then marked it fresh for its own 60s staleTime and never
+        // refetched). NetworkFirst prefers fresh data; the cache is only the
+        // offline/slow-network fallback (3s timeout), keeping resilience
+        // without silently stale availability.
         urlPattern: /^https?:\/\/.*\/api\/matches(\/.*)?$/,
-        handler: 'StaleWhileRevalidate',
+        handler: 'NetworkFirst',
         options: {
           cacheName: 'matches-feed-cache',
+          networkTimeoutSeconds: 3,
           expiration: {
             maxAgeSeconds: 60,
             maxEntries: 50,
