@@ -92,8 +92,12 @@ export default function ProfilePage() {
     const logout = useAppStore((s) => s.logout);
 
     // ── Real data from API (fills gaps when store is stale after dev-login) ──
+    // P2-26: userStatsError drives the error state (profile still renders with
+    // defaults on transient failures — only a hard failure of the stats read,
+    // the lightest authenticated call, shows the retry surface; refetch covers
+    // every stale query at once).
     const { data: apiUser } = useUserProfile();
-    const { data: stats } = useUserStats();
+    const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useUserStats();
     const { data: walletData } = useWalletBalance();
     const {
         isSubscribed, isSubscribing, isSupported,
@@ -159,23 +163,57 @@ export default function ProfilePage() {
             {/* ── Stats Row ────────────────────────── */}
             {isAuthenticated && (
                 <div className="flex justify-around bg-white rounded-2xl mx-4 mt-4 py-4 shadow-card">
-                    <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black">{stats?.games_played ?? 0}</p>
-                        <p className="text-xs text-gray-400">{t('profile.gamesPlayed')}</p>
-                    </div>
-                    <div className="w-px bg-gray-100" />
-                    <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black flex items-center justify-center gap-1">
-                            <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                            <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
-                        </p>
-                        <p className="text-xs text-gray-400">{t('profile.pomCount')}</p>
-                    </div>
-                    <div className="w-px bg-gray-100" />
-                    <div className="text-center">
-                        <p className="text-2xl font-extrabold text-brand-black">{stats?.karma_score ?? 0}</p>
-                        <p className="text-xs text-gray-400">{t('profile.karma')}</p>
-                    </div>
+                    {/* P2-26: loading / error states (previously zero branches —
+                        review run #16). Error offers retry via the stats refetch. */}
+                    {statsLoading ? (
+                        <>
+                            <div className="text-center">
+                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
+                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
+                            </div>
+                            <div className="w-px bg-gray-100" />
+                            <div className="text-center">
+                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
+                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
+                            </div>
+                            <div className="w-px bg-gray-100" />
+                            <div className="text-center">
+                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
+                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
+                            </div>
+                        </>
+                    ) : statsError ? (
+                        <div className="flex-1 flex flex-col items-center py-1">
+                            <p className="text-sm text-gray-400">{t('common.error')}</p>
+                            <button
+                                type="button"
+                                onClick={() => refetchStats()}
+                                className="mt-1 text-xs font-semibold text-brand-green"
+                            >
+                                {t('common.retry')}
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="text-center">
+                                <p className="text-2xl font-extrabold text-brand-black">{stats?.games_played ?? 0}</p>
+                                <p className="text-xs text-gray-400">{t('profile.gamesPlayed')}</p>
+                            </div>
+                            <div className="w-px bg-gray-100" />
+                            <div className="text-center">
+                                <p className="text-2xl font-extrabold text-brand-black flex items-center justify-center gap-1">
+                                    <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
+                                    <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
+                                </p>
+                                <p className="text-xs text-gray-400">{t('profile.pomCount')}</p>
+                            </div>
+                            <div className="w-px bg-gray-100" />
+                            <div className="text-center">
+                                <p className="text-2xl font-extrabold text-brand-black">{stats?.karma_score ?? 0}</p>
+                                <p className="text-xs text-gray-400">{t('profile.karma')}</p>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
