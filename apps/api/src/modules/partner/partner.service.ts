@@ -779,7 +779,14 @@ export class PartnerService {
   async getPartnerMatches(
     ownerId: string,
     actorRole: string | undefined,
-    q: { scope: 'today' | 'upcoming'; status?: string; limit: number; offset: number },
+    q: {
+      scope: 'today' | 'upcoming';
+      status?: string;
+      venueId?: string;
+      pitchId?: string;
+      limit: number;
+      offset: number;
+    },
   ) {
     const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
     if (!pitchIds.length) {
@@ -795,6 +802,15 @@ export class PartnerService {
       q.status && q.status.length
         ? sql`${matches.status} = ${q.status}`
         : sql`true`;
+
+    // P2-30: additive venue/pitch narrowing (venueId implies its pitches;
+    // explicit pitchId wins). Never short-circuits the scope/status predicates.
+    const scopeFilter =
+      q.pitchId && pitchIds.includes(q.pitchId)
+        ? sql`${matches.pitch_id} = ${q.pitchId}`
+        : q.venueId
+          ? sql`${pitches.venue_id} = ${q.venueId}`
+          : sql`true`;
 
     const rows = await this.db
       .select({
@@ -819,7 +835,7 @@ export class PartnerService {
       .innerJoin(venues, eq(pitches.venue_id, venues.id))
       .innerJoin(users, eq(matches.host_id, users.id))
       .leftJoin(match_players, eq(match_players.match_id, matches.id))
-      .where(and(inArray(matches.pitch_id, pitchIds), timeScope, statusFilter))
+      .where(and(inArray(matches.pitch_id, pitchIds), timeScope, statusFilter, scopeFilter))
       .groupBy(
         matches.id,
         pitches.name,

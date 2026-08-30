@@ -137,6 +137,8 @@ export class PartnerController {
     return this.partner.getPartnerMatches(user.sub, user.role, {
       scope: q.scope ?? 'today',
       status: q.status,
+      venueId: q.venueId,
+      pitchId: q.pitchId,
       limit: q.limit ?? 50,
       offset: q.offset ?? 0,
     });

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /** Match statuses accepted by `?status=` (mirror of the DB match_status enum). */
 const MATCH_STATUSES = ['Open', 'Full', 'InProgress', 'Completed', 'Cancelled'] as const;
@@ -29,6 +29,17 @@ export class GetPartnerMatchesDto {
   @IsOptional()
   @IsIn(MATCH_STATUSES)
   status?: (typeof MATCH_STATUSES)[number];
+
+  @ApiPropertyOptional({ description: 'Filter by venue id (P2-30)' })
+  @IsOptional()
+  @IsString()
+  venueId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by pitch id (P2-30)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  pitchId?: string;
 
   @ApiPropertyOptional({ description: 'Page size (default 50, max 100)' })
   @IsOptional()

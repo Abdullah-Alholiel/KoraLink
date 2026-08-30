@@ -11,6 +11,7 @@ export type OpsEntity =
   | 'users'
   | 'matches'
   | 'venues'
+  | 'pitches'
   | 'disputes'
   | 'transactions'
   | 'settlements'
