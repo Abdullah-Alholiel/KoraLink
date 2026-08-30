@@ -10,6 +10,7 @@ import {
   MapPin,
   Star,
   Calendar,
+  Clock,
   ChevronRight,
   Loader2,
   AlertTriangle,
@@ -23,10 +24,18 @@ import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import DatePicker from '@/components/matches/DatePicker';
 import { dateInRiyadh } from '@/lib/api-adapter';
+import { isVenueOpenNow } from '@/lib/venue-hours';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 // ── Helpers ────────────────────────────────────────────────
+
+/** Hourly pitch rate display (numeric column arrives as string from Drizzle). */
+const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'SAR',
+  maximumFractionDigits: 2,
+});
 
 function formatDateLabel(date: Date, t: (k: string) => string): string {
   const today = new Date();
@@ -163,8 +172,26 @@ export default function ClubPage() {
               </div>
 
               {/* ── Club Info Card (Screenshot 2) ── */}
-              <div className="mx-5 mt-2 bg-white rounded-2xl shadow-card p-5">
+              <div className="relative mx-5 mt-2 bg-white rounded-2xl shadow-card p-5">
                 <div className="space-y-3">
+                  {/* P1-32: open/closed badge from the venue's operating hours
+                      (Riyadh-local; same source of truth as the clubs list). */}
+                  {(() => {
+                    const openNow = isVenueOpenNow(venue);
+                    return (
+                      <span
+                        role="status"
+                        className={`absolute top-4 end-5 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          openNow
+                            ? 'text-green-700 bg-green-100'
+                            : 'text-gray-500 bg-gray-100'
+                        }`}
+                      >
+                        {openNow ? t('clubs.openNow') : t('clubs.closed')}
+                      </span>
+                    );
+                  })()}
+
                   {/* Address */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
@@ -173,6 +200,19 @@ export default function ClubPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-400">{t('clubs.address')}</p>
                       <p className="text-sm font-semibold text-brand-black truncate">{venue.address}</p>
+                    </div>
+                  </div>
+
+                  {/* P1-32: operating hours row (Riyadh-local wall clock). */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-400">{t('clubs.hours')}</p>
+                      <p className="text-sm font-semibold text-brand-black" dir="ltr">
+                        {String(venue.open_hour ?? 0).padStart(2, '0')}:00 – {String(venue.close_hour ?? 24).padStart(2, '0')}:00
+                      </p>
                     </div>
                   </div>
 
@@ -216,6 +256,36 @@ export default function ClubPage() {
                   })()}
                 </div>
               </div>
+
+              {/* ── P1-32: Pitches (what you can actually book here) ── */}
+              {(venue.pitches?.length ?? 0) > 0 && (
+                <div className="mx-5 mt-4">
+                  <p className="text-xs font-bold text-brand-green uppercase tracking-widest">
+                    {t('clubs.availablePitches')}
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {venue.pitches!.map((pitch) => (
+                      <div
+                        key={pitch.id}
+                        className="bg-white rounded-2xl shadow-card p-4 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-brand-black truncate">{pitch.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {pitch.size} · {pitch.surface_type}
+                          </p>
+                        </div>
+                        <span className="text-sm font-bold text-brand-green flex-shrink-0" dir="ltr">
+                          {hourlyRateFormatter.format(Number(pitch.hourly_rate))}
+                          <span className="block text-[10px] font-medium text-gray-400 text-end">
+                            / {t('clubs.perHour')}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── View Calendar + Selected Date ── */}
               <div className="mx-5 mt-4">

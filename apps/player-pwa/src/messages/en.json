@@ -454,6 +454,8 @@
     "closed": "Closed",
     "pitches": "pitches",
     "address": "Address",
+    "hours": "Hours",
+    "perHour": "hour",
     "amenities": "Amenities",
     "availablePitches": "Pitches",
     "venues": "venues",
