@@ -20,14 +20,15 @@ import { AdminAuditController } from './audit.controller';
 import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
 import { AdminPitchesService } from './pitches.service';
-import { AdminPitchesController } from './pitches.controller';
+import { AdminPitchesController, AdminSlotsController } from './pitches.controller';
 import { MatchesModule } from '../matches/matches.module';
+import { PartnerModule } from '../partner/partner.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { ActivitiesModule } from '../activities/activities.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [MatchesModule, GatewayModule, ActivitiesModule, NotificationsModule],
+  imports: [MatchesModule, PartnerModule, GatewayModule, ActivitiesModule, NotificationsModule],
   controllers: [
     MetricsController,
     AdminUsersController,
@@ -40,6 +41,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminAuditController,
     AdminMatchesController,
     AdminPitchesController,
+    AdminSlotsController,
   ],
   providers: [
     AuditService,

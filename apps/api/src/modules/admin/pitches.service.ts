@@ -8,6 +8,8 @@ import { ListPitchesDto } from './dto/list-pitches.dto';
 import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { PartnerService } from '../partner/partner.service';
+import { CreateSlotDto, GenerateSlotsDto } from '../partner/dto/slots.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -22,6 +24,7 @@ export class AdminPitchesService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly partner: PartnerService,
   ) {}
 
   async list(dto: ListPitchesDto) {
@@ -144,5 +147,56 @@ export class AdminPitchesService {
     this.realtime.broadcastOps('venues');
 
     return after;
+  }
+
+  // ── Schedule management (admin acts on user/partner feedback) ─────────
+  // Delegates to PartnerService with actorRole='Admin' — the same slot
+  // logic the partner uses, admin-bypassed ownership, plus the audit trail.
+
+  async listSlots(id: string, from: string, to: string) {
+    await this.findOne(id); // 404 guard
+    return this.partner.listSlots('', 'Admin', id, from, to);
+  }
+
+  async generateSlots(id: string, dto: GenerateSlotsDto, adminId: string, ip?: string) {
+    const result = await this.partner.generateSlots(adminId, 'Admin', id, dto);
+    await this.audit.log({
+      adminId,
+      action: 'pitch.slots_generate',
+      entityType: 'pitch',
+      entityId: id,
+      before: { dto },
+      after: result,
+      ip,
+    });
+    return result;
+  }
+
+  async createSlot(id: string, dto: CreateSlotDto, adminId: string, ip?: string) {
+    const result = await this.partner.createSlot(adminId, 'Admin', id, dto);
+    await this.audit.log({
+      adminId,
+      action: 'pitch.slot_create',
+      entityType: 'pitch',
+      entityId: id,
+      before: { dto },
+      after: result,
+      ip,
+    });
+    return result;
+  }
+
+  async deleteSlot(slotId: string, adminId: string, ip?: string) {
+    const result = await this.partner.deleteSlot(adminId, 'Admin', slotId);
+    await this.audit.log({
+      adminId,
+      action: 'pitch.slot_delete',
+      entityType: 'slot',
+      entityId: slotId,
+      before: { slotId },
+      after: result,
+      ip,
+    });
+    return result;
   }
 }

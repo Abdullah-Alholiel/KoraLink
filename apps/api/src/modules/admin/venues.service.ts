@@ -7,6 +7,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { TransferVenueDto } from './dto/transfer-venue.dto';
+import { UpdateVenueAdminDto } from './dto/update-venue-admin.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -133,6 +134,58 @@ export class AdminVenuesService {
       entityId: id,
       before,
       after: { ...after, note: dto.note ?? null },
+      ip,
+    });
+    this.realtime.broadcastOps('venues');
+
+    return after;
+  }
+
+  /**
+   * Admin venue profile edit — mirrors the partner update fields (name/city/
+   * address/amenities/operating hours/closed days), no ownership restriction.
+   * The "admin edits like the partner" workflow (Abdullah 2026-08-31): the
+   * partner portal is owner-only now, so HQ gets its own PATCH.
+   */
+  async update(id: string, dto: UpdateVenueAdminDto, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    const updates: Record<string, unknown> = {};
+    if (dto.name !== undefined) updates.name = dto.name;
+    if (dto.city !== undefined) updates.city = dto.city;
+    if (dto.address !== undefined) updates.address = dto.address;
+    if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
+      const openHour = dto.open_hour ?? Number(before.open_hour ?? 8);
+      const closeHour = dto.close_hour ?? Number(before.close_hour ?? 23);
+      if (closeHour <= openHour) {
+        throw new BadRequestException('close_hour must be after open_hour.');
+      }
+      updates.open_hour = openHour;
+      updates.close_hour = closeHour;
+    }
+    for (const day of [0, 1, 2, 3, 4, 5, 6]) {
+      const key = `closed_day_${day}` as keyof UpdateVenueAdminDto;
+      if (dto[key] !== undefined) updates[key] = dto[key];
+    }
+
+    if (!Object.keys(updates).length) {
+      throw new BadRequestException('No changes provided.');
+    }
+
+    await this.db
+      .update(venues)
+      .set(withTimestamp(updates) as never)
+      .where(eq(venues.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'venue.update',
+      entityType: 'venue',
+      entityId: id,
+      before,
+      after,
       ip,
     });
     this.realtime.broadcastOps('venues');

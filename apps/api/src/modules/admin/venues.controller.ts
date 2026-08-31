@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -13,6 +14,7 @@ import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { TransferVenueDto } from './dto/transfer-venue.dto';
+import { UpdateVenueAdminDto } from './dto/update-venue-admin.dto';
 import { AdminVenuesService } from './venues.service';
 
 @Controller('admin/venues')
@@ -43,6 +45,16 @@ export class AdminVenuesController {
   ) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.venues.decide(id, dto, adminId, req.ip);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateVenueAdminDto,
+    @Req() req: Request,
+  ) {
+    const adminId = (req as unknown as { user: { sub: string } }).user.sub;
+    return this.venues.update(id, dto, adminId, req.ip);
   }
 
   @Post(':id/transfer-ownership')
