@@ -9,6 +9,7 @@ import {
   Patch,
   ForbiddenException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import {
   ApiTags,
@@ -39,8 +40,12 @@ export class AuthController {
   ) {}
 
   // ── POST /auth/send-otp ──────────────────────────────────────────────────
+  // P2-19 (run #22): route-level cap — 3 sends/min/IP on top of the global
+  // 60/min and the per-phone caps in otp-store (60s cooldown, 10 SMS/day,
+  // 5-fail lockout). Bounds SMS pumping from distributed loops.
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({ summary: 'Send a one-time password via Unifonic SMS' })
   @ApiOkResponse({ description: 'OTP sent successfully.' })
   @ApiBadRequestResponse({ description: 'Invalid Saudi phone number.' })
