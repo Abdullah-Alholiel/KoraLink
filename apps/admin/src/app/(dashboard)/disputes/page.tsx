@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -12,6 +14,8 @@ import Pagination from '@/components/Pagination';
 type DisputesResponse = ListResponse<DisputeListItem> & { disputes: DisputeListItem[] };
 
 export default function DisputesPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
 
@@ -22,7 +26,7 @@ export default function DisputesPage() {
 
   return (
     <div>
-      <PageHeader title="Disputes" subtitle="Resolve no-show appeals and other disputes" />
+      <PageHeader title={t('disputesTitle')} subtitle={t('disputesSubtitle')} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select
@@ -33,16 +37,16 @@ export default function DisputesPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="opened">Opened</option>
-          <option value="under_review">Under review</option>
-          <option value="resolved">Resolved</option>
-          <option value="rejected">Rejected</option>
+          <option value="">{t('allStatuses')}</option>
+          <option value="opened">{ts('opened')}</option>
+          <option value="under_review">{ts('under_review')}</option>
+          <option value="resolved">{ts('resolved')}</option>
+          <option value="rejected">{ts('rejected')}</option>
         </select>
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading disputes…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingDisputes')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load disputes: {error}</div>
       ) : (
@@ -51,13 +55,13 @@ export default function DisputesPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">Dispute</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Reporter</th>
-                  <th className="px-4 py-3 font-medium">Respondent</th>
-                  <th className="px-4 py-3 font-medium">Match</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Opened</th>
+                  <th className="px-8 py-3 font-medium">{t('thDispute')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thType')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thReporter')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thRespondent')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thMatch')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{ts('opened')}</th>
                   <th className="px-4 py-3 font-medium" />
                 </tr>
               </thead>

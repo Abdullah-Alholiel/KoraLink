@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -12,6 +14,8 @@ import Pagination from '@/components/Pagination';
 type ReportsResponse = ListResponse<AdminReportListItem> & { reports: AdminReportListItem[] };
 
 export default function ReportsPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const [status, setStatus] = useState('');
   const [subjectType, setSubjectType] = useState('');
   const [page, setPage] = useState(1);
@@ -27,7 +31,7 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Triage user, match, and venue reports" />
+      <PageHeader title={t('reportsTitle')} subtitle={t('reportsSubtitle')} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select
@@ -38,11 +42,11 @@ export default function ReportsPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="open">Open</option>
-          <option value="reviewing">Reviewing</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
+          <option value="">{t('allStatuses')}</option>
+          <option value="open">{ts('open')}</option>
+          <option value="reviewing">{ts('reviewing')}</option>
+          <option value="resolved">{ts('resolved')}</option>
+          <option value="dismissed">{ts('dismissed')}</option>
         </select>
         <select
           value={subjectType}
@@ -52,16 +56,16 @@ export default function ReportsPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">All subjects</option>
-          <option value="user">User</option>
-          <option value="match">Match</option>
-          <option value="venue">Venue</option>
-          <option value="message">Message</option>
+          <option value="">{t('allSubjects')}</option>
+          <option value="user">{t('thUser')}</option>
+          <option value="match">{t('thMatch')}</option>
+          <option value="venue">{t('thVenue')}</option>
+          <option value="message">{t('thMessage')}</option>
         </select>
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading reports…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingReports')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load reports: {error}</div>
       ) : (
@@ -70,12 +74,12 @@ export default function ReportsPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">Report</th>
-                  <th className="px-4 py-3 font-medium">Subject</th>
-                  <th className="px-4 py-3 font-medium">Reporter</th>
-                  <th className="px-4 py-3 font-medium">Reason</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Reported</th>
+                  <th className="px-8 py-3 font-medium">{t('thReport')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thSubject')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thReporter')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thReason')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thReported')}</th>
                   <th className="px-4 py-3 font-medium" />
                 </tr>
               </thead>

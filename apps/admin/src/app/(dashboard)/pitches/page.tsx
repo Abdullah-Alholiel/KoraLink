@@ -1,17 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { CalendarClock, Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
-import type { AdminPitchList, AdminPitchRow, AdminVenueListRow } from '@/lib/types';
+import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
 import PitchFormDrawer from '@/components/PitchFormDrawer';
+import ScheduleDrawer from '@/components/ScheduleDrawer';
 import type { PitchFormResult } from '@/components/PitchFormDrawer';
+
+interface SlotsResponse {
+  slots: PartnerSlot[];
+}
 
 /**
  * HQ pitch management (admin-ux-overhaul slice 2): every pitch across all
@@ -25,6 +30,7 @@ export default function AdminPitchesPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<AdminPitchRow | null>(null);
+  const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   // Debounced search: 300ms after the last keystroke, back to page 1.
@@ -45,6 +51,25 @@ export default function AdminPitchesPage() {
 
   // Venue options for the edit drawer (cross-venue move / ownership hand-off).
   const venues = useLiveAdminData<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100', ['venues']);
+
+  // Slots for the schedule drawer (admin slot endpoints).
+  function weekStart(): string {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    return d.toISOString().slice(0, 10);
+  }
+  function weekEnd(): string {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
+    return d.toISOString().slice(0, 10);
+  }
+  const scheduleState = useLiveAdminData<SlotsResponse>(
+    schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekStart()}&to=${weekEnd()}` : '/admin/pitches',
+    [],
+    { pollMs: 60_000 },
+  );
+  const schedule = schedulePitchId ? scheduleState : { ...scheduleState, data: undefined, loading: false };
+  const schedulePitch = (data?.pitches ?? []).find((p) => p.id === schedulePitchId) ?? null;
 
   async function save(pitch: AdminPitchRow, values: PitchFormResult) {
     await api.patch(`/admin/pitches/${pitch.id}`, {
@@ -140,6 +165,12 @@ export default function AdminPitchesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => setSchedulePitchId(p.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}
+                          </button>
+                          <button
                             onClick={() => toggleActive(p)}
                             disabled={busyId === p.id}
                             className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
@@ -176,6 +207,17 @@ export default function AdminPitchesPage() {
           )}
         </div>
       </div>
+
+      <ScheduleDrawer
+        open={!!schedulePitch}
+        onClose={() => setSchedulePitchId(null)}
+        pitchId={schedulePitch?.id ?? ''}
+        pitchName={`${schedulePitch?.name ?? ''} · ${schedulePitch?.venue_name ?? ''}`}
+        slots={schedule.data?.slots ?? []}
+        loading={schedule.loading}
+        onChanged={scheduleState.reload}
+        endpointBase="/admin"
+      />
 
       <PitchFormDrawer
         open={!!editing}

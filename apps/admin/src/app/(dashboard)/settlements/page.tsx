@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -13,6 +15,8 @@ import Pagination from '@/components/Pagination';
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
 export default function SettlementsPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -45,14 +49,14 @@ export default function SettlementsPage() {
 
   return (
     <div>
-      <PageHeader title="Settlements" subtitle="Venue payouts and earnings" />
+      <PageHeader title={t('settlementsTitle')} subtitle={t('settlementsSubtitle')} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="paid">Paid</option>
-          <option value="failed">Failed</option>
+          <option value="">{t('allStatuses')}</option>
+          <option value="pending">{ts('pending')}</option>
+          <option value="paid">{ts('paid')}</option>
+          <option value="failed">{ts('failed')}</option>
         </select>
         <button
           onClick={generate}
@@ -65,7 +69,7 @@ export default function SettlementsPage() {
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading settlements…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettlements')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load: {error}</div>
       ) : (
@@ -74,13 +78,13 @@ export default function SettlementsPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">ID</th>
-                  <th className="px-4 py-3 font-medium">Venue</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Period</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Payout ref</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
+                  <th className="px-8 py-3 font-medium">{t('thId')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thVenue')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thAmount')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thPeriod')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thPayoutRef')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

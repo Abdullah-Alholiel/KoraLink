@@ -1,11 +1,14 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, Loader2, ShieldAlert } from 'lucide-react';
 import { api, defaultRoute, setToken } from '@/lib/api';
 
 export default function LoginPage() {
+  const t = useTranslations('hq');
   const router = useRouter();
   const [phone, setPhone] = useState('+966500000000');
   const [code, setCode] = useState('');
@@ -77,11 +80,11 @@ export default function LoginPage() {
           </div>
           <div>
             <div className="text-lg font-semibold text-gray-900">KoraLink</div>
-            <div className="text-xs text-gray-500">Admin Console</div>
+            <div className="text-xs text-gray-500">{t('loginTitle')}</div>
           </div>
         </div>
 
-        <label className="mb-1 block text-sm font-medium text-gray-700">Phone number</label>
+        <label className="mb-1 block text-sm font-medium text-gray-700">{t('phoneNumber')}</label>
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
@@ -139,9 +142,9 @@ export default function LoginPage() {
             <span className="font-medium text-gray-700">Admin</span> — HQ console (users, matches, disputes, money)
           </div>
           <div>
-            <span className="font-medium text-gray-700">Venue Owner</span> — partner portal (venues, pitches, earnings)
+            <span className="font-medium text-gray-700">{t('roleVenueOwner')}</span> — partner portal (venues, pitches, earnings)
           </div>
-          <div className="mt-1 text-gray-400">Players sign in via the KoraLink app.</div>
+          <div className="mt-1 text-gray-400">{t('playersSignInNote')}</div>
         </div>
       </div>
     </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -18,6 +20,8 @@ const KNOWN_SETTINGS: { key: string; label: string; type: 'number' | 'text' }[] 
 ];
 
 export default function SettingsPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const { data, loading, error, reload } = useLiveAdminData<SettingsResponse>('/admin/settings', ['settings']);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -46,15 +50,15 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Platform-wide configuration" />
+      <PageHeader title={t('settingsTitle')} subtitle={t('settingsSubtitle')} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading settings…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettings')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load: {error}</div>
       ) : (
         <div className="max-w-2xl p-8">
-          {saved && <p className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Saved.</p>}
+          {saved && <p className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{t('savedOk')}</p>}
           <div className="space-y-4">
             {KNOWN_SETTINGS.map((s) => {
               const current =

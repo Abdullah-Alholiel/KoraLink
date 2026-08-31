@@ -20,6 +20,8 @@ interface SlotManagerProps {
   slots: PartnerSlot[];
   loading: boolean;
   onChanged: () => void;
+  /** Which console surface owns the calls: partner (default) or admin. */
+  endpointBase?: '/partner' | '/admin';
 }
 
 /**
@@ -27,7 +29,7 @@ interface SlotManagerProps {
  * a recurring-pattern generator, single-slot add, and unbooked-slot delete.
  * Localized (en/ar); times/dates keep dir=ltr for readability in RTL.
  */
-export default function SlotManager({ pitchId, pitchName, slots, loading, onChanged }: SlotManagerProps) {
+export default function SlotManager({ pitchId, pitchName, slots, loading, onChanged, endpointBase = '/partner' }: SlotManagerProps) {
   const t = useTranslations('slotManager');
   const tc = useTranslations('common');
   const [weekStart, setWeekStart] = useState(() => {
@@ -78,7 +80,10 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
     setBusyAction(true);
     setMessage(null);
     try {
-      const res = await api.post<{ created: number; skipped: number }>(`/partner/pitches/${pitchId}/slots/generate`, pattern);
+      const res = await api.post<{ created: number; skipped: number }>(
+        `${endpointBase}/pitches/${pitchId}/slots/generate`,
+        pattern,
+      );
       setMessage(t('created', { created: res.created, skipped: res.skipped }));
       onChanged();
     } catch (e) {
@@ -92,7 +97,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
     setBusyAction(true);
     setMessage(null);
     try {
-      await api.post(`/partner/pitches/${pitchId}/slots`, oneSlot);
+      await api.post(`${endpointBase}/pitches/${pitchId}/slots`, oneSlot);
       setShowAddSlot(false);
       onChanged();
     } catch (e) {
@@ -106,7 +111,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
     setBusyId(slotId);
     setMessage(null);
     try {
-      await api.delete(`/partner/slots/${slotId}`);
+      await api.delete(`${endpointBase}/slots/${slotId}`);
       onChanged();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : t('deleteFailed'));

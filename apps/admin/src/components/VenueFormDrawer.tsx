@@ -14,6 +14,8 @@ interface VenueFormDrawerProps {
   venue?: PartnerVenueRow | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Which console surface owns the calls: partner (default) or admin. */
+  endpointBase?: '/partner' | '/admin';
 }
 
 interface VenueFormValues {
@@ -41,7 +43,7 @@ const EMPTY: VenueFormValues = {
  * amenities hint, operating hours with the P2-31(1) validation moved inside,
  * closed-day toggles. Replaces the old inline panels that shifted the page.
  */
-export default function VenueFormDrawer({ open, venue, onClose, onSaved }: VenueFormDrawerProps) {
+export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpointBase = '/partner' }: VenueFormDrawerProps) {
   const t = useTranslations('venueForm');
   const tp = useTranslations('partner.venues');
   const tc = useTranslations('common');
@@ -110,7 +112,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved }: Venue
       if (venue) {
         const openHour = Number(values.open);
         const closeHour = Number(values.close);
-        await api.patch(`/partner/venues/${venue.id}`, {
+        await api.patch(`${endpointBase}/venues/${venue.id}`, {
           name: values.name.trim(),
           city: values.city.trim(),
           address: values.address.trim(),
@@ -123,7 +125,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved }: Venue
           ...Object.fromEntries(values.closedDays.map((closed, day) => [`closed_day_${day}`, closed])),
         });
       } else {
-        await api.post('/partner/venues', {
+        await api.post(`${endpointBase}/venues`, {
           name: values.name.trim(),
           city: values.city.trim(),
           address: values.address.trim(),

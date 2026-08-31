@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   Bar,
   BarChart,
@@ -28,6 +30,7 @@ import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function DashboardPage() {
+  const t = useTranslations('hq');
   const { data, loading, error } = useLiveAdminData<AdminMetrics>('/admin/metrics', ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
   const recentTx = useLiveAdminData<{ transactions: { id: string; user_name: string | null; reference_type: string; amount: number; status: string }[] }>(
     '/admin/transactions?page=1&perPage=5',
@@ -39,8 +42,8 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="Mission Control" subtitle="Loading…" />
-        <div className="p-8 text-sm text-gray-500">Loading metrics…</div>
+        <PageHeader title={t('dashboardTitle')} subtitle="Loading…" />
+        <div className="p-8 text-sm text-gray-500">{t('loadingMetrics')}</div>
       </div>
     );
   }
@@ -48,7 +51,7 @@ export default function DashboardPage() {
   if (error || !data) {
     return (
       <div>
-        <PageHeader title="Mission Control" />
+        <PageHeader title={t('dashboardTitle')} />
         <div className="p-8 text-sm text-red-600">Failed to load metrics: {error}</div>
       </div>
     );
@@ -56,7 +59,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Mission Control" subtitle="KoraLink operations overview" />
+      <PageHeader title={t('dashboardTitle')} subtitle={t('dashboardSubtitle')} />
 
       <div className="space-y-6 p-8">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -84,7 +87,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-gray-900">Total Revenue (6 months)</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{t('totalRevenue6m')}</h2>
             <div className="mt-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.revenueSeries}>
@@ -99,7 +102,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-gray-900">Matches Played vs Cancelled</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{t('matchesPlayedVsCancelled')}</h2>
             <div className="mt-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.matchesPlayedVsCancelled}>
@@ -117,7 +120,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-gray-900">Monthly Dispute Rate</h2>
+          <h2 className="text-sm font-semibold text-gray-900">{t('monthlyDisputeRate')}</h2>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data.disputeRateSeries}>
@@ -133,7 +136,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Recent Transactions</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('recentTransactions')}</h2>
             <div className="divide-y divide-gray-100">
               {(recentTx.data?.transactions ?? []).map((t) => (
                 <div key={t.id} className="flex items-center justify-between py-2">
@@ -148,13 +151,13 @@ export default function DashboardPage() {
                 </div>
               ))}
               {!recentTx.data?.transactions?.length && (
-                <div className="py-4 text-sm text-gray-400">No transactions yet.</div>
+                <div className="py-4 text-sm text-gray-400">{t('noTransactions')}</div>
               )}
             </div>
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Active Disputes</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('activeDisputes')}</h2>
             <div className="divide-y divide-gray-100">
               {(activeDisputes.data?.disputes ?? []).map((d) => (
                 <div key={d.id} className="flex items-center justify-between py-2">
@@ -166,7 +169,7 @@ export default function DashboardPage() {
                 </div>
               ))}
               {!activeDisputes.data?.disputes?.length && (
-                <div className="py-4 text-sm text-gray-400">No disputes.</div>
+                <div className="py-4 text-sm text-gray-400">{t('noDisputes')}</div>
               )}
             </div>
           </div>

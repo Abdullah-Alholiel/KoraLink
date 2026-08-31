@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
@@ -20,6 +22,8 @@ function userStatus(u: AdminUser): string {
 }
 
 export default function UsersPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
@@ -46,7 +50,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Users" subtitle="Manage players, venue owners, and admins" />
+      <PageHeader title={t('usersTitle')} subtitle={t('usersSubtitle')} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <form
@@ -62,7 +66,7 @@ export default function UsersPage() {
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search name, phone, handle"
+              placeholder={t('usersSearchPh')}
               className="w-64 rounded-lg border border-gray-300 py-2 ps-8 pe-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
@@ -82,10 +86,10 @@ export default function UsersPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">All roles</option>
-          <option value="Player">Player</option>
-          <option value="VenueOwner">Venue Owner</option>
-          <option value="Admin">Admin</option>
+          <option value="">{t('allRoles')}</option>
+          <option value="Player">{t('rolePlayer')}</option>
+          <option value="VenueOwner">{t('roleVenueOwner')}</option>
+          <option value="Admin">{t('roleAdmin')}</option>
         </select>
 
         <select
@@ -96,15 +100,15 @@ export default function UsersPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="banned">Banned</option>
-          <option value="suspended">Suspended</option>
+          <option value="all">{t('allStatuses')}</option>
+          <option value="active">{ts('active')}</option>
+          <option value="banned">{ts('banned')}</option>
+          <option value="suspended">{ts('suspended')}</option>
         </select>
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading users…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingUsers')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load users: {error}</div>
       ) : (
@@ -113,15 +117,15 @@ export default function UsersPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">User</th>
-                  <th className="px-4 py-3 font-medium">Phone</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Wallet</th>
-                  <th className="px-4 py-3 font-medium">Karma</th>
-                  <th className="px-4 py-3 font-medium">No-shows</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Joined</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
+                  <th className="px-8 py-3 font-medium">{t('thUser')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thPhone')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thRole')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thWallet')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thKarma')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thNoShows')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thJoined')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -158,14 +162,14 @@ export default function UsersPage() {
                                   onClick={() => act(u.id, { banned: false })}
                                   className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
                                 >
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Unban
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('unbanAction')}
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => act(u.id, { banned: true })}
                                   className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
                                 >
-                                  <Ban className="h-3.5 w-3.5" /> Ban
+                                  <Ban className="h-3.5 w-3.5" /> {t('banAction')}
                                 </button>
                               )}
                               {st === 'suspended' ? (

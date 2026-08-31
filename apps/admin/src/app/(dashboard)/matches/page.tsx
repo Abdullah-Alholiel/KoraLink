@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import { Ban, Loader2, Pencil } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -16,6 +18,8 @@ type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
 const TERMINAL = new Set(['Completed', 'Cancelled']);
 
 export default function MatchesPage() {
+  const t = useTranslations('hq');
+  const ts = useTranslations('status');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -38,7 +42,7 @@ export default function MatchesPage() {
 
   return (
     <div>
-      <PageHeader title="Matches" subtitle="Every match on the platform, with admin override" />
+      <PageHeader title={t('matchesTitle')} subtitle={t('matchesSubtitle')} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select
@@ -49,17 +53,17 @@ export default function MatchesPage() {
           }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="Open">Open</option>
-          <option value="Full">Full</option>
-          <option value="InProgress">In Progress</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
+          <option value="">{t('allStatuses')}</option>
+          <option value="Open">{ts('open')}</option>
+          <option value="Full">{ts('full')}</option>
+          <option value="InProgress">{ts('inprogress')}</option>
+          <option value="Completed">{ts('completed')}</option>
+          <option value="Cancelled">{ts('cancelled')}</option>
         </select>
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading matches…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingMatches')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load: {error}</div>
       ) : (
@@ -68,13 +72,13 @@ export default function MatchesPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">Match</th>
-                  <th className="px-4 py-3 font-medium">Host</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Scheduled</th>
-                  <th className="px-4 py-3 font-medium">Spots</th>
-                  <th className="px-4 py-3 font-medium">Price</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
+                  <th className="px-8 py-3 font-medium">{t('thMatch')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thHost')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thScheduled')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thSpots')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thPrice')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -107,13 +111,13 @@ export default function MatchesPage() {
                               onClick={() => setEditing(m)}
                               className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
                             >
-                              <Pencil className="h-3.5 w-3.5" /> Edit
+                              <Pencil className="h-3.5 w-3.5" /> {t('editAction')}
                             </button>
                             <button
                               onClick={() => cancel(m.id)}
                               className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                             >
-                              <Ban className="h-3.5 w-3.5" /> Cancel
+                              <Ban className="h-3.5 w-3.5" /> {t('cancelAction')}
                             </button>
                           </div>
                         ) : (

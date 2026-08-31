@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -13,6 +15,8 @@ import Pagination from '@/components/Pagination';
 type TxResponse = ListResponse<AdminTransaction> & { transactions: AdminTransaction[] };
 
 export default function TransactionsPage() {
+  const hq = useTranslations('hq');
+  const ts = useTranslations('status');
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
@@ -36,25 +40,25 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <PageHeader title="Transactions" subtitle="All player and venue money movement" />
+      <PageHeader title={hq('transactionsTitle')} subtitle={hq('transactionsSubtitle')} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">All statuses</option>
-          <option value="Pending">Pending</option>
-          <option value="Completed">Completed</option>
-          <option value="Failed">Failed</option>
-          <option value="Reversed">Reversed</option>
+          <option value="">{hq('allStatuses')}</option>
+          <option value="Pending">{ts('pending')}</option>
+          <option value="Completed">{ts('completed')}</option>
+          <option value="Failed">{ts('failed')}</option>
+          <option value="Reversed">{ts('reversed')}</option>
         </select>
         <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">All types</option>
-          <option value="DEBIT">Debit</option>
-          <option value="CREDIT">Credit</option>
+          <option value="">{hq('allTypes')}</option>
+          <option value="DEBIT">{hq('typeDebit')}</option>
+          <option value="CREDIT">{hq('typeCredit')}</option>
         </select>
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">Loading transactions…</div>
+        <div className="px-8 py-10 text-sm text-gray-500">{hq('loadingTransactions')}</div>
       ) : error ? (
         <div className="px-8 py-10 text-sm text-red-600">Failed to load: {error}</div>
       ) : (
@@ -63,14 +67,14 @@ export default function TransactionsPage() {
             <table className="w-full text-start text-sm">
               <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-8 py-3 font-medium">ID</th>
-                  <th className="px-4 py-3 font-medium">User</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Reference</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
+                  <th className="px-8 py-3 font-medium">{hq('thId')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thUser')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thType')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thAmount')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thReference')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thDate')}</th>
+                  <th className="px-4 py-3 font-medium">{hq('thActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -100,7 +104,7 @@ export default function TransactionsPage() {
                           onClick={() => refund(t.id)}
                           className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                         >
-                          <RotateCcw className="h-3.5 w-3.5" /> Refund
+                          <RotateCcw className="h-3.5 w-3.5" /> {hq('refundAction')}
                         </button>
                       ) : (
                         <span className="text-xs text-gray-300">—</span>

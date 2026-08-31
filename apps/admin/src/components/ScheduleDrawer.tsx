@@ -13,6 +13,7 @@ interface ScheduleDrawerProps {
   slots: PartnerSlot[];
   loading: boolean;
   onChanged: () => void;
+  endpointBase?: '/partner' | '/admin';
 }
 
 /**
@@ -21,11 +22,27 @@ interface ScheduleDrawerProps {
  * affordance (X / Esc / backdrop) — no more inline accordion that pushes
  * the page down and closes only via the same button.
  */
-export default function ScheduleDrawer({ open, onClose, pitchId, pitchName, slots, loading, onChanged }: ScheduleDrawerProps) {
+export default function ScheduleDrawer({
+  open,
+  onClose,
+  pitchId,
+  pitchName,
+  slots,
+  loading,
+  onChanged,
+  endpointBase = '/partner',
+}: ScheduleDrawerProps) {
   const t = useTranslations('schedule');
   return (
     <Drawer open={open} onClose={onClose} title={t('manageTitle', { name: pitchName })} size="lg">
-      <SlotManager pitchId={pitchId} pitchName={pitchName} slots={slots} loading={loading} onChanged={onChanged} />
+      <SlotManager
+        pitchId={pitchId}
+        pitchName={pitchName}
+        slots={slots}
+        loading={loading}
+        onChanged={onChanged}
+        endpointBase={endpointBase}
+      />
     </Drawer>
   );
 }

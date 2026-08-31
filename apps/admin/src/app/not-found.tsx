@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 
 /**
  * App-router 404 page. Without this file, Next serves its synthesized
@@ -8,10 +11,11 @@ import Link from 'next/link';
  * ships the same file — admin now matches.
  */
 export default function NotFound() {
+  const t = useTranslations('hq');
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 p-4 text-center">
-      <h1 className="text-2xl font-semibold text-gray-900">Page not found</h1>
-      <p className="text-sm text-gray-500">The page you are looking for does not exist.</p>
+      <h1 className="text-2xl font-semibold text-gray-900">{t('notFoundTitle')}</h1>
+      <p className="text-sm text-gray-500">{t('notFoundBody')}</p>
       <Link
         href="/"
         className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
