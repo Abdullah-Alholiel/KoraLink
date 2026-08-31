@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, Play, WifiOff } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import NotificationBell from '@/components/layout/NotificationBell';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
@@ -23,6 +24,8 @@ export default function MyGamesPage() {
   const pathname = usePathname();
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations();
+  const tc = useTranslations('common');
+  const isOnline = useOnlineStatus();
 
   const { data: matchesApi, isLoading, error, refetch } = useMyMatches();
   const storeUser = useAppStore(selectUser);
@@ -55,6 +58,14 @@ export default function MyGamesPage() {
         {/* P2-34 (run #22): bell reachable from every tab */}
         <NotificationBell />
       </div>
+
+      {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
+      {!isOnline && (
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+          <WifiOff className="w-4 h-4 flex-shrink-0" />
+          <span>{tc('offlineBanner')}</span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto scroll-container bg-brand-bg">
         {/* Loading */}

@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, ShieldCheck, WifiOff } from 'lucide-react';
 import { useMyReports, type MyReportApi } from '@/hooks/useReports';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 /** P2-23 (run #17): "My Reports" — reporters see their reports and outcomes. */
 
@@ -20,6 +21,8 @@ export default function ReportsPage() {
   const pathname = usePathname();
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations('reports');
+  const tc = useTranslations('common');
+  const isOnline = useOnlineStatus();
 
   const { data, isLoading, error, refetch } = useMyReports();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -47,6 +50,14 @@ export default function ReportsPage() {
           {t('title')}
         </h1>
       </div>
+
+      {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
+      {!isOnline && (
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+          <WifiOff className="w-4 h-4 flex-shrink-0" />
+          <span>{tc('offlineBanner')}</span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto scroll-container bg-brand-bg p-4 space-y-3">
         {/* Loading */}

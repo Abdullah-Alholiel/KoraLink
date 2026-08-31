@@ -11,6 +11,8 @@ import {
 import { useDiscussions } from '@/hooks/useMessages';
 import { useConversations } from '@/hooks/useConversations';
 import NotificationBell from '@/components/layout/NotificationBell';
+import { WifiOff } from 'lucide-react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import Link from 'next/link';
 import DiscussionCard from '@/components/matches/DiscussionCard';
 import type { Discussion } from '@/types';
@@ -59,6 +61,8 @@ function groupDiscussions(
 
 export default function MessagesPage() {
   const t = useTranslations();
+  const tc = useTranslations('common');
+  const isOnline = useOnlineStatus();
   const pathname = usePathname();
   const locale = (pathname ?? '').split('/')[1] || 'en';
 
@@ -101,7 +105,7 @@ export default function MessagesPage() {
           onClick={() => {
             setShowSearch(!showSearch);
             if (showSearch) setSearchQuery('');
-          }}
+          }} 
           className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
           aria-label={t('common.search')}
         >
@@ -111,6 +115,14 @@ export default function MessagesPage() {
           />
         </button>
       </div>
+
+      {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
+      {!isOnline && (
+        <div className="mx-5 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+          <WifiOff className="w-4 h-4 flex-shrink-0" />
+          <span>{tc('offlineBanner')}</span>
+        </div>
+      )}
 
       {/* ── Search Bar ── */}
       {showSearch && (
