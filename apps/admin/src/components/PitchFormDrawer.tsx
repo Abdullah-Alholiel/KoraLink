@@ -5,18 +5,6 @@ import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
-import { api } from '@/lib/api';
-import type { AdminVenueListRow } from '@/lib/types';
-
-export interface PitchFormValues {
-  venue_id: string;
-  name: string;
-  size: string;
-  surface_type: string;
-  environment: string;
-  hourly_rate: number;
-  is_active: boolean;
-}
 
 export interface PitchFormResult {
   venue_id: string;
@@ -28,22 +16,28 @@ export interface PitchFormResult {
   is_active?: boolean;
 }
 
+export interface PitchLike {
+  id: string;
+  name: string;
+  size: string;
+  surface_type: string;
+  environment: string;
+  hourly_rate: number | string;
+  is_active: boolean;
+  venue_id?: string;
+}
+
 interface PitchFormDrawerProps {
   open: boolean;
   onClose: () => void;
-  /** Present = edit mode (admin PATCH); absent = create mode. */
-  pitch?: {
-    id: string;
-    name: string;
-    size: string;
-    surface_type: string;
-    environment: string;
-    hourly_rate: number | string;
-    is_active: boolean;
-    venue_id?: string;
-  } | null;
-  /** Admin mode adds the venue selector (cross-venue move / ownership hand-off). */
-  allowVenueMove?: boolean;
+  /** Present = edit mode; null = create. */
+  pitch?: PitchLike | null;
+  /** Venue options — the parent owns fetching (admin or partner source). */
+  venues: { id: string; name: string; city?: string }[] | null;
+  /** Show the venue selector (create mode, or admin cross-venue move). */
+  showVenueSelect?: boolean;
+  /** Expose the availability toggle (admin edit). */
+  showIsActive?: boolean;
   onSubmit: (values: PitchFormResult) => Promise<void>;
 }
 
@@ -54,10 +48,17 @@ const SIZES = ['5v5', '7v7', '8v8', '11v11'] as const;
  * live price preview, proper busy state. Shared by the partner My Pitches
  * page (create + edit) and the admin Pitches page (edit + venue move).
  */
-export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, onSubmit }: PitchFormDrawerProps) {
+export default function PitchFormDrawer({
+  open,
+  onClose,
+  pitch,
+  venues,
+  showVenueSelect,
+  showIsActive,
+  onSubmit,
+}: PitchFormDrawerProps) {
   const t = useTranslations('pitchForm');
   const tc = useTranslations('common');
-  const venues = useLiveVenues(open);
 
   const [values, setValues] = useState<PitchFormValues>(() => defaults(pitch));
   const [errors, setErrors] = useState<{ name?: string; venue_id?: string }>({});
@@ -77,7 +78,7 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
   async function submit() {
     const next: { name?: string; venue_id?: string } = {};
     if (!values.name.trim()) next.name = t('nameRequired');
-    if (allowVenueMove && !values.venue_id) next.venue_id = t('venueRequired');
+    if (showVenueSelect && !values.venue_id) next.venue_id = t('venueRequired');
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -92,8 +93,7 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
         environment: values.environment,
         hourly_rate: values.hourly_rate,
       };
-      // is_active is admin-editable; in create mode the API defaults it.
-      if (pitch) payload.is_active = values.is_active;
+      if (pitch && showIsActive) payload.is_active = values.is_active;
       await onSubmit(payload);
       onClose();
     } catch (e) {
@@ -125,7 +125,7 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
       }
     >
       <div className="space-y-4">
-        {allowVenueMove && (
+        {showVenueSelect && (
           <FormField label={t('fldVenue')} required error={errors.venue_id}>
             <select
               value={values.venue_id}
@@ -135,7 +135,8 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
               <option value="">—</option>
               {(venues ?? []).map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.name} · {v.city}
+                  {v.name}
+                  {v.city ? ` · ${v.city}` : ''}
                 </option>
               ))}
             </select>
@@ -200,7 +201,7 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
           </FormField>
         </div>
 
-        {pitch && (
+        {pitch && showIsActive && (
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
@@ -223,7 +224,17 @@ export default function PitchFormDrawer({ open, onClose, pitch, allowVenueMove, 
   );
 }
 
-function defaults(pitch: PitchFormDrawerProps['pitch']) {
+interface PitchFormValues {
+  venue_id: string;
+  name: string;
+  size: string;
+  surface_type: string;
+  environment: string;
+  hourly_rate: number;
+  is_active: boolean;
+}
+
+function defaults(pitch: PitchFormDrawerProps['pitch']): PitchFormValues {
   return {
     venue_id: pitch?.venue_id ?? '',
     name: pitch?.name ?? '',
@@ -233,25 +244,4 @@ function defaults(pitch: PitchFormDrawerProps['pitch']) {
     hourly_rate: Number(pitch?.hourly_rate ?? 300),
     is_active: pitch?.is_active ?? true,
   };
-}
-
-/** Fetch the venue options only while the drawer is open. */
-function useLiveVenues(enabled: boolean): AdminVenueListRow[] | null {
-  const [venues, setVenues] = useState<AdminVenueListRow[] | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    api
-      .get<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100')
-      .then((res) => {
-        if (!cancelled) setVenues(res.venues);
-      })
-      .catch(() => {
-        if (!cancelled) setVenues([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
-  return venues;
 }

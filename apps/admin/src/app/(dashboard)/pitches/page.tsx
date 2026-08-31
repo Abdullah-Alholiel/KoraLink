@@ -5,7 +5,7 @@ import { Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
-import type { AdminPitchList, AdminPitchRow } from '@/lib/types';
+import type { AdminPitchList, AdminPitchRow, AdminVenueListRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -42,6 +42,9 @@ export default function AdminPitchesPage() {
     `/admin/pitches?${qs.toString()}`,
     ['venues'],
   );
+
+  // Venue options for the edit drawer (cross-venue move / ownership hand-off).
+  const venues = useLiveAdminData<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100', ['venues']);
 
   async function save(pitch: AdminPitchRow, values: PitchFormResult) {
     await api.patch(`/admin/pitches/${pitch.id}`, {
@@ -177,7 +180,9 @@ export default function AdminPitchesPage() {
       <PitchFormDrawer
         open={!!editing}
         pitch={editing}
-        allowVenueMove
+        venues={venues.data?.venues ?? null}
+        showVenueSelect
+        showIsActive
         onClose={() => setEditing(null)}
         onSubmit={async (values) => {
           if (!editing) return;
