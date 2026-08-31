@@ -260,4 +260,16 @@ describe('MatchesService.rescheduleMatch', () => {
     const result = await makeService(h).rescheduleMatch(HOST, MATCH_ID, dto);
     expect(result.reschedule.wallet_delta_sar).toBe(-50);
   });
+
+  it('P2-37: rejects max_players < 2 before pricing (divide-by-zero defense)', async () => {
+    // DTO floors max_players at 2, but a drifted/legacy row would make
+    // round2(newCost / (newMax - 1) + margin) divide by zero → Infinity/NaN.
+    const h = makeTx({ match: { ...baseMatch, max_players: 1 } });
+    await expect(makeService(h).rescheduleMatch(HOST, MATCH_ID, dto)).rejects.toThrow(
+      BadRequestException,
+    );
+    // No ledger writes happened — the guard fires before money moves.
+    expect(h.insertedTransactions.length).toBe(0);
+    expect(h.slotUpdates.length).toBe(0);
+  });
 });

@@ -1841,6 +1841,15 @@ export class MatchesService {
         throw new BadRequestException('Cannot reschedule the match to a slot in the past.');
       }
 
+      // P2-37 (run #21): defense-in-depth — max_players is DTO-floored ≥2 at
+      // create (create-match.dto.ts @Min(2)), but a drifted/legacy row with
+      // max_players < 2 would make the per-player pricing divide by zero and
+      // persist Infinity/NaN. Guard sits BEFORE money moves (like duration/
+      // past-slot guards) so nothing is refunded/charged on a broken row.
+      if (match.max_players < 2) {
+        throw new BadRequestException('Cannot price a match with fewer than 2 players.');
+      }
+
       // ── 3. Money: refund old cost, charge new cost, net the wallet ────
       const oldCost = match.pitch_cost_sar ? parseFloat(match.pitch_cost_sar) : 0;
       const [pitch] = await tx
