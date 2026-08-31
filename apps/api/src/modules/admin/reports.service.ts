@@ -6,6 +6,7 @@ import { matches, personal_messages, reports, users, venues } from '../../databa
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListReportsDto } from './dto/list-reports.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
+import { UpdateReportDto } from './dto/update-report.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { AdminUsersService } from './users.service';
@@ -144,6 +145,73 @@ export class AdminReportsService {
     } catch {
       // best-effort — resolution already committed and audited
     }
+
+    return after;
+  }
+
+  /**
+   * Reopen a decided report (admin-ux-overhaul slice 5). Allowed from BOTH
+   * resolved and dismissed (Abdullah-approved). Resolution text is kept as
+   * history; resolved_by/resolved_at clear so the case sits fresh in the
+   * open queue.
+   */
+  async reopen(id: string, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    if (before.status !== 'resolved' && before.status !== 'dismissed') {
+      throw new BadRequestException('Only decided reports can be reopened.');
+    }
+
+    await this.db
+      .update(reports)
+      .set(
+        withTimestamp({
+          status: 'open',
+          resolved_by: null,
+          resolved_at: null,
+        }),
+      )
+      .where(eq(reports.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'report.reopen',
+      entityType: 'report',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('reports');
+
+    return after;
+  }
+
+  /** Edit the resolution text in ANY status; null clears it. */
+  async update(id: string, dto: UpdateReportDto, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    if (dto.resolution === undefined) {
+      throw new BadRequestException('No changes provided.');
+    }
+
+    await this.db
+      .update(reports)
+      .set(withTimestamp({ resolution: dto.resolution ?? null }))
+      .where(eq(reports.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'report.update',
+      entityType: 'report',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('reports');
 
     return after;
   }

@@ -6,6 +6,7 @@ import { disputes, dispute_messages, match_players, users } from '../../database
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListDisputesDto } from './dto/list-disputes.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
+import { UpdateDisputeDto } from './dto/update-dispute.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -143,6 +144,80 @@ export class AdminDisputesService {
     } catch {
       // swallow — feed/WS fan-out is supplementary
     }
+
+    return after;
+  }
+
+  /**
+   * Reopen a decided dispute (admin-ux-overhaul slice 5). Allowed from BOTH
+   * resolved and rejected (Abdullah-approved). The decision text and
+   * internal note are preserved as visible history; a `reopened` entry is
+   * appended to the evidence timeline so every admin action is traceable.
+   * No player notification in v1 — the audit trail is the record.
+   */
+  async reopen(id: string, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    if (before.status !== 'resolved' && before.status !== 'rejected') {
+      throw new BadRequestException('Only decided disputes can be reopened.');
+    }
+
+    const entry = { action: 'reopened', by: adminId, at: new Date().toISOString() };
+    const evidence = Array.isArray(before.evidence)
+      ? [...(before.evidence as unknown[]), entry]
+      : [entry];
+
+    await this.db
+      .update(disputes)
+      .set(withTimestamp({ status: 'opened', evidence: evidence as never }))
+      .where(eq(disputes.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'dispute.reopen',
+      entityType: 'dispute',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('disputes');
+
+    return after;
+  }
+
+  /**
+   * Edit a dispute's decision/internal note in ANY status — including after
+   * closure (post-decision corrections are the point). Null clears the text.
+   */
+  async update(id: string, dto: UpdateDisputeDto, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    if (dto.decision === undefined && dto.internalNote === undefined) {
+      throw new BadRequestException('No changes provided.');
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (dto.decision !== undefined) updates.decision = dto.decision ?? null;
+    if (dto.internalNote !== undefined) updates.internal_note = dto.internalNote ?? null;
+
+    await this.db
+      .update(disputes)
+      .set(withTimestamp(updates) as never)
+      .where(eq(disputes.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'dispute.update',
+      entityType: 'dispute',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('disputes');
 
     return after;
   }
