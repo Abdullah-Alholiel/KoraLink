@@ -19,6 +19,19 @@ Scope options:
 
 Separate approvals needed (only if B): runbook delta for the loop (Phase 2 reviewer boards `[multica]` cards), and `multica-agents` profile quota choice.
 
+## Phase 2a progress (2026-08-31)
+
+- Agents **KoraLink Finance**, **KoraLink Marketing**, **KoraLink Analytics**
+  created in workspace `KoraLink` (project `KoraLink Factory`), all bound to
+  the local Hermes runtime with `custom_args: ["-p", "multica-agents"]`.
+- Squad **Growth** (`1a680b0c`): leader Marketing; members Finance + Analytics.
+- **KoraLink Analytics fully harnessed** (2026-08-31): full instructions
+  (measurement framework: activation funnel, growth loop, D1/D7/D30 retention),
+  6 bound skills (PostHog, Sentry ×2, SQL Toolkit, Retention, Agent Analytics),
+  autopilot `4bdd35a6` "Weekly progress report" (Sun 17:00 Cairo,
+  create_issue). Registry + ops in `kanban/multica-bridge/README.md`.
+- Daemon runtime online; autopilot first run pending (next 2026-09-06).
+
 ## Research evidence (primary sources)
 
 - Multica repo: `github.com/multica-ai/multica` (README, SELF_HOSTING.md, `server/pkg/agent/hermes.go`, `server/internal/daemon/execenv/hermes_{sessions,memory,home}.go`, `server/cmd/multica/cmd_issue.go`, `docker-compose.selfhost.yml`, `.env.example`).

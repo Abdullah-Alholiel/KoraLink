@@ -1,0 +1,4 @@
+state.json
+state.json.tmp
+state.lock
+__pycache__/
