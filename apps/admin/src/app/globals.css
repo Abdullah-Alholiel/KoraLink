@@ -16,8 +16,8 @@ body {
 }
 
 /* ── Shared motion tokens (drawers, dialogs, toasts) ─────────────────────
-   RTL-aware: the drawer slide uses a direction-scoped var so the panel
-   enters from the inline-end in BOTH languages (LTR: right, RTL: left). */
+   Drawer is a LEFT-hand side panel in both locales (Abdullah 2026-08-31),
+   so the entrance slides from the left unconditionally. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -40,7 +40,7 @@ body {
 
 @keyframes slide-in-end {
   from {
-    transform: translateX(var(--slide-from, 100%));
+    transform: translateX(-100%);
     opacity: 0.7;
   }
   to {
@@ -50,10 +50,5 @@ body {
 }
 
 .animate-slide-in-end {
-  --slide-from: 100%;
   animation: slide-in-end 0.22s ease-out;
-}
-
-[dir='rtl'] .animate-slide-in-end {
-  --slide-from: -100%;
 }

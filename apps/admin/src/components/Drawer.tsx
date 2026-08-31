@@ -59,10 +59,12 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          'absolute inset-y-0 end-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
+          // Abdullah's rule (2026-08-31): the edit/view panel is a LEFT-hand
+          // side panel in BOTH locales — left-0 (physical), not end-0. This
+          // matches what he approved on the admin pitches tab.
+          'absolute inset-y-0 left-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
           size === 'lg' && 'max-w-3xl',
-          // Inline-direction-aware entrance: slides from the end side
-          // (globals.css flips --slide-from under [dir=rtl]).
+          // Slides in from the left (globals.css keyframe).
           'animate-slide-in-end',
         )}
       >
