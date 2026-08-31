@@ -105,6 +105,7 @@ function makeService(rows: StubRows) {
       },
       innerJoin: () => chain,
       leftJoin: () => chain,
+      groupBy: () => chain,
       orderBy: () => chain,
       limit: () => chain,
     };
@@ -113,6 +114,10 @@ function makeService(rows: StubRows) {
   }
 
   const db = {
+    // Raw-SQL path (run #22): getDashboard's weekly-revenue query resolves to
+    // a bare rows array (postgres-js). The tests assert venue scoping only,
+    // so an empty week trend is fine.
+    execute: async () => [],
     select: () => ({ from: (table: unknown) => chainFor(table) }),
     update: () => ({
       set: () => ({
