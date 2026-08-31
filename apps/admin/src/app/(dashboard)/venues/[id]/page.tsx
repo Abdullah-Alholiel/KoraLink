@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
@@ -11,6 +12,7 @@ import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function VenueDetailPage() {
+  const t = useTranslations('hq');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -39,7 +41,7 @@ export default function VenueDetailPage() {
     return (
       <div>
         <PageHeader title="Venue" />
-        <div className="p-8 text-sm text-red-600">Failed to load: {error}</div>
+        <div className="p-8 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       </div>
     );
   }

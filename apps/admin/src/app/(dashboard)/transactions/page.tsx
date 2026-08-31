@@ -60,7 +60,7 @@ export default function TransactionsPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{hq('loadingTransactions')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">Failed to load: {error}</div>
+        <div className="px-8 py-10 text-sm text-red-600">{hq('loadFailed')}: {error}</div>
       ) : (
         <>
           <div className="overflow-x-auto">

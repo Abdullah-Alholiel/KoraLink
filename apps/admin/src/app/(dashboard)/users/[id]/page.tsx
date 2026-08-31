@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
@@ -19,6 +20,7 @@ function userStatus(u: AdminUser): string {
 }
 
 export default function UserDetailPage() {
+  const t = useTranslations('hq');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -47,7 +49,7 @@ export default function UserDetailPage() {
     return (
       <div>
         <PageHeader title="User" />
-        <div className="p-8 text-sm text-red-600">Failed to load: {error}</div>
+        <div className="p-8 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       </div>
     );
   }

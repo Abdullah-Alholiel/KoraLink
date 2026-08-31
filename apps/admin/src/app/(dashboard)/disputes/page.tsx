@@ -48,7 +48,7 @@ export default function DisputesPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingDisputes')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">Failed to load disputes: {error}</div>
+        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       ) : (
         <>
           <div className="overflow-x-auto">

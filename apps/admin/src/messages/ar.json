@@ -570,6 +570,7 @@
     "thActions": "إجراءات",
     "unbanAction": "إلغاء الحظر",
     "banAction": "حظر",
-    "refundAction": "استرداد"
+    "refundAction": "استرداد",
+    "loadFailed": "فشل تحميل البيانات"
   }
 }

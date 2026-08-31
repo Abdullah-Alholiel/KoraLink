@@ -570,6 +570,7 @@
     "thActions": "Actions",
     "unbanAction": "Unban",
     "banAction": "Ban",
-    "refundAction": "Refund"
+    "refundAction": "Refund",
+    "loadFailed": "Failed to load"
   }
 }

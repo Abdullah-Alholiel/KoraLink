@@ -67,7 +67,7 @@ export default function ReportsPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingReports')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">Failed to load reports: {error}</div>
+        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       ) : (
         <>
           <div className="overflow-x-auto">
