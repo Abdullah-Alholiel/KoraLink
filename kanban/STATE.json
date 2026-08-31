@@ -1,24 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 22,
-  "last_run_at": "2026-08-31T15:15:00Z",
+  "last_run": 23,
+  "last_run_at": "2026-08-31T20:15:00Z",
   "last_run_commits": [
-    "85e8326",
-    "0803e10",
-    "5052fe1",
-    "f69c965",
-    "2c46403",
-    "3016721",
-    "b0f13cb",
-    "8552504",
-    "ed7a63f"
+    "4807bcd",
+    "175df30",
+    "5d9684f"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-31T15-15Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-31T20-15Z.md",
   "in_review_items": [
-    "P2-34 notification bell on every tab (0803e10): NotificationBell mounted in header rows of play/clubs/my-games/wallet/messages; feed keeps its own. Verify in run #23: grep NotificationBell across (main) pages (expect 6 files incl. feed), vitest + build green, no double-mount on feed.",
-    "P2-39 admin refund FOR UPDATE guard (85e8326): transactions.refund.spec.ts 7 cases (in-tx status re-check, concurrent-loser 400, zero side effects). Verify in run #23: jest transactions.refund.spec.ts 7/7 + grep FOR UPDATE in refund().",
-    "Admin i18n HQ sweep (5052fe1 + 2c46403): dashboard MetricCard labels/chart series names + dispute-type map + hq:loadFailed across 11 pages, en/ar parity 124/124 hq leaves. Verify in run #23: grep 'Failed to load' apps/admin/src/app (expect 0), hq parity re-count, admin tsc + build."
+    "P1-33 chain completion (4807bcd): journaled 0029_dear_lizard.sql adds the 3 verbs run #19's 0026 missed (account_suspended/account_banned/no_show_marked) — fresh migrate previously broke at 0018. Verify in run #24: grep 'no_show_marked' apps/api/drizzle/0029_dear_lizard.sql (3 ADD VALUE IF NOT EXISTS incl. it), 0029 in meta/_journal.json, fresh-clone `npm run db:migrate` idempotent (NOTICEs), live enum still 20 values.",
+    "P2-40 EN offline fallback (175df30): worker/index.js warm-caches /en/offline + /ar/offline and intercepts /en/*//ar/* document navigations network-first. Verify in run #24: grep 'koralink-offline-pages' + '/en/offline' in the CURRENT public/worker-*.js, live sw.js references a worker-*.js bundle, /en/offline + /ar/offline 200, vitest + build green, no double-respondWith for workbox's start-url route (worker only handles /en/|/ar/ prefixes).",
+    "P2-31(2) mine-list pagination (5d9684f): GET /reports {reports,total,hasMore} + ?limit(1-50)/?offset; PWA useInfiniteQuery + Load More; reports.loadMore en/ar. Verify in run #24: jest reports spec 10/10, dev-login GET /reports envelope keys, ?limit=1 hasMore:true, ?limit=999 400, i18n parity count 685/685."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -26,7 +20,7 @@
     "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
     "P1-16 padel support — needs Abdullah's scope decision.",
     "P1-2 skill_level discovery filter — needs product decision on semantics.",
-    "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box). HQ copy is now fully translated (run #22 extended it to dashboard + load-failure lines); the visual pass remains.",
+    "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box). HQ copy fully translated + verified 124/124 (run #23); only the visual pass remains.",
     "P2-29 host page nav placement — Abdullah to confirm intent (CTAs exist on feed).",
     "P2-32 foreign pitchId silent-ignore — decide document-or-404.",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
@@ -36,5 +30,5 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #22 (15:15Z scheduled, ~1h15m): ADMIN HOLD LIFTED — Abdullah's admin work fully committed (through d0862a7), tree clean. glm-5.3 reviewers probe 200; A 216s/16 calls, B 100s/9 calls, zero timeouts, zero false positives. Run #21 claims ALL VERIFIED-TRUE by Reviewer B (P1-28 additive ILIKE + 300ms debounce + i18n; P2-37 guard before money + zero-ledger spec; P2-35 locale labels + h23) → promoted DONE. Sentry: KORALINK-API-Y (schema \"v\" does not exist, 1 event in run #21 probe window) REFUTED as probe artifact — query matches no shipped code; PWA fetch error same window = restart churn. BUILT 9 commits: 85e8326 refund FOR UPDATE + in-tx status re-check (P2-39, 7 jest cases incl. concurrent-loser 400), 0803e10 P2-34 bell on every tab (play/clubs/my-games/wallet/messages), 5052fe1 admin HQ dashboard i18n (8 MetricCard labels + 4 chart series + dispute-type map, hq parity 123/123), f69c965 partner access-control spec stub groupBy+execute (pre-existing breakage from 9645e95), 2c46403 hq:loadFailed across 11 HQ pages (+venues/[id], users/[id] first useTranslations), 3016721 offline banner on clubs/my-games/messages/reports (P2-31(4)), b0f13cb drop fallback-dev-secret JWT default → getOrThrow ×3 (P0-3 follow-through; gateway spec stub +getOrThrow), 8552504 send-otp @Throttle 3/min/IP (P2-19; live probe 400×3→429×2), ed7a63f P2-11 verify-otp never returns token in body. P2-38 verified STALE/DONE (states existed). Gates after every slice: build 3/3 (×6 runs), jest 190/190, vitest 261/261, tsc 0 (api/pwa/admin), lint clean; live: dev-login 200 + /users/me 200 after each API restart. OS research: none new (run #19 Leaflet/MapLibre card stands). Mirror: P2-39 card created gated; P2-34/P2-38 cards commented. Next run #23: verify the 3 in_review items, then remaining buildable: P2-31(2) reports listMine pagination, P2-13 Nearby/TopRated pills (needs radius scoring decision), P2-32 (needs Abdullah decision), or P2-8 push-text localization."
+  "notes": "Run #23 (20:15Z scheduled, ~50m): FULL. glm-5.3 reviewers probe 200; A 118s/16 calls, B 69s/10 calls, zero timeouts. Run #22 claims ALL VERIFIED-TRUE (P2-34 6 bell mounts, P2-39 refund guard jest 7/7, admin i18n 'Failed to load' 0 + hq 124/124) → DONE. Sentry: zero new signatures; all known noise. BUILT 3 commits: 4807bcd P1-33 COMPLETION — journaled chain still missed 3 ActivityVerb values (0026 folded back only 4 of the orphan's 7; fresh migrate broke at 0018 on 'account_unbanned BEFORE no_show_marked') → 0029_dear_lizard 3x ADD VALUE IF NOT EXISTS, applied live w/ idempotency NOTICEs, live enum 20 values; 175df30 P2-40 — built sw.js had NO setCatchHandler (offline inner navigations hit the browser error page; fallback doc was AR-only) → worker warm-caches /en/offline + /ar/offline, locale-aware network-first fetch handler, verified in built worker-579f91e6df06602a.js + live sw.js; 5d9684f P2-31(2) — /reports envelope {reports,total,hasMore} + limit/offset DTO, PWA infinite query + Load More, jest 193/193, LIVE E2E PASS (limit=1 hasMore:true; 999/-3/foreign all 400). Reviewer-B refutations recorded: 'no partner web app' (portal exists in apps/admin) and 'no Web Push' (worker push handlers exist). Gates: root build 3/3 x3, jest 190→193, vitest 261/261 x2, tsc 0 api+pwa, lint clean. Mirror: P1-33 card commented; P2-40 + P2-31(2) cards created + gated. Sibling touched messages/*.json mid-slice (net-zero) — only my loadMore keys committed. OS research: none. Next run #24: verify the 3 in_review items, then P2-8 push-text localization (medium) or backlog CSP-nonce/per-locale manifest; P2-13/P2-29/P2-32/P1-16 need Abdullah."
 }
