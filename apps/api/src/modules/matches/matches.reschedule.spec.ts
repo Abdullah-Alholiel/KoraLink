@@ -18,10 +18,17 @@ describe('MatchesService.rescheduleMatch', () => {
   const HOST = 'host-1';
   const MATCH_ID = 'match-1';
 
+  /** YYYY-MM-DD for (today in Riyadh) + N days — UTC+3, DST-free. */
+  function riyadhDate(daysFromNow: number): string {
+    return new Date(Date.now() + 3 * 3_600_000 + daysFromNow * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
   const oldSlot = {
     id: 'slot-old',
     pitch_id: 'pitch-1',
-    slot_date: '2026-09-01',
+    slot_date: riyadhDate(1),
     start_time: '18:00:00',
     end_time: '19:00:00',
     is_booked: true,
@@ -29,7 +36,7 @@ describe('MatchesService.rescheduleMatch', () => {
   const newSlot = {
     id: 'slot-new',
     pitch_id: 'pitch-1',
-    slot_date: '2026-09-02',
+    slot_date: riyadhDate(2),
     start_time: '20:00:00',
     end_time: '21:30:00',
     is_booked: false,
@@ -181,6 +188,28 @@ describe('MatchesService.rescheduleMatch', () => {
     await expect(makeService(h).rescheduleMatch(HOST, MATCH_ID, dto)).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it('rejects a PAST target slot with BadRequest BEFORE any money moves (cross-day picker)', async () => {
+    const h = makeTx({ slots: [oldSlot, { ...newSlot, slot_date: riyadhDate(-2) }] });
+    await expect(makeService(h).rescheduleMatch(HOST, MATCH_ID, dto)).rejects.toThrow(
+      /slot in the past/,
+    );
+    // Guard sits before the money path: no ledger rows, no slot writes.
+    expect(h.insertedTransactions).toHaveLength(0);
+    expect(h.slotUpdates).toHaveLength(0);
+  });
+
+  it('rejects by DATE not clock: same time-of-day yesterday 400, tomorrow 200', async () => {
+    const svc = (slotDate: string) => {
+      const h = makeTx({ slots: [oldSlot, { ...newSlot, slot_date: slotDate }] });
+      return { h, result: makeService(h).rescheduleMatch(HOST, MATCH_ID, dto) };
+    };
+    // Yesterday (identical 20:00–21:30 wall clock) → still past → 400.
+    await expect(svc(riyadhDate(-1)).result).rejects.toBeInstanceOf(BadRequestException);
+    // Tomorrow, same wall clock → the guard must not block it (cross-day OK).
+    const tomorrow = await svc(riyadhDate(1)).result;
+    expect(tomorrow.reschedule.new_slot_id).toBe('slot-new');
   });
 
   it('swaps slots, nets the wallet, reprices, and returns the populated match + summary', async () => {

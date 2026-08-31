@@ -1832,6 +1832,15 @@ export class MatchesService {
         throw new BadRequestException('Slot window is invalid (end must be after start).');
       }
 
+      // Cross-day reschedule (run #21): the picker now reaches ANY day, so a
+      // past slot must be rejected BEFORE any money moves — landing the match
+      // on a past instant would let the */5m auto-complete scheduler finish it
+      // immediately. Riyadh is UTC+3 (DST-free) → the same +03:00 wall-clock
+      // mapping createMatch uses is exact.
+      if (newScheduledAt.getTime() <= Date.now()) {
+        throw new BadRequestException('Cannot reschedule the match to a slot in the past.');
+      }
+
       // ── 3. Money: refund old cost, charge new cost, net the wallet ────
       const oldCost = match.pitch_cost_sar ? parseFloat(match.pitch_cost_sar) : 0;
       const [pitch] = await tx
