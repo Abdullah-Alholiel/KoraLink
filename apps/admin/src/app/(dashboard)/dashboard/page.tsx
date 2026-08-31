@@ -42,7 +42,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader title={t('dashboardTitle')} subtitle="Loading…" />
+        <PageHeader title={t('dashboardTitle')} />
         <div className="p-8 text-sm text-gray-500">{t('loadingMetrics')}</div>
       </div>
     );
@@ -52,7 +52,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader title={t('dashboardTitle')} />
-        <div className="p-8 text-sm text-red-600">Failed to load metrics: {error}</div>
+        <div className="p-8 text-sm text-red-600">{t('errorMetrics')}: {error}</div>
       </div>
     );
   }
@@ -63,23 +63,23 @@ export default function DashboardPage() {
 
       <div className="space-y-6 p-8">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MetricCard label="Users" value={data.totals.users.toLocaleString()} icon={Users} />
-          <MetricCard label="Matches Booked" value={data.totals.matches.toLocaleString()} icon={CalendarDays} />
-          <MetricCard label="Venues" value={data.totals.venues.toLocaleString()} icon={MapPin} />
+          <MetricCard label={t('metricUsers')} value={data.totals.users.toLocaleString()} icon={Users} />
+          <MetricCard label={t('metricMatches')} value={data.totals.matches.toLocaleString()} icon={CalendarDays} />
+          <MetricCard label={t('metricVenues')} value={data.totals.venues.toLocaleString()} icon={MapPin} />
           <MetricCard
-            label="Completion Rate"
+            label={t('metricCompletionRate')}
             value={formatPercent(data.completionRate)}
-            sub={`${formatPercent(data.disputeRate)} dispute rate`}
+            sub={t('metricDisputeRateSub', { rate: formatPercent(data.disputeRate) })}
             icon={TrendingUp}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MetricCard label="Total Float Held" value={formatMoney(data.totals.floatHeld)} icon={Wallet} />
-          <MetricCard label="Pending Payouts" value={formatMoney(data.totals.pendingPayouts)} icon={Wallet} />
-          <MetricCard label="Open Disputes" value={String(data.totals.disputesOpen)} icon={ShieldAlert} />
+          <MetricCard label={t('metricFloatHeld')} value={formatMoney(data.totals.floatHeld)} icon={Wallet} />
+          <MetricCard label={t('metricPendingPayouts')} value={formatMoney(data.totals.pendingPayouts)} icon={Wallet} />
+          <MetricCard label={t('metricOpenDisputes')} value={String(data.totals.disputesOpen)} icon={ShieldAlert} />
           <MetricCard
-            label="Avg Resolution"
+            label={t('metricAvgResolution')}
             value={`${data.avgResolutionHours.toFixed(1)}h`}
             icon={ShieldAlert}
           />
@@ -95,7 +95,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="revenue" stroke="#0f9d58" strokeWidth={2} name="Revenue (SAR)" />
+                  <Line type="monotone" dataKey="revenue" stroke="#0f9d58" strokeWidth={2} name={t('chartRevenue')} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -111,8 +111,8 @@ export default function DashboardPage() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="played" fill="#0f9d58" name="Played" />
-                  <Bar dataKey="cancelled" fill="#9ca3af" name="Cancelled" />
+                  <Bar dataKey="played" fill="#0f9d58" name={t('chartPlayed')} />
+                  <Bar dataKey="cancelled" fill="#9ca3af" name={t('chartCancelled')} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => formatPercent(v)} />
                 <Tooltip formatter={(v: number) => formatPercent(v)} />
-                <Line type="monotone" dataKey="rate" stroke="#ef4444" strokeWidth={2} name="Dispute rate" />
+                <Line type="monotone" dataKey="rate" stroke="#ef4444" strokeWidth={2} name={t('chartDisputeRate')} />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -69,7 +69,7 @@ export default function DisputesPage() {
                 {(data?.disputes ?? []).map((d) => (
                   <tr key={d.id} className="hover:bg-gray-50">
                     <td className="px-8 py-3 font-mono text-xs text-gray-600">#{d.id.slice(0, 8).toUpperCase()}</td>
-                    <td className="px-4 py-3 text-gray-700">{d.type.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-gray-700">{t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-gray-700">{d.reporter_name ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{d.respondent_name ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{d.match_title ?? '—'}</td>
