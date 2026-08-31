@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useDiscussions } from '@/hooks/useMessages';
 import { useConversations } from '@/hooks/useConversations';
+import NotificationBell from '@/components/layout/NotificationBell';
 import Link from 'next/link';
 import DiscussionCard from '@/components/matches/DiscussionCard';
 import type { Discussion } from '@/types';
@@ -95,6 +96,7 @@ export default function MessagesPage() {
             </p>
           )}
         </div>
+        <NotificationBell />
         <button
           onClick={() => {
             setShowSearch(!showSearch);

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
+import NotificationBell from '@/components/layout/NotificationBell';
 import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
@@ -51,6 +52,8 @@ export default function MyGamesPage() {
         <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
           {t('myGames.title')}
         </h1>
+        {/* P2-34 (run #22): bell reachable from every tab */}
+        <NotificationBell />
       </div>
 
       <div className="flex-1 overflow-y-auto scroll-container bg-brand-bg">

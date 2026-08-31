@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
+import NotificationBell from '@/components/layout/NotificationBell';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import { useMatches } from '@/hooks/useMatches';
@@ -75,6 +76,8 @@ export default function PlayPage() {
                             {t('app.title')}
                         </span>
                     </div>
+                    {/* P2-34 (run #22): bell reachable from every tab */}
+                    <NotificationBell />
                 </div>
 
                 {/* Search bar + Host button */}
