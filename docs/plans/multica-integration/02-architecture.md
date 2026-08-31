@@ -1,96 +1,86 @@
-# Gate 2 — Architecture: Multica + Sync Bridge
+# Gate 2 — Architecture: Multica as the Native KoraLink Kanban Board (rev 2, 2026-08-31)
 
 ## Verified facts (research 2026-08-31, evidence-cited)
 
-- Multica is open-source (Apache-2.0 + conditions), ~48.3k stars; stack: Next.js 16 web, Go backend, PostgreSQL 17; self-host via `make selfhost` (3 containers: postgres/backend/frontend).
-- **First-class Hermes driver**: `server/pkg/agent/hermes.go` (ACP transport: drives `hermes acp`, blocks `acp` arg overrides, parses `-p/--profile` selection); daemon execenv: `hermes_sessions.go` (per-conversation state.db shards), `hermes_memory.go`, `hermes_home.go` (per-task HERMES_HOME overlay + skill injection). Hermes is on the official runtime table (detected command `hermes`).
-- **CLI surface (bridge-critical, from `cmd_issue.go` + docs/cli.mdx):**
-  - `multica issue list --output json --status/--assignee/--project/--metadata <k=v>`
-  - `multica issue create --title --description-stdin --status --priority --project`
-  - `multica issue get <key>`, `update <key>`, `status <key> <status>`, `assign <key> --to`
-  - `multica issue comment list <key> --since`, `comment add <key> --content-stdin`
-  - `multica issue metadata set <key> k=v` (idempotency anchor)
-  - Headless auth: `multica login --token` (PAT), profiles in `~/.multica/`.
-- **Issue model:** 7 built-in status categories = board columns: `backlog, todo, in_progress, in_review, done, blocked, cancelled`; custom statuses allowed per category; board columns are categories.
-- **Hermes side:** `hermes kanban --board <slug> list --json` emits full cards (verified); `show <id>` includes comment thread with timestamps; kanban DB at `~/.hermes/kanban/boards/<slug>/kanban.db`.
-- **VPS fit (verified):** Docker 27.0.3 + compose v5 ✓ · 77G disk free ✓ · 15G RAM available ✓ · port 3000 taken (player-pwa standalone next-server, pid 2928999) → remap Multica to 3010/8081 via `FRONTEND_PORT`/`BACKEND_PORT` (compose honors them; containers bind 127.0.0.1 → override for Tailscale IP).
+- Multica open-source (Apache-2.0 + conditions), ~48.3k stars; Next.js 16 web, Go backend, PostgreSQL 17; `make selfhost` (postgres/backend/frontend).
+- **First-class Hermes driver**: `server/pkg/agent/hermes.go` (drives `hermes acp` — ACP JSON-RPC; `acp` arg blocked from override; `-p/--profile` parsed and passed through for skill-less tasks, stripped when a per-task overlay is built); execenv `hermes_{sessions,memory,home}.go` (per-conversation `state.db` shards, HERMES_HOME overlay, skill injection).
+- **CLI surface (bridge-critical):** `multica issue list/get/create/update/status/assign/comment/subscriber/metadata`, `multica agent create/update`, `multica skill`, `multica squad`, `multica autopilot`, `multica workspace` — all with `--output json`; headless auth via PAT (`multica login --token`); profiles in `~/.multica/`.
+- **Issue model:** 7 built-in status categories = board columns (`backlog, todo, in_progress, in_review, done, blocked, cancelled`); custom statuses per category; board columns are categories.
+- **No outbound webhooks** (open feature request #1020); inbound webhooks exist (#2373, autopilot triggers). **Plugin hooks** are plugin-manifest call sites, not general outbound event streams. → Multica→Hermes direction must poll (fast cadence).
+- **Hermes kanban:** `hermes kanban list --json` (verified); `show <id>` includes comments; kanban SQLite at `~/.hermes/kanban/boards/<slug>/kanban.db` with a **`task_events` table the dashboard live-tails over WebSocket** (`/api/plugins/kanban/events`) → Hermes→Multica can be **event-driven (push)**, not polled.
+- **VPS fit (verified):** Docker 27.0.3 + compose v5 ✓ · 77G disk ✓ · 15G RAM avail ✓ · :3000 taken (player-pwa standalone) → Multica remapped to 3010/8081 via `FRONTEND_PORT`/`BACKEND_PORT`; compose binds 127.0.0.1 → override for Tailscale IP.
 
-## Topology
+## Data-flow model (rev 2 — Multica is the FRONT DOOR, not just a mirror)
 
 ```
 ┌─────────────────────────────── VPS (100.93.99.24) ───────────────────────────────┐
 │                                                                                  │
 │  Abdullah (desktop/mobile, Tailscale)                                             │
-│    │ https? http://aa.tail2948f9.ts.net:3010   (or Traefik :443 route, later)    │
-│    ▼                                                                             │
-│  Multica frontend (:3010) ──► Multica backend (:8081) ──► multica-postgres       │
-│         ▲                              ▲                                          │
-│         │      multica CLI (PAT auth, ~/.multica)                                │
-│  ┌──────┴───────┐        ┌─────────────────────────────┐                          │
-│  │ BRIDGE       │◄──────►│ Hermes kanban CLI            │                          │
-│  │ bridge.py    │  cron  │ hermes kanban --board        │                          │
-│  │ + state.json │ every  │   koralink-factory-loop      │                          │
-│  │ (systemd     │  10m   │ (HERMES_HOME=koralink)       │                          │
-│  │  timer)      │        └──────────────┬───────────────┘                          │
-│  └──────────────┘                       │                                          │
-│                    ~/.hermes/kanban/boards/koralink-factory-loop/kanban.db         │
-│                    kanban/BOARD.md (SoT) ◄── factory loop cron writes ──┐          │
+│    │ http://aa.tail2948f9.ts.net:3010 (web)                                       │
+│    ▼                                                                            │
+│  ┌──────────────────────────── Multica ─────────────────────────────┐            │
+│  │ frontend (:3010) ──► backend (:8081) ──► multica-postgres        │            │
+│  │   • Agents:  "KoraLink Finance", "KoraLink Marketing", … (Phase 2a)│          │
+│  │   • Squads:  "Growth" (leader + members)  (Phase 2a)             │            │
+│  │   • Issues:  factory mirror cards + Abdullah's new work           │            │
+│  │   • Autopilot: optional nightly digest                            │            │
+│  └───────▲────────────────────────────┬──────────────────────────────┘            │
+│          │ CLI+PAT (writes)          │ REST/CLI (writes)                          │
+│   ┌──────┴──────────┐      ┌─────────┴──────────────┐                              │
+│   │ BRIDGE PULL     │      │ BRIDGE PUSH (event-    │                              │
+│   │ (poll 1-2 min)  │      │ tailer, ~3-5s)         │                              │
+│   │ Multica→Hermes  │      │ Hermes→Multica         │                              │
+│   └──────▲──────────┘      └─────────▲──────────────┘                              │
+│          │ comments/status          │ read-only: task_events high-water mark      │
+│   ┌──────┴──────────────────────────┴───────────────┐                              │
+│   │ Hermes kanban CLI (HERMES_HOME=koralink) + DB    │                              │
+│   │ ~/.hermes/kanban/boards/koralink-factory-loop/   │                              │
+│   │ kanban.db  ◄── factory loop cron writes ── BOARD.md (SoT)                      │
+│   └──────────────────────────────────────────────────┘                             │
+│   Phase 2a (gated): multica daemon (owns runtime) → hermes acp sessions            │
+│   for Finance/Marketing agents — dedicated Hermes profile, LOCK-aware,             │
+│   separate quota budget.                                                           │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Deliberate constraints**
-- The Multica **daemon is NOT started in Phase 1** (it exists to execute agent CLIs; board sync uses the CLI's API commands only). This prevents accidental `hermes acp` dispatch and concurrent-session collisions with the factory loop.
-- Hermes kanban statuses on mirror cards are **never mutated by the bridge** (gated under `t_ce9a513a`; `block`/`complete` refused by design). Multica status moves by Abdullah are reflected as *comments* on the Hermes card.
+**Two directions, both real:**
 
-## Status mapping (Hermes kanban → Multica)
-
-| Hermes status | Multica status/category | Notes |
+| Direction | Mechanism | Latency |
 |---|---|---|
-| triage | backlog | parked |
-| todo | todo | |
-| scheduled | backlog + due date | or custom status "Scheduled" (backlog category) |
-| ready | todo | custom "Ready" (todo category) optional |
-| running / in-progress | in_progress | |
-| blocked | blocked | |
-| review | in_review | built-in |
-| done | done | |
-| archived | cancelled | record kept |
+| Hermes → Multica (loop activity, factory mirror) | **Event-tailer**: read-only high-water-mark poll of SQLite `task_events` (3–5s) → Multica API/CLI | ~seconds |
+| Multica → Hermes (Abdullah's comments/status moves, new issues) | Fast poll (1–2 min) via `multica issue comment list --since` / `issue list` | ~1–2 min |
+| Multica → Hermes (new work front-door) | Bridge creates Hermes cards tagged `[multica]`; optional runbook delta boards them into BOARD.md | next loop run |
 
-Priority: P0→urgent, P1→high, P2→normal, unrated→low. Labels: `P0`, `P1`, `P2`, `mirror`.
+**Front-door model (Abdullah's mental model):** Abdullah creates issues + assigns to Finance/Marketing agents/squads in Multica → agents run (Phase 2a) → results + status land in the issue timeline → bridge mirrors the whole lifecycle into Hermes kanban (new cards, comments, status notes) → the factory loop's review pass (optional small runbook delta) can board `[multica]` items into BOARD.md for gated building. Factory-built items flow back Multica-wards the same way. Hermes kanban remains the complete cross-system record; `kanban/BOARD.md` stays the loop's SoT.
 
-## Sync algorithm (bridge.py)
+## Status mapping (unchanged from rev 1)
 
-State file: `kanban/multica-bridge/state.json` (in-repo, committed with bridge runs):
-```json
-{"hermes_task_id": {"multica_key": "MUL-42", "body_sha": "...", "status": "todo",
- "last_hermes_comment_ts": 0, "last_multica_comment_ts": 0}}
-```
+triage→backlog · todo→todo · scheduled→backlog(+due) · ready→todo · running/in-progress→in_progress · blocked→blocked · review→in_review · done→done · archived→cancelled. Priority P0→urgent · P1→high · P2→normal · none→low. Labels: `P0/P1/P2`, `mirror`, `[multica]`.
 
-**Push (Hermes → Multica), per card from `list --json`:**
-1. Not in state → `issue create` (title keeps `[Px]` prefix; body = Hermes body + "Mirror of kanban/BOARD.md"; status/priority mapped; project KoraLink Factory) → `issue metadata set <key> hermes_task_id=<id>` → record state.
-2. In state → `issue get <key>`: status differs → `issue status`; body sha differs → `issue update --description-stdin`; Hermes comments newer than `last_hermes_comment_ts` → `issue comment add` with suffix `— via koralink-bridge` (marks bridge-owned comments so the pull side skips them).
+## Agents & squads (Phase 2a — "tailored to financials/marketing")
 
-**Pull (Multica → Hermes), per issue in state:**
-3. `issue comment list <key> --since <last_multica_comment_ts>`: comments NOT containing `via koralink-bridge` → `hermes kanban --board koralink-factory-loop comment <id> "<Multica| <author> <ts>: <text>>"`.
-4. Multica status changed vs state (moved by Abdullah, not by push) → Hermes comment: `[multica] Abdullah moved to <status>` (status itself left untouched).
-5. Write state; exit 0. Every failure logged to journald; failures never fatal (mirror rule).
+- **Agents** = reusable config (name, instructions, model, skills, runtime). Create `KoraLink Finance` + `KoraLink Marketing` bound to the VPS Hermes runtime; attach Multica skills (runbook checklists imported via `multica skill import`).
+- **Squads** = leader + members; assign an issue to the squad → leader coordinates. E.g. "Growth" squad led by Marketing agent.
+- **Runtime & isolation (critical):**
+  1. Daemon runs as `ubuntu` → Multica docs recommend a dedicated user/container; accepted for this single-user VPS, revisit if repo-touching tasks are allowed.
+  2. **Separate Hermes profile** (e.g. `multica-agents`) for Multica-driven sessions → no memory/session pollution of the koralink profile, and the driver's per-task HERMES_HOME overlay already isolates state per issue.
+  3. **Quota guardrail:** hermes acp sessions burn GLM/DeepSeek keys. If the agents share the koralink profile keys they eat the factory loop's Lite-plan budget (2,000/5h, 10k/wk) → give the `multica-agents` profile its own keys, or a hard budget note + `agent_timeout`/iteration caps in the daemon env.
+  4. **LOCK discipline:** agents that may touch `/home/ubuntu/projects/koralink` get instructions to respect `kanban/LOCK.json` + `git status` before any write; default = run in scratch/own workdir, repo off-limits unless the issue says otherwise.
+- **Auto-update of Hermes kanban tasks:** every Multica issue created by Abdullah or an autopilot → bridge creates a Hermes card (`[multica]` prefix, source metadata); every status change/comment → Hermes card comment; when the factory loop completes a mirrored item, bridge sets the Multica issue `done`. So the Hermes board is always current without Abdullah touching the CLI.
 
-## Deployment & access
+## Streaming upgrade rationale (rev 2 vs rev 1)
 
-- `git clone --depth 1 https://github.com/multica-ai/multica.git` → `make selfhost` with `.env`: `FRONTEND_PORT=3010`, `BACKEND_PORT=8081`, `FRONTEND_ORIGIN=http://100.93.99.24:3010`, `MULTICA_APP_URL` same, `MULTICA_PUBLIC_URL=http://100.93.99.24:8081`; compose override file binds `100.93.99.24:3010` / `100.93.99.24:8081` (Tailscale-only, consistent with :9119 dashboard pattern).
-- Verify `curl http://100.93.99.24:8081/readyz` → `{"status":"ok",...}`.
-- Workspace "KoraLink"; login via email verification code read from backend logs (`docker compose -f docker-compose.selfhost.yml logs backend | grep "Verification code"`).
-- CLI: `curl -fsSL …/install.sh | bash`; create PAT in web settings (headless machine) → `multica login --token`; `multica workspace switch koralink`.
-- Bridge: `kanban/multica-bridge/bridge.py` + systemd user timer (every 10 min) or Hermes no_agent cron — zero LLM cost either way.
-- **Security note:** Multica binds only to the Tailscale IP; CLI config (`~/.multica`) contains a PAT — chmod 600, never committed. Multica's own Postgres is a separate container (no collision with koralink DB on :5432, which stays host-bound).
+Rev 1 polled both directions every 10 min via CLI. Rev 2: Hermes→Multica becomes near-real-time (task_events tail — the same source the dashboard's WebSocket uses, but read directly from SQLite so the bridge doesn't depend on the dashboard process); Multica→Hermes stays a short poll because outbound webhooks don't exist yet (#1020). Structured DB reads replace CLI text parsing for the Hermes side (no fragile `show` output parsing); writes stay CLI/REST (never write the Hermes DB directly — trigger/event consistency; never write Multica's Postgres).
 
-## Risks & mitigations
+## Risks & mitigations (rev 2)
 
 | Risk | Mitigation |
 |---|---|
-| Concurrent Hermes sessions if daemon accidentally enabled | Daemon OFF in Phase 1; bridge uses CLI API only |
-| Duplicate issues on re-run | `hermes_task_id` metadata + state.json; verified by count |
-| Bridge races the loop's writes | Read-only on Hermes except `comment`; loop tolerates foreign comments |
-| Multica weekly releases | Pin images at install; upgrade = git pull + `up -d`, off-peak |
-| Port collisions | 3010/8081 verified free |
-| Abdullah's Multica status moves lost | Reflected as Hermes comments; Phase 1.5 proposal: loop Phase 2 reads `[multica]` comments for re-prioritization (separate small runbook change, needs its own approval) |
+| Concurrent Hermes sessions (loop vs Multica agents) | Daemon agents LOCK-aware + separate profile + repo off-limits by default |
+| Quota exhaustion from agent runs | Separate profile keys / hard caps; monitor via existing quota tooling |
+| Bridge races the loop's writes | Read-only on Hermes DB; CLI writes only for comments; failures non-fatal |
+| Duplicate issues | `hermes_task_id` metadata + state.json + count verification |
+| No outbound webhooks (Multica→Hermes) | 1–2 min poll; human-paced interactions don't need sub-second |
+| Multica weekly releases | Pin images; upgrade off-peak (`git pull` + `up -d`) |
+| task_events schema drift | Bridge introspects `PRAGMA table_info(task_events)` at start; unknown events ignored |
+| Daemon full-permission execution | Dedicated OS user (later); repo guardrails now; log everything |

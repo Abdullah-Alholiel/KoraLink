@@ -4,18 +4,20 @@
 |---|---|---|
 | Gate 0 — Retrospective | `00-retro.md` | ✅ DONE (board-usage debt, decision: add layer, don't replace) |
 | Gate 1 — Product | `01-product.md` | ✅ DONE (scope Phase 1 board-sync; Phase 2 gated) |
-| Gate 2 — Architecture | `02-architecture.md` | ✅ DONE (topology, status map, bridge algorithm, VPS fit verified) |
-| Gate 3 — Program Design | `03-program-design.md` | ✅ DONE (bridge contract, idempotency, execution checklist, rollback) |
+| Gate 2 — Architecture | `02-architecture.md` | ✅ REV 2 (2026-08-31: two-way front-door model, event-tailer streaming, agents/squads Phase 2a) |
+| Gate 3 — Program Design | `03-program-design.md` | ✅ REV 2 (2026-08-31: push/pull contract, Phase 2a agent checklist, quota guardrails) |
 | Gate 4 — Vertical Slices | — | ⏸ **AWAITING ABDULLAH'S APPROVAL** (install nothing until then) |
 
 ## How to approve
 
-Say **"proceed"** / **"okay"** / **"do recommended"** → Gate 4 executes the checklist in `03-program-design.md` (install Multica → migrate 75 cards → bridge timer → build gate → push).
+Say **"proceed"** / **"okay"** / **"do recommended"** → Gate 4 executes the checklist in `03-program-design.md` (install Multica → migrate 75 cards → bridge push tailer + pull poll → optional Phase 2a agents/squads → build gate → push).
 
-Scope options if he wants to adjust:
-- **A (recommended):** board sync only (daemon OFF) — this cycle.
-- **B:** + Multica Hermes runtime dispatch (Phase 2 pulled in — bigger risk, needs LOCK work).
+Scope options:
+- **B (recommended):** board sync + Phase 2a — Finance/Marketing agents + Growth squad (daemon ON, guarded, pilot-first).
+- **A:** board sync only (daemon OFF, agents configured but idle).
 - **C:** hold; docs only (current state).
+
+Separate approvals needed (only if B): runbook delta for the loop (Phase 2 reviewer boards `[multica]` cards), and `multica-agents` profile quota choice.
 
 ## Research evidence (primary sources)
 
