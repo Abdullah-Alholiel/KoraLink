@@ -1,5 +1,21 @@
 'use client';
 
+/**
+ * Shared horizontal calendar-day strip (modular, run #21b).
+ *
+ * One component, three consumers: Play feed, club detail, RescheduleSheet —
+ * all inherit the same window + affordances:
+ *  - `days` window (default 30 — product cap, Abdullah 2026-08-31); the strip
+ *    scrolls horizontally (RTL-aware: scrolls from the start side in Arabic).
+ *  - TODAY marker: the first card keeps the "TODAY" label AND carries a dot
+ *    (aria-hidden) — every card reserves the dot row so heights stay equal.
+ *  - a11y: chips expose `aria-pressed` (selection), the today card sets
+ *    `aria-current="date"`, and every chip has a full localized date label.
+ *
+ * Controlled usage: pass `selectedDate` (Date | null — null = no selection).
+ * `fireOnMount` keeps the Play page's initial filter behavior.
+ */
+
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 
@@ -14,7 +30,11 @@ interface DatePickerProps {
      * explicitly show no selection (Play "all games" default).
      */
     selectedDate?: Date | null;
+    /** Calendar window length in days. Default 30 (product cap). */
+    days?: number;
 }
+
+const DEFAULT_DAYS = 30;
 
 function isSameDay(a: Date, b: Date): boolean {
     return (
@@ -24,14 +44,19 @@ function isSameDay(a: Date, b: Date): boolean {
     );
 }
 
-export default function DatePicker({ onDateSelect, fireOnMount = true, selectedDate }: DatePickerProps) {
+export default function DatePicker({
+    onDateSelect,
+    fireOnMount = true,
+    selectedDate,
+    days = DEFAULT_DAYS,
+}: DatePickerProps) {
     const t = useTranslations('datePicker');
     const locale = useLocale();
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const dates = useMemo(() => {
         const today = new Date();
-        return Array.from({ length: 7 }, (_, i) => {
+        return Array.from({ length: Math.max(1, days) }, (_, i) => {
             const d = new Date(today);
             d.setDate(today.getDate() + i);
             const isToday = i === 0;
@@ -41,9 +66,16 @@ export default function DatePicker({ onDateSelect, fireOnMount = true, selectedD
                 date: d,
                 dayLabel: isToday ? t('today') : dayAbbr,
                 dayNumber: d.getDate(),
+                isToday,
+                // Full localized date for the chip's accessible name.
+                ariaLabel: d.toLocaleDateString(locale, {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                }),
             };
         });
-    }, [locale, t]);
+    }, [locale, t, days]);
 
     // Fire initial onDateSelect on mount so the parent filters by today.
     useEffect(() => {
@@ -72,8 +104,11 @@ export default function DatePicker({ onDateSelect, fireOnMount = true, selectedD
                             setSelectedIndex(idx);
                             onDateSelect?.(item.date);
                         }}
+                        aria-pressed={isActive}
+                        aria-current={item.isToday ? 'date' : undefined}
+                        aria-label={item.ariaLabel}
                         className={`
-              flex flex-col items-center px-3 py-2 rounded-lg min-w-[52px] transition-all
+              flex flex-col items-center px-3 py-2 rounded-lg min-w-[52px] flex-shrink-0 transition-all
               ${isActive
                                 ? 'bg-brand-black'
                                 : 'bg-transparent hover:bg-gray-50'
@@ -92,6 +127,19 @@ export default function DatePicker({ onDateSelect, fireOnMount = true, selectedD
                         >
                             {item.dayNumber}
                         </span>
+                        {/* TODAY dot — the row is reserved on every card so all
+                            chips render the same height; transparent elsewhere. */}
+                        <span
+                            aria-hidden="true"
+                            data-testid={item.isToday ? 'today-dot' : undefined}
+                            className={`mt-0.5 h-1 w-1 rounded-full ${
+                                item.isToday
+                                    ? isActive
+                                        ? 'bg-white'
+                                        : 'bg-brand-green'
+                                    : 'bg-transparent'
+                            }`}
+                        />
                     </button>
                 );
             })}

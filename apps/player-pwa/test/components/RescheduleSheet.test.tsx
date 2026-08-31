@@ -114,15 +114,31 @@ describe('RescheduleSheet — host reschedule (P1-13, cross-day run #21)', () =>
     } as never);
     renderSheet();
 
-    // Day strip renders 7 days; tap the second chip (today+1).
+    // Day strip renders the 30-day window; tap the second chip (today+1).
     const strip = screen
       .getByText('Pick a day')
       .closest('div')!
       .parentElement!.querySelector('.scroll-container') as HTMLElement;
     const chips = within(strip).getAllByRole('button');
-    expect(chips).toHaveLength(7);
+    expect(chips).toHaveLength(30);
     await user.click(chips[1]);
     expect(lastQueriedDate()).toBe(isoDaysFromNow(1));
+  });
+
+  it('marks TODAY with a dot and aria-current inside the strip', () => {
+    vi.mocked(usePitchSlots).mockReturnValue({
+      data: [SLOT_A],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    renderSheet();
+    const dot = screen.getByTestId('today-dot');
+    expect(dot).toBeInTheDocument();
+    const todayChip = dot.closest('button')!;
+    expect(todayChip).toHaveAttribute('aria-current', 'date');
+    expect(todayChip).toHaveAttribute('aria-pressed', 'true'); // defaults to today
+    expect(within(todayChip).getByText('TODAY')).toBeInTheDocument();
   });
 
   it('shows the empty state on a day with no free slots (day-aware wording)', () => {
