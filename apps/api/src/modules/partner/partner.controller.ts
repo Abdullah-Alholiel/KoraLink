@@ -24,7 +24,14 @@ import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
 
 @Controller('partner')
 @UseGuards(JwtCookieAuthGuard, RolesGuard)
-@Roles('VenueOwner', 'Admin')
+// VenueOwner ONLY (admin-ux-overhaul, Abdullah 2026-08-31): the partner
+// portal is the venue owner's surface. Admins manage venues/pitches through
+// the HQ tabs (/venues, /pitches) and the /admin/* API — the old
+// "admins may also inspect the partner portal" allowance let admins into
+// views with different semantics (owner-scoped mutations) and has been
+// removed at BOTH layers: the admin sidebar no longer shows partner tabs,
+// and this guard now 403s an admin token outright.
+@Roles('VenueOwner')
 export class PartnerController {
   constructor(private readonly partner: PartnerService) {}
 
