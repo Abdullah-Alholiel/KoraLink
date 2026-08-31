@@ -1,0 +1,13 @@
+# Feature — Cycle Status (run23-fresh-migrate-verbs-en-offline)
+
+| Gate | Name | Status | Approved | Artifact |
+|------|------|--------|----------|----------|
+| 0 | Retrospective | ✅ APPROVED (autonomous mode) | auto | [00-retro.md](./00-retro.md) |
+| 1 | Product Spec | ✅ APPROVED (autonomous mode) | auto | [01-program-design.md](./01-program-design.md) (§Problem/User story/Scope) |
+| 2 | Architecture | ✅ APPROVED (autonomous mode) | auto | [01-program-design.md](./01-program-design.md) (§Architecture delta) |
+| 3 | Program Design | ✅ APPROVED (autonomous mode) | auto | [01-program-design.md](./01-program-design.md) (§Contract checklist all ✓) |
+| 4 | Vertical Slices | ⏳ IN PROGRESS | — | this run: slices below |
+
+Slices:
+1. Migration 0029 (3 missing verbs) → build+jest → commit → apply live (idempotent) → restart API.
+2. EN offline fallback (worker fetch branch + config) → vitest+tsc+lint+build → commit → restart PWA.
