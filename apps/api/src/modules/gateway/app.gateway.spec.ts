@@ -40,6 +40,15 @@ function makeGateway(dbRows: UserRow[], payload: { sub: string; role?: string })
         if (_key === 'JWT_SECRET') return 'test-secret';
         return def;
       },
+      // Run #22: the gateway verifies tokens with getOrThrow (no silent
+      // fallback secret) — the stub must expose the same contract.
+      getOrThrow: (_key: string) => {
+        if (_key === 'JWT_SECRET') return 'test-secret';
+        if (_key === 'PLAYER_URL') return 'http://localhost:3000';
+        if (_key === 'ADMIN_URL') return 'http://localhost:3002';
+        if (_key === 'NODE_ENV') return 'development';
+        throw new Error(`config key not stubbed: ${_key}`);
+      },
     } as never,
     {} as never,
     { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,

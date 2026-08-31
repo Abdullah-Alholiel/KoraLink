@@ -106,7 +106,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       if (!token) throw new Error('No token');
 
       const payload = this.jwt.verify<{ sub: string; role?: string }>(token, {
-        secret: this.config.get<string>('JWT_SECRET', 'fallback-dev-secret'),
+        secret: this.config.getOrThrow<string>('JWT_SECRET'),
       });
 
       // Re-read the user row so moderation actions (ban/suspend) and role
