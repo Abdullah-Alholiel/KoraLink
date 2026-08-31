@@ -13,6 +13,7 @@ export type ConsoleSection =
   | 'users'
   | 'matches'
   | 'venues'
+  | 'pitches'
   | 'disputes'
   | 'reports'
   | 'transactions'
@@ -33,20 +34,16 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
     'users',
     'matches',
     'venues',
+    'pitches',
     'disputes',
     'reports',
     'transactions',
     'settlements',
     'settings',
     'audit',
-    // Admins may also inspect the partner portal (read + manage) — useful
-    // for supporting venue owners without a screen-share.
-    'partner.dashboard',
-    'partner.venues',
-    'partner.pitches',
-    'partner.matches',
-    'partner.earnings',
-    'partner.settings',
+    // HQ only — admins manage pitches/venues through the HQ tabs (pitches,
+    // venues) and the /admin/* API. The partner portal is the VenueOwner's
+    // surface; showing its tabs to admins was removed (Abdullah, 2026-08-31).
   ],
   VenueOwner: [
     'partner.dashboard',
@@ -74,6 +71,7 @@ export function sectionForPath(pathname: string): ConsoleSection | null {
     'users',
     'matches',
     'venues',
+    'pitches',
     'disputes',
     'reports',
     'transactions',
@@ -99,15 +97,20 @@ export type ConsoleAction =
   | 'user.suspend'
   | 'user.setRole'
   | 'venue.approve'
+  | 'venue.transfer'
   | 'dispute.resolve'
+  | 'dispute.reopen'
   | 'report.resolve'
+  | 'report.reopen'
   | 'transaction.refund'
   | 'settlement.pay'
   | 'settlement.generate'
   | 'settings.edit'
   | 'match.cancel'
+  | 'match.edit'
   | 'pitch.create'
   | 'pitch.edit'
+  | 'pitch.transfer'
   | 'venue.create'
   | 'verification.submit';
 
@@ -117,15 +120,20 @@ const ACTIONS_BY_ROLE: Record<Role, ConsoleAction[]> = {
     'user.suspend',
     'user.setRole',
     'venue.approve',
+    'venue.transfer',
     'dispute.resolve',
+    'dispute.reopen',
     'report.resolve',
+    'report.reopen',
     'transaction.refund',
     'settlement.pay',
     'settlement.generate',
     'settings.edit',
     'match.cancel',
+    'match.edit',
     'pitch.create',
     'pitch.edit',
+    'pitch.transfer',
     'venue.create',
   ],
   VenueOwner: [
