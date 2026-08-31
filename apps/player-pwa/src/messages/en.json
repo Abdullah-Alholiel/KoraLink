@@ -227,7 +227,8 @@
   },
   "reschedule": {
     "title": "Reschedule Match",
-    "noSlots": "No free slots left on this pitch today. Try again tomorrow.",
+    "pickDay": "Pick a day",
+    "noSlots": "No free slots on the selected day. Try another day.",
     "confirm": "Move Match"
   },
   "emergencyCancel": {
