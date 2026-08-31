@@ -4,8 +4,14 @@
 > Each lane: **P0** = broken/blocking/money or security · **P1** = missing functionality users feel · **P2** = polish/tech debt.
 > Items link their cycle docs in `docs/plans/` and run reports in `kanban/RUNS/`.
 
-**Last updated:** 2026-08-31T10:1xZ (run #21 — verified all 5 in-review items live (P2-36 DatePicker, P1-13 cross-day + core reschedule, P2-31(1) hours guard, quiet-hours spec fix); BUILT P1-28 venue-level search (API `?search=` additive name/city ILIKE + PWA clubs search wired server-side) + P2-37 max_players guard + P2-35 date-locale rider; +P2-37, +P2-38)
-**Last run:** #21 (see `kanban/RUNS/2026-08-31T10-16Z.md`)
+**Last updated:** 2026-08-31T13:5xZ (run #21 — verified all 5 in-review items live)
+
+> 🛑 **ADMIN HOLD — Abdullah is actively working in the admin portal right now**
+> (uncommitted work in `apps/admin` + partner API). **ALL admin-area items are
+> BLOCKED (waiting on Abdullah)** until he commits. Factory runs: do NOT pick
+> admin items, do NOT touch `apps/admin` or `apps/api/src/modules/partner/*`
+> while the tree is dirty. See AGENTS.md §10.1 + STATE.json.
+
 
 ---
 

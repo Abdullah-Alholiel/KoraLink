@@ -11,6 +11,7 @@
     "P2-35 clubs date labels + h23 (5e98f07): formatDateLabel ar-SA/en-US + venue-hours hourCycle h23. Verify in run #22: grep clubs/[id]/page.tsx + venue-hours.ts; vitest green."
   ],
   "open_blockers": [
+    "ADMIN HOLD (2026-08-31 13:54 AST): Abdullah is ACTIVELY working in the admin portal — uncommitted work in apps/admin (pitches/page.tsx, PitchFormDrawer.tsx, ScheduleDrawer.tsx, VenueFormDrawer.tsx, …) + partner API. ALL admin-area board items BLOCKED (waiting on Abdullah) until he commits. Factory runs: do NOT pick admin items, do NOT touch apps/admin or apps/api/src/modules/partner while the tree is dirty.",
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
     "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
