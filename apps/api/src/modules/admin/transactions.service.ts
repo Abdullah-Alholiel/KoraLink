@@ -76,16 +76,49 @@ export class AdminTransactionsService {
     const refundId = randomUUID();
 
     await this.db.transaction(async (tx) => {
-      await tx.insert(transactions).values({
-        id: refundId,
-        user_id: original.user_id,
-        type: 'CREDIT',
-        amount: original.amount,
-        reference_type: 'REFUND',
-        reference_id: original.id,
-        idempotency_key: `refund-${original.id}`,
-        status: 'Completed',
-      });
+      // Lock the ORIGINAL debit row FOR UPDATE, then re-assert its status
+      // INSIDE the tx — the pre-check above runs outside any lock, so two
+      // concurrent refunds of the same debit could both pass it (Reviewer A,
+      // run #22). The loser now gets a 400 instead of a raw unique-violation
+      // 500 (or a double credit if the refund-<id> idempotency key were ever
+      // dropped). Same pattern as cancelMatch (run #20).
+      const locked = (await tx
+        .execute(
+          sql`SELECT id, status FROM transactions WHERE id = ${id}::text FOR UPDATE`,
+        )
+        .then(
+          (r: unknown) => (r as { rows?: unknown[] }).rows ?? r,
+        )) as Array<{ id: string; status: string }>;
+
+      if (!locked[0] || locked[0].status !== 'Completed') {
+        throw new BadRequestException(
+          'Only completed debit transactions can be refunded.',
+        );
+      }
+
+      // Idempotent insert: a concurrent winner already claimed refund-<id> →
+      // zero rows back → abort with zero side effects (rollback is a no-op —
+      // nothing was inserted or updated on this path).
+      const inserted = await tx
+        .insert(transactions)
+        .values({
+          id: refundId,
+          user_id: original.user_id,
+          type: 'CREDIT',
+          amount: original.amount,
+          reference_type: 'REFUND',
+          reference_id: original.id,
+          idempotency_key: `refund-${original.id}`,
+          status: 'Completed',
+        })
+        .onConflictDoNothing()
+        .returning({ id: transactions.id });
+
+      if (inserted.length === 0) {
+        throw new BadRequestException(
+          'This transaction is already being refunded.',
+        );
+      }
 
       await tx
         .update(transactions)
