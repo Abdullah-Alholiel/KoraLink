@@ -1,37 +1,40 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 21,
-  "last_run_at": "2026-08-31T10:16:00Z",
+  "last_run": 22,
+  "last_run_at": "2026-08-31T15:15:00Z",
   "last_run_commits": [
-    "0359bda",
-    "2caffce",
-    "0a2b05d",
-    "d833f03",
-    "5e98f07"
+    "85e8326",
+    "0803e10",
+    "5052fe1",
+    "f69c965",
+    "2c46403",
+    "3016721",
+    "b0f13cb",
+    "8552504",
+    "ed7a63f"
   ],
-  "last_run_report": "kanban/RUNS/2026-08-31T10-16Z.md",
+  "last_run_report": "kanban/RUNS/2026-08-31T15-15Z.md",
   "in_review_items": [
-    "P1-28 venue-level search (2caffce API + 0a2b05d PWA, 2026-08-31): GET /venues ?search= additive name/city ILIKE + clubs page 300ms-debounced server-side search. Verify in run #22: gates (jest 183/183, vitest 261/261, build 3/3) + live probe via /tmp/run21-search-probe.sh (KSU/olaya/geo-additive/81-char 400/nonexistent 0/no-search 4).",
-    "P2-37 reschedule max_players<2 guard (d833f03): guard BEFORE money moves. Verify in run #22: jest matches.reschedule 14/14 incl. zero-ledger-writes spec.",
-    "P2-35 clubs date labels + h23 (5e98f07): formatDateLabel ar-SA/en-US + venue-hours hourCycle h23. Verify in run #22: grep clubs/[id]/page.tsx + venue-hours.ts; vitest green."
+    "P2-34 notification bell on every tab (0803e10): NotificationBell mounted in header rows of play/clubs/my-games/wallet/messages; feed keeps its own. Verify in run #23: grep NotificationBell across (main) pages (expect 6 files incl. feed), vitest + build green, no double-mount on feed.",
+    "P2-39 admin refund FOR UPDATE guard (85e8326): transactions.refund.spec.ts 7 cases (in-tx status re-check, concurrent-loser 400, zero side effects). Verify in run #23: jest transactions.refund.spec.ts 7/7 + grep FOR UPDATE in refund().",
+    "Admin i18n HQ sweep (5052fe1 + 2c46403): dashboard MetricCard labels/chart series names + dispute-type map + hq:loadFailed across 11 pages, en/ar parity 124/124 hq leaves. Verify in run #23: grep 'Failed to load' apps/admin/src/app (expect 0), hq parity re-count, admin tsc + build."
   ],
   "open_blockers": [
-    "ADMIN HOLD (2026-08-31 13:54 AST): Abdullah is ACTIVELY working in the admin portal — uncommitted work in apps/admin (pitches/page.tsx, PitchFormDrawer.tsx, ScheduleDrawer.tsx, VenueFormDrawer.tsx, …) + partner API. ALL admin-area board items BLOCKED (waiting on Abdullah) until he commits. Factory runs: do NOT pick admin items, do NOT touch apps/admin or apps/api/src/modules/partner while the tree is dirty.",
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
     "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
     "P1-16 padel support — needs Abdullah's scope decision.",
     "P1-2 skill_level discovery filter — needs product decision on semantics.",
-    "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box).",
+    "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box). HQ copy is now fully translated (run #22 extended it to dashboard + load-failure lines); the visual pass remains.",
     "P2-29 host page nav placement — Abdullah to confirm intent (CTAs exist on feed).",
     "P2-32 foreign pitchId silent-ignore — decide document-or-404.",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
-    "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — preflight `env | grep` can report NO_MARKER yet the CLI still refuses; always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
-    "OPS (run #21): first admin build was OOM-killed (137) under memory pressure (3 tsservers + logflare + webui); solo retry passed. Retry admin build alone if turbo reports 137."
+    "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
+    "OPS (run #21): first admin build can OOM (137) under memory pressure; solo `turbo run build --filter=admin` retry passes."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #21 (10:16Z scheduled, ~2h10m): glm-5.3 reviewers (probe 200; 78s + 189s) — 7th consecutive clean review run, zero timeouts. ALL 5 in_review items verified live by Reviewer B (P2-36 DatePicker 17/17 + chunk grep, P1-13 cross-day+core jest 13/13 + 74/74, P2-31(1) guard en/ar:139, quiet-hours fix 9/9). Sentry/journal clean (only new sig = run #20's own E2E artifact KORALINK-API-X, pre-fix). BUILT P1-28 venue search end-to-end (API ?search= additive name/city ILIKE + PWA clubs debounced server-side search; live probe PASS), P2-37 max_players<2 guard before money moves (A1 IMPORTANT, fixed), P2-35 locale-aware date labels + hourCycle h23 (A rider). A2 (WS join-conversation) REFUTED by parent code check (participant guard exists at app.gateway.ts:353 — false positive, recorded). Boarded P2-38 (admin disputes/reports empty states). Sibling admin-ux-overhaul active in tree (c6e329a + 9490354 landed mid-run; WIP never staged). Admin build OOM'd once (137), solo retry passed. Mirror: 4 cards + 6 comments under t_ce9a513a. Next run #22: verify the 3 in_review items, then P2-34 (bell in layout / notifications route) or P2-31(2) (reports listMine pagination).\nOff-schedule session 2026-08-31 (Abdullah UX review): admin-ux-overhaul cycle DONE — 8 slices + RBAC API enforcement pushed to main (26a0179..3a40671). See docs/plans/admin-ux-overhaul/00-status.md. Covers: admin HQ-only sidebar (partner API now 403s Admin), admin Pitches tab + edit, admin match edit, venue ownership transfer (migration 0028 live), dispute/report reopen+edit (localized pages), partner dashboard enrichment, drawer forms + standalone schedule slide-over, global RTL sweep (0 physical props), i18n parity 393/393. FOLLOW-UPS for next runs: (1) remaining HQ list pages (users/transactions/settlements/audit/dashboard/login) hardcoded English copy — layout RTL done, copy translation next; (2) P1-12 visual RTL check still needs Abdullah's eyes; (3) admin partner-portal inspection removed by product rule.\nFollow-up session 2026-08-31b: (1) seed phones FIXED — dev-login +966500000003 (owner) works again (200 + token live-verified; root cause: a probe restore had written a masked literal, now real; seed.ts stores real phones +96650000000N); (2) admin schedule management + venue edit shipped (22d36c6): /admin/pitches/:id/slots CRUD + /admin/slots/:id + PATCH /admin/venues/:id, audited, live-probed with state restored; (3) FULL admin i18n (8371b5e): all 12 HQ/login/not-found pages translate via hq namespace, parity 500/500 — P1-12 companion done, visual check still needs Abdullah's eyes; (4) admin Pitches tab gains Schedule drawer + Venues tab gains Edit drawer (endpointBase pattern; partner defaults unchanged)."
+  "notes": "Run #22 (15:15Z scheduled, ~1h15m): ADMIN HOLD LIFTED — Abdullah's admin work fully committed (through d0862a7), tree clean. glm-5.3 reviewers probe 200; A 216s/16 calls, B 100s/9 calls, zero timeouts, zero false positives. Run #21 claims ALL VERIFIED-TRUE by Reviewer B (P1-28 additive ILIKE + 300ms debounce + i18n; P2-37 guard before money + zero-ledger spec; P2-35 locale labels + h23) → promoted DONE. Sentry: KORALINK-API-Y (schema \"v\" does not exist, 1 event in run #21 probe window) REFUTED as probe artifact — query matches no shipped code; PWA fetch error same window = restart churn. BUILT 9 commits: 85e8326 refund FOR UPDATE + in-tx status re-check (P2-39, 7 jest cases incl. concurrent-loser 400), 0803e10 P2-34 bell on every tab (play/clubs/my-games/wallet/messages), 5052fe1 admin HQ dashboard i18n (8 MetricCard labels + 4 chart series + dispute-type map, hq parity 123/123), f69c965 partner access-control spec stub groupBy+execute (pre-existing breakage from 9645e95), 2c46403 hq:loadFailed across 11 HQ pages (+venues/[id], users/[id] first useTranslations), 3016721 offline banner on clubs/my-games/messages/reports (P2-31(4)), b0f13cb drop fallback-dev-secret JWT default → getOrThrow ×3 (P0-3 follow-through; gateway spec stub +getOrThrow), 8552504 send-otp @Throttle 3/min/IP (P2-19; live probe 400×3→429×2), ed7a63f P2-11 verify-otp never returns token in body. P2-38 verified STALE/DONE (states existed). Gates after every slice: build 3/3 (×6 runs), jest 190/190, vitest 261/261, tsc 0 (api/pwa/admin), lint clean; live: dev-login 200 + /users/me 200 after each API restart. OS research: none new (run #19 Leaflet/MapLibre card stands). Mirror: P2-39 card created gated; P2-34/P2-38 cards commented. Next run #23: verify the 3 in_review items, then remaining buildable: P2-31(2) reports listMine pagination, P2-13 Nearby/TopRated pills (needs radius scoring decision), P2-32 (needs Abdullah decision), or P2-8 push-text localization."
 }
