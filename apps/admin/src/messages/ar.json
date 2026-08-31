@@ -350,7 +350,8 @@
     "failed": "فشل الإجراء",
     "noShowMarked": "المستضيف سجّل عدم الحضور",
     "appeal": "استأنف اللاعب",
-    "evidence": "دليل"
+    "evidence": "دليل",
+    "loading": "جارٍ التحميل…"
   },
   "adminReports": {
     "title": "بلاغ",
@@ -378,7 +379,8 @@
     "reopenConfirmMsg": "سيعود البلاغ إلى القائمة المفتوحة مع الاحتفاظ بنص الإجراء السابق.",
     "editOutcome": "تعديل الإجراء",
     "saved": "تم الحفظ",
-    "failed": "فشل الإجراء"
+    "failed": "فشل الإجراء",
+    "loading": "جارٍ التحميل…"
   },
   "partner.dashboard2": {
     "upcomingTitle": "المباريات القادمة",

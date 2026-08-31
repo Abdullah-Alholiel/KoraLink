@@ -350,7 +350,8 @@
     "failed": "Action failed",
     "noShowMarked": "Host marked no-show",
     "appeal": "Player appealed",
-    "evidence": "Evidence"
+    "evidence": "Evidence",
+    "loading": "Loading…"
   },
   "adminReports": {
     "title": "Report",
@@ -378,7 +379,8 @@
     "reopenConfirmMsg": "It returns to the open queue with the resolution text kept as history.",
     "editOutcome": "Edit resolution",
     "saved": "Saved",
-    "failed": "Action failed"
+    "failed": "Action failed",
+    "loading": "Loading…"
   },
   "partner.dashboard2": {
     "upcomingTitle": "Upcoming matches",
