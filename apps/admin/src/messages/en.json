@@ -426,5 +426,18 @@
   "schedule": {
     "manageTitle": "Schedule — {name}",
     "closeAria": "Close schedule"
+  },
+  "venueTransfer": {
+    "title": "Transfer ownership — {name}",
+    "subtitle": "Assign this venue (and all its pitches) to another venue owner. Takes effect immediately.",
+    "currentOwner": "Current owner",
+    "searchPhLabel": "New owner",
+    "searchPh": "Search owners by name or phone",
+    "noResults": "No venue owners found",
+    "confirmTitle": "Transfer ownership?",
+    "confirmMsg": "{name} will immediately own this venue and all its pitches. The current owner is notified.",
+    "confirmLabel": "Transfer",
+    "saved": "Ownership transferred",
+    "failed": "Could not transfer ownership"
   }
 }

@@ -1,12 +1,15 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { SQL, and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { venues, venue_verifications } from '../../database/schema';
+import { venues, venue_verifications, users } from '../../database/schema';
+import { withTimestamp } from '../../common/utils/timestamp';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
+import { TransferVenueDto } from './dto/transfer-venue.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -16,6 +19,7 @@ export class AdminVenuesService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   private buildWhere(dto: ListVenuesDto): SQL {
@@ -132,6 +136,77 @@ export class AdminVenuesService {
       ip,
     });
     this.realtime.broadcastOps('venues');
+
+    return after;
+  }
+
+  /**
+   * Ownership transfer (admin-ux-overhaul slice 4) — the "external request"
+   * case: HQ reassigns a venue (and therefore its pitches — ownership flows
+   * through venues.owner_id) to a new VenueOwner.
+   *
+   * Immediate hard transfer per Abdullah's approved semantics: audited,
+   * both owners notified, no acceptance round-trip.
+   */
+  async transferOwnership(id: string, dto: TransferVenueDto, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    const beforeOwnerId = before.owner_id as string | null;
+    if (beforeOwnerId === dto.newOwnerId) {
+      throw new BadRequestException('That user already owns this venue.');
+    }
+
+    const [target] = await this.db
+      .select({ id: users.id, role: users.role, full_name: users.full_name, phone: users.phone })
+      .from(users)
+      .where(eq(users.id, dto.newOwnerId))
+      .limit(1);
+    if (!target) {
+      throw new NotFoundException('Target user not found.');
+    }
+    if (target.role !== 'VenueOwner') {
+      throw new BadRequestException('Target user is not a venue owner.');
+    }
+
+    await this.db
+      .update(venues)
+      .set(withTimestamp({ owner_id: dto.newOwnerId }))
+      .where(eq(venues.id, id));
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'venue.transfer_ownership',
+      entityType: 'venue',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('venues');
+
+    // Notify both owners (best-effort — a notification failure must never
+    // fail the transfer). subjectId carries the venue for the feed link.
+    try {
+      if (beforeOwnerId) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: 'venue_ownership_removed',
+          subjectId: id,
+          recipients: [beforeOwnerId],
+          excludeActor: false,
+        });
+      }
+      await this.activities.record({
+        actorId: adminId,
+        verb: 'venue_ownership_added',
+        subjectId: id,
+        recipients: [dto.newOwnerId],
+        excludeActor: false,
+      });
+    } catch {
+      // swallow — feed/WS fan-out is supplementary
+    }
 
     return after;
   }

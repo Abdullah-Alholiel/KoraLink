@@ -14,3 +14,46 @@ body {
 body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
+
+/* ── Shared motion tokens (drawers, dialogs, toasts) ─────────────────────
+   RTL-aware: the drawer slide uses a direction-scoped var so the panel
+   enters from the inline-end in BOTH languages (LTR: right, RTL: left). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-end {
+  from {
+    transform: translateX(var(--slide-from, 100%));
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-end {
+  --slide-from: 100%;
+  animation: slide-in-end 0.22s ease-out;
+}
+
+[dir='rtl'] .animate-slide-in-end {
+  --slide-from: -100%;
+}

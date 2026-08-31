@@ -38,7 +38,10 @@ export type ActivityVerb =
   // ── Moderation closure (system→reporter) ──
   | 'report_resolved'
   // ── Host scheduling ──
-  | 'match_rescheduled';
+  | 'match_rescheduled'
+  // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
+  | 'venue_ownership_added'
+  | 'venue_ownership_removed';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
 const DIRECTED_VERBS = [

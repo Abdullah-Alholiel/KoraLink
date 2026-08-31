@@ -61,8 +61,9 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
         className={cn(
           'absolute inset-y-0 end-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
           size === 'lg' && 'max-w-3xl',
-          // Inline-direction-aware entrance: slides from the end side.
-          'rtl:animate-[slide-in-end_.22s_ease-out] ltr:animate-[slide-in-end_.22s_ease-out]',
+          // Inline-direction-aware entrance: slides from the end side
+          // (globals.css flips --slide-from under [dir=rtl]).
+          'animate-slide-in-end',
         )}
       >
         <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">

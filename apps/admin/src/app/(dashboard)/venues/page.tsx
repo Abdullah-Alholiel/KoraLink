@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Search, UserCog, XCircle } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminVenue, ListResponse } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
+import VenueTransferDrawer from '@/components/VenueTransferDrawer';
 
 type VenuesResponse = ListResponse<AdminVenue> & { venues: AdminVenue[] };
 
@@ -18,6 +19,7 @@ export default function VenuesPage() {
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [transferring, setTransferring] = useState<AdminVenue | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (search) qs.set('search', search);
@@ -119,23 +121,31 @@ export default function VenuesPage() {
                       <td className="px-4 py-3">
                         {busy ? (
                           <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                        ) : !v.is_approved ? (
-                          <div className="flex items-center gap-2">
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {!v.is_approved && (
+                              <>
+                                <button
+                                  onClick={() => decide(v.id, 'approve')}
+                                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                </button>
+                                <button
+                                  onClick={() => decide(v.id, 'reject')}
+                                  className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Reject
+                                </button>
+                              </>
+                            )}
                             <button
-                              onClick={() => decide(v.id, 'approve')}
-                              className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                              onClick={() => setTransferring(v)}
+                              className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Approve
-                            </button>
-                            <button
-                              onClick={() => decide(v.id, 'reject')}
-                              className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
-                            >
-                              <XCircle className="h-3.5 w-3.5" /> Reject
+                              <UserCog className="h-3.5 w-3.5" /> Transfer
                             </button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
                     </tr>
@@ -147,6 +157,12 @@ export default function VenuesPage() {
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
         </>
       )}
+
+      <VenueTransferDrawer
+        venue={transferring}
+        onClose={() => setTransferring(null)}
+        onSaved={reload}
+      />
     </div>
   );
 }

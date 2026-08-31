@@ -120,6 +120,9 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'report_resolved',
   // ── Host scheduling ──
   'match_rescheduled',
+  // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
+  'venue_ownership_added',
+  'venue_ownership_removed',
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
