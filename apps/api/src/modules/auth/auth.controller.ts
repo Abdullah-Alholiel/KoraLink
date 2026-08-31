@@ -87,9 +87,11 @@ export class AuthController {
       path: '/',
     });
 
-    const resp: { isNewUser: boolean; token?: string } = { isNewUser };
-    if (!isProd) resp.token = token;
-    return resp;
+    // P2-11 (run #22): the JWT rides ONLY the HttpOnly cookie — never the
+    // response body, dev or prod. The PWA reads the cookie; scripts use
+    // dev-login for a token. (Swagger contract already said "No JWT is
+    // returned in the response body".)
+    return { isNewUser };
   }
 
   // ── POST /auth/complete-profile ──────────────────────────────────────────
