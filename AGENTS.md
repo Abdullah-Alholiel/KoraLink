@@ -272,6 +272,27 @@ Before generating any code:
 7. For new features: check `docs/plans/<feature>/` for gate documents
 8. For database work: ensure `docker compose up -d postgres` is running
 
+### 10.1 Admin Portal — Mandatory State Check (before ANY admin task)
+
+**Abdullah actively works on the admin portal.** Board items written against `apps/admin` go stale
+fast. Before starting ANY task that touches `apps/admin` (HQ console, partner portal, RBAC,
+moderation) or its API surface (`apps/api/src/modules/partner/*`, `apps/api/src/modules/admin*`):
+
+1. **Snapshot the ACTUAL admin state** and record it in the run report / `00-retro.md`:
+   - `git status --short apps/admin apps/api/src/modules/partner apps/api/src/modules/admin*`
+     — uncommitted changes = Abdullah's in-flight work. NEVER overwrite, revert, restage, or
+     "fix" them. Treat them as the current truth.
+   - `git log --oneline -12 -- apps/admin` — what actually landed since the item was written.
+   - `systemctl --user is-active koralink-admin.service` — is the portal live right now?
+   - `ls apps/admin/src/app/(dashboard)/` — what routes/pages exist NOW vs what the item assumes.
+2. **Tailor the task to the new state**:
+   - Item overlaps in-flight uncommitted work → mark **BLOCKED (waiting on Abdullah)**, record
+     why, do NOT build over it.
+   - Item's premise is stale (feature already landed) → mark DONE with evidence, no rebuild.
+   - Scope drifted → re-scope the item in `kanban/BOARD.md` against live code BEFORE building.
+3. **Never assume** the admin portal looks like it did when the item was written. Board admin
+   items are proposals until re-validated against live code this run/session.
+
 ---
 
 ## 11. Required AI Skills & Context
