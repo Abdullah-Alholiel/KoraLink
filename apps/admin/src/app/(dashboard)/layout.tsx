@@ -46,11 +46,12 @@ export default function DashboardLayout({
   }
 
   return (
-    // ps-64 (inline-start padding, not pl-64): content clears the sidebar on
-    // whichever side it currently occupies — LTR left, RTL right.
+    // pl-64 (physical, matching the left-pinned sidebar): the sidebar never
+    // moves between locales (Abdullah 2026-08-31), so content clears it on
+    // the left in both LTR and RTL.
     <div className="min-h-screen">
       <Sidebar />
-      <main className="ps-64">{children}</main>
+      <main className="pl-64">{children}</main>
     </div>
   );
 }

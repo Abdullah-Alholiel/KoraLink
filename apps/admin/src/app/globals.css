@@ -16,8 +16,9 @@ body {
 }
 
 /* ── Shared motion tokens (drawers, dialogs, toasts) ─────────────────────
-   Drawer is a LEFT-hand side panel in both locales (Abdullah 2026-08-31),
-   so the entrance slides from the left unconditionally. */
+   Drawers are RIGHT-hand side panels; the main menu stays pinned LEFT and
+   always visible (Abdullah 2026-08-31) — the panel slides in from the
+   right unconditionally. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -40,7 +41,7 @@ body {
 
 @keyframes slide-in-end {
   from {
-    transform: translateX(-100%);
+    transform: translateX(100%);
     opacity: 0.7;
   }
   to {

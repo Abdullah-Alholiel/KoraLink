@@ -80,9 +80,11 @@ export default function Sidebar() {
   };
 
   return (
-    // Logical anchoring (start-0, not left-0): the sidebar sits on the RIGHT
-    // in Arabic (dir=rtl) and on the left in English — RTL-native shell.
-    <aside className="fixed inset-y-0 start-0 z-40 flex w-64 flex-col bg-gray-900 text-gray-300">
+    // Physical left pinning (Abdullah 2026-08-31): the main menu is a
+    // LEFT-hand panel in both locales — left-0, not start-0 — so it never
+    // moves between languages and is always visible next to the right-side
+    // edit drawers.
+    <aside className="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-gray-900 text-gray-300">
       <div className="flex h-16 items-center gap-2 border-b border-white/10 px-5">
         <Activity className="h-6 w-6 text-brand-500" />
         <span className="text-lg font-semibold text-white">KoraLink</span>

@@ -48,8 +48,11 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
   if (!open) return null;
 
   return (
+    // The overlay starts AFTER the sidebar column (left-64): the main menu
+    // stays pinned left and fully visible/clickable while a drawer is open
+    // (Abdullah 2026-08-31: "i always need the main menu to be shown").
     <div
-      className="fixed inset-0 z-[80]"
+      className="fixed inset-y-0 left-64 right-0 z-[80]"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -59,12 +62,10 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          // Abdullah's rule (2026-08-31): the edit/view panel is a LEFT-hand
-          // side panel in BOTH locales — left-0 (physical), not end-0. This
-          // matches what he approved on the admin pitches tab.
-          'absolute inset-y-0 left-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
+          // Right-hand side panel in both locales (physical right-0).
+          'absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
           size === 'lg' && 'max-w-3xl',
-          // Slides in from the left (globals.css keyframe).
+          // Slides in from the right (globals.css keyframe).
           'animate-slide-in-end',
         )}
       >
