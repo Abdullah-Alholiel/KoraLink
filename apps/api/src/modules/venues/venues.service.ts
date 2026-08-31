@@ -40,7 +40,7 @@ export class VenuesService {
    * Uses PostGIS ST_DWithin for geo-filtering (same pattern as matches service).
    */
   async findNearby(dto: GetVenuesDto): Promise<NearbyVenueRow[]> {
-    const { lat, lng, radius_km = 50, city, is_koralink_partner } = dto;
+    const { lat, lng, radius_km = 50, city, is_koralink_partner, search } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -60,6 +60,14 @@ export class VenuesService {
 
     const cityClause = city
       ? sql`AND v.city ILIKE ${'%' + city + '%'}`
+      : sql``;
+
+    // P1-28 (run #21): server-side free-text search — additive AND, never
+    // short-circuits geo/city/partner predicates. ILIKE substring on name OR
+    // city; pg_trgm similarity ranking is a later perf/ranking option.
+    const searchTerm = search?.trim();
+    const searchClause = searchTerm
+      ? sql`AND (v.name ILIKE ${'%' + searchTerm + '%'} OR v.city ILIKE ${'%' + searchTerm + '%'})`
       : sql``;
 
     const partnerClause = is_koralink_partner !== undefined
@@ -94,6 +102,7 @@ export class VenuesService {
       INNER JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       WHERE v.is_approved = true
+        ${searchClause}
         ${cityClause}
         ${partnerClause}
         ${geoClause}

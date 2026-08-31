@@ -1,8 +1,14 @@
-import { IsOptional, IsNumber, Min, Max, IsString } from 'class-validator';
+import { IsOptional, IsNumber, Min, Max, IsString, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GetVenuesDto {
+  @ApiPropertyOptional({ description: 'Free-text search on venue name or city (additive ILIKE)', maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  search?: string;
+
   @ApiPropertyOptional({ description: 'Latitude for geo-filter', minimum: -90, maximum: 90 })
   @IsOptional()
   @Type(() => Number)
