@@ -9,12 +9,14 @@ const withPWA = withPWAInit({
   dest: 'public',
   register: true,
   disable: process.env.NODE_ENV === 'development',
-  // Offline fallback: serve /ar/offline when a navigation fails (both cache
-  // and network). The page is a client component that re-detects the locale
-  // from the ACTUAL pathname (the browser URL stays the original request when
-  // the SW serves a cached response), so English users get English after
-  // hydration. One shell is the next-pwa pattern — only ONE document fallback
-  // is supported. Verified post-build: `grep -c setCatchHandler public/sw.js`.
+  // Offline fallback: serve /ar/offline when a start-url or cached-asset request
+  // fails (both cache and network). NOTE (P2-40, run #23): this config-level
+  // document fallback only fires via handlerDidError on routes registered BELOW
+  // — an offline navigation to an inner page matches no route and used to hit
+  // the browser error page (and EN users got Arabic copy). Document navigations
+  // are now handled locale-aware in worker/index.js (warm-caches /en/offline +
+  // /ar/offline, serves the matching one). This fallback stays for the
+  // start-url "/" route, which has no locale segment to key on.
   fallbacks: {
     document: '/ar/offline',
   },
