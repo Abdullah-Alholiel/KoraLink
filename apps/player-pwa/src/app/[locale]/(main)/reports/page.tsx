@@ -24,10 +24,9 @@ export default function ReportsPage() {
   const tc = useTranslations('common');
   const isOnline = useOnlineStatus();
 
-  const { data, isLoading, error, refetch } = useMyReports();
+  const { reports, isLoading, error, refetch, hasMore, fetchNextPage, isFetchingNextPage } =
+    useMyReports();
   const [expanded, setExpanded] = useState<string | null>(null);
-
-  const reports = data?.reports ?? [];
 
   const dateFmt = (iso: string) =>
     new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', {
@@ -138,6 +137,19 @@ export default function ReportsPage() {
             </div>
           );
         })}
+
+        {/* P2-31(2) (run #23): Load More — server-side pagination; hidden on the last page. */}
+        {!isLoading && !error && hasMore && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={fetchNextPage}
+              disabled={isFetchingNextPage}
+              className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform disabled:opacity-50"
+            >
+              {isFetchingNextPage ? tc('loading') : t('loadMore')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -773,6 +773,7 @@
     "emptyTitle": "No reports",
     "emptyBody": "You have not reported anything. Report a player, match, or venue if something breaks the rules.",
     "outcomeToggle": "Moderation outcome",
+    "loadMore": "Load More",
     "resolvedAt": "Reviewed {date}",
     "subjectType": {
       "user": "Player",

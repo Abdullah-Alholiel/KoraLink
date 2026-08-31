@@ -1,6 +1,7 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -21,12 +22,75 @@ export interface MyReportApi {
   created_at: string;
 }
 
-export function useMyReports() {
-  return useQuery<{ reports: MyReportApi[] }, FetchError>({
+/** One fetched page of the mine-list (canonical `{ reports, total, hasMore }` envelope — P2-31(2)). */
+interface MyReportsPage {
+  reports: MyReportApi[];
+  total: number;
+  hasMore: boolean;
+}
+
+const PAGE_SIZE = 20;
+
+export interface UseMyReportsResult {
+  reports: MyReportApi[];
+  total?: number;
+  hasMore: boolean;
+  fetchNextPage: () => void;
+  isFetchingNextPage: boolean;
+  isLoading: boolean;
+  error: FetchError | null;
+  refetch: () => void;
+}
+
+/** P2-31(2) (run #23): server-paged mine-list (was a hard 50-row cap). Same infinite-query shape as useMatches (P1-19). */
+export function useMyReports(): UseMyReportsResult {
+  const query = useInfiniteQuery({
     queryKey: ['reports', 'mine'],
-    queryFn: () => fetcher<{ reports: MyReportApi[] }>('/reports'),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<MyReportsPage> => {
+      const params: Record<string, string> = { limit: String(PAGE_SIZE) };
+      if (pageParam > 0) params.offset = String(pageParam);
+
+      const raw = await fetcher<{ reports: MyReportApi[]; total?: number; hasMore?: boolean }>(
+        '/reports',
+        { params },
+      );
+
+      const total = raw.total ?? raw.reports.length;
+      return {
+        reports: raw.reports,
+        total,
+        // Defensive: an unexpected legacy shape carries no hasMore — never page on it.
+        hasMore: raw.hasMore ?? false,
+      };
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      return allPages.reduce((sum, page) => sum + page.reports.length, 0);
+    },
     staleTime: 30_000,
   });
+
+  const reports = useMemo(
+    () => query.data?.pages.flatMap((page) => page.reports) ?? [],
+    [query.data],
+  );
+  const lastPage = query.data?.pages[query.data.pages.length - 1];
+
+  return {
+    reports,
+    total: lastPage?.total,
+    hasMore: Boolean(query.hasNextPage),
+    fetchNextPage: () => {
+      void query.fetchNextPage();
+    },
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    error: (query.error as FetchError | null) ?? null,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
 }
 
 /** Submit a report (POST /reports). On success, invalidates the mine-list. */

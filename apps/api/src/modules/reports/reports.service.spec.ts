@@ -77,6 +77,7 @@ describe('ReportsService message subjects (P1-31)', () => {
         leftJoin: () => chain,
         orderBy: () => chain,
         limit: () => chain,
+        offset: () => chain,
       };
       chain.then = (resolve: (v: unknown) => void) => resolve(rows);
       return chain;
@@ -141,11 +142,86 @@ describe('ReportsService message subjects (P1-31)', () => {
           match_title: null,
           venue_name: null,
           message_sender_name: 'Salem',
+          total: 1,
         },
       ],
     });
     const result = await svc.listMine('u1');
     expect(result.reports).toHaveLength(1);
     expect(result.reports[0].subject_label).toBe('Message from Salem');
+    // P2-31(2): envelope shape.
+    expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
+  });
+
+  /**
+   * P2-31(2) (run #23): server-side paging — the mine-list was a hard 50-row
+   * cap. Envelope { reports, total, hasMore }; hasMore derives from the
+   * COUNT(*) OVER() window total vs offset + returned rows.
+   */
+  describe('ReportsService.listMine pagination (P2-31(2))', () => {
+    function row(over: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 'r1',
+        subject_type: 'user',
+        subject_id: 'u2',
+        reason: 'spam',
+        status: 'open',
+        resolution: null,
+        resolved_at: null,
+        created_at: new Date(),
+        user_name: 'Fahad',
+        match_title: null,
+        venue_name: null,
+        message_sender_name: null,
+        total: 20,
+        ...over,
+      };
+    }
+
+    function makePageService(opts: { rows: unknown[]; captured?: { offset?: number; limit?: number } }) {
+      const chain: any = {
+        where: () => chain,
+        leftJoin: () => chain,
+        orderBy: () => chain,
+        limit: (n: number) => {
+          if (opts.captured) opts.captured.limit = n;
+          return chain;
+        },
+        offset: (n: number) => {
+          if (opts.captured) opts.captured.offset = n;
+          return chain;
+        },
+      };
+      chain.then = (resolve: (v: unknown) => void) => resolve(opts.rows);
+      const db = { select: () => ({ from: () => chain }) };
+      return new ReportsService(db as never);
+    }
+
+    it('clamps limit to [1,50] and offset to >=0', async () => {
+      const captured: { offset?: number; limit?: number } = {};
+      const svc = makePageService({ rows: [], captured });
+      await svc.listMine('u1', { limit: 999, offset: -5 });
+      expect(captured.limit).toBe(50);
+      expect(captured.offset).toBe(0);
+    });
+
+    it('hasMore is true when the window total exceeds offset + rows', async () => {
+      const svc = makePageService({ rows: [row({ total: 30 }), row({ id: 'r2', total: 30 })] });
+      const result = await svc.listMine('u1', { limit: 20, offset: 0 });
+      expect(result.total).toBe(30);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('hasMore is false on the last page and total is 0 for an empty list', async () => {
+      const svc = makePageService({ rows: [row({ total: 20, id: 'r20' })] });
+      const last = await svc.listMine('u1', { limit: 20, offset: 20 });
+      expect(last.hasMore).toBe(false);
+
+      const empty = makePageService({ rows: [] });
+      const none = await empty.listMine('u1');
+      expect(none.total).toBe(0);
+      expect(none.hasMore).toBe(false);
+    });
   });
 });

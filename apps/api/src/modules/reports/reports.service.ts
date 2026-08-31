@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches, personal_messages, reports, users, venues } from '../../database/schema';
 import { CreateReportDto, ReportSubjectType } from './dto/create-report.dto';
+import { ListMyReportsDto } from './dto/list-my-reports.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -85,7 +86,16 @@ export class ReportsService {
    * "reporters never learn the outcome" gap. Subject labels only (no
    * contact data); resolution text only once the report is closed.
    */
-  async listMine(reporterId: string) {
+  /**
+   * P2-31(2) (run #23): reporter-closure mine-list with server-side paging.
+   * Envelope `{ reports, total, hasMore }` (the P1-19 pattern) — `total` rides
+   * `COUNT(*) OVER()` (window count taken BEFORE LIMIT — no second query);
+   * `hasMore = offset + rows.length < total`.
+   */
+  async listMine(reporterId: string, query?: ListMyReportsDto) {
+    const limit = Math.min(Math.max(query?.limit ?? 50, 1), 50);
+    const offset = Math.max(query?.offset ?? 0, 0);
+
     const rows = await this.db
       .select({
         id: reports.id,
@@ -100,6 +110,7 @@ export class ReportsService {
         match_title: matches.title,
         venue_name: venues.name,
         message_sender_name: message_sender.full_name,
+        total: sql<number>`COUNT(*) OVER ()`.mapWith(Number),
       })
       .from(reports)
       .leftJoin(users, and(eq(reports.subject_type, 'user'), eq(users.id, reports.subject_id)))
@@ -120,7 +131,10 @@ export class ReportsService {
       )
       .where(eq(reports.reporter_id, reporterId))
       .orderBy(desc(reports.created_at))
-      .limit(50);
+      .limit(limit)
+      .offset(offset);
+
+    const total = rows.length > 0 ? rows[0].total : 0;
 
     return {
       reports: rows.map((r) => ({
@@ -140,6 +154,8 @@ export class ReportsService {
         resolved_at: r.resolved_at,
         created_at: r.created_at,
       })),
+      total,
+      hasMore: offset + rows.length < total,
     };
   }
 
