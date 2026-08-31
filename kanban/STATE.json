@@ -1,16 +1,14 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 20,
-  "last_run_at": "2026-08-30T21:30:00Z",
-  "last_run_commits": ["644ab89", "aa7a2d2", "f772b78", "4150fb8", "c9e9b0b", "a5b9251"],
-  "last_run_report": "kanban/RUNS/2026-08-30T20-16Z.md",
+  "last_run": 21,
+  "last_run_at": "2026-08-31T10:16:00Z",
+  "last_run_commits": ["0359bda", "2caffce", "0a2b05d", "d833f03", "5e98f07"],
+  "last_run_report": "kanban/RUNS/2026-08-31T10-16Z.md",
   "in_review_items": [
-    "P2-36 shared DatePicker strip (Abdullah request, 2026-08-31): 30-day scrollable window + TODAY dot (aria-current=date), one modular component consumed by Play feed, club detail, RescheduleSheet. Verify in run #21: vitest DatePicker.test.tsx + RescheduleSheet 30-chip/dot specs green; deployed /en/play chunk carries today-dot + aria-current (curl the chunk, the feed is client-gated); Abdullah eyeballs the strip on the PWA (no browser on box).",
-    "P1-13 cross-day extension (48170d8 API + ff49a35 PWA, 2026-08-31 off-schedule session): RescheduleSheet spans next 7 days (DatePicker strip, defaults TODAY) + rescheduleMatch past-slot guard BEFORE money moves. Verify in run #21: gates (jest/vitest/tsc/build) + live probe — cross-day move 200, past-day slot 400, restore seed match 7c4c6864-3c9a-4950-9885-d5f5e6da3d3d (KSU Stadium, host +966500000004) to slot 318c976e + wallet 45.00. PWA i18n parity after reschedule.pickDay (en/ar).",
-    "P1-13 match reschedule (644ab89 + f772b78 + 4150fb8 + a5b9251): PATCH /matches/:id/schedule + RescheduleSheet, migration 0027 applied live. Verify in run #21: re-run gates (jest/vitest/build) + live probe: non-host 403, move on a fresh slot 200 (slot swap + wallet delta), invalid body 400. Use /tmp/run20-e2e.sh as the recipe (provision a fresh slot first — 64d1479a was freed and remains free).",
-    "P2-31(1) admin venue hours guard (c9e9b0b): client-side open/close validation + venues.hoursInvalid en/ar. Verify in run #21: gates + grep hoursInvalid in admin messages + i18n parity 240/240.",
-    "Quiet-hours spec wall-clock fix (aa7a2d2): quiet_end 23→0 in two specs (window is end-exclusive; old fixture failed 23:00-23:59 AST daily). Verify in run #21: jest notifications.push-preferences green at any hour."
+    "P1-28 venue-level search (2caffce API + 0a2b05d PWA, 2026-08-31): GET /venues ?search= additive name/city ILIKE + clubs page 300ms-debounced server-side search. Verify in run #22: gates (jest 183/183, vitest 261/261, build 3/3) + live probe via /tmp/run21-search-probe.sh (KSU/olaya/geo-additive/81-char 400/nonexistent 0/no-search 4).",
+    "P2-37 reschedule max_players<2 guard (d833f03): guard BEFORE money moves. Verify in run #22: jest matches.reschedule 14/14 incl. zero-ledger-writes spec.",
+    "P2-35 clubs date labels + h23 (5e98f07): formatDateLabel ar-SA/en-US + venue-hours hourCycle h23. Verify in run #22: grep clubs/[id]/page.tsx + venue-hours.ts; vitest green."
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -22,9 +20,11 @@
     "P2-29 host page nav placement — Abdullah to confirm intent (CTAs exist on feed).",
     "P2-32 foreign pitchId silent-ignore — decide document-or-404.",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
-    "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates."
+    "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
+    "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — preflight `env | grep` can report NO_MARKER yet the CLI still refuses; always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
+    "OPS (run #21): first admin build was OOM-killed (137) under memory pressure (3 tsservers + logflare + webui); solo retry passed. Retry admin build alone if turbo reports 137."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #20 (20:16Z scheduled, ~1h20m): glm-5.3 reviewers (probe 200; 111s + 143s) + post-cycle review (78s) — zero timeouts, 6th consecutive clean review run. ALL 5 run-#19 claims verified live by Reviewer B (code+jest+DB probe+HTTP). Sentry/journal clean (no new signatures). BUILT P1-13 match reschedule end-to-end (API tx with FOR UPDATE row+slot locks, exact refund/charge/net-delta, server-authoritative schedule re-derivation, migration 0027 ActivityVerb match_rescheduled, PWA RescheduleSheet 5 UX states, i18n 683/683). TWO bugs caught by the run's own live E2E (never trust green unit tests alone): ReferenceType 'BOOKING' is not an enum value (spec had enshrined it — fixed to PITCH_BOOKING), and per-(match,slot) idempotency keys collide on legal A→B→A (now UUID-per-attempt). Post-cycle reviewer caught a REAL CRITICAL: cancelMatch read the match unlocked → reschedule-in-between could skip the refund (silent money loss); fixed with FOR UPDATE + proven by live create→reschedule→cancel drill (wallet arithmetic exact to the sar). Also built P2-31(1) admin hours guard; fixed 2 wall-clock-dependent quiet-hours specs (failed 23:00-23:59 AST daily). Boarded P2-34 (bell only on feed page — Reviewer B's 'no notifications surface' over-ranked, grounded as reachability gap) + P2-35 (clubs date labels en-US hardcode). Next run #21: verify the 3 in_review items, then P1-28 (venue discovery: search/city filter at venue level) or P2-34 bell placement — both finishable single-run slices."
+  "notes": "Run #21 (10:16Z scheduled, ~2h10m): glm-5.3 reviewers (probe 200; 78s + 189s) — 7th consecutive clean review run, zero timeouts. ALL 5 in_review items verified live by Reviewer B (P2-36 DatePicker 17/17 + chunk grep, P1-13 cross-day+core jest 13/13 + 74/74, P2-31(1) guard en/ar:139, quiet-hours fix 9/9). Sentry/journal clean (only new sig = run #20's own E2E artifact KORALINK-API-X, pre-fix). BUILT P1-28 venue search end-to-end (API ?search= additive name/city ILIKE + PWA clubs debounced server-side search; live probe PASS), P2-37 max_players<2 guard before money moves (A1 IMPORTANT, fixed), P2-35 locale-aware date labels + hourCycle h23 (A rider). A2 (WS join-conversation) REFUTED by parent code check (participant guard exists at app.gateway.ts:353 — false positive, recorded). Boarded P2-38 (admin disputes/reports empty states). Sibling admin-ux-overhaul active in tree (c6e329a + 9490354 landed mid-run; WIP never staged). Admin build OOM'd once (137), solo retry passed. Mirror: 4 cards + 6 comments under t_ce9a513a. Next run #22: verify the 3 in_review items, then P2-34 (bell in layout / notifications route) or P2-31(2) (reports listMine pagination)."
 }
