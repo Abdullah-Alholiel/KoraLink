@@ -322,3 +322,46 @@ export interface PartnerEarnings {
   totalPending: number;
   totalPaid: number;
 }
+
+/** One row of GET /admin/venues (used by admin pickers and lists). */
+export interface AdminVenueListRow {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  is_approved: boolean;
+  is_koralink_partner: boolean;
+  rating: number | string | null;
+  created_at: string;
+  owner_id: string | null;
+  owner_name: string | null;
+  pitch_count: number;
+  verification_status: string;
+}
+
+/** One row of GET /admin/pitches (HQ pitch management, admin-ux-overhaul slice 2). */
+export interface AdminPitchRow {
+  id: string;
+  name: string;
+  size: string;
+  surface_type: string;
+  environment: string;
+  hourly_rate: number;
+  is_active: boolean;
+  created_at: string;
+  venue_id: string;
+  venue_name: string;
+  venue_city: string;
+  owner_id: string | null;
+  owner_name: string | null;
+  owner_phone: string | null;
+  slots_total?: number;
+  slots_booked?: number;
+}
+
+export interface AdminPitchList {
+  pitches: AdminPitchRow[];
+  total: number;
+  page: number;
+  perPage: number;
+}

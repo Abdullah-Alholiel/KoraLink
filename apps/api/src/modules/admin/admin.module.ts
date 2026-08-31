@@ -19,6 +19,8 @@ import { AdminSettingsController } from './settings.controller';
 import { AdminAuditController } from './audit.controller';
 import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
+import { AdminPitchesService } from './pitches.service';
+import { AdminPitchesController } from './pitches.controller';
 import { MatchesModule } from '../matches/matches.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { ActivitiesModule } from '../activities/activities.module';
@@ -37,6 +39,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminSettingsController,
     AdminAuditController,
     AdminMatchesController,
+    AdminPitchesController,
   ],
   providers: [
     AuditService,
@@ -49,6 +52,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminSettlementsService,
     AdminSettingsService,
     AdminMatchesService,
+    AdminPitchesService,
   ],
   exports: [AuditService],
 })
