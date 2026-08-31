@@ -293,14 +293,77 @@ export class PartnerService {
       .orderBy(desc(settlements.created_at))
       .limit(5);
 
+    // ── Slice 6: upcoming list + 7-day trend (server-aggregated) ─────────
+    const upcomingList = await this.db
+      .select({
+        id: matches.id,
+        title: matches.title,
+        scheduledAt: matches.scheduled_at,
+        maxPlayers: matches.max_players,
+        pitchName: pitches.name,
+        playersFilled: sql<number>`(select count(*)::int from match_players mp where mp.match_id = ${matches.id})`,
+      })
+      .from(matches)
+      .innerJoin(pitches, eq(matches.pitch_id, pitches.id))
+      .where(
+        and(inArray(matches.pitch_id, pitchIds), UPCOMING_STATUSES, gte(matches.scheduled_at, sql`now()`)),
+      )
+      .orderBy(matches.scheduled_at)
+      .limit(5);
+
+    const weekSlots = await this.db
+      .select({
+        date: pitch_slots.slot_date,
+        booked: sql<number>`count(*) filter (where ${pitch_slots.is_booked})::int`,
+      })
+      .from(pitch_slots)
+      .where(
+        and(
+          inArray(pitch_slots.pitch_id, pitchIds),
+          gte(pitch_slots.slot_date, sql`CURRENT_DATE - INTERVAL '6 days'`),
+          lte(pitch_slots.slot_date, sql`CURRENT_DATE`),
+        ),
+      )
+      .groupBy(pitch_slots.slot_date);
+
+    const weekRevenue = (await this.db.execute(sql`
+      SELECT
+        to_char(${matches.scheduled_at} AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD') AS date,
+        COALESCE(SUM(${matches.pitch_cost_sar}), 0)::float AS revenue
+      FROM ${matches}
+      WHERE ${inArray(matches.pitch_id, pitchIds)}
+        AND ${matches.scheduled_at} >= (CURRENT_DATE - INTERVAL '6 days')
+        AND ${matches.scheduled_at} < (CURRENT_DATE + INTERVAL '1 day')
+      GROUP BY 1
+    `)) as unknown as Array<{ date: string; revenue: number }>;
+
+    // Fill all 7 Riyadh days so the chart never has holes.
+    const slotByDay = new Map<string, number>(weekSlots.map((r) => [String(r.date), Number(r.booked)]));
+    const revByDay = new Map<string, number>(weekRevenue.map((r) => [r.date, Number(r.revenue)]));
+    const weeklyTrend: { date: string; bookedSlots: number; revenue: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date();
+      day.setUTCDate(day.getUTCDate() - i);
+      const key = day.toISOString().slice(0, 10);
+      weeklyTrend.push({
+        date: key,
+        bookedSlots: slotByDay.get(key) ?? 0,
+        revenue: revByDay.get(key) ?? 0,
+      });
+    }
+
     return {
       venueNames: owned.map((v) => v.name),
+      venueCount: owned.length,
+      pitchCount: pitchIds.length,
       todayUtilization: util.total > 0 ? util.booked / util.total : 0,
       upcomingMatches: upcoming.c ?? 0,
       revenueToday: revenue.total ?? 0,
       nextMatchInMinutes: next.mins != null ? Math.round(Number(next.mins)) : null,
       scheduleToday,
       recentDeposits,
+      upcomingList,
+      weeklyTrend,
     };
   }
 

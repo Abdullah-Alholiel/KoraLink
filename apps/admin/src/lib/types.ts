@@ -191,6 +191,8 @@ export interface ListResponse<T> {
 
 export interface PartnerDashboard {
   venueNames: string[];
+  venueCount: number;
+  pitchCount: number;
   todayUtilization: number;
   upcomingMatches: number;
   revenueToday: number;
@@ -208,6 +210,21 @@ export interface PartnerDashboard {
     status: string;
     created_at: string;
     venueName: string | null;
+  }[];
+  /** Slice 6: next 5 upcoming matches with fill progress. */
+  upcomingList: {
+    id: string;
+    title: string;
+    scheduledAt: string;
+    maxPlayers: number;
+    pitchName: string | null;
+    playersFilled: number;
+  }[];
+  /** Slice 6: last 7 days (oldest → today), server-aggregated. */
+  weeklyTrend: {
+    date: string;
+    bookedSlots: number;
+    revenue: number;
   }[];
 }
 
