@@ -56,6 +56,7 @@ export function useVenues(params?: {
   lat?: number;
   lng?: number;
   city?: string;
+  search?: string;
   is_koralink_partner?: boolean;
 }) {
   return useQuery<VenueApi[], FetchError>({
@@ -65,6 +66,7 @@ export function useVenues(params?: {
       if (params?.lat != null) searchParams.lat = String(params.lat);
       if (params?.lng != null) searchParams.lng = String(params.lng);
       if (params?.city) searchParams.city = params.city;
+      if (params?.search) searchParams.search = params.search;
       if (params?.is_koralink_partner != null)
         searchParams.is_koralink_partner = String(params.is_koralink_partner);
       return fetcher<VenueApi[]>('/venues', {

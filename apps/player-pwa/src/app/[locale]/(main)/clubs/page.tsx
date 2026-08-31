@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -26,22 +26,29 @@ export default function ClubsPage() {
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [activeFilter, setActiveFilter] = useState<FilterKey>('Nearby');
     const [searchQuery, setSearchQuery] = useState('');
+    // P1-28 (run #21): search now runs SERVER-side (?search= additive name/city
+    // ILIKE over the whole venues table) — debounce the input 300ms so the
+    // queryKey change triggers one refetch, not one per keystroke.
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const { coords } = useLocation();
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const {
         data: venues,
         isLoading,
         error,
         refetch,
-    } = useVenues(coords ? { lat: coords.lat, lng: coords.lng } : undefined);
+    } = useVenues({
+        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+        search: debouncedSearch || undefined,
+    });
 
+    // Pills filter the (already server-searched) fetched set client-side.
     const filteredVenues = (venues ?? []).filter((v) => {
-        const matchesQuery =
-            !searchQuery ||
-            v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            v.city.toLowerCase().includes(searchQuery.toLowerCase());
-        if (!matchesQuery) return false;
-
         if (activeFilter === 'Top Rated') return true; // rating removed — show all
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
