@@ -37,17 +37,20 @@ const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-function formatDateLabel(date: Date, t: (k: string) => string): string {
+function formatDateLabel(date: Date, t: (k: string) => string, locale: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  // P2-35 (run #21): locale-aware — Arabic users get ar-SA weekdays/months
+  // (mirrors RescheduleSheet dayLabel / MatchDetailsForm).
+  const dateLocale = locale === 'ar' ? 'ar-SA' : 'en-US';
 
   if (diff === 0) return t('clubs.today');
   if (diff === 1) return t('clubs.tomorrow');
-  if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (diff < 7) return d.toLocaleDateString(dateLocale, { weekday: 'long' });
+  return d.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' });
 }
 
 // ── Amenity icons ──────────────────────────────────────────
@@ -301,7 +304,7 @@ export default function ClubPage() {
                     </p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="text-sm font-bold text-brand-black">
-                        {selectedDate ? formatDateLabel(selectedDate, t) : t('clubs.allMatches')}
+                        {selectedDate ? formatDateLabel(selectedDate, t, locale) : t('clubs.allMatches')}
                       </span>
                       {selectedDate && (
                         <button

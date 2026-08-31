@@ -40,6 +40,7 @@ export function riyadhHour(now: Date = new Date()): number {
     new Intl.DateTimeFormat('en-GB', {
       hour: '2-digit',
       hour12: false,
+      hourCycle: 'h23', // P2-35 (run #21): some ICU builds yield "24" at midnight without it
       timeZone: RIYADH_TIME_ZONE,
     }).format(now),
     10,
