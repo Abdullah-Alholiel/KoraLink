@@ -294,7 +294,8 @@
     "fldDuration": "Duration (minutes)",
     "saved": "Match updated",
     "failed": "Could not update the match",
-    "forbiddenStatus": "Only Open or InProgress matches can be edited"
+    "forbiddenStatus": "Only Open or InProgress matches can be edited",
+    "slotBookedHint": "Schedule is fixed for slot-booked matches — time changes go through the host’s reschedule flow."
   },
   "adminPitches": {
     "title": "Pitches",

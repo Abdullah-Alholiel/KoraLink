@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, Loader2 } from 'lucide-react';
+import { Ban, Loader2, Pencil } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import type { AdminMatch, ListResponse } from '@/lib/types';
@@ -9,6 +9,7 @@ import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
+import MatchEditDrawer from '@/components/MatchEditDrawer';
 
 type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
 
@@ -18,6 +19,7 @@ export default function MatchesPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AdminMatch | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
@@ -100,12 +102,20 @@ export default function MatchesPage() {
                         {busy ? (
                           <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                         ) : !terminal ? (
-                          <button
-                            onClick={() => cancel(m.id)}
-                            className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                          >
-                            <Ban className="h-3.5 w-3.5" /> Cancel
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditing(m)}
+                              className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </button>
+                            <button
+                              onClick={() => cancel(m.id)}
+                              className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                            >
+                              <Ban className="h-3.5 w-3.5" /> Cancel
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-xs text-gray-300">—</span>
                         )}
@@ -119,6 +129,8 @@ export default function MatchesPage() {
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
         </>
       )}
+
+      <MatchEditDrawer match={editing} onClose={() => setEditing(null)} onSaved={reload} />
     </div>
   );
 }
