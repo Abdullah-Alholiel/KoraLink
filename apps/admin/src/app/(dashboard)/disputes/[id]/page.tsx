@@ -49,6 +49,27 @@ export default function DisputeDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Admin reply on the dispute thread (P2-2, run #24) ──
+  const [reply, setReply] = useState('');
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  async function sendReply() {
+    const content = reply.trim();
+    if (!content || replySending) return;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      await api.post(`/admin/disputes/${id}/messages`, { content });
+      reload();
+      setReply('');
+    } catch (e) {
+      setReplyError(e instanceof Error ? e.message : t('replyFailed'));
+    } finally {
+      setReplySending(false);
+    }
+  }
+
   // Edit-outcome mode (available in ANY status — post-decision corrections).
   const [editing, setEditing] = useState(false);
   const [editDecision, setEditDecision] = useState('');
@@ -237,6 +258,36 @@ export default function DisputeDetailPage() {
                 </div>
               </>
             )}
+
+            {/* Admin reply composer (P2-2, run #24) — always available; replies
+                allowed in ANY dispute status (closing the loop after a decision
+                is legitimate ops). */}
+            <div className="mt-5 rounded-lg border border-gray-200 bg-white p-3">
+              <label htmlFor="dispute-reply" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {t('replyTitle')}
+              </label>
+              <textarea
+                id="dispute-reply"
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder={t('replyPlaceholder')}
+                rows={2}
+                maxLength={2000}
+                className="w-full rounded-lg border border-gray-300 p-2 text-sm"
+              />
+              {replyError && <p className="mt-2 text-sm text-brand-red">{replyError}</p>}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-400">{reply.length}/2000</span>
+                <button
+                  onClick={sendReply}
+                  disabled={replySending || reply.trim().length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {replySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {replySending ? t('replySending') : t('replySend')}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

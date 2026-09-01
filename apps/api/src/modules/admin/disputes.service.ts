@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SQL, and, eq, sql } from 'drizzle-orm';
+import { SQL, and, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, dispute_messages, match_players, users } from '../../database/schema';
@@ -85,15 +85,42 @@ export class AdminDisputesService {
     // dispute. A won no-show appeal reverses the player's no-show mark and
     // restores their standing no-show count. Other dispute types can add their
     // own effects (refunds, penalty reversals) as those flows are built.
-    if (dto.outcome === 'resolved' && before.type === 'no_show' && before.match_id) {
-      const matchId = before.match_id;
-      const reporterId = before.reporter_id;
-      await this.db.transaction(async (tx) => {
+    //
+    // ATOMICITY (Review run #24, was CRITICAL): the side effect and the status
+    // flip used to run as two independent transactions — a mid-sequence
+    // failure un-marked the player while the dispute stayed open (re-resolve
+    // → double no_show_count decrement), and two concurrent resolves both
+    // passed the advisory findOne status check. Now ONE tx: the guarded status
+    // UPDATE (predicate on `opened`/`under_review`) runs FIRST, and the loser
+    // of a resolve race throws before any side effect — rollback undoes
+    // everything.
+    await this.db.transaction(async (tx) => {
+      const decided = await tx
+        .update(disputes)
+        .set(
+          withTimestamp({
+            status: dto.outcome,
+            decision: dto.decision ?? null,
+            internal_note: dto.internalNote ?? null,
+            decided_by: adminId,
+          }),
+        )
+        .where(and(eq(disputes.id, id), inArray(disputes.status, ['opened', 'under_review'])))
+        .returning({ id: disputes.id });
+
+      if (decided.length === 0) {
+        // Lost the race (another admin decided it first) or the dispute was
+        // closed between findOne and here — throw so NOTHING (side effect,
+        // audit, activity) is applied for a stale decision.
+        throw new BadRequestException('This dispute has already been decided.');
+      }
+
+      if (dto.outcome === 'resolved' && before.type === 'no_show' && before.match_id) {
         await tx
           .update(match_players)
           .set({ no_show: false })
           .where(
-            and(eq(match_players.match_id, matchId), eq(match_players.user_id, reporterId)),
+            and(eq(match_players.match_id, before.match_id), eq(match_players.user_id, before.reporter_id)),
           );
         await tx
           .update(users)
@@ -102,21 +129,9 @@ export class AdminDisputesService {
               no_show_count: sql`GREATEST(${users.no_show_count} - 1, 0)`,
             }),
           )
-          .where(eq(users.id, reporterId));
-      });
-    }
-
-    await this.db
-      .update(disputes)
-      .set(
-        withTimestamp({
-          status: dto.outcome,
-          decision: dto.decision ?? null,
-          internal_note: dto.internalNote ?? null,
-          decided_by: adminId,
-        }),
-      )
-      .where(eq(disputes.id, id));
+          .where(eq(users.id, before.reporter_id));
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({
@@ -144,6 +159,43 @@ export class AdminDisputesService {
     } catch {
       // swallow — feed/WS fan-out is supplementary
     }
+
+    return after;
+  }
+
+  /**
+   * Admin reply on a dispute (P2-2 — run #24). The dispute thread was
+   * read-only for admins: `findOne` rendered `dispute_messages` but no
+   * endpoint could post one, so the reporter never heard back. Allowed in ANY
+   * status — closing-the-loop replies after resolve/reject are legitimate
+   * ops. Single insert (no tx needed); returns the fully populated dispute
+   * per the mutation-return contract (§2), OUTSIDE any transaction.
+   * Audit trail stays content-free (ids + ip only) by design.
+   */
+  async addMessage(id: string, content: string, adminId: string) {
+    const before = await this.findOne(id);
+
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Message content cannot be empty.');
+    }
+
+    await this.db.insert(dispute_messages).values({
+      dispute_id: id,
+      author_id: adminId,
+      content: trimmed,
+    });
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'dispute.message',
+      entityType: 'dispute',
+      entityId: id,
+      before,
+      after,
+    });
+    this.realtime.broadcastOps('disputes');
 
     return after;
   }
