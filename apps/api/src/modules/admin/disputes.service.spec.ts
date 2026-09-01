@@ -162,6 +162,13 @@ describe('AdminDisputesService — run #24', () => {
     ).toBe(false);
   });
 
+  it('reopen: guarded status UPDATE — 0 matching rows (race with concurrent resolve) → 400, no reopen', async () => {
+    const { svc } = makeService({ updateRows: [] }); // status pred matched 0 rows
+    await expect(svc.reopen(DISPUTE_ID, 'admin1')).rejects.toThrow(
+      'Only decided disputes can be reopened.',
+    );
+  });
+
   // ── admin replies (P2-2) ─────────────────────────────────────────────
 
   it('addMessage: inserts dispute_messages row and returns the populated dispute', async () => {

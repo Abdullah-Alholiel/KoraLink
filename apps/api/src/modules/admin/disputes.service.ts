@@ -219,10 +219,20 @@ export class AdminDisputesService {
       ? [...(before.evidence as unknown[]), entry]
       : [entry];
 
-    await this.db
+    // Status-predicated UPDATE (run #24 Reviewer-A CRITICAL #2): only a
+    // dispute that is STILL decided may flip back to opened. A concurrent
+    // resolve() that closed it between findOne and here makes this update
+    // match zero rows → clean 400 instead of silently reopening a decided
+    // dispute over the other admin's decision.
+    const reopened = await this.db
       .update(disputes)
       .set(withTimestamp({ status: 'opened', evidence: evidence as never }))
-      .where(eq(disputes.id, id));
+      .where(and(eq(disputes.id, id), inArray(disputes.status, ['resolved', 'rejected'])))
+      .returning({ id: disputes.id });
+
+    if (reopened.length === 0) {
+      throw new BadRequestException('Only decided disputes can be reopened.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
