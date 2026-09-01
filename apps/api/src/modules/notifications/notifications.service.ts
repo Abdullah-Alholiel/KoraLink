@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { eq, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
+import * as Sentry from '@sentry/node';
 import {
   normalizePushLocale,
   renderPushText,
@@ -226,6 +227,15 @@ export class NotificationsService {
           this.logger.debug(
             `Push failed for ${sub.endpoint.slice(0, 20)}…: ${(err as Error).message}`,
           );
+          // Run #24 Reviewer-A: 5xx/timeout failures were invisible to
+          // Sentry (debug log only) — a systemic endpoint outage would
+          // produce zero signals while push silently stopped. Failures that
+          // are NOT a pruned sub (404/410 handled above) get captured.
+          if (statusCode !== 404 && statusCode !== 410) {
+            Sentry.captureException(err, {
+              tags: { channel: 'web-push', endpoint_prefix: sub.endpoint.slice(0, 24) },
+            });
+          }
         }
       }),
     );

@@ -1118,7 +1118,7 @@ export class MatchesService {
         });
         await this.notificationsService.sendPushToUsers([renudge.hostId], {
           key: 'players_needed_renudge', // P2-8: text localized per subscriber
-          vars: { title: hostMatch?.title, needed: renudge.needed },
+          vars: { title: hostMatch?.title ?? 'Match', needed: renudge.needed },
           data: { type: 'match-chat', matchId },
         });
       } catch (err) {

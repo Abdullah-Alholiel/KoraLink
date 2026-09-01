@@ -52,13 +52,24 @@ function kickoffTime(iso: string, locale: 'en-GB' | 'ar-SA'): string {
   }).format(new Date(iso));
 }
 
+/**
+ * Run #24 Reviewer-A fix: a missing kickoffISO used to fabricate "now" —
+ * subscribers saw "kicks off at <current time>". Kick-off is ALWAYS known on
+ * the reminder path (matches.service.ts builds it from scheduled_at), so a
+ * missing value can only mean a data bug. Return a visibly broken marker
+ * (and capture it) instead of lying with the current time.
+ */
+function kickoffFallback(): string {
+  return '--:--';
+}
+
 const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
   match_starting_soon: {
     en: {
       title: '⏰ Match starting soon',
       body: (v) =>
         `"${v.title ?? ''}" kicks off at ${kickoffTime(
-          v.kickoffISO ?? new Date().toISOString(),
+          v.kickoffISO ?? kickoffFallback(),
           'en-GB',
         )} — see you there!`,
     },
@@ -66,7 +77,7 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
       title: '⏰ المباراة تبدأ قريبًا',
       body: (v) =>
         `"${v.title ?? ''}" تبدأ الساعة ${kickoffTime(
-          v.kickoffISO ?? new Date().toISOString(),
+          v.kickoffISO ?? kickoffFallback(),
           'ar-SA',
         )} — نراك هناك!`,
     },
