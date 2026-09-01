@@ -135,11 +135,8 @@ export class AdminReportsService {
         excludeActor: false,
       });
       await this.notifications.sendPushToUsers([before.reporter.id], {
-        title: 'Report update',
-        body:
-          dto.outcome === 'resolved'
-            ? 'Your report was resolved. Thank you for helping keep KoraLink safe.'
-            : 'Your report was reviewed and dismissed.',
+        // P2-8 (run #24): localized per subscriber locale (key picks the text).
+        key: dto.outcome === 'resolved' ? 'report_resolved' : 'report_dismissed',
         data: { type: 'report-resolved' },
       });
     } catch {

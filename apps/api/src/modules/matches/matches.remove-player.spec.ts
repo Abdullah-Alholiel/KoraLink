@@ -50,7 +50,7 @@ describe('MatchesService.removePlayer', () => {
 
   function makeService(opts: Parameters<typeof makeTx>[0] = {}) {
     const recorded: Array<{ verb: string; recipients: string[] }> = [];
-    const pushes: Array<{ users: string[]; title: string }> = [];
+    const pushes: Array<{ users: string[]; title?: string; key?: string }> = [];
     const db = {
       transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(makeTx(opts)),
       query: {
@@ -83,8 +83,11 @@ describe('MatchesService.removePlayer', () => {
       },
     };
     const notificationsService = {
-      sendPushToUsers: async (users: string[], p: { title: string }) => {
-        pushes.push({ users, title: p.title });
+      sendPushToUsers: async (
+        users: string[],
+        p: { title?: string; key?: string },
+      ) => {
+        pushes.push({ users, title: p.title, key: p.key });
       },
     };
     const svc = new MatchesService(
@@ -146,7 +149,9 @@ describe('MatchesService.removePlayer', () => {
     expect(result.id).toBe(MATCH_ID);
     expect(recorded.map((r) => r.verb)).toContain('player_removed');
     expect(recorded.find((r) => r.verb === 'player_removed')?.recipients).toEqual([TARGET]);
-    expect(pushes.map((p) => p.title)).toContain('⚠️ Removed from match');
+    // P2-8 (run #24): pushes carry the semantic key; text is localized per
+    // subscription locale in sendPushToUsers — the site no longer sends raw text.
+    expect(pushes.map((p) => p.key)).toContain('player_removed');
   });
 
   it('flips a Full match back to Open on removal', async () => {

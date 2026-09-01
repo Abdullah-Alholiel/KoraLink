@@ -80,7 +80,8 @@ self.addEventListener('push', (event) => {
       tag: data.type ? `${data.type}:${data.matchId ?? data.conversationId ?? ''}` : undefined,
       renotify: true,
       data: { ...data, url },
-      dir: 'auto',
+      // P2-8 (run #24): Arabic notifications render RTL, others auto.
+      dir: locale === 'ar' ? 'rtl' : 'auto',
     }),
   );
 });

@@ -250,10 +250,57 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
     expect(sendNotification).toHaveBeenCalledTimes(1);
     const sendMock = sendNotification as unknown as jest.Mock;
     const body = JSON.parse(sendMock.mock.calls[0][1] as string);
-    expect(body.title).toBe('🏆 Player of the Match');
+    // P2-8 (run #24): the 'ar' subscription now gets ARABIC text, not English.
+    expect(body.title).toBe('🏆 أفضل لاعب في المباراة');
+    expect(body.body).toContain('Saud Al-Otaibi'); // winner name interpolated as-is
     expect(body.data.type).toBe('pom-decided');
     expect(body.data.matchId).toBe('m1');
     expect(body.data.locale).toBe('ar'); // P1-5: deep-link keeps the subscriber's locale
     expect(body.data.winnerId).toBeUndefined(); // dead field dropped (0 PWA consumers)
+  });
+
+  it('localizes key-form pushes per subscription locale (P2-8, run #24)', async () => {
+    const { svc } = makePomService([{ user_id: 'u1' }], [
+      {
+        endpoint: 'ep-pom-active',
+        p256dh: 'k',
+        auth: 'a',
+        locale: 'en',
+        push_muted: false,
+        quiet_enabled: false,
+        quiet_start: 23,
+        quiet_end: 7,
+      },
+    ]);
+    await svc.sendPomDecidedNotification('m1', POM_PAYLOAD);
+    const sendMock = sendNotification as unknown as jest.Mock;
+    const body = JSON.parse(sendMock.mock.calls[0][1] as string);
+    expect(body.title).toBe('🏆 Player of the Match'); // en subscription → English
+    expect(body.data.locale).toBe('en');
+  });
+
+  it('legacy title/body pushes stay byte-identical (P2-8 compat branch)', async () => {
+    const { svc } = makePomService([{ user_id: 'u-legacy' }], [
+      {
+        endpoint: 'ep-legacy',
+        p256dh: 'k',
+        auth: 'a',
+        locale: 'ar',
+        push_muted: false,
+        quiet_enabled: false,
+        quiet_start: 23,
+        quiet_end: 7,
+      },
+    ]);
+    await svc.sendPushToUsers(['u-legacy'], {
+      title: 'Khalid Al-Otaibi',
+      body: 'marhaba',
+      data: { type: 'dm', conversationId: 'c1' },
+    });
+    const sendMock = sendNotification as unknown as jest.Mock;
+    const body = JSON.parse(sendMock.mock.calls[0][1] as string);
+    expect(body.title).toBe('Khalid Al-Otaibi'); // DM text is locale-neutral — never rewritten
+    expect(body.body).toBe('marhaba');
+    expect(body.data.locale).toBe('ar'); // deep-link locale still injected
   });
 });

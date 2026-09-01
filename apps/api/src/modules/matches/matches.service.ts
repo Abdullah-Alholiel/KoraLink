@@ -269,12 +269,8 @@ export class MatchesService {
           await this.notificationsService.sendPushToUsers(
             players.map((p) => p.user_id),
             {
-              title: '⏰ Match starting soon',
-              body: `"${match.title}" kicks off at ${kickoff.toLocaleTimeString('en-GB', {
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'Asia/Riyadh',
-              })} — see you there!`,
+              key: 'match_starting_soon', // P2-8: text localized per subscriber
+              vars: { title: match.title, kickoffISO: kickoff.toISOString() },
               data: { type: 'match-chat', matchId: match.id },
             },
           );
@@ -372,8 +368,8 @@ export class MatchesService {
           excludeActor: false,
         });
         await this.notificationsService.sendPushToUsers([row.host_id], {
-          title: '📣 Players needed',
-          body: `"${row.title}" still needs ${needed} more player${needed === 1 ? '' : 's'} — invite them before kick-off.`,
+          key: 'players_needed', // P2-8: text localized per subscriber
+          vars: { title: row.title, needed },
           data: { type: 'match-chat', matchId: row.id },
         });
         await this.db.execute(sql`
@@ -481,8 +477,8 @@ export class MatchesService {
             excludeActor: false,
           });
           await this.notificationsService.sendPushToUsers(rosterIds, {
-            title: '🚫 Match cancelled',
-            body: `"${row.title}" was cancelled — the minimum number of players wasn't reached.`,
+            key: 'match_cancelled', // P2-8: text localized per subscriber
+            vars: { title: row.title },
             data: { type: 'match-cancelled', matchId: row.id },
           });
         }
@@ -1117,8 +1113,8 @@ export class MatchesService {
           excludeActor: false,
         });
         await this.notificationsService.sendPushToUsers([renudge.hostId], {
-          title: '📣 Players needed',
-          body: `"${hostMatch?.title ?? 'Your match'}" dropped to ${renudge.needed} below the minimum after a withdrawal — invite more players.`,
+          key: 'players_needed_renudge', // P2-8: text localized per subscriber
+          vars: { title: hostMatch?.title, needed: renudge.needed },
           data: { type: 'match-chat', matchId },
         });
       } catch (err) {
@@ -1966,8 +1962,8 @@ export class MatchesService {
         excludeActor: true,
       });
       await this.notificationsService.sendPushToUsers(rosterIds, {
-        title: '🕒 Match rescheduled',
-        body: `The host moved "${updatedMatch.title}" to a new time. Check the match for details.`,
+        key: 'match_rescheduled', // P2-8: text localized per subscriber
+        vars: { title: updatedMatch.title },
         data: { type: 'match-chat', matchId },
       });
     } catch (err) {
@@ -2248,8 +2244,8 @@ export class MatchesService {
         excludeActor: false,
       });
       await this.notificationsService.sendPushToUsers([targetUserId], {
-        title: '⚠️ Removed from match',
-        body: `The host removed you from "${updatedMatch.title}".`,
+        key: 'player_removed', // P2-8: text localized per subscriber
+        vars: { title: updatedMatch.title },
         data: { type: 'match-chat', matchId },
       });
     } catch (err) {
