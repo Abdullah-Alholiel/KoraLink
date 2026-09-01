@@ -1968,7 +1968,7 @@ export class MatchesService {
       await this.notificationsService.sendPushToUsers(rosterIds, {
         key: 'match_rescheduled', // P2-8: text localized per subscriber
         vars: { title: updatedMatch.title },
-        data: { type: 'match-chat', matchId },
+        data: { type: 'match-rescheduled', matchId },
       });
     } catch (err) {
       this.logger.error(`rescheduleMatch notification failed for ${matchId}: ${(err as Error).message}`);
@@ -2250,7 +2250,7 @@ export class MatchesService {
       await this.notificationsService.sendPushToUsers([targetUserId], {
         key: 'player_removed', // P2-8: text localized per subscriber
         vars: { title: updatedMatch.title },
-        data: { type: 'match-chat', matchId },
+        data: { type: 'player-removed', matchId },
       });
     } catch (err) {
       this.logger.error(`removePlayer notification failed for ${matchId}: ${(err as Error).message}`);

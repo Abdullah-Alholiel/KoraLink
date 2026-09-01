@@ -71,6 +71,12 @@ self.addEventListener('push', (event) => {
   if (data.type === 'match-chat' && data.matchId) url = `/${locale}/match/${data.matchId}`;
   else if (data.type === 'dm' && data.conversationId) url = `/${locale}/messages/${data.conversationId}`;
   else if (data.type === 'pom-decided' && data.matchId) url = `/${locale}/match/${data.matchId}`;
+  // Run #24 Reviewer-A: push types that carried routing data fell through to
+  // '/' — the tap lost all context. Route the carriers to their match/report.
+  else if (data.type === 'match-cancelled' && data.matchId) url = `/${locale}/match/${data.matchId}`;
+  else if (data.type === 'player-removed' && data.matchId) url = `/${locale}/match/${data.matchId}`;
+  else if (data.type === 'match-rescheduled' && data.matchId) url = `/${locale}/match/${data.matchId}`;
+  else if (data.type === 'report-resolved') url = `/${locale}/reports`;
 
   event.waitUntil(
     self.registration.showNotification(title, {
