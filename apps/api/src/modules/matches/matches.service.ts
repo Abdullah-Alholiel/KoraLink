@@ -637,7 +637,7 @@ export class MatchesService {
         m.duration_mins,
         m.price_per_player::float AS price_per_player,
         m.max_players,
-        COUNT(mp.id)::int                                     AS spots_filled,
+        (SELECT COUNT(*)::int FROM match_players mpx WHERE mpx.match_id = m.id) AS spots_filled,
         ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,
@@ -670,11 +670,15 @@ export class MatchesService {
                   AND (m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW()
                 )
                 OR (
-                  -- Matches the user played in stay visible while the POTM
-                  -- voting window (24h after the effective completion) is
-                  -- still open, even after midnight. Keep in sync with
-                  -- VOTING_WINDOW_HOURS and effectiveCompletedAt().
-                  COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW() - INTERVAL '24 hours'
+                  -- Recently-completed matches the user played in stay visible
+                  -- while the POTM voting window (24h after the effective
+                  -- completion) is still open, even after midnight. Status is
+                  -- pinned to 'Completed': a FUTURE Cancelled match with NULL
+                  -- completed_at would otherwise satisfy the COALESCE time
+                  -- window and leak into the feed (demo seed regression).
+                  -- Keep in sync with VOTING_WINDOW_HOURS and effectiveCompletedAt().
+                  m.status = 'Completed'
+                  AND COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) >= NOW() - INTERVAL '24 hours'
                   AND (mp.user_id = ${currentUserId}::text OR m.host_id = ${currentUserId}::text)
                 )
               `
