@@ -62,3 +62,4 @@ graphify-out/koralink-callflow.html
 
 # Hallmark design-skill project memory (local only)
 .hallmark/
+.worktrees/

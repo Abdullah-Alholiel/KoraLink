@@ -1,16 +1,17 @@
 {
   "id": "/",
-  "name": "KoraLink",
+  "name": "KoraLink — Football Match Hub",
   "short_name": "KoraLink",
-  "description": "منصة كرة القدم الرائدة",
+  "description": "Find, join, and host football matches across Saudi Arabia. Live availability, wallet payments, POTM voting.",
   "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#254132",
-  "orientation": "portrait",
   "scope": "/",
-  "lang": "ar",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#254132",
+  "theme_color": "#254132",
   "dir": "rtl",
+  "lang": "ar",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
@@ -37,5 +38,22 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["sports", "entertainment"]
+  "screenshots": [
+    {
+      "src": "/screenshots/wide.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Discover matches near you"
+    },
+    {
+      "src": "/screenshots/narrow.png",
+      "sizes": "800x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Play feed with live availability"
+    }
+  ],
+  "categories": ["sports"],
+  "prefer_related_applications": false
 }

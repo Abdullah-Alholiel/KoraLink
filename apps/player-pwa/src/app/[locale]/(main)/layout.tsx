@@ -5,6 +5,7 @@ import Toast from '@/components/layout/Toast';
 import AuthGuard from '@/components/auth/AuthGuard';
 import NotificationProvider from '@/providers/NotificationProvider';
 import BadgeHydrator from '@/components/layout/BadgeHydrator';
+import WelcomeCheckpoint from '@/components/pwa/WelcomeCheckpoint';
 
 export default function MainLayout({
     children,
@@ -22,6 +23,7 @@ export default function MainLayout({
                         </main>
                         <BottomNav />
                         <Toast />
+                        <WelcomeCheckpoint />
                     </NotificationProvider>
                 </AuthGuard>
             </MobileFrame>

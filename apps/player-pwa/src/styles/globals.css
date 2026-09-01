@@ -189,3 +189,27 @@ body {
 .animate-slide-in-bottom {
   animation: slide-in-bottom 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
+
+/* ── Shots.so-grade spring motion (Gate 3 §8) ──────────── */
+/* Overshoot curve = spring feel with ZERO new dependencies.
+   transform + opacity ONLY (GPU-composited, no layout thrash). */
+
+:root {
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+@keyframes spring-in {
+  from {
+    transform: translateY(12px) scale(0.97);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-spring-in {
+  animation: spring-in 0.45s var(--ease-spring) forwards;
+}

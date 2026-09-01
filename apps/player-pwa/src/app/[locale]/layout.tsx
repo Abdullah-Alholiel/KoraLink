@@ -8,6 +8,7 @@ import AuthBootstrap from '@/components/auth/AuthBootstrap';
 import ServiceWorkerUpdater from '@/components/auth/ServiceWorkerUpdater';
 import ChunkLoadErrorHandler from '@/components/auth/ChunkLoadErrorHandler';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
+import InstallLandingGuard from '@/components/pwa/InstallLandingGuard';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -109,8 +110,10 @@ export default async function RootLayout({
                 <AuthBootstrap />
                 <ServiceWorkerUpdater />
                 <ChunkLoadErrorHandler />
-                <InstallPrompt />
-                <div className="app-shell">{children}</div>
+                <InstallLandingGuard>
+                  <InstallPrompt />
+                  <div className="app-shell">{children}</div>
+                </InstallLandingGuard>
               </LocationProvider>
             </IntlClientProvider>
           </ObservabilityProvider>

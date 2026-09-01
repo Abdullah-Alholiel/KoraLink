@@ -135,4 +135,123 @@ describe('usePwaInstall', () => {
     });
     expect(ok).toBe(false);
   });
+
+  // ── Install-landing gate (Gate 3 §2) ──────────────────────────
+
+  it('shows the landing for a fresh browser visitor', async () => {
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.shouldShowLanding).toBe(true));
+    expect(result.current.isStandalone).toBe(false);
+  });
+
+  it('never shows the landing in standalone mode', async () => {
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowLanding).toBe(false);
+    expect(result.current.shouldShowBanner).toBe(false);
+  });
+
+  it('suppresses the landing within the 30-day dismissal window', async () => {
+    window.localStorage.setItem(
+      'koralink.install-landing-dismissed-at',
+      String(Date.now() - 1000),
+    );
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.shouldShowLanding).toBe(false));
+  });
+
+  it('shows the landing again after 31 days', async () => {
+    window.localStorage.setItem(
+      'koralink.install-landing-dismissed-at',
+      String(Date.now() - 31 * 24 * 60 * 60 * 1000),
+    );
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.shouldShowLanding).toBe(true));
+  });
+
+  it('dismissLanding() writes the 30d flag and tags the event surface', async () => {
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.shouldShowLanding).toBe(true));
+
+    act(() => {
+      result.current.dismissLanding();
+    });
+    expect(window.localStorage.getItem('koralink.install-landing-dismissed-at')).toBeTruthy();
+    expect(result.current.shouldShowLanding).toBe(false);
+    expect(trackEvent).toHaveBeenCalledWith(
+      'pwa_install_dismissed',
+      expect.objectContaining({ surface: 'landing' }),
+    );
+  });
+
+  it('re-detects standalone when the media query flips (post-install handoff)', async () => {
+    const mqMock = mockMatchMedia(false);
+    vi.stubGlobal('matchMedia', mqMock);
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(false));
+
+    // Simulate: user accepted the install in another window; Chromium flips
+    // the display-mode media query → the MQL object's matches flips true and
+    // the change listener fires. The hook re-reads mq.matches (real behavior).
+    const mqInstance = mqMock.mock.results[0].value;
+    mqInstance.matches = true;
+    await act(async () => {
+      mqListeners.forEach((cb) => cb({ matches: true }));
+    });
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowLanding).toBe(false);
+  });
+
+  // ── Welcome checkpoint gate (Gate 3 §1.2) ─────────────────────
+
+  it('shows welcome on the first standalone launch for a fresh user', async () => {
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowWelcome).toBe(true);
+  });
+
+  it('never shows welcome to a returning standalone user', async () => {
+    window.localStorage.setItem('koralink.pwa-seen-app-before', String(Date.now()));
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowWelcome).toBe(false);
+  });
+
+  it('never shows welcome to an existing app user after install (legacy evidence)', async () => {
+    window.localStorage.setItem('koralink-app-store', '{"state":{"preferences":{}}}');
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowWelcome).toBe(false);
+  });
+
+  it('markWelcomeSeen() writes BOTH gate keys in one call', async () => {
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.shouldShowWelcome).toBe(true));
+
+    act(() => {
+      result.current.markWelcomeSeen();
+    });
+    expect(window.localStorage.getItem('koralink.pwa-welcome-seen')).toBeTruthy();
+    expect(window.localStorage.getItem('koralink.pwa-seen-app-before')).toBeTruthy();
+    expect(result.current.shouldShowWelcome).toBe(false);
+  });
+
+  it('appinstalled clears the welcome flag so the next standalone launch greets once', async () => {
+    window.localStorage.setItem('koralink.pwa-welcome-seen', String(Date.now() - 1000));
+    vi.stubGlobal('matchMedia', mockMatchMedia(true));
+    const { result } = renderHook(() => usePwaInstall());
+    await waitFor(() => expect(result.current.isStandalone).toBe(true));
+    expect(result.current.shouldShowWelcome).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new Event('appinstalled'));
+    });
+    expect(window.localStorage.getItem('koralink.pwa-welcome-seen')).toBeNull();
+    expect(result.current.shouldShowWelcome).toBe(true);
+  });
 });

@@ -764,6 +764,32 @@
       "notNow": "Not now",
       "iosStepShare": "Tap the Share button in Safari's toolbar",
       "iosStepAdd": "Tap “Add to Home Screen”"
+    },
+    "landing": {
+      "kicker": "INSTALL KORALINK",
+      "title": "KoraLink, right on your home screen",
+      "subtitle": "One tap from your home screen — full-screen, no browser bars, offline-ready.",
+      "benefitOne": "Live match availability, even on the move",
+      "benefitTwo": "Wallet payments and POTM voting in one tap",
+      "benefitThree": "Works offline — your games are saved on-device",
+      "ctaChromium": "Add to Home Screen",
+      "ctaContinue": "Continue to the web app",
+      "iosStepOne": "1",
+      "iosStepOneLabel": "Open this page in Safari",
+      "iosStepTwo": "2",
+      "iosStepTwoLabel": "Tap Share, then Add to Home Screen",
+      "notNow": "Not now",
+      "notNowNote": "You can add it later — the web app stays one tap away",
+      "alreadyInstalled": "You're all set — the app is installed on this device",
+      "heroBadge": "PWA",
+      "heroBadgeLabel": "Installable app",
+      "iosShareHint": "Safari Share button",
+      "iosAddHint": "Add to Home Screen"
+    },
+    "welcome": {
+      "title": "You're all set",
+      "subtitle": "KoraLink is now on your home screen. See you on the pitch.",
+      "cta": "Let's play"
     }
   },
   "reports": {
