@@ -223,6 +223,42 @@ describe('PartnerService match visibility (P1-26)', () => {
       const todayQuery = dialect.sqlToQuery(captured.get(matches) as unknown as Parameters<typeof dialect.sqlToQuery>[0]);
       expect(todayQuery.sql).not.toContain('"matches"."status"');
     });
+
+    // P2-32 (run #27, owner decision 2026-09-02): a foreign-but-valid
+    // ?pitchId must throw 404 instead of silently falling through to the
+    // venue/no filter. The pre-fix behaviour returned 200 with an empty
+    // list — indistinguishable from "no matches on this day".
+    it('throws 404 when ?pitchId is a valid pitch not in the caller scope', async () => {
+      const rowsByTable = new Map<unknown, unknown[]>([
+        [pitches, [{ id: PITCH_1, owner_id: OWNER }]],
+        [matches, []],
+      ]);
+      const { service } = makeService(rowsByTable);
+      await expect(
+        service.getPartnerMatches(OWNER, 'VenueOwner', {
+          scope: 'today',
+          pitchId: 'pitch-foreign',
+          limit: 50,
+          offset: 0,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('accepts ?pitchId when it is in the caller scope', async () => {
+      const rowsByTable = new Map<unknown, unknown[]>([
+        [pitches, [{ id: PITCH_1, owner_id: OWNER }]],
+        [matches, []],
+      ]);
+      const { service } = makeService(rowsByTable);
+      // No throw — the pitchId is in scope.
+      const result = await service.getPartnerMatches(OWNER, 'VenueOwner', {
+        scope: 'today',
+        pitchId: PITCH_1,
+        limit: 50,
+        offset: 0,
+      });
+      expect(result.total).toBe(0);
+    });
   });
 
   describe('getPartnerMatch', () => {

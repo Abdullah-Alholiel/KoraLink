@@ -857,6 +857,18 @@ export class PartnerService {
       return { matches: [], total: 0, hasMore: false };
     }
 
+    // P2-32 (run #27, owner decision 2026-09-02): an explicit ?pitchId that
+    // is not in the caller's scope is a 404, not a silent fall-through to
+    // the venue/no filter. The pre-fix behaviour returned 200 + an empty
+    // list — indistinguishable from "no matches" — which made partner
+    // misconfigurations look like network glitches. Distinguishes 404
+    // "not in your scope" from the existing `assertPitchAccess` 403/404
+    // pair: getPartnerMatches is a read-only listing, so the missing-pitch
+    // path is purely a "not visible to you" answer, not a permission error.
+    if (q.pitchId && !pitchIds.includes(q.pitchId)) {
+      throw new NotFoundException('Pitch not in your scope.');
+    }
+
     const timeScope =
       q.scope === 'upcoming'
         ? sql`${matches.scheduled_at} >= now()`
