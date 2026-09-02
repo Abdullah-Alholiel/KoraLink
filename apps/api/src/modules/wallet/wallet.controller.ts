@@ -55,6 +55,11 @@ export class WalletController {
   }
 
   // ── POST /wallet/topup ──────────────────────────────────────
+  // P0-7 (run #26): gated by an explicit `WALLET_TOPUP_ENABLED` env flag
+  // (default DISABLED). The previous `NODE_ENV === 'production'` string
+  // compare was the run-#25 Strix finding (CVSS 9.1) — free SAR 10,000
+  // credits were open on any Tailscale-reachable deployment running
+  // NODE_ENV=development. Real payments replace this path when P0-2 ships.
   @Post('topup')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Top up wallet balance' })
@@ -63,14 +68,14 @@ export class WalletController {
     @CurrentUser() user: { sub: string },
     @Body() dto: TopupWalletDto,
   ) {
-    // Dummy self-credit path (no payment provider yet — P0-2). Keep available
-    // in dev/test; never allow free credits in production. Mirror dev-login
-    // gating (auth.controller.ts).
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
-    if (isProd) {
+    // Dummy self-credit path (no payment provider yet — P0-2). Kept available
+    // only when the operator has explicitly opted in via WALLET_TOPUP_ENABLED.
+    // Mirror dev-login gating (auth.controller.ts).
+    const isEnabled =
+      this.configService.get<string>('WALLET_TOPUP_ENABLED') === 'true';
+    if (!isEnabled) {
       throw new ForbiddenException(
-        'Wallet top-up is disabled in production until a payment provider is integrated',
+        'Wallet top-up is disabled in this environment until a payment provider is integrated',
       );
     }
 

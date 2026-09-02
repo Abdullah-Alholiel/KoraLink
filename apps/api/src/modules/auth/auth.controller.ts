@@ -107,6 +107,11 @@ export class AuthController {
   }
 
   // ── POST /auth/dev-login — DEV ONLY — bypass SMS OTP ─────────────────────
+  // P0-7 (run #26): gated by an explicit `DEV_LOGIN_ENABLED` env flag (default
+  // DISABLED). The previous `NODE_ENV === 'production'` string compare was the
+  // run-#25 Strix finding (CVSS 9.1) — any Tailscale-reachable deployment
+  // running NODE_ENV=development had admin-token minting open. The token itself
+  // is now always signed with `expiresIn: JWT_EXPIRY` (defense in depth).
   @Post('dev-login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -117,10 +122,12 @@ export class AuthController {
     @Body() dto: DevLoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
-    if (isProd) {
-      throw new ForbiddenException('dev-login is disabled in production');
+    const isEnabled =
+      this.configService.get<string>('DEV_LOGIN_ENABLED') === 'true';
+    if (!isEnabled) {
+      throw new ForbiddenException(
+        'dev-login is disabled in this environment',
+      );
     }
 
     const token = await this.authService.devLogin(dto.phone, dto.surface);

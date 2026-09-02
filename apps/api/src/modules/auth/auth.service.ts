@@ -201,7 +201,12 @@ export class AuthService {
 
  /**
   * DEV ONLY — Returns a JWT for a seeded user by phone number.
-  * Skips OTP entirely. Blocked in production by the controller.
+  * Skips OTP entirely. Feature-gated by `DEV_LOGIN_ENABLED` in the controller
+  * (P0-7, run #26: explicit opt-in replaces the old NODE_ENV string gate).
+  *
+  * Always signs with `expiresIn: JWT_EXPIRY || '7d'` — defense in depth so
+  * the issued JWT is never non-expiring even if the controller gate is later
+  * bypassed by a misconfigured deployment.
   */
  async devLogin(phone: string, surface?: 'player' | 'ops'): Promise<string> {
    const [user] = await this.db
@@ -231,10 +236,15 @@ export class AuthService {
 
    assertSurfaceRole(surface, user.role);
 
-   return this.jwt.signAsync({
-     sub: user.id,
-     phone: user.phone,
-     role: user.role,
-   });
- }
- }
+   return this.jwt.signAsync(
+     {
+       sub: user.id,
+       phone: user.phone,
+       role: user.role,
+     },
+     {
+       expiresIn: this.config.get<string>('JWT_EXPIRY', '7d'),
+     },
+   );
+}
+}

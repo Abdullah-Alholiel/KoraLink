@@ -1,17 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactElement } from 'react';
 import { useLocale } from 'next-intl';
 import { fetcher, setAuthToken } from '@/lib/fetcher';
 import { useAppStore } from '@/store/useAppStore';
 import type { UserProfileApi } from '@/hooks/useUser';
 
+// P0-7 (run #26): build-time exclusion of dev-login shortcuts from production
+// bundles. Setting NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true at build time
+// short-circuits the entire component (returns null + the phone list is
+// tree-shaken out of the bundle). The previous hostname/NODE_ENV gate kept
+// the dev code reachable at runtime — the run-#25 Strix finding (CVSS 9.1).
+// The API also enforces the gate independently via DEV_LOGIN_ENABLED.
+const DEV_LOGIN_BAR_DISABLED =
+  process.env.NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR === 'true';
+
 /**
  * Dev-only quick-login buttons for seeded users.
- * Only renders when running on localhost, detected via useEffect
- * to avoid hydration mismatch (SSR cannot know the hostname).
+ * When the build-time flag is ON, the component is a constant no-op (the
+ * compiled bundle contains only the null return + the flag check). When OFF
+ * (dev box), the same component runs the seeded-phone quick-login UI. The
+ * additional runtime hostname check keeps a dev bundle from leaking onto a
+ * non-private host.
  */
-export default function DevLoginBar() {
+export default function DevLoginBar(): ReactElement | null {
+  // P0-7 (run #26): the build-time check must run BEFORE any hooks so the
+  // hooks tree is identical in both branches — otherwise React would log a
+  // hooks-order error if a future edit changes one branch's hook count.
+  if (DEV_LOGIN_BAR_DISABLED) {
+    return null;
+  }
+  return <DevLoginBarInner />;
+}
+
+function DevLoginBarInner(): ReactElement | null {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLocalhost, setIsLocalhost] = useState(false);
