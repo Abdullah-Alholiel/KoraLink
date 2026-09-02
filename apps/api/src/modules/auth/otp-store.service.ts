@@ -6,6 +6,7 @@ const OTP_PREFIX = 'otp:';
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const OTP_COOLDOWN_MS = 60 * 1000; // 60s resend cooldown
 const OTP_DAILY_CAP = 10; // max SMS per phone per rolling 24h
+const OTP_DAILY_IP_CAP = 50; // P2-19 (run #27): max SMS per source IP per rolling 24h
 const OTP_FAIL_LIMIT = 5; // verify attempts before lockout
 const OTP_LOCKOUT_MS = 15 * 60 * 1000; // 15min lockout
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -14,6 +15,7 @@ const keys = {
   otp: (phone: string) => `${OTP_PREFIX}${phone}`,
   cooldown: (phone: string) => `otp:cooldown:${phone}`,
   day: (phone: string) => `otp:day:${phone}`,
+  ip_day: (ip: string) => `otp:ip_day:${ip}`,
   fails: (phone: string) => `otp:fails:${phone}`,
 };
 
@@ -27,6 +29,7 @@ const keys = {
 @Injectable()
 export class OtpStoreService {
   static readonly DAILY_CAP = OTP_DAILY_CAP;
+  static readonly DAILY_IP_CAP = OTP_DAILY_IP_CAP;
   static readonly FAIL_LIMIT = OTP_FAIL_LIMIT;
   static readonly COOLDOWN_MS = OTP_COOLDOWN_MS;
   static readonly LOCKOUT_MS = OTP_LOCKOUT_MS;
@@ -64,6 +67,22 @@ export class OtpStoreService {
   async incrementDaily(phone: string): Promise<number> {
     const next = ((await this.cache.get<number>(keys.day(phone))) ?? 0) + 1;
     await this.cache.set(keys.day(phone), next, DAY_MS);
+    return next;
+  }
+
+  // ── Per-IP daily SMS cap (P2-19, run #27) ────────────────────────────────
+  // Bounds SMS pumping from a single source — a bot net rotating phones
+  // against one IP still drains the Unifonic budget. Same cache + sliding
+  // TTL as the per-phone counter; the cap is a constant tunable in one
+  // place (DAILY_IP_CAP).
+
+  async getIpDailyCount(ip: string): Promise<number> {
+    return (await this.cache.get<number>(keys.ip_day(ip))) ?? 0;
+  }
+
+  async incrementIpDaily(ip: string): Promise<number> {
+    const next = ((await this.cache.get<number>(keys.ip_day(ip))) ?? 0) + 1;
+    await this.cache.set(keys.ip_day(ip), next, DAY_MS);
     return next;
   }
 

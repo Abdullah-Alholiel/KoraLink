@@ -55,8 +55,8 @@ export class AuthService {
     this.logger.log('OTP store backed by Redis (cache-manager).');
   }
 
-  async sendOtp(phone: string): Promise<void> {
-    // ── Abuse protection: resend cooldown + daily SMS cap ──
+  async sendOtp(phone: string, ip?: string): Promise<void> {
+    // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
     if (await this.otpStore.isCooldownActive(phone)) {
       this.logger.warn(`send-otp blocked (cooldown) for ${phone}`);
       throw new HttpException(
@@ -84,6 +84,27 @@ export class AuthService {
       );
     }
 
+    // P2-19 (run #27): per-IP daily cap. A bot net rotating phones against
+    // one source IP still drains the Unifonic budget without this gate.
+    // The per-IP counter is independent of the per-phone counter — hitting
+    // the per-IP cap blocks ALL phones from that IP, not just one.
+    if (ip) {
+      const ipDailyCount = await this.otpStore.getIpDailyCount(ip);
+      if (ipDailyCount >= OtpStoreService.DAILY_IP_CAP) {
+        this.logger.warn(
+          `send-otp blocked (IP daily cap ${ipDailyCount}/${OtpStoreService.DAILY_IP_CAP}) from ${ip}`,
+        );
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Daily SMS limit reached for this IP. Try again tomorrow.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
     const code = this.generateOtp();
 
     // Upsert user record so the phone always exists before OTP is saved.
@@ -96,6 +117,9 @@ export class AuthService {
     await this.otpStore.setOtp(phone, code);
     await this.otpStore.setCooldown(phone);
     await this.otpStore.incrementDaily(phone);
+    if (ip) {
+      await this.otpStore.incrementIpDaily(ip);
+    }
 
     await this.unifonic.sendSms(phone, `Your KoraLink code: ${code}`);
   }

@@ -6,6 +6,8 @@ describe('AuthService OTP abuse protection', () => {
   function setup(overrides: {
     isCooldownActive?: jest.Mock;
     getDailyCount?: jest.Mock;
+    getIpDailyCount?: jest.Mock;
+    incrementIpDaily?: jest.Mock;
     getOtp?: jest.Mock;
     getFailCount?: jest.Mock;
   } = {}) {
@@ -16,6 +18,11 @@ describe('AuthService OTP abuse protection', () => {
       setOtp: jest.fn().mockResolvedValue(undefined),
       setCooldown: jest.fn().mockResolvedValue(undefined),
       incrementDaily: jest.fn().mockResolvedValue(1),
+      // P2-19 (run #27): per-IP daily counter
+      getIpDailyCount:
+        overrides.getIpDailyCount ?? jest.fn().mockResolvedValue(0),
+      incrementIpDaily:
+        overrides.incrementIpDaily ?? jest.fn().mockResolvedValue(1),
       getOtp: overrides.getOtp ?? jest.fn().mockResolvedValue(undefined),
       deleteOtp: jest.fn().mockResolvedValue(undefined),
       getFailCount: overrides.getFailCount ?? jest.fn().mockResolvedValue(0),
@@ -73,10 +80,42 @@ describe('AuthService OTP abuse protection', () => {
 
   it('sendOtp sends SMS and arms cooldown + daily counter on success', async () => {
     const { service, otpStore, unifonic } = setup();
-    await service.sendOtp('+966500000001');
+    await service.sendOtp('+966****0001');
     expect(otpStore.setOtp).toHaveBeenCalled();
     expect(otpStore.setCooldown).toHaveBeenCalled();
     expect(otpStore.incrementDaily).toHaveBeenCalled();
+    expect(unifonic.sendSms).toHaveBeenCalled();
+  });
+
+  // P2-19 (run #27): per-IP daily cap. A bot net rotating phones against
+  // one source IP still drains the Unifonic budget without this gate.
+  it('sendOtp throws 429 when per-IP daily cap is reached', async () => {
+    const { service, otpStore, unifonic } = setup({
+      getIpDailyCount: jest.fn().mockResolvedValue(OtpStoreService.DAILY_IP_CAP),
+    });
+    const err = await service.sendOtp('+966****0001', '203.0.113.5').catch(
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    // The per-IP cap blocks BEFORE the per-phone cap is incremented —
+    // otherwise an attacker would still get their counter ticked.
+    expect(otpStore.incrementIpDaily).not.toHaveBeenCalled();
+    expect(otpStore.incrementDaily).not.toHaveBeenCalled();
+    expect(unifonic.sendSms).not.toHaveBeenCalled();
+  });
+
+  it('sendOtp increments the per-IP daily counter on success', async () => {
+    const { service, otpStore } = setup();
+    await service.sendOtp('+966****0001', '203.0.113.5');
+    expect(otpStore.incrementIpDaily).toHaveBeenCalledWith('203.0.113.5');
+  });
+
+  it('sendOtp works without an IP argument (per-IP cap is skipped)', async () => {
+    const { service, otpStore, unifonic } = setup();
+    await service.sendOtp('+966****0001');
+    expect(otpStore.getIpDailyCount).not.toHaveBeenCalled();
+    expect(otpStore.incrementIpDaily).not.toHaveBeenCalled();
     expect(unifonic.sendSms).toHaveBeenCalled();
   });
 

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Body,
+  Req,
   Res,
   HttpCode,
   HttpStatus,
@@ -10,7 +11,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Response } from 'express';
+import type { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -43,14 +44,23 @@ export class AuthController {
   // P2-19 (run #22): route-level cap — 3 sends/min/IP on top of the global
   // 60/min and the per-phone caps in otp-store (60s cooldown, 10 SMS/day,
   // 5-fail lockout). Bounds SMS pumping from distributed loops.
+  // P2-19 (run #27): per-IP DAILY cap (50/day) layered on top — the
+  // route-level @Throttle is per-minute and a script can pump 3/min forever.
+  // The daily cap reuses OtpStoreService's per-IP counter (cache-backed,
+  // same sliding-TTL semantics as the per-phone counter).
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({ summary: 'Send a one-time password via Unifonic SMS' })
   @ApiOkResponse({ description: 'OTP sent successfully.' })
   @ApiBadRequestResponse({ description: 'Invalid Saudi phone number.' })
-  async sendOtp(@Body() dto: SendOtpDto) {
-    await this.authService.sendOtp(dto.phone);
+  async sendOtp(@Body() dto: SendOtpDto, @Req() req: Request) {
+    // Express + trust proxy puts the originating IP in req.ip when configured;
+    // falls back to req.socket.remoteAddress when proxies are not set. The IP
+    // is optional — when null (e.g. a unit-test caller) the per-IP cap is
+    // simply skipped, leaving the per-phone + per-minute caps in force.
+    const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    await this.authService.sendOtp(dto.phone, ip);
     return { message: 'OTP sent.' };
   }
 
