@@ -1243,31 +1243,54 @@ export class MatchesService {
           .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
           .where(eq(pitch_slots.id, dto.booking_slot_id));
 
-        // 2b. Deduct pitch cost from host wallet (koralink mode)
+        // 2b. Deduct pitch cost from host wallet (koralink mode).
+        //
+        // The host's users row is NOT row-locked (only pitch_slots is), so a
+        // plain SELECT-then-UPDATE would race when the same host books two
+        // different slots concurrently: both reads pass, both writes commit,
+        // wallet_balance goes negative. Same fix class as P0-4 (run #13
+        // auto-cancel) and P2-39 (run #22 admin refund): move the integrity
+        // guard INSIDE the row update so the database enforces it, then read
+        // back the failing row only when zero rows updated (for the error
+        // message). A numeric `>=` predicate keeps the comparison in SQL.
         if (pitchCostSar > 0) {
-          // Check balance first
-          const [user] = await tx
-            .select({ wallet_balance: users.wallet_balance })
-            .from(users)
-            .where(eq(users.id, hostId))
-            .limit(1);
-
-          if (!user || parseFloat(user.wallet_balance) < pitchCostSar) {
-            throw new BadRequestException(
-              `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
-            );
-          }
-
-          // Deduct from wallet atomically
-          await tx
+          const deducted = await tx
             .update(users)
             .set({
               wallet_balance: sql`${users.wallet_balance} - ${pitchCostSar.toString()}`,
               updated_at: new Date(),
             })
-            .where(eq(users.id, hostId));
+            .where(
+              and(
+                eq(users.id, hostId),
+                sql`${users.wallet_balance} >= ${pitchCostSar.toString()}`,
+              ),
+            )
+            .returning({ wallet_balance: users.wallet_balance });
 
-          // Record ledger entry
+          if (deducted.length === 0) {
+            // Either the host is gone (rare) or the balance is too low.
+            // Re-read for a meaningful error message; the re-read is best-
+            // effort (the row could be deleted in the gap) so default '0'.
+            const [user] = await tx
+              .select({ wallet_balance: users.wallet_balance })
+              .from(users)
+              .where(eq(users.id, hostId))
+              .limit(1);
+
+            this.logger.warn(
+              `koralink_wallet_insufficient hostId=${hostId} required=${pitchCostSar} slotId=${dto.booking_slot_id ?? 'n/a'}`,
+              MatchesService.name,
+            );
+
+            throw new BadRequestException(
+              `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+            );
+          }
+
+          // Record ledger entry — only reached when the deduct succeeded,
+          // and the slot-booking-<slotId> idempotency key keeps concurrent
+          // retried POSTs from double-inserting.
           await tx.insert(schema.transactions).values({
             user_id: hostId,
             type: 'DEBIT',

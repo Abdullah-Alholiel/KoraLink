@@ -229,11 +229,21 @@ export class NotificationsService {
           );
           // Run #24 Reviewer-A: 5xx/timeout failures were invisible to
           // Sentry (debug log only) — a systemic endpoint outage would
-          // produce zero signals while push silently stopped. Failures that
-          // are NOT a pruned sub (404/410 handled above) get captured.
-          if (statusCode !== 404 && statusCode !== 410) {
+          // produce zero signals while push silently stopped.
+          //
+          // Run #25 Reviewer-A refinement: only TRANSPORT-level failures
+          // (5xx, or no statusCode at all = timeout/network) are captured.
+          // Per-subscription 4xx (429 rate-limit, 400 bad payload) is
+          // expected noise that would otherwise flood Sentry on a single
+          // bad endpoint. The status_code tag keeps any 4xx spike
+          // filterable from the debug log line above.
+          if (statusCode === undefined || statusCode >= 500) {
             Sentry.captureException(err, {
-              tags: { channel: 'web-push', endpoint_prefix: sub.endpoint.slice(0, 24) },
+              tags: {
+                channel: 'web-push',
+                endpoint_prefix: sub.endpoint.slice(0, 24),
+                status_code: String(statusCode ?? 'timeout'),
+              },
             });
           }
         }
