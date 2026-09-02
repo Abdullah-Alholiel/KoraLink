@@ -10,6 +10,6 @@
 
 | Slice | Item | Status | Commit |
 |-------|------|--------|--------|
-| 1 | P0-7 dev-login admin bypass fix | ⏳ TODO | — |
-| 2 | P0-8 push-endpoint SSRF fix | ⏳ TODO | — |
-| 3 | P1-17a dep upgrade (next 15.5.21, drizzle 0.45.2, axios 1.16.0, ws/engine.io overrides) | ⏳ TODO | — |
+| 1 | P0-7 dev-login admin bypass fix | ✅ DONE | bfd453b |
+| 2 | P0-8 push-endpoint SSRF fix | ✅ DONE | 9678790 |
+| 3 | P1-17a dep upgrade (next 15.5.21, axios 1.16.0, ws 8.21.0/engine.io 6.6.7 overrides, Sentry 10.70.0 pin, tsc latent-error sweep, drizzle deferred) | ✅ DONE | 835e27d |
