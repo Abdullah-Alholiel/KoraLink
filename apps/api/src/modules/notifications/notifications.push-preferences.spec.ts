@@ -78,7 +78,7 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
               ? 'priv'
               : key === 'VAPID_SUBJECT'
                 ? 'mailto:t@example.com'
-                : undefined,
+                : '',
       } as never,
     );
     return { svc };
@@ -92,7 +92,7 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
   it('skips muted users entirely', async () => {
     const { svc } = makeService([
       {
-        endpoint: 'ep-muted',
+        endpoint: 'https://fcm.googleapis.com/ep-muted',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -110,7 +110,7 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
   it('skips users inside their enabled quiet-hours window', async () => {
     const { svc } = makeService([
       {
-        endpoint: 'ep-quiet',
+        endpoint: 'https://fcm.googleapis.com/ep-quiet',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -128,7 +128,7 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
   it('delivers to unrestricted users (control case)', async () => {
     const { svc } = makeService([
       {
-        endpoint: 'ep-active',
+        endpoint: 'https://fcm.googleapis.com/ep-active',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -180,7 +180,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
               ? 'priv'
               : key === 'VAPID_SUBJECT'
                 ? 'mailto:t@example.com'
-                : undefined,
+                : '',
       } as never,
     );
     return { svc };
@@ -199,7 +199,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
   it('skips muted roster users', async () => {
     const { svc } = makePomService([{ user_id: 'u1' }], [
       {
-        endpoint: 'ep-pom-muted',
+        endpoint: 'https://fcm.googleapis.com/ep-pom-muted',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -217,7 +217,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
   it('skips roster users inside their quiet-hours window', async () => {
     const { svc } = makePomService([{ user_id: 'u1' }], [
       {
-        endpoint: 'ep-pom-quiet',
+        endpoint: 'https://fcm.googleapis.com/ep-pom-quiet',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -235,7 +235,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
   it('delivers to unrestricted roster users with per-subscription locale and no winnerId', async () => {
     const { svc } = makePomService([{ user_id: 'u1' }], [
       {
-        endpoint: 'ep-pom-active',
+        endpoint: 'https://fcm.googleapis.com/ep-pom-active',
         p256dh: 'k',
         auth: 'a',
         locale: 'ar',
@@ -262,7 +262,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
   it('localizes key-form pushes per subscription locale (P2-8, run #24)', async () => {
     const { svc } = makePomService([{ user_id: 'u1' }], [
       {
-        endpoint: 'ep-pom-active',
+        endpoint: 'https://fcm.googleapis.com/ep-pom-active',
         p256dh: 'k',
         auth: 'a',
         locale: 'en',
@@ -282,7 +282,7 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
   it('legacy title/body pushes stay byte-identical (P2-8 compat branch)', async () => {
     const { svc } = makePomService([{ user_id: 'u-legacy' }], [
       {
-        endpoint: 'ep-legacy',
+        endpoint: 'https://fcm.googleapis.com/ep-legacy',
         p256dh: 'k',
         auth: 'a',
         locale: 'ar',

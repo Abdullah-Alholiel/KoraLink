@@ -11,6 +11,10 @@ import {
   type PushLocale,
   type PushVars,
 } from './push-text';
+import {
+  assertSafePushEndpoint,
+  DEFAULT_PUSH_HOST_ALLOWLIST,
+} from '../../common/security/push-endpoint.validator';
 import * as schema from '../../database/schema';
 import { push_subscriptions, match_players, users } from '../../database/schema';
 
@@ -28,6 +32,11 @@ export interface PushSubscriptionDto {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private vapidConfigured = false;
+  // P0-8 (run #26): the push-host allowlist is the default set + any
+  // operator-supplied overrides via ADMIN_PUSH_HOST_ALLOWLIST (comma-separated).
+  // Computed once at construction (config is immutable per process) and
+  // passed to every assertSafePushEndpoint call.
+  private readonly hostAllowlist: ReadonlySet<string>;
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -45,13 +54,27 @@ export class NotificationsService {
         'Web Push VAPID keys not configured — push notifications disabled. Set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY.',
       );
     }
+
+    const extra = this.config.get<string>('ADMIN_PUSH_HOST_ALLOWLIST', '');
+    const merged = new Set<string>(DEFAULT_PUSH_HOST_ALLOWLIST);
+    for (const host of extra.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+      merged.add(host);
+    }
+    this.hostAllowlist = merged;
   }
 
   /**
    * Store a push subscription for a user.
    * Uses upsert on endpoint to handle re-subscriptions.
+   *
+   * P0-8 (run #26): the endpoint is validated against the push-host
+   * allowlist (HTTPS-only, port 443, no private/loopback/link-local IPs) at
+   * the entry point. A bad subscription is rejected with 400 BEFORE the DB
+   * write — the table is always clean of SSRF endpoints.
    */
   async subscribe(userId: string, sub: PushSubscriptionDto, userAgent?: string, locale = 'en') {
+    assertSafePushEndpoint(sub.endpoint, this.hostAllowlist);
+
     await this.db
       .insert(push_subscriptions)
       .values({
@@ -197,6 +220,27 @@ export class NotificationsService {
           sub.quiet_enabled &&
           NotificationsService.isInQuietHours(now, sub.quiet_start, sub.quiet_end)
         ) {
+          return;
+        }
+        // P0-8 (run #26): defense-in-depth re-validation at send time. A DB
+        // row that pre-dates the rule (or one written by a non-API path)
+        // is still rejected before web-push fetches the endpoint. Uniform
+        // 5xx capture (run #25 Sentry gate) ensures operators learn about
+        // any leakage attempts; the row stays in the table until the
+        // 404/410 prune path runs (it never will for a private IP, so the
+        // row is harmless garbage until manually cleaned).
+        try {
+          assertSafePushEndpoint(sub.endpoint, this.hostAllowlist);
+        } catch (err) {
+          this.logger.warn(
+            `push-send: invalid stored endpoint ${sub.endpoint.slice(0, 24)}…: ${(err as Error).message}`,
+          );
+          Sentry.captureException(err, {
+            tags: {
+              channel: 'web-push-validate',
+              endpoint_prefix: sub.endpoint.slice(0, 24),
+            },
+          });
           return;
         }
         // P1-5: per-subscription locale (deep-link +, since P2-8, push TEXT).
