@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/landing-enhance.css">
-<script src="../shared/landing-enhance.js" defer></script>
+<link rel="stylesheet" href="../shared/landing-enhance.css?v=3">
+<script src="../shared/landing-enhance.js?v=3" defer></script>
 <script>try{var t=localStorage.getItem('koralink.landing-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
 /* ── الوضع الليلي الموحّد (يقلبه المحرك المشترك عبر data-theme) ── */
@@ -33,7 +33,7 @@ html[data-theme="dark"] {
   color-scheme: dark;
 }
 html[data-theme="dark"] .nav-wrap { background: oklch(15% 0.010 150 / 0.82); }
-html[data-theme="dark"] .wordmark, html[data-theme="dark"] .bell { color: var(--color-ink-2); }
+html[data-theme="dark"] .wordmark { color: var(--color-ink-2); }
 /* البطل فن ليلي داكن دائمًا — ألوان النص عليه ثابتة في المظهرين */
 .hero {
   --color-paper:   oklch(97.5% 0.005 140);
@@ -162,18 +162,6 @@ p { margin: 0; }
   padding-block: 0.5rem;
 }
 .wordmark svg { width: 22px; height: 22px; }
-.bell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px; height: 44px;
-  border-radius: 999px;
-  color: var(--color-ink-2);
-  transition: background-color var(--dur-micro) var(--ease-out),
-              color var(--dur-micro) var(--ease-out);
-}
-.bell:hover { background: var(--color-paper-3); color: var(--color-ink); }
-.bell svg { width: 22px; height: 22px; }
 
 /* ── Hero ── */
 .hero {
@@ -489,19 +477,20 @@ p { margin: 0; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
       كورالينك
     </a>
-    <a class="bell" href="https://aa.tail2948f9.ts.net:9450" aria-label="افتح تطبيق كورالينك">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-    </a>
+    
     <div class="nav-ctls">
-      <button type="button" class="nav-ctl" data-theme-toggle aria-label="تبديل المظهر">
-        <svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        <svg data-icon-moon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-      <a class="nav-ctl" data-lang-toggle="../draft-a-player/index.html" href="../draft-a-player/index.html" lang="en">English</a>
-      <a class="nav-ctl nav-ctl--primary" href="../draft-b-partner/index.ar.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
-        للشركاء
-      </a>
+      <div class="seg" role="group" aria-label="المظهر">
+        <button type="button" class="seg__opt" data-theme-opt="light" aria-pressed="true" aria-label="وضع فاتح"><svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        <button type="button" class="seg__opt" data-theme-opt="dark" aria-pressed="false" aria-label="وضع داكن"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      </div>
+      <div class="seg" role="group" aria-label="اللغة">
+        <span class="seg__opt" data-active="true" aria-current="true">عربي</span>
+        <a class="seg__opt" data-lang-toggle="../draft-a-player/index.html" href="../draft-a-player/index.html" lang="en">English</a>
+      </div>
+      <div class="seg" role="group" aria-label="نسخة كورالينك">
+        <span class="seg__opt" data-active="true" aria-current="true">للاعبين</span>
+        <a class="seg__opt" href="../draft-b-partner/index.ar.html">للشركاء</a>
+      </div>
     </div>
   </div>
 </header>

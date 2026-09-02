@@ -12,9 +12,9 @@
 <!-- Google Fonts: Fraunces (display, roman) + Geist (body) + JetBrains Mono (stage numerals) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Geist:wght@400;500&family=Albert+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/landing-enhance.css">
-<script src="../shared/landing-enhance.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Albert+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/landing-enhance.css?v=3">
+<script src="../shared/landing-enhance.js?v=3" defer></script>
 <script>try{var t=localStorage.getItem('koralink.landing-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
 /* ── Unified light mode (html[data-theme="light"], flipped by shared engine) ──
@@ -40,7 +40,7 @@ html[data-theme="light"] .nav-wrap { background: oklch(97.5% 0.005 140 / 0.82); 
 <style>
 /* Hallmark · macrostructure: Narrative Workflow · F4 knobs: numbering=1.0/2.0/3.0, layout=vertical, connector=none
  * theme: custom · vibe: "match-night operations, calm confidence" · paper: oklch(16% 0.010 150) · accent: oklch(64% 0.10 152)
- * display: Fraunces 600 roman · body: Geist · axes: dark / roman-serif / chromatic-green ~152°
+ * display: Outfit 800 · body: Albert Sans (standardized to player draft, 2026-09-02) · axes: dark / roman-serif / chromatic-green ~152°
  * accent-2: brand red (dark-lifted) oklch(62% 0.16 22) · enrichment: Tier-A CSS slot mocks
  * nav: N1a sticky minimal + blur · footer: Ft1 mast-headed
  * UX audit applied (2026-08-27): sticky nav, 44px touch targets, load entrance,
@@ -63,8 +63,8 @@ html[data-theme="light"] .nav-wrap { background: oklch(97.5% 0.005 140 / 0.82); 
   --color-accent-ink:oklch(16%  0.010 150);
   --color-focus:     oklch(70%  0.14  152);
 
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-body:    "Geist", "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Albert Sans", ui-sans-serif, system-ui, sans-serif;
   --font-outlier: "JetBrains Mono", ui-monospace, monospace;
 
   --text-xs:  0.75rem;
@@ -435,12 +435,18 @@ p { margin: 0; }
   <nav class="container nav-min" aria-label="Primary">
     <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450">KoraLink</a>
     <div class="nav-ctls">
-      <button type="button" class="nav-ctl" data-theme-toggle aria-label="Switch theme">
-        <svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        <svg data-icon-moon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-      <a class="nav-ctl" data-lang-toggle="../draft-b-partner/index.ar.html" href="../draft-b-partner/index.ar.html" lang="ar">العربية</a>
-      <a class="nav-ctl nav-ctl--primary" href="../draft-a-player/index.html">For players</a>
+      <div class="seg" role="group" aria-label="Colour theme">
+        <button type="button" class="seg__opt" data-theme-opt="light" aria-pressed="false" aria-label="Light mode"><svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        <button type="button" class="seg__opt" data-theme-opt="dark" aria-pressed="true" aria-label="Dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      </div>
+      <div class="seg" role="group" aria-label="Language">
+        <span class="seg__opt" data-active="true" aria-current="true">EN</span>
+        <a class="seg__opt" data-lang-toggle="../draft-b-partner/index.ar.html" href="../draft-b-partner/index.ar.html" lang="ar">عربي</a>
+      </div>
+      <div class="seg" role="group" aria-label="KoraLink edition">
+        <span class="seg__opt" data-active="true" aria-current="true">Partners</span>
+        <a class="seg__opt" href="../draft-a-player/index.html">Players</a>
+      </div>
     </div>
     <ul class="nav-min__links">
       <li><a class="nav-min__cta" href="https://aa.tail2948f9.ts.net:3002/partner">Partner sign in</a></li>

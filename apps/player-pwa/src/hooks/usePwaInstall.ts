@@ -13,7 +13,13 @@ const DISMISS_KEY = 'koralink.install-banner-dismissed-at';
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ─── Install-landing + welcome state (03-program-design §1 / §1.2) ──────────
-const LANDING_DISMISS_KEY = 'koralink.install-landing-dismissed-at';
+// V2 key (2026-09-02): the in-app intercept and the marketing landing's
+// install band previously SHARED 'koralink.install-landing-dismissed-at' —
+// tapping "Continue" on the marketing band suppressed the in-app install
+// intercept for 30 days. The intercept now owns its own key; the old key is
+// read-only legacy evidence of prior app usage (never written again).
+const LANDING_DISMISS_KEY = 'koralink.install-landing-dismissed-at.v2';
+const LEGACY_LANDING_KEY = 'koralink.install-landing-dismissed-at';
 const LANDING_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const WELCOME_SEEN_KEY = 'koralink.pwa-welcome-seen';
 const SEEN_APP_BEFORE_KEY = 'koralink.pwa-seen-app-before';
@@ -22,7 +28,12 @@ const SEEN_APP_BEFORE_KEY = 'koralink.pwa-seen-app-before';
 // the app before (zustand persist root, prior banner/landing dismissal). This
 // is what keeps the welcome checkpoint from nagging EXISTING standalone users
 // after they upgrade (Gate 3 §1.2).
-const LEGACY_EVIDENCE_KEYS = ['koralink-app-store', 'persist:root', DISMISS_KEY, LANDING_DISMISS_KEY];
+const LEGACY_EVIDENCE_KEYS = [
+    'koralink-app-store',
+    'persist:root',
+    DISMISS_KEY,
+    LEGACY_LANDING_KEY, // pre-v2 landing dismissal ⇒ this device used the app before
+];
 
 export type PwaPlatform = 'chromium' | 'ios' | 'other';
 

@@ -68,6 +68,67 @@ html.theme-anim body * {
   letter-spacing: 0.04em;
 }
 
+/* ---------- segmented toggles (theme · language · edition) ----------
+   One visual language across BOTH drafts: a pill track holding 2 options.
+   The ACTIVE option is filled with the draft accent + accent-ink text —
+   the user always sees which mode they're in, and clicking an option
+   flips the fill instantly (theme) or navigates (language / edition). */
+.seg {
+  --kx-rule: var(--color-rule, oklch(90% 0.006 140));
+  --kx-btn-bg: var(--color-paper-2, oklch(99% 0.004 140 / 0.7));
+  --kx-btn-ink: var(--color-ink-2, inherit);
+  --kx-accent: var(--color-accent, #254132);
+  --kx-accent-ink: var(--color-accent-ink, #f7f8f7);
+  --kx-focus: var(--color-focus, #254132);
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--kx-rule, oklch(90% 0.006 140));
+  border-radius: 999px;
+  background: var(--kx-btn-bg, oklch(99% 0.004 140 / 0.7));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.seg__opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0.25rem 0.65rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--kx-btn-ink, inherit);
+  font: 600 0.8rem/1 var(--kx-btn-font, inherit);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out, ease), color 160ms var(--ease-out, ease), transform var(--dur-micro, 120ms) ease;
+}
+.seg__opt:hover { background: oklch(50% 0.01 150 / 0.14); }
+.seg__opt:active { transform: scale(0.95); }
+.seg__opt svg { width: 14px; height: 14px; flex: none; }
+/* ACTIVE state — unmistakable: accent fill, accent-ink label */
+.seg__opt[aria-pressed="true"],
+.seg__opt[data-active="true"] {
+  background: var(--kx-accent, #254132);
+  color: var(--kx-accent-ink, #f7f8f7);
+  box-shadow: 0 1px 6px oklch(10% 0.03 160 / 0.25);
+}
+.seg__opt:focus-visible {
+  outline: 2px solid var(--kx-focus, #254132);
+  outline-offset: 2px;
+}
+[dir="rtl"] .seg { direction: rtl; }
+@media (max-width: 560px) {
+  .seg { padding: 2px; gap: 2px; }
+  .seg__opt { min-height: 30px; padding: 0.2rem 0.5rem; font-size: 0.74rem; }
+}
+
 /* focus ring for controls */
 .nav-ctl:focus-visible {
   outline: 2px solid var(--kx-focus, #254132);

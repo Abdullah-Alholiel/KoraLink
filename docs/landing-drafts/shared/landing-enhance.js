@@ -7,7 +7,10 @@
   'use strict';
 
   var THEME_KEY = 'koralink.landing-theme';
-  var DISMISS_KEY = 'koralink.install-landing-dismissed-at';
+  // Band-specific dismissal (2026-09-02): this key is NOT shared with the
+  // in-app install intercept anymore — the old shared key made "Continue to
+  // the web app" silently suppress the in-app install page for 30 days.
+  var DISMISS_KEY = 'koralink.landing-band-dismissed-at';
   var DISMISS_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   function store(k, v) {
@@ -68,6 +71,21 @@
           })();
     applyTheme(mode, false);
 
+    // Sync the segmented theme toggle (light | dark): the active option gets
+    // aria-pressed="true" → CSS fills it with the accent. Runs at init AND on
+    // every toggle so the fill always tracks the real mode.
+    function syncThemeSeg() {
+      var cur = document.documentElement.getAttribute('data-theme') || 'light';
+      var opts = document.querySelectorAll('[data-theme-opt]');
+      for (var i = 0; i < opts.length; i++) {
+        var isCur = opts[i].getAttribute('data-theme-opt') === cur;
+        opts[i].setAttribute('aria-pressed', isCur ? 'true' : 'false');
+      }
+    }
+    syncThemeSeg();
+    // expose so the click handler below can re-sync after flipping
+    window.__kxSyncThemeSeg = syncThemeSeg;
+
     document.addEventListener('click', function (ev) {
       var btn = ev.target.closest ? ev.target.closest('[data-theme-toggle]') : null;
       if (!btn) return;
@@ -75,6 +93,19 @@
       var next = cur === 'dark' ? 'light' : 'dark';
       applyTheme(next, true);
       store(THEME_KEY, next);
+      if (window.__kxSyncThemeSeg) window.__kxSyncThemeSeg();
+    });
+
+    // Segmented options: clicking a mode selects it directly (no cycling).
+    document.addEventListener('click', function (ev) {
+      var opt = ev.target.closest ? ev.target.closest('[data-theme-opt]') : null;
+      if (!opt) return;
+      var want = opt.getAttribute('data-theme-opt');
+      var cur = document.documentElement.getAttribute('data-theme') || defaultMode;
+      if (want === cur) return; // already active — nothing to do
+      applyTheme(want, true);
+      store(THEME_KEY, want);
+      if (window.__kxSyncThemeSeg) window.__kxSyncThemeSeg();
     });
   }
 
@@ -165,10 +196,9 @@
       band.setAttribute('data-dismissed', '1');
     }
     if (skipBtn) skipBtn.addEventListener('click', dismiss);
-    // "Continue to the app" links also count as a dismissal — the user chose
-    // the web app; don't re-nag on their next landing visit.
-    var skips = band.querySelectorAll('.install-band__skip');
-    for (var s = 0; s < skips.length; s++) skips[s].addEventListener('click', dismiss);
+    // "Continue to the app" links are a pure hand-off to the web app — they
+    // must NOT dismiss the band (and never touched the in-app intercept's
+    // flag, which now owns a separate key anyway).
 
     // iOS: no beforeinstallprompt — show Share-steps emphasis
     if (isIOS()) showIOSHint(band);

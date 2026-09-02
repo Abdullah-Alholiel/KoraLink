@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Albert+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/landing-enhance.css">
-<script src="../shared/landing-enhance.js" defer></script>
+<link rel="stylesheet" href="../shared/landing-enhance.css?v=3">
+<script src="../shared/landing-enhance.js?v=3" defer></script>
 <script>try{var t=localStorage.getItem('koralink.landing-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
 /* ── Unified dark mode (html[data-theme="dark"], flipped by shared engine) ──
@@ -34,7 +34,7 @@ html[data-theme="dark"] {
   color-scheme: dark;
 }
 html[data-theme="dark"] .nav-wrap { background: oklch(15% 0.010 150 / 0.82); }
-html[data-theme="dark"] .wordmark, html[data-theme="dark"] .bell { color: var(--color-ink-2); }
+html[data-theme="dark"] .wordmark { color: var(--color-ink-2); }
 /* The hero is the always-dark night-stadium art — its on-dark text colors are
    theme-invariant (paper-2 stays "white text" inside the hero in BOTH themes). */
 .hero {
@@ -49,7 +49,7 @@ html[data-theme="dark"] .wordmark, html[data-theme="dark"] .bell { color: var(--
  * display: Outfit 800 · body: Albert Sans · axes: light / geometric-sans / chromatic-green ~155°
  * accent-2: brand red oklch(55% 0.16 22) · gold star: oklch(60% 0.13 75) · mint NEW badge: oklch(62% 0.14 160)
  * enrichment: Tier-A CSS night-stadium hero + pitch-art club cards (no external photos)
- * nav: N1a sticky minimal (globe wordmark + bell, blur) · footer: Ft1 mast-headed + payment chips
+ * nav: N1a sticky minimal (globe wordmark , blur) · footer: Ft1 mast-headed + payment chips
  * UX audit applied (2026-08-27): 44px touch targets (HIG), sticky nav, load entrance,
  * NEW badge on section head, pointer-fine hover lift, escape-hatch link, og meta, honest copy.
  * contrast: pass (40–41) · honest: pass (46 — sample cards carry user-supplied values) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 50–57) · pre-emit critique: P4 H5 E5 S5 R4 V5
@@ -140,7 +140,7 @@ h1, h2, h3 {
 p { margin: 0; }
 .container { width: 100%; max-width: var(--column); margin-inline: auto; padding-inline: var(--gutter); }
 
-/* ── Nav · N1a sticky: globe wordmark + bell, blur on scroll state via :has? keep simple: always-blur ── */
+/* ── Nav · N1a sticky: globe wordmark , blur on scroll state via :has? keep simple: always-blur ── */
 .nav-wrap {
   position: sticky;
   top: 0;
@@ -170,18 +170,6 @@ p { margin: 0; }
   padding-block: 0.5rem;             /* 44px-class hit target */
 }
 .wordmark svg { width: 22px; height: 22px; }
-.bell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px; height: 44px;          /* HIG min touch target */
-  border-radius: 999px;
-  color: var(--color-ink-2);
-  transition: background-color var(--dur-micro) var(--ease-out),
-              color var(--dur-micro) var(--ease-out);
-}
-.bell:hover { background: var(--color-paper-3); color: var(--color-ink); }
-.bell svg { width: 22px; height: 22px; }
 
 /* ── Hero · night-stadium CSS art, eyebrow pill, headline, CTA ── */
 .hero {
@@ -496,26 +484,27 @@ p { margin: 0; }
 </head>
 <body>
 
-<!-- Nav · sticky, blur backdrop, globe wordmark + bell -->
+<!-- Nav · sticky, blur backdrop, globe wordmark  -->
 <header class="nav-wrap">
   <div class="container nav-min">
     <a class="wordmark" href="https://aa.tail2948f9.ts.net:9450" aria-label="KoraLink home">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
       KoraLink
     </a>
-    <a class="bell" href="https://aa.tail2948f9.ts.net:9450" aria-label="Open the KoraLink app">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-    </a>
+    
     <div class="nav-ctls">
-      <button type="button" class="nav-ctl" data-theme-toggle aria-label="Switch theme">
-        <svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        <svg data-icon-moon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-      <a class="nav-ctl" data-lang-toggle="../draft-a-player/index.ar.html" href="../draft-a-player/index.ar.html" lang="ar">العربية</a>
-      <a class="nav-ctl nav-ctl--primary" href="../draft-b-partner/index.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
-        For Partners
-      </a>
+      <div class="seg" role="group" aria-label="Colour theme">
+        <button type="button" class="seg__opt" data-theme-opt="light" aria-pressed="true" aria-label="Light mode"><svg data-icon-sun viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        <button type="button" class="seg__opt" data-theme-opt="dark" aria-pressed="false" aria-label="Dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      </div>
+      <div class="seg" role="group" aria-label="Language">
+        <span class="seg__opt" data-active="true" aria-current="true">EN</span>
+        <a class="seg__opt" data-lang-toggle="../draft-a-player/index.ar.html" href="../draft-a-player/index.ar.html" lang="ar">عربي</a>
+      </div>
+      <div class="seg" role="group" aria-label="KoraLink edition">
+        <span class="seg__opt" data-active="true" aria-current="true">Players</span>
+        <a class="seg__opt" href="../draft-b-partner/index.html">Partners</a>
+      </div>
     </div>
   </div>
 </header>

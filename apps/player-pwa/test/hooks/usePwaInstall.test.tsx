@@ -154,7 +154,7 @@ describe('usePwaInstall', () => {
 
   it('suppresses the landing within the 30-day dismissal window', async () => {
     window.localStorage.setItem(
-      'koralink.install-landing-dismissed-at',
+      'koralink.install-landing-dismissed-at.v2',
       String(Date.now() - 1000),
     );
     const { result } = renderHook(() => usePwaInstall());
@@ -163,7 +163,7 @@ describe('usePwaInstall', () => {
 
   it('shows the landing again after 31 days', async () => {
     window.localStorage.setItem(
-      'koralink.install-landing-dismissed-at',
+      'koralink.install-landing-dismissed-at.v2',
       String(Date.now() - 31 * 24 * 60 * 60 * 1000),
     );
     const { result } = renderHook(() => usePwaInstall());
@@ -177,7 +177,7 @@ describe('usePwaInstall', () => {
     act(() => {
       result.current.dismissLanding();
     });
-    expect(window.localStorage.getItem('koralink.install-landing-dismissed-at')).toBeTruthy();
+    expect(window.localStorage.getItem('koralink.install-landing-dismissed-at.v2')).toBeTruthy();
     expect(result.current.shouldShowLanding).toBe(false);
     expect(trackEvent).toHaveBeenCalledWith(
       'pwa_install_dismissed',
