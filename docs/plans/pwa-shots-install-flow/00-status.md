@@ -33,3 +33,18 @@ All slices DONE. Post-drift recovery found and fixed three defects:
 Verification: 272/272 unit tests; `turbo run build` 3/3 tasks exit 0; live
 headless flow gates ALL PASS (browser→landing overlay, 30d-dismissed skip,
 standalone skip, 'Not now' persists flag). Committed and pushed.
+
+## Post-cycle correction (2026-09-02, owner-reported)
+
+The marketing landing's install band and the in-app intercept SHARED
+`koralink.install-landing-dismissed-at` — tapping "Continue" on the band
+suppressed the in-app install landing for 30 days (owner: "I can't feel the
+embedded CTA"). Supersedes the Gate 3 §1 key contract:
+
+- Intercept owns `koralink.install-landing-dismissed-at.v2` (30d).
+- Old key = read-only returning-user evidence (LEGACY_EVIDENCE_KEYS).
+- Band writes `koralink.landing-band-dismissed-at`; continue links never
+  dismiss anything.
+- Landing drafts: bell removed; segmented visual toggles (theme/lang/edition,
+  active = accent fill); partner draft standardized to player type system
+  (Outfit/Albert Sans). Commits bacc9a1, 68896eb.
