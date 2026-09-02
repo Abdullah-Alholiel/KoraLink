@@ -1479,6 +1479,11 @@ export class MatchesService {
     // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
     // return the row the winner inserted instead of raising a unique-violation 500.
     if (!inserted) {
+      if (!clientMessageIdValue) {
+        // Lost the unique-key race without an idempotency key — surface
+        // a 409 so the caller retries the send.
+        throw new ConflictException('Message send conflicted; retry.');
+      }
       const existing = await this.db.query.match_messages.findFirst({
         where: and(
           eq(match_messages.user_id, userId),

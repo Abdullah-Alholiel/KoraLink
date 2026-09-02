@@ -158,8 +158,8 @@ export class AdminSettlementsService {
         adminId,
         action: 'settlement.generate',
         entityType: 'settlement',
-        entityId: settlement.id,
-        before: null,
+        entityId: settlement.id as string,
+        before: undefined,
         after: settlement,
         ip,
       });

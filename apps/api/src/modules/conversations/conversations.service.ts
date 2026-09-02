@@ -248,6 +248,11 @@ export class ConversationsService {
     // unique-violation 500 — and skip the side effects below (read receipt,
     // "messaged" activity, push) so a duplicate retry never double-fires them.
     if (!inserted) {
+      if (!clientMessageIdValue) {
+        // Lost the unique-key race without an idempotency key — surface
+        // a 409 so the caller retries the send.
+        throw new ConflictException('Message send conflicted; retry.');
+      }
       const existing = await this.db.query.personal_messages.findFirst({
         where: and(
           eq(personal_messages.sender_id, userId),

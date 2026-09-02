@@ -214,7 +214,11 @@ describe('MatchesService.rescheduleMatch', () => {
 
   it('swaps slots, nets the wallet, reprices, and returns the populated match + summary', async () => {
     const h = makeTx({ walletBalance: '500' });
-    const result = await makeService(h).rescheduleMatch(HOST, MATCH_ID, dto);
+    const result = (await makeService(h).rescheduleMatch(HOST, MATCH_ID, dto)) as unknown as {
+      id: string;
+      title: string;
+      reschedule: { old_slot_id: string; new_slot_id: string; wallet_delta_sar: number };
+    };
 
     // 60 min @ 100 SAR/h = 100 old cost; 90 min = 150 new cost → +50 net.
     expect(result.reschedule).toEqual({

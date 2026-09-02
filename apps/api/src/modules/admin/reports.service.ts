@@ -128,13 +128,20 @@ export class AdminReportsService {
     // web-push that honors the reporter's delivery preferences (P1-20/P2-27).
     // Best-effort: a notification failure must never fail the resolution.
     try {
+      const reporter = Array.isArray(before.reporter)
+        ? before.reporter[0]
+        : before.reporter;
+      if (!reporter) {
+        // Reporter row gone — skip the fan-out, still mark resolved.
+        return { status: 'resolved' as const };
+      }
       await this.activities.record({
         actorId: adminId,
         verb: 'report_resolved',
-        recipients: [before.reporter.id],
+        recipients: [reporter.id],
         excludeActor: false,
       });
-      await this.notifications.sendPushToUsers([before.reporter.id], {
+      await this.notifications.sendPushToUsers([reporter.id], {
         // P2-8 (run #24): localized per subscriber locale (key picks the text).
         key: dto.outcome === 'resolved' ? 'report_resolved' : 'report_dismissed',
         data: { type: 'report-resolved' },

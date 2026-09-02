@@ -198,7 +198,7 @@ describe('PartnerService match visibility (P1-26)', () => {
         limit: 50,
         offset: 0,
       });
-      const defaultQuery = dialect.sqlToQuery(captured.get(matches));
+      const defaultQuery = dialect.sqlToQuery(captured.get(matches) as unknown as Parameters<typeof dialect.sqlToQuery>[0]);
       expect(defaultQuery.sql).toContain('"matches"."status"');
       expect(defaultQuery.params).toContain('Cancelled');
 
@@ -210,7 +210,7 @@ describe('PartnerService match visibility (P1-26)', () => {
         limit: 50,
         offset: 0,
       });
-      const explicitQuery = dialect.sqlToQuery(captured.get(matches));
+      const explicitQuery = dialect.sqlToQuery(captured.get(matches) as unknown as Parameters<typeof dialect.sqlToQuery>[0]);
       expect(explicitQuery.params).toContain('Open');
       expect(explicitQuery.params).not.toContain('Cancelled');
 
@@ -220,7 +220,7 @@ describe('PartnerService match visibility (P1-26)', () => {
         limit: 50,
         offset: 0,
       });
-      const todayQuery = dialect.sqlToQuery(captured.get(matches));
+      const todayQuery = dialect.sqlToQuery(captured.get(matches) as unknown as Parameters<typeof dialect.sqlToQuery>[0]);
       expect(todayQuery.sql).not.toContain('"matches"."status"');
     });
   });

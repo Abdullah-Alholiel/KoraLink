@@ -152,7 +152,7 @@ export class AdminDisputesService {
       await this.activities.record({
         actorId: adminId,
         verb: dto.outcome === 'resolved' ? 'dispute_resolved' : 'dispute_rejected',
-        matchId: before.match_id,
+        matchId: before.match_id ?? undefined,
         recipients: [before.reporter_id],
         excludeActor: false,
       });
