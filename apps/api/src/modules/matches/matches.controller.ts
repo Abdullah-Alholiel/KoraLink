@@ -33,6 +33,7 @@ import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
 import { CreateMatchMessageDto } from './dto/create-match-message.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { escapeIcsText } from '../../common/security/ics-text';
 
 @ApiTags('matches')
 @ApiCookieAuth('access_token')
@@ -90,16 +91,23 @@ export class MatchesController {
     const venueAddr = (match as any).pitch?.venue?.address ?? '';
     const location = [venueName, venueAddr].filter(Boolean).join(', ');
 
+    // P1-17d (run #27): escape every user-controlled TEXT field per RFC 5545
+    // §3.3.11 so a CRLF-laden title cannot split the VEVENT or inject a
+    // second event with attacker-controlled summary + alarm. The title is
+    // set by the host; venue name/address are venue-owner input.
+    const safeTitle = escapeIcsText(match.title);
+    const safeLocation = escapeIcsText(location);
+
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//KoraLink//Match Calendar//EN',
       'BEGIN:VEVENT',
-      `SUMMARY:${match.title}`,
+      `SUMMARY:${safeTitle}`,
       `DTSTART:${toICSDate(startDate)}`,
       `DTEND:${toICSDate(endDate)}`,
-      `LOCATION:${location}`,
-      `DESCRIPTION:${match.match_type} \\u2022 ${match.gender_rule} \\u2022 Hosted on KoraLink`,
+      `LOCATION:${safeLocation}`,
+      `DESCRIPTION:${escapeIcsText(`${match.match_type} • ${match.gender_rule} • Hosted on KoraLink`)}`,
       `URL:https://koralink.app/match/${match.id}`,
       'END:VEVENT',
       'END:VCALENDAR',
