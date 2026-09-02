@@ -1,35 +1,32 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 24,
-  "last_run_at": "2026-09-01T15:17:00Z",
+  "last_run": 25,
+  "last_run_at": "2026-09-02T01:35:00Z",
   "last_run_commits": [
-    "ec7cc56",
-    "87386cf",
-    "34694a1",
-    "5c57649"
+    "8d890ce"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-01T15-17Z.md",
-  "in_review_items": [
-    "P2-2 dispute replies + resolve/reopen atomicity (ec7cc56, 87386cf): verify in run #25 \u2014 disputes.service.spec.ts 8/8 present, resolve() tx order (status-predicated UPDATE first, reversal second), reopen() WHERE status IN (resolved,rejected) + 0-rows 400; live: POST /admin/disputes/:id/messages 201 + populated messages, whitespace 400, unknown 404, re-resolve 400, re-reopen 400 (all LIVE-verified run #24 \u2014 spot-check one).",
-    "Reviewer-A follow-ups (34694a1, 5c57649): verify in run #25 \u2014 grep kickoffFallback in push-text.ts (no new-Date fallback), 'Match' renudge title fallback in matches.service.ts, Sentry.captureException in notifications.service.ts sendPushToUsers catch, worker routes for match-cancelled/player-removed/match-rescheduled/report-resolved in the BUILT worker-*.js.",
-    "ADMIN i18n (added with this slice): admin en/ar parity still exact after +5 reply keys \u2014 recount leaf keys (was 520/520) and grep disputes reply keys in both files."
-  ],
+  "last_run_report": "kanban/RUNS/2026-09-02T01-35Z.md",
+  "in_review_items": [],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
-    "P1-8 joinMatch debit + P1-14 settlement payout \u2014 BLOCKED on P0-2 (real payment provider).",
-    "P1-29 dispute money side-effect \u2014 needs P0-2 money-path decision before building.",
-    "P1-16 padel support \u2014 needs Abdullah's scope decision.",
-    "P1-2 skill_level discovery filter \u2014 needs product decision on semantics.",
-    "P1-12 admin i18n visual RTL check \u2014 needs Abdullah's eyes (browserless box). HQ copy fully translated + verified 124/124 (run #23); only the visual pass remains.",
-    "P2-29 host page nav placement \u2014 Abdullah to confirm intent (CTAs exist on feed).",
-    "P2-32 foreign pitchId silent-ignore \u2014 decide document-or-404.",
-    "Headless browser unavailable on VPS \u2014 visual checks need Abdullah or a working browser.",
+    "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
+    "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
+    "P1-16 padel support — needs Abdullah's scope decision.",
+    "P1-2 skill_level discovery filter — needs product decision on semantics.",
+    "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box). HQ copy fully translated + verified 124/124 (run #23); only the visual pass remains.",
+    "P2-29 host page nav placement — Abdullah to confirm intent (CTAs exist on feed).",
+    "P2-32 foreign pitchId silent-ignore — decide document-or-404.",
+    "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
-    "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions \u2014 always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
-    "OPS (run #21): first admin build can OOM (137) under memory pressure; solo `turbo run build --filter=admin` retry passes."
+    "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
+    "OPS (run #21): first admin build can OOM (137) under memory pressure; solo `turbo run build --filter=admin` retry passes.",
+    "P0-5 per-category push preferences — needs Abdullah scope decision on 8 vs 4 categories (Reviewer B run #25).",
+    "P0-6 PDPL account-delete / data-export — KSA legal blocker; needs Abdullah scope decision on hard/soft delete + 30-day grace period + JSON export shape (Reviewer B run #25).",
+    "P2-42 CSP `script-src` migration — standing reviewer item 11, 2-PR effort (nonce middleware → drop unsafe-inline; then audit Script usage → drop unsafe-eval).",
+    "zai delegation for children still 401 at gateway layer after run #24 pool repair — gateway booted before today's config churn. Working path: opencode-go glm-5.3-flash (~3% rolling spend for 2 reviewers). Next run re-probes; if still 401, fall back to deepseek-v4-flash or persist on opencode-go."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #24 (15:17Z manual-fire after the 10:15Z cron fire 402'd on opencode-go at boot; the pinned prestate script was MISSING from profile scripts \u2014 restored from /home/ubuntu/.hermes/scripts/ (sibling misplaced it); repair = copy + chmod, script now runs before every fire). Root causes fixed this run: (1) zai credential pool carried a BROKEN manual entry 'api-key-2' (junk token, wrong base_url api.z.ai/api/paas/v4) that fill_first served after the rate-marked primary \u2014 delegation children 401'd twice; pool cleaned (broken entry removed, stale failure markers cleared, backup auth.json.bak-run24); (2) reviewer dispatched on opencode-go glm-5.3-flash as the WORKING path this session (zai gateway credential resolution still failing for children \u2014 left flagged for Abdullah/factory-watchdog). z.ai weekly was 92% at run start, RESET mid-run (15:40Z) \u2192 probes+work landed on the cheap plan after reset; Go spent ~2% rolling. VERIFIED run #23 items ALL TRUE (P1-33 enum 20 live; P2-40 offline bundle survives sibling rebuilds; P2-31(2) envelope + 10/10 jest). Sibling 10f94ce BUILT P2-8 completely \u2014 verified 17/17, boarded DONE (+ Reviewer-A follow-ups built: 34694a1 push-text hardening, 5c57649 worker deep-links). BUILT P2-2 dispute replies + resolve/reopen atomicity (CRITICAL) + 4 Reviewer-A IMPORTANTs. Gates: jest 202\u2192209, vitest 261/261, tsc 0, build 3/3 \u00d73, live E2E dispute flow PASS. Mirror: 7 card comments, 2 new cards created+gated (t_b93d8de3 minors backlog, t_afc0593f product gaps P1). ADMIN STATE CHECK: clean all run. Strix: DEFERRED (weekly >75% at decision time; reset landed 15:40Z but scan+build didn't fit the budget \u2014 NEXT RUN pick it up FIRST: run-scan.sh targets/koralink-src). OS research: none. Next run #25: Strix scan first, then verify the 3 in_review items; buildable queue: dispute-reply PWA push (notify the reporter when admin replies \u2014 needs a push key in the catalog) or backlog minors."
+  "notes": "Run #25 (2026-09-02 01:35Z): P2-41 koralink-booking wallet TOCTOU FIXED (8d890ce, Reviewer-A IMPORTANT #1) — the createMatch koralink path read wallet_balance with a plain SELECT and updated without a 'wallet_balance >= cost' guard, allowing two concurrent same-host bookings to drive the balance negative. Same fix class as P0-4 (run #13) + P2-39 (run #22): conditional UPDATE inside the tx, zero-rows → BadRequestException, ledger insert only on successful deduct. BUNDLED: notifications.service.ts:234-238 Sentry capture now fires only on 5xx/timeout (was capturing every 4xx per-sub noise, Reviewer-A IMPORTANT #3). 4 new jest specs. Strix monthly scan: due this month, in background (koralink-src_fa31, 14min in Caido cold-start at gate commit — non-blocking, 45min budget guard). Reviewers: dispatched on opencode-go glm-5.3-flash as the documented working path (zai delegation still 401's for children at the gateway layer after run #24 pool repair; pool itself is clean — gateway daemon predates the repair). Both reviewers returned full findings (183s + 170s, 22+17 tool calls, schema_valid). Reviewer-B re-ranked 3 P0-class gaps: per-category push prefs (booted P0-5), PDPL delete/export (booted P0-6), real payment provider (existing P0-2 — needs Abdullah). All 3 run #24 in_review items VERIFIED PASS (P2-2 dispute replies, 34694a1 push-text hardening, 5c57649 worker deep-links) → demoted to verified-DONE; admin i18n 525/525 (was 520+5 reply keys). Gates: build 3/3, jest 213/213 (+4), vitest 272/272, tsc 0, API restarted + health 200, dist grep confirms. Strix_scan=2026-09-02 (in progress)."
 }
