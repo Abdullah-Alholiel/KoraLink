@@ -183,4 +183,69 @@ describe('AppGateway.handleConnection — moderation enforcement', () => {
     expect(client.joined).toEqual([]);
     expect(disconnect).toHaveBeenCalledWith(true);
   });
+
+  // P1-17c (run #27): the WS handshake must enforce the origin allowlist in
+  // every environment — Strix flagged the previous NODE_ENV-gated bypass
+  // (run #25). The check runs BEFORE the JWT verify so a probing connection
+  // is closed without a DB round-trip.
+  it('rejects a connection from an unlisted origin in development', async () => {
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null }],
+      { sub: 'u1', role: 'Player' },
+    );
+    const client = makeClient();
+    client.handshake.headers.origin = 'https://attacker.example';
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.joined).toEqual([]);
+    expect(client.userId).toBeUndefined();
+    expect(disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('rejects a connection from an unlisted origin when NODE_ENV=production', async () => {
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null }],
+      { sub: 'u1', role: 'Player' },
+    );
+    // Override the stub to simulate prod
+    (gateway as unknown as { config: { get: (k: string) => string } }).config = {
+      get: (k: string) => (k === 'NODE_ENV' ? 'production' : 'http://localhost:3000'),
+    } as never;
+    const client = makeClient();
+    client.handshake.headers.origin = 'https://attacker.example';
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('accepts a connection from a listed PLAYER_URL origin', async () => {
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null }],
+      { sub: 'u1', role: 'Player' },
+    );
+    const client = makeClient();
+    client.handshake.headers.origin = 'http://localhost:3000';
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.joined).toEqual(['user:u1']);
+    expect(client.userId).toBe('u1');
+  });
+
+  it('accepts a connection from a listed ADMIN_URL origin', async () => {
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Admin', banned_at: null, suspended_until: null }],
+      { sub: 'u1', role: 'Admin' },
+    );
+    const client = makeClient();
+    client.handshake.headers.origin = 'http://localhost:3002';
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.joined).toEqual(['user:u1', 'ops']);
+  });
 });

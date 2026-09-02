@@ -80,19 +80,20 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .filter(Boolean);
     const allowedOrigins = [...playerUrls, ...adminUrls];
 
-    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    // P1-17c (run #27): the previous code gated the rejection on NODE_ENV
+    // === 'production' so dev / tailnet / LAN tooling could attach from an
+    // origin not yet listed in PLAYER_URL / ADMIN_URL. Strix flagged this
+    // (run #25) — the auth check still applies, but `credentials: true` on
+    // the WS cors means the session cookie travels on any accepted origin.
+    // Tighten: ALWAYS reject unlisted origins. Listing PLAYER_URL / ADMIN_URL
+    // for any new local interface is a one-env-var change; loosening at the
+    // gateway is a privilege-escalation surface we don't need.
     if (origin && !allowedOrigins.includes(origin)) {
-      // In production, reject outright. In development, log a warning but keep
-      // the connection so local tooling (e.g. a dev server on a LAN IP that is
-      // not yet listed in PLAYER_URL) still works — auth still applies, this
-      // only relaxes the browser-origin check, never authentication.
-      if (isProd) {
-        client.disconnect(true);
-        return;
-      }
       this.logger.warn(
-        `WS connection from unlisted origin "${origin}" allowed (development mode)`,
+        `WS connection from unlisted origin "${origin}" rejected (allowlist: ${allowedOrigins.join(', ')})`,
       );
+      client.disconnect(true);
+      return;
     }
 
     try {
