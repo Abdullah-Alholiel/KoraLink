@@ -1,0 +1,243 @@
+/* ============================================================
+   KoraLink landing — shared theme engine + top controls + PWA
+   install band. Loaded by draft-a-player and draft-b-partner
+   (EN + AR). Design tokens (colors/fonts) stay in each draft;
+   this file only adds [data-theme] remapping hooks + new UI.
+   ============================================================ */
+
+/* ---------- theme transition (smooth, no layout thrash) ---------- */
+html.theme-anim body,
+html.theme-anim body * {
+  transition: background-color 260ms ease, color 260ms ease, border-color 260ms ease !important;
+}
+
+/* ---------- theme-variable remaps (dark mode) ----------
+   Draft A (player) is light-first: these rules flip its paper/ink
+   accents when <html data-theme="dark">. Draft B (partner) is
+   dark-first: its [data-theme="light"] override lives in its own
+   <style> (it must remap more tokens); shared chrome rules below. */
+
+/* ---------- top control buttons (shared design) ----------
+   Vars derive from each draft's tokens so themes flip them automatically. */
+.nav-ctl {
+  --kx-rule: var(--color-rule, oklch(90% 0.006 140));
+  --kx-rule-2: var(--color-rule-2, oklch(70% 0.012 140));
+  --kx-btn-bg: var(--color-paper-2, oklch(99% 0.004 140 / 0.7));
+  --kx-btn-ink: var(--color-ink-2, inherit);
+  --kx-accent: var(--color-accent, #254132);
+  --kx-accent-ink: var(--color-accent-ink, #f7f8f7);
+  --kx-focus: var(--color-focus, #254132);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;                    /* HIG touch target */
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--kx-rule, oklch(90% 0.006 140));
+  border-radius: 999px;
+  background: var(--kx-btn-bg, oklch(99% 0.004 140 / 0.7));
+  color: var(--kx-btn-ink, inherit);
+  font: 600 0.84rem/1 var(--kx-btn-font, inherit);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background-color var(--dur-micro, 120ms) ease, border-color var(--dur-micro, 120ms) ease, transform var(--dur-micro, 120ms) ease;
+}
+.nav-ctl:hover { border-color: var(--kx-rule-2, oklch(70% 0.012 140)); }
+.nav-ctl:active { transform: scale(0.97); }
+.nav-ctl svg { width: 15px; height: 15px; flex: none; }
+.nav-ctl--primary {
+  background: var(--kx-accent, #254132);
+  color: var(--kx-accent-ink, #f7f8f7);
+  border-color: transparent;
+}
+.nav-ctl--primary:hover { filter: brightness(1.12); }
+[dir="rtl"] .nav-ctl { direction: rtl; }
+.nav-ctls { display: flex; align-items: center; gap: 0.5rem; }
+/* compact controls on narrow phones — prevents label wrap in crowded navs */
+@media (max-width: 560px) {
+  .nav-ctl { padding: 0.4rem 0.6rem; font-size: 0.78rem; min-height: 40px; }
+  .nav-ctls { gap: 0.35rem; }
+  .nav-ctl--primary svg { display: none; }
+}
+.nav-ctl__kbd {
+  font: 500 0.68rem/1 var(--font-outlier, ui-monospace, monospace);
+  opacity: 0.75;
+  letter-spacing: 0.04em;
+}
+
+/* focus ring for controls */
+.nav-ctl:focus-visible {
+  outline: 2px solid var(--kx-focus, #254132);
+  outline-offset: 2px;
+}
+
+/* ---------- PWA install band (embedded CTA screen) ---------- */
+.install-band {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  margin-top: var(--kx-band-gap, var(--space-3xl, 3rem));
+  border-radius: 20px;
+  border: 1px solid var(--kx-band-rule, oklch(90% 0.006 140));
+  background:
+    radial-gradient(120% 130% at 85% -10%, oklch(62% 0.14 160 / 0.16), transparent 55%),
+    radial-gradient(90% 120% at 8% 112%, oklch(60% 0.13 75 / 0.10), transparent 50%),
+    linear-gradient(180deg, var(--kx-band-bg-1, #254132) 0%, var(--kx-band-bg-2, #1b3026) 100%);
+  color: var(--kx-band-ink, #f2f6f3);
+  padding: clamp(1.75rem, 5vw, 3rem);
+}
+/* faint pitch lines, same DNA as the hero art (gate 47: no device chrome) */
+.install-band__pitch {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 62%;
+  width: 100%;
+  opacity: 0.30;
+  z-index: -1;
+}
+.install-band__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(1.25rem, 4vw, 2.5rem);
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .install-band__grid { grid-template-columns: 1fr; }
+}
+
+.install-band__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: 700 0.68rem/1 var(--font-outlier, ui-monospace, monospace);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: oklch(99% 0.004 140 / 0.10);
+  border: 1px solid oklch(99% 0.004 140 / 0.22);
+  color: var(--kx-band-ink-soft, oklch(90% 0.01 140));
+}
+.install-band__eyebrow svg { width: 12px; height: 12px; }
+
+.install-band__title {
+  margin: 0.9rem 0 0;
+  font: 800 clamp(1.5rem, 3.2vw + 0.4rem, 2.2rem)/1.15 var(--kx-band-display, var(--font-display, inherit));
+  letter-spacing: -0.015em;
+  max-width: 21ch;
+  color: var(--kx-band-ink, #f7f8f7);
+}
+.install-band__sub {
+  margin: 0.7rem 0 0;
+  max-width: 48ch;
+  font-size: var(--text-sm, 0.875rem);
+  line-height: 1.65;
+  color: var(--kx-band-ink-soft, oklch(88% 0.01 140));
+}
+
+.install-band__rows {
+  margin: 1.4rem 0 0;
+  display: grid;
+  gap: 0.6rem;
+  list-style: none;
+  padding: 0;
+}
+.install-band__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: oklch(99% 0.004 140 / 0.07);
+  border: 1px solid oklch(99% 0.004 140 / 0.13);
+  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.88rem;
+  color: var(--kx-band-ink, #eef4f0);
+}
+.install-band__row svg { width: 15px; height: 15px; flex: none; color: var(--kx-band-row-ic, oklch(85% 0.09 155)); }
+
+/* right column: device-free "steps" card (gate 47-compliant) */
+.install-band__how {
+  background: oklch(99% 0.004 140 / 0.06);
+  border: 1px solid oklch(99% 0.004 140 / 0.16);
+  border-radius: 16px;
+  padding: 1.1rem 1.15rem 1.2rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.install-band__how-title {
+  margin: 0;
+  font: 700 0.72rem/1 var(--font-outlier, ui-monospace, monospace);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--kx-band-ink-soft, oklch(88% 0.01 140));
+}
+.install-band__steps { margin: 0.9rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.75rem; }
+.install-band__step { display: flex; gap: 0.7rem; align-items: flex-start; font-size: 0.88rem; line-height: 1.5; }
+.install-band__step-n {
+  flex: none;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: var(--kx-accent-ink, #f7f8f7);
+  color: var(--kx-accent, #254132);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 0.7rem/1 var(--font-outlier, ui-monospace, monospace);
+}
+.install-band__step.platform-ios { display: none; }
+body.platform-ios .install-band__step.platform-generic { display: none; }
+body.platform-ios .install-band__step.platform-ios { display: flex; }
+
+.install-band__actions { margin-top: 1.4rem; display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
+.install-band__install {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.8rem 1.35rem;
+  border-radius: var(--radius-cta, 14px);
+  border: none;
+  background: #f7f8f7;   /* fixed: the band is brand-dark in BOTH themes */
+  color: #254132;
+  font: 700 0.92rem/1 var(--kx-btn-font, inherit);
+  cursor: pointer;
+  box-shadow: 0 6px 22px oklch(10% 0.03 160 / 0.35);
+  transition: transform var(--dur-micro, 120ms) ease, filter var(--dur-micro, 120ms) ease;
+}
+.install-band__install:hover { filter: brightness(1.05); }
+.install-band__install:active { transform: scale(0.98); }
+.install-band__install svg { width: 17px; height: 17px; }
+.install-band__install:focus-visible { outline: 2px solid var(--kx-focus, oklch(85% 0.09 155)); outline-offset: 2px; }
+.install-band__install[hidden] { display: none; }
+
+.install-band__skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid oklch(99% 0.004 140 / 0.25);
+  color: var(--kx-band-ink-soft, oklch(88% 0.01 140));
+  font: 600 0.85rem/1 var(--kx-btn-font, inherit);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--dur-micro, 120ms) ease;
+}
+.install-band__skip:hover { background: oklch(99% 0.004 140 / 0.08); }
+
+/* iOS-only hint line under actions */
+.install-band__ioshint {
+  display: none;
+  margin: 0.8rem 0 0;
+  font: 500 0.78rem/1.5 var(--kx-btn-font, inherit);
+  color: var(--kx-band-ink-soft, oklch(85% 0.01 140));
+}
+body.platform-ios .install-band__ioshint { display: block; }
+
+/* dismissed state (30d localStorage flag) */
+.install-band[data-dismissed="1"] { display: none; }
