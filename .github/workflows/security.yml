@@ -1,0 +1,39 @@
+# Secret scanning + dependency audit — CTO review 2026-09-02 (board P1-19)
+# Makes class-of-bug ".env.bak committed by an agent" structurally impossible:
+# gitleaks scans the full diff/history on every PR and push to main.
+name: Security Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret Scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so leak commits are caught retroactively
+      - name: gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm-audit:
+    name: Dependency Audit (prod, HIGH+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies (root workspaces)
+        run: npm ci
+      - name: Audit production deps (fail on HIGH/CRITICAL)
+        run: npm audit --omit=dev --audit-level=high || true # report-only until P1-17a lands, then flip to enforcing
