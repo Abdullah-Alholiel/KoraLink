@@ -22,12 +22,18 @@ import {
     Tag,
     Moon,
     Flag,
+    Download,
+    AlertTriangle,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
-import { useUserStats, useUserProfile, useUpdatePushPreferences, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
+import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
+import { downloadJsonAsFile } from '@/lib/download';
+import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
+import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
+import RestoreAccountBanner from '@/components/profile/RestoreAccountBanner';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -94,6 +100,29 @@ export default function ProfilePage() {
     // installed mode). Cleared when the next attempt is made.
     const [installHintShown, setInstallHintShown] = useState(false);
 
+    // P0-6 (run #29): PDPL sheet state. Both sheets sit idle until the
+    // user taps the corresponding MenuItem. signOutPending and
+    // deletePending are tracked separately so the buttons' spinners
+    // show only for the in-flight action.
+    const [signOutSheetOpen, setSignOutSheetOpen] = useState(false);
+    const [signOutPending, setSignOutPending] = useState(false);
+    const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [exportPending, setExportPending] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+
+    // P0-6 (run #29): when a soft-delete completes, the localStorage
+    // entry carries the scheduled-purge date so the Restore banner can
+    // re-render on a return visit. We read it on mount + after delete.
+    const [purgeAt, setPurgeAt] = useState<string | null>(null);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setPurgeAt(localStorage.getItem('koralink_pdpl_purge_at'));
+    }, [deleteSheetOpen]);
+
+    const softDelete = useSoftDeleteAccount();
+    const exportData = useExportMyData();
+
     // ── User data from Zustand store (populated by auth flow) ──
     const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
@@ -106,7 +135,17 @@ export default function ProfilePage() {
     // every stale query at once).
     const { data: apiUser } = useUserProfile();
     const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useUserStats();
-    const { data: walletData } = useWalletBalance();
+    // Live balance from API. P0-6 (run #29): previously silently fell
+    // back to `0` on error — a materially wrong number with no
+    // affordance. Now show a localized error line + a "—" balance so
+    // the user knows the number is unavailable (vs. a real zero).
+    const { data: walletData, error: walletError, refetch: refetchWallet } = useWalletBalance();
+    const walletErrorMsg = walletError
+        ? (walletError.status === 0
+            ? t('common.offline')
+            : t('common.error'))
+        : null;
+    const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
     const {
         isSubscribed, isSubscribing, isSupported,
         subscribe, unsubscribe,
@@ -154,11 +193,23 @@ export default function ProfilePage() {
     const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
     const avatarInitial = fullName.charAt(0).toUpperCase();
 
-    // Live balance from API
-    const displayBalance = walletData?.balance ?? 0;
-
     return (
         <div className="pb-4">
+            {/* P0-6 (run #29): persistent Restore banner. Shows ABOVE
+                everything when the user has a scheduled-purge date in
+                localStorage. Hidden when restore succeeds or when the
+                user dismisses for the current session. */}
+            {purgeAt && (
+                <RestoreAccountBanner
+                    purgeAt={purgeAt}
+                    onRestored={() => setPurgeAt(null)}
+                    onDismissed={() => {
+                        // session-only dismiss — the localStorage entry
+                        // is left intact so a hard refresh re-shows it.
+                    }}
+                />
+            )}
+
             {/* ── Avatar & Name ─────────────────────── */}
             <div className="flex flex-col items-center pt-[var(--top-safe-inset)] pb-4 bg-white">
                 <div className="relative">
@@ -258,9 +309,26 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<Wallet className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.wallet')}
-                    endText={`SAR ${displayBalance.toFixed(2)}`}
-                    href={`/${locale}/wallet`}
+                    endText={
+                        displayBalance === null
+                            ? '—'
+                            : `SAR ${displayBalance.toFixed(2)}`
+                    }
+                    href={walletErrorMsg ? undefined : `/${locale}/wallet`}
+                    onClick={walletErrorMsg ? () => refetchWallet() : undefined}
                 />
+                {walletErrorMsg && (
+                    <p role="alert" className="mx-4 -mt-1 mb-2 text-xs text-amber-600">
+                        {walletErrorMsg}{' · '}
+                        <button
+                            type="button"
+                            onClick={() => refetchWallet()}
+                            className="font-semibold underline"
+                        >
+                            {t('common.retry')}
+                        </button>
+                    </p>
+                )}
                 <div className="h-px bg-gray-50 mx-4" />
                 <MenuItem
                     icon={<Trophy className="w-5 h-5" strokeWidth={1.5} />}
@@ -278,13 +346,56 @@ export default function ProfilePage() {
                     icon={<LogOut className="w-5 h-5" strokeWidth={1.5} />}
                     label={t('profile.signOut')}
                     danger
-                    onClick={() => {
-                      logout();
-                      clearAuthToken();
-                      window.location.href = `/${locale}/login`;
-                    }}
+                    onClick={() => setSignOutSheetOpen(true)}
                 />
             </div>
+
+            {/* ── Danger Zone (P0-6, run #29) ────────────── */}
+            {/* The Delete + Export actions live in their own card so they're
+                visually distinct from the routine sign-out above. Auth-gated
+                so a logged-out visitor (Reviewer B P1 #3) can't tap them. */}
+            {isAuthenticated && (
+                <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
+                    <div className="px-4 pt-3 pb-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            {t('profile.dangerZone.title')}
+                        </p>
+                    </div>
+                    <MenuItem
+                        icon={<Download className="w-5 h-5" strokeWidth={1.5} />}
+                        label={t('profile.exportData')}
+                        endText={exportPending ? t('common.loading') : undefined}
+                        onClick={async () => {
+                            setExportError(null);
+                            setExportPending(true);
+                            try {
+                                const data = await exportData.mutateAsync();
+                                const today = new Date().toISOString().slice(0, 10);
+                                downloadJsonAsFile(data, `koralink-export-${today}.json`);
+                            } catch (e) {
+                                setExportError((e as Error).message);
+                            } finally {
+                                setExportPending(false);
+                            }
+                        }}
+                    />
+                    {exportError && (
+                        <p role="alert" className="mx-4 mb-2 text-xs text-brand-red">
+                            {exportError}
+                        </p>
+                    )}
+                    <div className="h-px bg-gray-50 mx-4" />
+                    <MenuItem
+                        icon={<AlertTriangle className="w-5 h-5" strokeWidth={1.5} />}
+                        label={t('profile.deleteAccount.menu')}
+                        danger
+                        onClick={() => {
+                            setDeleteError(null);
+                            setDeleteSheetOpen(true);
+                        }}
+                    />
+                </div>
+            )}
 
             {/* ── Settings ──────────────────────────── */}
             <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
@@ -495,6 +606,58 @@ export default function ProfilePage() {
             <p className="text-center text-xs text-gray-300 mt-6 pb-2">
                 {t('profile.footer')}
             </p>
+
+            {/* ── PDPL Sheets (P0-6, run #29) ───────────── */}
+            <SignOutConfirmSheet
+                isOpen={signOutSheetOpen}
+                onClose={() => setSignOutSheetOpen(false)}
+                isPending={signOutPending}
+                onConfirm={async () => {
+                    setSignOutPending(true);
+                    // Brief delay so the spinner is visible; the action
+                    // itself is local (Zustand clear + cookie clear +
+                    // navigate). A future run could add a tracking call.
+                    await new Promise((r) => setTimeout(r, 200));
+                    logout();
+                    clearAuthToken();
+                    setSignOutSheetOpen(false);
+                    window.location.href = `/${locale}/login`;
+                }}
+            />
+            <DeleteAccountSheet
+                isOpen={deleteSheetOpen}
+                onClose={() => {
+                    if (softDelete.isPending) return;
+                    setDeleteSheetOpen(false);
+                }}
+                isPending={softDelete.isPending}
+                errorMessage={deleteError ?? (softDelete.error?.message ?? null)}
+                // Scheduled-purge date: now() + 30 days. We compute it
+                // here so the warning shows the EXACT date the user is
+                // agreeing to, before the API call lands.
+                purgeDate={(() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 30);
+                    return d.toISOString();
+                })()}
+                onConfirm={async () => {
+                    setDeleteError(null);
+                    try {
+                        const result = await softDelete.mutateAsync();
+                        setPurgeAt(result.purge_at);
+                        setDeleteSheetOpen(false);
+                        // Sign the user out client-side so the next
+                        // navigation lands on /login. The server-side
+                        // strategy would 401 them anyway, but the
+                        // explicit clear avoids a 401 flash.
+                        logout();
+                        clearAuthToken();
+                        window.location.href = `/${locale}/login`;
+                    } catch (e) {
+                        setDeleteError((e as Error).message);
+                    }
+                }}
+            />
         </div>
     );
 }

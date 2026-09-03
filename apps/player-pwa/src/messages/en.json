@@ -28,8 +28,10 @@
     "filter": "Filter",
     "noResults": "No results found",
     "offlineBanner": "You're offline — showing cached data",
-    "or": "or",
-    "installRequired": "Add KoraLink to your home screen to enable push notifications."
+    "offline": "Offline",
+    "dismiss": "Dismiss",
+    "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "or": "or"
   },
   "nav": {
     "feed": "Feed",
@@ -415,6 +417,25 @@
       "chatHint": "Push notifications for new direct messages when the app is closed.",
       "promoHint": "Marketing and offers (reserved for future use).",
       "systemHint": "Account actions, report resolution, and admin notices."
+    },
+    "signOutTitle": "Sign out?",
+    "signOutBody": "You'll need to enter your phone number and a new code next time you sign in.",
+    "exportData": "Download my data",
+    "dangerZone": {
+      "title": "Account"
+    },
+    "deleteAccount": {
+      "menu": "Delete my account",
+      "title": "Delete your account?",
+      "body": "This will deactivate your account immediately. You can restore it within 30 days — after that, your data is permanently deleted.",
+      "warning": "Your account will be permanently deleted on {date}. You can restore it any time before then.",
+      "confirm": "Delete my account"
+    },
+    "restoreAccount": {
+      "title": "Account scheduled for deletion",
+      "body": "Your account will be permanently deleted in {days} day(s). Tap Restore to keep your account active.",
+      "restore": "Restore",
+      "dismiss": "Hide for now"
     }
   },
   "wallet": {

@@ -2,7 +2,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
-
 // ─── API Response Types ────────────────────────────────
 
 export interface UserProfileApi {
@@ -182,5 +181,94 @@ export function useSearchUsers(query: string) {
     queryFn: () => fetcher<SearchUserApi[]>(`/users/search?q=${encodeURIComponent(query)}`),
     enabled: query.length >= 2,
     staleTime: 30_000,
+  });
+}
+
+// ─── P0-6 (run #29): PDPL account-delete + restore + data-export ──
+
+export interface SoftDeleteResult {
+  deleted_at: string;
+  purge_at: string;
+  restore_token: string;
+}
+
+/**
+ * POST /users/me (DELETE) — soft-delete. Returns the deletion timestamp,
+ * the scheduled hard-purge date, and a `restore_token` (a JWT with
+ * `purpose: 'restore'`). The PWA persists the token in localStorage
+ * (separate from the main auth token) and shows a banner with a
+ * "Restore" affordance during the 30-day grace window.
+ *
+ * On success, the page navigates to /login. The user is signed out
+ * client-side (Zustand cleared) and the deleted user can no longer
+ * authenticate via the strategy or verifyOtp.
+ */
+export function useSoftDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation<SoftDeleteResult, FetchError, void>({
+    mutationFn: () =>
+      fetcher<SoftDeleteResult>('/users/me', { method: 'DELETE' }),
+    onSuccess: (data) => {
+      // Persist the restore token separately so a future /login flow
+      // can offer "Restore my account" if the user comes back.
+      if (typeof window !== 'undefined' && data?.restore_token) {
+        localStorage.setItem('koralink_pdpl_restore_token', data.restore_token);
+        localStorage.setItem('koralink_pdpl_purge_at', data.purge_at);
+        localStorage.setItem('koralink_pdpl_deleted_at', data.deleted_at);
+      }
+      // Invalidate the profile query — the next /users/me call will 401
+      // (strategy rejects deleted users), but invalidating is the right
+      // shape so any cached profile UI is dropped.
+      queryClient.removeQueries({ queryKey: ['user', 'profile'] });
+    },
+  });
+}
+
+/**
+ * POST /users/me/restore — restore within the 30-day grace. Idempotent
+ * on an active user (returns the profile). Clears the persisted
+ * restore-token + dates from localStorage on success.
+ */
+export function useRestoreAccount() {
+  const queryClient = useQueryClient();
+  return useMutation<UserProfileApi, FetchError, void>({
+    mutationFn: () =>
+      fetcher<UserProfileApi>('/users/me/restore', { method: 'POST' }),
+    onSuccess: () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('koralink_pdpl_restore_token');
+        localStorage.removeItem('koralink_pdpl_purge_at');
+        localStorage.removeItem('koralink_pdpl_deleted_at');
+      }
+      queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
+    },
+  });
+}
+
+/**
+ * GET /users/me/export — JSON envelope of 8 data groups. The fetcher
+ * sees the Content-Disposition: attachment header and returns the
+ * response body as JSON. The PWA converts the JSON to a Blob and
+ * triggers a download (see lib/download.ts).
+ */
+export interface UserExportData {
+  exportedAt: string;
+  schemaVersion: number;
+  profile: Record<string, unknown>;
+  matches: {
+    joined: Array<Record<string, unknown>>;
+    hosted: Array<Record<string, unknown>>;
+  };
+  wallet: { balance: string };
+  transactions: Array<Record<string, unknown>>;
+  disputes: Array<Record<string, unknown>>;
+  reports: Array<Record<string, unknown>>;
+  activities: Array<Record<string, unknown>>;
+  push_subscriptions: Array<Record<string, unknown>>;
+}
+
+export function useExportMyData() {
+  return useMutation<UserExportData, FetchError, void>({
+    mutationFn: () => fetcher<UserExportData>('/users/me/export'),
   });
 }

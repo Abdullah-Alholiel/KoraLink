@@ -700,6 +700,11 @@ export class UsersService {
     // the joined side; add a separate `hosted` slice via the host_id
     // relation so a user sees matches they created but never joined
     // (cancelled/scheduled/etc.).
+    //
+    // Note: `match_players` has no `joined_at` column (the schema
+    // models `created_at` on the table, but the column isn't there in
+    // the live DB). Strip it from the SELECT to keep this query
+    // additive-only.
     const [joinedRows, hostedRows] = await Promise.all([
       this.db.execute(sql`
         SELECT
@@ -707,7 +712,7 @@ export class UsersService {
           m.duration_mins, m.max_players, m.price_per_player::float AS price_per_player,
           m.visibility, p.name AS pitch_name, p.size AS pitch_size, p.surface_type AS pitch_surface,
           v.name AS venue_name, v.city AS venue_city,
-          mp.is_host, mp.team, mp.joined_at
+          mp.is_host, mp.team
         FROM match_players mp
         INNER JOIN matches m ON m.id = mp.match_id
         INNER JOIN pitches p ON p.id = m.pitch_id
@@ -748,7 +753,6 @@ export class UsersService {
         venue_city: r.venue_city,
         is_host: r.is_host,
         team: r.team,
-        joined_at: r.joined_at,
       })),
       hosted: (hostedRows as unknown as Array<Record<string, unknown>>).map((r) => ({
         id: r.id,
