@@ -55,12 +55,25 @@ describe('Play page — host pill + pinned header group', () => {
         expect(pill).toHaveTextContent('Host a Match');
     });
 
-    it('keeps search, calendar and filter bar in one sticky group with a sentinel', () => {
+    it('pins app bar + search + calendar, but NOT the filter bar (Abdullah, r4)', () => {
         const { container } = renderPage();
-        // The sentinel that flips isPinned exists below the sticky group
-        const sentinel = container.querySelector('.h-px[aria-hidden="true"]');
-        expect(sentinel).not.toBeNull();
-        // Calendar strip renders inside the page (group member)
+        // The sticky container exists from scroll-zero (no empty-gap problem)
+        const sticky = container.querySelector('.sticky.top-0.z-40');
+        expect(sticky).not.toBeNull();
+        // App bar (icon + title + bell) is INSIDE the sticky container
+        expect(sticky!.textContent).toContain('KoraLink');
+        // Calendar strip renders inside the group
         expect(screen.getAllByRole('button').length).toBeGreaterThan(3);
+        // Filter chips are OUTSIDE the sticky container — they scroll away
+        const stickyDiv = sticky as HTMLElement;
+        const formatChip = screen.getAllByText('5v5')[0];
+        expect(stickyDiv.contains(formatChip)).toBe(false);
+    });
+
+    it('shows the app icon next to the KoraLink title (not the trophy)', () => {
+        const { container } = renderPage();
+        const img = container.querySelector('img[alt=""]');
+        expect(img).not.toBeNull();
+        expect(img!.getAttribute('src')).toContain('icon-192x192');
     });
 });

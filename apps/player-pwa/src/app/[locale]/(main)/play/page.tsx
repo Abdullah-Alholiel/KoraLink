@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
+import NextImage from 'next/image';
 import DatePicker from '@/components/matches/DatePicker';
 import NotificationBell from '@/components/layout/NotificationBell';
 import MatchDateSections from '@/components/matches/MatchDateSections';
@@ -50,27 +51,13 @@ export default function PlayPage() {
     const storeUser = useAppStore(selectUser);
     const currentUserId = storeUser?.id;
 
-    /* ── Pinned header group (Abdullah, 2026-09-03): search+pill, calendar and
-       filter bar stick under the app bar while scrolling the games list.
-       Sentinel sits BELOW the FilterBar; when it scrolls out of view the group
-       pins. border-b + shadow appear only when pinned (no floating seam). ── */
-    const [isPinned, setIsPinned] = useState(false);
-    const stickySentinelRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const el = stickySentinelRef.current;
-        if (!el) return;
-        const obs = new IntersectionObserver(
-            ([entry]) => setIsPinned(!entry.isIntersecting),
-            { rootMargin: '-46px 0px 0px 0px' } // app bar height ≈ 46px
-        );
-        obs.observe(el);
-        return () => obs.disconnect();
-    }, []);
-
-    const stickyGroupClass = isPinned
-        ? 'sticky top-[46px] z-40 bg-white border-b border-gray-100 shadow-[0_4px_14px_rgba(0,0,0,0.07)]'
-        : 'bg-white';
+    /* ── Fully pinned header (Abdullah, 2026-09-03 r3): the app bar (icon +
+       KoraLink + bell) AND the search/pill/calendar/filter group are ONE
+       sticky container — no empty gap where the app bar used to scroll away.
+       Always pinned (top-0) since the games list is the whole point of the
+       screen; safe-area padding lives on the container (black-translucent
+       status bar draws over app backgrounds, not white chrome). ── */
+    const stickyGroupClass = 'sticky top-0 z-40 bg-white pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)]';
 
     // ── Client-side search filter ──
     const filteredMatches = searchQuery
@@ -87,13 +74,19 @@ export default function PlayPage() {
 
     return (
         <div className="pb-4">
-            {/* ── Top App Bar (inline) ─────────────── */}
-            <div className="bg-white">
+            {/* ── Fully pinned header: app bar + search/pill + calendar + filters.
+                Sticks as ONE unit from scroll position zero — the app bar never
+                scrolls away, so no empty gap is left behind. ── */}
+            <div className={stickyGroupClass}>
                 <div className="flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-2">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center">
-                            <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2.5} />
-                        </div>
+                        <NextImage
+                            src="/icons/icon-192x192.png"
+                            alt=""
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full"
+                        />
                         <span className="text-lg font-bold text-brand-black tracking-tight">
                             {t('app.title')}
                         </span>
@@ -101,11 +94,7 @@ export default function PlayPage() {
                     {/* P2-34 (run #22): bell reachable from every tab */}
                     <NotificationBell />
                 </div>
-            </div>
 
-            {/* ── Pinned group: search + Host pill + calendar + filters.
-                Sticks under the app bar while the games list scrolls. ── */}
-            <div className={stickyGroupClass}>
                 {/* Search bar + labeled Host pill (Abdullah, 2026-09-03:
                     "+ Host a Match" text next to search for easy visual) */}
                 <div className="flex items-center gap-2 px-4 pb-2.5 pt-1">
@@ -143,14 +132,11 @@ export default function PlayPage() {
                         setSelectedDate((prev) => (prev === iso ? null : iso));
                     }}
                 />
-
-                {/* ── Filter Bar ──────────────────────── */}
-                <FilterBar filters={filters} onChange={setFilters} />
             </div>
 
-            {/* Sticky sentinel: when this scrolls past the app bar, the group
-                above pins (IntersectionObserver flips isPinned). */}
-            <div ref={stickySentinelRef} aria-hidden="true" className="h-px" />
+            {/* ── Filter Bar — NOT pinned (Abdullah, 2026-09-03): scrolls away
+                with the list; only app bar + search/pill + calendar stick. ── */}
+            <FilterBar filters={filters} onChange={setFilters} />
 
             {/* ── Content: 5 UX States ────────────── */}
 
