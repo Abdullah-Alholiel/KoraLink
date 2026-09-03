@@ -220,6 +220,16 @@ export const users = pgTable('users', {
   home_lng: doublePrecision('home_lng'),
   banned_at: timestamp('banned_at', { withTimezone: true }),
   suspended_until: timestamp('suspended_until', { withTimezone: true }),
+  // P0-6 (run #29): PDPL soft-delete. NULL = active account. Non-NULL =
+  // deactivated with `deleted_at + 30 days` as the hard-purge deadline.
+  // Auth gates (jwt-cookie strategy, verifyOtp) reject non-NULL; service
+  // methods (searchUsers, getPublicProfile, etc.) filter on it; the
+  // hard-purge job at day 30 ANONYMIZES the row (phone → "deleted:<id>",
+  // name → "Deleted User", avatar → NULL) but leaves the row standing
+  // because `transactions.user_id` is FK RESTRICT — a hard DELETE of a
+  // user with transactions is now blocked at the DB level (migration
+  // 0031). The anonymized ghost row keeps the financial audit trail.
+  deleted_at: timestamp('deleted_at', { withTimezone: true }),
   // ── Push delivery preferences (P1-20, run #13) ──
   // Global kill-switch; quiet hours are Riyadh-local wall-clock hours.
   push_muted: boolean('push_muted').notNull().default(false),
@@ -465,9 +475,14 @@ export const transactions = pgTable(
     id: varchar('id', { length: 36 })
       .primaryKey()
       .$defaultFn(() => randomUUID()),
+    // P0-6 (run #29): switched from `cascade` to `restrict`. PDPL requires
+    // financial transaction history to be retained for audit; a hard
+    // DELETE of a user with transactions is now BLOCKED at the DB level.
+    // The hard-purge job (cron @ 5h) anonymizes the user row instead of
+    // removing it, so the FK target is preserved. See migration 0031.
     user_id: varchar('user_id', { length: 36 })
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     type: transactionTypeEnum('type').notNull(),
     amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
     reference_type: referenceTypeEnum('reference_type').notNull(),

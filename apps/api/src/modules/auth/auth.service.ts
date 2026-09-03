@@ -113,6 +113,34 @@ export class AuthService {
       .values(withTimestamp({ phone }))
       .onConflictDoNothing({ target: users.phone });
 
+    // P0-6 (run #29): PDPL soft-delete. If the phone belongs to a deleted
+    // account, BLOCK OTP dispatch. The user must restore first (the only
+    // surface for that is the in-app banner on a still-valid session, or
+    // a support-assisted restore if their JWT expired during the grace
+    // window). Without this guard, an attacker who knows a deleted user's
+    // phone could re-create them with the same phone (unique constraint
+    // would block the upsert, but they'd be able to mint an OTP for the
+    // row that exists). Also blocks a deactivated user from accidentally
+    // resetting via re-login flow.
+    const [existingUser] = await this.db
+      .select({ id: users.id, deleted_at: users.deleted_at })
+      .from(users)
+      .where(eq(users.phone, phone))
+      .limit(1);
+    if (existingUser?.deleted_at) {
+      this.logger.warn(
+        `send-otp blocked (deleted_at IS NOT NULL) for phone ${phone}`,
+      );
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.FORBIDDEN,
+          message: 'Account scheduled for deletion.',
+          error: 'Forbidden',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     // Store OTP in Redis via cache-manager (5-minute TTL handled by store).
     await this.otpStore.setOtp(phone, code);
     await this.otpStore.setCooldown(phone);
@@ -171,6 +199,14 @@ export class AuthService {
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
       throw new ForbiddenException('Account suspended.');
+    }
+    // P0-6 (run #29): PDPL soft-delete. A deleted account must not be
+    // able to mint a fresh 7-day JWT by re-authenticating — the only
+    // escape is POST /users/me/restore. Throwing here blocks the token
+    // mint at the source. (If the user has a still-valid JWT, the
+    // jwt-cookie strategy already 401s on every guarded call.)
+    if (user.deleted_at) {
+      throw new ForbiddenException('Account scheduled for deletion.');
     }
 
     // Surface separation — the PWA never issues sessions for staff roles and

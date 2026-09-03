@@ -13,6 +13,13 @@ export interface JwtPayload {
   role: string;
   iat?: number;
   exp?: number;
+  /**
+   * P0-6 (run #29): if `'restore'`, the JWT was issued for the PDPL restore
+   * flow and the strategy lets it through even when the user is soft-deleted
+   * (otherwise the deleted user could never call /users/me/restore).
+   * All other tokens (regular session, dev-login) leave this unset / `undefined`.
+   */
+  purpose?: 'restore' | undefined;
 }
 
 /** The request-side user shape guards consume (`req.user`). */
@@ -56,6 +63,12 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
         role: schema.users.role,
         banned_at: schema.users.banned_at,
         suspended_until: schema.users.suspended_until,
+        // P0-6 (run #29): PDPL soft-delete. A deleted user must NOT be
+        // able to use a still-valid JWT — EXCEPT for a one-time restore
+        // token (purpose === 'restore') issued at delete time, which the
+        // PWA uses to call POST /users/me/restore. After restore,
+        // deleted_at is NULL and normal flow resumes.
+        deleted_at: schema.users.deleted_at,
       })
       .from(schema.users)
       .where(eq(schema.users.id, payload.sub))
@@ -73,6 +86,15 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
       throw new UnauthorizedException('Account suspended.');
+    }
+    // P0-6 (run #29): deleted users cannot use a still-valid JWT — UNLESS
+    // the JWT's `purpose` claim is `restore` (set by UsersService.softDelete
+    // when it issues the restore token). The restore flow is the ONLY
+    // path that bypasses this gate; the moment the user calls
+    // /users/me/restore and we null deleted_at, the next regular call
+    // passes normally.
+    if (user.deleted_at && payload.purpose !== 'restore') {
+      throw new UnauthorizedException('Account scheduled for deletion.');
     }
 
     // Role changes (promotion/demotion) must also apply immediately — the

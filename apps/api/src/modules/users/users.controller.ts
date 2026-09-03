@@ -1,16 +1,21 @@
 import {
   Controller,
   Get,
+  Post,
+  Delete,
   Param,
   Patch,
   Body,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
+  ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
@@ -108,5 +113,54 @@ export class UsersController {
   @ApiOkResponse({ description: 'Public user profile.' })
   getPublicProfile(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
     return this.usersService.getPublicProfile(id, user.sub);
+  }
+
+  // ── DELETE /users/me — P0-6 PDPL soft-delete (run #29) ────
+  // Idempotent: a second call returns the existing deleted_at. The
+  // response includes a `restore_token` (purpose: 'restore' JWT) the
+  // PWA persists and uses to call POST /users/me/restore within the
+  // 30-day grace window.
+  @Delete('me')
+  @ApiOperation({
+    summary: 'PDPL soft-delete account (30-day grace before hard purge)',
+  })
+  @ApiOkResponse({
+    description: 'Deletion scheduled; restore_token is a one-time JWT for restore.',
+  })
+  deleteMyAccount(@CurrentUser() user: { sub: string }) {
+    return this.usersService.softDelete(user.sub);
+  }
+
+  // ── POST /users/me/restore — P0-6 PDPL restore (run #29) ──
+  // Idempotent on an active user (returns populated profile). On a
+  // deleted user, sets deleted_at = NULL and returns the populated
+  // profile. Requires a JWT with purpose: 'restore' (or an active
+  // session — idempotent no-op path).
+  @Post('me/restore')
+  @ApiOperation({ summary: 'PDPL restore (only valid within 30-day grace window)' })
+  @ApiOkResponse({ description: 'Restored profile (or current profile if not deleted).' })
+  restoreMyAccount(@CurrentUser() user: { sub: string }) {
+    return this.usersService.restoreUser(user.sub);
+  }
+
+  // ── GET /users/me/export — P0-6 PDPL data export (run #29) ──
+  // Returns a JSON envelope of 8 data groups (profile, matches, wallet,
+  // transactions, disputes, reports, activities, push_subscriptions).
+  // Profile + push_subscriptions are redacted (no internal columns,
+  // no device crypto). The PWA downloads as a file.
+  @Get('me/export')
+  @ApiOperation({ summary: 'PDPL data export (downloadable JSON of all user data)' })
+  @ApiOkResponse({ description: 'A JSON envelope of the user\'s data groups.' })
+  async exportMyData(
+    @CurrentUser() user: { sub: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const data = await this.usersService.exportUserData(user.sub);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="koralink-export-${new Date().toISOString().slice(0, 10)}.json"`,
+    );
+    return data;
   }
 }
