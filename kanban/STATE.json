@@ -1,16 +1,14 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 28,
-  "last_run_at": "2026-09-03T01:18:00Z",
+  "last_run": 29,
+  "last_run_at": "2026-09-03T10:52:00Z",
   "last_run_commits": [
-    "28-PUSH-CAT-API",
-    "28-PUSH-CAT-PWA"
+    "29-PDPL-API",
+    "29-PDPL-PWA"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-03T01-18Z.md",
-  "in_review_items": [
-    "P0-5 per-category push mutes — built run #28 (API + PWA + iOS install gate), verified by next run"
-  ],
+  "last_run_report": "kanban/RUNS/2026-09-03T10-19Z.md",
+  "in_review_items": [],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
@@ -24,14 +22,14 @@
     "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
     "OPS (run #21): first admin build can OOM (137) under memory pressure; solo `turbo run build --filter=admin` retry passes.",
     "P0-5 per-category push preferences — BUILT run #28 (vertical slice DONE: 4-category taxonomy, schema + API + PWA UI + iOS install gate; 6 new jest cases; 302/302 tests; live E2E PASS). Future sub-cycles (deferred, not blocking): 8-category taxonomy, per-category quiet hours, per-subscription push, observability for mute-rate metrics.",
-    "P0-6 PDPL account-delete / data-export — DECIDED by Abdullah 2026-09-02: soft delete + 30-day grace + JSON export of 7 data groups. Buildable.",
+    "P0-6 PDPL account-delete / data-export — BUILT run #29 (2 commits: API + PWA). Sub-cycles deferred: hard-purge cron at day 30, admin 'deleted users' back-office view, PDPL email receipt (needs P0-9).",
     "P0-9 email infrastructure — CARVED run #27. Zero providers in repo (no nodemailer/sendgrid/resend/mailgun/smtp). Required for KSA launch. Architecture decision needed: managed vs self-hosted SMTP. Buildable only AFTER owner call.",
     "P2-42 CSP `script-src` migration — standing reviewer item 11, 2-PR effort (nonce middleware → drop unsafe-inline; then audit Script usage → drop unsafe-eval).",
     "P1-17b partial (run #26): .env.bak-expose-* deleted + .gitignore extended. STILL TODO: rotate the secrets the .bak file held (window unverified); Sentry token rotation; Redis password; admin→HttpOnly cookies; server-side session invalidation; drop Bearer on browser surfaces.",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle — 6 type tightenings, no reachable sink per Strix's own analysis.",
-    "zai delegation for children STILL 401 at gateway layer — 4th consecutive run (#24/#25/#26/#27). Pool itself is clean; gateway daemon (PID 3537113, booted 2026-09-02T06:52:35Z) is resolving children through a stale state. Direct zai probe returns 200. Run #27 used parent self-review. Working path next: re-probe zai, fall back to opencode-go (if key added) or deepseek-v4-flash (402 confirmed unavailable). Recommend gateway restart investigation OR live with self-review."
+    "zai delegation 6th consecutive 401 (runs #24-#29). auth.json pool says `last_status: ok` but direct API rejects both GLM_API_KEY and ZAI_API_KEY (HTTP 401 'token expired or incorrect'). opencode-go with glm-5.3-flash WORKS (delegation.model/provider/base_url flipped to opencode-go this run; 2 reviewers returned clean in 102+109s). Investigate pool credential validation — pool `last_status` is misleading; need probe-based re-validation. Working path for #30: keep opencode-go (Go weekly 56%, healthy for 2 reviewers)."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #27 (2026-09-02 15:33Z) — SECURITY + INFRA SPRINT (4 small slices DONE, all verified): **P1-17c WS origin FIXED**: app.gateway.ts:80-97 drops the NODE_ENV==='production' gate; unlisted origins are now ALWAYS disconnected. 4 new jest cases; live journal probe shows the rejection. **P1-17d ICS escape FIXED**: new apps/api/src/common/security/ics-text.ts (escapeIcsText per RFC 5545 §3.3.11) applied to title/location/description in matches.controller.ts:33,91-105; also fixed a latent bug where the bullet char was literally `\\u2022` instead of `•`. 7 new jest cases; live ICS download shows real `\\,` escapes + CRLF + bullet. **P2-19 per-IP daily OTP cap FIXED**: OtpStoreService extends with `OTP_DAILY_IP_CAP=50` + `keys.ip_day(ip)` + `getIpDailyCount`/`incrementIpDaily`; auth.service.ts:sendOtp(phone, ip?) gates BEFORE per-phone increment; auth.controller.ts threads `req.ip` via @Req(). 3 new jest cases. **P2-32 foreign pitchId 404 FIXED**: partner.service.ts:860-869 throws NotFoundException('Pitch not in your scope.') after scopedPitchIds check, before the existing query. 2 new jest cases. **NEW P0-9 email infra CARVED**: zero providers in repo (no nodemailer/sendgrid/resend/mailgun/smtp) — needs owner call on managed vs self-hosted before any code. P0-5 split: per-category prefs + install-triggered push DEFERRED to #28 (clean cycle with full Gate 3 contract). P0-2/P0-4/P0-6/P0-7/P0-8 still in force. **GATES**: tsc 0, jest 35 suites 296 tests (+16 from #26: 4 gateway + 7 ics-text + 3 auth + 2 partner), vitest 272/272, build 3/3, API restarted + health 200 + dist grep confirms new code. **zai delegation 4th consecutive 401** — parent self-review used; next run MUST re-probe and consider gateway restart. APPROVED RUN PLAN UPDATE: #28 P0-5 per-category push preferences + install-triggered push enablement (full cycle); #29 P0-6 PDPL delete + export; #30 P0-9 email infra (after owner call). drizzle 0.45.2 + P1-17b rotation + P1-17c/#28 + P1-17d/#28 + chat pagination/waitlist/search still queued. Money items (P0-2 real + P1-8/P1-14/P1-27/P1-29/P2-1/P2-3) PARKED until KSA company. strix_scan=2026-09-02 (run #25) — no Strix due this run."
+  "notes": "Run #29 (2026-09-03 10:52Z) — P0-6 PDPL account-delete + data-export DONE ✅ (vertical slice, full cycle). **Build**: 2 commits 8ef3106 (API: migration 0031, users.deleted_at, transactions FK CASCADE→RESTRICT, push_subscriptions kept CASCADE, softDelete + restoreUser + exportUserData service methods, DELETE/POST/GET routes, auth gate on jwt strategy + verifyOtp + sendOtp, searchUsers filter deleted_at/banned_at, UsersModule imports AuthModule) + a17755a (PWA: SignOutConfirmSheet, DeleteAccountSheet, RestoreAccountBanner, useSoftDeleteAccount/Restore/Export hooks, danger zone card, wallet error state, lib/download.ts, 732/732 i18n parity, 7 jest + 12 vitest). **Gates**: tsc 0, vitest 284/284, jest 309/309, build 3/3. **LIVE E2E**: dev-login +966500000001 → DELETE /users/me (200 with deleted_at+purge_at+restore_token) → /users/me (401 'Account scheduled for deletion') → POST /users/me/restore with restore_token (201 with full profile) → re-login (200) → send-otp for deleted phone (403 'Account scheduled for deletion') → dev-login 403 after flag flip. GET /users/me/export returned 6607 bytes with 8 data groups; push_subscriptions redacted (no device crypto). 0 journal errors. **ZAI 6th consecutive 401** — opencode-go with glm-5.3-flash WORKS (2 reviewers 102+109s, 6+5 calls); delegation config flipped to opencode-go; pool says keys are ok but API rejects them — investigate credential validation. **Strix DONE for Sept** (run #25). P0-5 + P0-6 both DONE. Money + email parked. P0-6 sub-cycles (hard-purge cron, admin deleted users view, PDPL email receipt) deferred. APPROVED RUN PLAN: #30 P0-9 email infra (after owner call) OR PDPL sub-cycles (hard-purge cron + admin back-office view) if email spec not ready. drizzle 0.45.2 + P1-17b secret rotation still queued. Money items (P0-2 real + P1-8/P1-14/P1-27/P1-29/P2-1/P2-3) PARKED until KSA company. strix_scan=2026-09-02 (run #25) covers Sept monthly gate."
 }
