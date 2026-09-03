@@ -3,6 +3,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import ErrorBoundary from '@/components/layout/ErrorBoundary';
 import Toast from '@/components/layout/Toast';
 import AuthGuard from '@/components/auth/AuthGuard';
+import ScrollableMain from '@/components/layout/ScrollableMain';
 import NotificationProvider from '@/providers/NotificationProvider';
 import BadgeHydrator from '@/components/layout/BadgeHydrator';
 import WelcomeCheckpoint from '@/components/pwa/WelcomeCheckpoint';
@@ -18,9 +19,7 @@ export default function MainLayout({
                 <AuthGuard>
                     <NotificationProvider>
                         <BadgeHydrator />
-                        <main className="flex-1 overflow-y-auto scroll-container bg-brand-bg">
-                            {children}
-                        </main>
+                        <ScrollableMain>{children}</ScrollableMain>
                         <BottomNav />
                         <Toast />
                         <WelcomeCheckpoint />
