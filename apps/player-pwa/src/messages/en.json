@@ -54,7 +54,12 @@
     "terms": "By continuing, you agree to our",
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
-    "and": "&"
+    "and": "&",
+    "restoreAccount": {
+      "title": "Restore your account?",
+      "body": "Your account is scheduled for deletion in {days} day(s). Tap Restore to keep it active.",
+      "restore": "Restore"
+    }
   },
   "verify": {
     "title": "Enter the code",
@@ -853,10 +858,11 @@
     "label": "Promotions",
     "goToSlide": "Go to slide {n}",
     "host": {
-      "kicker": "Host",
-      "title": "Got a pitch? Gather your crew.",
-      "sub": "You play free when you host.",
-      "cta": "Host"
+      "kicker": "Hosting",
+      "title": "Host a Match",
+      "sub": "Get players together. You play free.",
+      "cta": "Start hosting",
+      "hint": "HOST PLAYS FREE"
     },
     "clubs": {
       "kicker": "Clubs",

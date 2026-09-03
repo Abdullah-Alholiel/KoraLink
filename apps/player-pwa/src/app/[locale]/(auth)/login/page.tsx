@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Trophy, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Trophy, Loader2, AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
+import { useRestoreAccount } from '@/hooks/useUser';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -16,6 +17,43 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
 
     const sendOtp = useSendOtp();
+
+    // P0-6 (run #30): when the user soft-deletes on profile, the restore
+    // token persists to localStorage. Surface a one-tap "Restore" affordance
+    // here so the user can recover their account without first being
+    // bounced through the OTP flow. The fetcher falls back to the
+    // `koralink_pdpl_restore_token` Bearer for /users/me/restore.
+    const [restorePurgeAt, setRestorePurgeAt] = useState<string | null>(null);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setRestorePurgeAt(localStorage.getItem('koralink_pdpl_purge_at'));
+    }, []);
+    const restore = useRestoreAccount();
+    const [restoreError, setRestoreError] = useState<string | null>(null);
+    const daysLeft = restorePurgeAt
+        ? Math.max(0, Math.ceil((new Date(restorePurgeAt).getTime() - Date.now()) / 86_400_000))
+        : 0;
+    const restoreAvailable = restorePurgeAt !== null && daysLeft > 0;
+
+    const handleRestore = async () => {
+        setRestoreError(null);
+        try {
+            const profile = await restore.mutateAsync();
+            // Restore succeeded — the backend returns the populated profile
+            // but doesn't mint a fresh session JWT. We bounce the user to
+            // the verify flow on their existing phone (read from the
+            // restored profile if available) so they get a real session.
+            // Fall back to /login if the profile shape is unexpected.
+            const restoredPhone = (profile as { phone?: string })?.phone;
+            if (restoredPhone) {
+                router.push(`/${locale}/verify?phone=${restoredPhone}`);
+            } else {
+                router.push(`/${locale}/login`);
+            }
+        } catch (e) {
+            setRestoreError((e as Error).message);
+        }
+    };
 
     const handleContinue = () => {
         if (phone.length < 7) return;
@@ -49,6 +87,44 @@ export default function LoginPage() {
 
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center justify-center -mt-16">
+                {/* P0-6 (run #30): restore banner when the user soft-deleted
+                    on profile and the restore token is still valid. Tap →
+                    fetcher falls back to the PDPL restore-token Bearer. */}
+                {restoreAvailable && (
+                    <div
+                        role="alert"
+                        data-testid="restore-account-banner"
+                        className="w-full mt-4 mb-4 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3"
+                    >
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-amber-800">
+                                    {t('restoreAccount.title')}
+                                </p>
+                                <p className="text-xs text-amber-700 mt-1">
+                                    {t('restoreAccount.body', { days: daysLeft })}
+                                </p>
+                                {restoreError && (
+                                    <p className="text-xs text-brand-red mt-2">
+                                        {restoreError}
+                                    </p>
+                                )}
+                                <button
+                                    onClick={handleRestore}
+                                    disabled={restore.isPending}
+                                    className="mt-3 px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {restore.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : null}
+                                    {t('restoreAccount.restore')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <h1 className="text-2xl font-bold text-brand-black text-center leading-tight">
                     {t('titleLine1')}
                     <br />
