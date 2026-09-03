@@ -161,6 +161,24 @@ export const reportStatusEnum = pgEnum('ReportStatus', [
   'dismissed',
 ]);
 
+// P0-5 (run #28): per-category push preferences. 4 categories that cover every
+// web-push trigger today + reserve `promo` for future marketing emails. The
+// `users.push_muted` global kill-switch stays (it's a separate semantic — the
+// user can globally silence EVERYTHING and still have per-category prefs in
+// the table for the day they re-enable).
+export const notificationCategoryEnum = pgEnum('NotificationCategory', [
+  'match',
+  'chat',
+  'promo',
+  'system',
+]);
+
+export type NotificationCategory =
+  | 'match'
+  | 'chat'
+  | 'promo'
+  | 'system';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TypeScript string-literal types (replaces @prisma/client enum imports)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,6 +241,38 @@ export const users = pgTable('users', {
     .defaultNow()
     .$onUpdateFn(() => new Date()),
 });
+
+// P0-5 (run #28): per-category push preferences. One row per (user, category);
+// absence == `muted = false` (default behaviour) so the table stays sparse — a
+// user who only muts `chat` has exactly one row. Cascade-delete with the user
+// keeps the table clean on PDPL soft-delete purges.
+export const user_notification_prefs = pgTable(
+  'user_notification_prefs',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    category: notificationCategoryEnum('category').notNull(),
+    muted: boolean('muted').notNull().default(true),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('user_notification_prefs_user_category_uidx').on(
+      t.user_id,
+      t.category,
+    ),
+    index('user_notification_prefs_user_idx').on(t.user_id),
+  ],
+);
 
 export const venues = pgTable(
   'venues',

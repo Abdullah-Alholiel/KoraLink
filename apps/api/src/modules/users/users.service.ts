@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, sql, and, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { users, match_players, match_votes, matches, follows } from '../../database/schema';
+import { users, match_players, match_votes, matches, follows, user_notification_prefs } from '../../database/schema';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
@@ -302,6 +302,11 @@ export class UsersService {
    * Update the authenticated user's push delivery preferences
    * (P1-20, run #13). Only the provided fields change. Returns the full
    * preference set so the client can reconcile its UI in one round-trip.
+   *
+   * P0-5 (run #28): also persists per-category mutes into
+   * `user_notification_prefs`. Each `categoryMutes` key is a partial PATCH
+   * (absent == leave the stored value alone). On read, missing rows default
+   * to `muted: false` so a brand-new user sees an all-allowed response.
    */
   async updatePushPreferences(
     userId: string,
@@ -322,6 +327,37 @@ export class UsersService {
         .where(eq(users.id, userId));
     }
 
+    // Per-category mutes (P0-5). Upsert per key so a user can flip a single
+    // category back to false without writing the other three. The category
+    // is typed by the DTO so we can iterate the keys statically — no
+    // user-supplied SQL ever touches the table.
+    if (dto.categoryMutes) {
+      const m = dto.categoryMutes;
+      const pairs: { category: 'match' | 'chat' | 'promo' | 'system'; muted: boolean }[] = [];
+      if (m.match !== undefined) pairs.push({ category: 'match', muted: m.match });
+      if (m.chat !== undefined) pairs.push({ category: 'chat', muted: m.chat });
+      if (m.promo !== undefined) pairs.push({ category: 'promo', muted: m.promo });
+      if (m.system !== undefined) pairs.push({ category: 'system', muted: m.system });
+      for (const { category, muted } of pairs) {
+        await this.db
+          .insert(user_notification_prefs)
+          .values({ user_id: userId, category, muted })
+          .onConflictDoUpdate({
+            target: [user_notification_prefs.user_id, user_notification_prefs.category],
+            set: withTimestamp({ muted }),
+          });
+      }
+    }
+
+    return this.getPushPreferences(userId);
+  }
+
+  /**
+   * Read the authenticated user's full push preferences (P1-20 + P0-5).
+   * Always returns the 4 category keys; missing rows default to `muted: false`
+   * (the unmuted default — a brand-new user hasn't chosen yet).
+   */
+  async getPushPreferences(userId: string) {
     const [prefs] = await this.db
       .select({
         push_muted: users.push_muted,
@@ -337,7 +373,25 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
-    return prefs;
+    const stored = await this.db
+      .select({
+        category: user_notification_prefs.category,
+        muted: user_notification_prefs.muted,
+      })
+      .from(user_notification_prefs)
+      .where(eq(user_notification_prefs.user_id, userId));
+
+    const storedByCat: Record<string, boolean> = {};
+    for (const row of stored) storedByCat[row.category] = row.muted;
+
+    const categoryMutes = {
+      match: storedByCat['match'] ?? false,
+      chat: storedByCat['chat'] ?? false,
+      promo: storedByCat['promo'] ?? false,
+      system: storedByCat['system'] ?? false,
+    };
+
+    return { ...prefs, category_mutes: categoryMutes };
   }
 
   /**

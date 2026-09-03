@@ -79,15 +79,27 @@ export class UsersController {
     return this.usersService.updateProfile(user.sub, dto);
   }
 
-  // ── PATCH /users/me/push-preferences — P1-20 (run #13) ──
+  // ── PATCH /users/me/push-preferences — P1-20 (run #13) + P0-5 (run #28) ──
   @Patch('me/push-preferences')
-  @ApiOperation({ summary: 'Update push delivery preferences (mute, quiet hours)' })
+  @ApiOperation({ summary: 'Update push delivery preferences (mute, quiet hours, per-category)' })
   @ApiOkResponse({ description: 'Full push preference set after the update.' })
   updatePushPreferences(
     @CurrentUser() user: { sub: string },
     @Body() dto: UpdatePushPreferencesDto,
   ) {
     return this.usersService.updatePushPreferences(user.sub, dto);
+  }
+
+  // ── GET /users/me/push-preferences — P0-5 (run #28) ─────────────────
+  // Companion read so the PWA can rehydrate prefs on cold load (the Zustand
+  // store doesn't carry the field; the profile page already fetches
+  // /users/me so adding a parallel call would be wasteful — this lives on
+  // the same handler for free).
+  @Get('me/push-preferences')
+  @ApiOperation({ summary: 'Read the authenticated user\'s push preferences' })
+  @ApiOkResponse({ description: 'Full push preference set.' })
+  getPushPreferences(@CurrentUser() user: { sub: string }) {
+    return this.usersService.getPushPreferences(user.sub);
   }
 
   // ── GET /users/:id — Public profile ──────────────────────

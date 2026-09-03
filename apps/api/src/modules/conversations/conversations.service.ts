@@ -311,6 +311,13 @@ export class ConversationsService {
           title: sender?.full_name ?? 'KoraLink',
           body: trimmed.slice(0, 80),
           data: { type: 'dm', conversationId },
+          // P0-5 (run #28): DM pushes belong to the `chat` category so the
+          // per-category mute gate (sendPushToUsers) can drop them for users
+          // who have `chat` muted. The inline-form payload type will be
+          // narrowed in a follow-up — for now this extra field is
+          // accepted-and-ignored by the gate (it only acts when
+          // CATEGORY_BY_KEY resolves the key form).
+          category: 'chat',
         })
         .catch(() => 0);
     }

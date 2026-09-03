@@ -63,6 +63,12 @@ describe('NotificationsService.sendPushToUsers preference filtering (P1-20)', ()
             innerJoin: () => ({
               where: async () => rows,
             }),
+            // P0-5 (run #28): the per-category mute lookup is a second
+            // `select().from().where()` chain. The pre-P0-5 test
+            // didn't exercise this path; the existing tests don't
+            // assert any per-category behaviour, so returning [] is
+            // equivalent to "no mutes" (every sub passes the new gate).
+            where: async () => [],
           }),
         }),
         delete: () => ({
@@ -166,6 +172,10 @@ describe('NotificationsService.sendPomDecidedNotification preference filtering (
             innerJoin: () => ({
               where: async () => subRows,
             }),
+            // P0-5 (run #28): see makeService above. The POTM path
+            // also funnels through sendPushToUsers, so the new mute
+            // chain must be mocked here too.
+            where: async () => [],
           }),
         }),
         delete: () => ({

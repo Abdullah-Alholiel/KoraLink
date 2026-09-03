@@ -16,7 +16,25 @@ import {
   DEFAULT_PUSH_HOST_ALLOWLIST,
 } from '../../common/security/push-endpoint.validator';
 import * as schema from '../../database/schema';
-import { push_subscriptions, match_players, users } from '../../database/schema';
+import { push_subscriptions, match_players, users, user_notification_prefs, type NotificationCategory } from '../../database/schema';
+
+/**
+ * P0-5 (run #28): the canonical mapping from a `PushKey` (semantic catalog) to
+ * a per-user preference category. The DM push uses the inline form, not a
+ * `PushKey`, and threads `category: 'chat'` directly (conversations.service.ts
+ * — see the parallel inline-form type change in `sendPushToUsers`).
+ */
+const CATEGORY_BY_KEY: Partial<Record<PushKey, NotificationCategory>> = {
+  match_starting_soon: 'match',
+  players_needed: 'match',
+  players_needed_renudge: 'match',
+  match_cancelled: 'match',
+  match_rescheduled: 'match',
+  player_removed: 'match',
+  pom_decided: 'match',
+  report_resolved: 'system',
+  report_dismissed: 'system',
+};
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -181,7 +199,18 @@ export class NotificationsService {
   async sendPushToUsers(
     userIds: string[],
     payload:
-      | { title: string; body: string; data: { type: string; matchId?: string; conversationId?: string } }
+      | {
+          title: string;
+          body: string;
+          data: { type: string; matchId?: string; conversationId?: string };
+          // P0-5 (run #28): the inline form now carries an optional
+          // `category` so the per-category mute gate can drop a chat
+          // push for a user who has muted `chat`. Omitting the field is
+          // permitted for backwards compatibility with any caller that
+          // doesn't opt in — those pushes simply aren't gated by
+          // category (the global `push_muted` + quiet hours still apply).
+          category?: NotificationCategory;
+        }
       // P2-8 (run #24): semantic-key form — text is rendered per-subscription
       // from push-text.ts using the subscription's stored locale.
       | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string } },
@@ -192,6 +221,8 @@ export class NotificationsService {
 
     const subs = await this.db
       .select({
+        // P0-5 (run #28): need user_id on the row to look up muted categories.
+        user_id: push_subscriptions.user_id,
         endpoint: push_subscriptions.endpoint,
         p256dh: push_subscriptions.p256dh,
         auth: push_subscriptions.auth,
@@ -204,6 +235,38 @@ export class NotificationsService {
       .from(push_subscriptions)
       .innerJoin(users, eq(users.id, push_subscriptions.user_id))
       .where(inArray(push_subscriptions.user_id, userIds));
+
+    // P0-5 (run #28): per-category mute map. Fetched once for the whole fan-out
+    // so a 100-sub push is one join, not 100. Resolves from CATEGORY_BY_KEY
+    // for the `key` form, and the inline form's `category` field (DM push
+    // threads `category: 'chat'` directly — see conversations.service.ts:308).
+    // For the inline form without an explicit `category`, no category gate
+    // applies (the global `push_muted` + quiet hours still do).
+    const pushCategory: NotificationCategory | null =
+      'key' in payload
+        ? CATEGORY_BY_KEY[payload.key] ?? null
+        : payload.category ?? null;
+
+    const mutedByUser = new Map<string, Set<NotificationCategory>>();
+    if (pushCategory) {
+      const mutes = await this.db
+        .select({
+          user_id: user_notification_prefs.user_id,
+          category: user_notification_prefs.category,
+        })
+        .from(user_notification_prefs)
+        .where(
+          and(
+            inArray(user_notification_prefs.user_id, userIds),
+            eq(user_notification_prefs.muted, true),
+            eq(user_notification_prefs.category, pushCategory),
+          ),
+        );
+      for (const m of mutes) {
+        if (!mutedByUser.has(m.user_id)) mutedByUser.set(m.user_id, new Set());
+        mutedByUser.get(m.user_id)!.add(m.category);
+      }
+    }
 
     const now = new Date();
 
@@ -220,6 +283,13 @@ export class NotificationsService {
           sub.quiet_enabled &&
           NotificationsService.isInQuietHours(now, sub.quiet_start, sub.quiet_end)
         ) {
+          return;
+        }
+        // P0-5 (run #28): per-category mute gate. Resolve from the
+        // precomputed `pushCategory` for the `key` form, and check the
+        // user's muted set in O(1). Drops the sub BEFORE the SSRF + render
+        // work (saves a cache miss + a useless payload build).
+        if (pushCategory && mutedByUser.get(sub.user_id)?.has(pushCategory)) {
           return;
         }
         // P0-8 (run #26): defense-in-depth re-validation at send time. A DB
