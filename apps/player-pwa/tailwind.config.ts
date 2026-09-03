@@ -8,6 +8,7 @@ const config: Config = {
     extend: {
       colors: {
         'brand-green': '#254132',
+        'brand-green-deep': '#1b3227',
         'brand-green-light': '#2d5c3e',
         'brand-red': '#d4494c',
         'brand-black': '#202124',
@@ -30,6 +31,10 @@ const config: Config = {
         'card-hover':
           '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
         nav: '0 -1px 3px 0 rgba(0, 0, 0, 0.05)',
+      },
+      backgroundImage: {
+        // HostHeroBanner (sketches/001-host-button, variant A) — deep → brand → light
+        'host-hero': 'linear-gradient(135deg, #1b3227 0%, #254132 55%, #2d5c3e 100%)',
       },
     },
   },

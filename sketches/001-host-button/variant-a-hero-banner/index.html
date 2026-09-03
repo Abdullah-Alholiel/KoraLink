@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Variant A — Host Hero Banner (KoraLink)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #254132;
+    --green-deep: #1b3227;
+    --green-light: #2d5c3e;
+    --black: #202124;
+    --bg: #f7f8f7;
+    --border: #E5E7EB;
+    --gray: #6B7280;
+  }
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: #e8eae8;
+    color: var(--black);
+    line-height: 1.5;
+    padding: 24px 12px;
+  }
+  h1 { text-align:center; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#9aa39d; margin-bottom:14px; }
+  .phone {
+    width: 390px; margin: 0 auto 32px; background: var(--bg);
+    border-radius: 36px; border: 10px solid #111; overflow: hidden;
+    height: 720px; display: flex; flex-direction: column;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,.18);
+  }
+  .phone.ar { direction: rtl; }
+  .appbar { background:#fff; padding: 14px 16px 12px; }
+  .appbar-row { display:flex; align-items:center; justify-content:space-between; }
+  .brand { display:flex; align-items:center; gap:8px; }
+  .brand-chip { width:32px;height:32px;border-radius:50%;background:rgba(37,65,50,.1);display:flex;align-items:center;justify-content:center;font-size:15px; }
+  .brand-name { font-size:18px; font-weight:700; letter-spacing:-0.01em; }
+  .bell { width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px; }
+  .searchrow { display:flex; gap:10px; align-items:center; padding: 6px 0 0; }
+  .search { flex:1; display:flex; align-items:center; gap:8px; background:#f3f4f6; border:1px solid var(--border); border-radius:999px; padding:10px 16px; color:#9ca3af; font-size:14px; }
+  .hostbtn {
+    flex-shrink:0; width:40px;height:40px;border-radius:50%; background:var(--green); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:300;
+    box-shadow:0 4px 20px rgba(37,65,50,.4); border:none; cursor:pointer;
+  }
+
+  /* ===== VARIANT A: HOST HERO BANNER ===== */
+  .host-banner {
+    margin: 14px 16px 0;
+    border-radius: 24px;
+    overflow: hidden;
+    position: relative;
+    background:
+      radial-gradient(120% 150% at 88% 0%, rgba(45,92,62,0.65) 0%, rgba(27,50,39,0) 60%),
+      linear-gradient(135deg, #1b3227 0%, #254132 55%, #2d5c3e 100%);
+    color: #fff;
+    padding: 18px 18px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 10px 28px rgba(27,50,39,0.28);
+    cursor: pointer;
+    border: none; text-align: start;
+    font-family: inherit;
+    width: calc(100% - 32px);
+    transition: transform .15s ease;
+  }
+  .host-banner:active { transform: scale(.985); }
+  /* pitch line-art: center circle + touchline arcs */
+  .halo {
+    position:absolute; top:-56px; inset-inline-end:-60px; width:170px; height:170px; border-radius:50%;
+    border: 1.5px solid rgba(255,255,255,.30); pointer-events:none;
+  }
+  .halo::before {
+    content:''; position:absolute; inset:18px; border-radius:50%;
+    border: 1.5px dashed rgba(255,255,255,.22);
+  }
+  .halo::after {
+    content:''; position:absolute; inset:0; border-radius:50%;
+    box-shadow: 0 0 60px rgba(127,212,160,.35) inset;
+  }
+  .banner-top { display:flex; align-items:flex-start; justify-content:space-between; position:relative; }
+  .kicker { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#bfe3cd; }
+  .kicker-dot { width:6px;height:6px;border-radius:50%;background:#7fd4a0; box-shadow:0 0 0 3px rgba(127,212,160,.25); }
+  .stadium-emoji { font-size:26px; line-height:1; }
+  .banner-mid { position:relative; display:block; }
+  .banner-title { display:block; font-size:22px; font-weight:800; letter-spacing:-0.015em; color:#fff; }
+  .banner-sub { display:block; font-size:13px; color:rgba(255,255,255,.78); margin-top:3px; max-width: 32ch; }
+  .banner-actions { display:flex; align-items:center; gap:12px; position:relative; margin-top:2px; }
+  .cta {
+    display:inline-flex; align-items:center; gap:8px;
+    background:#fff; color:var(--green-deep); border:none; cursor:pointer;
+    font-family: inherit; font-size:13px; font-weight:700;
+    padding: 11px 18px; border-radius:999px;
+    box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    transition: transform .15s ease;
+  }
+  .cta:active { transform: scale(.97); }
+  .price-hint {
+    font-size:11px; color:rgba(255,255,255,.75); display:inline-flex; align-items:center; gap:5px; font-weight:600;
+  }
+  .price-hint .spark { color:#7fd4a0; }
+
+  .list { padding-top: 4px; }
+  .card { background:#fff; border-radius:18px; padding:14px; margin:12px 16px 0; box-shadow:0 1px 4px rgba(0,0,0,.05); display:flex; gap:12px; align-items:center; }
+  .skel-avatar { width:40px;height:40px;border-radius:50%;background:#e5e7eb; }
+  .skel-lines { flex:1; }
+  .skel-line { height:12px; border-radius:6px; background:#e5e7eb; margin-bottom:8px; }
+  .skel-line.short { width:55%; background:#f0f1f0; margin-bottom:0; }
+  .nav {
+    margin-top:auto; background:#fff; border-top:1px solid var(--border);
+    display:grid; grid-template-columns: repeat(5,1fr); padding: 8px 0 22px; position:relative;
+  }
+  .nav-item { display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:#9ca3af; font-weight:500;}
+  .nav-item.active { color:var(--green); font-weight:700; }
+  .nav-icon { font-size:19px; }
+  .fab {
+    width:64px;height:64px;border-radius:50%;background:var(--green);
+    margin-top:-32px; display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 20px rgba(27,67,50,.4); border:4px solid #fff; font-size:24px; color:#fff;
+  }
+  .fab-label { color: var(--green) !important; font-weight:700; }
+</style>
+</head>
+<body>
+  <h1>Variant A — Host Hero Banner</h1>
+
+  <!-- EN -->
+  <div class="phone">
+    <div class="appbar">
+      <div class="appbar-row">
+        <div class="brand">
+          <div class="brand-chip">🏟️</div>
+          <span class="brand-name">KoraLink</span>
+        </div>
+        <div class="bell">🔔</div>
+      </div>
+      <div class="searchrow">
+        <div class="search">🔍 Where to play?</div>
+        <button class="hostbtn" title="Host a Match">+</button>
+      </div>
+    </div>
+
+    <!-- THE NEW HOST HERO BANNER -->
+    <button class="host-banner" aria-label="Host a Match — start hosting">
+      <span class="halo" aria-hidden="true"></span>
+      <span class="banner-top">
+        <span class="kicker"><span class="kicker-dot"></span> HOSTING</span>
+        <span class="stadium-emoji">⚽</span>
+      </span>
+      <span class="banner-mid">
+        <span class="banner-title">Host a Match</span>
+        <span class="banner-sub">Get players together. You play free.</span>
+      </span>
+      <span class="banner-actions">
+        <span class="cta">Start hosting <span class="arrow">→</span></span>
+        <span class="price-hint"><span class="spark">✦</span> HOST PLAYS FREE</span>
+      </span>
+    </button>
+
+    <div class="list">
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <div class="nav-item"><span class="nav-icon">📰</span>Feed</div>
+      <div class="nav-item"><span class="nav-icon">👥</span>Clubs</div>
+      <div class="nav-item active"><div class="fab">▶</div><span class="fab-label">Play</span></div>
+      <div class="nav-item"><span class="nav-icon">💬</span>Messages</div>
+      <div class="nav-item"><span class="nav-icon">👤</span>Profile</div>
+    </div>
+  </div>
+
+  <!-- AR -->
+  <div class="phone ar" lang="ar" dir="rtl" style="font-family:'Tajawal', -apple-system, 'Segoe UI', sans-serif;">
+    <div class="appbar">
+      <div class="appbar-row">
+        <div class="brand">
+          <div class="brand-chip">🏟️</div>
+          <span class="brand-name">كورالينك</span>
+        </div>
+        <div class="bell">🔔</div>
+      </div>
+      <div class="searchrow">
+        <div class="search">🔍 أين تريد اللعب؟</div>
+        <button class="hostbtn" title="استضافة مباراة">+</button>
+      </div>
+    </div>
+
+    <button class="host-banner" aria-label="استضافة مباراة">
+      <span class="halo" aria-hidden="true"></span>
+      <span class="banner-top">
+        <span class="kicker">استضافة</span>
+        <span class="stadium-emoji">⚽</span>
+      </span>
+      <span class="banner-mid">
+        <span class="banner-title">استضف مباراة</span>
+        <span class="banner-sub">اجمع اللاعبين. أنت تلعب مجاناً.</span>
+      </span>
+      <span class="banner-actions">
+        <span class="cta">ابدأ الاستضافة <span class="arrow">←</span></span>
+        <span class="price-hint"><span class="spark">✦</span> المضيف يلعب مجاناً</span>
+      </span>
+    </button>
+
+    <div class="list">
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+      <div class="card">
+        <div class="skel-avatar"></div>
+        <div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <div class="nav-item"><span class="nav-icon">📰</span>المتابعة</div>
+      <div class="nav-item"><span class="nav-icon">👥</span>الأندية</div>
+      <div class="nav-item active"><div class="fab">▶</div><span class="fab-label">العب</span></div>
+      <div class="nav-item"><span class="nav-icon">💬</span>الرسائل</div>
+      <div class="nav-item"><span class="nav-icon">👤</span>الملف الشخصي</div>
+    </div>
+  </div>
+</body>
+</html>

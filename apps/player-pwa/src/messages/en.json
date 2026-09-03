@@ -848,5 +848,21 @@
       "resolved": "Resolved",
       "dismissed": "Dismissed"
     }
+  },
+  "promos": {
+    "label": "Promotions",
+    "goToSlide": "Go to slide {n}",
+    "host": {
+      "kicker": "Host",
+      "title": "Got a pitch? Gather your crew.",
+      "sub": "You play free when you host.",
+      "cta": "Host"
+    },
+    "clubs": {
+      "kicker": "Clubs",
+      "title": "Find your football home.",
+      "sub": "Venues and clubs near you.",
+      "cta": "Explore"
+    }
   }
 }

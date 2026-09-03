@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -50,6 +50,28 @@ export default function PlayPage() {
     const storeUser = useAppStore(selectUser);
     const currentUserId = storeUser?.id;
 
+    /* ── Pinned header group (Abdullah, 2026-09-03): search+pill, calendar and
+       filter bar stick under the app bar while scrolling the games list.
+       Sentinel sits BELOW the FilterBar; when it scrolls out of view the group
+       pins. border-b + shadow appear only when pinned (no floating seam). ── */
+    const [isPinned, setIsPinned] = useState(false);
+    const stickySentinelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = stickySentinelRef.current;
+        if (!el) return;
+        const obs = new IntersectionObserver(
+            ([entry]) => setIsPinned(!entry.isIntersecting),
+            { rootMargin: '-46px 0px 0px 0px' } // app bar height ≈ 46px
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, []);
+
+    const stickyGroupClass = isPinned
+        ? 'sticky top-[46px] z-40 bg-white border-b border-gray-100 shadow-[0_4px_14px_rgba(0,0,0,0.07)]'
+        : 'bg-white';
+
     // ── Client-side search filter ──
     const filteredMatches = searchQuery
         ? matches.filter((m) => {
@@ -79,9 +101,14 @@ export default function PlayPage() {
                     {/* P2-34 (run #22): bell reachable from every tab */}
                     <NotificationBell />
                 </div>
+            </div>
 
-                {/* Search bar + Host button */}
-                <div className="flex items-center gap-3 px-4 pb-3">
+            {/* ── Pinned group: search + Host pill + calendar + filters.
+                Sticks under the app bar while the games list scrolls. ── */}
+            <div className={stickyGroupClass}>
+                {/* Search bar + labeled Host pill (Abdullah, 2026-09-03:
+                    "+ Host a Match" text next to search for easy visual) */}
+                <div className="flex items-center gap-2 px-4 pb-2.5 pt-1">
                     <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
                         <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
                         <input
@@ -94,26 +121,36 @@ export default function PlayPage() {
                     </div>
                     <Link
                         href={`/${locale}/host`}
-                        className="w-10 h-10 flex items-center justify-center rounded-full bg-brand-green text-white active:scale-95 transition-transform shadow-[0_4px_20px_rgba(37,65,50,0.4)]"
+                        className="flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-brand-green bg-white ps-1.5 pe-3.5 active:scale-95 transition-transform"
                         aria-label={t('host.title')}
+                        data-testid="host-plus-button"
                     >
-                        <Plus className="w-5 h-5" strokeWidth={2.5} />
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-green text-white">
+                            <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+                        </span>
+                        <span className="text-[12.5px] font-bold text-brand-green">
+                            {t('play.hostMatch')}
+                        </span>
                     </Link>
                 </div>
+
+                {/* ── Date Picker (all games by default; tap to filter, tap again to clear) ── */}
+                <DatePicker
+                    fireOnMount={false}
+                    selectedDate={selectedDate ? new Date(selectedDate) : null}
+                    onDateSelect={(date) => {
+                        const iso = dateInRiyadh(date);
+                        setSelectedDate((prev) => (prev === iso ? null : iso));
+                    }}
+                />
+
+                {/* ── Filter Bar ──────────────────────── */}
+                <FilterBar filters={filters} onChange={setFilters} />
             </div>
 
-            {/* ── Date Picker (all games by default; tap to filter, tap again to clear) ── */}
-            <DatePicker
-                fireOnMount={false}
-                selectedDate={selectedDate ? new Date(selectedDate) : null}
-                onDateSelect={(date) => {
-                    const iso = dateInRiyadh(date);
-                    setSelectedDate((prev) => (prev === iso ? null : iso));
-                }}
-            />
-
-            {/* ── Filter Bar ──────────────────────── */}
-            <FilterBar filters={filters} onChange={setFilters} />
+            {/* Sticky sentinel: when this scrolls past the app bar, the group
+                above pins (IntersectionObserver flips isPinned). */}
+            <div ref={stickySentinelRef} aria-hidden="true" className="h-px" />
 
             {/* ── Content: 5 UX States ────────────── */}
 

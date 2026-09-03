@@ -8,6 +8,7 @@ import { useFeed } from '@/hooks/useFeed';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import ActivityCard from '@/components/feed/ActivityCard';
 import NotificationBell from '@/components/layout/NotificationBell';
+import PromoBillboard from '@/components/feed/PromoBillboard';
 import PullToRefresh from '@/components/feed/PullToRefresh';
 
 const LAST_SEEN_KEY = 'koralink_feed_last_seen';
@@ -96,6 +97,9 @@ export default function CommunityFeedPage() {
           </div>
           <NotificationBell />
         </div>
+
+        {/* ── Promo billboard (compact, rotating: host / clubs / …) ── */}
+        <PromoBillboard />
 
         {/* ── New activities pill ── */}
         {hasNewAbove && !isLoading && (
