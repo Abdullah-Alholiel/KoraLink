@@ -427,7 +427,7 @@ export const matches = pgTable(
     // P1-1 scheduler: set once when the "match starting soon" reminder fires,
     // so each match is reminded exactly once (NULL = not yet reminded).
     reminders_sent_at: timestamp('reminders_sent_at', { withTimezone: true }),
-    booking_mode: bookingModeEnum('booking_mode').notNull().default('self'),
+    booking_mode: bookingModeEnum('booking_mode').notNull().default('koralink'),
     booking_slot_id: varchar('booking_slot_id', { length: 36 })
       .references(() => pitch_slots.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true })

@@ -1175,7 +1175,9 @@ export class MatchesService {
       throw new NotFoundException(`Pitch ${dto.pitch_id} not found.`);
     }
 
-    const bookingMode = dto.booking_mode ?? 'self';
+    // Product default — matches the PWA form default and the DB column
+    // default: an omitted booking_mode means KoraLink books the pitch.
+    const bookingMode = dto.booking_mode ?? 'koralink';
     const visibility = dto.visibility ?? 'public';
     const pitchCostSar = round2(
       parseFloat(pitch.hourlyRate) * dto.duration_mins / 60,

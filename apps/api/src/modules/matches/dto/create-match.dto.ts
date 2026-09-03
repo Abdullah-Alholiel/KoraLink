@@ -53,8 +53,8 @@ export class CreateMatchDto {
   @Min(0)
   pitchCostSar?: number;
 
-  @ApiPropertyOptional({ enum: ['koralink', 'self'], default: 'self',
-    description: 'Who handles pitch booking — koralink = we book it, self = host books it' })
+  @ApiPropertyOptional({ enum: ['koralink', 'self'], default: 'koralink',
+    description: 'Who handles pitch booking — koralink = we book it, self = host books it. Defaults to koralink.' })
   @IsOptional()
   @IsEnum(['koralink', 'self'])
   booking_mode?: 'koralink' | 'self';

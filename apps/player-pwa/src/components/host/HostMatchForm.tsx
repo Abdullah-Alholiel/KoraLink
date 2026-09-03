@@ -34,8 +34,12 @@ export default function HostMatchForm() {
      * Validated: YYYY-MM-DD, today-or-later in Riyadh. Past/garbage → null. */
     const dateFromQuery = parseHostDateParam(searchParams?.get('date'));
 
-    /* ── Mode State ──────────────────────────────── */
-    const [mode, setMode] = useState<'koralink' | 'self'>('self');
+    /* ── Mode State ────────────────────────────────
+     * Product default: "Book via Us" (koralink) — every entry into the host
+     * flow opens in koralink mode; the host must actively switch to "Book by
+     * Yourself". Backend layers (client Zod schema, API service fallback,
+     * DTO/Swagger, DB column default) all mirror this default. */
+    const [mode, setMode] = useState<'koralink' | 'self'>('koralink');
     const [visibility, setVisibility] = useState<Visibility>('public');
     const [showWarning, setShowWarning] = useState(false);
 

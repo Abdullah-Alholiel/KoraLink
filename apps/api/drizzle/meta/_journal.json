@@ -225,6 +225,13 @@
       "when": 1788334800000,
       "tag": "0031_pdpl_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788448640000,
+      "tag": "0032_booking_mode_default_koralink",
+      "breakpoints": true
     }
   ]
 }

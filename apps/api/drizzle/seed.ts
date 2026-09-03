@@ -776,7 +776,13 @@ async function seed() {
         location: olayaLoc,
         completed_at: votingLiveCompleted,
       },
-    ])
+    ].map((m) => ({
+      // Seeded matches are all self-booked: none occupies a pitch slot (all
+      // seeded slots are is_booked: false). Set explicitly — never ride the
+      // booking_mode column default, which is 'koralink' since migration 0032.
+      booking_mode: 'self' as const,
+      ...m,
+    })))
     .returning({
       id: schema.matches.id,
       title: schema.matches.title,
