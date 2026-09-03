@@ -7,6 +7,14 @@ import {
 } from '@/store/slices';
 import type { User, PaymentMethod } from '@/types';
 
+// P2-45: the auth slice now funnels logout through the persisted-cache wipe.
+// Mocked so the slice test never loads the real IDB/observability chain.
+const clearPersistedQueryCacheSpy = vi.fn();
+vi.mock('@/lib/query-persister', () => ({
+  clearPersistedQueryCache: (...args: unknown[]) =>
+    clearPersistedQueryCacheSpy(...args),
+}));
+
 // Helper: create a mock set that returns the partial state
 function mockSet<T>() {
   const set = vi.fn((fn: (state: T) => Partial<T>) => {
@@ -59,6 +67,11 @@ describe('createAuthSlice', () => {
     expect(set.__prevState.token).toBeNull();
     expect(set.__prevState.isAuthenticated).toBe(false);
     expect(set.__prevState.isOnboarded).toBe(false);
+    // P2-45: logout must also wipe the persisted query cache so the next
+    // user on a shared device never sees the previous user's cached rows.
+    // (Error-swallowing of the wipe itself is covered in query-persister.test.ts
+    // — the real clearPersistedQueryCache never rejects.)
+    expect(clearPersistedQueryCacheSpy).toHaveBeenCalledTimes(1);
   });
 
   it('updateUser merges partial fields into existing user', () => {

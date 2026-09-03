@@ -1,4 +1,5 @@
 import type { User, PaymentMethod } from '@/types';
+import { clearPersistedQueryCache } from '@/lib/query-persister';
 
 // ─── Auth Slice ─────────────────────────────────────
 
@@ -25,13 +26,18 @@ export const createAuthSlice = (
     login: (user, token) =>
         set(() => ({ user, token, isAuthenticated: true })),
 
-    logout: () =>
-        set(() => ({
+    logout: () => {
+        // Wipe the persisted query cache (P2-45) FIRST — fire-and-forget so
+        // logout UX never waits on IndexedDB; the in-memory cache is cleared
+        // by the hard navigations all logout paths perform.
+        void clearPersistedQueryCache();
+        return set(() => ({
             user: null,
             token: null,
             isAuthenticated: false,
             isOnboarded: false,
-        })),
+        }));
+    },
 
     updateUser: (partial) =>
         set((state) => ({
