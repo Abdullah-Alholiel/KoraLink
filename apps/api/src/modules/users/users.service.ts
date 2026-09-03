@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -866,5 +866,62 @@ export class UsersService {
       activities: activityRows,
       push_subscriptions: pushRows,
     };
+  }
+
+  /**
+   * P0-6 (run #30): hard-purge users past their 30-day PDPL grace window.
+   *
+   * Anonymizes the user row in place (does NOT DELETE the row — the
+   * transactions FK is RESTRICT per migration 0031, so a hard DELETE
+   * would break the financial audit trail).
+   *
+   * - phone → 'purged-<short-id>' (a deterministic but unique placeholder
+   *   that fits the varchar(20) column; the last 12 chars of the UUID are
+   *   enough to keep the unique-phone constraint satisfied).
+   * - full_name → 'Deleted User'
+   * - handle → NULL
+   * - avatar_url → NULL
+   * - home_lat/home_lng → NULL
+   * - preferred_location/position/skill_level → NULL
+   * - banned_at/suspended_until → NULL
+   * - verification_status → 'pending' (the only safe default)
+   * - deleted_at → NOW() (refresh so a re-trigger doesn't fire on the
+   *   same row again — the WHERE clause matches `deleted_at < NOW() - 30d`,
+   *   so a freshly-refreshed deleted_at is excluded from the next tick)
+   *
+   * Returns the count of anonymized rows.
+   *
+   * Idempotent: a row already anonymized has phone='purged-...' and
+   * `deleted_at < now() - 30d` still matches → re-purging it sets
+   * deleted_at=NOW() (idempotent), name='Deleted User' (idempotent), etc.
+   * Side effects are minimal.
+   */
+  async purgeExpiredAccounts(): Promise<number> {
+    const purged = await this.db
+      .update(users)
+      .set({
+        phone: sql`('purged-' || RIGHT(${users.id}, 12))`,
+        full_name: 'Deleted User',
+        handle: null,
+        avatar_url: null,
+        home_lat: null,
+        home_lng: null,
+        preferred_location: null,
+        preferred_position: null,
+        skill_level: null,
+        banned_at: null,
+        suspended_until: null,
+        verification_status: 'pending',
+        deleted_at: sql`NOW()`,
+        updated_at: new Date(),
+      })
+      .where(
+        and(
+          isNotNull(users.deleted_at),
+          lt(users.deleted_at, sql`NOW() - INTERVAL '${sql.raw(String(PDPL_GRACE_DAYS))} days'`),
+        ),
+      )
+      .returning({ id: users.id });
+    return purged.length;
   }
 }
