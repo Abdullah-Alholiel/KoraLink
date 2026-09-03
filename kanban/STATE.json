@@ -1,21 +1,15 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 27,
-  "last_run_at": "2026-09-02T15:33:00Z",
+  "last_run": 28,
+  "last_run_at": "2026-09-03T01:18:00Z",
   "last_run_commits": [
-    "27-WS-ORIGIN",
-    "27-ICS-ESCAPE",
-    "27-OTP-IP-CAP",
-    "27-PITCHID-404",
-    "27-KANBAN-DOCS"
+    "28-PUSH-CAT-API",
+    "28-PUSH-CAT-PWA"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-02T15-33Z.md",
+  "last_run_report": "kanban/RUNS/2026-09-03T01-18Z.md",
   "in_review_items": [
-    "P1-17c WS origin allowlist — built run #27, verified by next run",
-    "P1-17d ICS TEXT escape — built run #27, verified by next run",
-    "P2-19 per-IP daily OTP cap — built run #27, verified by next run",
-    "P2-32 foreign pitchId 404 — built run #27, verified by next run"
+    "P0-5 per-category push mutes — built run #28 (API + PWA + iOS install gate), verified by next run"
   ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -29,7 +23,7 @@
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
     "RUNBOOK (run #21): HERMES_DELEGATED_CHILD_CONTEXT is injected LATE into cron sessions — always prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
     "OPS (run #21): first admin build can OOM (137) under memory pressure; solo `turbo run build --filter=admin` retry passes.",
-    "P0-5 per-category push preferences — scope BROADENED by Abdullah 2026-09-02: P0-5 sub-slices split; per-IP OTP cap BUILT run #27 (P2-19 DONE); per-category prefs + install-triggered push DEFERRED to #28.",
+    "P0-5 per-category push preferences — BUILT run #28 (vertical slice DONE: 4-category taxonomy, schema + API + PWA UI + iOS install gate; 6 new jest cases; 302/302 tests; live E2E PASS). Future sub-cycles (deferred, not blocking): 8-category taxonomy, per-category quiet hours, per-subscription push, observability for mute-rate metrics.",
     "P0-6 PDPL account-delete / data-export — DECIDED by Abdullah 2026-09-02: soft delete + 30-day grace + JSON export of 7 data groups. Buildable.",
     "P0-9 email infrastructure — CARVED run #27. Zero providers in repo (no nodemailer/sendgrid/resend/mailgun/smtp). Required for KSA launch. Architecture decision needed: managed vs self-hosted SMTP. Buildable only AFTER owner call.",
     "P2-42 CSP `script-src` migration — standing reviewer item 11, 2-PR effort (nonce middleware → drop unsafe-inline; then audit Script usage → drop unsafe-eval).",
