@@ -17,6 +17,9 @@ import {
     Camera,
     Bell,
     BellOff,
+    Calendar,
+    MessageCircle,
+    Tag,
     Moon,
     Flag,
 } from 'lucide-react';
@@ -86,6 +89,11 @@ export default function ProfilePage() {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
 
+    // P0.5 (run #28): show a one-line hint when the user taps "subscribe"
+    // but the PWA isn't installed (iOS contract — push only works in
+    // installed mode). Cleared when the next attempt is made.
+    const [installHintShown, setInstallHintShown] = useState(false);
+
     // ── User data from Zustand store (populated by auth flow) ──
     const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
@@ -116,7 +124,29 @@ export default function ProfilePage() {
         quiet_hours_enabled: profileForPrefs?.quiet_hours_enabled ?? false,
         quiet_start_hour: profileForPrefs?.quiet_start_hour ?? 23,
         quiet_end_hour: profileForPrefs?.quiet_end_hour ?? 7,
+        // P0-5 (run #28): per-category mutes. Default to all-false (allowed)
+        // so a brand-new user with no prefs in the table sees the right UI.
+        category_mutes: {
+            match: profileForPrefs?.category_mutes?.match ?? false,
+            chat: profileForPrefs?.category_mutes?.chat ?? false,
+            promo: profileForPrefs?.category_mutes?.promo ?? false,
+            system: profileForPrefs?.category_mutes?.system ?? false,
+        },
     };
+
+    // Stable, per-category icon + hint so the UI doesn't repeat the
+    // map. The category keys are a closed union; the icons are
+    // already imported for adjacent features.
+    const CATEGORY_ROWS: {
+        key: 'match' | 'chat' | 'promo' | 'system';
+        icon: typeof Bell;
+        hintKey: string;
+    }[] = [
+        { key: 'match', icon: Calendar, hintKey: 'profile.push.matchHint' },
+        { key: 'chat', icon: MessageCircle, hintKey: 'profile.push.chatHint' },
+        { key: 'promo', icon: Tag, hintKey: 'profile.push.promoHint' },
+        { key: 'system', icon: Shield, hintKey: 'profile.push.systemHint' },
+    ];
 
     // Merge store + API data. API takes priority when available.
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
@@ -283,8 +313,30 @@ export default function ProfilePage() {
                             }
                             label={t('profile.notifications')}
                             endText={isSubscribed ? t('profile.notificationsOn') : t('profile.notificationsOff')}
-                            onClick={() => isSubscribed ? unsubscribe() : subscribe()}
+                            onClick={() => {
+                                if (isSubscribed) {
+                                    unsubscribe();
+                                    return;
+                                }
+                                // P0.5 (run #28): wire the install-gate
+                                // feedback. `subscribe()` returns false when
+                                // the PWA isn't installed (iOS contract) —
+                                // surface a one-line hint so the user knows
+                                // why nothing happened.
+                                setInstallHintShown(false);
+                                subscribe().then((ok) => {
+                                    if (!ok && !isSubscribed) setInstallHintShown(true);
+                                });
+                            }}
                         />
+                        {mounted && installHintShown && !isSubscribed && (
+                            <p
+                                role="status"
+                                className="mx-4 -mt-1 mb-1 text-xs text-amber-600"
+                            >
+                                {t('common.installRequired')}
+                            </p>
+                        )}
                         {mounted && isSubscribed && (
                             <>
                                 <div className="h-px bg-gray-50 mx-4" />
@@ -359,6 +411,58 @@ export default function ProfilePage() {
                                             )}
                                         </div>
                                     )}
+
+                                    {/* P0.5 (run #28): per-category push
+                                        mutes. Each toggle is a partial PATCH
+                                        on the API side; absent keys leave
+                                        the stored value alone. */}
+                                    <div className="h-px bg-gray-50 mx-4" />
+                                    <div className="px-4 pt-3 pb-1">
+                                        <p className="text-sm font-medium text-brand-black">
+                                            {t('profile.push.categoriesHint')}
+                                        </p>
+                                    </div>
+                                    {CATEGORY_ROWS.map(({ key, icon: Icon, hintKey }, idx) => (
+                                        <div key={key}>
+                                            {idx === 0 && <div className="h-px bg-gray-50 mx-4" />}
+                                            <div className="px-4 py-3">
+                                                <button
+                                                    type="button"
+                                                    className="flex w-full items-center justify-between gap-3 text-start"
+                                                    onClick={() =>
+                                                        mutatePrefs({
+                                                            categoryMutes: {
+                                                                [key]: !prefs.category_mutes[key],
+                                                            },
+                                                        })
+                                                    }
+                                                    aria-pressed={prefs.category_mutes[key]}
+                                                >
+                                                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-black">
+                                                        <Icon
+                                                            className="w-5 h-5 text-gray-500 shrink-0"
+                                                            strokeWidth={1.5}
+                                                        />
+                                                        <span className="truncate">
+                                                            {t(`profile.push.categories.${key}`)}
+                                                        </span>
+                                                    </span>
+                                                    <span
+                                                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${prefs.category_mutes[key] ? 'bg-gray-200' : 'bg-brand-green'}`}
+                                                        role="switch"
+                                                        aria-checked={!prefs.category_mutes[key]}
+                                                    >
+                                                        <span
+                                                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${prefs.category_mutes[key] ? 'translate-x-0.5 rtl:-translate-x-0.5' : 'translate-x-5 rtl:-translate-x-5'}`}
+                                                        />
+                                                    </span>
+                                                </button>
+                                                <p className="mt-1 ps-7 text-xs text-gray-500">
+                                                    {t(hintKey)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </>
                         )}

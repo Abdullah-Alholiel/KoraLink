@@ -52,6 +52,27 @@ export function usePushNotifications(locale: string = 'en') {
 
     setIsSubscribing(true);
     try {
+      // P0.5 (run #28): iOS Safari only delivers web push to installed PWAs
+      // (system contract — `display-mode: standalone` OR the iOS
+      // `navigator.standalone` flag). Asking for permission before install
+      // lets the user deny a request that would have been silent anyway,
+      // and creates a poor first impression. Surface a localized hint and
+      // return false; the profile UI can pick it up and show the install
+      // prompt. `mounted` guards the SSR window.
+      if (typeof window === 'undefined') return false;
+      const isStandalone =
+        (typeof window.matchMedia === 'function' &&
+          window.matchMedia('(display-mode: standalone)').matches) ||
+        // iOS Safari exposes `navigator.standalone` as a boolean.
+        // Navigator isn't always defined during SSR hydration.
+        (typeof navigator !== 'undefined' && (navigator as Navigator & { standalone?: boolean }).standalone === true);
+      if (!isStandalone) {
+        // No exception — the user is just not in the installed surface yet.
+        // The profile UI surfaces `common.installRequired` if the consumer
+        // wants to show a hint.
+        return false;
+      }
+
       const granted = await requestPermission();
       if (!granted) return false;
 

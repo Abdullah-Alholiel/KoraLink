@@ -28,7 +28,8 @@
     "filter": "Filter",
     "noResults": "No results found",
     "offlineBanner": "You're offline — showing cached data",
-    "or": "or"
+    "or": "or",
+    "installRequired": "Add KoraLink to your home screen to enable push notifications."
   },
   "nav": {
     "feed": "Feed",
@@ -401,7 +402,20 @@
     "footer": "KoraLink v2.1.0 • Made with 🇸🇦❤️ in KSA",
     "languageEn": "English",
     "languageAr": "العربية",
-    "myReports": "My Reports"
+    "myReports": "My Reports",
+    "push": {
+      "categories": {
+        "match": "Match updates",
+        "chat": "Direct messages",
+        "promo": "Promotions",
+        "system": "System & account"
+      },
+      "categoriesHint": "Choose which kinds of notifications you want. You can still mute everything at the top.",
+      "matchHint": "Kickoff reminders, cancellations, reschedules, Player of the Match.",
+      "chatHint": "Push notifications for new direct messages when the app is closed.",
+      "promoHint": "Marketing and offers (reserved for future use).",
+      "systemHint": "Account actions, report resolution, and admin notices."
+    }
   },
   "wallet": {
     "title": "Wallet",

@@ -57,11 +57,21 @@ export function useUserProfile() {
 
 // ─── Push Delivery Preferences (P1-20) ─────────────────
 
+export interface PushCategoryMutes {
+  match: boolean;
+  chat: boolean;
+  promo: boolean;
+  system: boolean;
+}
+
 export interface PushPreferences {
   push_muted: boolean;
   quiet_hours_enabled: boolean;
   quiet_start_hour: number;
   quiet_end_hour: number;
+  // P0-5 (run #28): per-category mutes returned by the API. The 4 keys are
+  // always present; `false` means the category is allowed.
+  category_mutes: PushCategoryMutes;
 }
 
 /** PATCH body — camelCase, matching UpdatePushPreferencesDto on the API. */
@@ -70,6 +80,9 @@ export type PushPreferencesInput = Partial<{
   quietHoursEnabled: boolean;
   quietStartHour: number;
   quietEndHour: number;
+  // P0-5 (run #28): each category key is itself optional — sending a
+  // partial subset leaves the other categories' stored values untouched.
+  categoryMutes: Partial<PushCategoryMutes>;
 }>;
 
 export function useUpdatePushPreferences() {
