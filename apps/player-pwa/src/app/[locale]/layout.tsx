@@ -9,6 +9,7 @@ import ServiceWorkerUpdater from '@/components/auth/ServiceWorkerUpdater';
 import ChunkLoadErrorHandler from '@/components/auth/ChunkLoadErrorHandler';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import InstallLandingGuard from '@/components/pwa/InstallLandingGuard';
+import ViewportHeightSync from '@/components/layout/ViewportHeightSync';
 import '@/styles/globals.css';
 
 const outfit = Outfit({
@@ -115,6 +116,7 @@ export default async function RootLayout({
             <IntlClientProvider locale={locale} messages={messages}>
               <LocationProvider>
                 <AuthBootstrap />
+                <ViewportHeightSync />
                 <ServiceWorkerUpdater />
                 <ChunkLoadErrorHandler />
                 <InstallLandingGuard>
