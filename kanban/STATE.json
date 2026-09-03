@@ -8,7 +8,10 @@
     "29-PDPL-PWA"
   ],
   "last_run_report": "kanban/RUNS/2026-09-03T10-19Z.md",
-  "in_review_items": [],
+  "in_review_items": [
+    "P2-45 persisted query cache (offline-first cold start) — commit c0980b0. Verify: vitest test/lib/query-persister.test.ts + slices logout-wipe, tsc, build; spot-check cold-open render from IDB.",
+    "P2-46 local DB + offline mutation queue — PARKED by Abdullah 2026-09-03 (build only if offline ACTIONS become a requirement); mirror card t_9338488a carries the note."
+  ],
   "open_blockers": [
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
