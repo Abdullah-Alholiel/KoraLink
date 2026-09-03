@@ -54,7 +54,7 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
     return (
         <>
             {/* ── Inline quick format chips + filter button ── */}
-            <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto scroll-container">
+            <div className="flex items-center gap-2 px-4 py-2.5 overflow-x-auto scroll-container">
                 {FORMAT_KEYS.map((f) => (
                     <button
                         key={f}

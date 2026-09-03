@@ -57,7 +57,7 @@ export default function PlayPage() {
        Always pinned (top-0) since the games list is the whole point of the
        screen; safe-area padding lives on the container (black-translucent
        status bar draws over app backgrounds, not white chrome). ── */
-    const stickyGroupClass = 'sticky top-0 z-40 bg-white pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)]';
+    const stickyGroupClass = 'sticky top-0 z-40 bg-white shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100';
 
     // ── Client-side search filter ──
     const filteredMatches = searchQuery
