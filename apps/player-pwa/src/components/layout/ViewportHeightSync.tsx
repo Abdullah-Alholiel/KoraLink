@@ -4,29 +4,27 @@ import { useEffect } from 'react';
 import { captureError } from '@/providers/ObservabilityProvider';
 
 /**
- * ViewportHeightSync v2 — iOS standalone (installed PWA) bottom-gap fix.
+ * ViewportHeightSync v3 — iOS standalone (installed PWA) bottom-gap fix.
  *
- * Symptom (Abdullah, 2026-09-03, persisted across delete+reinstall): a dead
- * strip below BottomNav in the INSTALLED app only — never in browser/desktop.
+ * Device ground truth (Abdullah's iPhone, iOS 18.7, 428×926pt, Sentry
+ * 'viewport-diagnostic:standalone' event 05ee0962): in standalone the VISIBLE
+ * web canvas is 879pt top-anchored; the bottom 47pt (home-indicator zone) is
+ * OUTSIDE the canvas and painted by iOS itself (launch underlay). Web code
+ * cannot render there — ever.
  *
- * Root cause: with `viewportFit: cover` + `black-translucent` the app draws
- * edge-to-edge, but iOS WebKit standalone misreports dynamic viewport units —
- * `100dvh`/`100vh` resolve SMALLER than the physical screen (safe areas are
- * treated as dynamic chrome). The fixed shell (body height: var(--app-height))
- * ends short and the body background shows below the nav.
+ * Therefore: pin --app-height to the VISIBLE CANVAS = max(innerHeight,
+ * clientHeight, visualViewport.height) — the measures that agree on the true
+ * paintable area. NEVER screen.height/availHeight (v2 pinned 926 and pushed
+ * BottomNav's labels into the unpaintable zone → clipped labels, hidden Play
+ * label). With canvas-correct height the nav is fully visible and the system
+ * zone merges with the nav's white background (native Settings-app look).
  *
- * v1 pinned window.innerHeight — insufficient: innerHeight can be reported
- * short in standalone too (same safe-area accounting). v2 pins the PHYSICAL
- * screen height: the max of every viewport measure the platform offers
- * (screen.height/width — width guards the landscape-report quirk — availHeight,
- * visualViewport.height, innerHeight, documentElement.clientHeight). All sane
- * browsers agree on at least one truth here; iOS standalone's largest number
- * is the physical height. Web mode is untouched (dvh default is correct and
- * drives keyboard/toolbar tracking).
- *
- * Also emits a ONE-SHOT per-session Sentry diagnostic with the raw viewport
- * numbers, so device ground truth lands in Sentry even if this heuristic ever
- * misses on some future iOS build.
+ * Edge-to-edge (no strip at all) requires the viewport-fit:cover meta to be
+ * honored — which iOS does reliably only on SECURE origins. On the insecure
+ * http://IP bookmark iOS caps the canvas short; re-adding the bookmark from
+ * the HTTPS origin restores the full canvas. The Sentry diagnostic
+ * ('viewport-diagnostic:standalone') keeps capturing per-device numbers to
+ * verify that.
  */
 export default function ViewportHeightSync() {
     useEffect(() => {
@@ -37,18 +35,16 @@ export default function ViewportHeightSync() {
 
         const apply = (reason: string) => {
             const vv = window.visualViewport;
+            // Visible (paintable) canvas — NOT screen.height (v2 lesson: the
+            // home-indicator zone is unpaintable; nav labels got buried there).
             const candidates = [
-                window.screen?.height,
-                window.screen?.width, // orientation quirk: iOS may report the long edge here
-                window.screen?.availHeight,
-                window.screen?.availWidth,
-                vv?.height,
                 window.innerHeight,
                 document.documentElement.clientHeight,
+                vv?.height,
             ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0);
-            const physical = Math.round(Math.max(...candidates));
-            if (physical <= 0) return;
-            document.documentElement.style.setProperty('--app-height', `${physical}px`);
+            const canvas = Math.round(Math.max(...candidates));
+            if (canvas <= 0) return;
+            document.documentElement.style.setProperty('--app-height', `${canvas}px`);
 
             // One-shot diagnostic per session — device ground truth to Sentry.
             try {
@@ -65,7 +61,8 @@ export default function ViewportHeightSync() {
                         screenW: window.screen?.width ?? null,
                         availH: window.screen?.availHeight ?? null,
                         dpr: window.devicePixelRatio,
-                        pinned: physical,
+                        pinned: canvas,
+                        canvasVsScreenDelta: (window.screen?.height ?? canvas) - canvas,
                         dvhSupport: window.CSS?.supports?.('height', '100dvh') ?? null,
                     });
                 }
