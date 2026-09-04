@@ -8,13 +8,9 @@ import { users, match_players, match_votes, matches, follows, user_notification_
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 
 type DB = PostgresJsDatabase<typeof schema>;
-
-// P0-6 (run #29): PDPL grace window. After deleted_at, the user has this
-// many days to POST /users/me/restore before the hard-purge job
-// anonymizes the row.
-const PDPL_GRACE_DAYS = 30;
 
 @Injectable()
 export class UsersService {

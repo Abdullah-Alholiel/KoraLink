@@ -6,13 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-
-/**
- * P0-6 (run #29) PDPL grace window in days. MUST mirror
- * UsersService.PDPL_GRACE_DAYS (apps/api/src/modules/users/users.service.ts)
- * — the restore token's signed `iat` is the window anchor here.
- */
-const PDPL_GRACE_DAYS = 30;
+import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 
 /**
  * P1-36 hardening (run #31 resume, Reviewer A): match on the URL PATH only.
