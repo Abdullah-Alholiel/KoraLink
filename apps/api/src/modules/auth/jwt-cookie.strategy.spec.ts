@@ -14,7 +14,10 @@ import type { Request } from 'express';
  *   deleted + restore token, restore route, in window → PASS (the only happy path)
  *   deleted + restore token, /admin/*  → 403 (admin surface is closed)
  *   deleted + restore token, past iat+30d → 403 (ghost rows stay dead)
- *   active + any token                 → unaffected
+ *   active + restore token, any route  → 403 (spent-token replay guard,
+ *                                        run #31 resume — a restore token
+ *                                        is never a session token)
+ *   active + regular token             → unaffected
  */
 describe('JwtCookieStrategy P1-36 restore-token scope gate (run #31)', () => {
   const NOW_S = Math.floor(Date.now() / 1000);
@@ -121,13 +124,18 @@ describe('JwtCookieStrategy P1-36 restore-token scope gate (run #31)', () => {
     ).rejects.toThrow(/Restore window has expired/);
   });
 
-  it('ACTIVE user + restore token → unaffected (no deleted gate)', async () => {
+  // Run #31 resume hardening (Reviewer A IMPORTANT #1): a restore token is
+  // NOT a session token. Once restore succeeds (deleted_at NULL), the same
+  // JWT used to be accepted on EVERY route until exp — a leaked restore
+  // token was a full session on the restored account. Now it 403s.
+  it('ACTIVE user + restore token on a normal route → 403 (spent-token replay guard)', async () => {
     const strategy = makeStrategy(activeUser);
-    const result = await strategy.validate(otherReq, restoreToken(10));
-    expect(result.sub).toBe('u1');
+    await expect(
+      strategy.validate(otherReq, restoreToken(10)),
+    ).rejects.toThrow(/already been used/);
   });
 
-  it('ACTIVE user + regular token → unaffected', async () => {
+  it('ACTIVE user + REGULAR token → unaffected', async () => {
     const strategy = makeStrategy(activeUser);
     const result = await strategy.validate(otherReq, {
       sub: 'u1',

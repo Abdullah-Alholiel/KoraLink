@@ -14,6 +14,27 @@ import * as schema from '../../database/schema';
  */
 const PDPL_GRACE_DAYS = 30;
 
+/**
+ * P1-36 hardening (run #31 resume, Reviewer A): match on the URL PATH only.
+ * originalUrl carries the query string (?code=…, ?utm_source=…) and
+ * endsWith on the raw URL would 403 a legitimate restore call that happens
+ * to carry one. decodeURIComponent tolerates encoded separators in the
+ * query part; a percent-encoded '?' (%3F) inside the path itself decodes
+ * BEFORE the split, so it can never smuggle extra segments past this gate
+ * — the split point is the FIRST real '?' of the decoded URL, matching
+ * Express's own routing.
+ */
+function requestPathOf(req: Request | undefined): string {
+  const rawUrl = req?.originalUrl ?? req?.path ?? '';
+  try {
+    return decodeURIComponent(rawUrl).split('?')[0];
+  } catch {
+    // Malformed percent-encoding: fall back to the raw split (the restore
+    // happy path never sends malformed URLs).
+    return rawUrl.split('?')[0];
+  }
+}
+
 export interface JwtPayload {
   sub: string;
   phone: string;
@@ -130,24 +151,9 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
       // restore Bearer ONLY to /users/me/restore (fetcher.ts getBearerForRequest)
       // and the restore hook deletes the token on success (useUser.ts:239),
       // so the strict gate cannot break the happy path.
-      // P1-36 hardening (run #31 resume): match on the URL PATH only —
-      // originalUrl carries the query string (?code=…, ?utm_source=…), and
-      // endsWith on the raw URL would 403 a legitimate restore call that
-      // happens to carry one. decodeURIComponent tolerates encoded
-      // separators in the query part; a percent-encoded '?' (%3F) inside
-      // the path itself decodes BEFORE the split, so it can never smuggle
-      // extra segments past this gate — the split point is the FIRST real
-      // '?' of the decoded URL, matching Express's own routing.
-      const rawUrl = req?.originalUrl ?? req?.path ?? '';
-      const reqPath = (() => {
-        try {
-          return decodeURIComponent(rawUrl).split('?')[0];
-        } catch {
-          // Malformed percent-encoding: fall back to the raw split (the
-          // restore happy path never sends malformed URLs).
-          return rawUrl.split('?')[0];
-        }
-      })();
+      // P1-36 hardening (run #31 resume, Reviewer A): match on the URL PATH
+      // only — the query-string-proof variant of the route gate.
+      const reqPath = requestPathOf(req);
       if (!reqPath.endsWith('/users/me/restore')) {
         throw new ForbiddenException('This token can only restore the account.');
       }
@@ -160,6 +166,21 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
           'Restore window has expired. The account is permanently scheduled for deletion.',
         );
       }
+    } else if (payload.purpose === 'restore') {
+      // Spent-token replay guard (run #31 resume, Reviewer A IMPORTANT #1):
+      // once /users/me/restore has succeeded, deleted_at is NULL but the
+      // restore JWT may still be hours-to-days from exp — and until this
+      // guard, it was accepted on EVERY route as a full session token
+      // (mitigated only by the PWA deleting its localStorage copy). A
+      // restore token is NOT a session token: on an ACTIVE account it does
+      // nothing, so it is rejected everywhere. (The restore route itself
+      // never reaches this branch with purpose:'restore' + active user —
+      // UsersService.restore() treats it as a no-op — and rejecting it here
+      // too would be equally safe; the PWA deletes the token immediately
+      // after a 200 either way.)
+      throw new ForbiddenException(
+        'This restore token has already been used. Please sign in normally.',
+      );
     }
 
     // Role changes (promotion/demotion) must also apply immediately — the
