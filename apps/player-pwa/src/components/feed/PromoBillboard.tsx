@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { Sparkles, Users, type LucideIcon } from 'lucide-react';
@@ -16,9 +16,13 @@ import { Sparkles, Users, type LucideIcon } from 'lucide-react';
  * destination page. No placeholder destinations.
  *
  * Interaction: auto-advances every 5s (paused for prefers-reduced-motion and
- * hidden tabs); dots are a11y buttons OUTSIDE the Link; crossfade via key
- * remount (animate-fade-in-up) — RTL-safe, no horizontal translate. Hrefs are
- * locale-prefixed via useLocale().
+ * hidden tabs, clock restarts after any manual navigation); dots are a11y
+ * buttons OUTSIDE the Link; finger swipe changes slide (RTL-mirrored — swipe
+ * right in Arabic goes forward) via pure `swipeToStep` mapping; the carousel
+ * keeps `touch-pan-y` so vertical finger scrolling ALWAYS chains to the feed
+ * scroller — only deliberate horizontal travel (>48px) is a swipe. Crossfade
+ * via key remount (animate-fade-in-up) — RTL-safe, no horizontal translate.
+ * Hrefs are locale-prefixed via useLocale().
  */
 
 type SlideKey = 'host' | 'clubs';
@@ -39,13 +43,40 @@ const SLIDES: Slide[] = [
 ];
 
 const ROTATE_MS = 5000;
+/** Deliberate horizontal travel before a drag counts as a swipe (matches
+ *  the native Android ViewPager2 fling threshold). */
+const SWIPE_THRESHOLD_PX = 48;
+
+/** Maps a horizontal drag (sign carries the direction) to a carousel step.
+ *  RTL-aware: in Arabic the axis mirrors, so swiping RIGHT is "next". The
+ *  browser's touch AXIS-LOCK already decided this gesture is horizontal
+ *  (the carousel carries `touch-pan-y`), so diagonal finger travel that
+ *  leans vertical chains to the feed scroller instead — no math needed. */
+export function swipeToStep(sign: number): -1 | 1 {
+    return sign < 0 ? 1 : -1;
+}
 
 export default function PromoBillboard() {
     const t = useTranslations('promos');
     const locale = useLocale();
+    const rtl = locale === 'ar';
     const [index, setIndex] = useState(0);
+    const touchStartX = useRef<number | null>(null);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const many = SLIDES.length > 1;
+
+    /* Manual navigation (swipe/dot) restarts the auto-advance clock, so a
+     * slide the player just swiped to never vanishes mid-read. */
+    const goTo = (i: number) => {
+        setIndex(((i % SLIDES.length) + SLIDES.length) % SLIDES.length);
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                setIndex((cur) => (cur + 1) % SLIDES.length);
+            }
+        }, ROTATE_MS);
+    };
 
     useEffect(() => {
         if (!many) return;
@@ -53,13 +84,41 @@ export default function PromoBillboard() {
             typeof window !== 'undefined' &&
             window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (reduced) return;
-        const id = setInterval(() => {
+        timerRef.current = setInterval(() => {
             if (document.visibilityState === 'visible') {
                 setIndex((i) => (i + 1) % SLIDES.length);
             }
         }, ROTATE_MS);
-        return () => clearInterval(id);
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
     }, [many]);
+
+    /* ── Finger swipe (native-feel, scroll-safe) ──
+     * `touch-pan-y` on the carousel lets the BROWSER axis-lock each gesture:
+     * predominantly-vertical touch travel pans the carousel element (and
+     * chains to the feed scroller) and never reaches onTouchMove as a
+     * horizontal candidate; predominantly-horizontal travel is pannable
+     * here, so we see it and map it to prev/next via swipeToStep (RTL-
+     * mirrored). Pointer (mouse) drag is intentionally not a swipe input —
+     * on desktop the Link must stay a plain click target. */
+    const onTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        const startX = touchStartX.current;
+        if (startX == null || !many) return;
+        const dx = e.touches[0].clientX - startX;
+        if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
+            touchStartX.current = null;
+            goTo(index + swipeToStep(rtl ? -dx : dx));
+        }
+    };
+
+    const onTouchEnd = () => {
+        touchStartX.current = null;
+    };
 
     const slide = SLIDES[index];
 
@@ -70,8 +129,13 @@ export default function PromoBillboard() {
             data-testid="promo-billboard"
         >
             <div
-                className="overflow-hidden rounded-3xl bg-host-hero
-                    shadow-[0_10px_28px_rgba(27,50,39,0.28)]"
+                data-testid="promo-carousel"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onTouchCancel={onTouchEnd}
+                className="overflow-hidden rounded-3xl bg-host-hero select-none
+                    shadow-[0_10px_28px_rgba(27,50,39,0.28)] touch-pan-y"
             >
                 {/* Slide body — one Link, crossfades on index change */}
                 <Link
@@ -135,7 +199,7 @@ export default function PromoBillboard() {
                         {SLIDES.map((s, i) => (
                             <button
                                 key={s.key}
-                                onClick={() => setIndex(i)}
+                                onClick={() => goTo(i)}
                                 aria-label={t('goToSlide', { n: i + 1 })}
                                 aria-current={i === index}
                                 className={`h-1.5 rounded-full transition-all ${

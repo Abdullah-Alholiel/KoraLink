@@ -22,7 +22,7 @@ export default function ScrollableMain({ children }: { children: ReactNode }) {
   return (
     <main
       ref={scrollRef}
-      className="flex-1 overflow-y-auto scroll-container bg-brand-bg"
+      className="flex-1 min-h-0 overflow-y-auto scroll-container bg-brand-bg"
     >
       {children}
     </main>

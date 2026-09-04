@@ -36,7 +36,7 @@ export default function ReportsPage() {
     }).format(new Date(iso));
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 bg-white relative z-10">
         <button
@@ -58,7 +58,11 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scroll-container bg-brand-bg p-4 space-y-3">
+      {/* STANDARD (single-scroller): plain content block — <main class="scroll-container">
+          (ScrollableMain) is the ONLY scroller. A nested overflow-y-auto wrapper here
+          blocked wheel/touch scroll chaining (overscroll-behavior: contain with no
+          height). Same fix as my-games. */}
+      <div className="bg-brand-bg p-4 space-y-3">
         {/* Loading */}
         {isLoading && (
           <div className="flex justify-center py-20">

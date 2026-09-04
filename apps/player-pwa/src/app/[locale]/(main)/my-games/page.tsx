@@ -43,7 +43,7 @@ export default function MyGamesPage() {
   );
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 flex-shrink-0 bg-white relative z-10">
         <button
@@ -67,7 +67,11 @@ export default function MyGamesPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scroll-container bg-brand-bg">
+      {/* STANDARD (single-scroller): plain content block — <main class="scroll-container">
+          (ScrollableMain) is the ONLY scroller. A nested overflow-y-auto wrapper here
+          blocked wheel/touch scroll chaining (overscroll-behavior: contain with no
+          height) and left My Games stuck on desktop. Same fix as reports. */}
+      <div className="bg-brand-bg">
         {/* Loading */}
         {isLoading && (
           <div className="flex justify-center py-20">
