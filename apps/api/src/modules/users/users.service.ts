@@ -419,7 +419,13 @@ export class UsersService {
         skill_level: users.skill_level,
       })
       .from(users)
-      .where(eq(users.id, userId))
+      .where(
+        // P1-35 (run #31): a soft-deleted user's public profile must 404.
+        // Migration 0031's contract says deleted users vanish from search
+        // AND public profile; searchUsers got the filter in run #29, this
+        // call site was missed (Reviewer A run #31, CRITICAL C2).
+        and(eq(users.id, userId), isNull(users.deleted_at)),
+      )
       .limit(1);
 
     if (!user) {

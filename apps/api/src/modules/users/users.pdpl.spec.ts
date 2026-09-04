@@ -202,4 +202,70 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
     // The contract is: empty array, no SQL.
     expect(calls.find((c) => c.method === 'execute')).toBeUndefined();
   });
+
+  // ── getPublicProfile deleted filter (P1-35, run #31) ──────────
+
+  /** Full-chain stub for getPublicProfile: it runs 4 sequential queries. */
+  function makeProfileDb(userRow: unknown) {
+    const calls: { method: string; clause?: string }[] = [];
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: (clause: unknown) => {
+            calls.push({
+              method: 'select',
+              clause: new PgDialect().sqlToQuery(clause as never).sql,
+            });
+            // query 1: profile row (via .limit()) —
+            // query 2: games_played COUNT (awaited directly, one row) —
+            // query 3: follow lookup (awaited directly, empty)
+            const n = calls.length;
+            const rows = n === 1 ? (userRow ? [userRow] : []) : n === 2 ? [{ games_played: 0 }] : [];
+            const afterWhere = {
+              limit: async () => rows,
+              then: (
+                resolve: (v: unknown[]) => void,
+                reject: (e: unknown) => void,
+              ) => resolve(rows),
+            };
+            return afterWhere;
+          },
+        }),
+      }),
+      execute: async () => [],
+    };
+    return { db, calls };
+  }
+
+  it('getPublicProfile 404s for a soft-deleted user (isNull tripwire)', async () => {
+    // The assertion below is a WHERE-clause TRIPWIRE, not a data test —
+    // like the searchUsers case, it pins the generated SQL text so an
+    // `eq(users.deleted_at, ...)` regression (silent zero rows) or a
+    // dropped filter cannot reintroduce the leak (Reviewer A run #31
+    // CRITICAL C2; migration 0031 contract).
+    const { db, calls } = makeProfileDb(null);
+    const service = makeService(db as never);
+    await expect(service.getPublicProfile('u1')).rejects.toThrow(/User not found/);
+    const primary = calls[0];
+    expect(primary?.clause).toMatch(/deleted_at/i);
+    expect(primary?.clause).toMatch(/is null/i);
+    expect(primary?.clause).toMatch(/"users"\."id"/);
+  });
+
+  it('getPublicProfile still resolves an ACTIVE user', async () => {
+    const { db } = makeProfileDb({
+      id: 'u1',
+      full_name: 'Active User',
+      handle: 'active1',
+      avatar_url: null,
+      preferred_position: 'ST',
+      skill_level: 'Intermediate',
+    });
+    const service = makeService(db as never);
+    const profile = await service.getPublicProfile('u1', 'u2');
+    expect(profile.id).toBe('u1');
+    expect(profile.pom_count).toBe(0);
+    expect(profile.followersCount).toBe(0);
+    expect(profile.isFollowing).toBe(false);
+  });
 });
