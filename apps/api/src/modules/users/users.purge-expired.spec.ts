@@ -34,6 +34,7 @@ describe('UsersService P0-6 hard-purge (run #30)', () => {
       payload: unknown;
     }[] = [];
     const whereClauses: string[] = [];
+    const deleteClauses: string[] = [];
     const setPayloads: Record<string, unknown>[] = [];
     const purgedIds = opts?.purgedIds ?? [];
 
@@ -59,14 +60,17 @@ describe('UsersService P0-6 hard-purge (run #30)', () => {
         };
         return u;
       },
-      delete: () => ({
-        where: () => Promise.resolve(),
+      delete: (_table: unknown) => ({
+        where: (clause: unknown) => {
+          deleteClauses.push(dialect.sqlToQuery(clause as never).sql);
+          return Promise.resolve();
+        },
       }),
       query: {},
       execute: () => Promise.resolve([]),
       transaction: async (cb: (tx: unknown) => unknown) => cb(db),
     };
-    return { db, calls, whereClauses, setPayloads };
+    return { db, calls, whereClauses, deleteClauses, setPayloads };
   }
 
   function makeService(db: unknown): UsersService {
@@ -126,5 +130,23 @@ describe('UsersService P0-6 hard-purge (run #30)', () => {
     await svc.purgeExpiredAccounts();
     expect(whereClauses[0]).toContain("INTERVAL '30 days'");
     expect(whereClauses[0]).toContain('< NOW() - INTERVAL');
+  });
+
+  // I3 (run #31, Reviewer A): subscriptions re-created during the grace
+  // window must be deleted when the ghost is purged (migration 0031 docs).
+  it('deletes push_subscriptions for the purged user ids (grace-window re-subscribes)', async () => {
+    const { db, deleteClauses } = makeDb({ purgedIds: ['u1', 'u2'] });
+    const svc = makeService(db);
+    await svc.purgeExpiredAccounts();
+    expect(deleteClauses).toHaveLength(1);
+    expect(deleteClauses[0]).toContain('"push_subscriptions"."user_id"');
+    expect(deleteClauses[0]).toMatch(/in \(/);
+  });
+
+  it('issues NO push_subscriptions delete when nothing is purged', async () => {
+    const { db, deleteClauses } = makeDb({ purgedIds: [] });
+    const svc = makeService(db);
+    await svc.purgeExpiredAccounts();
+    expect(deleteClauses).toHaveLength(0);
   });
 });

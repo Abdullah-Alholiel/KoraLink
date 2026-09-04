@@ -537,6 +537,13 @@ export class UsersService {
 
     // Idempotent: a second call returns the existing deleted_at.
     if (existing.deleted_at) {
+      // A-I4 (run #31, Reviewer A): anchor the re-signed token's expiry to
+      // purge_at, NOT to now — a second DELETE on day 29 previously minted
+      // a fresh 31-day token that outlived the purge deadline by 30 days.
+      // The strategy's signed-`iat` window check remains the outer bound;
+      // this JWT exp is the tighter one.
+      const purgeAt = new Date(existing.deleted_at.getTime() + PDPL_GRACE_DAYS * 86_400_000);
+      const remainingSec = Math.floor((purgeAt.getTime() - Date.now()) / 1000);
       const restore_token = this.jwt.sign(
         {
           sub: existing.id,
@@ -544,11 +551,13 @@ export class UsersService {
           role: existing.role,
           purpose: 'restore',
         },
-        { expiresIn: `${PDPL_GRACE_DAYS + 1}d` },
+        // Never negative (jwt.sign throws): a floor of 1h is harmless —
+        // the strategy window check rejects expired-window restores anyway.
+        { expiresIn: Math.max(remainingSec, 3600) },
       );
       return {
         deleted_at: existing.deleted_at,
-        purge_at: new Date(existing.deleted_at.getTime() + PDPL_GRACE_DAYS * 86_400_000),
+        purge_at: purgeAt,
         restore_token,
       };
     }
@@ -928,6 +937,20 @@ export class UsersService {
         ),
       )
       .returning({ id: users.id });
+
+    // I3 (Reviewer A run #31): push subscriptions re-created during the
+    // grace window survive the users-row anonymization — CASCADE never
+    // fires because the user row is only anonymized, never deleted (the
+    // transactions FK is RESTRICT per migration 0031). Delete them here
+    // so the anonymized ghost receives no further pushes, as migration
+    // 0031's docs promise ("we DELETE the push_subscriptions row in the
+    // purge job").
+    if (purged.length > 0) {
+      await this.db
+        .delete(push_subscriptions)
+        .where(inArray(push_subscriptions.user_id, purged.map((p) => p.id)));
+    }
+
     return purged.length;
   }
 }

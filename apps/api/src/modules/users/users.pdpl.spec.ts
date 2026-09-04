@@ -268,4 +268,38 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
     expect(profile.followersCount).toBe(0);
     expect(profile.isFollowing).toBe(false);
   });
+
+  // A-I4 (run #31, Reviewer A): an idempotent re-delete must NOT mint a
+  // fresh 31-day token — its expiry is anchored to purge_at (here: 1 day
+  // remaining), so the token can never outlive the purge deadline.
+  it('idempotent re-delete anchors the re-signed token expiry to purge_at', async () => {
+    const deleted29DaysAgo = new Date(Date.now() - 29 * 86_400_000);
+    const { db } = makeDb({
+      existingUser: { id: 'u1', phone: '+966500000001', role: 'Player', deleted_at: deleted29DaysAgo },
+    });
+    const signCalls: { payload: unknown; opts: unknown }[] = [];
+    const jwt = {
+      sign: (payload: object, opts?: unknown) => {
+        signCalls.push({ payload, opts });
+        return 'tok';
+      },
+    } as unknown as JwtService;
+    const config = {
+      get: (k: string, d?: string) => (k === 'JWT_EXPIRY' ? (d ?? '7d') : d),
+    } as unknown as ConfigService;
+    const service = new UsersService(db as never, jwt, config);
+
+    const result = await service.softDelete('u1');
+
+    // purge_at = deleted_at + 30d → exactly 1 day of validity left.
+    expect(new Date(result.purge_at).getTime()).toBe(
+      deleted29DaysAgo.getTime() + 30 * 86_400_000,
+    );
+    const opts = signCalls[0]?.opts as { expiresIn: number } | undefined;
+    expect(opts).toBeDefined();
+    expect(typeof opts?.expiresIn).toBe('number');
+    // ≈ 1 day (86 400s), NOT the old 31d (2 678 400s); floor ≥ 1h.
+    expect(opts!.expiresIn).toBeLessThanOrEqual(86_400 + 5);
+    expect(opts!.expiresIn).toBeGreaterThanOrEqual(3600);
+  });
 });
