@@ -31,6 +31,7 @@ const userColumns = {
   banned_at: users.banned_at,
   suspended_until: users.suspended_until,
   verification_status: users.verification_status,
+  deleted_at: users.deleted_at,
   last_seen_at: users.last_seen_at,
   created_at: users.created_at,
 };
@@ -63,6 +64,18 @@ export class AdminUsersService {
       conds.push(
         sql`${users.banned_at} IS NULL AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
       );
+    }
+    // P1-37 (run #31): PDPL ops view — users scheduled for deletion (soft-
+    // deleted within the 30-day grace window) or already hard-purged
+    // (anonymized ghosts whose deleted_at the purge job refreshed). The
+    // list shows which PII remains and when the purge fired/due.
+    else if (dto.status === 'deleted') {
+      conds.push(sql`${users.deleted_at} IS NOT NULL`);
+    }
+    // Default (no status / 'all'): EXCLUDE deleted users — the ops default
+    // view must not mix ghosts with live accounts.
+    else {
+      conds.push(sql`${users.deleted_at} IS NULL`);
     }
 
     return conds.length ? and(...conds) : undefined;

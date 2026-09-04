@@ -6,21 +6,19 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Sparkles, Users, type LucideIcon } from 'lucide-react';
 
 /**
- * PromoBillboard — KoraLink's compact "billboard" surface on the Community Feed.
+ * PromoBillboard — KoraLink's "billboard" surface on the Community Feed.
  *
- * Design: sketches/002-promo-billboard (Abdullah, 2026-09-03) — a carousel of
- * ONE-LINE promo slides at match-card scale (~88px), NOT a hero. Each slide is
- * fully data-driven (SLIDES config): adding a future Partner / Request-a-club
- * slide = one entry + i18n keys + a real href. No placeholder destinations —
- * slides ship only when their target page exists.
+ * Design: round-1 hero visuals (sketches/001-host-button variant A) at the
+ * size Abdullah approved, placed on the FEED (not Play — Abdullah, 2026-09-03
+ * round 3: "use the same size as we did before, but for feed"). Rotating
+ * multi-slide carousel from round 2: data-driven SLIDES config — a new slide
+ * (partner, request-a-club) = one entry + `promos.<key>.*` i18n + a REAL
+ * destination page. No placeholder destinations.
  *
  * Interaction: auto-advances every 5s (paused for prefers-reduced-motion and
- * while the tab is hidden); dots are buttons (a11y labels via promos.goToSlide).
- * The slide body is a single Link — 1 tap to the destination. Crossfade via
- * key remount (animate-fade-in-up) — no horizontal scroll, so RTL is free.
- *
- * i18n: promos.* namespace (kicker/title/sub/cta per slide + goToSlide + label).
- * Colors: bg-host-hero gradient token + brand tokens only.
+ * hidden tabs); dots are a11y buttons OUTSIDE the Link; crossfade via key
+ * remount (animate-fade-in-up) — RTL-safe, no horizontal translate. Hrefs are
+ * locale-prefixed via useLocale().
  */
 
 type SlideKey = 'host' | 'clubs';
@@ -29,12 +27,15 @@ interface Slide {
     key: SlideKey;
     href: string;
     Icon: LucideIcon;
+    emoji: string;
+    /** Optional trailing hint (e.g. host's "HOST PLAYS FREE" promise). */
+    hintKey?: string;
 }
 
 /** Add future surfaces here (e.g. partner) once a real destination page exists. */
 const SLIDES: Slide[] = [
-    { key: 'host', href: '/host', Icon: Sparkles },
-    { key: 'clubs', href: '/clubs', Icon: Users },
+    { key: 'host', href: '/host', Icon: Sparkles, emoji: '⚽', hintKey: 'host.hint' },
+    { key: 'clubs', href: '/clubs', Icon: Users, emoji: '🏟️' },
 ];
 
 const ROTATE_MS = 5000;
@@ -61,7 +62,6 @@ export default function PromoBillboard() {
     }, [many]);
 
     const slide = SLIDES[index];
-    const Icon = slide.Icon;
 
     return (
         <section
@@ -70,50 +70,68 @@ export default function PromoBillboard() {
             data-testid="promo-billboard"
         >
             <div
-                className="overflow-hidden rounded-2xl bg-host-hero
-                    shadow-[0_6px_16px_rgba(27,50,39,0.22)]"
+                className="overflow-hidden rounded-3xl bg-host-hero
+                    shadow-[0_10px_28px_rgba(27,50,39,0.28)]"
             >
                 {/* Slide body — one Link, crossfades on index change */}
                 <Link
                     href={`/${locale}${slide.href}`}
                     aria-label={t(`${slide.key}.title`)}
-                    className="group flex items-center gap-3 p-3
+                    className="group relative block w-full text-start
                         transition-transform active:scale-[0.985]"
                     key={slide.key}
                 >
+                    {/* Pitch center-circle line-art (decorative, RTL-mirrors) */}
                     <span
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center
-                            rounded-xl bg-white/12"
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -top-14 rounded-full border border-white/30 w-[170px] h-[170px]"
+                        style={{ insetInlineEnd: '-60px' }}
                     >
-                        <Icon
-                            className="h-5 w-5 text-emerald-100"
-                            strokeWidth={1.5}
-                            aria-hidden="true"
-                        />
+                        <span className="absolute inset-[18px] rounded-full border border-dashed border-white/20" />
                     </span>
-                    <span className="min-w-0 flex-1 animate-fade-in-up">
-                        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-100/90">
+
+                    {/* Kicker + emoji */}
+                    <span className="relative flex items-start justify-between px-5 pt-4">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 shadow-[0_0_0_3px_rgba(127,212,160,0.25)]" />
                             {t(`${slide.key}.kicker`)}
                         </span>
-                        <span className="mt-0.5 block truncate text-[14.5px] font-bold leading-tight text-white">
+                        <span aria-hidden="true" className="animate-fade-in-up text-[26px] leading-none">
+                            {slide.emoji}
+                        </span>
+                    </span>
+
+                    {/* Title + hook */}
+                    <span className="relative block px-5 mt-1 animate-fade-in-up">
+                        <span className="block text-[22px] leading-tight font-extrabold text-white">
                             {t(`${slide.key}.title`)}
                         </span>
-                        <span className="mt-0.5 block truncate text-[11px] text-white/72">
+                        <span className="block mt-1 text-[13px] text-white/80">
                             {t(`${slide.key}.sub`)}
                         </span>
                     </span>
-                    <span
-                        className="flex-shrink-0 rounded-full bg-white px-3.5 py-2 text-[11.5px] font-bold
-                            text-brand-green-deep shadow-[0_3px_10px_rgba(0,0,0,0.22)]
-                            transition-transform group-active:scale-[0.97]"
-                    >
-                        {t(`${slide.key}.cta`)}
+
+                    {/* CTA + optional hint */}
+                    <span className="relative flex items-center gap-3 px-5 pt-3 pb-4">
+                        <span
+                            className="inline-flex items-center gap-2 rounded-full bg-white px-[18px] py-[11px]
+                                text-[13px] font-bold text-brand-green-deep shadow-[0_6px_16px_rgba(0,0,0,0.25)]
+                                transition-transform group-active:scale-[0.97]"
+                        >
+                            {t(`${slide.key}.cta`)}
+                        </span>
+                        {slide.hintKey && (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/75">
+                                <slide.Icon className="w-3.5 h-3.5 text-emerald-300" aria-hidden="true" />
+                                {t(slide.hintKey)}
+                            </span>
+                        )}
                     </span>
                 </Link>
 
                 {/* Dots — outside the Link so they stay separate targets */}
                 {many && (
-                    <div className="flex items-center justify-center gap-1.5 pb-2.5">
+                    <div className="relative flex items-center justify-center gap-1.5 pb-2.5">
                         {SLIDES.map((s, i) => (
                             <button
                                 key={s.key}

@@ -24,15 +24,14 @@ describe('PromoBillboard', () => {
         vi.useRealTimers();
     });
 
-    it('renders the host slide first with kicker, title, sub and CTA (EN)', () => {
+    it('renders the host slide first with kicker, title, sub, CTA and free-play hint (EN)', () => {
         renderWithLocale('en');
-        expect(screen.getAllByText('Host')).toHaveLength(2); // kicker + CTA
-        expect(screen.getByText('Got a pitch? Gather your crew.')).toBeInTheDocument();
-        expect(screen.getByText('You play free when you host.')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Got a pitch? Gather your crew.' })).toHaveAttribute(
-            'href',
-            '/en/host'
-        );
+        expect(screen.getByText('Hosting')).toBeInTheDocument();
+        expect(screen.getByText('Host a Match')).toBeInTheDocument();
+        expect(screen.getByText('Get players together. You play free.')).toBeInTheDocument();
+        expect(screen.getByText('Start hosting')).toBeInTheDocument();
+        expect(screen.getByText('HOST PLAYS FREE')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Host a Match' })).toHaveAttribute('href', '/en/host');
     });
 
     it('auto-advances to the clubs slide after 5s and locale-prefixes its href', () => {

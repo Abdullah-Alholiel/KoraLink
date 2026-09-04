@@ -29,6 +29,8 @@ export interface AdminUser {
   no_show_count: number;
   banned_at: string | null;
   suspended_until: string | null;
+  /** P1-37 (run #31): PDPL soft-delete timestamp — set ⇒ scheduled/purged. */
+  deleted_at: string | null;
   verification_status: string;
   last_seen_at: string | null;
   created_at: string;

@@ -16,9 +16,26 @@ import Pagination from '@/components/Pagination';
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
 
 function userStatus(u: AdminUser): string {
+  // P1-37 (run #31): PDPL state first — a deleted account is neither
+  // active nor banned; the ops view must label it as deleted.
+  if (u.deleted_at) return 'deleted';
   if (u.banned_at) return 'banned';
   if (u.suspended_until && new Date(u.suspended_until).getTime() > Date.now()) return 'suspended';
   return 'active';
+}
+
+/**
+ * P1-37 (run #31): purge visibility for a soft-deleted row.
+ * - Scheduled (grace window): `purgesIn` = days until hard-purge
+ *   (deleted_at + 30d − now).
+ * - Already-purged ghost: the purge job refreshes deleted_at AND marks
+ *   phone='purged-<id12>' — detect via the phone prefix and report done.
+ */
+function purgeInfo(u: AdminUser): { purged: boolean; daysRemaining?: number } {
+  if (!u.deleted_at) return { purged: false };
+  if (u.phone.startsWith('purged-')) return { purged: true };
+  const purgeAt = new Date(u.deleted_at).getTime() + 30 * 86_400_000;
+  return { purged: false, daysRemaining: Math.max(0, Math.ceil((purgeAt - Date.now()) / 86_400_000)) };
 }
 
 export default function UsersPage() {
@@ -104,6 +121,7 @@ export default function UsersPage() {
           <option value="active">{ts('active')}</option>
           <option value="banned">{ts('banned')}</option>
           <option value="suspended">{ts('suspended')}</option>
+          <option value="deleted">{ts('deleted')}</option>
         </select>
       </div>
 
@@ -124,6 +142,7 @@ export default function UsersPage() {
                   <th className="px-4 py-3 font-medium">{t('thKarma')}</th>
                   <th className="px-4 py-3 font-medium">{t('thNoShows')}</th>
                   <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
+                  <th className="px-4 py-3 font-medium">{t('thPurgeScheduled')}</th>
                   <th className="px-4 py-3 font-medium">{t('thJoined')}</th>
                   <th className="px-4 py-3 font-medium">{t('thActions')}</th>
                 </tr>
@@ -150,8 +169,24 @@ export default function UsersPage() {
                       <td className="px-4 py-3">
                         <StatusBadge status={st} />
                       </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {(() => {
+                          const info = purgeInfo(u);
+                          if (info.purged) return <span className="text-gray-500">{ts('purged')}</span>;
+                          if (info.daysRemaining !== undefined) {
+                            return ts('purgeInDays', { count: info.daysRemaining });
+                          }
+                          return '—';
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-gray-500">{formatDate(u.created_at)}</td>
                       <td className="px-4 py-3">
+                        {/* P1-37 (run #31): deleted/purged rows carry no
+                            moderation actions — a ghost account cannot be
+                            banned or suspended. */}
+                        {st === 'deleted' ? (
+                          <span className="text-xs text-gray-400">—</span>
+                        ) : (
                         <div className="flex items-center gap-2">
                           {busy ? (
                             <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
@@ -194,6 +229,7 @@ export default function UsersPage() {
                             </>
                           )}
                         </div>
+                        )}
                       </td>
                     </tr>
                   );

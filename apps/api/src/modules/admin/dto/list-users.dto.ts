@@ -13,10 +13,10 @@ export class ListUsersDto {
   @IsIn(['Player', 'VenueOwner', 'Admin'])
   role?: 'Player' | 'VenueOwner' | 'Admin';
 
-  @ApiPropertyOptional({ enum: ['all', 'active', 'banned', 'suspended'] })
+  @ApiPropertyOptional({ enum: ['all', 'active', 'banned', 'suspended', 'deleted'] })
   @IsOptional()
-  @IsIn(['all', 'active', 'banned', 'suspended'])
-  status?: 'all' | 'active' | 'banned' | 'suspended';
+  @IsIn(['all', 'active', 'banned', 'suspended', 'deleted'])
+  status?: 'all' | 'active' | 'banned' | 'suspended' | 'deleted';
 
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
