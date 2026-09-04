@@ -115,12 +115,16 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       // Mirrors jwt-cookie.strategy.validate(): REST 401s banned/suspended
       // users; the socket must refuse the handshake just as strictly, else a
       // banned user keeps chat/DM access until token expiry (up to 7 days).
+      // P1-36 (run #31): deleted_at is checked too — a soft-deleted user's
+      // regular JWT must not keep realtime access (REST 401s the same token;
+      // the WS layer was the only surface that ignored PDPL deletion).
       const [user] = await this.db
         .select({
           id: users.id,
           role: users.role,
           banned_at: users.banned_at,
           suspended_until: users.suspended_until,
+          deleted_at: users.deleted_at,
         })
         .from(users)
         .where(eq(users.id, payload.sub))
@@ -139,6 +143,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
         this.logger.warn(
           `WS connection rejected: account ${payload.sub} suspended until ${user.suspended_until.toISOString()}`,
+        );
+        client.disconnect(true);
+        return;
+      }
+      // P1-36 (run #31): PDPL parity with the REST strategy — a soft-deleted
+      // user (regular token, purpose-less) is disconnected at handshake. The
+      // restore-token flow never opens a socket: the PWA calls only
+      // POST /users/me/restore over REST while deleted.
+      if (user.deleted_at) {
+        this.logger.warn(
+          `WS connection rejected: account ${payload.sub} is soft-deleted (PDPL)`,
         );
         client.disconnect(true);
         return;

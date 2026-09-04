@@ -61,11 +61,12 @@ No DB migration required (uses existing users.deleted_at, push_subscriptions.use
   avatar_url, preferred_position, skill_level, preferred_location, karma_score, rating, ... }`
   (getProfile shape — UNCHANGED, the one allowed restore action).
 - `POST /users/me/restore` with purpose:restore JWT past window → 403
-  `{"message":"Restore window has expired...","statusCode":403}` (was 400 past-window error
-  reachable only via legacy session cookie).
-- Any other guarded route with purpose:restore JWT while deleted → 403
-  `{"message":"This token can only restore the account.","statusCode":403}` (was 200 full
-  access). After successful restore (deleted_at NULL): all routes behave normally.
+  `{"message":"Restore window has expired...","statusCode":403}`.
+- ANY other route with purpose:restore JWT while deleted → 403
+  `{"message":"This token can only restore the account.","statusCode":403}` (route-strict:
+  restore token is NOT a session token; covers wallet/export/chat AND /admin/* ops surface).
+- Any other guarded route with a regular (purpose-less) JWT while deleted → 401 (unchanged).
+  After successful restore (deleted_at NULL): all routes behave normally.
 - `GET /admin/users?status=deleted` → `{ users: [...rows with deleted_at added],
   total, page, perPage }`; rows carry `"deleted_at": "<iso>|null"`.
 

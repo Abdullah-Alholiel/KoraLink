@@ -13,6 +13,8 @@ type UserRow = {
   role: 'Player' | 'VenueOwner' | 'Admin';
   banned_at: Date | null;
   suspended_until: Date | null;
+  /** P1-36 (run #31): PDPL soft-delete timestamp — set ⇒ handshake rejected. */
+  deleted_at?: Date | null;
 };
 
 function makeDb(rows: UserRow[]) {
@@ -181,6 +183,23 @@ describe('AppGateway.handleConnection — moderation enforcement', () => {
     await gateway.handleConnection(client as never);
 
     expect(client.joined).toEqual([]);
+    expect(disconnect).toHaveBeenCalledWith(true);
+  });
+
+  // P1-36 (run #31): PDPL parity with the REST strategy — a soft-deleted
+  // user's regular JWT must not keep realtime access after deletion.
+  it('rejects a soft-deleted user at handshake (PDPL deleted_at)', async () => {
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: new Date() }],
+      { sub: 'u1', role: 'Player' },
+    );
+    const client = makeClient();
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.joined).toEqual([]);
+    expect(client.userId).toBeUndefined();
     expect(disconnect).toHaveBeenCalledWith(true);
   });
 
