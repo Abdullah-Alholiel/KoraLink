@@ -79,6 +79,27 @@ describe('JwtCookieStrategy P1-36 restore-token scope gate (run #31)', () => {
     expect(result.role).toBe('Player');
   });
 
+  // Run #31 resume hardening: originalUrl carries the query string — the
+  // route gate must strip it, not 403 a restore call that carries ?code=…
+  it('restore route WITH a query string → still PASSES (gate matches path only)', async () => {
+    const strategy = makeStrategy(deletedUser);
+    const qsReq = {
+      originalUrl: '/api/v1/users/me/restore?code=abc&utm_source=email',
+    } as Request;
+    const result = await strategy.validate(qsReq, restoreToken(10));
+    expect(result.sub).toBe('u1');
+  });
+
+  // Malformed percent-encoding must degrade to a 403 route rejection,
+  // never an unhandled decode error (500).
+  it('malformed percent-encoding in the URL → clean 403 (no decode crash)', async () => {
+    const strategy = makeStrategy(deletedUser);
+    const badReq = { originalUrl: '/api/v1/wallet/%zz' } as Request;
+    await expect(
+      strategy.validate(badReq, restoreToken(10)),
+    ).rejects.toThrow(/can only restore the account/);
+  });
+
   it('deleted user + restore token on an /admin path → 403 (admin surface closed)', async () => {
     const strategy = makeStrategy(deletedUser);
     await expect(

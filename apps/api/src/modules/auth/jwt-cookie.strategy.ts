@@ -130,7 +130,24 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
       // restore Bearer ONLY to /users/me/restore (fetcher.ts getBearerForRequest)
       // and the restore hook deletes the token on success (useUser.ts:239),
       // so the strict gate cannot break the happy path.
-      const reqPath = req?.originalUrl ?? req?.path ?? '';
+      // P1-36 hardening (run #31 resume): match on the URL PATH only —
+      // originalUrl carries the query string (?code=…, ?utm_source=…), and
+      // endsWith on the raw URL would 403 a legitimate restore call that
+      // happens to carry one. decodeURIComponent tolerates encoded
+      // separators in the query part; a percent-encoded '?' (%3F) inside
+      // the path itself decodes BEFORE the split, so it can never smuggle
+      // extra segments past this gate — the split point is the FIRST real
+      // '?' of the decoded URL, matching Express's own routing.
+      const rawUrl = req?.originalUrl ?? req?.path ?? '';
+      const reqPath = (() => {
+        try {
+          return decodeURIComponent(rawUrl).split('?')[0];
+        } catch {
+          // Malformed percent-encoding: fall back to the raw split (the
+          // restore happy path never sends malformed URLs).
+          return rawUrl.split('?')[0];
+        }
+      })();
       if (!reqPath.endsWith('/users/me/restore')) {
         throw new ForbiddenException('This token can only restore the account.');
       }

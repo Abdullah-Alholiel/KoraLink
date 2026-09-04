@@ -81,6 +81,43 @@ describe('UsersService P0-6 hard-purge (run #30)', () => {
     );
   }
 
+  it('purge is atomic — UPDATE + subscription DELETE run in ONE transaction', async () => {
+    const { db, calls, whereClauses, deleteClauses } = makeDb({
+      purgedIds: ['u1'],
+    });
+    // The stub's transaction is a passthrough; count invocations so the
+    // spec proves the service routed the purge through db.transaction
+    // (single tx entry) instead of two independent auto-commits.
+    let txCount = 0;
+    const inner = db.transaction;
+    db.transaction = async (cb: (tx: unknown) => unknown) => {
+      txCount += 1;
+      return inner(cb);
+    };
+    const svc = makeService(db);
+    const count = await svc.purgeExpiredAccounts();
+
+    expect(count).toBe(1);
+    expect(txCount).toBe(1); // exactly ONE transaction wrapped the purge
+    expect(calls).toHaveLength(1); // the update ran inside it
+    expect(whereClauses).toHaveLength(1);
+    expect(deleteClauses).toHaveLength(1); // the subscription wipe ran too
+    expect(deleteClauses[0]).toContain('in (');
+  });
+
+  it('deleteClauses pin the subscription wipe to exactly the purged ids', async () => {
+    const { db, deleteClauses } = makeDb({
+      purgedIds: ['aaaaaaaa-bbbb-cccc-dddd-eeeeffff0001', 'aaaaaaaa-bbbb-cccc-dddd-eeeeffff0002'],
+    });
+    const svc = makeService(db);
+    await svc.purgeExpiredAccounts();
+    // sqlToQuery renders bound values as $n placeholders — the IN-list must
+    // target push_subscriptions.user_id and carry one param per purged id.
+    expect(deleteClauses[0]).toBe(
+      '"push_subscriptions"."user_id" in ($1, $2)',
+    );
+  });
+
   it('anonymizes 2 deleted users past their 30-day grace window', async () => {
     const { db, whereClauses, setPayloads } = makeDb({
       purgedIds: ['u1', 'u2'],

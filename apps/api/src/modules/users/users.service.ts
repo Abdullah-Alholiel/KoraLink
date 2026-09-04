@@ -912,45 +912,54 @@ export class UsersService {
    * Side effects are minimal.
    */
   async purgeExpiredAccounts(): Promise<number> {
-    const purged = await this.db
-      .update(users)
-      .set({
-        phone: sql`('purged-' || RIGHT(${users.id}, 12))`,
-        full_name: 'Deleted User',
-        handle: null,
-        avatar_url: null,
-        home_lat: null,
-        home_lng: null,
-        preferred_location: null,
-        preferred_position: null,
-        skill_level: null,
-        banned_at: null,
-        suspended_until: null,
-        verification_status: 'pending',
-        deleted_at: sql`NOW()`,
-        updated_at: new Date(),
-      })
-      .where(
-        and(
-          isNotNull(users.deleted_at),
-          lt(users.deleted_at, sql`NOW() - INTERVAL '${sql.raw(String(PDPL_GRACE_DAYS))} days'`),
-        ),
-      )
-      .returning({ id: users.id });
+    // Run #31 resume hardening (Reviewer A I3 follow-up): the anonymizing
+    // UPDATE and the push-subscription DELETE are one atomic unit. Before
+    // this wrap, a crash between the two statements left push subscriptions
+    // permanently pointing at an ANONYMIZED user row (the UPDATE had already
+    // committed; the retry's WHERE `deleted_at < NOW() - 30d` never re-matches
+    // because deleted_at was refreshed) — the ghost would keep receiving
+    // pushes forever, violating migration 0031's erasure promise.
+    return this.db.transaction(async (tx) => {
+      const purged = await tx
+        .update(users)
+        .set({
+          phone: sql`('purged-' || RIGHT(${users.id}, 12))`,
+          full_name: 'Deleted User',
+          handle: null,
+          avatar_url: null,
+          home_lat: null,
+          home_lng: null,
+          preferred_location: null,
+          preferred_position: null,
+          skill_level: null,
+          banned_at: null,
+          suspended_until: null,
+          verification_status: 'pending',
+          deleted_at: sql`NOW()`,
+          updated_at: new Date(),
+        })
+        .where(
+          and(
+            isNotNull(users.deleted_at),
+            lt(users.deleted_at, sql`NOW() - INTERVAL '${sql.raw(String(PDPL_GRACE_DAYS))} days'`),
+          ),
+        )
+        .returning({ id: users.id });
 
-    // I3 (Reviewer A run #31): push subscriptions re-created during the
-    // grace window survive the users-row anonymization — CASCADE never
-    // fires because the user row is only anonymized, never deleted (the
-    // transactions FK is RESTRICT per migration 0031). Delete them here
-    // so the anonymized ghost receives no further pushes, as migration
-    // 0031's docs promise ("we DELETE the push_subscriptions row in the
-    // purge job").
-    if (purged.length > 0) {
-      await this.db
-        .delete(push_subscriptions)
-        .where(inArray(push_subscriptions.user_id, purged.map((p) => p.id)));
-    }
+      // I3 (Reviewer A run #31): push subscriptions re-created during the
+      // grace window survive the users-row anonymization — CASCADE never
+      // fires because the user row is only anonymized, never deleted (the
+      // transactions FK is RESTRICT per migration 0031). Delete them in the
+      // SAME tx so the anonymized ghost receives no further pushes, as
+      // migration 0031's docs promise ("we DELETE the push_subscriptions
+      // row in the purge job").
+      if (purged.length > 0) {
+        await tx
+          .delete(push_subscriptions)
+          .where(inArray(push_subscriptions.user_id, purged.map((p) => p.id)));
+      }
 
-    return purged.length;
+      return purged.length;
+    });
   }
 }
