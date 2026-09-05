@@ -32,9 +32,11 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
         limit: () => chain(),
         offset: () => chain(),
       };
-      // Thenable: the count query is awaited directly.
+      // Thenable: the count query is awaited directly. Resolves ONE count row
+      // (not []) so the last-admin guard path can proceed past count<=1; the
+      // list() specs only inspect the rendered WHERE, never the resolved rows.
       c.then = (resolve: (v: unknown) => void) => {
-        resolve([]);
+        resolve([{ count: 2 }]);
         return undefined;
       };
       return c;
@@ -119,6 +121,34 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
     await expect(
       svc.update('live-1', {} as never, 'admin-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('last-admin protection counts only LIVING admins (deleted_at IS NULL — run #34)', async () => {
+    const db = makeDb();
+    // Let the post-guard UPDATE resolve so the guard path runs to completion.
+    (db as { update?: unknown }).update = () => ({
+      set: () => ({ where: () => Promise.resolve() }),
+    });
+    const svc = await makeService(db);
+    // Target is a LIVING admin (ghost 409 must NOT fire) being demoted.
+    jest.spyOn(svc, 'findOne').mockResolvedValue({
+      id: 'admin-2',
+      deleted_at: null,
+      role: 'Admin',
+    } as never);
+    await svc.update('admin-2', { role: 'Player' } as never, 'admin-1');
+    // Exactly one select ran: the last-admin count query.
+    expect(db._selectCalls).toHaveLength(1);
+    const rendered = dialect(db._selectCalls[0].where);
+    // role is a bind param ($1) in the rendered SQL — assert the predicate exists;
+    // the ghost tripwires below are the point of this spec.
+    expect(rendered).toContain('"users"."role" = $1');
+    // Tripwire: ghosts are not living admins (run #34 — without this clause a
+    // soft-deleted/purged admin satisfied the guard and the last living admin
+    // could be demoted away).
+    expect(rendered).toContain('"users"."deleted_at" IS NULL');
+    expect(rendered).toContain('"users"."banned_at" IS NULL');
+    expect(rendered).toContain('now()');
   });
 });
 

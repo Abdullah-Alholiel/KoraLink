@@ -165,6 +165,11 @@ export class AdminUsersService {
         .where(
           and(
             eq(users.role, 'Admin'),
+            // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
+            // are NOT living admins — counting them let the last LIVING admin
+            // be demoted/banned while only ghosts remained (run #34, found by
+            // Reviewer A). Same rationale as the status=active fix in f40acd9.
+            sql`${users.deleted_at} IS NULL`,
             sql`${users.banned_at} IS NULL`,
             sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
           ),
