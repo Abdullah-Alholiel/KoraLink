@@ -42,7 +42,7 @@ export default function InstallLanding() {
         // accepted → appinstalled fires + standalone flips via focus/visibility
         // listeners → guard swaps to app (no reload). dismissed → user can
         // still tap the continue CTA below.
-    }, [canInstall, isIos, promptInstall]);
+    }, [canInstall, promptInstall]);
 
     const handleContinue = useCallback(() => {
         trackEvent('pwa_install_landing_cta_clicked', {

@@ -33,7 +33,7 @@ export default function ServiceWorkerUpdater() {
     navigator.serviceWorker.ready
       .then((reg) => {
         // A new worker may already be waiting — tell it to activate.
-        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        if (reg?.waiting) reg?.waiting.postMessage({ type: 'SKIP_WAITING' });
 
         // Re-run the update check now that our controllerchange listener is
         // definitely registered, and watch for a freshly-installed worker.

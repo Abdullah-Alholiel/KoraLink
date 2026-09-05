@@ -71,6 +71,12 @@ export default function PromoBillboard() {
     const goTo = (i: number) => {
         setIndex(((i % SLIDES.length) + SLIDES.length) % SLIDES.length);
         if (timerRef.current) clearInterval(timerRef.current);
+        // Run #32 re-arm fix: a reduced-motion user's manual swipe/dot nav
+        // must not silently re-arm the auto-advance clock they opted out of.
+        const reduced =
+            typeof window !== 'undefined' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) return;
         timerRef.current = setInterval(() => {
             if (document.visibilityState === 'visible') {
                 setIndex((cur) => (cur + 1) % SLIDES.length);
