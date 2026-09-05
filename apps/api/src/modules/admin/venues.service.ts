@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { SQL, and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -111,19 +111,31 @@ export class AdminVenuesService {
     const before = await this.findOne(id);
 
     await this.db.transaction(async (tx) => {
-      await tx
-        .update(venues)
-        .set({ is_approved: dto.decision === 'approve', updated_at: new Date() })
-        .where(eq(venues.id, id));
-
-      await tx
+      // P2-49 (run #34): only a PENDING verification can be decided. The
+      // guard lives INSIDE the tx on the verification UPDATE — a concurrent
+      // decision (or a partner resubmission) races here and the loser gets a
+      // clean 409 instead of silently overwriting the other decision.
+      // Note the verification UPDATE goes FIRST: it carries the guard, so a
+      // raced withdraw-as-decided can never flip the venue's approval flag.
+      const decided = await tx
         .update(venue_verifications)
         .set({
           status: dto.decision === 'approve' ? 'approved' : 'rejected',
           reviewed_by: adminId,
           reviewed_at: new Date(),
         })
-        .where(eq(venue_verifications.venue_id, id));
+        .where(and(eq(venue_verifications.venue_id, id), eq(venue_verifications.status, 'pending')))
+        .returning({ venue_id: venue_verifications.venue_id });
+      if (decided.length === 0) {
+        throw new ConflictException(
+          'Venue verification was concurrently decided or resubmitted — re-check its status.',
+        );
+      }
+
+      await tx
+        .update(venues)
+        .set({ is_approved: dto.decision === 'approve', updated_at: new Date() })
+        .where(eq(venues.id, id));
     });
 
     const after = await this.findOne(id);

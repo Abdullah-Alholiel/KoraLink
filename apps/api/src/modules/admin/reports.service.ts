@@ -1,5 +1,5 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SQL, and, eq, sql } from 'drizzle-orm';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { SQL, and, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches, personal_messages, reports, users, venues } from '../../database/schema';
@@ -99,7 +99,11 @@ export class AdminReportsService {
       await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
     }
 
-    await this.db
+    // P2-49 (run #34): status-predicated guard — a concurrent resolve/reopen
+    // loses here (zero rows → 409) instead of double-writing over the other
+    // decision and leaving the audit trail stale (run #24 disputes pattern;
+    // zero-rows detection per the P2-41 pattern).
+    const updated = await this.db
       .update(reports)
       .set(
         withTimestamp({
@@ -109,7 +113,12 @@ export class AdminReportsService {
           resolved_at: new Date(),
         }),
       )
-      .where(eq(reports.id, id));
+      .where(and(eq(reports.id, id), inArray(reports.status, ['open', 'reviewing'])))
+      .returning({ id: reports.id });
+    if (updated.length === 0) {
+      // Race loser: another admin decided this report between findOne and now.
+      throw new ConflictException('Report was concurrently decided — re-check its status.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
@@ -166,7 +175,8 @@ export class AdminReportsService {
       throw new BadRequestException('Only decided reports can be reopened.');
     }
 
-    await this.db
+    // P2-49 (run #34): status-predicated guard, same race rule as resolve().
+    const updated = await this.db
       .update(reports)
       .set(
         withTimestamp({
@@ -175,7 +185,11 @@ export class AdminReportsService {
           resolved_at: null,
         }),
       )
-      .where(eq(reports.id, id));
+      .where(and(eq(reports.id, id), inArray(reports.status, ['resolved', 'dismissed'])))
+      .returning({ id: reports.id });
+    if (updated.length === 0) {
+      throw new ConflictException('Report was concurrently decided — re-check its status.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
