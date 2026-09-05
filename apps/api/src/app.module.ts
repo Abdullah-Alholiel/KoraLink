@@ -24,6 +24,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { PartnerModule } from './modules/partner/partner.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { MailerModule } from './modules/mailer/mailer.module';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

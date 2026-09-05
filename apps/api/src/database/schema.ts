@@ -236,6 +236,17 @@ export const users = pgTable('users', {
   quiet_hours_enabled: boolean('quiet_hours_enabled').notNull().default(false),
   quiet_start_hour: integer('quiet_start_hour').notNull().default(23),
   quiet_end_hour: integer('quiet_end_hour').notNull().default(7),
+  // ── Transactional email (P1-41, run #35) ──
+  // Phone-first product: NULL email = the user cannot be emailed (default).
+  // `email_verified_at` gates ALL transactional sends (unverified addresses
+  // receive only the verification email). `email_muted` is the email
+  // kill-switch mirroring `push_muted`. The partial unique index on
+  // lower(email) lives in migration 0033 (NOT in this table definition —
+  // drizzle-kit on the VPS cannot regenerate it; see kanban run #35 notes).
+  // PDPL: the 30-day purge anonymizer nulls email + email_verified_at.
+  email: varchar('email', { length: 255 }),
+  email_verified_at: timestamp('email_verified_at', { withTimezone: true }),
+  email_muted: boolean('email_muted').notNull().default(false),
   verification_status: verificationStatusEnum('verification_status')
     .notNull()
     .default('pending'),

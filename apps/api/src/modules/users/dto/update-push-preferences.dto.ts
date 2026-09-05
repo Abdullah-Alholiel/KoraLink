@@ -32,7 +32,9 @@ export class CategoryMutesDto {
   @IsOptional() @IsBoolean()
   promo?: boolean;
 
-  @ApiPropertyOptional({ description: 'Mute system pushes (account actions, report resolution, admin notices).' })
+  @ApiPropertyOptional({
+    description: 'Mute system pushes (account actions, report resolution, admin notices).'
+  })
   @IsOptional() @IsBoolean()
   system?: boolean;
 }
@@ -42,6 +44,11 @@ export class UpdatePushPreferencesDto {
   @IsOptional()
   @IsBoolean()
   pushMuted?: boolean;
+
+  @ApiPropertyOptional({ description: 'Mute ALL transactional email (independent of push)' })
+  @IsOptional()
+  @IsBoolean()
+  emailMuted?: boolean;
 
   @ApiPropertyOptional({ description: 'Enable the quiet-hours window' })
   @IsOptional()

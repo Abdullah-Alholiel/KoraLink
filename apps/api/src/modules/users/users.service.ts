@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
@@ -9,6 +9,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
+import { MailerService } from '../mailer/mailer.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -18,6 +19,8 @@ export class UsersService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    // P1-41 (run #35): optional — deletion-confirmation email (E15).
+    @Optional() private readonly mailer?: MailerService,
   ) {}
 
   /**
@@ -89,6 +92,9 @@ export class UsersService {
         home_lat: true,
         home_lng: true,
         push_muted: true,
+        email: true,
+        email_verified_at: true,
+        email_muted: true,
         quiet_hours_enabled: true,
         quiet_start_hour: true,
         quiet_end_hour: true,
@@ -321,6 +327,7 @@ export class UsersService {
   ) {
     const set: Record<string, unknown> = {};
     if (dto.pushMuted !== undefined) set.push_muted = dto.pushMuted;
+    if (dto.emailMuted !== undefined) set.email_muted = dto.emailMuted; // P1-41 (run #35)
     if (dto.quietHoursEnabled !== undefined)
       set.quiet_hours_enabled = dto.quietHoursEnabled;
     if (dto.quietStartHour !== undefined)
@@ -368,6 +375,7 @@ export class UsersService {
     const [prefs] = await this.db
       .select({
         push_muted: users.push_muted,
+        email_muted: users.email_muted,
         quiet_hours_enabled: users.quiet_hours_enabled,
         quiet_start_hour: users.quiet_start_hour,
         quiet_end_hour: users.quiet_end_hour,
@@ -584,6 +592,15 @@ export class UsersService {
     // user stops receiving pushes immediately.
     await this.db.delete(push_subscriptions).where(eq(push_subscriptions.user_id, userId));
 
+    // P1-41 (run #35): PDPL deletion-confirmation email (E15). Best-effort
+    // fire-and-forget; the mailer's suppression skips users without a
+    // verified email (ghosts can never be addressed — purge nulls it).
+    if (this.mailer) {
+      this.mailer
+        .sendToUsers([userId], 'account_deletion')
+        .catch(() => undefined);
+    }
+
     const restore_token = this.jwt.sign(
       {
         sub: existing.id,
@@ -681,6 +698,9 @@ export class UsersService {
         karma_score: users.karma_score,
         no_show_count: users.no_show_count,
         push_muted: users.push_muted,
+        email: users.email,
+        email_muted: users.email_muted,
+        email_verified_at: users.email_verified_at,
         quiet_hours_enabled: users.quiet_hours_enabled,
         quiet_start_hour: users.quiet_start_hour,
         quiet_end_hour: users.quiet_end_hour,
@@ -711,6 +731,9 @@ export class UsersService {
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
       push_muted: user.push_muted,
+      email: user.email,
+      email_muted: user.email_muted,
+      email_verified_at: user.email_verified_at,
       quiet_hours_enabled: user.quiet_hours_enabled,
       quiet_start_hour: user.quiet_start_hour,
       quiet_end_hour: user.quiet_end_hour,
@@ -940,6 +963,10 @@ export class UsersService {
           skill_level: null,
           banned_at: null,
           suspended_until: null,
+          // P1-41 (run #35): the email columns ARE PII — erase them with the
+          // rest of the identity so a purged ghost can never be addressed.
+          email: null,
+          email_verified_at: null,
           verification_status: 'pending',
           deleted_at: sql`NOW()`,
           updated_at: new Date(),

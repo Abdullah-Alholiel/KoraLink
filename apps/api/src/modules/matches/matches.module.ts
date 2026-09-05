@@ -6,9 +6,10 @@ import { WalletModule } from '../wallet/wallet.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ActivitiesModule } from '../activities/activities.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
-  imports: [WalletModule, GatewayModule, NotificationsModule, ActivitiesModule],
+  imports: [WalletModule, GatewayModule, NotificationsModule, ActivitiesModule, MailerModule],
   controllers: [MatchesController],
   providers: [MatchesService, MatchesScheduler],
   exports: [MatchesService],

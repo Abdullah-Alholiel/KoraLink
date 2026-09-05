@@ -122,3 +122,25 @@ swapping to SES/SMTP later touches nothing else. State the swap in the report.
 - Bulk/backfill email to existing users (they have no addresses yet; collection
   happens organically via signup/profile).
 - In-app notification changes beyond the email hook calls.
+
+## Run-time amendments (run #35, pre-build — contract updates)
+
+1. **Single parameterized template + copy dictionary** (`mailer.copy.ts`, `{en,ar}` per
+   event: subject/heading/body/cta) rendered by ONE layout — replaces "one .tsx per email".
+   Same Gate-3 contract (every event renders en+ar, `dir="rtl"` asserted on ar).
+2. **Choke-point hook**: email fan-out lives INSIDE `activities.record()` next to the WS
+   try/catch, filtered to the E-list verbs only (messaged/created_match/joined_match/
+   followed are NOT transactional — chat DM emails stay out of scope). Scheduler-only
+   events (match_starting_soon, E1) hook directly at their call sites.
+3. **E1 welcome merges with the verification email** — phone-first OTP means new users
+   have no address at signup; the "add email" profile flow sends verify+welcome in one.
+4. **Verify link = API-served bilingual HTML page** (`GET /auth/verify-email?token=...`,
+   signed JWT purpose:'email-verify' → sets email_verified_at) — no PWA page needed v1.
+5. **Suppression = one SQL shape**: `email IS NOT NULL AND email_verified_at IS NOT NULL
+   AND email_muted = false AND deleted_at IS NULL`; per-category mutes do NOT gate email v1
+   (global email_muted only) — recorded decision.
+6. **PDPL**: purge anonymizer ALSO nulls email + email_verified_at (erasure); export
+   includes email + email_muted.
+7. **Migration 0033 hand-written** (IF NOT EXISTS style, journal appended — VPS convention):
+   users.email varchar(255) NULL, email_verified_at timestamptz NULL, email_muted bool
+   NOT NULL DEFAULT false, partial unique index on email WHERE NOT NULL.

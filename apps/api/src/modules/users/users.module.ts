@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { UsersScheduler } from './users.scheduler';
 import { AuthModule } from '../auth/auth.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
   // P0-6 (run #29): AuthModule is imported for JwtService + ConfigService
@@ -14,7 +15,7 @@ import { AuthModule } from '../auth/auth.module';
   // `@Cron('0 */5 * * *')` decorator registers the 5h hard-purge tick.
   // NestJS auto-instantiates providers with `providedIn`-style DI, and
   // the ScheduleModule is already global (root app.module.ts).
-  imports: [AuthModule],
+  imports: [AuthModule, MailerModule],
   controllers: [UsersController],
   providers: [UsersService, UsersScheduler],
   exports: [UsersService],

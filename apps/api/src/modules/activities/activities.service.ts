@@ -12,6 +12,8 @@ import {
   venues,
 } from '../../database/schema';
 import { RealtimeService } from '../gateway/realtime.service';
+import { MailerService } from '../mailer/mailer.service';
+import { EMAIL_ACTIVITY_VERBS, MailTemplateKey } from '../mailer/mailer.copy';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -92,6 +94,8 @@ export class ActivitiesService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     @Optional() @Inject(forwardRef(() => RealtimeService))
     private readonly realtime?: RealtimeService,
+    @Optional() @Inject(forwardRef(() => MailerService))
+    private readonly mailer?: MailerService,
   ) {}
 
   /**
@@ -142,6 +146,23 @@ export class ActivitiesService {
       });
     } catch {
       // swallow — WS is best-effort
+    }
+
+    // P1-41 (run #35): transactional email mirror. Fire-and-forget (never
+    // awaits, never throws into the caller) to exactly the recipients whose
+    // verb is transactional — chat/social verbs (messaged, created_match,
+    // joined_match, followed) deliberately do NOT email. Suppression
+    // (verified/muted/ghost) is resolved inside the mailer. Even a HUNG
+    // transport cannot block record(): the whole loop is deferred + caught.
+    if (EMAIL_ACTIVITY_VERBS.has(params.verb) && this.mailer) {
+      const mailer = this.mailer;
+      queueMicrotask(() => {
+        mailer
+          .sendToUsers(recipients, params.verb as MailTemplateKey, {}, {
+            matchId: params.matchId ?? undefined,
+          })
+          .catch(() => undefined);
+      });
     }
   }
 

@@ -232,6 +232,13 @@
       "when": 1788448640000,
       "tag": "0032_booking_mode_default_koralink",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788623897199,
+      "tag": "0033_user_email_columns",
+      "breakpoints": true
     }
   ]
 }

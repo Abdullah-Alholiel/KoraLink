@@ -6,6 +6,7 @@ import {
   Inject,
   NotFoundException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
@@ -25,7 +26,20 @@ import { AppGateway } from '../gateway/app.gateway';
 import { RealtimeService } from '../gateway/realtime.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { MailerService } from '../mailer/mailer.service';
 import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
+
+/**
+ * Format a Date in Asia/Riyadh wall-clock for email details boxes.
+ * Server-local-safe (the server runs UTC; en-GB gives 24h clock).
+ */
+export function riyadhLocal(d: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Riyadh',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(d);
+}
 
 /** Margin added on top of the raw pitch cost per player (SAR). */
 const PLATFORM_MARGIN_SAR = 5;
@@ -75,6 +89,9 @@ export class MatchesService {
     private readonly activitiesService: ActivitiesService,
     private readonly settings: PlatformSettingsService,
     private readonly realtime: RealtimeService,
+    // P1-41 (run #35): optional injection — the mailer self-disables when
+    // MailerModule isn't wired into MatchesModule's imports (tests).
+    @Optional() private readonly mailer?: MailerService,
   ) {}
 
   /**
@@ -274,6 +291,23 @@ export class MatchesService {
               data: { type: 'match-chat', matchId: match.id },
             },
           );
+          // P1-41 (run #35): email mirror of the reminder (E2). Best-effort
+          // — the mailer never throws; recipients w/o verified email are
+          // skipped inside. Riyadh-local kickoff string for the details box.
+          if (this.mailer) {
+            this.mailer
+              .sendToUsers(
+                players.map((p) => p.user_id),
+                'match_reminder',
+                { title: match.title },
+                {
+                  matchId: match.id,
+                  matchTitle: match.title,
+                  when: riyadhLocal(kickoff),
+                },
+              )
+              .catch(() => undefined);
+          }
         }
 
         await this.db
@@ -560,7 +594,8 @@ export class MatchesService {
     const {
       lat,
       lng,
-      radius_km = 50,
+      // radius_km: hard cutoff deliberately descoped (run #12) — the query
+      // orders by distance without clipping; destructuring skips it.
       date,
       format,
       gender,
@@ -721,7 +756,7 @@ export class MatchesService {
     // page without a second COUNT query. hasMore ⇒ another page exists.
     const list = rows as unknown as (NearbyMatchRow & { total_count?: number })[];
     const total = typeof list[0]?.total_count === 'number' ? list[0].total_count : undefined;
-    const items = list.map(({ total_count: _tc, ...rest }) => rest);
+    const items = list.map(({ total_count: _tc, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
     return {
       matches: items as NearbyMatchRow[],
       total,
