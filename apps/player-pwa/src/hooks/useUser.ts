@@ -38,6 +38,8 @@ export interface PublicProfileApi {
   skill_level: string | null;
   pom_count: number;
   games_played: number;
+  /** Reputation visibility (P1-39): completed-game no-shows, host-screening signal. */
+  no_show_count: number;
   isFollowing: boolean;
   followersCount: number;
   followingCount: number;

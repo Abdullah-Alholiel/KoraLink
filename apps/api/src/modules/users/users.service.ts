@@ -413,6 +413,10 @@ export class UsersService {
         avatar_url: users.avatar_url,
         preferred_position: users.preferred_position,
         skill_level: users.skill_level,
+        // P1-39 (run #34): reputation visibility — the no-show count is already
+        // tracked and admin-visible; expose it on the public profile so hosts
+        // can screen joiners. Screening/penalties remain a product decision.
+        no_show_count: users.no_show_count,
       })
       .from(users)
       .where(
@@ -430,8 +434,13 @@ export class UsersService {
 
     const pom_count = await this.getPomCount(userId);
 
-    const [{ games_played }] = await this.db
-      .select({ games_played: sql<number>`COUNT(*)::int` })
+    const [{ games_played, no_show_count }] = await this.db
+      .select({
+        games_played: sql<number>`COUNT(*)::int`,
+        // Same query, second aggregate: completed-game no-shows for this user
+        // (P1-39 reputation visibility).
+        no_show_count: sql<number>`COUNT(*) FILTER (WHERE ${match_players.no_show} = true)::int`,
+      })
       .from(match_players)
       .where(eq(match_players.user_id, userId));
 
@@ -460,6 +469,7 @@ export class UsersService {
       skill_level: user.skill_level,
       pom_count,
       games_played,
+      no_show_count: no_show_count ?? 0,
       isFollowing,
       followersCount: counts?.followers_count ?? 0,
       followingCount: counts?.following_count ?? 0,

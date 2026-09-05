@@ -220,7 +220,7 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
             // query 2: games_played COUNT (awaited directly, one row) —
             // query 3: follow lookup (awaited directly, empty)
             const n = calls.length;
-            const rows = n === 1 ? (userRow ? [userRow] : []) : n === 2 ? [{ games_played: 0 }] : [];
+            const rows = n === 1 ? (userRow ? [userRow] : []) : n === 2 ? [{ games_played: 0, no_show_count: 2 }] : [];
             const afterWhere = {
               limit: async () => rows,
               then: (
@@ -265,6 +265,8 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
     const profile = await service.getPublicProfile('u1', 'u2');
     expect(profile.id).toBe('u1');
     expect(profile.pom_count).toBe(0);
+    // P1-39 (run #34): reputation visibility rides the public profile.
+    expect(profile.no_show_count).toBe(2);
     expect(profile.followersCount).toBe(0);
     expect(profile.isFollowing).toBe(false);
   });

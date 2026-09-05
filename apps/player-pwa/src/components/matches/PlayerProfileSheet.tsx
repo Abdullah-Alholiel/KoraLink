@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { X, Trophy, Users, Loader2, AlertTriangle, Flag, UserMinus } from 'lucide-react';
+import { X, Trophy, Users, UserX, Loader2, AlertTriangle, Flag, UserMinus } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
 import FollowButton from '@/components/features/FollowButton';
@@ -102,7 +102,7 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
 
                 {/* ── Stats Grid ── */}
                 {profile && !isLoading && (
-                    <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="grid grid-cols-3 gap-3 mb-3">
                         <div className="bg-white rounded-xl shadow-card p-3 text-center">
                             <Trophy className="w-4 h-4 text-brand-green mx-auto mb-1.5" strokeWidth={2} />
                             <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.pom_count ?? 0}</p>
@@ -112,6 +112,12 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
                             <Users className="w-4 h-4 text-gray-400 mx-auto mb-1.5" strokeWidth={2} />
                             <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.games_played ?? 0}</p>
                             <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.gamesPlayed')}</p>
+                        </div>
+                        {/* P1-39: reputation visibility — no-shows, host-screening signal. */}
+                        <div className="bg-white rounded-xl shadow-card p-3 text-center">
+                            <UserX className="w-4 h-4 text-gray-400 mx-auto mb-1.5" strokeWidth={2} />
+                            <p className="text-base font-extrabold text-brand-black" dir="ltr">{profile.no_show_count ?? 0}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{t('profile.noShowCount')}</p>
                         </div>
                     </div>
                 )}
