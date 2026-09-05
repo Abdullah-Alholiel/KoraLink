@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -61,8 +62,11 @@ export class AdminUsersService {
     } else if (dto.status === 'suspended') {
       conds.push(sql`${users.suspended_until} IS NOT NULL AND ${users.suspended_until} > now()`);
     } else if (dto.status === 'active') {
+      // Run #32 ghost guard: "active" must exclude soft-deleted/purged
+      // accounts — a ghost has banned_at NULL, so without the deleted_at
+      // predicate it displayed as active in the ops table.
       conds.push(
-        sql`${users.banned_at} IS NULL AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
+        sql`${users.banned_at} IS NULL AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now()) AND ${users.deleted_at} IS NULL`,
       );
     }
     // P1-37 (run #31): PDPL ops view — users scheduled for deletion (soft-
@@ -123,6 +127,17 @@ export class AdminUsersService {
 
   async update(id: string, dto: UpdateUserAdminDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
+
+    // ── PDPL ghost guard (run #32) ──
+    // Soft-deleted (grace window) and hard-purged accounts are frozen: the
+    // admin UI hides moderation actions for deleted rows, and the API must
+    // enforce the same rule against direct calls (ban/unban/role/suspend on
+    // a ghost would silently mutate a record that is scheduled to vanish).
+    if (before.deleted_at) {
+      throw new ConflictException(
+        'This account is deleted (PDPL); moderation actions are disabled.',
+      );
+    }
 
     // ── Self-moderation guards ──
     if (id === adminId) {
