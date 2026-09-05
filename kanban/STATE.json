@@ -1,26 +1,23 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 31,
-  "last_run_at": "2026-09-04T03:00:00Z",
+  "last_run": 33,
+  "last_run_at": "2026-09-05T10:45:00Z",
   "last_run_commits": [
-    "d96684b",
-    "05f086e",
-    "8346aeb",
-    "13bf4d4",
-    "ec3862e",
-    "acd27b4"
+    "f40acd9",
+    "45cdb91"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-04T02-15Z.md",
+  "last_run_report": "kanban/RUNS/2026-09-05T10-45Z.md",
   "in_review_items": [
-    "P1-35+P1-36+resume hardening (d96684b, 05f086e, 8346aeb, 13bf4d4, ec3862e, acd27b4) — LIVE E2E PASS this run on restarted API (delete→200, me 401, restore WITH query string→201, spent restore token 403 on /users/me AND /admin/users, original session 200). Next run: re-verify claims (spot-check restore flow + jest/vitest green).",
-    "NEW P1 (Reviewer B, run #31): match-detail roster not realtime — stale seats at the booking moment (match/[id]/page.tsx fetch-based; lobby socket layer exists via createLobbySocket). Boarded, NOT built. Mirror card creation failed (approval timeout) — create with dedupe check next run.",
+    "Repair session 2026-09-05 (verify next run): PDPL ghost guards f40acd9 (spec 4/4 — status=active excludes deleted_at, update() 409s ghosts pre-write), PWA 45cdb91 (WEB-8 reg?.waiting, billboard reduced-motion re-arm, InstallLanding deps). Gates: jest 338/338, vitest 362/362, tsc 0/0, eslint 0, turbo 3/3 exit 0. Wiring verified: delegation child probe on zai returned ZAI-DELEGATION-OK (6.5s).",
+    "Run #32 slices (Docker pair only — NOT rebuilt, P2-48): admin Dockerfile mkdir public + socket.io-client dep. Deliberately deferred to a Coolify-verified cycle per run #32 A3 caveat.",
     "P2-46 local DB + offline mutation queue — PARKED by Abdullah 2026-09-03 (unchanged)."
   ],
   "open_blockers": [
-    "ADMIN HOLD (run #31, 02:15Z): Abdullah has UNCOMMITTED work in apps/admin (users/page.tsx, lib/types.ts, messages/*) AND its API surface (apps/api/src/modules/admin/users.service.ts, dto/list-users.dto.ts). ALL admin-area items hold — P1-37 BLOCKED. Next run: if the owner's work IS the deleted-users view, mark P1-37 DONE-with-evidence; else re-scope.",
-    "Kanban mirror PARTIAL (run #31): t_7d0b0f38 (P2-45) verified-commented; P1-35 card t_b45a5999 created+linked; P1-36/P1-37/lobby cards NOT created (approval gate timed out mid-batch; non-fatal — BOARD.md is durable record).",
-    "Run #31 crash forensics inconclusive: the 01:16Z cron fire died ~5min in (pid dead, no OOM traces — logs rolled). Watch the next cron slots for recurrence.",
+    "zai delegation-path 401 — RESOLVED 2026-09-05 repair: live delegation child probe on restored zai config returned ZAI-DELEGATION-OK (6.5s). delegation.provider/model/base_url = zai/glm-5.3-flash/coding-paas-v4; cron pin = zai; fallback ladder diversified (deepseek → zai → Go×2); watchdog alerts on wrong pin. zai child 401s remain intermittent (runs #24-32 history) — try zai first, failover Go on first child error.",
+    "P2-47 (new, run #32): admin cannot cancel a scheduled purge or restore-on-behalf — P1-37 landed VISIBILITY only (1043293). Needs Abdullah decision: cancel-purge (clear deleted_at) vs full restore-on-behalf.",
+    "Root Dockerfile workspace-manifest strictness (Reviewer A run #32 A3, LOW-MED): root-stage npm ci copies only apps/api manifests against the 3-workspace lockfile — latent npm-strictness risk; Coolify path reportedly works, needs a Coolify-verified cycle before touching.",
+    "Runbook addition (run #32): NEVER regen app standalone lockfiles in-tree on this box — npm 12 walks up and mutates the ROOT workspace lockfile (git-reverted this run); regen in an isolated /tmp dir against the standalone lockfile only.",
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
     "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
@@ -37,10 +34,9 @@
     "P0-9 email infrastructure — CARVED run #27. Zero providers in repo. Required for KSA launch. Architecture decision needed: managed vs self-hosted SMTP. Buildable only AFTER owner call.",
     "P2-42 CSP `script-src` migration — standing reviewer item, 2-PR effort (nonce middleware → drop unsafe-inline; then audit Script usage → drop unsafe-eval).",
     "P1-17b partial (run #26): .env.bak deleted + .gitignore extended. STILL TODO: rotate the secrets the .bak held; Sentry token rotation; Redis password; admin→HttpOnly cookies; server-side session invalidation; drop Bearer on browser surfaces.",
-    "drizzle-orm 0.45.2 deferred to a focused half-day cycle — 6 type tightenings, no reachable sink per Strix's own analysis.",
-    "zai delegation REPAIRED (run #31): reviewers ran clean on zai/glm-5.3-flash after 7 consecutive 401s (credential pool entries now ok + correct base_url). Keep zai primary per provider directive; opencode-go stays failover."
+    "drizzle-orm 0.45.2 deferred to a focused half-day cycle — 6 type tightenings, no reachable sink per Strix's own analysis."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #31 (2026-09-04 02:15-03:00Z, RESUMED — 01:16Z fire crashed 5min in, lock taken over per owner instruction): PDPL hardening run. Crashed segment had landed P1-35 (d96684b deleted-profile filter) + P1-36 (05f086e route-strict restore scope + WS deleted-user rejection) + 8346aeb (purge subscription sweep + signed-iat expiry anchor) — all verified this run. Resume added 3 commits: 13bf4d4 (purge UPDATE+subscription DELETE now ONE tx — crash previously orphaned subscriptions on an anonymized ghost forever; restore-route gate query-string-proof), ec3862e (SPENT-TOKEN REPLAY GUARD — after restore succeeds the purpose:'restore' JWT was STILL a full session token until exp; now 403 everywhere on active accounts; Reviewer A IMPORTANT #1), acd27b4 (PDPL_GRACE_DAYS single source). Reviewers on zai/glm-5.3-flash — pool REPAIRED (A 112s/7 calls, B 464s/29 calls; zai weekly 1%). Reviewer B verified run #30 PDPL claims ALL ✓ and P2-45 ALL ✓ → DONE. Gates: targeted jest 40/40, full API jest 330/330, vitest 328/330 (2 = sibling PromoBillboard WIP), turbo build 3/3 + api rebuilt uncached, API restarted + health 200, LIVE E2E PASS (delete→401→restore w/ query string→spent token 403 me+admin→session 200). P1-37 BLOCKED: ADMIN HOLD (owner's uncommitted apps/admin + admin-API work — possibly this very feature). Sentry triage: no new P0/P1 (all known/dormant/by-design; attacker.example CORS = control working). Next: re-check admin tree first; create 3 missing mirror cards; best buildable = match-detail realtime lobby (new P1). Money items PARKED until KSA company. strix_scan=2026-09-02 covers Sept."
+  "notes": "Repair session 2026-09-05 10:45Z (Abdullah-triggered, kanban/RUNS/2026-09-05T10-45Z.md): fires #33/#34 died at BOOT — cron pin opencode-go + ALL fallback rungs on Go; Go weekly 429; zai untouched at 1% weekly. Fixed wiring (pin/delegation/ladder/auth pool + watchdog checks), rebuilt run #32's lost code slices (f40acd9 ghost guards — surviving spec 4/4; 45cdb91 WEB-8 + billboard + InstallLanding). Gates: jest 338/338, vitest 362/362, tsc 0/0, eslint 0, turbo 3/3 exit 0. Docker pair NOT rebuilt → P2-48 (Coolify-verified cycle). Board reconciled to run #32 verified state (P1-37 DONE, ADMIN HOLD lifted, P2-47 added). Run #32's own notes: kanban/RUNS/2026-09-04T15-15Z.md. Next: 15:15Z fire = run #34 full cycle on zai; P2-47 needs Abdullah decision (cancel-purge vs restore-on-behalf); Go weekly resets Sep 7."
 }
