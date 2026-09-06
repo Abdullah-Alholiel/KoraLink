@@ -662,6 +662,19 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   }),
 }));
 
+export const matchWaitlistRelations = relations(match_waitlist, ({ one }) => ({
+  // P1-17: inverse side of matches.waitlist (many) — Drizzle requires BOTH
+  // directions declared or the relational query builder 500s at runtime.
+  match: one(matches, {
+    fields: [match_waitlist.match_id],
+    references: [matches.id],
+  }),
+  user: one(users, {
+    fields: [match_waitlist.user_id],
+    references: [users.id],
+  }),
+}));
+
 export const matchMessagesRelations = relations(match_messages, ({ one }) => ({
   match: one(matches, {
     fields: [match_messages.match_id],

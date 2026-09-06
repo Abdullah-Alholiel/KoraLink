@@ -1091,6 +1091,29 @@ export class MatchesService {
           no_show: false,
         });
 
+      // 6. P1-17: a queued player who lands a seat by hand leaves the queue —
+      // otherwise promoteNextInTx would later seat them a second time.
+      const [queued] = await tx
+        .select({ position: schema.match_waitlist.position })
+        .from(schema.match_waitlist)
+        .where(
+          sql`${schema.match_waitlist.match_id} = ${matchId} AND ${schema.match_waitlist.user_id} = ${userId}`,
+        )
+        .limit(1);
+      if (queued) {
+        await tx
+          .delete(schema.match_waitlist)
+          .where(
+            sql`${schema.match_waitlist.match_id} = ${matchId} AND ${schema.match_waitlist.user_id} = ${userId}`,
+          );
+        await tx
+          .update(schema.match_waitlist)
+          .set({ position: sql`${schema.match_waitlist.position} - 1` })
+          .where(
+            sql`${schema.match_waitlist.match_id} = ${matchId} AND ${schema.match_waitlist.position} > ${queued.position}`,
+          );
+      }
+
       // 6. If last spot, mark Full — premise-predicated (P2-49, run #36):
       // only flip while the row is still Open; a concurrent cancel/complete
       // between read and write must not be overwritten.
@@ -1205,6 +1228,8 @@ export class MatchesService {
       // transaction — a crash can never leave a free spot with a stale queue.
       // Runs BEFORE the underfill check: when the queue refills the roster,
       // the host must NOT get a "players needed" nudge for a full match.
+      // EXACTLY ONE call per freeing path: a second call would seat ANOTHER
+      // queued player past capacity (live E2E proved 15/14 — regression S4).
       promoted = await this.waitlist.promoteNextInTx(tx, matchId);
 
       // Below minimum after this withdrawal → re-arm the hourly nudge clock
@@ -1226,10 +1251,6 @@ export class MatchesService {
           needed: match.min_players - match.total_players,
         };
       }
-
-      // P1-17 waitlist: the freed spot goes to the queue head in the SAME
-      // transaction — a crash can never leave a free spot with a stale queue.
-      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
     });
 
     // P1-17: bell + WS for the promoted player (fire-and-forget after commit).
