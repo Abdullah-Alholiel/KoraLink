@@ -107,14 +107,17 @@ describe('P1-41 mail templates (run #35)', () => {
     expect(out.html).toContain('1 Jan 2026, 18:00');
     expect(out.html).toContain('Riyadh');
     expect(out.html).toContain('SAR 35.00');
-    // CTA deep-links to the match (same shape as the PWA push deep-link).
-    expect(out.html).toContain('https://x/ar/match/m1');
+    // CTA deep-links to the match, locale-aware (run #36: was hardcoded /ar/).
+    expect(out.html).toContain('https://x/en/match/m1');
   });
 
   it('produces a plain-text alternative with no HTML tags', () => {
     const out = renderEmail('pom_decided', 'ar', {}, { matchId: 'm1', matchTitle: 'نصف النهائي' }, 'https://x');
     expect(out.text).not.toContain('<');
     expect(out.text).toContain('https://x/ar/match/m1');
+    // Run #36: en locale now deep-links to /en/, not a hardcoded /ar/.
+    const outEn = renderEmail('wallet_refunded', 'en', {}, { matchId: 'm1' }, 'https://x');
+    expect(outEn.html).toContain('https://x/en/match/m1');
   });
 });
 

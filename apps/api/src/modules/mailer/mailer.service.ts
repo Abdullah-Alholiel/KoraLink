@@ -287,7 +287,9 @@ export function renderEmail(
   const heading = fillVars(copy.heading, vars);
   const body = fillVars(copy.body, vars);
 
-  const ctaUrl = details.matchId ? `${playerUrl}/ar/match/${details.matchId}` : playerUrl;
+  const ctaUrl = details.matchId
+    ? `${playerUrl}/${locale}/match/${details.matchId}`
+    : playerUrl;
 
   const rows: [string, string][] = [];
   if (details.matchTitle) rows.push([labels.match, details.matchTitle]);
