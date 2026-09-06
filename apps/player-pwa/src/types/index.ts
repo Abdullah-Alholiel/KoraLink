@@ -72,6 +72,10 @@ export interface Match {
     pitchId?: string;
     /** The slot currently holding the match (excluded from reschedule picker). */
     bookingSlotId?: string | null;
+    /** Players queued on a full match (P1-17 waitlist). */
+    waitlistCount?: number;
+    /** The current user's queue position (null when not queued). */
+    yourWaitlistPosition?: number | null;
 }
 
 export interface RosterPlayer {

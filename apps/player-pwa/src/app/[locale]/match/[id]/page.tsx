@@ -26,7 +26,7 @@ import {
 import { useMatch } from '@/hooks/useMatches';
 import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
 import { useAppeal } from '@/hooks/useDisputes';
-import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch, useRescheduleMatch } from '@/hooks/useMatchActions';
+import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch, useRescheduleMatch, useJoinWaitlist, useLeaveWaitlist } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
@@ -92,6 +92,15 @@ export default function MatchDetailPage({
     const isJoined = match?.isJoined ?? false;
     const isUserHost = match?.isUserHost ?? false;
     const showJoin = !!match && !isJoined && !isUserHost && (match.status === 'open' || match.status === 'full' || match.status === 'in_progress') && openSpots > 0;
+
+    // ── P1-17 waitlist (full-match queue) ──
+    const joinWaitlist = useJoinWaitlist();
+    const leaveWaitlist = useLeaveWaitlist();
+    const isQueued = match?.yourWaitlistPosition != null;
+    const isFullMatch = !!match && openSpots <= 0 && (match.status === 'open' || match.status === 'full');
+    // Non-members see the queue CTA on a full match; queued players see their spot.
+    const showWaitlistCTA = isFullMatch && !isJoined && !isUserHost && !isQueued;
+    const showQueuedState = isFullMatch && !isJoined && isQueued;
 
     const [showPayment, setShowPayment] = useState(false);
     const [showRules, setShowRules] = useState(false);
@@ -816,6 +825,65 @@ export default function MatchDetailPage({
                                             {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
                                         </span>
                                     </button>
+                                </div>
+                            </div>
+                            )}
+
+                            {/* P1-17: full-match waitlist CTA / queued state */}
+                            {showWaitlistCTA && (
+                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                                <div className="max-w-xl mx-auto">
+                                    <button
+                                        onClick={() => joinWaitlist.mutate(id, {
+                                            onError: (err) => showToast(err.message || t('waitlist.joinFailed'), 'error'),
+                                            onSuccess: () => showToast(t('waitlist.joinSuccess'), 'success'),
+                                        })}
+                                        disabled={joinWaitlist.isPending}
+                                        data-testid="join-waitlist-cta"
+                                        className="
+                                            w-full py-4 rounded-2xl bg-amber-500 text-white
+                                            text-sm font-bold flex items-center justify-between px-6
+                                            shadow-[0_4px_14px_rgba(245,158,11,0.4)]
+                                            active:scale-[0.98] transition-transform
+                                            disabled:opacity-60
+                                        "
+                                    >
+                                        <span>
+                                            {joinWaitlist.isPending
+                                                ? t('waitlist.joining')
+                                                : `${t('waitlist.joinCta')} (${match.waitlistCount ?? 0})`}
+                                        </span>
+                                        <span className="font-extrabold">
+                                            {match.price === 0 ? t('gameDetails.free') : t('waitlist.noCharge')}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            )}
+
+                            {showQueuedState && (
+                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                                <div className="max-w-xl mx-auto">
+                                    <div
+                                        data-testid="waitlist-queued-state"
+                                        className="
+                                            w-full py-3.5 rounded-2xl bg-brand-green/10 border border-brand-green
+                                            text-sm font-bold flex items-center justify-between px-6 text-brand-green
+                                        "
+                                    >
+                                        <span dir="auto">
+                                            {t('waitlist.queuedPrefix', { position: match.yourWaitlistPosition })}
+                                        </span>
+                                        <button
+                                            onClick={() => leaveWaitlist.mutate(id, {
+                                                onError: (err) => showToast(err.message || t('waitlist.leaveFailed'), 'error'),
+                                            })}
+                                            disabled={leaveWaitlist.isPending}
+                                            className="text-xs font-bold text-brand-red active:scale-[0.98] transition-transform disabled:opacity-60"
+                                        >
+                                            {leaveWaitlist.isPending ? t('waitlist.leaving') : t('waitlist.leave')}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             )}

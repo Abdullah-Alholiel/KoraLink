@@ -156,7 +156,8 @@
     "full": "FULL",
     "votePotm": "Vote POTM",
     "potmVoted": "POTM voted",
-    "potmBadge": "POTM"
+    "potmBadge": "POTM",
+    "fullWaitlist": "FULL · {count} waiting"
   },
   "matchDetail": {
     "joinMatch": "Join Match",

@@ -134,6 +134,43 @@ export function useJoinMatch() {
   });
 }
 
+// ─── Waitlist (P1-17) ───────────────────────────────────────────────────────
+
+/**
+ * Queue for a FULL match. The API positions you at the tail; when a roster
+ * spot frees up, the head of the queue is promoted automatically and you get
+ * a localized notification. Detail + feed caches invalidate on completion so
+ * the CTA flips from "Join Waitlist (#N)" to "Queued · #N".
+ */
+export function useJoinWaitlist() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ position: number }, FetchError, string>({
+    mutationFn: (matchId) =>
+      fetcher(`/matches/${matchId}/waitlist`, { method: 'POST' }),
+    onSuccess: (_data, matchId) => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+    },
+  });
+}
+
+/** Leave the waitlist of a match. */
+export function useLeaveWaitlist() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ message: string }, FetchError, string>({
+    mutationFn: (matchId) =>
+      fetcher(`/matches/${matchId}/waitlist`, { method: 'DELETE' }),
+    onSuccess: (_data, matchId) => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+    },
+  });
+}
+
 // ─── Leave Match ───────────────────────────────────────
 
 export function useLeaveMatch() {

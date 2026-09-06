@@ -156,7 +156,8 @@
     "full": "مكتمل",
     "votePotm": "صوّت لأفضل لاعب",
     "potmVoted": "تم التصويت",
-    "potmBadge": "أفضل لاعب"
+    "potmBadge": "أفضل لاعب",
+    "fullWaitlist": "مكتمل · {count} بالانتظار"
   },
   "matchDetail": {
     "joinMatch": "انضم للمباراة",

@@ -61,6 +61,10 @@ export interface MatchDetailApi {
   booking_slot_id?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** P1-17: players queued on this match (CTA counter). */
+  waitlist_count?: number;
+  /** P1-17: the viewer's queue position (null when not queued). */
+  your_waitlist_position?: number | null;
   host: MatchHostApi;
   pitch: MatchPitchApi;
   players?: MatchPlayerApi[];
@@ -354,6 +358,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     currency: 'SAR',
     totalSpots: row.max_players,
     filledSpots: row.spots_filled,
+    waitlistCount: (row as { waitlist_count?: number }).waitlist_count ?? 0,
     status,
     imageUrl: '',
     roster: [],
@@ -425,6 +430,8 @@ export function adaptMatchDetail(
     bookingMode: detail.booking_mode,
     pitchId: detail.pitch?.id,
     bookingSlotId: detail.booking_slot_id ?? null,
+    waitlistCount: detail.waitlist_count ?? 0,
+    yourWaitlistPosition: detail.your_waitlist_position ?? null,
   };
 }
 

@@ -86,8 +86,14 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
             </span>
         );
     } else if (isFull) {
-        buttonLabel = t('matchCard.full');
-        buttonStyle = 'bg-gray-100 text-gray-500';
+        // P1-17: a full match is a queue entry point, not a dead end — the
+        // label carries the queue count when players are waiting; the real
+        // "Join Waitlist" CTA lives on the detail screen.
+        buttonLabel =
+            (match.waitlistCount ?? 0) > 0
+                ? t('matchCard.fullWaitlist', { count: match.waitlistCount })
+                : t('matchCard.full');
+        buttonStyle = 'bg-amber-100 text-amber-800';
     } else {
         buttonLabel = t('matchDetail.joinMatch');
         buttonStyle = 'bg-brand-green text-white';
