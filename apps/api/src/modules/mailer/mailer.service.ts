@@ -190,13 +190,24 @@ export class MailerService {
       );
       return { userId: recipient.userId, status: 'skipped', reason: 'transport-unconfigured' };
     }
-    const { subject, html, text } = renderEmail(
-      template,
-      recipient.locale,
-      vars,
-      details,
-      this.playerUrl,
-    );
+    // Render is INSIDE the guarded region (run #36, Reviewer A): a template
+    // render throw must degrade to one failed outcome for THIS recipient —
+    // never escape deliver() and let sendToUsers' catch discard the outcomes
+    // already collected for earlier recipients.
+    let rendered: { subject: string; html: string; text: string };
+    try {
+      rendered = renderEmail(template, recipient.locale, vars, details, this.playerUrl);
+    } catch (err) {
+      this.logger.warn(
+        `mailer: render error for ${template} → ${recipient.userId}: ${(err as Error).message}`,
+      );
+      Sentry.captureException(err, {
+        tags: { component: 'mailer', template },
+        extra: { userId: recipient.userId },
+      });
+      return { userId: recipient.userId, status: 'failed', reason: 'render-error' };
+    }
+    const { subject, html, text } = rendered;
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',

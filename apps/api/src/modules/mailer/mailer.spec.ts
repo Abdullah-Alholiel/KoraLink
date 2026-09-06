@@ -211,3 +211,64 @@ describe('P1-41 email verb filter (run #35)', () => {
     }
   });
 });
+
+describe('P1-41 deliver() render hardening (run #36, Reviewer A)', () => {
+  /** details object whose `matchTitle` read THROWS — drives a deterministic render failure. */
+  function bombDetails(): Record<string, string> {
+    const bomb: Record<string, string> = {};
+    Object.defineProperty(bomb, 'matchTitle', {
+      get() {
+        throw new Error('render boom');
+      },
+    });
+    return bomb;
+  }
+
+  it('a render throw degrades to ONE render-error outcome (deliver never throws render errors upward)', async () => {
+    // Configured transport so deliver() reaches renderEmail; fetch stubbed to
+    // success — the ONLY failure source is the poisoned details object.
+    const svc = makeMailer([], { RESEND_API_KEY: 'k', MAIL_FROM: 'KoraLink <no-reply@koralink.app>' });
+    const deliver = (svc as unknown as { deliver: Function }).deliver.bind(svc);
+    const realFetch = global.fetch;
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ id: 'x' }), { status: 200 })) as unknown as typeof fetch;
+    try {
+      const ok = await deliver({ userId: 'u1', email: 'a@x.com', locale: 'ar' }, 'wallet_refunded', {}, {});
+      const bad = await deliver({ userId: 'u2', email: 'b@x.com', locale: 'ar' }, 'wallet_refunded', {}, bombDetails());
+      expect(ok).toMatchObject({ userId: 'u1', status: 'sent' });
+      expect(bad).toMatchObject({ userId: 'u2', status: 'failed', reason: 'render-error' });
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+
+  it('sendToUsers keeps collecting outcomes when renders throw mid-batch (old code returned [])', async () => {
+    const svc = makeMailer(
+      [
+        { id: 'u1', email: 'a@x.com', email_verified_at: new Date(), email_muted: false, deleted_at: null },
+        { id: 'u2', email: 'b@x.com', email_verified_at: new Date(), email_muted: false, deleted_at: null },
+      ],
+      { RESEND_API_KEY: 'k', MAIL_FROM: 'KoraLink <no-reply@koralink.app>' },
+    );
+    const realFetch = global.fetch;
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ id: 'x' }), { status: 200 })) as unknown as typeof fetch;
+    try {
+      // Both recipients get the poisoned details → render throws for BOTH.
+      // Old behavior: sendToUsers' catch returned [] and discarded everything.
+      const outcomes = (await svc.sendToUsers(
+        ['u1', 'u2'],
+        'wallet_refunded',
+        {},
+        bombDetails() as never,
+      )) as Array<{ userId: string; status: string; reason?: string }>;
+      expect(outcomes.length).toBe(2);
+      for (const item of outcomes) {
+        expect(item.status).toBe('failed');
+        expect(item.reason).toBe('render-error');
+      }
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+});
