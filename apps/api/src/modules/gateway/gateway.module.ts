@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AppGateway } from './app.gateway';
 import { RealtimeService } from './realtime.service';
+import { WsRateLimitService } from './rate-limit.service';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ActivitiesModule } from '../activities/activities.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -21,7 +22,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     forwardRef(() => ActivitiesModule),
     NotificationsModule,
   ],
-  providers: [AppGateway, RealtimeService],
+  providers: [AppGateway, RealtimeService, WsRateLimitService],
   exports: [AppGateway, RealtimeService],
 })
 export class GatewayModule {}

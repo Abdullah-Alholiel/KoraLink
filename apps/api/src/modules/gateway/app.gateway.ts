@@ -22,6 +22,10 @@ import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from './realtime.service';
+import { WsRateLimitService } from './rate-limit.service';
+
+/** Parity with the REST message DTOs (@MaxLength(2000)). */
+const WS_MESSAGE_MAX_LENGTH = 2000;
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -56,6 +60,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     private readonly realtime: RealtimeService,
     private readonly activitiesService: ActivitiesService,
     private readonly notificationsService: NotificationsService,
+    private readonly rateLimit: WsRateLimitService,
   ) {}
 
   afterInit(): void {
@@ -233,6 +238,19 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     const content = data.content.trim();
     const clientMessageId = data.clientMessageId?.trim() || null;
 
+    // Parity with the REST DTO: reject oversized payloads before any DB work.
+    if (content.length > WS_MESSAGE_MAX_LENGTH) {
+      throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
+    }
+
+    // P1-42 (run #36): per-socket flood control. Keyed per connection — each
+    // connection paid a full authenticated handshake, and reconnect-to-refill
+    // costs an expensive, logged handshake per round.
+    const rl = this.rateLimit.consume(`msg:${client.id}`);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
+
     // Only match members may post to the lobby.
     const [membership] = await this.db
       .select({ id: match_players.id })
@@ -381,6 +399,19 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
+
+    const content = data.content.trim();
+
+    // REST DTO parity: same 2000-char cap the conversations REST endpoint enforces.
+    if (content.length > WS_MESSAGE_MAX_LENGTH) {
+      throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
+    }
+
+    // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM budget.
+    const rl = this.rateLimit.consume(`dm:${client.id}`);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
 
     const message = await this.conversationsService.sendMessage(
       client.userId,

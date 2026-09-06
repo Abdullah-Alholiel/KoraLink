@@ -56,6 +56,9 @@ function makeGateway(dbRows: UserRow[], payload: { sub: string; role?: string })
     { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
     {} as never,
     {} as never,
+    // Run #36 (P1-42): per-socket WS rate limiter — always-allow stub for the
+    // connection-moderation suites; flood behavior has its own spec file.
+    { consume: () => ({ allowed: true, retryAfterSec: 0 }) } as never,
   );
   return gateway;
 }
