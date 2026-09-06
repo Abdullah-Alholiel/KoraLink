@@ -489,6 +489,9 @@
   },
   "profile": {
     "title": "Profile",
+    "sectionPlaying": "Playing",
+    "sectionPreferences": "Preferences",
+    "sectionAccount": "Account",
     "editProfile": "Edit Profile",
     "gamesPlayed": "Games Played",
     "noShowCount": "No-shows",

@@ -18,13 +18,15 @@ import {
     Camera,
     Bell,
     BellOff,
-    Calendar,
     MessageCircle,
     Tag,
     Moon,
     Flag,
     Download,
     AlertTriangle,
+    Pencil,
+    Gamepad2,
+    BellRing,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -36,6 +38,7 @@ import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
 import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
 import RestoreAccountBanner from '@/components/profile/RestoreAccountBanner';
 import EmailSection from '@/components/profile/EmailSection';
+import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -49,7 +52,7 @@ interface MenuItemProps {
 function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps) {
     const content = (
         <>
-            <div className={`w-5 h-5 flex-shrink-0 ${danger ? 'text-brand-red' : 'text-gray-400'}`}>
+            <div className={`w-5 h-5 flex-shrink-0 ${danger ? 'text-brand-red' : 'text-brand-green'}`}>
                 {icon}
             </div>
             <span
@@ -64,12 +67,15 @@ function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps
                     {endText}
                 </span>
             )}
-            {!danger && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" strokeWidth={1.5} />}
+            {!danger && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 rtl:rotate-180" strokeWidth={1.5} />}
         </>
     );
 
+    // Flat-list row (sketches/004-profile-redesign V2): hairline separators via
+    // sibling selectors live on the parent; rows themselves are borderless and
+    // carry generous 44pt+ tap height (px-6 py-3.5).
     const className =
-        'w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors';
+        'w-full flex items-center gap-3.5 px-6 py-3.5 hover:bg-gray-50 transition-colors';
 
     if (href) {
         return (
@@ -85,6 +91,8 @@ function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps
         </button>
     );
 }
+
+/** Uppercase micro-label that opens each flat section — shared component. */
 
 export default function ProfilePage() {
     const pathname = usePathname();
@@ -183,8 +191,8 @@ export default function ProfilePage() {
         icon: typeof Bell;
         hintKey: string;
     }[] = [
-        { key: 'match', icon: Calendar, hintKey: 'profile.push.matchHint' },
-        { key: 'chat', icon: MessageCircle, hintKey: 'profile.push.chatHint' },
+        { key: 'match', icon: MessageCircle, hintKey: 'profile.push.matchHint' },
+        { key: 'chat', icon: Bell, hintKey: 'profile.push.chatHint' },
         { key: 'promo', icon: Tag, hintKey: 'profile.push.promoHint' },
         { key: 'system', icon: Shield, hintKey: 'profile.push.systemHint' },
     ];
@@ -212,104 +220,167 @@ export default function ProfilePage() {
                 />
             )}
 
-            {/* ── Avatar & Name ─────────────────────── */}
-            <div className="flex flex-col items-center pt-[var(--top-safe-inset)] pb-4 bg-white">
-                <div className="relative">
-                    {avatarUrl ? (
-                        <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={avatarUrl}
-                                alt={fullName}
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                    ) : (
-                        <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-2xl font-bold text-gray-400">
-                                {avatarInitial}
-                            </span>
-                        </div>
-                    )}
-                    <button
-                        className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-brand-green flex items-center justify-center border-2 border-white active:scale-95 transition-transform"
-                        aria-label={t('profile.editProfile')}
-                        onClick={() => router.push(`/${locale}/personal-info`)}
-                    >
-                        <Camera className="w-4 h-4 text-white" strokeWidth={2} />
-                    </button>
-                </div>
-                <h1 className="text-xl font-bold text-brand-black mt-3">{fullName}</h1>
-                <p className="text-sm text-gray-400 mt-0.5" dir="ltr">{handle}</p>
-            </div>
+            {/* ── Identity hero (sketches/004-profile-redesign V2 r2) ──
+                Brand-green gradient — Abdullah: "not too dark, same colours
+                highlight as my app design system" — via the profile-hero
+                token (brand-green-light → mid → brand-green). White-glow
+                floodlight radials replace the old near-black surface. */}
+            <div className="relative overflow-hidden bg-profile-hero text-white">
+                {/* Floodlight glow layers (pure CSS, decorative) */}
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                        background:
+                            'radial-gradient(340px 260px at 85% -40px, rgba(255,255,255,0.10), transparent 70%), radial-gradient(280px 220px at 8% 30%, rgba(255,255,255,0.06), transparent 70%)',
+                    }}
+                />
+                <div className="relative px-6 pt-[calc(var(--top-safe-inset)+14px)] pb-7">
+                    {/* Brandmark row — mirrors the Play screen app bar */}
+                    <div className="flex items-center justify-between">
+                        <span className="text-[15px] font-bold tracking-wide">
+                            {t('play.title')}
+                        </span>
+                        <span
+                            className="pointer-events-none flex h-9 w-9 items-center justify-center rounded-full bg-white/10"
+                            aria-hidden
+                        >
+                            <Bell className="h-4 w-4 text-white/90" strokeWidth={1.5} />
+                        </span>
+                    </div>
 
-            {/* ── Stats Row ────────────────────────── */}
-            {isAuthenticated && (
-                <div className="flex justify-around bg-white rounded-2xl mx-4 mt-4 py-4 shadow-card">
-                    {/* P2-26: loading / error states (previously zero branches —
-                        review run #16). Error offers retry via the stats refetch. */}
-                    {statsLoading ? (
-                        <>
-                            <div className="text-center">
-                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
-                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
-                            </div>
-                            <div className="w-px bg-gray-100" />
-                            <div className="text-center">
-                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
-                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
-                            </div>
-                            <div className="w-px bg-gray-100" />
-                            <div className="text-center">
-                                <div className="h-8 w-12 bg-gray-200 rounded-full mx-auto animate-pulse" />
-                                <div className="h-3 w-16 bg-gray-100 rounded-full mx-auto mt-2 animate-pulse" />
-                            </div>
-                        </>
-                    ) : statsError ? (
-                        <div className="flex-1 flex flex-col items-center py-1">
-                            <p className="text-sm text-gray-400">{t('common.error')}</p>
+                    {/* Identity row: avatar + name + white edit pill */}
+                    <div className="mt-6 flex items-center gap-4">
+                        <div className="relative flex-shrink-0">
+                            {avatarUrl ? (
+                                <div className="h-[84px] w-[84px] overflow-hidden rounded-full border-2 border-white/40">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={avatarUrl}
+                                        alt={fullName}
+                                        className="h-full w-full object-cover"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex h-[84px] w-[84px] items-center justify-center rounded-full border-2 border-white/40 bg-brand-green-deep/60">
+                                    <span className="text-3xl font-bold text-white/90">
+                                        {avatarInitial}
+                                    </span>
+                                </div>
+                            )}
                             <button
-                                type="button"
-                                onClick={() => refetchStats()}
-                                className="mt-1 text-xs font-semibold text-brand-green"
+                                className="absolute bottom-0 end-0 flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md active:scale-95 transition-transform"
+                                aria-label={t('profile.editProfile')}
+                                onClick={() => router.push(`/${locale}/personal-info`)}
                             >
-                                {t('common.retry')}
+                                <Camera className="h-3.5 w-3.5" strokeWidth={2} />
                             </button>
                         </div>
-                    ) : (
-                        <>
-                            <div className="text-center">
-                                <p className="text-2xl font-extrabold text-brand-black">{stats?.games_played ?? 0}</p>
-                                <p className="text-xs text-gray-400">{t('profile.gamesPlayed')}</p>
-                            </div>
-                            <div className="w-px bg-gray-100" />
-                            <div className="text-center">
-                                <p className="text-2xl font-extrabold text-brand-black flex items-center justify-center gap-1">
-                                    <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
-                                    <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
-                                </p>
-                                <p className="text-xs text-gray-400">{t('profile.pomCount')}</p>
-                            </div>
-                            <div className="w-px bg-gray-100" />
-                            <div className="text-center">
-                                <p className="text-2xl font-extrabold text-brand-black">{stats?.karma_score ?? 0}</p>
-                                <p className="text-xs text-gray-400">{t('profile.karma')}</p>
-                            </div>
-                        </>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="truncate text-[21px] font-bold leading-tight">{fullName}</h1>
+                            <p className="mt-0.5 text-[13px] text-white/60" dir="ltr">{handle}</p>
+                            <button
+                                type="button"
+                                onClick={() => router.push(`/${locale}/personal-info`)}
+                                className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-brand-green shadow-[0_3px_10px_rgba(0,0,0,0.18)] active:scale-[0.98] transition-transform"
+                            >
+                                <Pencil className="h-3 w-3" strokeWidth={2.5} />
+                                {t('profile.editProfile')}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Glass stats bar (auth-gated) — games / POTM / karma.
+                        P2-26 loading + error states preserved. */}
+                    {isAuthenticated && (
+                        <div className="mt-6 flex overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md">
+                            {statsLoading ? (
+                                <>
+                                    <div className="flex-1 px-4 py-3.5">
+                                        <div className="mx-auto h-6 w-10 animate-pulse rounded-full bg-white/20" />
+                                        <div className="mx-auto mt-2 h-2.5 w-14 animate-pulse rounded-full bg-white/10" />
+                                    </div>
+                                    <div className="w-px bg-white/15" />
+                                    <div className="flex-1 px-4 py-3.5">
+                                        <div className="mx-auto h-6 w-10 animate-pulse rounded-full bg-white/20" />
+                                        <div className="mx-auto mt-2 h-2.5 w-14 animate-pulse rounded-full bg-white/10" />
+                                    </div>
+                                    <div className="w-px bg-white/15" />
+                                    <div className="flex-1 px-4 py-3.5">
+                                        <div className="mx-auto h-6 w-10 animate-pulse rounded-full bg-white/20" />
+                                        <div className="mx-auto mt-2 h-2.5 w-14 animate-pulse rounded-full bg-white/10" />
+                                    </div>
+                                </>
+                            ) : statsError ? (
+                                <div className="flex-1 py-2 text-center">
+                                    <p className="text-sm text-white/70">{t('common.error')}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => refetchStats()}
+                                        className="mt-0.5 text-xs font-bold text-white underline underline-offset-2"
+                                    >
+                                        {t('common.retry')}
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex-1 py-3.5 text-center">
+                                        <p className="text-xl font-extrabold leading-none">{stats?.games_played ?? 0}</p>
+                                        <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
+                                            {t('profile.gamesPlayed')}
+                                        </p>
+                                    </div>
+                                    <div className="w-px bg-white/15" />
+                                    <div className="flex-1 py-3.5 text-center">
+                                        <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none">
+                                            <Trophy className="h-4 w-4 text-amber-300" strokeWidth={2} />
+                                            <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
+                                        </p>
+                                        <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
+                                            {t('profile.pomCount')}
+                                        </p>
+                                    </div>
+                                    <div className="w-px bg-white/15" />
+                                    <div className="flex-1 py-3.5 text-center">
+                                        <p className="text-xl font-extrabold leading-none">{stats?.karma_score ?? 0}</p>
+                                        <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
+                                            {t('profile.karma')}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     )}
                 </div>
-            )}
+            </div>
 
-            {/* ── Main Menu ─────────────────────────── */}
-            <div className="bg-white rounded-2xl mx-4 mt-4 overflow-hidden shadow-card">
+            {/* ── PLAYING ──────────────────────────────── */}
+            <FlatSectionLabel label={t('profile.sectionPlaying')} />
+            <div>
                 <MenuItem
-                    icon={<User className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<User className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.personalInfo')}
                     href={`/${locale}/personal-info`}
                 />
-                <div className="h-px bg-gray-50 mx-4" />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
-                    icon={<Wallet className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<Gamepad2 className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('profile.myGames')}
+                    href={`/${locale}/my-games`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
+                <MenuItem
+                    icon={<Flag className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('profile.myReports')}
+                    href={`/${locale}/reports`}
+                />
+            </div>
+
+            {/* ── PREFERENCES ──────────────────────────── */}
+            <FlatSectionLabel label={t('profile.sectionPreferences')} />
+            <div>
+                <MenuItem
+                    icon={<Wallet className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.wallet')}
                     endText={
                         displayBalance === null
@@ -320,7 +391,7 @@ export default function ProfilePage() {
                     onClick={walletErrorMsg ? () => refetchWallet() : undefined}
                 />
                 {walletErrorMsg && (
-                    <p role="alert" className="mx-4 -mt-1 mb-2 text-xs text-amber-600">
+                    <p role="alert" className="px-6 pt-1 pb-2 text-xs text-amber-600">
                         {walletErrorMsg}{' · '}
                         <button
                             type="button"
@@ -331,78 +402,9 @@ export default function ProfilePage() {
                         </button>
                     </p>
                 )}
-                <div className="h-px bg-gray-50 mx-4" />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
-                    icon={<Trophy className="w-5 h-5" strokeWidth={1.5} />}
-                    label={t('profile.myGames')}
-                    href={`/${locale}/my-games`}
-                />
-                <div className="h-px bg-gray-50 mx-4" />
-                <MenuItem
-                    icon={<Flag className="w-5 h-5" strokeWidth={1.5} />}
-                    label={t('profile.myReports')}
-                    href={`/${locale}/reports`}
-                />
-                <div className="h-px bg-gray-50 mx-4" />
-                <MenuItem
-                    icon={<LogOut className="w-5 h-5" strokeWidth={1.5} />}
-                    label={t('profile.signOut')}
-                    danger
-                    onClick={() => setSignOutSheetOpen(true)}
-                />
-            </div>
-
-            {/* ── Danger Zone (P0-6, run #29) ────────────── */}
-            {/* The Delete + Export actions live in their own card so they're
-                visually distinct from the routine sign-out above. Auth-gated
-                so a logged-out visitor (Reviewer B P1 #3) can't tap them. */}
-            {isAuthenticated && (
-                <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
-                    <div className="px-4 pt-3 pb-1">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                            {t('profile.dangerZone.title')}
-                        </p>
-                    </div>
-                    <MenuItem
-                        icon={<Download className="w-5 h-5" strokeWidth={1.5} />}
-                        label={t('profile.exportData')}
-                        endText={exportPending ? t('common.loading') : undefined}
-                        onClick={async () => {
-                            setExportError(null);
-                            setExportPending(true);
-                            try {
-                                const data = await exportData.mutateAsync();
-                                const today = new Date().toISOString().slice(0, 10);
-                                downloadJsonAsFile(data, `koralink-export-${today}.json`);
-                            } catch {
-                                setExportError(t('errors.unknown'));
-                            } finally {
-                                setExportPending(false);
-                            }
-                        }}
-                    />
-                    {exportError && (
-                        <p role="alert" className="mx-4 mb-2 text-xs text-brand-red">
-                            {exportError}
-                        </p>
-                    )}
-                    <div className="h-px bg-gray-50 mx-4" />
-                    <MenuItem
-                        icon={<AlertTriangle className="w-5 h-5" strokeWidth={1.5} />}
-                        label={t('profile.deleteAccount.menu')}
-                        danger
-                        onClick={() => {
-                            setDeleteError(null);
-                            setDeleteSheetOpen(true);
-                        }}
-                    />
-                </div>
-            )}
-
-            {/* ── Settings ──────────────────────────── */}
-            <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
-                <MenuItem
-                    icon={<Globe className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<Globe className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.language')}
                     endText={locale === 'ar' ? t('profile.languageAr') : t('profile.languageEn')}
                     onClick={() => {
@@ -415,13 +417,13 @@ export default function ProfilePage() {
                 />
                 {mounted && isSupported && (
                     <>
-                        <div className="h-px bg-gray-50 mx-4" />
+                        <div className="h-px bg-gray-100 ms-[60px]" />
                         <MenuItem
                             icon={
                                 isSubscribing ? (
-                                    <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
                                 ) : (
-                                    <Bell className="w-5 h-5" strokeWidth={1.5} />
+                                    <BellRing className="h-5 w-5" strokeWidth={1.5} />
                                 )
                             }
                             label={t('profile.notifications')}
@@ -445,23 +447,23 @@ export default function ProfilePage() {
                         {mounted && installHintShown && !isSubscribed && (
                             <p
                                 role="status"
-                                className="mx-4 -mt-1 mb-1 text-xs text-amber-600"
+                                className="px-6 pt-1 pb-1 text-xs text-amber-600"
                             >
                                 {t('common.installRequired')}
                             </p>
                         )}
                         {mounted && isSubscribed && (
                             <>
-                                <div className="h-px bg-gray-50 mx-4" />
+                                <div className="h-px bg-gray-100 ms-[60px]" />
                                 <MenuItem
-                                    icon={<BellOff className="w-5 h-5" strokeWidth={1.5} />}
+                                    icon={<BellOff className="h-5 w-5" strokeWidth={1.5} />}
                                     label={t('profile.pushMute')}
                                     endText={prefs.push_muted ? t('profile.pushOn') : t('profile.pushOff')}
                                     onClick={() =>
                                         mutatePrefs({ pushMuted: !prefs.push_muted })
                                     }
                                 />
-                                <div className="px-4 py-3">
+                                <div className="px-6 py-3">
                                     <button
                                         type="button"
                                         className="flex w-full items-center justify-between"
@@ -471,8 +473,8 @@ export default function ProfilePage() {
                                             })
                                         }
                                     >
-                                        <span className="flex items-center gap-2 text-sm font-medium text-brand-black">
-                                            <Moon className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
+                                        <span className="flex items-center gap-3.5 text-sm font-medium text-brand-black">
+                                            <Moon className="h-5 w-5 text-brand-green" strokeWidth={1.5} />
                                             {t('profile.quietHours')}
                                         </span>
                                         <span
@@ -529,16 +531,14 @@ export default function ProfilePage() {
                                         mutes. Each toggle is a partial PATCH
                                         on the API side; absent keys leave
                                         the stored value alone. */}
-                                    <div className="h-px bg-gray-50 mx-4" />
-                                    <div className="px-4 pt-3 pb-1">
-                                        <p className="text-sm font-medium text-brand-black">
-                                            {t('profile.push.categoriesHint')}
-                                        </p>
-                                    </div>
+                                    <div className="h-px bg-gray-100 mt-3" />
+                                    <p className="pt-3 pb-1 text-sm font-medium text-brand-black">
+                                        {t('profile.push.categoriesHint')}
+                                    </p>
                                     {CATEGORY_ROWS.map(({ key, icon: Icon, hintKey }, idx) => (
                                         <div key={key}>
-                                            {idx === 0 && <div className="h-px bg-gray-50 mx-4" />}
-                                            <div className="px-4 py-3">
+                                            {idx === 0 && <div className="h-px bg-gray-100" />}
+                                            <div className="py-3">
                                                 <button
                                                     type="button"
                                                     className="flex w-full items-center justify-between gap-3 text-start"
@@ -553,7 +553,7 @@ export default function ProfilePage() {
                                                 >
                                                     <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-black">
                                                         <Icon
-                                                            className="w-5 h-5 text-gray-500 shrink-0"
+                                                            className="h-5 w-5 shrink-0 text-brand-green"
                                                             strokeWidth={1.5}
                                                         />
                                                         <span className="truncate">
@@ -581,40 +581,83 @@ export default function ProfilePage() {
                         )}
                     </>
                 )}
-                <div className="h-px bg-gray-50 mx-4" />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
-                    icon={<Headphones className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<Headphones className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.contactSupport')}
                     href="mailto:hello@koralink.sa"
                 />
-            </div>
-
-            {/* ── Email notifications (P1-41 PWA residual) ── */}
-            <EmailSection />
-
-            {/* ── Host guide (permanent home of the host onboarding) ── */}
-            <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
-                    icon={<BookOpen className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<BookOpen className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.hostGuide')}
                     href={`/${locale}/host-guide`}
                 />
             </div>
 
-            {/* ── Legal ─────────────────────────────── */}
-            <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
+            {/* ── ACCOUNT (P0-6, run #29: export + delete are auth-gated) ── */}
+            <FlatSectionLabel label={t('profile.sectionAccount')} />
+            <div>
+                {isAuthenticated && (
+                    <>
+                        <MenuItem
+                            icon={<Download className="h-5 w-5" strokeWidth={1.5} />}
+                            label={t('profile.exportData')}
+                            endText={exportPending ? t('common.loading') : undefined}
+                            onClick={async () => {
+                                setExportError(null);
+                                setExportPending(true);
+                                try {
+                                    const data = await exportData.mutateAsync();
+                                    const today = new Date().toISOString().slice(0, 10);
+                                    downloadJsonAsFile(data, `koralink-export-${today}.json`);
+                                } catch {
+                                    setExportError(t('errors.unknown'));
+                                } finally {
+                                    setExportPending(false);
+                                }
+                            }}
+                        />
+                        {exportError && (
+                            <p role="alert" className="px-6 pb-2 text-xs text-brand-red">
+                                {exportError}
+                            </p>
+                        )}
+                        <div className="h-px bg-gray-100 ms-[60px]" />
+                        <MenuItem
+                            icon={<AlertTriangle className="h-5 w-5" strokeWidth={1.5} />}
+                            label={t('profile.deleteAccount.menu')}
+                            danger
+                            onClick={() => {
+                                setDeleteError(null);
+                                setDeleteSheetOpen(true);
+                            }}
+                        />
+                        <div className="h-px bg-gray-100 ms-[60px]" />
+                    </>
+                )}
                 <MenuItem
-                    icon={<Shield className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<Shield className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.privacyPolicy')}
                     href={`/${locale}/privacy`}
                 />
-                <div className="h-px bg-gray-50 mx-4" />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
-                    icon={<FileText className="w-5 h-5" strokeWidth={1.5} />}
+                    icon={<FileText className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.termsOfService')}
                     href={`/${locale}/terms`}
                 />
+                <div className="h-px bg-gray-100 ms-[60px]" />
+                <MenuItem
+                    icon={<LogOut className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('profile.signOut')}
+                    danger
+                    onClick={() => setSignOutSheetOpen(true)}
+                />
             </div>
+
+            {/* ── Email notifications (P1-41 PWA residual) — flat section ── */}
+            <EmailSection />
 
             {/* ── Footer ────────────────────────────── */}
             <p className="text-center text-xs text-gray-300 mt-6 pb-2">
@@ -629,7 +672,7 @@ export default function ProfilePage() {
                 onConfirm={async () => {
                     setSignOutPending(true);
                     // Brief delay so the spinner is visible; the action
-                    // itself is local (Zustand clear + cookie clear +
+                    // itself is local (Zustand clear + cookie clear + 
                     // navigate). A future run could add a tracking call.
                     await new Promise((r) => setTimeout(r, 200));
                     logout();

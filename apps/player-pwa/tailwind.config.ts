@@ -35,6 +35,10 @@ const config: Config = {
       backgroundImage: {
         // HostHeroBanner (sketches/001-host-button, variant A) — deep → brand → light
         'host-hero': 'linear-gradient(135deg, #1b3227 0%, #254132 55%, #2d5c3e 100%)',
+        // ProfilePage hero (sketches/004-profile-redesign, V2 "Stadium Night" r2) —
+        // Abdullah: "not too dark, same colours as the design system" —
+        // brand-green-light → mid → brand-green, vertical flow
+        'profile-hero': 'linear-gradient(180deg, #2d5c3e 0%, #274b38 55%, #254132 100%)',
       },
     },
   },

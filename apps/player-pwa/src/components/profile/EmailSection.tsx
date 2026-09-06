@@ -24,6 +24,7 @@ import {
     useResendEmailVerification,
     useUpdateEmailPreferences,
 } from '@/hooks/useUser';
+import FlatSectionLabel from './FlatSectionLabel';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -115,10 +116,10 @@ export default function EmailSection() {
 
     if (!email || editing) {
         return (
-            <div className="mx-4 mt-3 overflow-hidden rounded-2xl bg-white shadow-card">
-                <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-                    <Mail className="h-5 w-5 text-gray-500" strokeWidth={1.5} />
-                    <p className="text-sm font-medium text-brand-black">{t('title')}</p>
+            <div className="mt-1">
+                <div className="flex items-center gap-3.5 px-6 pt-2 pb-1">
+                    <Mail className="h-5 w-5 text-brand-green" strokeWidth={1.5} />
+                    <p className="flex-1 text-sm font-medium text-brand-black">{t('title')}</p>
                 </div>
                 {inputForm}
             </div>
@@ -126,12 +127,9 @@ export default function EmailSection() {
     }
 
     return (
-        <div className="mx-4 mt-3 overflow-hidden rounded-2xl bg-white shadow-card">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-                <Mail className="h-5 w-5 text-gray-500" strokeWidth={1.5} />
-                <p className="text-sm font-medium text-brand-black">{t('title')}</p>
-            </div>
-            <div className="px-4 pb-4">
+        <div className="mt-1">
+            <FlatSectionLabel label={t('title')} />
+            <div className="px-6 pb-4">
                 <div className="flex items-center justify-between gap-3">
                     <p dir="ltr" className="truncate text-sm text-brand-black">
                         {email}

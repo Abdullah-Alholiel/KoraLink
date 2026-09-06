@@ -17,12 +17,12 @@
   }
   .phone.rtl { font-family:'Tajawal',sans-serif; }
 
-  /* ── Immersive dark top: gradient + floodlight glow + pitch arc ── */
+  /* ── Immersive brand-green top: floodlight glow, seams at #254132/#2d5c3e (design-system family) ── */
   .hero {
     background:
-      radial-gradient(340px 260px at 85% -40px, rgba(45,92,62,.55), transparent 70%),
-      radial-gradient(280px 220px at 8% 30%, rgba(45,92,62,.35), transparent 70%),
-      linear-gradient(180deg,#232528 0%, #202124 62%, #254132 140%);
+      radial-gradient(340px 260px at 85% -40px, rgba(255,255,255,.10), transparent 70%),
+      radial-gradient(280px 220px at 8% 30%, rgba(255,255,255,.06), transparent 70%),
+      linear-gradient(180deg,#2d5c3e 0%, #274b38 55%, #254132 100%);
     color:#fff; padding:70px 24px 26px; position:relative; flex-shrink:0;
   }
   /* floodlight beam */
@@ -38,17 +38,18 @@
   .idrow { display:flex; align-items:center; gap:16px; }
   .avatar {
     width:84px; height:84px; border-radius:50%; flex-shrink:0;
-    background:linear-gradient(135deg,#2d5c3e,#1d3328); display:flex; align-items:center; justify-content:center;
-    font-size:34px; font-weight:700; color:#e8ece9; border:2px solid rgba(255,255,255,.25);
-    box-shadow:0 8px 24px rgba(0,0,0,.35);
+    background:linear-gradient(135deg,#1d3f2e,#1a3327); display:flex; align-items:center; justify-content:center;
+    font-size:34px; font-weight:700; color:#e8ece9; border:2px solid rgba(255,255,255,.4);
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
   }
   .who { flex:1; min-width:0; }
   .name { font-size:21px; font-weight:700; letter-spacing:.2px; }
   .handle { font-size:12.5px; color:rgba(255,255,255,.5); direction:ltr; margin-top:1px; }
   .editbtn {
     margin-top:9px; display:inline-flex; align-items:center; gap:6px;
-    background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
-    color:#fff; font-size:11.5px; font-weight:600; padding:6px 13px; border-radius:999px;
+    background:#fff; border:0; color:#254132;
+    font-size:11.5px; font-weight:700; padding:6px 13px; border-radius:999px;
+    box-shadow:0 3px 10px rgba(0,0,0,.18);
   }
 
   /* glass stats bar inside the dark half */
@@ -90,7 +91,7 @@
 </style>
 </head>
 <body>
-<div class="stage-label">sketches/004-profile-redesign · V2 "Stadium Night" — immersive gradient identity half (floodlight beam, glass stats), flat borderless utility list, dark→green seam</div>
+<div class="stage-label">sketches/004-profile-redesign · V2 "Stadium Night" r2 — brand-green gradient identity half (Abdullah: not too dark, same family as design system), floodlight glow, white Edit-profile pill, glass stats, flat borderless utility list</div>
 
 <!-- ══════════ EN ══════════ -->
 <div class="phone">

@@ -1,6 +1,15 @@
 # 004 — Profile Screen Redesign (Impeccable-driven)
 
-**Date:** 2026-09-06 · **Status:** AWAITING ABDULLAH'S PICK · **Recommended: V2 "Stadium Night"**
+**Date:** 2026-09-06 · **Status:** PICKED — **V2 "Stadium Night" r2 (brand-green retint)**
+
+> Abdullah: "yes go with v2, but dont make the background of the top card to dark,
+> tailor it to the same colours highlight as my app design system"
+
+Retint applied (r2): hero gradient now `#2d5c3e → #274b38 → #254132` (design-system
+family, shipped as `bg-profile-hero` token in tailwind.config.ts), floodlight radials
+switched to white glows, edit pill switched to white (`bg-white text-brand-green`,
+PromoBillboard white-pill language). Avatar disc deepened to `brand-green-deep` for
+contrast on the lighter hero.
 
 ## Context
 Abdullah asked whether the `impeccable` skill (pbakaus/impeccable v4.2.1, installed into the
@@ -24,6 +33,9 @@ visual direction. Findings:
 Renders: `sketches/_render/004/*.png` (gitignored dir, re-run `render.js` if needed).
 
 ## Decision
-PENDING — Abdullah to pick one of: V2 (recommended) / V1 / Hybrid (V2 hero + V1 grouped cards) / V3.
-On pick: build per `koralink-ui-standards` §design-loop (component + i18n both locales + colocated
-tests + `turbo run build` + live verify on :3000 via the dev-login chain).
+**PICKED (2026-09-06, later same day): V2 with the brand-green retint (r2).**
+Build landed in the same cycle: tailwind token `profile-hero`, page rewrite preserving
+all P0/P1/P2 logic (PDPL sheets, install hint, prefs, wallet error affordance),
+`FlatSectionLabel` shared component, EmailSection de-carded, section labels i18n
+(`profile.sectionPlaying/Preferences/Account`, EN+AR), tests in
+`test/components/ProfilePage.test.tsx` (24/24 green incl. pre-existing sheet suites).

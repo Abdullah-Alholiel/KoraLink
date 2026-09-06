@@ -489,6 +489,9 @@
   },
   "profile": {
     "title": "الملف الشخصي",
+    "sectionPlaying": "اللعب",
+    "sectionPreferences": "التفضيلات",
+    "sectionAccount": "الحساب",
     "editProfile": "تعديل الملف الشخصي",
     "gamesPlayed": "المباريات الملعوبة",
     "noShowCount": "الغيابات",
