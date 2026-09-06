@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>V1 — Player Card Hero · KoraLink Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Hallmark/Impeccable sketch · stance: identity-first player card
+     Tokens: brand-green #254132 · brand-dark #202124 · brand-bg #f7f8f7 · brand-red #d4494c */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#17181a; display:flex; gap:48px; justify-content:center; align-items:flex-start; padding:40px 24px; font-family:'Outfit',sans-serif; }
+  .stage-label { position:absolute; top:8px; left:16px; color:#888; font-size:13px; }
+  .phone {
+    width:390px; height:844px; background:#f7f8f7; border-radius:44px; overflow:hidden;
+    position:relative; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.55); flex-shrink:0;
+  }
+  .phone.rtl { font-family:'Tajawal',sans-serif; }
+
+  /* ── Identity hero: brand-dark with pitch markings ── */
+  .hero {
+    background:#202124; color:#fff; padding:64px 24px 58px; position:relative; overflow:hidden;
+  }
+  /* faint pitch geometry — one center circle + halfway line, 6% white */
+  .hero::before {
+    content:''; position:absolute; inset:0;
+    background:
+      radial-gradient(circle 130px at 50% 118%, transparent 128px, rgba(255,255,255,.07) 129px, rgba(255,255,255,.07) 132px, transparent 133px),
+      linear-gradient(to top, transparent 36px, rgba(255,255,255,.07) 37px, rgba(255,255,255,.07) 39px, transparent 40px);
+  }
+  .hero > * { position:relative; }
+  .avatar-ring {
+    width:112px; height:112px; margin:0 auto; border-radius:50%; padding:3px;
+    background:linear-gradient(135deg,#2d5c3e,#254132); position:relative;
+  }
+  .avatar {
+    width:100%; height:100%; border-radius:50%; background:#3a3d40; display:flex; align-items:center; justify-content:center;
+    font-size:40px; font-weight:700; color:#9aa0a6; border:3px solid #202124;
+  }
+  .avatar-cam {
+    position:absolute; bottom:2px; inset-inline-end:2px; width:30px; height:30px; border-radius:50%;
+    background:#254132; border:3px solid #202124; display:flex; align-items:center; justify-content:center; font-size:13px;
+  }
+  .name { text-align:center; font-size:22px; font-weight:700; margin-top:14px; letter-spacing:.2px; }
+  .handle { text-align:center; font-size:13px; color:rgba(255,255,255,.45); margin-top:2px; direction:ltr; }
+
+  /* ── Stats strip: green card overlapping the fold ── */
+  .stats-wrap { padding:0 20px; margin-top:-34px; position:relative; z-index:2; }
+  .stats {
+    background:linear-gradient(135deg,#2d5c3e,#254132); border-radius:20px; padding:16px 8px;
+    display:flex; align-items:stretch; box-shadow:0 10px 30px rgba(37,65,50,.35);
+  }
+  .stat { flex:1; text-align:center; color:#fff; position:relative; }
+  .stat + .stat::before { content:''; position:absolute; inset-inline-start:0; top:15%; height:70%; width:1px; background:rgba(255,255,255,.14); }
+  .stat b { display:block; font-size:22px; font-weight:800; line-height:1; }
+  .stat span { display:block; font-size:10.5px; font-weight:500; color:rgba(255,255,255,.65); margin-top:5px; letter-spacing:.4px; text-transform:uppercase; }
+  .stat .trophy { color:#e8c559; }
+
+  /* ── Grouped list on the tinted bg (no more card-on-card) ── */
+  .groups { flex:1; overflow:hidden; padding:20px 20px 0; display:flex; flex-direction:column; gap:18px; }
+  .glabel { font-size:10px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:#8a948e; padding:0 12px 7px; }
+  .card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 1px 2px rgba(32,33,36,.05), 0 4px 16px rgba(32,33,36,.05); }
+  .row { display:flex; align-items:center; gap:13px; padding:13px 16px; position:relative; }
+  .row + .row::before { content:''; position:absolute; top:0; inset-inline-start:60px; inset-inline-end:16px; height:1px; background:#f0f2f0; }
+  .chip {
+    width:36px; height:36px; border-radius:12px; background:rgba(37,65,50,.09); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:16px; color:#254132;
+  }
+  .chip.danger { background:rgba(212,73,76,.1); color:#d4494c; }
+  .row .lbl { flex:1; font-size:14.5px; font-weight:500; color:#202124; }
+  .row .end { font-size:13px; font-weight:600; color:#6B7280; direction:ltr; }
+  .row .chev { color:#c6ccc8; font-size:15px; flex-shrink:0; }
+  .row.danger .lbl { color:#d4494c; }
+  .phone.rtl .chev { transform:rotate(180deg); }
+
+  .bottomnav {
+    background:#fff; border-top:1px solid #ececec; display:flex; align-items:flex-end; justify-content:space-around;
+    padding:8px 8px 22px; position:relative; flex-shrink:0;
+  }
+  .nav-it { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; font-weight:600; color:#b3b7b5; width:52px; }
+  .nav-it svg { width:21px; height:21px; }
+  .nav-it.active { color:#254132; }
+  .fab {
+    width:56px; height:56px; border-radius:50%; background:#254132; margin-top:-34px;
+    display:flex; align-items:center; justify-content:center; border:4px solid #fff;
+    box-shadow:0 6px 18px rgba(37,65,50,.4); color:#fff; font-size:22px;
+  }
+</style>
+</head>
+<body>
+<div class="stage-label">sketches/004-profile-redesign · V1 "Player Card" — dark identity hero, pitch-line motif, green stats card overlapping the fold, 3 consolidated groups</div>
+
+<!-- ══════════ EN ══════════ -->
+<div class="phone">
+  <div class="hero">
+    <div class="avatar-ring">
+      <div class="avatar">A</div>
+      <div class="avatar-cam">✎</div>
+    </div>
+    <div class="name">Ahmed Al-Rashid</div>
+    <div class="handle">@ahmed.rashid</div>
+  </div>
+
+  <div class="stats-wrap">
+    <div class="stats">
+      <div class="stat"><b>24</b><span>Games Played</span></div>
+      <div class="stat"><b class="trophy">🏆 3</b><span>POTM</span></div>
+      <div class="stat"><b>4.8</b><span>Karma</span></div>
+    </div>
+  </div>
+
+  <div class="groups">
+    <div>
+      <div class="glabel">Playing</div>
+      <div class="card">
+        <div class="row"><div class="chip">👤</div><span class="lbl">Personal Information</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">⚽</div><span class="lbl">My Games</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">⚑</div><span class="lbl">My Reports</span><span class="chev">›</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="glabel">Money &amp; Preferences</div>
+      <div class="card">
+        <div class="row"><div class="chip">💳</div><span class="lbl">Wallet</span><span class="end">SAR 150.00</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🌐</div><span class="lbl">Language</span><span class="end">English</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🔔</div><span class="lbl">Notifications</span><span class="end">On</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🎧</div><span class="lbl">Contact Support</span><span class="chev">›</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="glabel">Account</div>
+      <div class="card">
+        <div class="row"><div class="chip">⬇</div><span class="lbl">Download my data</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">ⓘ</div><span class="lbl">Privacy Policy</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip danger">↩</div><span class="lbl danger">Sign Out</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>Feed</span></div>
+    <div class="nav-it">🛡<span>Clubs</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>Messages</span></div>
+    <div class="nav-it active">👤<span>Profile</span></div>
+  </div>
+</div>
+
+<!-- ══════════ AR ══════════ -->
+<div class="phone rtl" dir="rtl">
+  <div class="hero">
+    <div class="avatar-ring">
+      <div class="avatar">أ</div>
+      <div class="avatar-cam">✎</div>
+    </div>
+    <div class="name">أحمد الراشد</div>
+    <div class="handle">@ahmed.rashid</div>
+  </div>
+
+  <div class="stats-wrap">
+    <div class="stats">
+      <div class="stat"><b>٢٤</b><span>المباريات الملعوبة</span></div>
+      <div class="stat"><b class="trophy">🏆 ٣</b><span>أفضل لاعب</span></div>
+      <div class="stat"><b>٤.٨</b><span>السمعة</span></div>
+    </div>
+  </div>
+
+  <div class="groups">
+    <div>
+      <div class="glabel">اللعب</div>
+      <div class="card">
+        <div class="row"><div class="chip">👤</div><span class="lbl">المعلومات الشخصية</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">⚽</div><span class="lbl">مبارياتي</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">⚑</div><span class="lbl">بلاغاتي</span><span class="chev">›</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="glabel">المحفظة والتفضيلات</div>
+      <div class="card">
+        <div class="row"><div class="chip">💳</div><span class="lbl">المحفظة</span><span class="end">SAR 150.00</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🌐</div><span class="lbl">اللغة</span><span class="end">العربية</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🔔</div><span class="lbl">الإشعارات</span><span class="end">مفعلة</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">🎧</div><span class="lbl">تواصل مع الدعم</span><span class="chev">›</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="glabel">الحساب</div>
+      <div class="card">
+        <div class="row"><div class="chip">⬇</div><span class="lbl">تحميل بياناتي</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip">ⓘ</div><span class="lbl">سياسة الخصوصية</span><span class="chev">›</span></div>
+        <div class="row"><div class="chip danger">↩</div><span class="lbl danger">تسجيل الخروج</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>الرئيسية</span></div>
+    <div class="nav-it">🛡<span>الأندية</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>الرسائل</span></div>
+    <div class="nav-it active">👤<span>حسابي</span></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>V3 — Season Card Tabs · KoraLink Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Hallmark/Impeccable sketch · stance: dashboard card identity + segmented tabs (IA change)
+     Tokens: brand-green #254132 · brand-dark #202124 · brand-bg #f7f8f7 · brand-red #d4494c */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#17181a; display:flex; gap:48px; justify-content:center; align-items:flex-start; padding:40px 24px; font-family:'Outfit',sans-serif; }
+  .stage-label { position:absolute; top:8px; left:16px; color:#888; font-size:13px; }
+  .phone {
+    width:390px; height:844px; background:#f7f8f7; border-radius:44px; overflow:hidden;
+    position:relative; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.55); flex-shrink:0;
+  }
+  .phone.rtl { font-family:'Tajawal',sans-serif; }
+
+  /* ── Identity banner card with season ribbon ── */
+  .top { padding:58px 20px 0; flex-shrink:0; }
+  .idcard {
+    background:#fff; border-radius:22px; overflow:hidden; position:relative;
+    box-shadow:0 2px 4px rgba(32,33,36,.05), 0 8px 24px rgba(32,33,36,.06);
+  }
+  .ribbon {
+    height:56px; background:linear-gradient(120deg,#232528 0%, #202124 55%, #2d5c3e 130%); position:relative;
+  }
+  /* jersey stripe motif on the ribbon */
+  .ribbon::after {
+    content:''; position:absolute; inset:0;
+    background:repeating-linear-gradient(115deg, transparent 0 26px, rgba(255,255,255,.045) 26px 34px);
+  }
+  .idbody { padding:0 18px 16px; }
+  .idrow { display:flex; align-items:flex-end; gap:14px; margin-top:-34px; }
+  .avatar {
+    width:76px; height:76px; border-radius:24px; flex-shrink:0;
+    background:linear-gradient(135deg,#2d5c3e,#254132); display:flex; align-items:center; justify-content:center;
+    font-size:30px; font-weight:700; color:#fff; border:4px solid #fff;
+    box-shadow:0 6px 18px rgba(37,65,50,.3);
+  }
+  .who { flex:1; padding-bottom:2px; min-width:0; }
+  .name { font-size:19px; font-weight:700; color:#202124; }
+  .handle { font-size:12px; color:#9aa0a6; direction:ltr; }
+  .edit { font-size:11.5px; font-weight:600; color:#254132; background:rgba(37,65,50,.09); padding:6px 12px; border-radius:999px; margin-bottom:4px; white-space:nowrap; }
+  .chips { display:flex; gap:8px; margin-top:14px; }
+  .chipstat {
+    flex:1; background:#f7f8f7; border:1px solid #eef0ee; border-radius:14px; padding:9px 6px 8px; text-align:center;
+  }
+  .chipstat b { display:block; font-size:17px; font-weight:800; color:#202124; }
+  .chipstat span { display:block; font-size:9px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:#9aa39d; margin-top:2px; }
+  .chipstat.gold b { color:#b98f1d; }
+
+  /* ── Segmented control ── */
+  .seg {
+    margin:18px 20px 4px; display:flex; background:#ececea; border-radius:14px; padding:3px; flex-shrink:0;
+  }
+  .seg button {
+    flex:1; border:0; background:transparent; font-family:inherit; font-size:12.5px; font-weight:600;
+    color:#6d7370; padding:8px 0; border-radius:11px;
+  }
+  .seg button.on { background:#fff; color:#202124; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+
+  /* ── Tab panel: flat rows, airy, no nested cards ── */
+  .panel { flex:1; overflow:hidden; padding:8px 0 0; }
+  .prow { display:flex; align-items:center; gap:14px; padding:14px 28px; position:relative; }
+  .prow + .prow::before { content:''; position:absolute; top:0; inset-inline-start:62px; inset-inline-end:28px; height:1px; background:#e8eae8; }
+  .pic { width:34px; height:34px; border-radius:11px; background:#fff; border:1px solid #e8eae8; display:flex; align-items:center; justify-content:center; font-size:15px; color:#254132; flex-shrink:0; box-shadow:0 1px 2px rgba(32,33,36,.04); }
+  .plbl { flex:1; font-size:14.5px; font-weight:500; color:#202124; }
+  .pend { font-size:13px; font-weight:600; color:#9aa0a6; direction:ltr; }
+  .chev { color:#ccd1cd; font-size:15px; }
+  .prow.danger .plbl, .prow.danger .pic { color:#d4494c; border-color:rgba(212,73,76,.25); }
+  .phone.rtl .chev { transform:rotate(180deg); }
+
+  .bottomnav {
+    background:#fff; border-top:1px solid #ececec; display:flex; align-items:flex-end; justify-content:space-around;
+    padding:8px 8px 22px; flex-shrink:0;
+  }
+  .nav-it { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; font-weight:600; color:#b3b7b5; width:52px; }
+  .nav-it.active { color:#254132; }
+  .fab {
+    width:56px; height:56px; border-radius:50%; background:#254132; margin-top:-34px;
+    display:flex; align-items:center; justify-content:center; border:4px solid #fff;
+    box-shadow:0 6px 18px rgba(37,65,50,.4); color:#fff; font-size:22px;
+  }
+</style>
+</head>
+<body>
+<div class="stage-label">sketches/004-profile-redesign · V3 "Season Card + Tabs" — white identity card w/ jersey-stripe ribbon + stat chips, segmented control (Overview · Preferences · Account) collapses the scroll</div>
+
+<!-- ══════════ EN ══════════ -->
+<div class="phone">
+  <div class="top">
+    <div class="idcard">
+      <div class="ribbon"></div>
+      <div class="idbody">
+        <div class="idrow">
+          <div class="avatar">A</div>
+          <div class="who">
+            <div class="name">Ahmed Al-Rashid</div>
+            <div class="handle">@ahmed.rashid</div>
+          </div>
+          <div class="edit">✎ Edit</div>
+        </div>
+        <div class="chips">
+          <div class="chipstat"><b>24</b><span>Games</span></div>
+          <div class="chipstat gold"><b>🏆 3</b><span>POTM</span></div>
+          <div class="chipstat"><b>4.8</b><span>Karma</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="seg">
+    <button class="on">Overview</button>
+    <button>Preferences</button>
+    <button>Account</button>
+  </div>
+
+  <div class="panel">
+    <div class="prow"><div class="pic">👤</div><span class="plbl">Personal Information</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">💳</div><span class="plbl">Wallet</span><span class="pend">SAR 150.00</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">⚽</div><span class="plbl">My Games</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">⚑</div><span class="plbl">My Reports</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🌐</div><span class="plbl">Language</span><span class="pend">English</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🔔</div><span class="plbl">Notifications</span><span class="pend">On</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🎧</div><span class="plbl">Contact Support</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">📖</div><span class="plbl">Host Guide</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🛡</div><span class="plbl">Privacy Policy</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">📄</div><span class="plbl">Terms of Service</span><span class="chev">›</span></div>
+    <div class="prow danger"><div class="pic">↩</div><span class="plbl">Sign Out</span></div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>Feed</span></div>
+    <div class="nav-it">🛡<span>Clubs</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>Messages</span></div>
+    <div class="nav-it active">👤<span>Profile</span></div>
+  </div>
+</div>
+
+<!-- ══════════ AR ══════════ -->
+<div class="phone rtl" dir="rtl">
+  <div class="top">
+    <div class="idcard">
+      <div class="ribbon"></div>
+      <div class="idbody">
+        <div class="idrow">
+          <div class="avatar">أ</div>
+          <div class="who">
+            <div class="name">أحمد الراشد</div>
+            <div class="handle">@ahmed.rashid</div>
+          </div>
+          <div class="edit">✎ تعديل</div>
+        </div>
+        <div class="chips">
+          <div class="chipstat"><b>٢٤</b><span>مباريات</span></div>
+          <div class="chipstat gold"><b>🏆 ٣</b><span>أفضل لاعب</span></div>
+          <div class="chipstat"><b>٤.٨</b><span>السمعة</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="seg">
+    <button class="on">نظرة عامة</button>
+    <button>التفضيلات</button>
+    <button>الحساب</button>
+  </div>
+
+  <div class="panel">
+    <div class="prow"><div class="pic">👤</div><span class="plbl">المعلومات الشخصية</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">💳</div><span class="plbl">المحفظة</span><span class="pend">SAR 150.00</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">⚽</div><span class="plbl">مبارياتي</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">⚑</div><span class="plbl">بلاغاتي</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🌐</div><span class="plbl">اللغة</span><span class="pend">العربية</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🔔</div><span class="plbl">الإشعارات</span><span class="pend">مفعلة</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🎧</div><span class="plbl">تواصل مع الدعم</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">📖</div><span class="plbl">دليل المستضيف</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">🛡</div><span class="plbl">سياسة الخصوصية</span><span class="chev">›</span></div>
+    <div class="prow"><div class="pic">📄</div><span class="plbl">شروط الخدمة</span><span class="chev">›</span></div>
+    <div class="prow danger"><div class="pic">↩</div><span class="plbl">تسجيل الخروج</span></div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>الرئيسية</span></div>
+    <div class="nav-it">🛡<span>الأندية</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>الرسائل</span></div>
+    <div class="nav-it active">👤<span>حسابي</span></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>V2 — Stadium Night · KoraLink Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Hallmark/Impeccable sketch · stance: immersive dark identity half + borderless flat utility
+     Tokens: brand-green #254132 · brand-dark #202124 · brand-bg #f7f8f7 · brand-red #d4494c */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#17181a; display:flex; gap:48px; justify-content:center; align-items:flex-start; padding:40px 24px; font-family:'Outfit',sans-serif; }
+  .stage-label { position:absolute; top:8px; left:16px; color:#888; font-size:13px; }
+  .phone {
+    width:390px; height:844px; background:#fff; border-radius:44px; overflow:hidden;
+    position:relative; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.55); flex-shrink:0;
+  }
+  .phone.rtl { font-family:'Tajawal',sans-serif; }
+
+  /* ── Immersive dark top: gradient + floodlight glow + pitch arc ── */
+  .hero {
+    background:
+      radial-gradient(340px 260px at 85% -40px, rgba(45,92,62,.55), transparent 70%),
+      radial-gradient(280px 220px at 8% 30%, rgba(45,92,62,.35), transparent 70%),
+      linear-gradient(180deg,#232528 0%, #202124 62%, #254132 140%);
+    color:#fff; padding:70px 24px 26px; position:relative; flex-shrink:0;
+  }
+  /* floodlight beam */
+  .hero::before {
+    content:''; position:absolute; inset:0;
+    background:conic-gradient(from 200deg at 50% -80px, transparent 40deg, rgba(255,255,255,.05) 47deg, transparent 54deg);
+  }
+  .hero > * { position:relative; }
+  .toprow { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .brandmark { font-size:15px; font-weight:700; letter-spacing:.5px; opacity:.9; }
+  .bell { width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center; font-size:15px; }
+
+  .idrow { display:flex; align-items:center; gap:16px; }
+  .avatar {
+    width:84px; height:84px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,#2d5c3e,#1d3328); display:flex; align-items:center; justify-content:center;
+    font-size:34px; font-weight:700; color:#e8ece9; border:2px solid rgba(255,255,255,.25);
+    box-shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  .who { flex:1; min-width:0; }
+  .name { font-size:21px; font-weight:700; letter-spacing:.2px; }
+  .handle { font-size:12.5px; color:rgba(255,255,255,.5); direction:ltr; margin-top:1px; }
+  .editbtn {
+    margin-top:9px; display:inline-flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
+    color:#fff; font-size:11.5px; font-weight:600; padding:6px 13px; border-radius:999px;
+  }
+
+  /* glass stats bar inside the dark half */
+  .glass {
+    margin-top:22px; display:flex; border-radius:18px; overflow:hidden;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(10px);
+  }
+  .g { flex:1; text-align:center; padding:13px 4px 11px; position:relative; }
+  .g + .g::before { content:''; position:absolute; inset-inline-start:0; top:22%; height:56%; width:1px; background:rgba(255,255,255,.12); }
+  .g b { display:block; font-size:20px; font-weight:800; }
+  .g span { display:block; font-size:9.5px; font-weight:600; letter-spacing:1.1px; text-transform:uppercase; color:rgba(255,255,255,.55); margin-top:3px; }
+  .g .gold { color:#e8c559; }
+
+  /* ── Flat borderless utility list on white ── */
+  .list { flex:1; overflow:hidden; padding:10px 0 0; }
+  .sect { padding:16px 24px 6px; font-size:10px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:#9aa39d; }
+  .frow { display:flex; align-items:center; gap:14px; padding:13px 24px; position:relative; }
+  .frow + .frow::before { content:''; position:absolute; top:0; inset-inline-start:62px; inset-inline-end:24px; height:1px; background:#eef0ee; }
+  .fic { width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:15px; color:#254132; flex-shrink:0; }
+  .flbl { flex:1; font-size:14.5px; font-weight:500; color:#202124; }
+  .fend { font-size:13px; font-weight:600; color:#9aa0a6; direction:ltr; }
+  .chev { color:#ccd1cd; font-size:15px; }
+  .frow.danger .flbl, .frow.danger .fic { color:#d4494c; }
+  .phone.rtl .chev { transform:rotate(180deg); }
+  .list .divide { height:8px; background:#f7f8f7; margin-top:12px; }
+
+  .bottomnav {
+    background:#fff; border-top:1px solid #ececec; display:flex; align-items:flex-end; justify-content:space-around;
+    padding:8px 8px 22px; flex-shrink:0;
+  }
+  .nav-it { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; font-weight:600; color:#b3b7b5; width:52px; }
+  .nav-it.active { color:#254132; }
+  .fab {
+    width:56px; height:56px; border-radius:50%; background:#254132; margin-top:-34px;
+    display:flex; align-items:center; justify-content:center; border:4px solid #fff;
+    box-shadow:0 6px 18px rgba(37,65,50,.4); color:#fff; font-size:22px;
+  }
+</style>
+</head>
+<body>
+<div class="stage-label">sketches/004-profile-redesign · V2 "Stadium Night" — immersive gradient identity half (floodlight beam, glass stats), flat borderless utility list, dark→green seam</div>
+
+<!-- ══════════ EN ══════════ -->
+<div class="phone">
+  <div class="hero">
+    <div class="toprow"><div class="brandmark">KoraLink</div><div class="bell">🔔</div></div>
+    <div class="idrow">
+      <div class="avatar">A</div>
+      <div class="who">
+        <div class="name">Ahmed Al-Rashid</div>
+        <div class="handle">@ahmed.rashid</div>
+        <div class="editbtn">✎ Edit profile</div>
+      </div>
+    </div>
+    <div class="glass">
+      <div class="g"><b>24</b><span>Games</span></div>
+      <div class="g"><b class="gold">3</b><span>POTM</span></div>
+      <div class="g"><b>4.8</b><span>Karma</span></div>
+    </div>
+  </div>
+
+  <div class="list">
+    <div class="sect">Playing</div>
+    <div class="frow"><div class="fic">👤</div><span class="flbl">Personal Information</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">⚽</div><span class="flbl">My Games</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">⚑</div><span class="flbl">My Reports</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">💳</div><span class="flbl">Wallet</span><span class="fend">SAR 150.00</span><span class="chev">›</span></div>
+
+    <div class="divide"></div>
+    <div class="sect">Preferences</div>
+    <div class="frow"><div class="fic">🌐</div><span class="flbl">Language</span><span class="fend">English</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🔔</div><span class="flbl">Notifications</span><span class="fend">On</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🎧</div><span class="flbl">Contact Support</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">📖</div><span class="flbl">Host Guide</span><span class="chev">›</span></div>
+
+    <div class="divide"></div>
+    <div class="sect">Account</div>
+    <div class="frow"><div class="fic">⬇</div><span class="flbl">Download my data</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🛡</div><span class="flbl">Privacy Policy</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">📄</div><span class="flbl">Terms of Service</span><span class="chev">›</span></div>
+    <div class="frow danger"><div class="fic">↩</div><span class="flbl">Sign Out</span></div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>Feed</span></div>
+    <div class="nav-it">🛡<span>Clubs</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>Messages</span></div>
+    <div class="nav-it active">👤<span>Profile</span></div>
+  </div>
+</div>
+
+<!-- ══════════ AR ══════════ -->
+<div class="phone rtl" dir="rtl">
+  <div class="hero">
+    <div class="toprow"><div class="brandmark">كورالينك</div><div class="bell">🔔</div></div>
+    <div class="idrow">
+      <div class="avatar">أ</div>
+      <div class="who">
+        <div class="name">أحمد الراشد</div>
+        <div class="handle">@ahmed.rashid</div>
+        <div class="editbtn">✎ تعديل الملف الشخصي</div>
+      </div>
+    </div>
+    <div class="glass">
+      <div class="g"><b>٢٤</b><span>مباريات</span></div>
+      <div class="g"><b class="gold">٣</b><span>أفضل لاعب</span></div>
+      <div class="g"><b>٤.٨</b><span>السمعة</span></div>
+    </div>
+  </div>
+
+  <div class="list">
+    <div class="sect">اللعب</div>
+    <div class="frow"><div class="fic">👤</div><span class="flbl">المعلومات الشخصية</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">⚽</div><span class="flbl">مبارياتي</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">⚑</div><span class="flbl">بلاغاتي</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">💳</div><span class="flbl">المحفظة</span><span class="fend">SAR 150.00</span><span class="chev">›</span></div>
+
+    <div class="divide"></div>
+    <div class="sect">التفضيلات</div>
+    <div class="frow"><div class="fic">🌐</div><span class="flbl">اللغة</span><span class="fend">العربية</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🔔</div><span class="flbl">الإشعارات</span><span class="fend">مفعلة</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🎧</div><span class="flbl">تواصل مع الدعم</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">📖</div><span class="flbl">دليل المستضيف</span><span class="chev">›</span></div>
+
+    <div class="divide"></div>
+    <div class="sect">الحساب</div>
+    <div class="frow"><div class="fic">⬇</div><span class="flbl">تحميل بياناتي</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">🛡</div><span class="flbl">سياسة الخصوصية</span><span class="chev">›</span></div>
+    <div class="frow"><div class="fic">📄</div><span class="flbl">شروط الخدمة</span><span class="chev">›</span></div>
+    <div class="frow danger"><div class="fic">↩</div><span class="flbl">تسجيل الخروج</span></div>
+  </div>
+
+  <div class="bottomnav">
+    <div class="nav-it">◉<span>الرئيسية</span></div>
+    <div class="nav-it">🛡<span>الأندية</span></div>
+    <div class="fab">⚽</div>
+    <div class="nav-it">💬<span>الرسائل</span></div>
+    <div class="nav-it active">👤<span>حسابي</span></div>
+  </div>
+</div>
+</body>
+</html>
