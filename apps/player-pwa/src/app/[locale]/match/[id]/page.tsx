@@ -836,7 +836,7 @@ export default function MatchDetailPage({
                                 <div className="max-w-xl mx-auto">
                                     <button
                                         onClick={() => joinWaitlist.mutate(id, {
-                                            onError: (err) => showToast(err.message || t('waitlist.joinFailed'), 'error'),
+                                            onError: () => showToast(t('errors.waitlistJoinFailed'), 'error'),
                                             onSuccess: () => showToast(t('waitlist.joinSuccess'), 'success'),
                                         })}
                                         disabled={joinWaitlist.isPending}
@@ -885,7 +885,7 @@ export default function MatchDetailPage({
                                         </span>
                                         <button
                                             onClick={() => leaveWaitlist.mutate(id, {
-                                                onError: (err) => showToast(err.message || t('waitlist.leaveFailed'), 'error'),
+                                                onError: () => showToast(t('errors.waitlistLeaveFailed'), 'error'),
                                             })}
                                             disabled={leaveWaitlist.isPending}
                                             className="shrink-0 rounded-full border border-brand-red/30 px-4 py-2 text-xs font-bold text-brand-red active:scale-[0.97] transition-transform disabled:opacity-60"

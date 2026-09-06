@@ -13,6 +13,7 @@ export default function LoginPage() {
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('login');
+    const tErrors = useTranslations('errors');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +51,9 @@ export default function LoginPage() {
             } else {
                 router.push(`/${locale}/login`);
             }
-        } catch (e) {
-            setRestoreError((e as Error).message);
+        } catch {
+            // error-message standard: no raw backend text on the login screen.
+            setRestoreError(tErrors('unauthorized'));
         }
     };
 
@@ -62,7 +64,7 @@ export default function LoginPage() {
             { phone },
             {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
-                onError: (err) => setError(err.message),
+                onError: () => setError(tErrors('otpSendFailed')),
             },
         );
     };

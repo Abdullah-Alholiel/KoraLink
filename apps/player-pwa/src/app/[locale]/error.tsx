@@ -7,10 +7,12 @@ import { captureError } from '@/providers/ObservabilityProvider';
 const i18n = {
   ar: {
     heading: 'حدث خطأ ما',
+    description: 'لم نتمكن من تحميل هذه الصفحة. تحقق من اتصالك وحاول مرة أخرى.',
     retry: 'حاول مجدداً',
   },
   en: {
     heading: 'Something went wrong',
+    description: "Couldn't load this page. Check your connection and try again.",
     retry: 'Try again',
   },
 } as const;
@@ -33,7 +35,7 @@ export default function GlobalError({
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-bg p-8 text-center">
       <h2 className="text-2xl font-bold text-brand-red">{t.heading}</h2>
-      <p className="text-sm text-gray-500">{error.message}</p>
+      <p className="text-sm text-gray-500">{t.description}</p>
       <button
         onClick={reset}
         className="rounded-lg bg-brand-green px-6 py-2 text-white"

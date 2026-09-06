@@ -1,7 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Publish-error classification — maps raw API/Zod errors to localized i18n keys
 // shown inside the PublishWarningSheet (single contextual error surface).
+//
+// Since the error-message-standards cycle (2026-09-06) the generic kinds
+// (network / validation) are derived from the shared classifier in
+// `error-classify.ts`; only the host-publish-specific business kinds remain
+// here. Public API is unchanged for all consumers.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { classifyError } from './error-classify';
 
 export type PublishErrorKind =
   | 'insufficient_balance'
@@ -19,35 +26,21 @@ export const PUBLISH_ERROR_KEYS: Record<PublishErrorKind, string> = {
   generic: 'host.createError',
 };
 
-/** True when the error looks like a network-level failure (fetch/timeout). */
-function isNetworkError(err: Error): boolean {
-  const m = err.message.toLowerCase();
-  return (
-    m.includes('failed to fetch') ||
-    m.includes('networkerror') ||
-    m.includes('network request failed') ||
-    m.includes('timeout') ||
-    m.includes('load failed')
-  );
-}
-
 /** Classify a publish (createMatch) failure into a localized error kind. */
 export function classifyPublishError(err: unknown): PublishErrorKind {
-  const name = (err as { name?: string })?.name ?? '';
   const message = ((err as { message?: string })?.message ?? '').toString();
 
-  // Zod validation from hostMatchSchema.parse in the mutation
-  if (name === 'ZodError' || /validation/.test(name) || /\[zod/i.test(message)) {
-    return 'validation';
-  }
+  // Business-specific checks FIRST — a 409 carrying "insufficient wallet
+  // balance" must map to the balance copy, not generic conflict copy.
   if (/insufficient wallet balance/i.test(message)) {
     return 'insufficient_balance';
   }
   if (/slot.*booked|already been booked/i.test(message)) {
     return 'slot_taken';
   }
-  if (isNetworkError(err instanceof Error ? err : new Error(message))) {
-    return 'network';
-  }
+
+  const kind = classifyError(err);
+  if (kind === 'network') return 'network';
+  if (kind === 'validation') return 'validation';
   return 'generic';
 }

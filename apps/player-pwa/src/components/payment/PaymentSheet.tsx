@@ -194,7 +194,7 @@ export default function PaymentSheet({
                 </button>
                 {payWallet.isError && (
                     <p className="text-xs text-brand-red mt-2 text-center">
-                        {t('payment.paymentFailed')}
+                        {t('errors.walletPayFailed')}
                     </p>
                 )}
             </div>

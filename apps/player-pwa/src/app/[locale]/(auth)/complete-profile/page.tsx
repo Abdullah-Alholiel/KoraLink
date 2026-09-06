@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCompleteProfile } from '@/hooks/useAuth';
+import { classifyError } from '@/lib/error-classify';
 import type { SkillLevel } from '@/types';
 
 export default function CompleteProfilePage() {
@@ -20,6 +21,7 @@ export default function CompleteProfilePage() {
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('completeProfile');
+    const tErrors = useTranslations('errors');
 
     const [fullName, setFullName] = useState('');
     const [location, setLocation] = useState('');
@@ -47,7 +49,12 @@ export default function CompleteProfilePage() {
             },
             {
                 onSuccess: () => router.push(`/${locale}/play`),
-                onError: (err) => setError(err.message),
+                onError: (err) =>
+                    setError(
+                        classifyError(err) === 'validation'
+                            ? tErrors('validation')
+                            : tErrors('unknown')
+                    ),
             },
         );
     };

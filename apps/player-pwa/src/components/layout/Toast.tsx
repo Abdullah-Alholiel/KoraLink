@@ -70,7 +70,12 @@ export default function Toast() {
         }`}
       >
         {config.icon}
-        <span className="text-sm font-medium flex-1">{toast.message}</span>
+        <span className="flex-1 min-w-0">
+          <span className="text-sm font-medium block">{toast.message}</span>
+          {toast.meta?.detail && (
+            <span className="text-xs opacity-90 block mt-0.5">{toast.meta.detail}</span>
+          )}
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation();

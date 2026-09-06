@@ -1,7 +1,9 @@
 'use client';
 
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { classifyError } from '@/lib/error-classify';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import type { Match, RosterPlayer } from '@/types';
@@ -10,6 +12,22 @@ import type { Match, RosterPlayer } from '@/types';
 
 function useToast() {
   return useAppStore((s) => s.showToast);
+}
+
+/**
+ * Secondary toast line per error kind (error-message standard, 2026-09-06).
+ * The primary line names the flow ("Couldn't join the match…"); the detail
+ * adds the why/what-next when the kind carries extra meaning. undefined → omit.
+ */
+function kindDetail(
+  t: (key: string) => string,
+  error: FetchError
+): string | undefined {
+  const kind = classifyError(error);
+  if (kind === 'network') return t('network');
+  if (kind === 'server') return t('server');
+  if (kind === 'unauthorized') return t('unauthorized');
+  return undefined;
 }
 
 // ─── Optimistic update helpers (pure, exported for tests) ──
@@ -96,6 +114,7 @@ type DetailSnapshot = [QueryKey, Match | undefined][];
 export function useJoinMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, string, { snapshot: DetailSnapshot }>({
     mutationFn: (matchId) =>
@@ -120,10 +139,7 @@ export function useJoinMatch() {
           queryClient.setQueryData(key, data);
         }
       }
-      showToast(
-        error.message || 'Failed to join. Please try again.',
-        'error',
-      );
+      showToast(t('joinFailed'), 'error', { detail: kindDetail(t, error) });
     },
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
@@ -176,6 +192,7 @@ export function useLeaveWaitlist() {
 export function useLeaveMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, string, { snapshot: DetailSnapshot }>({
     mutationFn: (matchId) =>
@@ -198,10 +215,7 @@ export function useLeaveMatch() {
           queryClient.setQueryData(key, data);
         }
       }
-      showToast(
-        error.message || 'Failed to leave. Please try again.',
-        'error',
-      );
+      showToast(t('leaveFailed'), 'error', { detail: kindDetail(t, error) });
     },
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
@@ -217,6 +231,7 @@ export function useLeaveMatch() {
 export function useCancelMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -229,10 +244,7 @@ export function useCancelMatch() {
       trackEvent('match_cancelled', { match_id: matchId });
     },
     onError: (error) => {
-      showToast(
-        error.message || 'Failed to cancel match.',
-        'error'
-      );
+      showToast(t('cancelFailed'), 'error', { detail: kindDetail(t, error) });
     },
   });
 }
@@ -242,6 +254,7 @@ export function useCancelMatch() {
 export function useStartMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -253,10 +266,7 @@ export function useStartMatch() {
       showToast('Match started! ⚽', 'success');
     },
     onError: (error) => {
-      showToast(
-        error.message || 'Failed to start match.',
-        'error'
-      );
+      showToast(t('startFailed'), 'error', { detail: kindDetail(t, error) });
     },
   });
 }
@@ -266,6 +276,7 @@ export function useStartMatch() {
 export function useCompleteMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -278,10 +289,7 @@ export function useCompleteMatch() {
       showToast('Match completed! Vote for Player of the Match.', 'success');
     },
     onError: (error) => {
-      showToast(
-        error.message || 'Failed to complete match.',
-        'error'
-      );
+      showToast(t('completeFailed'), 'error', { detail: kindDetail(t, error) });
     },
   });
 }
@@ -296,6 +304,7 @@ export interface RescheduleMatchInput {
 export function useRescheduleMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
+  const t = useTranslations('errors');
 
   return useMutation<unknown, FetchError, RescheduleMatchInput>({
     mutationFn: ({ matchId, bookingSlotId }) =>
@@ -312,10 +321,7 @@ export function useRescheduleMatch() {
       trackEvent('match_rescheduled', { match_id: matchId });
     },
     onError: (error) => {
-      showToast(
-        error.message || 'Failed to reschedule match.',
-        'error'
-      );
+      showToast(t('rescheduleFailed'), 'error', { detail: kindDetail(t, error) });
     },
   });
 }

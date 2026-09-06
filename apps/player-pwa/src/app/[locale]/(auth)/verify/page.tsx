@@ -17,6 +17,7 @@ function VerifyContent() {
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('verify');
+    const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
     const phone = searchParams?.get('phone') || '';
 
@@ -94,7 +95,7 @@ function VerifyContent() {
                         router.push(`/${locale}/play`);
                     }
                 },
-                onError: (err) => setError(err.message),
+                onError: () => setError(tErrors('otpFailed')),
             },
         );
     };
@@ -106,7 +107,7 @@ function VerifyContent() {
         sendOtp.mutate(
             { phone },
             {
-                onError: (err) => setError(err.message),
+                onError: () => setError(tErrors('otpSendFailed')),
             },
         );
     };

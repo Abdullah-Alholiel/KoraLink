@@ -141,6 +141,11 @@ export interface ToastMeta {
     href?: string;
     /** Actor avatar URL for notification toasts. */
     avatarUrl?: string | null;
+    /**
+     * Secondary line for error toasts — the "what to do next" part of the
+     * error-message standard (what happened / why / what to do next).
+     */
+    detail?: string;
 }
 
 export interface Toast {

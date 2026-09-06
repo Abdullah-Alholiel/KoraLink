@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NextIntlClientProvider } from 'next-intl';
 import React from 'react';
 import type { Match } from '@/types';
 import {
@@ -10,6 +11,7 @@ import {
   useLeaveMatch,
 } from '@/hooks/useMatchActions';
 import { useAppStore } from '@/store/useAppStore';
+import enMessages from '@/messages/en.json';
 
 // Mock fetcher
 const mockFetcher = vi.fn();
@@ -45,7 +47,9 @@ function createWrapper() {
   });
   return {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <NextIntlClientProvider messages={enMessages} locale="en">
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </NextIntlClientProvider>
     ),
     queryClient,
   };
@@ -199,6 +203,22 @@ describe('useJoinMatch', () => {
     expect(cached?.isJoined).toBe(false);
     expect(cached?.filledSpots).toBe(5);
     expect(cached?.roster).toHaveLength(0);
+  });
+
+  it('shows a localized error toast — never raw backend text — when join fails', async () => {
+    const { wrapper } = createWrapper();
+    mockFetcher.mockRejectedValueOnce(new Error('Insufficient wallet balance'));
+
+    const { result } = renderHook(() => useJoinMatch(), { wrapper });
+    act(() => {
+      result.current.mutate('m1');
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const toast = useAppStore.getState().toast;
+    expect(toast?.type).toBe('error');
+    expect(toast?.message).toBe(enMessages.errors.joinFailed);
+    expect(toast?.message).not.toContain('Insufficient');
   });
 });
 

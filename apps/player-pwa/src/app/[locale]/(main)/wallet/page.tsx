@@ -118,7 +118,9 @@ export default function WalletPage() {
                     ) {
                         setTopUpError(t('wallet.topupDisabled'));
                     } else {
-                        setTopUpError(t('common.error'));
+                        // error-message standard: what happened + money-moved
+                        // reassurance + next step. Never raw backend text.
+                        setTopUpError(t('errors.walletTopupFailed'));
                     }
                 },
             }

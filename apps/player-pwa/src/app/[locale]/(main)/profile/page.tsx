@@ -374,8 +374,8 @@ export default function ProfilePage() {
                                 const data = await exportData.mutateAsync();
                                 const today = new Date().toISOString().slice(0, 10);
                                 downloadJsonAsFile(data, `koralink-export-${today}.json`);
-                            } catch (e) {
-                                setExportError((e as Error).message);
+                            } catch {
+                                setExportError(t('errors.unknown'));
                             } finally {
                                 setExportPending(false);
                             }
@@ -667,8 +667,8 @@ export default function ProfilePage() {
                         logout();
                         clearAuthToken();
                         window.location.href = `/${locale}/login`;
-                    } catch (e) {
-                        setDeleteError((e as Error).message);
+                    } catch {
+                        setDeleteError(t('errors.unknown'));
                     }
                 }}
             />
