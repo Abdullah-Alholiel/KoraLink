@@ -102,6 +102,7 @@ describe('scroll-memory', () => {
     // null, so it must re-read the position from sessionStorage.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reloaded: any = await import(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       /* @vite-ignore */ '@/lib/scroll-memory?reload=1' as any
     );
     expect(reloaded.getRemembered('/en/my-games')).toBe(640);

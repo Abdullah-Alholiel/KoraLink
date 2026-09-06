@@ -10,7 +10,7 @@
  * the layout effect already restored (settles the "held" check) and the test
  * then reads its own 0 (this exact false negative cost a debug round).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act, waitFor, fireEvent } from '@testing-library/react';
 import { useScrollMemory } from '@/hooks/useScrollMemory';
 import { clearScrollMemory } from '@/lib/scroll-memory';
