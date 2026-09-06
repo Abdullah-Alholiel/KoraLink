@@ -21,9 +21,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS match_waitlist_match_user_idx
 
 -- Deferred so a swap/resequence inside ONE transaction can't trip the
 -- constraint mid-statement (positions are dense 1..N, resequenced in tx).
-CREATE UNIQUE INDEX IF NOT EXISTS match_waitlist_match_pos_idx
-  ON match_waitlist (match_id, position)
-  DEFERRABLE INITIALLY DEFERRED;
+-- NOTE: DEFERRABLE is only valid on a table CONSTRAINT, not CREATE INDEX —
+-- hence the DO block (idempotent re-run safe).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'match_waitlist_match_pos_unique'
+      AND conrelid = 'match_waitlist'::regclass
+  ) THEN
+    ALTER TABLE match_waitlist
+      ADD CONSTRAINT match_waitlist_match_pos_unique
+      UNIQUE (match_id, position) DEFERRABLE INITIALLY DEFERRED;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS match_waitlist_user_id_idx ON match_waitlist (user_id);
 
