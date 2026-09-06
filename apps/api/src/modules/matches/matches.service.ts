@@ -2707,7 +2707,12 @@ export class MatchesService {
     voterId: string,
     matchId: string,
     candidateId: string,
-  ): Promise<{ matchId: string; votedFor: string; message: string }> {
+  ): Promise<
+    Awaited<ReturnType<MatchesService['findOne']>> & {
+      votedFor: string;
+      message: string;
+    }
+  > {
     // Cannot vote for yourself
     if (voterId === candidateId) {
       throw new BadRequestException('You cannot vote for yourself.');
@@ -2794,8 +2799,12 @@ export class MatchesService {
         set: { candidate_id: candidateId, created_at: new Date() },
       });
 
+    // P2-5 (run #38): populated match contract (API Contract Rule §2) — every
+    // mutation returns the fully populated match. `votedFor` + `message` are
+    // preserved additively so the PWA VoteResult type stays truthful.
+    const updatedMatch = await this.findOne(matchId, voterId);
     return {
-      matchId,
+      ...updatedMatch,
       votedFor: candidateId,
       message: 'Vote recorded.',
     };
