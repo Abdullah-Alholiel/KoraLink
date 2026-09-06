@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="600">
+<title>KoraLink Factory — Control Tower</title>
+<style>
+:root { --bg:#0b1020; --card:#121a33; --line:#223059; --tx:#e6ecff; --dim:#8ea0c9; --acc:#38bdf8; }
+* { box-sizing:border-box; margin:0; }
+body { background:var(--bg); color:var(--tx); font:14px/1.55 system-ui,-apple-system,'Segoe UI',sans-serif; padding:28px; max-width:1180px; margin:0 auto; }
+h1 { font-size:22px; letter-spacing:.3px; } h2 { font-size:13px; text-transform:uppercase; letter-spacing:1.4px; color:var(--acc); margin:26px 0 10px; }
+.dim { color:var(--dim); } .sub { color:var(--dim); margin-top:4px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:18px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.kpi .n { font-size:26px; font-weight:700; } .kpi .l { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
+.gauge .glabel { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
+.gbar { height:7px; background:#1a2344; border-radius:4px; margin:7px 0 4px; overflow:hidden; }
+.gfill { height:100%; border-radius:4px; } .gpct { font-size:15px; font-weight:700; }
+table { width:100%; border-collapse:collapse; } td,th { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+th { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
+.lane { font-weight:600; white-space:nowrap; }
+.pick { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+.pick-head { display:flex; gap:10px; align-items:baseline; } .pid { font-weight:700; font-size:15px; } .parea { color:var(--dim); font-size:12px; }
+.score { margin-left:auto; background:rgba(56,189,248,.12); color:var(--acc); border-radius:8px; padding:1px 9px; font-weight:700; }
+.ptitle { margin-top:4px; } .pwhy { font-size:12px; margin-top:5px; }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+ul { padding-left:18px; } li { margin-bottom:5px; }
+.footer { margin-top:34px; padding-top:14px; border-top:1px solid var(--line); color:var(--dim); font-size:12px; }
+.banner { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:10px 14px; margin-top:14px; }
+</style></head><body>
+<h1>🏟️ KoraLink Factory — Control Tower</h1>
+<div class="sub">run #38 next · rotation: Admin console · lens: ADMIN STATE CHECK first; owner-WIP holds · generated 2026-09-06 21:08 UTC · auto-refresh 10 min</div>
+
+<div class="grid">
+  <div class="card kpi"><div class="n">75</div><div class="l">done ✅</div></div>
+  <div class="card kpi"><div class="n">20</div><div class="l">todo</div></div>
+  <div class="card kpi"><div class="n">1</div><div class="l">in-review</div></div>
+  <div class="card kpi"><div class="n">2</div><div class="l">blocked</div></div>
+  <div class="card kpi"><div class="n">153</div><div class="l">commits / 7d</div></div>
+  <div class="card"><div class='gauge'><div class='glabel'>z.ai weekly</div><div class='gbar'><div class='gfill' style='width:19%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>19%</div></div><div class='gauge'><div class='glabel'>z.ai 5h</div><div class='gbar'><div class='gfill' style='width:17%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>17%</div></div></div>
+</div>
+
+<div class="banner">🎯 <b>Recommendations (deterministic — scored, not vibes):</b>
+verify 2 in-review item(s) first, then build down the picks below. 12 items sit in the CEO queue — they need Abdullah, the loop will not touch them.</div>
+
+<h2>🔨 Build picks for run #38</h2>
+<div class='pick'><div class='pick-head'><span class='pid'>P1-3</span><span class='parea'>API/Chat</span><span class='score'>72</span></div><div class='ptitle'>Chat idempotency + pagination indexes — idempotency DONE + VERIFIED: `client_message_id` dedup backed by unique index `match_messages_client</div><div class='pwhy dim'>why: base P1=60; unblocks 1 item(s) (+12) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P1-17</span><span class='parea'>PWA/API</span><span class='score'>60</span></div><div class='ptitle'>No waitlist/overflow for full matches — 0 hits for &quot;waitlist&quot; across apps/; a Full match gives players no queue path (churn point for popula</div><div class='pwhy dim'>why: base P1=60 · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P1-27</span><span class='parea'>PWA/Wallet</span><span class='score'>60</span></div><div class='ptitle'>No wallet withdrawal / cash-out — withdraw button only shows a `wallet.comingSoon` toast; API has no withdraw/refund endpoints (wallet.contr</div><div class='pwhy dim'>why: base P1=60 · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P2-1</span><span class='parea'>Admin</span><span class='score'>50</span></div><div class='ptitle'>No generic &quot;refund player&quot; tool — refunds only via dispute no-show reversal + host cancelMatch; payouts = manual status flip with synthetic </div><div class='pwhy dim'>why: base P2=25; rotation fit (+25) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P2-4</span><span class='parea'>API</span><span class='score'>37</span></div><div class='ptitle'>Money aggregated via `::float` casts in settlement/user totals — rounding risk in sums. run #5 reviewer added: `settlements.service.ts:115` </div><div class='pwhy dim'>why: base P2=25; unblocks 1 item(s) (+12) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+
+<div class="cols">
+<div>
+<h2>👑 CEO queue — waiting on Abdullah</h2>
+<ul><li><b>P0-2</b></li>
+<li><b>P1-8</b></li>
+<li><b>P1-12</b></li>
+<li><b>P1-14</b></li>
+<li><b>P1-29</b></li>
+<li><b>P1-38</b></li>
+<li><b>P2-50</b></li>
+<li><b>P2-51</b></li>
+<li><b>P2-29</b></li>
+<li><b>P2-42</b></li>
+<li><b>P1-20</b></li>
+<li><b>P2-47</b></li></ul>
+</div>
+<div>
+<h2>🕘 Recent shifts</h2>
+<ul><li class='dim'>2026-09-06T10-21Z</li>
+<li class='dim'>2026-09-06T01-18Z</li>
+<li class='dim'>2026-09-05T16-20Z</li>
+<li class='dim'>2026-09-05T11-40Z</li>
+<li class='dim'>2026-09-05T10-45Z</li></ul>
+</div>
+</div>
+
+<h2>🎭 Team lanes (who plays which role)</h2>
+<table><tr><th>Lane</th><th>Model / staff</th><th>Scope</th><th>Cadence</th></tr>
+<tr><td class='lane'>👑 CEO</td><td>Abdullah</td><td>Gate decisions, priorities, product verdicts</td><td class='dim'>human — batch via chat; queue below</td></tr>
+<tr><td class='lane'>🔍 Reviewer A</td><td>glm-5.3-flash · zai</td><td>Code quality + security sweep (TOCTOU, FOR UPDATE, predicates)</td><td class='dim'>every cycle, parallel</td></tr>
+<tr><td class='lane'>🎨 Reviewer B</td><td>glm-5.3-flash · zai</td><td>Product gaps + DESIGN lens (5 UX states, EN+AR, drawers-left)</td><td class='dim'>every cycle, parallel</td></tr>
+<tr><td class='lane'>🧪 QA</td><td>session + terminal</td><td>Live E2E probes DB→API→adapter→UI; vitest/jest gates</td><td class='dim'>every slice — mandatory evidence</td></tr>
+<tr><td class='lane'>🚀 Release</td><td>session</td><td>turbo 3/3 exit 0 · tsc 0 · restart + health 200 · Sentry check</td><td class='dim'>hard gate, no DONE without it</td></tr>
+<tr><td class='lane'>📝 Docs</td><td>session</td><td>RUNS report · BOARD.md · STATE.json compaction</td><td class='dim'>cycle end</td></tr>
+<tr><td class='lane'>🔄 Retro</td><td>parent session</td><td>Gate 0 audit · pitfalls promotion into skills</td><td class='dim'>cycle start</td></tr>
+</table>
+
+<div class="footer">Deterministic control-plane: factory-recommendations.py (scoring: priority base + rotation fit + unblock power; owner items excluded) → this dashboard + prestate injection + Telegram digest. Board SoT: kanban/BOARD.md. gstack verdict: native lanes (claude CLI unauthenticated). <a style="color:var(--acc)" href="/BOARD_mirror.html">board file</a> · repo: ~/projects/koralink</div>
+</body></html>
