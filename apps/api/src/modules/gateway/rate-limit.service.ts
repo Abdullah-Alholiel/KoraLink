@@ -49,6 +49,22 @@ export class WsRateLimitService implements OnModuleDestroy {
     return { allowed: true, retryAfterSec: 0 };
   }
 
+  /**
+   * Release every bucket owned by a socket — called on disconnect so the
+   * `hits` Map never grows unboundedly across socket churn (run #37).
+   * Pure Map deletes — never throws.
+   *
+   * Honest bound note: per-socket budgeting means a flooder who reconnects
+   * gets a fresh 10/10s window per socket; the full authenticated handshake
+   * per reconnect (~hundreds of ms + moderation guard + logs) is the
+   * deterrent, ~1 msg/s sustained worst case. This method only guarantees
+   * the memory lifecycle, not a per-user cross-socket budget.
+   */
+  release(socketId: string): void {
+    this.hits.delete(`msg:${socketId}`);
+    this.hits.delete(`dm:${socketId}`);
+  }
+
   onModuleDestroy(): void {
     this.hits.clear();
   }

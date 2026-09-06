@@ -23,11 +23,15 @@ describe('MatchesService.removePlayer', () => {
     return { then: (r: (v: unknown) => void) => r([]) };
   }
 
-  function makeTx(opts: { match?: unknown | null; player?: unknown | null; deleted?: unknown; capture?: Array<{ op: string; table?: unknown; setArg?: unknown; whereArg?: unknown }> }) {
+  function makeTx(opts: { match?: unknown | null; player?: unknown | null; deleted?: unknown; capture?: Array<{ op: string; table?: unknown; setArg?: unknown; whereArg?: unknown; lockOf?: unknown }> }) {
     function chainFor(rows: unknown[]) {
       const chain: any = {
         where: () => chain,
         limit: () => chain,
+        for: function (this: any, strength: string) {
+          (this as any).__lock = strength;
+          return this;
+        },
       };
       chain.then = (resolve: (v: unknown) => void) => resolve(rows);
       return chain;
@@ -51,6 +55,7 @@ describe('MatchesService.removePlayer', () => {
       }),
       delete: () => ({ where: () => thenable() }),
       insert: () => ({ values: () => thenable() }),
+      execute: () => thenable(),
       _deleted: deleted,
     };
     return tx;

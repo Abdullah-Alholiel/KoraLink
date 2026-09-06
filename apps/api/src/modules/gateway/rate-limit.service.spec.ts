@@ -93,6 +93,52 @@ describe('WsRateLimitService (sliding window)', () => {
     expect(() => rl.consume('msg:socket-with-🚀-unicode')).not.toThrow();
     expect(rl.consume('').allowed).toBe(true);
   });
+
+  // ── run #37: disconnect eviction (Reviewer A IMPORTANT — unbounded Map) ──
+
+  it('release() empties a socket bucket — a full budget becomes a fresh one', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) expect(rl.consume('msg:s9').allowed).toBe(true);
+    expect(rl.consume('msg:s9').allowed).toBe(false);
+    rl.release('s9');
+    // The socket reconnected (new socket id in real life) — but even the OLD
+    // key is gone: consuming it again starts a fresh window.
+    expect(rl.consume('msg:s9').allowed).toBe(true);
+  });
+
+  it('release() drops BOTH channel buckets (msg: and dm:) of the socket', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) {
+      expect(rl.consume('msg:s10').allowed).toBe(true);
+      expect(rl.consume('dm:s10').allowed).toBe(true);
+    }
+    expect(rl.consume('msg:s10').allowed).toBe(false);
+    expect(rl.consume('dm:s10').allowed).toBe(false);
+    rl.release('s10');
+    expect(rl.consume('msg:s10').allowed).toBe(true);
+    expect(rl.consume('dm:s10').allowed).toBe(true);
+  });
+
+  it('release() leaves OTHER socket buckets untouched and never throws', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) expect(rl.consume('msg:s11').allowed).toBe(true);
+    rl.release('someone-else');
+    expect(rl.consume('msg:s11').allowed).toBe(false); // still exhausted
+    expect(() => rl.release('')).not.toThrow();
+    expect(() => rl.release('msg:weird-🚀')).not.toThrow();
+  });
+
+  it('handleDisconnect releases the disconnected socket buckets (gateway wiring)', async () => {
+    const rl = makeRateLimitService();
+    const gw = makeGatewayWithLimiter(rl);
+    const client = makeClient('s12');
+    for (let i = 0; i < 10; i++) {
+      await expect(gw.handleMessage({ matchId: 'm1', content: 'hello' }, client)).rejects.toThrow(/not a member/i);
+    }
+    expect(rl.consume('msg:s12').allowed).toBe(false);
+    gw.handleDisconnect(client);
+    expect(rl.consume('msg:s12').allowed).toBe(true);
+  });
 });
 
 describe('AppGateway send guards (P1-42)', () => {

@@ -185,6 +185,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   handleDisconnect(client: AuthenticatedSocket): void {
     // Rooms are cleaned up automatically by Socket.IO on disconnect.
+    // Release the socket's rate-limit buckets too (run #37) — otherwise every
+    // socket that ever sent a message leaks its Map entry for process lifetime.
+    this.rateLimit.release(client.id);
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 

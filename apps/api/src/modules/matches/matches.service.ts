@@ -946,7 +946,11 @@ export class MatchesService {
 
   async joinMatch(userId: string, matchId: string) {
     await this.db.transaction(async (tx) => {
-      // 1. Verify match exists and is Open
+      // 1. Verify match exists and is Open — FOR UPDATE row lock serializes
+      //    concurrent joins (P2-49 overbook race, run #37): the spot count
+      //    below can no longer be read by two txs at once. Lock ORDER:
+      //    matches row first (same as cancelMatch/removePlayer) — join never
+      //    touches pitch_slots, so no cycle with rescheduleMatch's slot locks.
       const [match] = await tx
         .select({
           id: matches.id,
@@ -955,7 +959,8 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
@@ -1073,6 +1078,15 @@ export class MatchesService {
     // drives the immediate host re-nudge after commit.
     let needsRenudge: { hostId: string; needed: number } | null = null;
     await this.db.transaction(async (tx) => {
+      // 0. Lock the match row FIRST (P2-49, run #37) — serializes against
+      //     concurrent joins/removePlayers so the roster count read below and
+      //     the Full→Open flip can't interleave with a join's count-then-insert.
+      //     Same lock order as cancelMatch/joinMatch (matches row first).
+      //     Raw sql with ::text cast — varchar(36) ids, never ::uuid.
+      await tx.execute(
+        sql`SELECT id FROM matches WHERE id = ${matchId}::text FOR UPDATE`,
+      );
+
       // 1. Verify user is in the match
       const [membership] = await tx
         .select({
@@ -2249,6 +2263,9 @@ export class MatchesService {
     }
 
     await this.db.transaction(async (tx) => {
+      // Lock the match row FOR UPDATE (P2-49, run #37) — same lock order as
+      // joinMatch/leaveMatch/cancelMatch (matches row first). Serializes the
+      // roster read + delete + Full→Open flip against concurrent joins.
       const [match] = await tx
         .select({
           id: matches.id,
@@ -2257,7 +2274,8 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
