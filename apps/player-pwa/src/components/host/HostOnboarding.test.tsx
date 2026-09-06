@@ -154,15 +154,36 @@ describe('HostOnboarding — guide mode (permanent reference, profile → Host G
         expect(trackEvent).toHaveBeenCalledWith('host_guide_closed', expect.anything());
     });
 
-    it('finishing the last slide in guide mode also never writes the seen-flag', () => {
+    it('Start Hosting counts as read: flag written; without a nav handler it falls back to onFinished', () => {
         renderGuide();
         fireEvent.click(screen.getByTestId('onboarding-get-started'));
         // Jump to the last slide via the dots.
         const dots = screen.getAllByRole('tab');
         fireEvent.click(dots[dots.length - 1]);
         fireEvent.click(screen.getByTestId('onboarding-done'));
+        // They just read the whole guide — it counts as seen even when the
+        // page didn't pass onStartHosting (fallback closes the guide).
+        expect(window.localStorage.getItem(HOST_ONBOARDING_SEEN_KEY)).toBe('1');
         expect(onFinished).toHaveBeenCalledTimes(1);
-        expect(window.localStorage.getItem(HOST_ONBOARDING_SEEN_KEY)).toBeNull();
+        expect(trackEvent).toHaveBeenCalledWith('host_guide_finished', expect.anything());
+    });
+
+    it('Start Hosting on the last slide DOES write the flag and hands off to the host form', () => {
+        const onStartHosting = vi.fn();
+        render(
+            <NextIntlClientProvider messages={enMessages} locale="en">
+                <HostOnboarding guide onFinished={onFinished} onStartHosting={onStartHosting} />
+            </NextIntlClientProvider>
+        );
+        fireEvent.click(screen.getByTestId('onboarding-get-started'));
+        const dots = screen.getAllByRole('tab');
+        fireEvent.click(dots[dots.length - 1]);
+        fireEvent.click(screen.getByTestId('onboarding-done'));
+        // They just read the whole guide — it counts as seen.
+        expect(window.localStorage.getItem(HOST_ONBOARDING_SEEN_KEY)).toBe('1');
+        expect(onStartHosting).toHaveBeenCalledTimes(1);
+        expect(onFinished).not.toHaveBeenCalled();
+        expect(trackEvent).toHaveBeenCalledWith('host_guide_finished', expect.anything());
     });
 });
 
