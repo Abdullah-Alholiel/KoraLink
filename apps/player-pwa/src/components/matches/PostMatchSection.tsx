@@ -1,15 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Trophy, Crown, Check, Loader2, Clock, ChevronRight, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createLobbySocket } from '@/lib/socket';
 import { useAppStore } from '@/store/useAppStore';
 import { usePomResult, useVote } from '@/hooks/usePom';
+import { formatTimeLeft, type AppLocale } from '@/lib/format';
 import { trackEvent, addBreadcrumb } from '@/providers/ObservabilityProvider';
 import PomVotingSheet from './PomVotingSheet';
 import PomResultsSheet from './PomResultsSheet';
+
+/** Re-renders the caller every `intervalMs` with a fresh `Date` (live countdowns). */
+function useNow(intervalMs = 30_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
 
 interface PostMatchSectionProps {
   matchId: string;
@@ -19,6 +30,7 @@ interface PostMatchSectionProps {
 
 export default function PostMatchSection({ matchId, currentUserId, format = '7v7' }: PostMatchSectionProps) {
   const t = useTranslations('pom');
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const showToast = useAppStore((s) => s.showToast);
   const { data: pom, isLoading } = usePomResult(matchId, currentUserId);
@@ -36,6 +48,18 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
       });
     }
   }, [pomStatus, matchId]);
+
+  // Live per-match countdown: re-render every 30s so the "Ends in" badge
+  // ticks down and flips to the ended state the moment the window closes.
+  const now = useNow(30_000);
+  const timeLeft =
+    pom?.status === 'voting_open'
+      ? formatTimeLeft(
+          pom.votingClosesAt,
+          (locale === 'ar' ? 'ar' : 'en') as AppLocale,
+          now,
+        )
+      : null;
 
   // Real-time: listen for the POTM winner being decided while viewing.
   useEffect(() => {
@@ -174,6 +198,24 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
     );
   }
 
+  // ── Voting window has just ended (deadline passed before the API flipped
+  // status) — same visual as the API's votingClosed state ──
+  if (pom.status === 'voting_open' && timeLeft === null) {
+    return (
+      <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+          <Clock className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {t('title')}
+          </p>
+          <p className="text-sm font-semibold text-brand-black mt-1">{t('votingClosed')}</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Voting still open ──
   const waiting = Math.max(pom.totalEligibleVoters - pom.votedCount, 0);
   return (
@@ -189,9 +231,13 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
               {t('title')}
             </span>
           </div>
-          <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1 flex-shrink-0">
+          <span
+            className={`text-[10px] font-medium flex items-center gap-1 flex-shrink-0 ${
+              timeLeft && timeLeft.minutesLeft < 60 ? 'text-brand-red' : 'text-gray-400'
+            }`}
+          >
             <Clock className="w-3 h-3" strokeWidth={1.5} />
-            {t('votingOpen')}
+            {timeLeft ? t('votingEndsIn', { time: timeLeft.text }) : t('votingOpen')}
           </span>
         </div>
         <p className="text-xs text-gray-500 mb-4">{t('voteSubtitle')}</p>

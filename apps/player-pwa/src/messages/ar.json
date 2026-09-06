@@ -779,6 +779,7 @@
     "voted": "صوّت لـ",
     "changeVote": "تغيير الصوت",
     "votingOpen": "التصويت مفتوح",
+    "votingEndsIn": "ينتهي خلال {time}",
     "votingClosed": "انتهى التصويت",
     "winner": "الفائز",
     "votes": "أصوات",

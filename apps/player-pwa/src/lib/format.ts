@@ -84,6 +84,50 @@ export function formatRelativeTime(iso: string, locale: AppLocale): string {
   }).format(date);
 }
 
+export interface TimeLeft {
+  /** Localized display chunk, e.g. "5h 32m" (en) / "٥ س ٣٢ د" (ar). */
+  text: string;
+  /** Whole minutes remaining (floor). 0 when under a minute. */
+  minutesLeft: number;
+}
+
+/**
+ * Time remaining until a future deadline, as a localized countdown chunk for
+ * the POTM voting window. Returns null when the deadline has passed (or the
+ * input is invalid) — the caller decides how to present the ended state.
+ *
+ *   +5h32m → "5h 32m" (en) / "٥ س ٣٢ د" (ar)
+ *   +12m   → "12m"    (en) / "١٢ د"     (ar)
+ *   +30s   → "under a minute" (en) / "أقل من دقيقة" (ar)
+ */
+export function formatTimeLeft(
+  target: Date | string,
+  locale: AppLocale,
+  now: Date = new Date(),
+): TimeLeft | null {
+  const end = typeof target === 'string' ? new Date(target) : target;
+  const ms = end.getTime() - now.getTime();
+  if (Number.isNaN(end.getTime()) || ms <= 0) return null;
+
+  const totalMins = Math.floor(ms / 60_000);
+  const nf = numberFormat(locale, { maximumFractionDigits: 0 });
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+
+  let text: string;
+  if (hours >= 1) {
+    text =
+      locale === 'ar'
+        ? `${nf.format(hours)} س ${nf.format(mins)} د`
+        : `${hours}h ${mins}m`;
+  } else if (totalMins >= 1) {
+    text = locale === 'ar' ? `${nf.format(totalMins)} د` : `${totalMins}m`;
+  } else {
+    text = locale === 'ar' ? 'أقل من دقيقة' : 'under a minute';
+  }
+  return { text, minutesLeft: totalMins };
+}
+
 /**
  * Formats a clock time in Asia/Riyadh (the app's display timezone) for the
  * active locale — e.g. "7:00 PM" (en) / "٧:٠٠ م" (ar). Used for the host's

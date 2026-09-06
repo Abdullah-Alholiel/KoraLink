@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDistance, formatDateSection, formatRelativeTime } from '@/lib/format';
+import { formatDistance, formatDateSection, formatRelativeTime, formatTimeLeft } from '@/lib/format';
 
 describe('formatDistance', () => {
   it('returns null for null, undefined, or NaN', () => {
@@ -49,5 +49,43 @@ describe('formatRelativeTime', () => {
   it('returns a relative string for a recent past timestamp', () => {
     const recent = new Date(Date.now() - 5 * 60_000).toISOString();
     expect(formatRelativeTime(recent, 'en')).toBe('5m ago');
+  });
+});
+
+describe('formatTimeLeft', () => {
+  const NOW = new Date('2026-09-06T12:00:00Z');
+
+  it('formats hours + minutes (en)', () => {
+    expect(formatTimeLeft('2026-09-06T17:32:00Z', 'en', NOW)).toEqual({
+      text: '5h 32m',
+      minutesLeft: 332,
+    });
+  });
+
+  it('formats hours + minutes with Hindi numerals (ar)', () => {
+    expect(formatTimeLeft('2026-09-06T17:32:00Z', 'ar', NOW)).toEqual({
+      text: '٥ س ٣٢ د',
+      minutesLeft: 332,
+    });
+  });
+
+  it('formats minutes only when under an hour (en + ar)', () => {
+    const target = new Date('2026-09-06T12:45:00Z');
+    expect(formatTimeLeft(target, 'en', NOW)).toEqual({ text: '45m', minutesLeft: 45 });
+    expect(formatTimeLeft(target, 'ar', NOW)).toEqual({ text: '٤٥ د', minutesLeft: 45 });
+  });
+
+  it('returns the under-a-minute chunk for sub-minute deadlines', () => {
+    const target = new Date('2026-09-06T12:00:30Z');
+    expect(formatTimeLeft(target, 'en', NOW)).toEqual({ text: 'under a minute', minutesLeft: 0 });
+    expect(formatTimeLeft(target, 'ar', NOW)).toEqual({ text: 'أقل من دقيقة', minutesLeft: 0 });
+  });
+
+  it('returns null once the deadline has passed', () => {
+    expect(formatTimeLeft('2026-09-06T11:59:00Z', 'en', NOW)).toBeNull();
+  });
+
+  it('returns null for an invalid timestamp', () => {
+    expect(formatTimeLeft('not-a-date', 'en', NOW)).toBeNull();
   });
 });

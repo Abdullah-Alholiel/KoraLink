@@ -779,6 +779,7 @@
     "voted": "You voted for",
     "changeVote": "Change Vote",
     "votingOpen": "Voting is open",
+    "votingEndsIn": "Ends in {time}",
     "votingClosed": "Voting has ended",
     "winner": "Winner",
     "votes": "votes",
