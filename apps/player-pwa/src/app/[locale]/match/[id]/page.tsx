@@ -22,6 +22,7 @@ import {
     ShieldAlert,
     Lock as LockIcon,
     UserPlus,
+    Clock,
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
@@ -848,13 +849,20 @@ export default function MatchDetailPage({
                                             disabled:opacity-60
                                         "
                                     >
-                                        <span>
-                                            {joinWaitlist.isPending
-                                                ? t('waitlist.joining')
-                                                : `${t('waitlist.joinCta')} (${match.waitlistCount ?? 0})`}
+                                        <span className="flex items-center gap-2" dir="auto">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            {joinWaitlist.isPending ? t('waitlist.joining') : t('waitlist.joinCta')}
+                                            {(match.waitlistCount ?? 0) > 0 && (
+                                                <span
+                                                    data-testid="waitlist-count-pill"
+                                                    className="rounded-full bg-white/25 px-2 py-0.5 text-[11px] font-extrabold leading-none"
+                                                >
+                                                    {match.waitlistCount}
+                                                </span>
+                                            )}
                                         </span>
                                         <span className="font-extrabold">
-                                            {match.price === 0 ? t('gameDetails.free') : t('waitlist.noCharge')}
+                                            {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
                                         </span>
                                     </button>
                                 </div>
@@ -867,11 +875,12 @@ export default function MatchDetailPage({
                                     <div
                                         data-testid="waitlist-queued-state"
                                         className="
-                                            w-full py-3.5 rounded-2xl bg-brand-green/10 border border-brand-green
-                                            text-sm font-bold flex items-center justify-between px-6 text-brand-green
+                                            w-full py-3 pl-4 pr-2.5 rounded-2xl bg-[#E9ECEA] border border-brand-green
+                                            flex items-center justify-between gap-3
                                         "
                                     >
-                                        <span dir="auto">
+                                        <span className="flex items-center gap-2 text-sm font-bold text-brand-green" dir="auto">
+                                            <Clock className="h-4 w-4 shrink-0" />
                                             {t('waitlist.queuedPrefix', { position: match.yourWaitlistPosition })}
                                         </span>
                                         <button
@@ -879,7 +888,7 @@ export default function MatchDetailPage({
                                                 onError: (err) => showToast(err.message || t('waitlist.leaveFailed'), 'error'),
                                             })}
                                             disabled={leaveWaitlist.isPending}
-                                            className="text-xs font-bold text-brand-red active:scale-[0.98] transition-transform disabled:opacity-60"
+                                            className="shrink-0 rounded-full border border-brand-red/30 px-4 py-2 text-xs font-bold text-brand-red active:scale-[0.97] transition-transform disabled:opacity-60"
                                         >
                                             {leaveWaitlist.isPending ? t('waitlist.leaving') : t('waitlist.leave')}
                                         </button>

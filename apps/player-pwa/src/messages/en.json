@@ -159,6 +159,16 @@
     "potmBadge": "POTM",
     "fullWaitlist": "FULL · {count} waiting"
   },
+  "waitlist": {
+    "joinCta": "Join Waitlist",
+    "joining": "Joining…",
+    "joinSuccess": "You're on the waitlist — we'll notify you when a spot opens",
+    "joinFailed": "Couldn't join the waitlist",
+    "queuedPrefix": "Queued · #{position}",
+    "leave": "Leave",
+    "leaving": "Leaving…",
+    "leaveFailed": "Couldn't leave the waitlist"
+  },
   "matchDetail": {
     "joinMatch": "Join Match",
     "joinOngoingMatch": "Join Ongoing Match",

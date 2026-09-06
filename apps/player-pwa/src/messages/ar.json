@@ -159,6 +159,16 @@
     "potmBadge": "أفضل لاعب",
     "fullWaitlist": "مكتمل · {count} بالانتظار"
   },
+  "waitlist": {
+    "joinCta": "انضم لقائمة الانتظار",
+    "joining": "جارٍ الانضمام…",
+    "joinSuccess": "تم إضافتك لقائمة الانتظار — سنبلغك عند توفر مقعد",
+    "joinFailed": "تعذّر الانضمام لقائمة الانتظار",
+    "queuedPrefix": "بالانتظار · #{position}",
+    "leave": "مغادرة",
+    "leaving": "جارٍ المغادرة…",
+    "leaveFailed": "تعذّرت مغادرة قائمة الانتظار"
+  },
   "matchDetail": {
     "joinMatch": "انضم للمباراة",
     "joinOngoingMatch": "الانضمام للمباراة الجارية",
