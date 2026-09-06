@@ -31,9 +31,8 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/useUser', async () => {
     const actual = await vi.importActual<typeof import('@/hooks/useUser')>('@/hooks/useUser');
-    // EmailSection's mutations ride the same module — stub them so the
+    // EmailSection's mutations ride the same module — stubbed below so the
     // page test never needs a QueryClientProvider.
-    const stubMutation = () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false, error: null });
     return {
         ...actual,
         useUserProfile: vi.fn(),
