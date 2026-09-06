@@ -18,6 +18,11 @@ export interface UserProfileApi {
   karma_score: number;
   no_show_count: number;
   pom_count: number;
+  // P1-41 (run #35 API + owner-session PWA): optional transactional email.
+  // email_verified_at NULL = collected but not yet verified (suppressed).
+  email?: string | null;
+  email_verified_at?: string | null;
+  email_muted?: boolean;
   home_lat: number | null;
   home_lng: number | null;
   created_at: string;
@@ -103,6 +108,43 @@ export function useUpdatePushPreferences() {
       );
     },
   });
+}
+
+// ─── Email notifications (P1-41 PWA residual, owner session 2026-09-06) ──
+
+/** PATCH /email/me — set/replace the address; API sends the verification email. */
+export function useSetEmail() {
+    const queryClient = useQueryClient();
+    return useMutation<{ email: string; emailVerified: boolean; verificationSent: boolean }, FetchError, string>({
+        mutationFn: (email) =>
+            fetcher('/email/me', { method: 'PATCH', body: JSON.stringify({ email }) }),
+        onSuccess: (res) => {
+            queryClient.setQueryData<Record<string, unknown>>(['user', 'profile'], (old) =>
+                old ? { ...old, email: res.email, email_verified_at: null } : old,
+            );
+        },
+    });
+}
+
+/** PATCH /email/me/resend — re-send the verification email (server-throttled 3/min). */
+export function useResendEmailVerification() {
+    return useMutation<{ verificationSent: boolean }, FetchError, void>({
+        mutationFn: () => fetcher('/email/me/resend', { method: 'PATCH' }),
+    });
+}
+
+/** PATCH /users/me {emailMuted} — global transactional-email kill-switch. */
+export function useUpdateEmailPreferences() {
+    const queryClient = useQueryClient();
+    return useMutation<{ email_muted: boolean }, FetchError, { emailMuted: boolean }>({
+        mutationFn: (data) =>
+            fetcher('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+        onSuccess: (res) => {
+            queryClient.setQueryData<Record<string, unknown>>(['user', 'profile'], (old) =>
+                old ? { ...old, email_muted: res.email_muted } : old,
+            );
+        },
+    });
 }
 
 // ─── Fetch Public Profile ──────────────────────────────

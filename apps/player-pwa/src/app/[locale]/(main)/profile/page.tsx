@@ -34,6 +34,7 @@ import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
 import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
 import RestoreAccountBanner from '@/components/profile/RestoreAccountBanner';
+import EmailSection from '@/components/profile/EmailSection';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -586,6 +587,9 @@ export default function ProfilePage() {
                     href="mailto:hello@koralink.sa"
                 />
             </div>
+
+            {/* ── Email notifications (P1-41 PWA residual) ── */}
+            <EmailSection />
 
             {/* ── Legal ─────────────────────────────── */}
             <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
