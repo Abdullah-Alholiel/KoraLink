@@ -493,6 +493,7 @@
     "pomCount": "POTM",
     "contactSupport": "Contact Support",
     "hostGuide": "Host Guide",
+    "saving": "Saving…",
     "emailSection": {
         "title": "Email notifications",
         "inputLabel": "Email address",
