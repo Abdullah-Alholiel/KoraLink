@@ -640,6 +640,8 @@ export const matchesRelations = relations(matches, ({ one, many }) => ({
   }),
   players: many(match_players),
   messages: many(match_messages),
+  // P1-17: queue rows for the detail CTA (count + viewer position).
+  waitlist: many(match_waitlist),
 }));
 
 export const matchPlayersRelations = relations(match_players, ({ one }) => ({

@@ -74,6 +74,8 @@ export interface NearbyMatchRow {
   price_per_player: number;
   max_players: number;
   spots_filled: number;
+  /** P1-17: players queued on a full match (CTA counter). */
+  waitlist_count: number;
   distance_m: number;
   host_id: string;
   host_name: string | null;
@@ -709,6 +711,7 @@ export class MatchesService {
         m.price_per_player::float AS price_per_player,
         m.max_players,
         (SELECT COUNT(*)::int FROM match_players mpx WHERE mpx.match_id = m.id) AS spots_filled,
+        (SELECT COUNT(*)::int FROM match_waitlist w WHERE w.match_id = m.id) AS waitlist_count,
         ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,
@@ -877,6 +880,10 @@ export class MatchesService {
           },
           orderBy: (msg, { asc }) => [asc(msg.created_at)],
         },
+        // P1-17: queue rows for the CTA (count + viewer position), computed
+        // below in JS and stripped from the payload — queuer user_ids must
+        // not leak to players.
+        waitlist: true,
       },
     });
 
@@ -905,7 +912,23 @@ export class MatchesService {
       }
     }
 
-    return match;
+    // P1-17: derive the waitlist snapshot for the CTA and strip the raw queue
+    // rows (queuer user_ids are private — hosts use GET /matches/:id/waitlist).
+    const queueRows = (match as typeof match & { waitlist?: Array<{ user_id: string; position: number }> })
+      .waitlist ?? [];
+    delete (match as Record<string, unknown>).waitlist;
+    const wlCount = queueRows.length;
+    const wlYourPos = viewerId
+      ? queueRows.find((q) => q.user_id === viewerId)?.position ?? null
+      : null;
+
+    const result = match as typeof match & {
+      waitlist_count: number;
+      your_waitlist_position: number | null;
+    };
+    result.waitlist_count = wlCount;
+    result.your_waitlist_position = wlYourPos;
+    return result;
   }
 
   /**
