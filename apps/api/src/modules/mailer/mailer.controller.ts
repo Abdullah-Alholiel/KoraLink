@@ -35,15 +35,12 @@ export class MailerController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set or replace the account email (sends a verification email)' })
   async setEmail(@CurrentUser() user: { sub: string }, @Body() dto: SetEmailDto) {
-    try {
-      return await this.mailerUsers.setEmail(user.sub, dto.email);
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (msg === 'EMAIL_TAKEN') {
-        throw new ConflictException('This email is already in use.');
-      }
-      throw new BadRequestException('Invalid email address.');
-    }
+    // Run #36 (Reviewer A): domain errors are typed exceptions from the
+    // service (400 invalid / 409 taken / 404 no-user) and propagate as-is.
+    // Only genuinely unknown failures fall back to 400 — a DB outage or
+    // other unexpected error is NOT misrepresented as a client mistake;
+    // those bubble to the global exception filter (500 + Sentry).
+    return this.mailerUsers.setEmail(user.sub, dto.email);
   }
 
   /**

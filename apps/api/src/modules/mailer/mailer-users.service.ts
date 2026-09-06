@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { eq, and, ne, sql } from 'drizzle-orm';
@@ -51,9 +51,18 @@ export class MailerUsersService {
 
   /**
    * Set/replace the account email. Clears verification on change (an
-   * unverified address gates ALL transactional mail). Domain errors are
-   * plain Errors mapped by the controller: INVALID_EMAIL → 400,
-   * EMAIL_TAKEN → 409.
+   * unverified address gates ALL transactional mail). Validation failures
+   * throw typed exceptions the controller maps 1:1: invalid format →
+   * BadRequestException (400), address in use → ConflictException (409),
+   * unknown user → NotFoundException (404).
+   *
+   * Run #36 (Reviewer A): the conflict pre-check + UPDATE pair is TOCTOU-prone
+   * by nature — a concurrent setEmail with the same address can still lose the
+   * race. The UPDATE now carries `.returning()` so an unchanged row count
+   * proves the target user exists, and the migration-0033 unique index
+   * (LOWER(email)) is the LAST word: a losing racer surfaces as a
+   * unique-violation error (code 23505) which this method maps to the same
+   * 409 instead of leaking as a 500.
    */
   async setEmail(
     userId: string,
@@ -65,27 +74,43 @@ export class MailerUsersService {
   }> {
     const email = rawEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(email) || email.length > 255) {
-      throw new Error('INVALID_EMAIL');
+      throw new BadRequestException('Invalid email address.');
     }
 
-    // Case-insensitive conflict check (matches migration 0033's lower(email) uidx).
+    // Friendly-path conflict check (matches migration 0033's lower(email) uidx).
+    // Not authoritative — see the TOCTOU note above.
     const [conflict] = await this.db
       .select({ id: users.id })
       .from(users)
       .where(and(eq(sql`LOWER(${users.email})`, email), ne(users.id, userId)))
       .limit(1);
     if (conflict) {
-      throw new Error('EMAIL_TAKEN');
+      throw new ConflictException('EMAIL_TAKEN');
     }
 
-    await this.db
-      .update(users)
-      .set({
-        email,
-        email_verified_at: null,
-        updated_at: new Date(),
-      })
-      .where(eq(users.id, userId));
+    let updated: Array<{ id: string }>;
+    try {
+      updated = await this.db
+        .update(users)
+        .set({
+          email,
+          email_verified_at: null,
+          updated_at: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+    } catch (err) {
+      // Lost the TOCTOU race: concurrent setEmail hit migration 0033's
+      // LOWER(email) unique index. Same client answer as the pre-check 409.
+      if ((err as { code?: string }).code === '23505') {
+        throw new ConflictException('EMAIL_TAKEN');
+      }
+      throw err;
+    }
+    if (updated.length === 0) {
+      // .returning() is the existence check — no row updated = no such user.
+      throw new NotFoundException('USER_NOT_FOUND');
+    }
 
     const sent = await this.sendVerification(userId, email, 'welcome_verify');
     return {
