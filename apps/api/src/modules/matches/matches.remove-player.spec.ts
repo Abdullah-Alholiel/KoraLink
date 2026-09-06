@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { MatchesService } from './matches.service';
 import { matches, match_players } from '../../database/schema';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 /**
  * removePlayer (P1-24) regression specs. Host-only roster removal:
@@ -22,7 +23,7 @@ describe('MatchesService.removePlayer', () => {
     return { then: (r: (v: unknown) => void) => r([]) };
   }
 
-  function makeTx(opts: { match?: unknown | null; player?: unknown | null; deleted?: unknown }) {
+  function makeTx(opts: { match?: unknown | null; player?: unknown | null; deleted?: unknown; capture?: Array<{ op: string; table?: unknown; setArg?: unknown; whereArg?: unknown }> }) {
     function chainFor(rows: unknown[]) {
       const chain: any = {
         where: () => chain,
@@ -40,7 +41,14 @@ describe('MatchesService.removePlayer', () => {
           return chainFor([]);
         },
       }),
-      update: () => ({ set: () => ({ where: () => thenable() }) }),
+      update: (table: unknown) => ({
+        set: (setArg: unknown) => ({
+          where: (whereArg: unknown) => {
+            opts.capture?.push({ op: 'update', table, setArg, whereArg });
+            return thenable();
+          },
+        }),
+      }),
       delete: () => ({ where: () => thenable() }),
       insert: () => ({ values: () => thenable() }),
       _deleted: deleted,
@@ -161,5 +169,41 @@ describe('MatchesService.removePlayer', () => {
     });
     const result = await svc.removePlayer(HOST, MATCH_ID, TARGET);
     expect(result.id).toBe(MATCH_ID);
+  });
+
+  // ── P2-49 (run #36): premise-predicated status writes ────────────────────
+  // Reviewer B (run #35): removePlayer reverted status to 'Open' with NO
+  // status predicate — a concurrent join flipping Full→Open between the tx's
+  // read and write was silently reverted. The UPDATE must carry the premise.
+  describe('P2-49 status-predicate guards', () => {
+    it('Full→Open flip carries status="Full" in the WHERE (race no longer reverts a join)', async () => {
+      const capture: Array<{ op: string; table?: unknown; setArg?: unknown; whereArg?: unknown }> = [];
+      const { svc } = makeService({
+        match: { id: MATCH_ID, host_id: HOST, status: 'Full' },
+        player: { id: 'mp-1' },
+        capture,
+      });
+      await svc.removePlayer(HOST, MATCH_ID, TARGET);
+
+      const flip = capture.find(
+        (c) => c.table === matches && (c.setArg as Record<string, unknown>)?.status === 'Open',
+      );
+      expect(flip).toBeDefined();
+      const q = new PgDialect().sqlToQuery(flip!.whereArg as never);
+      expect(q.sql).toContain('"matches"."id" =');
+      expect(q.sql).toContain('"matches"."status" =');
+      expect(q.params).toContain('Full');
+    });
+
+    it('Open-match removal fires NO matches status update at all', async () => {
+      const capture: Array<{ op: string; table?: unknown; setArg?: unknown; whereArg?: unknown }> = [];
+      const { svc } = makeService({
+        match: { id: MATCH_ID, host_id: HOST, status: 'Open' },
+        player: { id: 'mp-1' },
+        capture,
+      });
+      await svc.removePlayer(HOST, MATCH_ID, TARGET);
+      expect(capture.filter((c) => c.table === matches)).toEqual([]);
+    });
   });
 });

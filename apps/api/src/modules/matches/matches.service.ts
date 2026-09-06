@@ -966,11 +966,14 @@ export class MatchesService {
         throw new BadRequestException('This match is no longer open for joining.');
       }
       if (match.status === 'Full') {
-        // Stale Full status — revert to Open before allowing join
+        // Stale Full status — revert to Open before allowing join.
+        // P2-49 (run #36): premise-predicated — only while STILL Full; a
+        // concurrent cancel between our read and this write must not be
+        // resurrected to Open.
         await tx
           .update(matches)
           .set(withTimestamp({ status: 'Open' }))
-          .where(eq(matches.id, matchId));
+          .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
 
       // 2. Check user is not already in match_players
@@ -1024,12 +1027,14 @@ export class MatchesService {
           no_show: false,
         });
 
-      // 6. If last spot, mark Full
+      // 6. If last spot, mark Full — premise-predicated (P2-49, run #36):
+      // only flip while the row is still Open; a concurrent cancel/complete
+      // between read and write must not be overwritten.
       if (count + 1 >= match.max_players) {
         await tx
           .update(matches)
           .set(withTimestamp({ status: 'Full' }))
-          .where(eq(matches.id, matchId));
+          .where(and(eq(matches.id, matchId), eq(matches.status, 'Open')));
       }
     });
 
@@ -1112,10 +1117,12 @@ export class MatchesService {
         .limit(1);
 
       if (match?.status === 'Full') {
+        // P2-49 (run #36): premise-predicated like removePlayer — a concurrent
+        // join's Full→Open flip between read and write is not reverted.
         await tx
           .update(matches)
           .set(withTimestamp({ status: 'Open' }))
-          .where(eq(matches.id, matchId));
+          .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
 
       // Below minimum after this withdrawal → re-arm the hourly nudge clock
@@ -2286,10 +2293,13 @@ export class MatchesService {
         .where(eq(schema.match_players.id, player.id));
 
       if (match.status === 'Full') {
+        // P2-49 (run #36): predicate on the read's premise. A concurrent
+        // join flipping Full→Open between our read and this write no longer
+        // gets silently reverted — the UPDATE is a no-op instead.
         await tx
           .update(matches)
           .set(withTimestamp({ status: 'Open' }))
-          .where(eq(matches.id, matchId));
+          .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
     });
 
