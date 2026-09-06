@@ -38,26 +38,26 @@ DELETE FROM users           WHERE id LIKE 'wl-e2e-%';
 -- 1 host + 15 joiners, generated 1:1. Valid SA mobiles +96657XXXXXXX
 -- (9 digits after 966 — passes libphonenumber), prefix 57 = outside the
 -- demo seed block. dev-login + IsPhoneNumber('SA') safe.
-INSERT INTO users (id, phone, full_name, handle, skill_level, role, home_lat, home_lng)
+INSERT INTO users (id, phone, full_name, handle, role, home_lat, home_lng)
 VALUES
-  ('wl-e2e-host', '+966570000000', 'WL E2E Host', 'wl_e2e_host', 'Advanced', 'Player', 24.7136, 46.6753),
-  ('wl-e2e-p01', '+966570000001', 'WL E2E Player 01', 'wl_e2e_p01', 'Intermediate', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p02', '+966570000002', 'WL E2E Player 02', 'wl_e2e_p02', 'Advanced', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p03', '+966570000003', 'WL E2E Player 03', 'wl_e2e_p03', 'Beginner', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p04', '+966570000004', 'WL E2E Player 04', 'wl_e2e_p04', 'Intermediate', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p05', '+966570000005', 'WL E2E Player 05', 'wl_e2e_p05', 'Advanced', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p06', '+966570000006', 'WL E2E Player 06', 'wl_e2e_p06', 'Beginner', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p07', '+966570000007', 'WL E2E Player 07', 'wl_e2e_p07', 'Intermediate', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p08', '+966570000008', 'WL E2E Player 08', 'wl_e2e_p08', 'Advanced', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p09', '+966570000009', 'WL E2E Player 09', 'wl_e2e_p09', 'Beginner', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p10', '+966570000010', 'WL E2E Player 10', 'wl_e2e_p10', 'Intermediate', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p11', '+966570000011', 'WL E2E Player 11', 'wl_e2e_p11', 'Advanced', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p12', '+966570000012', 'WL E2E Player 12', 'wl_e2e_p12', 'Beginner', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p13', '+966570000013', 'WL E2E Player 13', 'wl_e2e_p13', 'Intermediate', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p14', '+966570000014', 'WL E2E Player 14', 'wl_e2e_p14', 'Advanced', 'Player', 24.7743, 46.7386),
-  ('wl-e2e-p15', '+966570000015', 'WL E2E Player 15', 'wl_e2e_p15', 'Beginner', 'Player', 24.7743, 46.7386)
+  ('wl-e2e-host', '+966570000000', 'WL E2E Host', 'wl_e2e_host', 'Player', 24.7136, 46.6753),
+  ('wl-e2e-p01', '+966570000001', 'WL E2E Player 01', 'wl_e2e_p01', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p02', '+966570000002', 'WL E2E Player 02', 'wl_e2e_p02', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p03', '+966570000003', 'WL E2E Player 03', 'wl_e2e_p03', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p04', '+966570000004', 'WL E2E Player 04', 'wl_e2e_p04', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p05', '+966570000005', 'WL E2E Player 05', 'wl_e2e_p05', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p06', '+966570000006', 'WL E2E Player 06', 'wl_e2e_p06', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p07', '+966570000007', 'WL E2E Player 07', 'wl_e2e_p07', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p08', '+966570000008', 'WL E2E Player 08', 'wl_e2e_p08', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p09', '+966570000009', 'WL E2E Player 09', 'wl_e2e_p09', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p10', '+966570000010', 'WL E2E Player 10', 'wl_e2e_p10', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p11', '+966570000011', 'WL E2E Player 11', 'wl_e2e_p11', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p12', '+966570000012', 'WL E2E Player 12', 'wl_e2e_p12', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p13', '+966570000013', 'WL E2E Player 13', 'wl_e2e_p13', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p14', '+966570000014', 'WL E2E Player 14', 'wl_e2e_p14', 'Player', 24.7743, 46.7386),
+  ('wl-e2e-p15', '+966570000015', 'WL E2E Player 15', 'wl_e2e_p15', 'Player', 24.7743, 46.7386)
 ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone, full_name = EXCLUDED.full_name,
-  handle = EXCLUDED.handle, skill_level = EXCLUDED.skill_level;
+  handle = EXCLUDED.handle;
 
 -- ── 2. VENUE + PITCH ────────────────────────────────────────────────────────
 INSERT INTO venues (id, owner_id, name, city, address, is_approved, is_koralink_partner, location)

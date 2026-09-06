@@ -7,7 +7,7 @@
  * design system and style same to profile screen"): now wears the Stadium
  * Night system from sketches/004 — standard white pinned header (back +
  * title + edit/save), the brand-green profile-hero gradient with the
- * identity block (avatar ring, name, handle, skill chip), and the SHARED
+ * identity block (avatar ring, name, handle), and the SHARED
  * GlassStats bar (components/profile/GlassStats.tsx) so the stats read
  * pixel-identical to the Profile screen. Detail/edit sections stay flat:
  * hairline rows and underline-style fields (no boxes, no shadow cards).
@@ -26,7 +26,6 @@ import AppBar from '@/components/layout/AppBar';
 import GlassStats from '@/components/profile/GlassStats';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 
-const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced'] as const;
 const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'] as const;
 
 export default function PersonalInfoPage() {
@@ -44,14 +43,12 @@ export default function PersonalInfoPage() {
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
   const [position, setPosition] = useState('');
-  const [skill, setSkill] = useState('');
   const [location, setLocation] = useState('');
 
   const startEdit = () => {
     setFullName(apiUser?.full_name ?? storeUser?.fullName ?? '');
     setHandle(apiUser?.handle ?? storeUser?.handle ?? '');
     setPosition(apiUser?.preferred_position ?? storeUser?.preferredPosition ?? '');
-    setSkill(apiUser?.skill_level ?? storeUser?.skillLevel ?? '');
     setLocation(apiUser?.preferred_location ?? storeUser?.preferredLocation ?? '');
     setEditing(true);
   };
@@ -63,7 +60,6 @@ export default function PersonalInfoPage() {
         handle,
         preferred_position: position || undefined,
         preferred_location: location || undefined,
-        skill_level: (skill as 'Beginner' | 'Intermediate' | 'Advanced') || undefined,
       },
       {
         onSuccess: () => {
@@ -79,7 +75,6 @@ export default function PersonalInfoPage() {
 
   const displayName = apiUser?.full_name ?? storeUser?.fullName ?? '';
   const displayHandle = apiUser?.handle ?? storeUser?.handle ?? '';
-  const displaySkill = apiUser?.skill_level ?? storeUser?.skillLevel ?? '';
   const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
   const phone = apiUser?.phone ?? storeUser?.phone ?? '-';
   const pomCount = apiUser?.pom_count ?? 0;
@@ -183,14 +178,6 @@ export default function PersonalInfoPage() {
                 </div>
                 <h2 className="mt-3 truncate text-[21px] font-bold leading-tight">{displayName}</h2>
                 <p className="mt-0.5 text-[13px] text-white/60" dir="ltr">@{displayHandle}</p>
-                {!editing && displaySkill && displaySkill !== '-' && (
-                  <span
-                    className="mt-2.5 inline-block rounded-full bg-white px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-brand-green"
-                    data-testid="skill-line"
-                  >
-                    {displaySkill}
-                  </span>
-                )}
               </div>
 
               {/* Shared glass stats — identical component to the Profile screen */}
@@ -224,7 +211,6 @@ export default function PersonalInfoPage() {
                 <EditField label={t('completeProfile.fullName')} value={fullName} onChange={setFullName} />
                 <EditField label={t('completeProfile.handle')} value={handle} onChange={setHandle} prefix="@" />
                 <EditSelect label={t('completeProfile.preferredPosition')} value={position} onChange={setPosition} options={POSITIONS as unknown as string[]} />
-                <EditSelect label={t('completeProfile.skillLevel')} value={skill} onChange={setSkill} options={SKILL_LEVELS as unknown as string[]} />
                 <EditField label={t('completeProfile.preferredLocation')} value={location} onChange={setLocation} />
               </div>
             </div>

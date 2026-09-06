@@ -14,7 +14,6 @@ import {
 import { useTranslations } from 'next-intl';
 import { useCompleteProfile } from '@/hooks/useAuth';
 import { classifyError } from '@/lib/error-classify';
-import type { SkillLevel } from '@/types';
 
 export default function CompleteProfilePage() {
     const router = useRouter();
@@ -26,16 +25,9 @@ export default function CompleteProfilePage() {
     const [fullName, setFullName] = useState('');
     const [location, setLocation] = useState('');
     const [position, setPosition] = useState('');
-    const [skillLevel, setSkillLevel] = useState<SkillLevel>('Intermediate');
     const [error, setError] = useState<string | null>(null);
 
     const completeProfile = useCompleteProfile();
-
-    const skillLevels: { value: SkillLevel; label: string }[] = [
-        { value: 'Beginner', label: t('skills.beginner') },
-        { value: 'Intermediate', label: t('skills.intermediate') },
-        { value: 'Advanced', label: t('skills.advanced') },
-    ];
 
     const handleFinish = () => {
         if (!fullName.trim()) return;
@@ -45,7 +37,6 @@ export default function CompleteProfilePage() {
                 fullName: fullName.trim(),
                 preferredLocation: location || undefined,
                 preferredPosition: position || undefined,
-                skillLevel,
             },
             {
                 onSuccess: () => router.push(`/${locale}/play`),
@@ -151,31 +142,6 @@ export default function CompleteProfilePage() {
                     </div>
                 </div>
 
-                {/* Skill Level */}
-                <div className="mt-4">
-                    <label className="text-sm font-semibold text-brand-black">
-                        {t('skillLevel')}
-                    </label>
-                    <div className="flex gap-2 mt-2">
-                        {skillLevels.map((level) => (
-                            <button
-                                key={level.value}
-                                onClick={() => setSkillLevel(level.value)}
-                                disabled={completeProfile.isPending}
-                                className={`
-                  px-4 py-2.5 rounded-full text-sm font-medium transition-all
-                  ${skillLevel === level.value
-                                        ? 'bg-brand-green text-white'
-                                        : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
-                                    }
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                `}
-                            >
-                                {level.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
             </div>
 
             {/* ── Bottom Section ────────────────────── */}

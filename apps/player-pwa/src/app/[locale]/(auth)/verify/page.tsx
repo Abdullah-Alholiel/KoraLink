@@ -74,7 +74,6 @@ function VerifyContent() {
                         // join detection, host detection, isAuthenticated, and profile display.
                         try {
                             const profile = await fetcher<UserProfileApi>('/users/me');
-                            const skillLevel = (profile.skill_level?.toLowerCase() ?? 'intermediate') as 'beginner' | 'intermediate' | 'advanced';
                             useAppStore.getState().login({
                                 id: profile.id,
                                 fullName: profile.full_name ?? '',
@@ -83,7 +82,6 @@ function VerifyContent() {
                                 phone: profile.phone,
                                 preferredLocation: profile.preferred_location ?? '',
                                 preferredPosition: profile.preferred_position ?? '',
-                                skillLevel,
                                 locale: locale as 'ar' | 'en',
                             }, '');
                         } catch (profileErr) {

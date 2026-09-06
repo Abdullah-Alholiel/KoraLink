@@ -13,7 +13,6 @@ export interface UserSummary {
   handle: string | null;
   avatar_url: string | null;
   preferred_position: string | null;
-  skill_level: string | null;
 }
 
 export interface FollowState {
@@ -68,7 +67,7 @@ export class FollowsService {
   async getFollowers(userId: string): Promise<{ users: UserSummary[]; total: number }> {
     const rows = (await this.db.execute(sql`
       SELECT
-        u.id, u.full_name, u.handle, u.avatar_url, u.preferred_position, u.skill_level
+        u.id, u.full_name, u.handle, u.avatar_url, u.preferred_position
       FROM ${follows} f
       INNER JOIN ${users} u ON u.id = f.follower_id
       WHERE f.following_id = ${userId}::text
@@ -82,7 +81,7 @@ export class FollowsService {
   async getFollowing(userId: string): Promise<{ users: UserSummary[]; total: number }> {
     const rows = (await this.db.execute(sql`
       SELECT
-        u.id, u.full_name, u.handle, u.avatar_url, u.preferred_position, u.skill_level
+        u.id, u.full_name, u.handle, u.avatar_url, u.preferred_position
       FROM ${follows} f
       INNER JOIN ${users} u ON u.id = f.following_id
       WHERE f.follower_id = ${userId}::text

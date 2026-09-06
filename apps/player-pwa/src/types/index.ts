@@ -9,7 +9,6 @@ export interface User {
     phone: string;
     preferredLocation: string;
     preferredPosition: string;
-    skillLevel: 'beginner' | 'intermediate' | 'advanced';
     locale: 'ar' | 'en';
 }
 
@@ -146,7 +145,6 @@ export interface NavItem {
     href: string;
 }
 
-export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type MatchGender = 'men' | 'women' | 'mixed';
 
 // ─── Discussion (Messages screen) ────────────────────

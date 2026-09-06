@@ -48,9 +48,6 @@ export default function AuthBootstrap() {
     queryFn: async () => {
       try {
         const profile = await fetcher<UserProfileApi>('/users/me');
-        const skillLevel = (
-          profile.skill_level?.toLowerCase() ?? 'intermediate'
-        ) as 'beginner' | 'intermediate' | 'advanced';
         login(
           {
             id: profile.id,
@@ -60,7 +57,6 @@ export default function AuthBootstrap() {
             phone: profile.phone,
             preferredLocation: profile.preferred_location ?? '',
             preferredPosition: profile.preferred_position ?? '',
-            skillLevel,
             locale: 'en',
           },
           '', // No new token — cookie already valid

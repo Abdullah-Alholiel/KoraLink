@@ -114,12 +114,6 @@
       "midfielder": "لاعب وسط",
       "forward": "مهاجم"
     },
-    "skillLevel": "مستوى المهارة",
-    "skills": {
-      "beginner": "مبتدئ",
-      "intermediate": "متوسط",
-      "advanced": "متقدم"
-    },
     "preferredLocation": "الموقع المفضل",
     "locationPlaceholder": "اختر مدينتك",
     "avatar": "الصورة الشخصية",

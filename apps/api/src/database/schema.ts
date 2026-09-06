@@ -33,12 +33,6 @@ export const geography = customType<{ data: string; driverData: string }>({
 // Enums (mirror Prisma enum names so existing DB enums are reused)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const skillLevelEnum = pgEnum('SkillLevel', [
-  'Beginner',
-  'Intermediate',
-  'Advanced',
-]);
-
 export const userRoleEnum = pgEnum('UserRole', [
   'Player',
   'VenueOwner',
@@ -210,7 +204,6 @@ export const users = pgTable('users', {
   avatar_url: text('avatar_url'),
   preferred_location: varchar('preferred_location', { length: 255 }),
   preferred_position: varchar('preferred_position', { length: 100 }),
-  skill_level: skillLevelEnum('skill_level'),
   role: userRoleEnum('role').notNull().default('Player'),
   wallet_balance: numeric('wallet_balance', { precision: 12, scale: 2 })
     .notNull()

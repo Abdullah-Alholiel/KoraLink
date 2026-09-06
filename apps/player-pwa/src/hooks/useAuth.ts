@@ -22,7 +22,6 @@ interface CompleteProfileResponse {
   full_name: string;
   handle: string;
   avatar_url: string | null;
-  skill_level: string | null;
   preferred_location: string | null;
   preferred_position: string | null;
   role: string;
@@ -52,7 +51,6 @@ export const completeProfileSchema = z.object({
     .max(50, 'Full name must be under 50 characters'),
   preferredLocation: z.string().min(2, 'Location must be at least 2 characters').max(100).optional().or(z.literal('')),
   preferredPosition: z.string().optional(),
-  skillLevel: z.enum(['Beginner', 'Intermediate', 'Advanced']).default('Intermediate'),
 });
 
 export type PhoneInput = z.infer<typeof phoneSchema>;
@@ -109,16 +107,11 @@ export function useCompleteProfile() {
         body: JSON.stringify({
           full_name: data.fullName,
           handle: data.fullName.toLowerCase().replace(/\s+/g, '_'),
-          skill_level: data.skillLevel,
           preferred_location: data.preferredLocation,
           preferred_position: data.preferredPosition,
         }),
       }),
     onSuccess: (data) => {
-      const skillLevel = data.skill_level
-        ? (data.skill_level.charAt(0).toLowerCase() + data.skill_level.slice(1)) as 'beginner' | 'intermediate' | 'advanced'
-        : 'intermediate';
-
       updateUser({
         id: data.id,
         fullName: data.full_name,
@@ -127,7 +120,6 @@ export function useCompleteProfile() {
         phone: data.phone,
         preferredLocation: data.preferred_location ?? '',
         preferredPosition: data.preferred_position ?? '',
-        skillLevel,
         locale: 'ar',
       });
       setOnboarded(true);

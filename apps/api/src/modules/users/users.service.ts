@@ -84,7 +84,6 @@ export class UsersService {
         avatar_url: true,
         preferred_location: true,
         preferred_position: true,
-        skill_level: true,
         role: true,
         wallet_balance: true,
         karma_score: true,
@@ -298,7 +297,6 @@ export class UsersService {
         avatar_url: users.avatar_url,
         preferred_location: users.preferred_location,
         preferred_position: users.preferred_position,
-        skill_level: users.skill_level,
         role: users.role,
         home_lat: users.home_lat,
         home_lng: users.home_lng,
@@ -420,7 +418,6 @@ export class UsersService {
         handle: users.handle,
         avatar_url: users.avatar_url,
         preferred_position: users.preferred_position,
-        skill_level: users.skill_level,
         // P1-39 (run #34): reputation visibility — the no-show count is already
         // tracked and admin-visible; expose it on the public profile so hosts
         // can screen joiners. Screening/penalties remain a product decision.
@@ -474,7 +471,6 @@ export class UsersService {
       handle: user.handle,
       avatar_url: user.avatar_url,
       preferred_position: user.preferred_position,
-      skill_level: user.skill_level,
       pom_count,
       games_played,
       no_show_count: no_show_count ?? 0,
@@ -503,7 +499,6 @@ export class UsersService {
         handle: users.handle,
         avatar_url: users.avatar_url,
         preferred_position: users.preferred_position,
-        skill_level: users.skill_level,
       })
       .from(users)
       .where(
@@ -691,7 +686,6 @@ export class UsersService {
         avatar_url: users.avatar_url,
         preferred_location: users.preferred_location,
         preferred_position: users.preferred_position,
-        skill_level: users.skill_level,
         role: users.role,
         home_lat: users.home_lat,
         home_lng: users.home_lng,
@@ -724,7 +718,6 @@ export class UsersService {
       avatar_url: user.avatar_url,
       preferred_location: user.preferred_location,
       preferred_position: user.preferred_position,
-      skill_level: user.skill_level,
       role: user.role,
       home_lat: user.home_lat,
       home_lng: user.home_lng,
@@ -926,7 +919,7 @@ export class UsersService {
    * - handle → NULL
    * - avatar_url → NULL
    * - home_lat/home_lng → NULL
-   * - preferred_location/position/skill_level → NULL
+   * - preferred_location/position → NULL
    * - banned_at/suspended_until → NULL
    * - verification_status → 'pending' (the only safe default)
    * - deleted_at → NOW() (refresh so a re-trigger doesn't fire on the
@@ -960,7 +953,6 @@ export class UsersService {
           home_lng: null,
           preferred_location: null,
           preferred_position: null,
-          skill_level: null,
           banned_at: null,
           suspended_until: null,
           // P1-41 (run #35): the email columns ARE PII — erase them with the

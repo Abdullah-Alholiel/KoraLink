@@ -72,7 +72,6 @@ describe('AuthBootstrap stale-user self-heal (P2-17)', () => {
       id: 'u2',
       full_name: 'Fresh User',
       handle: 'fresh',
-      skill_level: 'advanced',
     });
     renderBootstrap();
 

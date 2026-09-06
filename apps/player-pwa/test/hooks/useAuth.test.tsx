@@ -105,7 +105,6 @@ describe('useAuth hooks', () => {
         full_name: 'Ahmed Al-Rashid',
         handle: 'ahmed_al-rashid',
         avatar_url: null,
-        skill_level: 'Intermediate',
         preferred_location: 'Riyadh',
         preferred_position: 'Forward',
         role: 'Player',
@@ -119,7 +118,6 @@ describe('useAuth hooks', () => {
           fullName: 'Ahmed Al-Rashid',
           preferredLocation: 'Riyadh',
           preferredPosition: 'Forward',
-          skillLevel: 'Intermediate',
         });
       });
 
@@ -128,7 +126,6 @@ describe('useAuth hooks', () => {
         body: JSON.stringify({
           full_name: 'Ahmed Al-Rashid',
           handle: 'ahmed_al-rashid',
-          skill_level: 'Intermediate',
           preferred_location: 'Riyadh',
           preferred_position: 'Forward',
         }),

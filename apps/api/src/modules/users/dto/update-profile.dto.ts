@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsEnum, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -20,14 +20,6 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   avatar_url?: string;
-
-  @ApiPropertyOptional({
-    enum: ['Beginner', 'Intermediate', 'Advanced'],
-    description: 'Skill level',
-  })
-  @IsOptional()
-  @IsEnum(['Beginner', 'Intermediate', 'Advanced'])
-  skill_level?: 'Beginner' | 'Intermediate' | 'Advanced';
 
   @ApiPropertyOptional({ description: 'Preferred location', maxLength: 255 })
   @IsOptional()

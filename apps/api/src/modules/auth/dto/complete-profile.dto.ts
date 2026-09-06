@@ -1,13 +1,5 @@
-import { IsString, IsOptional, IsEnum, MinLength } from 'class-validator';
+import { IsString, IsOptional, MinLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-
-const SkillLevel = {
-  Beginner: 'Beginner',
-  Intermediate: 'Intermediate',
-  Advanced: 'Advanced',
-} as const;
-
-type SkillLevel = (typeof SkillLevel)[keyof typeof SkillLevel];
 
 export class CompleteProfileDto {
   @ApiPropertyOptional({ example: 'Abdullah Al-Harbi' })
@@ -19,11 +11,6 @@ export class CompleteProfileDto {
   @IsString()
   @MinLength(3)
   handle: string;
-
-  @ApiPropertyOptional({ enum: SkillLevel })
-  @IsOptional()
-  @IsEnum(SkillLevel)
-  skill_level?: SkillLevel;
 
   @ApiPropertyOptional({ example: 'Riyadh' })
   @IsOptional()

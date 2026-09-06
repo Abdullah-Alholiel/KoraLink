@@ -35,7 +35,6 @@ function mockData() {
             full_name: 'Ahmed Al-Rashid',
             handle: 'ahmed.rashid',
             phone: '+966500000001',
-            skill_level: 'Advanced',
             avatar_url: null,
             pom_count: 3,
             preferred_position: 'Midfielder',
@@ -80,10 +79,10 @@ describe('PersonalInfoPage — Stadium Night system (sketches/004 follow-up)', (
         expect(row.textContent).toContain('10');
     });
 
-    it('shows the skill as a white chip and keeps flat hairline detail rows', () => {
+    it('keeps flat hairline detail rows and no card chrome', () => {
         mockData();
         renderPage();
-        expect(screen.getByTestId('skill-line').textContent).toBe('Advanced');
+        expect(screen.queryByTestId('skill-line')).toBeNull();
         expect(screen.getByText('+966500000001')).toBeInTheDocument();
         // no card chrome — flat system
         expect(document.querySelector('.shadow-card')).toBeNull();

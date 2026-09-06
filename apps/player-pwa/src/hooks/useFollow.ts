@@ -15,7 +15,6 @@ export interface UserSummary {
   handle: string | null;
   avatar_url: string | null;
   preferred_position: string | null;
-  skill_level: string | null;
 }
 
 interface PublicProfileShape {

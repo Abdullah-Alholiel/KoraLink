@@ -37,7 +37,6 @@ describe('createAuthSlice', () => {
     phone: '+966501234567',
     preferredLocation: 'Riyadh',
     preferredPosition: 'forward',
-    skillLevel: 'advanced',
     locale: 'ar',
   };
 

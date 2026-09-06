@@ -79,7 +79,6 @@ function DevLoginBarInner(): ReactElement | null {
         const profile = await fetcher<UserProfileApi>('/users/me', {
           headers: res.token ? { Authorization: `Bearer ${res.token}` } : {},
         });
-        const skillLevel = (profile.skill_level?.toLowerCase() ?? 'intermediate') as 'beginner' | 'intermediate' | 'advanced';
         useAppStore.getState().login({
           id: profile.id,
           fullName: profile.full_name ?? '',
@@ -88,7 +87,6 @@ function DevLoginBarInner(): ReactElement | null {
           phone: profile.phone,
           preferredLocation: profile.preferred_location ?? '',
           preferredPosition: profile.preferred_position ?? '',
-          skillLevel,
           locale: locale as 'ar' | 'en',
         }, res.token ?? '');
       } catch {

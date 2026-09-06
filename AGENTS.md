@@ -215,7 +215,7 @@ Every screen must handle 5 states:
 
 | Table | Key Columns | Notes |
 |-------|------------|-------|
-| `users` | id, phone (unique), full_name, handle (unique), wallet_balance, preferred_position, skill_level, role, karma_score, rating | Wallet uses `numeric(12,2)` |
+| `users` | id, phone (unique), full_name, handle (unique), wallet_balance, preferred_position, role, karma_score, rating | Wallet uses `numeric(12,2)` |
 | `venues` | id, owner_id → users, name, city, location (PostGIS geography) | CASCADE DELETE from users |
 | `pitches` | id, venue_id → venues, name, size (enum), surface_type, hourly_rate | CASCADE DELETE from venues |
 | `matches` | id, host_id → users, pitch_id → pitches, title, match_type, scheduled_at, price_per_player, max_players, location (PostGIS) | status: Open/Full/InProgress/Completed/Cancelled |

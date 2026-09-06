@@ -244,7 +244,6 @@ export class AuthService {
         full_name: users.full_name,
         handle: users.handle,
         avatar_url: users.avatar_url,
-        skill_level: users.skill_level,
         preferred_location: users.preferred_location,
         preferred_position: users.preferred_position,
         role: users.role,

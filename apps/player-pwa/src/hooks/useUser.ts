@@ -12,7 +12,6 @@ export interface UserProfileApi {
   avatar_url: string | null;
   preferred_location: string | null;
   preferred_position: string | null;
-  skill_level: string | null;
   role: string;
   wallet_balance: string;
   karma_score: number;
@@ -40,7 +39,6 @@ export interface PublicProfileApi {
   handle: string | null;
   avatar_url: string | null;
   preferred_position: string | null;
-  skill_level: string | null;
   pom_count: number;
   games_played: number;
   /** Reputation visibility (P1-39): completed-game no-shows, host-screening signal. */
@@ -175,7 +173,6 @@ interface UpdateProfileInput {
   full_name?: string;
   handle?: string;
   avatar_url?: string;
-  skill_level?: 'Beginner' | 'Intermediate' | 'Advanced';
   preferred_location?: string;
   preferred_position?: string;
   home_lat?: number;
@@ -216,7 +213,6 @@ export interface SearchUserApi {
   handle: string | null;
   avatar_url: string | null;
   preferred_position: string | null;
-  skill_level: string | null;
 }
 
 export function useSearchUsers(query: string) {

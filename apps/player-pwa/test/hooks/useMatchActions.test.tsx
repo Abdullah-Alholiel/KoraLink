@@ -37,7 +37,6 @@ const testUser = {
   phone: '+966500000000',
   preferredLocation: '',
   preferredPosition: '',
-  skillLevel: 'intermediate' as const,
   locale: 'en' as const,
 };
 

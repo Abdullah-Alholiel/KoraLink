@@ -114,12 +114,6 @@
       "midfielder": "Midfielder",
       "forward": "Forward"
     },
-    "skillLevel": "Skill Level",
-    "skills": {
-      "beginner": "Beginner",
-      "intermediate": "Intermediate",
-      "advanced": "Advanced"
-    },
     "preferredLocation": "Preferred Location",
     "locationPlaceholder": "Choose your city",
     "avatar": "Profile Photo",

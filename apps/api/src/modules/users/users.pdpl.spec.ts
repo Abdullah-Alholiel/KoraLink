@@ -259,7 +259,6 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
       handle: 'active1',
       avatar_url: null,
       preferred_position: 'ST',
-      skill_level: 'Intermediate',
     });
     const service = makeService(db as never);
     const profile = await service.getPublicProfile('u1', 'u2');
