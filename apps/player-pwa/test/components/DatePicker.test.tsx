@@ -87,8 +87,10 @@ describe('DatePicker — shared calendar-day strip', () => {
   it('controlled selectedDate highlights the matching chip (even far out)', async () => {
     const user = userEvent.setup();
     const onDateSelectSpy = vi.fn();
-    const far = new Date();
-    far.setDate(far.getDate() + 20);
+    // Run #38: chips are Riyadh-keyed (UTC-anchored), so the expected day
+    // number must be computed the same way — the local getDate() disagreed
+    // with the rendered chip for 3h daily (21:00–24:00 UTC).
+    const far = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
     render(
       <NextIntlClientProvider messages={enMessages} locale="en">
         <DatePicker fireOnMount={false} selectedDate={far} onDateSelect={onDateSelectSpy} />
@@ -96,7 +98,10 @@ describe('DatePicker — shared calendar-day strip', () => {
     );
     const pressed = chips().find((c) => c.getAttribute('aria-pressed') === 'true');
     expect(pressed).toBeDefined();
-    const dayNumber = far.getDate();
+    const dayNumber = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Riyadh',
+      day: '2-digit',
+    }).format(far);
     expect(pressed!).toHaveTextContent(String(dayNumber));
     // Controlled: tapping a chip fires the callback but does NOT steal the
     // active state — the parent's selectedDate keeps precedence.

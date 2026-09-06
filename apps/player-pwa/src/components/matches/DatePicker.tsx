@@ -18,6 +18,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import { riyadhDateKey } from '@/lib/venue-hours';
 
 interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
@@ -36,12 +37,12 @@ interface DatePickerProps {
 
 const DEFAULT_DAYS = 30;
 
+/** Run #38: the strip is Riyadh-first like the rest of the app — chips are
+ * keyed by the Riyadh calendar day (UTC-midnight anchors) so "TODAY" matches
+ * todayInRiyadh() regardless of the viewer's device timezone. Previously the
+ * anchor was device-local, which disagreed with the sheet for 3h daily. */
 function isSameDay(a: Date, b: Date): boolean {
-    return (
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate()
-    );
+    return riyadhDateKey(a) === riyadhDateKey(b);
 }
 
 export default function DatePicker({
@@ -55,23 +56,25 @@ export default function DatePicker({
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const dates = useMemo(() => {
-        const today = new Date();
+        // Riyadh-day anchor: UTC midnight of the Riyadh calendar day.
+        const base = new Date(`${riyadhDateKey()}T00:00:00Z`);
         return Array.from({ length: Math.max(1, days) }, (_, i) => {
-            const d = new Date(today);
-            d.setDate(today.getDate() + i);
+            const d = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
             const isToday = i === 0;
-            // Localized day abbreviation (e.g. "Mon", "الاثنين")
-            const dayAbbr = d.toLocaleDateString(locale, { weekday: 'short' });
+            // Localized day abbreviation (e.g. "Mon", "الاثنين") — UTC-pinned
+            // so the label cannot shift a day on non-+03 devices.
+            const dayAbbr = d.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' });
             return {
                 date: d,
                 dayLabel: isToday ? t('today') : dayAbbr,
-                dayNumber: d.getDate(),
+                dayNumber: d.getUTCDate(),
                 isToday,
                 // Full localized date for the chip's accessible name.
                 ariaLabel: d.toLocaleDateString(locale, {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
+                    timeZone: 'UTC',
                 }),
             };
         });

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 import RescheduleSheet from '@/components/matches/RescheduleSheet';
 import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
+import { riyadhDateKey } from '@/lib/venue-hours';
 
 // Mock the slots hook — the sheet is a pure consumer of its 5 states.
 vi.mock('@/hooks/usePitchSlots', () => ({
@@ -15,14 +16,15 @@ vi.mock('@/hooks/usePitchSlots', () => ({
 // jsdom: BottomSheet uses scrollIntoView via its open/close effects.
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {});
 
-/** YYYY-MM-DD for (today) + N days — computed in LOCAL time, matching the
- * test environment (the sheet maps it through dateInRiyadh for the API). */
+/** YYYY-MM-DD for (today) + N days — computed in RIYADH-local time, matching
+ * what the sheet itself maps through dateInRiyadh for the API. The previous
+ * local-TZ version disagreed with the component for 3h every day (21:00–24:00
+ * UTC, when Riyadh has already rolled to tomorrow) — found live 2026-09-06
+ * 21:3xZ when 3 fixtures failed the moment Riyadh hit Sep 7. Anchoring on the
+ * component's own riyadhDateKey + Saudi's no-DST +N×24h is wall-clock-proof. */
 function isoDaysFromNow(daysFromNow: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromNow);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  const now = new Date();
+  return riyadhDateKey(new Date(now.getTime() + daysFromNow * 24 * 60 * 60 * 1000));
 }
 
 const TODAY = isoDaysFromNow(0);
