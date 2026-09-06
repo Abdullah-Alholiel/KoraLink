@@ -13,6 +13,7 @@ import {
     Headphones,
     Shield,
     FileText,
+    BookOpen,
     ChevronRight,
     Camera,
     Bell,
@@ -590,6 +591,15 @@ export default function ProfilePage() {
 
             {/* ── Email notifications (P1-41 PWA residual) ── */}
             <EmailSection />
+
+            {/* ── Host guide (permanent home of the host onboarding) ── */}
+            <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">
+                <MenuItem
+                    icon={<BookOpen className="w-5 h-5" strokeWidth={1.5} />}
+                    label={t('profile.hostGuide')}
+                    href={`/${locale}/host-guide`}
+                />
+            </div>
 
             {/* ── Legal ─────────────────────────────── */}
             <div className="bg-white rounded-2xl mx-4 mt-3 overflow-hidden shadow-card">

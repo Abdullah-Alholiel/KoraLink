@@ -216,7 +216,17 @@ function ModeCard({
 
 /* ── Main wizard ────────────────────────────────────────────────────── */
 
-export default function HostOnboarding({ onFinished }: { onFinished: () => void }) {
+export default function HostOnboarding({
+    onFinished,
+    guide = false,
+}: {
+    onFinished: () => void;
+    /** Guide mode: the wizard as a permanent reference (profile → Host
+     * Guide). Exiting never writes the seen-flag, so first-time hosts
+     * still get the real onboarding before Host a Match; the exit button
+     * is a back arrow instead of "Skip". */
+    guide?: boolean;
+}) {
     const t = useTranslations('hostOnboarding');
     const locale = useLocale();
     const [step, setStep] = useState(0);
@@ -248,8 +258,14 @@ export default function HostOnboarding({ onFinished }: { onFinished: () => void 
     };
 
     const finish = (via: 'skip' | 'complete') => {
-        writeHostOnboardingSeen();
-        trackEvent('host_onboarding_finished', { via, step, locale });
+        // Guide mode is a reference visit — it must never mark the real
+        // onboarding as seen, or first-time hosts would lose it.
+        if (!guide) writeHostOnboardingSeen();
+        trackEvent(guide ? 'host_guide_closed' : 'host_onboarding_finished', {
+            via,
+            step,
+            locale,
+        });
         // The gate (same /host route) swaps the wizard for the form — no
         // navigation: router.replace to the same route would NOT remount it.
         onFinished();
@@ -269,16 +285,29 @@ export default function HostOnboarding({ onFinished }: { onFinished: () => void 
             role="region"
             aria-label={t('dotsLabel')}
         >
-            {/* Top bar — skip (exit) + step counter */}
+            {/* Top bar — skip (exit) + step counter. Guide mode: back arrow
+                instead of Skip, and exiting never persists the seen-flag. */}
             <div className="flex flex-shrink-0 items-center justify-between px-4 pb-1 pt-[var(--top-safe-inset)]">
-                <button
-                    type="button"
-                    onClick={() => finish('skip')}
-                    className="flex h-11 min-w-[44px] items-center justify-center rounded-full px-3 text-sm font-semibold text-gray-500 transition-colors hover:text-brand-black active:scale-95"
-                    data-testid="onboarding-skip"
-                >
-                    {t('skip')}
-                </button>
+                {guide ? (
+                    <button
+                        type="button"
+                        onClick={() => finish('skip')}
+                        aria-label={t('guideClose')}
+                        className="flex h-11 min-w-[44px] items-center justify-center rounded-full text-gray-500 transition-colors hover:text-brand-black active:scale-95"
+                        data-testid="onboarding-guide-back"
+                    >
+                        <ArrowLeft className="h-5 w-5 rtl:-scale-x-100" strokeWidth={2} />
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => finish('skip')}
+                        className="flex h-11 min-w-[44px] items-center justify-center rounded-full px-3 text-sm font-semibold text-gray-500 transition-colors hover:text-brand-black active:scale-95"
+                        data-testid="onboarding-skip"
+                    >
+                        {t('skip')}
+                    </button>
+                )}
                 <span className="text-xs font-semibold text-gray-400" dir="ltr">
                     {t('stepOf', { current: step + 1, total: TOTAL_STEPS })}
                 </span>

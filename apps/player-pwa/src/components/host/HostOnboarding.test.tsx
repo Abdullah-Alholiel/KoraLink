@@ -124,6 +124,48 @@ describe('HostOnboarding — wizard flow', () => {
     });
 });
 
+describe('HostOnboarding — guide mode (permanent reference, profile → Host Guide)', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+        vi.mocked(trackEvent).mockClear();
+        onFinished.mockClear();
+    });
+
+    function renderGuide(locale: 'en' | 'ar' = 'en') {
+        const messages = locale === 'ar' ? arMessages : enMessages;
+        return render(
+            <NextIntlClientProvider messages={messages} locale={locale}>
+                <HostOnboarding guide onFinished={onFinished} />
+            </NextIntlClientProvider>
+        );
+    }
+
+    it('shows a back arrow instead of Skip', () => {
+        renderGuide();
+        expect(screen.queryByTestId('onboarding-skip')).not.toBeInTheDocument();
+        expect(screen.getByTestId('onboarding-guide-back')).toBeInTheDocument();
+    });
+
+    it('exiting from the guide NEVER writes the seen-flag (first-time hosts keep onboarding)', () => {
+        renderGuide();
+        fireEvent.click(screen.getByTestId('onboarding-guide-back'));
+        expect(onFinished).toHaveBeenCalledTimes(1);
+        expect(window.localStorage.getItem(HOST_ONBOARDING_SEEN_KEY)).toBeNull();
+        expect(trackEvent).toHaveBeenCalledWith('host_guide_closed', expect.anything());
+    });
+
+    it('finishing the last slide in guide mode also never writes the seen-flag', () => {
+        renderGuide();
+        fireEvent.click(screen.getByTestId('onboarding-get-started'));
+        // Jump to the last slide via the dots.
+        const dots = screen.getAllByRole('tab');
+        fireEvent.click(dots[dots.length - 1]);
+        fireEvent.click(screen.getByTestId('onboarding-done'));
+        expect(onFinished).toHaveBeenCalledTimes(1);
+        expect(window.localStorage.getItem(HOST_ONBOARDING_SEEN_KEY)).toBeNull();
+    });
+});
+
 describe('HostOnboarding — swipe navigation', () => {
     beforeEach(() => {
         window.localStorage.clear();

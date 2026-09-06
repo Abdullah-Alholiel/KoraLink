@@ -492,6 +492,7 @@
     "myGames": "My Games",
     "pomCount": "POTM",
     "contactSupport": "Contact Support",
+    "hostGuide": "Host Guide",
     "emailSection": {
         "title": "Email notifications",
         "inputLabel": "Email address",
@@ -511,6 +512,9 @@
         "why": "Optional. Used only for important updates about your matches and account. No marketing.",
         "mute": "Email notifications",
         "muteHint": "Turn off to stop all non-essential emails. Critical account notices still apply."
+    },
+    "hostGuidePage": {
+        "close": "Close host guide"
     },
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
