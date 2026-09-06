@@ -120,9 +120,11 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'report_resolved',
   // ── Host scheduling ──
   'match_rescheduled',
+  // ── Waitlist (P1-17) ──
+  'waitlist_promoted',
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   'venue_ownership_added',
-  'venue_ownership_removed',
+  'venue_ownership_removed'
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
@@ -567,6 +569,32 @@ export const match_votes = pgTable(
   (t) => [
     uniqueIndex('match_votes_voter_match_idx').on(t.match_id, t.voter_id),
     index('match_votes_match_idx').on(t.match_id),
+  ],
+);
+
+// ── P1-17: FIFO waitlist for full matches ───────────────────────────────────
+export const match_waitlist = pgTable(
+  'match_waitlist',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    match_id: varchar('match_id', { length: 36 })
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Dense 1-based FIFO position; resequenced inside one tx on leave/promote
+    // (unique (match_id, position) is DEFERRABLE in migration 0034).
+    position: integer('position').notNull(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('match_waitlist_match_user_idx').on(t.match_id, t.user_id),
+    index('match_waitlist_user_id_idx').on(t.user_id),
   ],
 );
 

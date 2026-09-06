@@ -112,6 +112,7 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
       { record: async () => {} } as never,
       { getNumber: async () => 0 } as never,
       { broadcastOps: () => {} } as never,
+      { promoteNextInTx: async () => null } as never
     );
     return svc;
   }

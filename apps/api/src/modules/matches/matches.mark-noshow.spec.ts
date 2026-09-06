@@ -71,6 +71,7 @@ describe('MatchesService.markNoShow roster guard', () => {
       activitiesService as never,
       settings as never,
       realtime as never,
+      { promoteNextInTx: async () => null } as never
     );
   }
 
@@ -143,6 +144,7 @@ describe('MatchesService.markNoShow roster guard', () => {
       { record: async () => {} } as never,
       { getNumber: async () => 0 } as never,
       { broadcastOps: () => {} } as never,
+      { promoteNextInTx: async () => null } as never
     );
 
     // Host CLEARS the mark (noShow=false) on a currently-marked player.

@@ -2,6 +2,8 @@ import { Module, OnModuleInit, Logger } from '@nestjs/common';
 import { MatchesController } from './matches.controller';
 import { MatchesService } from './matches.service';
 import { MatchesScheduler } from './matches.scheduler';
+import { MatchWaitlistController } from './waitlist.controller';
+import { MatchWaitlistService } from './waitlist.service';
 import { WalletModule } from '../wallet/wallet.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -10,8 +12,8 @@ import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
   imports: [WalletModule, GatewayModule, NotificationsModule, ActivitiesModule, MailerModule],
-  controllers: [MatchesController],
-  providers: [MatchesService, MatchesScheduler],
+  controllers: [MatchesController, MatchWaitlistController],
+  providers: [MatchesService, MatchesScheduler, MatchWaitlistService],
   exports: [MatchesService],
 })
 export class MatchesModule implements OnModuleInit {

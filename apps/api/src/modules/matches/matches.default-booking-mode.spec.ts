@@ -31,6 +31,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
     id: PITCH_ID,
     venueLocation: { type: 'Point', coordinates: [46.6, 24.7] },
     hourlyRate: '160.00', // 160 SAR/hr × 30 min = 80 SAR
+  size: '7v7', // capacity derived: 14 (2 × 7)
   };
 
   const HOST = { id: HOST_ID, wallet_balance: '100.00' };
@@ -145,6 +146,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
       { record: async () => undefined } as never,
       { getNumber: async (_k: string, fb: number) => fb } as never, // settings
       {} as never, // realtime
+      { promoteNextInTx: async () => null } as never
     );
   }
 

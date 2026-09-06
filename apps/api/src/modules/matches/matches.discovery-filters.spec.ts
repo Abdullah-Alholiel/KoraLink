@@ -55,7 +55,8 @@ function makeService(capture: (q: unknown) => void): MatchesService {
     {} as never, // activitiesService
     settings as never,
     {} as never, // realtime
-  );
+      { promoteNextInTx: async () => null } as never
+    );
 }
 
 describe('normalizeGenderRule', () => {
@@ -220,6 +221,7 @@ describe('MatchesService.findNearby pagination envelope (run #13, P1-19)', () =>
       {} as never,
       { getNumber: async () => 0 } as never,
       {} as never,
+      { promoteNextInTx: async () => null } as never
     );
     const result = await svc.findNearby({} as GetMatchesDto, 'user-1');
     expect(result.total).toBe(120);

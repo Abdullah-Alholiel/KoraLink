@@ -23,7 +23,9 @@ export type PushKey =
   | 'player_removed'
   | 'pom_decided'
   | 'report_resolved'
-  | 'report_dismissed';
+  | 'report_dismissed'
+  | 'waitlist_promoted'
+  | 'waitlist_closed';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -39,6 +41,8 @@ export type PushVars = {
   winnerName?: string;
   /** ISO timestamp of kickoff (match_starting_soon only). */
   kickoffISO?: string;
+  /** New queue position (waitlist_promoted only). */
+  position?: number;
 };
 
 type Entry = { title: string; body: (v: PushVars) => string };
@@ -171,6 +175,30 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
     ar: {
       title: 'تحديث البلاغ',
       body: () => 'تمت مراجعة بلاغك واعتُبر غير مؤسس.',
+    },
+  },
+  waitlist_promoted: {
+    en: {
+      title: '🎉 You’re in!',
+      body: (v) =>
+        `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game.`,
+    },
+    ar: {
+      title: '🎉 مبروك، أنت داخل!',
+      body: (v) =>
+        `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
+    },
+  },
+  waitlist_closed: {
+    en: {
+      title: 'Waitlist update',
+      body: (v) =>
+        `"${v.title ?? 'The match'}" ended before a spot opened up. Better luck next game!`,
+    },
+    ar: {
+      title: 'تحديث قائمة الانتظار',
+      body: (v) =>
+        `انتهت "${v.title ?? 'المباراة'}" قبل أن يفضي مكان. حظًا أوفر في المباراة القادمة!`,
     },
   },
 };

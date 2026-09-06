@@ -133,6 +133,7 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
       { record: recordActivity } as never,
       {} as never, // settings
       {} as never, // realtime
+      { promoteNextInTx: async () => null } as never
     );
     return { svc, tx, txCalls, order, db, recordActivity, sendPush };
   }
@@ -154,6 +155,9 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
       'post:select-roster',
       'post:activity',
       'post:push',
+      // P1-17: the waitlist check (empty queue → no-op) runs after the roster
+      // notification, before the cancelled-counter log.
+      'post:select-roster',
     ]);
     expect(recordActivity).toHaveBeenCalledWith(
       expect.objectContaining({ verb: 'match_auto_cancelled', matchId: EXPIRING_ROW.id }),

@@ -12,7 +12,7 @@ import { randomUUID } from 'crypto';
 import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { disputes, matches, match_messages, match_players, match_votes, pitch_slots, pitches, transactions, users } from '../../database/schema';
+import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
 import {
   GetMatchesDto,
   normalizeGenderRule,
@@ -28,6 +28,22 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { MailerService } from '../mailer/mailer.service';
 import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
+import { MatchWaitlistService, WaitlistPromotion } from './waitlist.service';
+
+/**
+ * Capacity standardisation (owner directive 2026-09-06): match capacity is
+ * DERIVED from the pitch format — `max_players = 2 × per-side(pitches.size)`
+ * (5v5→10 · 7v7→14 · 8v8→16 · 11v11→22). The client never sets capacity, the
+ * same way it never sets pitch cost. Mirrored by the DB trigger
+ * `trg_match_capacity` (migration 0034) — this helper is the shared parser.
+ */
+export function capacityForPitchSize(size: string): number {
+  const perSide = parseInt(size.split('v')[0] ?? '', 10);
+  if (Number.isNaN(perSide) || perSide <= 0) {
+    throw new BadRequestException(`Unknown pitch format "${size}".`);
+  }
+  return perSide * 2;
+}
 
 /**
  * Format a Date in Asia/Riyadh wall-clock for email details boxes.
@@ -89,6 +105,7 @@ export class MatchesService {
     private readonly activitiesService: ActivitiesService,
     private readonly settings: PlatformSettingsService,
     private readonly realtime: RealtimeService,
+    private readonly waitlist: MatchWaitlistService,
     // P1-41 (run #35): optional injection — the mailer self-disables when
     // MailerModule isn't wired into MatchesModule's imports (tests).
     @Optional() private readonly mailer?: MailerService,
@@ -515,6 +532,25 @@ export class MatchesService {
             vars: { title: row.title },
             data: { type: 'match-cancelled', matchId: row.id },
           });
+        }
+
+        // P1-17: the queue dies with the match — clear it and tell the waiters.
+        const queuedPlayers = await this.db
+          .select({ user_id: match_waitlist.user_id })
+          .from(match_waitlist)
+          .where(eq(match_waitlist.match_id, row.id));
+        if (queuedPlayers.length > 0) {
+          await this.db
+            .delete(match_waitlist)
+            .where(eq(match_waitlist.match_id, row.id));
+          await this.notificationsService.sendPushToUsers(
+            queuedPlayers.map((q) => q.user_id),
+            {
+              key: 'waitlist_closed', // P2-8: text localized per subscriber
+              vars: { title: row.title },
+              data: { type: 'match-cancelled', matchId: row.id },
+            },
+          );
         }
         cancelled += 1;
         this.logger.log(
@@ -1077,6 +1113,9 @@ export class MatchesService {
     // Set inside the tx when this withdrawal drops the roster below minimum —
     // drives the immediate host re-nudge after commit.
     let needsRenudge: { hostId: string; needed: number } | null = null;
+    // P1-17: set inside the tx when a queue head was promoted into the freed
+    // spot — drives the post-commit notification.
+    let promoted: WaitlistPromotion | null = null;
     await this.db.transaction(async (tx) => {
       // 0. Lock the match row FIRST (P2-49, run #37) — serializes against
       //     concurrent joins/removePlayers so the roster count read below and
@@ -1139,10 +1178,22 @@ export class MatchesService {
           .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
 
+      // P1-17 waitlist: the freed spot goes to the queue head in the SAME
+      // transaction — a crash can never leave a free spot with a stale queue.
+      // Runs BEFORE the underfill check: when the queue refills the roster,
+      // the host must NOT get a "players needed" nudge for a full match.
+      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+
       // Below minimum after this withdrawal → re-arm the hourly nudge clock
       // so the scheduler's next tick may nudge again, and remember the state
-      // for the immediate post-tx notification.
-      if (match && match.min_players > 0 && match.total_players < match.min_players) {
+      // for the immediate post-tx notification. Skipped when the waitlist
+      // refilled the spot (roster is back at capacity).
+      if (
+        !promoted &&
+        match &&
+        match.min_players > 0 &&
+        match.total_players < match.min_players
+      ) {
         await tx
           .update(matches)
           .set(withTimestamp({ last_nudge_at: null }))
@@ -1152,7 +1203,16 @@ export class MatchesService {
           needed: match.min_players - match.total_players,
         };
       }
+
+      // P1-17 waitlist: the freed spot goes to the queue head in the SAME
+      // transaction — a crash can never leave a free spot with a stale queue.
+      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
     });
+
+    // P1-17: bell + WS for the promoted player (fire-and-forget after commit).
+    if (promoted) {
+      await this.waitlist.notifyPromotion(promoted, matchId);
+    }
 
     // Underfill re-nudge: tell the host immediately that the match dropped
     // below minimum (bell + push). Best-effort. (Re-annotate to defeat TS
@@ -1221,6 +1281,7 @@ export class MatchesService {
         id: schema.pitches.id,
         venueLocation: schema.venues.location,
         hourlyRate: schema.pitches.hourly_rate,
+        size: schema.pitches.size,
       })
       .from(schema.pitches)
       .innerJoin(schema.venues, eq(schema.pitches.venue_id, schema.venues.id))
@@ -1231,6 +1292,13 @@ export class MatchesService {
       throw new NotFoundException(`Pitch ${dto.pitch_id} not found.`);
     }
 
+    // Capacity standardisation (owner directive 2026-09-06): capacity is
+    // DERIVED from the pitch format, never the client — same rule as the
+    // pitch-cost derivation. `dto.max_players` is accepted for wire
+    // back-compat but ignored. The DB trigger (migration 0034) is the
+    // backstop for any non-API write path.
+    const capacity = capacityForPitchSize(pitch.size);
+
     // Product default — matches the PWA form default and the DB column
     // default: an omitted booking_mode means KoraLink books the pitch.
     const bookingMode = dto.booking_mode ?? 'koralink';
@@ -1240,13 +1308,13 @@ export class MatchesService {
     );
     const pricePerPlayer = await this.calculatePricePerPlayer(
       pitchCostSar,
-      dto.max_players,
+      capacity,
     );
     // Underfill protection: minimum total players (host included) needed for
     // the match to be played. Always even, max−2 by product rule
     // (5v5→8, 7v7→12, 11v11→20), floored at 2. Server-authoritative —
-    // the client never sets it.
-    const minPlayers = MatchesService.minPlayersFor(dto.max_players);
+    // the client never sets it. Computed from the DERIVED capacity.
+    const minPlayers = MatchesService.minPlayersFor(capacity);
 
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
@@ -1283,7 +1351,7 @@ export class MatchesService {
           duration_mins: dto.duration_mins,
           price_per_player: pricePerPlayer.toString(),
           pitch_cost_sar: pitchCostSar.toString(),
-          max_players: dto.max_players,
+          max_players: capacity,
           min_players: minPlayers,
           status: 'Open',
           visibility,
@@ -1653,6 +1721,8 @@ export class MatchesService {
    * Complete a match: InProgress → Completed. Only the host may transition.
    */
   async completeMatch(userId: string, matchId: string) {
+    // P1-17: ex-queued players collected in-tx for the post-commit push.
+    let queueUserIds: string[] = [];
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -1696,10 +1766,38 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'Completed', completed_at: new Date() }))
         .where(eq(matches.id, matchId));
+
+      // P1-17: a completed match can never seat its queue — clear it and
+      // remember who was waiting for the post-commit notification.
+      queueUserIds = (
+        await tx
+          .select({ user_id: schema.match_waitlist.user_id })
+          .from(schema.match_waitlist)
+          .where(eq(schema.match_waitlist.match_id, matchId))
+      ).map((r) => r.user_id);
+      if (queueUserIds.length > 0) {
+        await tx
+          .delete(schema.match_waitlist)
+          .where(eq(schema.match_waitlist.match_id, matchId));
+      }
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
     const updatedMatch = await this.findOne(matchId);
+
+    // P1-17: tell ex-queued players the game ended without them (localized).
+    if (queueUserIds.length > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers(queueUserIds, {
+          key: 'waitlist_closed', // P2-8: text localized per subscriber
+          vars: { title: updatedMatch.title },
+          data: { type: 'match-cancelled', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`waitlist_closed push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+
     try {
       this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
     } catch (err) {
@@ -1714,6 +1812,8 @@ export class MatchesService {
    */
   async cancelMatch(userId: string, matchId: string) {
     let refundedSar = 0;
+    // P1-17: ex-queued players collected in-tx for the post-commit push.
+    let queueUserIds: string[] = [];
     await this.db.transaction(async (tx) => {
       // FOR UPDATE row lock — serializes against rescheduleMatch, which moves
       // booking_slot_id between this read and the release below. Without the
@@ -1756,6 +1856,20 @@ export class MatchesService {
         .update(matches)
         .set(withTimestamp({ status: 'Cancelled' }))
         .where(eq(matches.id, matchId));
+
+      // P1-17: a cancelled match can never seat its queue — clear it and
+      // notify the waiters after commit.
+      queueUserIds = (
+        await tx
+          .select({ user_id: schema.match_waitlist.user_id })
+          .from(schema.match_waitlist)
+          .where(eq(schema.match_waitlist.match_id, matchId))
+      ).map((r) => r.user_id);
+      if (queueUserIds.length > 0) {
+        await tx
+          .delete(schema.match_waitlist)
+          .where(eq(schema.match_waitlist.match_id, matchId));
+      }
 
       // Release slot + refund (koralink mode)
       if (match.booking_mode === 'koralink' && match.booking_slot_id) {
@@ -1809,6 +1923,20 @@ export class MatchesService {
       this.logger.error(`WS broadcast error on cancelMatch: ${(err as Error).message}`);
     }
     this.logger.log(`match_cancelled matchId=${matchId} refundSar=${refundedSar}`, MatchesService.name);
+
+    // P1-17: tell ex-queued players the match was cancelled (localized).
+    if (queueUserIds.length > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers(queueUserIds, {
+          key: 'waitlist_closed', // P2-8: text localized per subscriber
+          vars: { title: updatedMatch.title },
+          data: { type: 'match-cancelled', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`waitlist_closed push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+
     return updatedMatch;
   }
 
@@ -2262,6 +2390,10 @@ export class MatchesService {
       );
     }
 
+    // P1-17: set inside the tx when a queue head was promoted into the freed
+    // spot — drives the post-commit notification.
+    let promoted: WaitlistPromotion | null = null;
+
     await this.db.transaction(async (tx) => {
       // Lock the match row FOR UPDATE (P2-49, run #37) — same lock order as
       // joinMatch/leaveMatch/cancelMatch (matches row first). Serializes the
@@ -2319,7 +2451,15 @@ export class MatchesService {
           .set(withTimestamp({ status: 'Open' }))
           .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
+
+      // P1-17 waitlist: freed spot goes to the queue head atomically.
+      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
     });
+
+    // P1-17: bell + WS for the promoted player (after commit).
+    if (promoted) {
+      await this.waitlist.notifyPromotion(promoted, matchId);
+    }
 
     const updatedMatch = await this.findOne(matchId);
     try {

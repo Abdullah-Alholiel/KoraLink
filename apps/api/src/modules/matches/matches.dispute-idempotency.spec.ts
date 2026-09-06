@@ -82,6 +82,7 @@ describe('MatchesService.createDispute idempotency', () => {
       activitiesService as never,
       { getNumber: async () => 0 } as never,
       realtime as never,
+      { promoteNextInTx: async () => null } as never
     );
     return { service, db, realtime };
   }

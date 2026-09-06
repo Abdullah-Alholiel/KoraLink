@@ -111,6 +111,7 @@ describe('MatchesService.removePlayer', () => {
       activitiesService as never,
       settings as never,
       realtime as never,
+      { promoteNextInTx: async () => null } as never
     );
     return { svc, recorded, pushes };
   }

@@ -41,6 +41,8 @@ export type ActivityVerb =
   | 'report_resolved'
   // ── Host scheduling ──
   | 'match_rescheduled'
+  // ── Waitlist (P1-17) ──
+  | 'waitlist_promoted'
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   | 'venue_ownership_added'
   | 'venue_ownership_removed';
@@ -63,6 +65,7 @@ const DIRECTED_VERBS = [
   'match_auto_cancelled',
   'report_resolved',
   'match_rescheduled',
+  'waitlist_promoted',
 ] as const;
 
 /** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */

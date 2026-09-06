@@ -100,6 +100,7 @@ describe('MatchesService chat access control (P0-1)', () => {
       {} as never, // activitiesService
       {} as never, // settings (PlatformSettingsService)
       {} as never, // realtime
+      { promoteNextInTx: async () => null } as never
     );
   }
 

@@ -58,6 +58,7 @@ describe('MatchesService.getCalendarMatch access control (P2-22)', () => {
       {} as never,
       {} as never,
       {} as never,
+      { promoteNextInTx: async () => null } as never
     );
     return { svc, membershipQueried };
   }

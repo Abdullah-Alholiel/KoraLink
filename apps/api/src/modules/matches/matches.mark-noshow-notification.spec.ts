@@ -81,6 +81,7 @@ describe('MatchesService.markNoShow notification accuracy', () => {
       activitiesService as never,
       settings as never,
       realtime as never,
+      { promoteNextInTx: async () => null } as never
     );
     return { svc, recorded };
   }

@@ -136,6 +136,7 @@ describe('MatchesService.rescheduleMatch', () => {
       activitiesService as never,
       {} as never, // settings
       {} as never, // realtime
+      { promoteNextInTx: async () => null } as never
     );
   }
 
