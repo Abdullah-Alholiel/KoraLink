@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, lt } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
 import * as Sentry from '@sentry/node';
@@ -49,6 +49,14 @@ export interface PushSubscriptionDto {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+
+  /**
+   * P2-43 (run #37): a subscription untouched (no re-subscribe bump) for this
+   * many days is considered a dead device and swept nightly. 90d mirrors the
+   * board item's proposal and comfortably exceeds browser push-key rotation
+   * cadences (~weeks) for ACTIVE devices.
+   */
+  static readonly STALE_SUBSCRIPTION_DAYS = 90;
   private vapidConfigured = false;
   // P0-8 (run #26): the push-host allowlist is the default set + any
   // operator-supplied overrides via ADMIN_PUSH_HOST_ALLOWLIST (comma-separated).
@@ -131,6 +139,37 @@ export class NotificationsService {
       );
 
     return { unsubscribed: true };
+  }
+
+  /**
+   * P2-43 (run #37): sweep subscriptions whose device has been silent for
+   * STALE_SUBSCRIPTION_DAYS. `updated_at` is bumped on every re-subscribe
+   * (the PWA re-subscribes when the push key rotates), so a subscription
+   * untouched for 90 days belongs to a device that is gone: uninstalled,
+   * reset, or permission revoked WITHOUT the browser delivering a 404/410 to
+   * our per-send prune (notifications.service.ts send path). Those rows
+   * otherwise accumulate forever — every send fans out to dead endpoints
+   * (latency + wasted web-push quota + Map/driver churn).
+   *
+   * Complements, never replaces, the per-send 404/410 prune: that path needs
+   * the push service to TELL us; this one catches silent deaths.
+   *
+   * Returns the number of rows deleted (0 = nothing stale).
+   */
+  async sweepStaleSubscriptions(): Promise<number> {
+    const staleCutoff = new Date(Date.now() - NotificationsService.STALE_SUBSCRIPTION_DAYS * 24 * 60 * 60 * 1000);
+
+    const deleted = await this.db
+      .delete(push_subscriptions)
+      .where(lt(push_subscriptions.updated_at, staleCutoff))
+      .returning({ id: push_subscriptions.id });
+
+    if (deleted.length > 0) {
+      this.logger.log(
+        `P2-43 stale-subscription sweep: removed ${deleted.length} subscription(s) untouched for ${NotificationsService.STALE_SUBSCRIPTION_DAYS}d`,
+      );
+    }
+    return deleted.length;
   }
 
   /**
