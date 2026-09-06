@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
-import NextImage from 'next/image';
 import DatePicker from '@/components/matches/DatePicker';
-import NotificationBell from '@/components/layout/NotificationBell';
+import AppBar from '@/components/layout/AppBar';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import { useMatches } from '@/hooks/useMatches';
@@ -78,22 +77,9 @@ export default function PlayPage() {
                 Sticks as ONE unit from scroll position zero — the app bar never
                 scrolls away, so no empty gap is left behind. ── */}
             <div className={stickyGroupClass}>
-                <div className="flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-2">
-                    <div className="flex items-center gap-2">
-                        <NextImage
-                            src="/icons/icon-192x192.png"
-                            alt=""
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full"
-                        />
-                        <span className="text-lg font-bold text-brand-black tracking-tight">
-                            {t('app.title')}
-                        </span>
-                    </div>
-                    {/* P2-34 (run #22): bell reachable from every tab */}
-                    <NotificationBell />
-                </div>
+                {/* Standard app header — shared AppBar (Abdullah, 2026-09-06:
+                    one header across screens; bells live on the Feed only) */}
+                <AppBar />
 
                 {/* Search bar + labeled Host pill (Abdullah, 2026-09-03:
                     "+ Host a Match" text next to search for easy visual) */}

@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
-import NotificationBell from '@/components/layout/NotificationBell';
 import { uuid } from '@/lib/uuid';
 import BottomSheet from '@/components/layout/BottomSheet';
 import type { Transaction } from '@/types';
@@ -144,11 +143,9 @@ export default function WalletPage() {
                     >
                         <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
                     </button>
-                    <h1 className="text-lg font-bold text-brand-black flex-1 text-center pe-10">
+                    <h1 className="text-lg font-bold text-brand-black flex-1 text-center">
                         {t('wallet.title')}
                     </h1>
-                    {/* P2-34 (run #22): bell reachable from every tab */}
-                    <NotificationBell />
                 </div>
             </div>
 

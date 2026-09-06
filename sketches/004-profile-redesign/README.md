@@ -39,3 +39,16 @@ all P0/P1/P2 logic (PDPL sheets, install hint, prefs, wallet error affordance),
 `FlatSectionLabel` shared component, EmailSection de-carded, section labels i18n
 (`profile.sectionPlaying/Preferences/Account`, EN+AR), tests in
 `test/components/ProfilePage.test.tsx` (24/24 green incl. pre-existing sheet suites).
+
+## Follow-up (2026-09-06, same evening): system standardisation
+Abdullah: "make profile screen header same as play screen header… standardise, not to
+feel various headers in different screens; no notification bells on other screens (feed
+has one); tailor personal information screen same to profile screen."
+- `components/layout/AppBar.tsx` — THE standard header (Play anatomy), used by Play + both heroes
+- `components/profile/GlassStats.tsx` — shared glass stats bar (Profile + Personal Info)
+- Bell policy reversed (was P2-34 "bell on every tab"): Feed ONLY; stripped from play/
+  my-games/wallet/clubs (+ profile hero's decorative bell)
+- Personal Info rebuilt on the Stadium Night system (hero + chip + GlassStats), edit
+  flow untouched; new i18n key `profile.sectionDetails` (EN+AR)
+- Gates: 18/18 tests (7 profile + 3 personal-info + 8 sheet/bell/email), build exit 0,
+  live-verified 6 screens × EN+AR on :3000 — exactly 1 bell per locale (feed).

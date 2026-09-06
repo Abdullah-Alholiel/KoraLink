@@ -3,24 +3,28 @@
 /**
  * Personal Information — view + edit the account profile.
  *
- * DESIGN (2026-09-06, Abdullah: "less AI slop, minimal"): typography-led,
- * matching the redesigned host onboarding. No gradient banners, no icon
- * chips, no pill badges, no shadow cards — flat identity block, a
- * hairline-divided stats row, an editorial detail list, and underline-style
- * edit fields. The phone row stays visible (read-only) in edit mode: it is
- * the OTP identity and is not editable here.
- *
- * Edit affordances: "Edit" in the header becomes Cancel / Save (text
- * buttons — typographic, not icon circles).
+ * DESIGN (2026-09-06, r2 — Abdullah: "tailor personal information screen
+ * design system and style same to profile screen"): now wears the Stadium
+ * Night system from sketches/004 — standard white pinned header (back +
+ * title + edit/save), the brand-green profile-hero gradient with the
+ * identity block (avatar ring, name, handle, skill chip), and the SHARED
+ * GlassStats bar (components/profile/GlassStats.tsx) so the stats read
+ * pixel-identical to the Profile screen. Detail/edit sections stay flat:
+ * hairline rows and underline-style fields (no boxes, no shadow cards).
+ * The phone row stays visible (read-only) in edit mode: it is the OTP
+ * identity and is not editable here.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, ChevronDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Loader2, Camera } from 'lucide-react';
 import { useUserProfile, useUserStats, useUpdateProfile } from '@/hooks/useUser';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import { useAppStore as useStore } from '@/store/useAppStore';
+import AppBar from '@/components/layout/AppBar';
+import GlassStats from '@/components/profile/GlassStats';
+import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 
 const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced'] as const;
 const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'] as const;
@@ -79,19 +83,20 @@ export default function PersonalInfoPage() {
   const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
   const phone = apiUser?.phone ?? storeUser?.phone ?? '-';
   const pomCount = apiUser?.pom_count ?? 0;
+  const avatarInitial = displayName.charAt(0).toUpperCase();
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 bg-brand-bg sticky top-0 z-10">
+      {/* Header — standard pinned white bar (Play-screen shadow language) */}
+      <div className="sticky top-0 z-40 flex items-center bg-white px-4 pt-[var(--top-safe-inset)] pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100">
         <button
           onClick={() => (editing ? setEditing(false) : router.back())}
-          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
+          className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-50"
           aria-label={t('common.back')}
         >
-          <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
+          <ArrowLeft className="h-5 w-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
         </button>
-        <h1 className="text-base font-bold text-brand-black absolute start-1/2 -translate-x-1/2 rtl:translate-x-1/2">
+        <h1 className="absolute start-1/2 -translate-x-1/2 rtl:translate-x-1/2 text-base font-bold text-brand-black">
           {t('profile.personalInfo')}
         </h1>
         {!editing ? (
@@ -123,13 +128,13 @@ export default function PersonalInfoPage() {
       {/* Loading */}
       {isLoading && (
         <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 text-brand-green animate-spin" strokeWidth={2} />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-green" strokeWidth={2} />
         </div>
       )}
 
       {/* Error */}
       {error && !isLoading && (
-        <div className="flex flex-col items-center py-20 px-8">
+        <div className="flex flex-col items-center px-8 py-20">
           <p className="text-sm text-gray-400">{t('common.error')}</p>
           <button
             onClick={() => refetch()}
@@ -143,46 +148,63 @@ export default function PersonalInfoPage() {
       {/* ── Populated ── */}
       {!isLoading && !error && (
         <div className="pb-32">
-          {/* ─── Identity — flat, typographic ─── */}
-          <div className="flex flex-col items-center pt-6 pb-7">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden ring-1 ring-gray-200">
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-2xl font-bold text-gray-400">
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-            <h2 className="mt-4 text-[22px] font-bold leading-tight text-brand-black">
-              {displayName}
-            </h2>
-            <p className="mt-0.5 text-sm text-gray-400" dir="ltr">@{displayHandle}</p>
-            {!editing && displaySkill && displaySkill !== '-' && (
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-brand-green" data-testid="skill-line">
-                {displaySkill}
-              </p>
-            )}
-          </div>
+          {/* ─── Identity hero — Stadium Night system (same as Profile) ─── */}
+          <div className="relative overflow-hidden bg-profile-hero text-white">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(340px 260px at 85% -40px, rgba(255,255,255,0.10), transparent 70%), radial-gradient(280px 220px at 8% 30%, rgba(255,255,255,0.06), transparent 70%)',
+              }}
+            />
+            <div className="relative px-6 pb-7">
+              <AppBar light />
 
-          {/* ─── Stats — hairline-divided flat row ─── */}
-          <div className="mx-6 grid grid-cols-3 divide-x divide-gray-100 border-y border-gray-100 py-4 rtl:divide-x-reverse" data-testid="stats-row">
-            {[
-              { value: stats?.games_played ?? 0, label: t('profile.gamesPlayed') },
-              { value: pomCount, label: t('profile.pomCount') },
-              { value: stats?.karma_score ?? 0, label: t('profile.karma') },
-            ].map((stat) => (
-              <div key={stat.label} className="px-2 text-center">
-                <p className="text-xl font-extrabold text-brand-black tabular-nums" dir="ltr">
-                  {stat.value}
-                </p>
-                <p className="mt-0.5 text-[10px] text-gray-400">{stat.label}</p>
+              <div className="mt-4 flex flex-col items-center">
+                <div className="relative">
+                  <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-full border-2 border-white/40 bg-brand-green-deep/60">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-3xl font-bold text-white/90">{avatarInitial}</span>
+                    )}
+                  </div>
+                  {!editing && (
+                    <button
+                      onClick={startEdit}
+                      className="absolute bottom-0 end-0 flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md active:scale-95 transition-transform"
+                      aria-label={t('common.edit')}
+                    >
+                      <Camera className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+                <h2 className="mt-3 truncate text-[21px] font-bold leading-tight">{displayName}</h2>
+                <p className="mt-0.5 text-[13px] text-white/60" dir="ltr">@{displayHandle}</p>
+                {!editing && displaySkill && displaySkill !== '-' && (
+                  <span
+                    className="mt-2.5 inline-block rounded-full bg-white px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-brand-green"
+                    data-testid="skill-line"
+                  >
+                    {displaySkill}
+                  </span>
+                )}
               </div>
-            ))}
+
+              {/* Shared glass stats — identical component to the Profile screen */}
+              <div className="mt-6" data-testid="stats-row">
+                <GlassStats
+                  games={stats?.games_played ?? 0}
+                  potm={pomCount}
+                  karma={stats?.karma_score ?? 0}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* ─── Details / Edit form ─── */}
+          {/* ─── Details / Edit form — flat, hairline language ─── */}
           {!editing ? (
             <dl className="mx-6 mt-2">
               <DetailRow label={t('profile.phoneNumber')} value={phone} ltr />
@@ -191,6 +213,7 @@ export default function PersonalInfoPage() {
             </dl>
           ) : (
             <div className="mx-6 mt-2">
+              <FlatSectionLabel label={t('profile.sectionDetails')} />
               <p className="py-3.5 text-sm font-semibold text-brand-black" dir="ltr">
                 <span className="me-3 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 rtl:me-0 rtl:ms-3">
                   {t('profile.phoneNumber')}

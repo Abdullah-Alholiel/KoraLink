@@ -39,6 +39,7 @@ import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
 import RestoreAccountBanner from '@/components/profile/RestoreAccountBanner';
 import EmailSection from '@/components/profile/EmailSection';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
+import AppBar from '@/components/layout/AppBar';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -235,19 +236,10 @@ export default function ProfilePage() {
                             'radial-gradient(340px 260px at 85% -40px, rgba(255,255,255,0.10), transparent 70%), radial-gradient(280px 220px at 8% 30%, rgba(255,255,255,0.06), transparent 70%)',
                     }}
                 />
-                <div className="relative px-6 pt-[calc(var(--top-safe-inset)+14px)] pb-7">
-                    {/* Brandmark row — mirrors the Play screen app bar */}
-                    <div className="flex items-center justify-between">
-                        <span className="text-[15px] font-bold tracking-wide">
-                            {t('play.title')}
-                        </span>
-                        <span
-                            className="pointer-events-none flex h-9 w-9 items-center justify-center rounded-full bg-white/10"
-                            aria-hidden
-                        >
-                            <Bell className="h-4 w-4 text-white/90" strokeWidth={1.5} />
-                        </span>
-                    </div>
+                <div className="relative px-6 pt-3 pb-7">
+                    {/* Standard app header on the green hero — same AppBar as Play
+                        (Abdullah: standardise headers; no bells outside the Feed) */}
+                    <AppBar light />
 
                     {/* Identity row: avatar + name + white edit pill */}
                     <div className="mt-6 flex items-center gap-4">

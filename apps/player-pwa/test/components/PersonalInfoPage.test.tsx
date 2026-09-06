@@ -1,0 +1,91 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '@/messages/en.json';
+import PersonalInfoPage from '@/app/[locale]/(main)/personal-info/page';
+import {
+    useUserProfile,
+    useUserStats,
+    useUpdateProfile,
+} from '@/hooks/useUser';
+
+// sketches/004 follow-up (2026-09-06): Personal Info now wears the Stadium
+// Night system — standard AppBar, green profile-hero, SHARED GlassStats
+// (Abdullah: "tailor personal information screen… same to profile screen").
+
+vi.mock('next/navigation', () => ({
+    useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useUser', async () => {
+    const actual = await vi.importActual<typeof import('@/hooks/useUser')>('@/hooks/useUser');
+    return {
+        ...actual,
+        useUserProfile: vi.fn(),
+        useUserStats: vi.fn(),
+        useUpdateProfile: vi.fn(),
+    };
+});
+
+const { useAppStore } = await import('@/store/useAppStore');
+
+function mockData() {
+    vi.mocked(useUserProfile).mockReturnValue({
+        data: {
+            full_name: 'Ahmed Al-Rashid',
+            handle: 'ahmed.rashid',
+            phone: '+966500000001',
+            skill_level: 'Advanced',
+            avatar_url: null,
+            pom_count: 3,
+            preferred_position: 'Midfielder',
+            preferred_location: 'Riyadh',
+        },
+    } as never);
+    vi.mocked(useUserStats).mockReturnValue({
+        data: { games_played: 12, karma_score: 10 },
+    } as never);
+    vi.mocked(useUpdateProfile).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
+}
+
+function renderPage() {
+    return render(
+        <NextIntlClientProvider messages={enMessages} locale="en">
+            <PersonalInfoPage />
+        </NextIntlClientProvider>,
+    );
+}
+
+describe('PersonalInfoPage — Stadium Night system (sketches/004 follow-up)', () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+        useAppStore.setState({ user: null } as never);
+    });
+
+    it('renders the green hero with the standard AppBar (same header as Play/Profile)', () => {
+        mockData();
+        renderPage();
+        expect(document.querySelector('.bg-profile-hero')).not.toBeNull();
+        expect(screen.getByText('KoraLink')).toBeInTheDocument();
+        expect(screen.getByText('Ahmed Al-Rashid')).toBeInTheDocument();
+    });
+
+    it('renders the SHARED GlassStats bar (pixel-identical to Profile) with real values', () => {
+        mockData();
+        renderPage();
+        const row = screen.getByTestId('stats-row');
+        expect(row.querySelector('.backdrop-blur-md')).not.toBeNull();
+        expect(row.textContent).toContain('12');
+        expect(row.textContent).toContain('3');
+        expect(row.textContent).toContain('10');
+    });
+
+    it('shows the skill as a white chip and keeps flat hairline detail rows', () => {
+        mockData();
+        renderPage();
+        expect(screen.getByTestId('skill-line').textContent).toBe('Advanced');
+        expect(screen.getByText('+966500000001')).toBeInTheDocument();
+        // no card chrome — flat system
+        expect(document.querySelector('.shadow-card')).toBeNull();
+    });
+});

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Search, MapPin, Users, WifiOff } from 'lucide-react';
-import NotificationBell from '@/components/layout/NotificationBell';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useVenues } from '@/hooks/useVenues';
 import { useLocation } from '@/providers/LocationProvider';
@@ -78,8 +77,6 @@ export default function ClubsPage() {
                 {/* P2-13 (run #17): decorative MapPin button removed — it had no
                     onClick/href (dead UI); the page already uses device coords
                     automatically when location permission is granted. */}
-                {/* P2-34 (run #22): bell reachable from every tab */}
-                <NotificationBell />
             </div>
 
             {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
