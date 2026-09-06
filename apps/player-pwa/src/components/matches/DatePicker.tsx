@@ -20,7 +20,10 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { riyadhDateKey } from '@/lib/venue-hours';
 
-interface DatePickerProps {
+/** Run #38 (reviewer note): `date` is a UTC-midnight anchor for the Riyadh
+ * calendar day. Format/compare it with timeZone:'UTC' (or via riyadhDateKey)
+ * — local-timezone reads can shift it a day for viewers outside Riyadh. */
+export interface DatePickerProps {
     onDateSelect?: (date: Date) => void;
     /** Fire onDateSelect on mount with today's date. Default true (needed by Play page). */
     fireOnMount?: boolean;

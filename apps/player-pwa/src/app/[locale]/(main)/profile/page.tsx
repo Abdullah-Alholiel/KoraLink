@@ -33,6 +33,7 @@ import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAc
 import { useWalletBalance } from '@/hooks/useWallet';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
 import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
@@ -680,7 +681,7 @@ export default function ProfilePage() {
                     setDeleteSheetOpen(false);
                 }}
                 isPending={softDelete.isPending}
-                errorMessage={deleteError ?? (softDelete.error?.message ?? null)}
+                errorMessage={deleteError ?? (softDelete.error ? t(errorKey(classifyError(softDelete.error))) : null)}
                 // Scheduled-purge date: now() + 30 days. We compute it
                 // here so the warning shows the EXACT date the user is
                 // agreeing to, before the API call lands.
