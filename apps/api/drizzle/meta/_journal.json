@@ -253,6 +253,13 @@
       "when": 1788730125000,
       "tag": "0035_drop_skill_level",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788747885743,
+      "tag": "0036_venue_geo_gist_index",
+      "breakpoints": true
     }
   ]
 }
