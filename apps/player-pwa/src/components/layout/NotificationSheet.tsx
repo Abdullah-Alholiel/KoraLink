@@ -237,7 +237,10 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-brand-black leading-snug">
                         {t(VERB_LABEL[item.verb], {
-                          name: item.actor.name,
+                          // System actors (purge sweep, moderation) can carry a
+                          // null actor — fall back to the app name instead of
+                          // crashing the row (Reviewer A minor, run #40).
+                          name: item.actor?.name ?? 'KoraLink',
                           title: item.match?.title ?? '',
                         })}
                       </p>

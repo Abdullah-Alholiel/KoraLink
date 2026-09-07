@@ -58,9 +58,13 @@ export default function DatePicker({
     const locale = useLocale();
     const [selectedIndex, setSelectedIndex] = useState(0);
 
+    // Riyadh-day anchor read per render and INCLUDED in the memo deps: a
+    // long-lived strip re-anchors itself at Riyadh midnight instead of
+    // freezing on a stale "TODAY" (Reviewer A minor, run #40).
+    const todayKey = riyadhDateKey();
     const dates = useMemo(() => {
         // Riyadh-day anchor: UTC midnight of the Riyadh calendar day.
-        const base = new Date(`${riyadhDateKey()}T00:00:00Z`);
+        const base = new Date(`${todayKey}T00:00:00Z`);
         return Array.from({ length: Math.max(1, days) }, (_, i) => {
             const d = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
             const isToday = i === 0;
@@ -81,7 +85,7 @@ export default function DatePicker({
                 }),
             };
         });
-    }, [locale, t, days]);
+    }, [locale, t, days, todayKey]);
 
     // Fire initial onDateSelect on mount so the parent filters by today.
     useEffect(() => {
