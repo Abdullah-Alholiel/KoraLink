@@ -239,6 +239,20 @@
       "when": 1788623897199,
       "tag": "0033_user_email_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788708023000,
+      "tag": "0034_waitlist_capacity_standard",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788730125000,
+      "tag": "0035_drop_skill_level",
+      "breakpoints": true
     }
   ]
 }
