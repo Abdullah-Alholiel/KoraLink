@@ -6,7 +6,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -852,6 +852,8 @@ export class PartnerService {
       status?: string;
       venueId?: string;
       pitchId?: string;
+      sortBy?: string;
+      dir?: 'asc' | 'desc';
       limit: number;
       offset: number;
     },
@@ -927,7 +929,11 @@ export class PartnerService {
         venues.name,
         users.full_name,
       )
-      .orderBy(matches.scheduled_at)
+      .orderBy(
+        ...(q.sortBy === 'scheduled_at'
+          ? [q.dir === 'desc' ? desc(matches.scheduled_at) : asc(matches.scheduled_at)]
+          : [matches.scheduled_at]),
+      )
       .limit(q.limit)
       .offset(q.offset);
 

@@ -1,12 +1,23 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListSettlementsDto {
   @ApiPropertyOptional({ enum: ['pending', 'paid', 'failed'] })
   @IsOptional()
   @IsIn(['pending', 'paid', 'failed'])
   status?: 'pending' | 'paid' | 'failed';
+
+  @ApiPropertyOptional({ description: 'Sort key (whitelist enforced server-side; unknown → default order)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  dir?: 'asc' | 'desc';
 
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)

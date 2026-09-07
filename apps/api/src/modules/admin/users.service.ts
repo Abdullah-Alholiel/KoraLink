@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SQL, and, desc, eq, sql } from 'drizzle-orm';
+import { SQL, and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
@@ -91,7 +91,19 @@ export class AdminUsersService {
     const where = this.buildWhere(dto);
 
     const [rows, totalRows] = await Promise.all([
-      this.db.select(userColumns).from(users).where(where).orderBy(desc(users.created_at)).limit(perPage).offset((page - 1) * perPage),
+      this.db
+        .select(userColumns)
+        .from(users)
+        .where(where)
+        .orderBy(
+          ...(dto.sortBy === 'wallet_balance'
+            ? [dto.dir === 'asc' ? asc(users.wallet_balance) : desc(users.wallet_balance)]
+            : dto.sortBy === 'full_name'
+              ? [dto.dir === 'desc' ? desc(users.full_name) : asc(users.full_name)]
+              : [dto.dir === 'asc' ? asc(users.created_at) : desc(users.created_at)]),
+        )
+        .limit(perPage)
+        .offset((page - 1) * perPage),
       this.db.select({ c: sql<number>`count(*)::int` }).from(users).where(where),
     ]);
 

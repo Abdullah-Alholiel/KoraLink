@@ -55,4 +55,17 @@ export class GetPartnerMatchesDto {
   @IsInt()
   @Min(0)
   offset?: number;
+
+  @ApiPropertyOptional({
+    description: 'Sort key (whitelist enforced server-side; unknown → default order)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  sortBy?: string;
+
+  @ApiPropertyOptional({ description: 'Sort direction (default asc = soonest first)', enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  dir?: 'asc' | 'desc';
 }

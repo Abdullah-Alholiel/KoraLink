@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListMatchesDto {
@@ -22,4 +22,15 @@ export class ListMatchesDto {
   @IsOptional()
   @IsEnum(['Open', 'Full', 'InProgress', 'Completed', 'Cancelled'])
   status?: 'Open' | 'Full' | 'InProgress' | 'Completed' | 'Cancelled';
+
+  @ApiPropertyOptional({ description: 'Sort key (whitelist enforced server-side; unknown → default order)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  dir?: 'asc' | 'desc';
 }

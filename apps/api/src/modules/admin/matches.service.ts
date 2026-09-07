@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { whitelistedOrderBy } from '../../common/utils/sort';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { UpdateMatchAdminDto } from './dto/update-match-admin.dto';
 import { AuditService } from './audit.service';
@@ -45,7 +46,13 @@ export class AdminMatchesService {
       LEFT JOIN match_players mp ON mp.match_id = m.id
       ${where}
       GROUP BY m.id, p.id, v.id, host.id
-      ORDER BY m.scheduled_at DESC
+      ORDER BY ${whitelistedOrderBy(
+        dto.sortBy,
+        dto.dir,
+        { scheduled_at: sql`m.scheduled_at`, price_per_player: sql`m.price_per_player` },
+        sql`m.scheduled_at`,
+        'desc',
+      )}
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 

@@ -8,6 +8,7 @@ import { SQL, and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { settlements } from '../../database/schema';
+import { whitelistedOrderBy } from '../../common/utils/sort';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -39,7 +40,13 @@ export class AdminSettlementsService {
       FROM settlements s
       INNER JOIN venues v ON v.id = s.venue_id
       ${where}
-      ORDER BY s.created_at DESC
+      ORDER BY ${whitelistedOrderBy(
+        dto.sortBy,
+        dto.dir,
+        { created_at: sql`s.created_at`, amount: sql`s.amount` },
+        sql`s.created_at`,
+        'desc',
+      )}
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 

@@ -146,6 +146,8 @@ export class PartnerController {
       status: q.status,
       venueId: q.venueId,
       pitchId: q.pitchId,
+      sortBy: q.sortBy,
+      dir: q.dir,
       limit: q.limit ?? 50,
       offset: q.offset ?? 0,
     });

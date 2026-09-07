@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import * as schema from '../../database/schema';
 import { transactions, users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { whitelistedOrderBy } from '../../common/utils/sort';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
@@ -33,6 +34,13 @@ export class AdminTransactionsService {
     if (dto.status) conds.push(sql`t.status = ${dto.status}`);
     if (dto.type) conds.push(sql`t.type = ${dto.type}`);
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
+    const orderBy = whitelistedOrderBy(
+      dto.sortBy,
+      dto.dir,
+      { created_at: sql`t.created_at`, amount: sql`t.amount` },
+      sql`t.created_at`,
+      'desc',
+    );
 
     const rows = (await this.db.execute(sql`
       SELECT
@@ -42,7 +50,7 @@ export class AdminTransactionsService {
       FROM transactions t
       INNER JOIN users u ON u.id = t.user_id
       ${where}
-      ORDER BY t.created_at DESC
+      ORDER BY ${orderBy}
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 
