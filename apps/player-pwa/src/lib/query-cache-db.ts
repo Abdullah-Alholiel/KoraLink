@@ -32,7 +32,17 @@ function openDb(): Promise<IDBDatabase> {
           db.createObjectStore(STORE_NAME);
         }
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        // Another tab asked for a schema bump → close THIS connection so the
+        // upgrade isn't blocked forever; the next idb call reopens on the new
+        // version. Without this, a future DB_VERSION bump hangs old tabs on
+        // `onblocked` (Reviewer A minor, run #40).
+        db.onversionchange = () => {
+          db.close();
+        };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'));
       request.onblocked = () => reject(new Error('IndexedDB open blocked'));
     });

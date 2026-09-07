@@ -122,6 +122,7 @@ export default function RescheduleSheet({
                 </p>
                 <div className="-mx-1">
                     <DatePicker
+                        days={7}
                         selectedDate={
                             slotDate ? new Date(`${slotDate}T00:00:00`) : null
                         }

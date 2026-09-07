@@ -116,13 +116,13 @@ describe('RescheduleSheet — host reschedule (P1-13, cross-day run #21)', () =>
     } as never);
     renderSheet();
 
-    // Day strip renders the 30-day window; tap the second chip (today+1).
+    // Day strip renders the 7-day window (P1-13 spec); tap the second chip (today+1).
     const strip = screen
       .getByText('Pick a day')
       .closest('div')!
       .parentElement!.querySelector('.scroll-container') as HTMLElement;
     const chips = within(strip).getAllByRole('button');
-    expect(chips).toHaveLength(30);
+    expect(chips).toHaveLength(7);
     await user.click(chips[1]);
     expect(lastQueriedDate()).toBe(isoDaysFromNow(1));
   });
