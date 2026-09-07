@@ -1,44 +1,44 @@
 # Graph Report - koralink  (2026-09-07)
 
 ## Corpus Check
-- 995 files · ~869,931 words
+- 1002 files · ~873,746 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6659 nodes · 10094 edges · 495 communities (402 shown, 93 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 355 edges (avg confidence: 0.78)
+- 6690 nodes · 10151 edges · 506 communities (413 shown, 93 thin omitted)
+- Extraction: 96% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 355 edges (avg confidence: 0.78)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `13835a77`
+- Built from commit: `10bb2ae5`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - Database Schema and Migrations
 - UsersController
-- MatchWaitlistService
+- MatchWaitlistController
 - HermesKanban
 - captureError
 - Slice 1 — P0-C1 Restore-Flow Auth Fix
 - HostOnboarding.tsx
-- admin/pitches.service.ts
-- NotificationsService
+- CreateSlotDto
+- admin/matches.service.ts
 - useAppStore
 - Gate 3 — Program Design: Profiles & Spots Remediation
 - iOS Native & Scalability — Gate 2 Architecture (Path C: HTTPS + PWA Hardening)
-- ConversationsService
+- ConversationsController
 - Gate 2 — Architecture
 - admin/venues.service.ts
 - Gate 3 — Program Design (contracts)
 - KoraLink API Standards
 - disputes.controller.ts
-- BottomSheet.tsx
+- index.ts
 - Gate 3 — Program Design (CONTRACTS): shots.so-style install landing + PWA activation
 - Error Message Standards — Gate 0 Retrospective
 - admin.module.ts
 - GetVenuesDto
-- useAuth.ts
+- fetcher.ts
 - use-live-data.ts
 - schema.ts
 - CurrentUser
@@ -47,8 +47,8 @@
 - match/[id]/page.tsx
 - types.ts
 - partner.controller.ts
-- PlayerProfileSheet.tsx
-- transactions.service.ts
+- FetchError
+- users
 - RealtimeService
 - useLiveAdminData
 - Cycle run23 — Gates 1–3 (single compact doc)
@@ -75,15 +75,15 @@
 - KoraLink Review Workflow
 - Gates 1–3 (compact) — Admin partner-portal scope (P1-6) + markNoShow 500 fix
 - Run #7 — Program Design: DM send idempotency (P1-11)
-- usePwaInstall.ts
-- FilterBar.tsx
-- [locale]/layout.tsx
+- player-pwa/src/providers/ObservabilityProvider.tsx
+- GetMatchesDto
+- useWallet.ts
 - Run #19 — Gate 0 Retrospective (15:16Z, Aug 30 2026)
 - Gate 2 — Architecture: Host Match Dual Mode
 - Cycle: private-match-access-control — Program Design (Gates 1-3 compact)
 - HIG Reference Lookup
 - overrides
-- GetMatchesDto
+- "matches"
 - api/.eslintrc.json
 - Factory Run #17 — 2026-08-29T21:19Z (off-schedule one-off, full budget)
 - venue-hours.ts
@@ -141,7 +141,7 @@
 - Verification Checklist
 - Gate 3 — Program Design
 - Implementation Plan (4 slices)
-- HIG: Feedback
+- Offering Help
 - Factory Run #13 — 2026-08-29T10:15Z
 - Factory Run #14 — 2026-08-29T15:15Z
 - Factory Run #15 — 2026-08-29T17:35Z (manual inter-run policy session, Abdullah-directed)
@@ -155,7 +155,7 @@
 - Factory Run #12 — 2026-08-29T01:15Z
 - compression
 - HealthController
-- UpdateMatchAdminDto
+- AdminMatchesController
 - VenueFormDrawer.tsx
 - @nestjs/common
 - Gate 1 — Product Spec
@@ -204,9 +204,9 @@
 - disputes/[id]/page.tsx
 - Run #36 — WS chat rate limiting (P1-42) — Program Design (Gates 1–3 compact)
 - Factory Run #20 — 2026-08-30T20:16Z
-- settlements.service.ts
+- AdminSettlementsController
 - 0007_rich_leader.sql
-- index.ts
+- play/page.tsx
 - Run #24 — Program Design (admin dispute replies, P2-2)
 - Run #21 — Gate 0 Retrospective (venue-level discovery, P1-28)
 - exclude
@@ -234,7 +234,7 @@
 - nest-cli.json
 - MatchesService.findNearby
 - LocationProvider.tsx
-- fetcher.ts
+- useMatches.ts
 - Factory Run #23 — 2026-08-31T20:15Z
 - Gate 0 — Retrospective: P1-4 Hot-FK Indexes
 - match-state-propagation-fix/00-status.md
@@ -306,11 +306,11 @@
 - admin/next.config.mjs
 - postcss.config.mjs
 - admin/tailwind.config.ts
-- conversations.controller.ts
+- AdminPitchesService
 - P0-6 PDPL — Cycle 00 Retrospective (Run #29, 2026-09-03)
 - KoraLink VPS Production-Readiness Assessment
 - ioredis
-- users/users.service.ts
+- UsersService
 - class-validator
 - drizzle-orm
 - @nestjs/bull
@@ -351,7 +351,7 @@
 - selectUser
 - withTimestamp
 - PitchesService.generateRecurringSlots
-- useVenues.ts
+- AdminVenuesController
 - Apple Touch Icon
 - Favicon 16×16
 - Favicon 32×32
@@ -399,14 +399,14 @@
 - Run #39 — Gate 0 Retrospective: Drizzle journal parity + P2-5 residual contracts
 - Run #28 — Push categories + install-triggered push (Program Design)
 - Factory Run #28 — 2026-09-03T01:18Z
-- ListReportsDto
+- admin/pitches.service.ts
 - KoraLink ↔ Multica Bridge
 - Factory Run #26 — 2026-09-02T11:10Z
 - (dashboard)/settings/page.tsx
 - Gate 0 — Retrospective: Why the Kanban Board Isn't Used (2026-08-31)
 - Gate Status — Multica Integration (2026-08-31)
 - Factory Run #27 — 2026-09-02T15:33Z
-- CreateMatchDto
+- TopupWalletDto
 - 001 — "Host a Match" + button redesign (design loop)
 - landing/shared/landing-enhance.js
 - hermes-harness-post.md
@@ -417,7 +417,7 @@
 - Factory Run #34 — 2026-09-05T11:40Z
 - UpdateProfileDto
 - Factory Run #29 — 2026-09-03T10:52Z
-- CreateReportDto
+- ApiOkResponse
 - Factory Run #39 — 2026-09-07T01:18Z (real UTC; cron slot 01:15)
 - JwtCookieAuthGuard
 - Run #28 — Push categories + install-triggered push enablement (Gate 0)
@@ -438,13 +438,13 @@
 - db-backup.sh
 - Factory Run #31 — 2026-09-04T02:15Z (RESUMED)
 - share.ts
-- attachCachePersistence
+- MatchesScheduler
 - Run #35 — Gate 0 retro: transactional email layer (P1-41)
-- CreateDisputeDto
+- .setEmail
 - AppGateway
 - Factory Run #36 — 2026-09-06T01:18Z
 - Run 37 — Gate 0 Retro (joinMatch row locks + WS limiter eviction)
-- ReportsService
+- GetPartnerMatchesDto
 - axios
 - Run #35 — Gate status
 - Run 37 — Program Design (compact Gates 1-3)
@@ -452,10 +452,20 @@
 - E2E Waitlist & Capacity Standardisation — Gate 0 Retro (2026-09-06)
 - 004 — Profile Screen Redesign (Impeccable-driven)
 - MemoryCache
-- usePwaInstall.test.tsx
+- GenerateSlotsDto
 - Status — Waitlist & Capacity Standardisation
-- .constructor
-- @socket.io/redis-adapter
+- MailerService
+- Run #40 — Program Design (Gates 1–3 compact) + Status
+- Factory Run #40 — 2026-09-07T10:19Z
+- VerifyOtpDto
+- SubmitVerificationDto
+- .getPublicProfile
+- PromoBillboard.tsx
+- WalletHistoryDto
+- .getHistory
+- HIG: Feedback
+- disputes.service.spec.ts
+- class-transformer
 
 ## God Nodes (most connected - your core abstractions)
 1. `CurrentUser` - 85 edges
@@ -498,7 +508,7 @@
 - **Launch-to-Onboarding Experience Flow** — docs_skills_apple_design_references_hig_launching, docs_skills_apple_design_references_hig_loading, docs_skills_apple_design_references_hig_onboarding [INFERRED 0.80]
 - **Social Discovery & Location Flow** — docs_plans_social_discovery_01_product_location_services, docs_plans_social_discovery_01_product_follow_dm, apps_api_src_modules_activities_activities_service_record, apps_api_src_modules_matches_matches_service_findnearby [INFERRED 0.85]
 
-## Communities (495 total, 93 thin omitted)
+## Communities (506 total, 93 thin omitted)
 
 ### Community 0 - "Database Schema and Migrations"
 Cohesion: 0.00
@@ -506,11 +516,11 @@ Nodes (3): "drizzle"."__drizzle_migrations", "public"."app_settings", "public"."
 
 ### Community 1 - "UsersController"
 Cohesion: 0.15
-Nodes (15): ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags, Body, Controller, Delete, Get (+7 more)
+Nodes (7): ApiCookieAuth, ApiTags, Controller, Get, Res, UseGuards, UsersController
 
-### Community 2 - "MatchWaitlistService"
-Cohesion: 0.08
-Nodes (21): JoinWaitlistDto, ApiPropertyOptional, IsIn, IsOptional, MatchWaitlistController, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse (+13 more)
+### Community 2 - "MatchWaitlistController"
+Cohesion: 0.13
+Nodes (14): MatchWaitlistController, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, Body, Controller (+6 more)
 
 ### Community 3 - "HermesKanban"
 Cohesion: 0.08
@@ -528,17 +538,17 @@ Nodes (31): ADMIN HOLD, Decision, Gate 0 — Retrospective, MINOR, Run #30 — P
 Cohesion: 0.09
 Nodes (11): HostMatchPage(), HostFormSkeleton(), HOST_ONBOARDING_SEEN_KEY, HostOnboarding(), readHostOnboardingSeen(), STEP_DEFS, StepDef, StepKey (+3 more)
 
-### Community 7 - "admin/pitches.service.ts"
-Cohesion: 0.05
-Nodes (48): ListPitchesDto, ApiPropertyOptional, IsInt, IsOptional, IsString, Max, Min, Type (+40 more)
+### Community 7 - "CreateSlotDto"
+Cohesion: 0.18
+Nodes (12): AdminPitchesController, AdminSlotsController, Body, Controller, Delete, Param, Patch, Post (+4 more)
 
-### Community 8 - "NotificationsService"
-Cohesion: 0.08
-Nodes (13): push_subscriptions, Inject, Inject, Inject, Optional, sendNotification, setVapidDetails, NotificationsScheduler (+5 more)
+### Community 8 - "admin/matches.service.ts"
+Cohesion: 0.09
+Nodes (22): ListMatchesDto, ApiPropertyOptional, IsEnum, IsInt, IsOptional, Max, Min, Type (+14 more)
 
 ### Community 9 - "useAppStore"
-Cohesion: 0.05
-Nodes (50): AMENITY_ICONS, ClubPage(), formatDateLabel(), hourlyRateFormatter, PlayPage(), pushMock, replaceMock, AuthGuard() (+42 more)
+Cohesion: 0.07
+Nodes (35): AuthGuard(), BottomNav(), navItems, NotificationBell(), Toast(), clearPersistedQueryCache(), BadgeSyncEvent, NotificationEvent (+27 more)
 
 ### Community 10 - "Gate 3 — Program Design: Profiles & Spots Remediation"
 Cohesion: 0.04
@@ -548,17 +558,17 @@ Nodes (43): 1. Architecture Overview, 2.1 Backend: `MatchesService` — Mutation
 Cohesion: 0.05
 Nodes (39): Commit health, iOS Native Shell & Scalability — Gate 0 Retrospective (Assessment), Paths, Pre-existing blocker: no HTTPS, Q1 — Capacitor readiness: **NO, not as-is**, Q2 — Scalability checklist mapping: **3 of 4 already built**, Real gaps found during this audit (NOT from their list), What already works in our favor (verified in code) (+31 more)
 
-### Community 12 - "ConversationsService"
-Cohesion: 0.11
-Nodes (16): ConversationsController, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, Body, Controller (+8 more)
+### Community 12 - "ConversationsController"
+Cohesion: 0.10
+Nodes (21): ConversationsController, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, Body, Controller (+13 more)
 
 ### Community 13 - "Gate 2 — Architecture"
 Cohesion: 0.05
 Nodes (39): Baseline Verification (Gate 0 entry evidence), Classification → user stories cascade, Cycle: Match Visibility, Host Form Locking, Interactive Feed, Full Notifications & Messaging, Finding H1 — CRITICAL: `format` is decoupled from selected pitch, Finding H2 — IMPORTANT: Date/time not locked when a pitch (self mode) is chosen, Finding H3 — MINOR: Mode switch resets venue/pitch/slot/date/time but not format sync, Finding N1 — CRITICAL: No notification icon or unread surface anywhere, Finding N2 — CRITICAL: Notifications are feed_items rows only — no per-notification read state at scale (+31 more)
 
 ### Community 14 - "admin/venues.service.ts"
-Cohesion: 0.05
-Nodes (41): venue_verifications, ListVenuesDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, IsString, Max (+33 more)
+Cohesion: 0.07
+Nodes (33): venue_verifications, ListVenuesDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, IsString, Max (+25 more)
 
 ### Community 15 - "Gate 3 — Program Design (contracts)"
 Cohesion: 0.05
@@ -572,9 +582,9 @@ Nodes (39): 10. Key Schema Tables, 13. GitHub Push Prerequisites, 14. Frontend/B
 Cohesion: 0.06
 Nodes (32): AdminDisputesController, Body, Controller, Get, Param, Patch, Post, Query (+24 more)
 
-### Community 18 - "BottomSheet.tsx"
-Cohesion: 0.06
-Nodes (25): PublishWarningSheet(), PublishWarningSheetProps, BottomSheet(), BottomSheetProps, AppealSheet(), AppealSheetProps, AttendanceSheet(), AttendanceSheetProps (+17 more)
+### Community 18 - "index.ts"
+Cohesion: 0.05
+Nodes (35): BottomSheet(), BottomSheetProps, AppealSheet(), AppealSheetProps, AttendanceSheet(), AttendanceSheetProps, CancelMatchSheet(), CancelMatchSheetProps (+27 more)
 
 ### Community 19 - "Gate 3 — Program Design (CONTRACTS): shots.so-style install landing + PWA activation"
 Cohesion: 0.04
@@ -592,17 +602,17 @@ Nodes (25): DatabaseModule, Global, Module, ActivitiesModule, Module, AdminModul
 Cohesion: 0.07
 Nodes (27): GetVenuesDto, ApiPropertyOptional, IsNumber, IsOptional, IsString, Max, MaxLength, Min (+19 more)
 
-### Community 23 - "useAuth.ts"
-Cohesion: 0.09
-Nodes (24): CompleteProfilePage(), LoginPage(), VerifyContent(), DevLoginBar(), CompleteProfileInput, CompleteProfileResponse, completeProfileSchema, OtpInput (+16 more)
+### Community 23 - "fetcher.ts"
+Cohesion: 0.06
+Nodes (34): CompleteProfilePage(), LoginPage(), VerifyContent(), AuthBootstrap(), DevLoginBar(), DevLoginBarInner(), CompleteProfileInput, CompleteProfileResponse (+26 more)
 
 ### Community 24 - "use-live-data.ts"
 Cohesion: 0.17
 Nodes (19): AuditResponse, DisputesResponse, MatchesResponse, TERMINAL, ReportsResponse, SettlementsResponse, TxResponse, UsersResponse (+11 more)
 
 ### Community 25 - "schema.ts"
-Cohesion: 0.02
-Nodes (86): activitiesRelations, activityVerbEnum, auditLogsRelations, bookingModeEnum, conversation_participants, conversationParticipantsRelations, conversations, conversationsRelations (+78 more)
+Cohesion: 0.03
+Nodes (71): PDPL_GRACE_DAYS, activities, activitiesRelations, activityVerbEnum, auditLogsRelations, bookingModeEnum, conversation_participants, conversationParticipantsRelations (+63 more)
 
 ### Community 26 - "CurrentUser"
 Cohesion: 0.20
@@ -617,7 +627,7 @@ Cohesion: 0.22
 Nodes (14): ScrollableMain(), cancelFrame(), scheduleFrame(), useScrollMemory(), clearScrollMemory(), flush(), flushScrollMemoryOnHide(), getRemembered() (+6 more)
 
 ### Community 29 - "match/[id]/page.tsx"
-Cohesion: 0.08
+Cohesion: 0.07
 Nodes (47): MatchDetailPage(), AttendanceBanner(), AttendanceBannerProps, GameDetails(), GameDetailsProps, LocationMap(), LocationMapProps, MatchRulesSheet() (+39 more)
 
 ### Community 30 - "types.ts"
@@ -625,20 +635,20 @@ Cohesion: 0.09
 Nodes (20): AdminPitchesPage(), SlotsResponse, CLOSED, AdminMetrics, AdminPitchList, AdminPitchRow, AdminReportDetail, AdminReportListItem (+12 more)
 
 ### Community 31 - "partner.controller.ts"
-Cohesion: 0.05
-Nodes (40): Role, Roles(), ROLES_KEY, RolesGuard, Injectable, CreatePitchDto, ApiProperty, IsIn (+32 more)
+Cohesion: 0.07
+Nodes (24): Role, Roles(), ROLES_KEY, RolesGuard, Injectable, CreatePitchDto, ApiProperty, IsIn (+16 more)
 
-### Community 32 - "PlayerProfileSheet.tsx"
-Cohesion: 0.15
-Nodes (13): FollowButton(), FollowButtonProps, PlayerProfileSheet(), FollowMutationContext, FollowState, PublicProfileShape, useFollow(), useFollowers() (+5 more)
+### Community 32 - "FetchError"
+Cohesion: 0.07
+Nodes (23): FollowButton(), FollowButtonProps, PlayerProfileSheet(), ReportSheet(), ReportSheetProps, FollowMutationContext, FollowState, PublicProfileShape (+15 more)
 
-### Community 33 - "transactions.service.ts"
-Cohesion: 0.09
-Nodes (20): ListTransactionsDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, Max, Min, Type (+12 more)
+### Community 33 - "users"
+Cohesion: 0.07
+Nodes (24): transactions, users, ListTransactionsDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, Max (+16 more)
 
 ### Community 34 - "RealtimeService"
 Cohesion: 0.04
-Nodes (40): activities, audit_logs, dispute_messages, feed_items, ActivitiesService, ActivityVerb, DB, DIRECTED_VERBS (+32 more)
+Nodes (43): audit_logs, dispute_messages, feed_items, ActivitiesService, ActivityVerb, DB, DIRECTED_VERBS, FeedItem (+35 more)
 
 ### Community 35 - "useLiveAdminData"
 Cohesion: 0.07
@@ -649,16 +659,16 @@ Cohesion: 0.11
 Nodes (16): Classification, Cycle run23 — Gate 0 Retrospective (2026-08-31T20:15Z, run #23), Full-stack connectivity audit (findings → board), Proceed to Gate 1? YES — two small vertical slices, both finishable in budget., Recent commit pattern (last 15), Scope touched this cycle, Feature — Cycle Status (run23-fresh-migrate-verbs-en-offline), API JSON shapes (+8 more)
 
 ### Community 37 - "MailerUsersService"
-Cohesion: 0.09
-Nodes (21): MailerController, ApiOperation, ApiTags, Body, Controller, Get, HttpCode, Patch (+13 more)
+Cohesion: 0.15
+Nodes (11): Get, Query, DB, escapeHtml(), MailerUsersService, makeDb(), makeService(), Injectable (+3 more)
 
 ### Community 38 - "FollowsService"
 Cohesion: 0.12
 Nodes (15): FollowsController, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags, Controller, Delete, Get (+7 more)
 
 ### Community 39 - "wallet.service.ts"
-Cohesion: 0.05
-Nodes (40): ReferenceType, TransactionType, TopupWalletDto, ApiProperty, ApiPropertyOptional, IsNumber, IsOptional, IsString (+32 more)
+Cohesion: 0.11
+Nodes (15): ReferenceType, TransactionType, ApiCookieAuth, ApiTags, Controller, UseGuards, WalletController, DB (+7 more)
 
 ### Community 40 - "devDependencies"
 Cohesion: 0.05
@@ -669,20 +679,20 @@ Cohesion: 0.06
 Nodes (28): app_settings, ApiProperty, UpdateSettingDto, AdminSettingsController, Body, Controller, Get, Param (+20 more)
 
 ### Community 42 - "fetcher"
-Cohesion: 0.07
-Nodes (50): PersonalInfoPage(), POSITIONS, MenuItemProps, ProfilePage(), AppBar(), AppBarProps, EmailSection(), FlatSectionLabel() (+42 more)
+Cohesion: 0.08
+Nodes (45): PersonalInfoPage(), POSITIONS, MenuItemProps, ProfilePage(), EmailSection(), FlatSectionLabel(), GlassStats(), GlassStatsProps (+37 more)
 
 ### Community 43 - "devDependencies"
 Cohesion: 0.05
 Nodes (41): devDependencies, autoprefixer, eslint, eslint-config-next, husky, jsdom, lint-staged, postcss (+33 more)
 
 ### Community 44 - "MatchesService"
-Cohesion: 0.08
-Nodes (9): collectEqPairs(), makeService(), MatchesScheduler, Cron, Injectable, MatchesService, riyadhLocal(), round2() (+1 more)
+Cohesion: 0.11
+Nodes (6): collectEqPairs(), makeService(), capacityForPitchSize(), MatchesService, round2(), Injectable
 
 ### Community 45 - "api-adapter.ts"
-Cohesion: 0.05
-Nodes (52): getTransactionIcon(), groupTransactionsByDay(), WalletPage(), HostMatchForm(), HostMatchInput, MatchesApiResponse, useCreateMatch(), useMatch() (+44 more)
+Cohesion: 0.10
+Nodes (33): HostMatchForm(), useMatchMessages(), adaptMatchDetail(), adaptNearbyMatch(), adaptTransaction(), adaptWalletBalance(), buildComments(), buildOrganizer() (+25 more)
 
 ### Community 46 - "ActivitiesController"
 Cohesion: 0.20
@@ -713,20 +723,20 @@ Cohesion: 0.40
 Nodes (3): ModeToggle(), ModeToggleProps, hostMatchSchema
 
 ### Community 53 - "NotificationSheet.tsx"
-Cohesion: 0.06
-Nodes (38): groupDiscussions(), MessagesPage(), CommunityFeedPage(), ReportsPage(), STATUS_STYLE, ActivityCard(), ActivityCardProps, VERB_ICON (+30 more)
+Cohesion: 0.13
+Nodes (19): CommunityFeedPage(), ActivityCard(), ActivityCardProps, VERB_ICON, VERB_LABEL, PullToRefresh(), PullToRefreshProps, NotificationSheet() (+11 more)
 
 ### Community 54 - ""public"."users""
 Cohesion: 0.14
 Nodes (22): "public"."activities", "public"."audit_logs", "public"."conversation_participants", "public"."conversations", "public"."dispute_messages", "public"."disputes", "public"."feed_items", "public"."follows" (+14 more)
 
 ### Community 55 - "mailer.service.ts"
-Cohesion: 0.12
-Nodes (22): EMAIL_ACTIVITY_VERBS, MAIL_DETAIL_LABELS, MAIL_TEMPLATES, mailBrand(), MailCopy, mailFooter(), MailLocale, MailTemplateKey (+14 more)
+Cohesion: 0.17
+Nodes (18): EMAIL_ACTIVITY_VERBS, MAIL_DETAIL_LABELS, MAIL_TEMPLATES, mailBrand(), MailCopy, mailFooter(), MailLocale, DB (+10 more)
 
 ### Community 56 - "matches/matches.service.ts"
-Cohesion: 0.06
-Nodes (33): disputes, match_players, match_votes, match_waitlist, matches, makeDb(), makeService(), thenable() (+25 more)
+Cohesion: 0.04
+Nodes (44): disputes, match_players, matches, pitch_slots, pitches, settlements, venues, makeDb() (+36 more)
 
 ### Community 57 - "KoraLink Review Workflow"
 Cohesion: 0.15
@@ -740,17 +750,17 @@ Nodes (18): Context restored, CRITICAL (→ board, NOT built this run), fix:feat
 Cohesion: 0.10
 Nodes (18): Area under audit, Contract audit of the DM send path, Proceed, Recent commits (context), Run #7 — Gate 0 Retrospective: DM send idempotency (P1-11), Schema diff vs match_messages, Tech-debt classification, Run #7 — Cycle Status: DM send idempotency (P1-11) (+10 more)
 
-### Community 60 - "usePwaInstall.ts"
-Cohesion: 0.22
-Nodes (13): Portal(), InstallLanding(), InstallLandingGuard(), InstallPrompt(), WelcomeCheckpoint(), BeforeInstallPromptEvent, classifyPlatform(), hasAnyKey() (+5 more)
+### Community 60 - "player-pwa/src/providers/ObservabilityProvider.tsx"
+Cohesion: 0.08
+Nodes (27): locales, outfit, tajawal, viewport, ChunkLoadErrorHandler(), ServiceWorkerUpdater(), Portal(), setPropertySpy (+19 more)
 
-### Community 61 - "FilterBar.tsx"
-Cohesion: 0.20
-Nodes (8): FilterBar(), FilterBarProps, FORMAT_KEYS, GENDER_KEYS, PlayFilters, PRICE_OPTIONS, TIME_KEYS, base
+### Community 61 - "GetMatchesDto"
+Cohesion: 0.11
+Nodes (16): GENDER_QUERY_VALUES, GenderQuery, GetMatchesDto, normalizeGenderRule(), NOTE: 'women' is checked before 'men' — not because equality matching needs, TIME_WINDOW_KEYS, TIME_WINDOWS, TimeWindowKey (+8 more)
 
-### Community 62 - "[locale]/layout.tsx"
-Cohesion: 0.13
-Nodes (10): locales, outfit, tajawal, viewport, ChunkLoadErrorHandler(), ServiceWorkerUpdater(), setPropertySpy, ViewportHeightSync() (+2 more)
+### Community 62 - "useWallet.ts"
+Cohesion: 0.17
+Nodes (13): getTransactionIcon(), groupTransactionsByDay(), WalletPage(), TopupMutationContext, useTopupWallet(), useWalletBalance(), useWalletHistory(), WalletBalanceShape (+5 more)
 
 ### Community 63 - "Run #19 — Gate 0 Retrospective (15:16Z, Aug 30 2026)"
 Cohesion: 0.12
@@ -772,9 +782,9 @@ Nodes (20): HIG: Accessibility, HIG: App Icons, HIG: Apple Pay, HIG: Apple Penci
 Cohesion: 0.07
 Nodes (29): devDependencies, pino-pretty, prettier, turbo, engines, node, turbo, name (+21 more)
 
-### Community 68 - "GetMatchesDto"
-Cohesion: 0.06
-Nodes (36): "match_messages", "match_players", "matches", "pitches", "public"."matches", "public"."pitches", "public"."users", "public"."venues" (+28 more)
+### Community 68 - ""matches""
+Cohesion: 0.12
+Nodes (20): "match_messages", "match_players", "matches", "pitches", "public"."matches", "public"."pitches", "public"."users", "public"."venues" (+12 more)
 
 ### Community 69 - "api/.eslintrc.json"
 Cohesion: 0.10
@@ -785,8 +795,8 @@ Cohesion: 0.20
 Nodes (9): Blockers & decisions, Board changes, Built this run (slices, commits, verification evidence), Factory Run #17 — 2026-08-29T21:19Z (off-schedule one-off, full budget), Findings (GLM reviewers + self, merged, evidence-cited), Next-run recommendation (#18, 10:15Z Aug 30), Preflight, Previous-run verification (+1 more)
 
 ### Community 71 - "venue-hours.ts"
-Cohesion: 0.21
-Nodes (10): DatePicker(), DatePickerProps, isSameDay(), isVenueOpenNow(), RIYADH_TIME_ZONE, riyadhDateKey(), riyadhDayOfWeek(), riyadhHour() (+2 more)
+Cohesion: 0.23
+Nodes (9): DatePicker(), DatePickerProps, isSameDay(), isVenueOpenNow(), RIYADH_TIME_ZONE, riyadhDateKey(), riyadhDayOfWeek(), riyadhHour() (+1 more)
 
 ### Community 72 - "compilerOptions"
 Cohesion: 0.11
@@ -826,14 +836,14 @@ Nodes (10): MyPitchesPage(), SlotsResponse, ScheduleDrawer(), ScheduleDrawerProp
 
 ### Community 81 - "dependencies"
 Cohesion: 0.06
-Nodes (33): dependencies, bull, cache-manager, cache-manager-redis-store, class-transformer, cookie-parser, helmet, @nestjs/config (+25 more)
+Nodes (33): dependencies, bull, cache-manager, cache-manager-redis-store, cookie-parser, helmet, @nestjs/config, @nestjs/jwt (+25 more)
 
 ### Community 82 - "3. Track C — Follow + direct messaging"
 Cohesion: 0.25
 Nodes (8): 3.1 Schema (migration `0008_follows_and_read.sql`), 3.2 Follow endpoints, 3.3 Conversation endpoints, 3.4 WebSocket (extend `app.gateway.ts`), 3.5 Frontend hooks, 3.6 Adapters, 3.7 `FollowButton` component, 3. Track C — Follow + direct messaging
 
 ### Community 83 - "OtpStoreService"
-Cohesion: 0.16
+Cohesion: 0.18
 Nodes (3): OtpStoreService, Inject, Injectable
 
 ### Community 84 - "Cycle pdpl-hardening-31 — Gate 0 Retrospective (run #31)"
@@ -893,8 +903,8 @@ Cohesion: 0.07
 Nodes (26): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+18 more)
 
 ### Community 98 - "RescheduleSheet.test.tsx"
-Cohesion: 0.15
-Nodes (18): DateTimeOverlayInput(), DateTimeOverlayInputProps, SlotPicker(), SlotPickerProps, RescheduleSheet(), RescheduleSheetProps, PitchSlot, PitchSlotApi (+10 more)
+Cohesion: 0.17
+Nodes (17): SlotPicker(), SlotPickerProps, RescheduleSheet(), RescheduleSheetProps, PitchSlot, PitchSlotApi, usePitchSlots(), dateInRiyadh() (+9 more)
 
 ### Community 99 - "Run #17 — Reporter closure (P2-23) — Gates 0-3 compact"
 Cohesion: 0.29
@@ -921,12 +931,12 @@ Cohesion: 0.07
 Nodes (28): ListUsersDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, IsString, Max, Min (+20 more)
 
 ### Community 105 - "auth.service.ts"
-Cohesion: 0.12
-Nodes (11): AuthModule, Module, assertSurfaceRole(), AuthService, DB, SURFACE_ROLES, Inject, Injectable (+3 more)
+Cohesion: 0.13
+Nodes (9): assertSurfaceRole(), AuthService, DB, SURFACE_ROLES, Inject, Injectable, keys, Injectable (+1 more)
 
 ### Community 106 - "matches/matches.controller.ts"
-Cohesion: 0.08
-Nodes (23): escapeIcsText(), RFC-5545, CastVoteDto, ApiProperty, IsString, CreateMatchMessageDto, ApiProperty, ApiPropertyOptional (+15 more)
+Cohesion: 0.04
+Nodes (42): escapeIcsText(), RFC-5545, CastVoteDto, ApiProperty, IsString, CreateDisputeDto, ApiPropertyOptional, IsEnum (+34 more)
 
 ### Community 107 - "PartnerService"
 Cohesion: 0.08
@@ -949,8 +959,8 @@ Cohesion: 0.29
 Nodes (6): Contract verification checklist (Gate 3 — explicit), Gate 0 — Retro (area audit), Gate 1 — Product, Gate 2 — Architecture, Gate 3 — Program design (contracts), Run #17 — Venue operating hours (P1-25) — Gates 0-3 compact
 
 ### Community 112 - "admin/reports.service.ts"
-Cohesion: 0.17
-Nodes (12): ResolveReportDto, ApiProperty, ApiPropertyOptional, IsBoolean, IsIn, IsOptional, IsString, ApiPropertyOptional (+4 more)
+Cohesion: 0.10
+Nodes (21): ListReportsDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, Max, Min, Type (+13 more)
 
 ### Community 113 - ".completeProfile"
 Cohesion: 0.20
@@ -1004,9 +1014,9 @@ Nodes (11): 1. Dependency (`apps/api`), 2. New file — `apps/api/src/modules/ga
 Cohesion: 0.17
 Nodes (11): Bug 1: Count discrepancy (card shows 0/14, detail shows 2/14), Bug 2: No team assignment on join, Bug 3: TeamLineup shows single team, not two, Cycle: Team Lineup System — Two-Team Auto-Assignment + Clickable Profiles, Implementation Plan (4 slices), Missing: Clickable user profiles, Root Causes Identified, Slice 1: API — auto team assignment + fix counts (+3 more)
 
-### Community 126 - "HIG: Feedback"
-Cohesion: 0.14
-Nodes (17): HIG: Feedback, HIG: Game Controls, HIG: Gestures, Help Menu, Launching, Launch Screen, Splash Screen, Loading (+9 more)
+### Community 126 - "Offering Help"
+Cohesion: 0.18
+Nodes (12): Help Menu, Launching, Launch Screen, Splash Screen, Loading, Progress Indicators, Managing Accounts, Offering Help (+4 more)
 
 ### Community 127 - "Factory Run #13 — 2026-08-29T10:15Z"
 Cohesion: 0.17
@@ -1052,9 +1062,9 @@ Nodes (10): Blockers & decisions, Board changes, Built this run, Factory Run #12
 Cohesion: 0.22
 Nodes (7): HealthController, ApiOperation, ApiTags, Controller, Get, HealthModule, Module
 
-### Community 140 - "UpdateMatchAdminDto"
-Cohesion: 0.09
-Nodes (20): ApiPropertyOptional, IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength (+12 more)
+### Community 140 - "AdminMatchesController"
+Cohesion: 0.16
+Nodes (10): AdminMatchesController, Body, Controller, Get, Param, Patch, Post, Query (+2 more)
 
 ### Community 141 - "VenueFormDrawer.tsx"
 Cohesion: 0.11
@@ -1173,12 +1183,12 @@ Cohesion: 0.14
 Nodes (12): ReportsController, ApiCookieAuth, ApiCreatedResponse, ApiOperation, ApiTags, Body, Controller, Get (+4 more)
 
 ### Community 173 - "jwt-cookie.strategy.ts"
-Cohesion: 0.21
-Nodes (7): PDPL_GRACE_DAYS, AuthenticatedUser, JwtCookieStrategy, JwtPayload, requestPathOf(), Inject, Injectable
+Cohesion: 0.24
+Nodes (6): AuthenticatedUser, JwtCookieStrategy, JwtPayload, requestPathOf(), Inject, Injectable
 
 ### Community 174 - "HostMatchForm.tsx"
-Cohesion: 0.19
-Nodes (11): CostFooter(), CostFooterProps, PitchSelector(), PitchSelectorProps, Visibility, VisibilityToggle(), VisibilityToggleProps, PitchApi (+3 more)
+Cohesion: 0.10
+Nodes (19): CostFooter(), CostFooterProps, PitchSelector(), PitchSelectorProps, PublishWarningSheet(), PublishWarningSheetProps, VenuePickerSheet(), VenuePickerSheetProps (+11 more)
 
 ### Community 176 - "player-pwa/.eslintrc.json"
 Cohesion: 0.25
@@ -1213,8 +1223,8 @@ Cohesion: 0.25
 Nodes (8): Layout, Adaptability, Layout Guide, Layout and Organization, Safe Area, Visual Hierarchy, Right To Left, Spatial Layout
 
 ### Community 184 - "Playing Video"
-Cohesion: 0.27
-Nodes (10): Live Viewing Apps, Cloud DVR, Electronic Program Guide, Multitasking, Playing Audio, Audio Categories, Playing Video, Picture in Picture (+2 more)
+Cohesion: 0.36
+Nodes (8): Live Viewing Apps, Cloud DVR, Electronic Program Guide, Multitasking, Playing Video, Picture in Picture, Remotes, Windows
 
 ### Community 185 - ""public"."geography_columns""
 Cohesion: 0.32
@@ -1236,17 +1246,17 @@ Nodes (15): Decision, Findings, Recent commits in area, Run #36 — WS chat rate
 Cohesion: 0.20
 Nodes (9): Blockers & decisions (new this run), Board changes, Built this run (slices, commits, verification), Factory Run #20 — 2026-08-30T20:16Z, Findings (GLM A/B + parent, merged, evidence-cited), Next-run recommendation, Preflight, Previous-run verification (Phase 1 — run #19's five claims) (+1 more)
 
-### Community 190 - "settlements.service.ts"
-Cohesion: 0.09
-Nodes (23): settlements, ListSettlementsDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, Max, Min (+15 more)
+### Community 190 - "AdminSettlementsController"
+Cohesion: 0.19
+Nodes (8): AdminSettlementsController, Controller, Get, Param, Post, Query, Req, UseGuards
 
 ### Community 191 - "0007_rich_leader.sql"
 Cohesion: 0.38
 Nodes (6): "activities", "feed_items", "follows", "public"."matches", "public"."users", "public"."activities"
 
-### Community 192 - "index.ts"
-Cohesion: 0.09
-Nodes (31): isVotingOpen(), MyGamesPage(), MatchCard(), MatchCardProps, MatchDateSections(), MatchDateSectionsProps, MatchesPage, useMyMatches() (+23 more)
+### Community 192 - "play/page.tsx"
+Cohesion: 0.05
+Nodes (47): ClubsPage(), FILTER_KEYS, FILTER_LABEL_MAP, FilterKey, groupDiscussions(), MessagesPage(), isVotingOpen(), MyGamesPage() (+39 more)
 
 ### Community 193 - "Run #24 — Program Design (admin dispute replies, P2-2)"
 Cohesion: 0.11
@@ -1325,8 +1335,8 @@ Cohesion: 0.29
 Nodes (6): API — POST /wallet/topup, Contract, Contract verification checklist, i18n keys, Program Design — Wallet Top-up Production Gate (P0-2 interim), PWA — wallet page top-up submit
 
 ### Community 212 - "query-persister.ts"
-Cohesion: 0.15
-Nodes (19): idbGet(), idbRemove(), idbSet(), openDb(), withStore(), clearPersistedQueryCache(), createIDBPersister(), filterDehydrated() (+11 more)
+Cohesion: 0.11
+Nodes (23): idbGet(), idbRemove(), idbSet(), openDb(), withStore(), attachCachePersistence(), createIDBPersister(), filterDehydrated() (+15 more)
 
 ### Community 213 - "outputs"
 Cohesion: 0.29
@@ -1356,9 +1366,9 @@ Nodes (6): ActivitiesService.record, MatchesService.findNearby, MatchesService.j
 Cohesion: 0.27
 Nodes (11): GeoCoords, GeolocationState, GeoStatus, isSupported(), NOTE: geolocation requires a secure context (HTTPS or localhost). On plain, readCache(), useGeolocation(), writeCache() (+3 more)
 
-### Community 220 - "fetcher.ts"
-Cohesion: 0.08
-Nodes (23): AuthBootstrap(), DevLoginBarInner(), ReportSheet(), ReportSheetProps, env, UseMatchesResult, MyReportsPage, ReportStatus (+15 more)
+### Community 220 - "useMatches.ts"
+Cohesion: 0.10
+Nodes (20): AMENITY_ICONS, ClubPage(), formatDateLabel(), hourlyRateFormatter, MatchCardProps, HostMatchInput, MatchesApiResponse, MatchesPage (+12 more)
 
 ### Community 221 - "Factory Run #23 — 2026-08-31T20:15Z"
 Cohesion: 0.20
@@ -1433,8 +1443,8 @@ Cohesion: 0.25
 Nodes (7): API, Contract (Gate 3 — exact shapes), Frontend, Problem (Gate 1), Run #18 Cycle — Program Design (Gates 1–3 compact), Slices, Verification checklist (run before Gate 4)
 
 ### Community 239 - "MatchDetailsForm.tsx"
-Cohesion: 0.18
-Nodes (11): Format, FORMAT_OPTIONS, GENDER_I18N_MAP, GENDER_OPTIONS, GenderRule, MATCH_TYPE_I18N_MAP, MATCH_TYPES, MatchDetailsForm() (+3 more)
+Cohesion: 0.15
+Nodes (13): DateTimeOverlayInput(), DateTimeOverlayInputProps, Format, FORMAT_OPTIONS, GENDER_I18N_MAP, GENDER_OPTIONS, GenderRule, MATCH_TYPE_I18N_MAP (+5 more)
 
 ### Community 240 - "Ended Game Today Visibility — Gate 1 Product"
 Cohesion: 0.40
@@ -1509,8 +1519,8 @@ Cohesion: 0.40
 Nodes (3): failed, results, VIEWPORTS
 
 ### Community 260 - "notifications.service.ts"
-Cohesion: 0.09
-Nodes (27): assertSafePushEndpoint(), checkPushEndpoint(), DEFAULT_PUSH_HOST_ALLOWLIST, isPublicIp(), logger, PUSH_ENDPOINT_MAX_LENGTH, PushEndpointValidationReason, REASON_MESSAGES (+19 more)
+Cohesion: 0.05
+Nodes (36): assertSafePushEndpoint(), checkPushEndpoint(), DEFAULT_PUSH_HOST_ALLOWLIST, isPublicIp(), logger, PUSH_ENDPOINT_MAX_LENGTH, PushEndpointValidationReason, REASON_MESSAGES (+28 more)
 
 ### Community 261 - "Factory Run #22 — 2026-08-31T15:15Z"
 Cohesion: 0.20
@@ -1573,11 +1583,11 @@ Cohesion: 0.17
 Nodes (9): Area audit (notifications/push path), Gate 0 → Gate 1, Gate 0 — Retrospective: run #24 cycle (P2-8 push-text localization), Tech debt / contracts check, run #24 cycle — Gate Status, Gate 1 — Product, Gate 2 — Architecture, Gate 3 — Contracts (exact shapes) (+1 more)
 
 ### Community 279 - "auth.controller.ts"
-Cohesion: 0.11
-Nodes (17): DevLoginDto, ApiProperty, ApiPropertyOptional, IsIn, IsOptional, IsPhoneNumber, SendOtpDto, ApiProperty (+9 more)
+Cohesion: 0.20
+Nodes (9): DevLoginDto, ApiProperty, ApiPropertyOptional, IsIn, IsOptional, IsPhoneNumber, SendOtpDto, ApiProperty (+1 more)
 
 ### Community 280 - "NotificationsController"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (11): NotificationsController, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags, Body, Controller, Delete (+3 more)
 
 ### Community 281 - "MatchStatusChangedEvent"
@@ -1604,9 +1614,9 @@ Nodes (3): Animation, Motion, Symbols
 Cohesion: 0.67
 Nodes (3): Typography, Scalable Text, Text Styles
 
-### Community 295 - "conversations.controller.ts"
-Cohesion: 0.16
-Nodes (11): CreateConversationDto, ApiProperty, IsNotEmpty, IsString, SendMessageDto, ApiProperty, ApiPropertyOptional, IsNotEmpty (+3 more)
+### Community 295 - "AdminPitchesService"
+Cohesion: 0.13
+Nodes (12): ListPitchesDto, ApiPropertyOptional, IsInt, IsOptional, IsString, Max, Min, Type (+4 more)
 
 ### Community 296 - "P0-6 PDPL — Cycle 00 Retrospective (Run #29, 2026-09-03)"
 Cohesion: 0.11
@@ -1616,9 +1626,9 @@ Nodes (18): API Reviewer — CRITICAL, API Reviewer — IMPORTANT, API Reviewer 
 Cohesion: 0.11
 Nodes (17): 1. Executive verdict, 2. Current state (measured), 3. Findings, 4. Capacity: how many users can this serve?, 5. Cost-efficient scaling ladder (verified prices, Sep 2026), 6. 30-day action checklist, 7. Evidence appendix (key commands → results), KoraLink VPS Production-Readiness Assessment (+9 more)
 
-### Community 299 - "users/users.service.ts"
-Cohesion: 0.08
-Nodes (9): user_notification_prefs, Module, UsersModule, Cron, Injectable, UsersScheduler, DB, Injectable (+1 more)
+### Community 299 - "UsersService"
+Cohesion: 0.15
+Nodes (9): AuthModule, Module, Module, UsersModule, Cron, Injectable, UsersScheduler, Injectable (+1 more)
 
 ### Community 308 - "admin-ux-overhaul/00-status.md"
 Cohesion: 0.29
@@ -1673,16 +1683,16 @@ Cohesion: 0.33
 Nodes (5): Gate 3 contract checklist, Item 1 — Admin refund double-refund guard (data integrity), Item 2 — P2-34: notification bell reachable from every tab, Item 3 — Admin HQ dashboard i18n (Reviewer A IMPORTANT), Run #22 — Cycle Program Design (compact, autonomous mode)
 
 ### Community 367 - "selectUser"
-Cohesion: 0.09
-Nodes (33): ConversationPage(), ChatSheet(), ChatSheetProps, getDateGroup(), groupMessages(), PaymentSheet(), PaymentSheetProps, ConversationApi (+25 more)
+Cohesion: 0.06
+Nodes (42): ConversationPage(), BadgeHydrator(), MobileFrame(), MobileFrameProps, ChatSheet(), ChatSheetProps, getDateGroup(), groupMessages() (+34 more)
 
 ### Community 368 - "withTimestamp"
-Cohesion: 0.15
-Nodes (9): withTimestamp(), AdminDisputesService, makeService(), updateChain(), Injectable, AdminReportsService, Injectable, AdminVenuesService (+1 more)
+Cohesion: 0.18
+Nodes (5): withTimestamp(), AdminDisputesService, Injectable, AdminReportsService, Injectable
 
-### Community 370 - "useVenues.ts"
-Cohesion: 0.19
-Nodes (10): ClubsPage(), FILTER_KEYS, FILTER_LABEL_MAP, FilterKey, VenuePickerSheet(), VenuePickerSheetProps, useVenues(), VenueApi (+2 more)
+### Community 370 - "AdminVenuesController"
+Cohesion: 0.18
+Nodes (10): AdminVenuesController, Body, Controller, Get, Param, Patch, Post, Query (+2 more)
 
 ### Community 425 - "seed"
 Cohesion: 0.28
@@ -1704,9 +1714,9 @@ Nodes (15): API contract — exact shapes, Architecture delta, Build order, Cont
 Cohesion: 0.12
 Nodes (15): Blockers & decisions, Board changes, Bug-class sweeps, Built this run, Factory Run #28 — 2026-09-03T01:18Z, Findings (parent self-review, zai delegation 401'd), Next-run recommendation, P0-5 design sanity (+7 more)
 
-### Community 431 - "ListReportsDto"
-Cohesion: 0.19
-Nodes (10): ListReportsDto, ApiPropertyOptional, IsIn, IsInt, IsOptional, Max, Min, Type (+2 more)
+### Community 431 - "admin/pitches.service.ts"
+Cohesion: 0.17
+Nodes (11): ApiPropertyOptional, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, UpdatePitchAdminDto (+3 more)
 
 ### Community 433 - "KoraLink ↔ Multica Bridge"
 Cohesion: 0.22
@@ -1732,9 +1742,9 @@ Nodes (4): Gate Status — Multica Integration (2026-08-31), How to approve, Pha
 Cohesion: 0.13
 Nodes (14): Blockers & decisions, Board changes, Built this run, Delegation result (zai children 401 — 4th consecutive run), Factory Run #27 — 2026-09-02T15:33Z, Findings (self-review, zai delegation 401'd), Next-run recommendation, Preflight (+6 more)
 
-### Community 439 - "CreateMatchDto"
-Cohesion: 0.14
-Nodes (13): CreateMatchDto, ApiProperty, ApiPropertyOptional, IsEnum, IsInt, IsISO8601, IsNumber, IsOptional (+5 more)
+### Community 439 - "TopupWalletDto"
+Cohesion: 0.16
+Nodes (14): TopupWalletDto, ApiProperty, ApiPropertyOptional, IsNumber, IsOptional, IsString, Max, MaxLength (+6 more)
 
 ### Community 440 - "001 — "Host a Match" + button redesign (design loop)"
 Cohesion: 0.29
@@ -1753,12 +1763,12 @@ Cohesion: 0.29
 Nodes (6): 002 — Compact billboard + Play pill + pinned header (round 2), Feedback that drove this round, Files, Not shipped (no destination yet — honest-billboard rule), Shipped, Verified (live :3000, EN + AR)
 
 ### Community 445 - "UpdatePushPreferencesDto"
-Cohesion: 0.20
+Cohesion: 0.24
 Nodes (10): CategoryMutesDto, ApiPropertyOptional, IsBoolean, IsInt, IsOptional, Max, Min, Type (+2 more)
 
 ### Community 446 - "reports/reports.service.ts"
-Cohesion: 0.19
-Nodes (10): ListMyReportsDto, IsInt, IsOptional, Max, Min, Type, ReportsModule, Module (+2 more)
+Cohesion: 0.11
+Nodes (19): CreateReportDto, ReportSubjectType, ApiProperty, IsIn, IsString, MaxLength, ListMyReportsDto, IsInt (+11 more)
 
 ### Community 447 - "Factory Run #34 — 2026-09-05T11:40Z"
 Cohesion: 0.18
@@ -1772,17 +1782,17 @@ Nodes (10): ApiPropertyOptional, IsNumber, IsOptional, IsString, Max, MaxLength,
 Cohesion: 0.17
 Nodes (11): Blockers & decisions, Factory Run #29 — 2026-09-03T10:52Z, Live E2E (restarted API, dev-login flag flipped true → false), Next-run recommendation, Phase 1.5/1.6 — Health + Sentry triage, Phase 2 — Reviewer dispatch (FIRST SUCCESSFUL since run #23), Phase 3.5/4 — Build (P0-6 vertical slice), Preflight (+3 more)
 
-### Community 451 - "CreateReportDto"
-Cohesion: 0.40
-Nodes (5): CreateReportDto, ApiProperty, IsIn, IsString, MaxLength
+### Community 451 - "ApiOkResponse"
+Cohesion: 0.20
+Nodes (6): ApiOkResponse, ApiOperation, Body, Delete, Patch, Query
 
 ### Community 452 - "Factory Run #39 — 2026-09-07T01:18Z (real UTC; cron slot 01:15)"
 Cohesion: 0.17
 Nodes (11): Blockers & decisions (CEO queue — unchanged ownership), Board changes, Built this run (slices, commits, verification evidence), Factory Run #39 — 2026-09-07T01:18Z (real UTC; cron slot 01:15), Findings (reviewers + self, merged; every claim re-verified before boarding — reviewer claims ≠ facts), Mirror note, Next-run recommendation (run #40), Preflight (+3 more)
 
 ### Community 453 - "JwtCookieAuthGuard"
-Cohesion: 0.12
-Nodes (14): JwtCookieAuthGuard, Injectable, MarkReadDto, ApiPropertyOptional, IsArray, IsBoolean, IsOptional, IsString (+6 more)
+Cohesion: 0.08
+Nodes (22): JwtCookieAuthGuard, Injectable, MarkReadDto, ApiPropertyOptional, IsArray, IsBoolean, IsOptional, IsString (+14 more)
 
 ### Community 454 - "Run #28 — Push categories + install-triggered push enablement (Gate 0)"
 Cohesion: 0.22
@@ -1844,21 +1854,21 @@ Nodes (9): Blockers & decisions, Board changes, Built this run (slices, commits,
 Cohesion: 0.29
 Nodes (5): copyToClipboard(), isDismissal(), shareOrCopy(), ShareOutcome, SharePayload
 
-### Community 473 - "attachCachePersistence"
-Cohesion: 0.33
-Nodes (5): attachCachePersistence(), Persister, getQueryClient(), makeQueryClient(), QueryProvider()
+### Community 473 - "MatchesScheduler"
+Cohesion: 0.18
+Nodes (4): MatchesScheduler, Cron, Injectable, riyadhLocal()
 
 ### Community 474 - "Run #35 — Gate 0 retro: transactional email layer (P1-41)"
 Cohesion: 0.29
 Nodes (6): 1. Owner decision on scope, 2. Fresh audit to run at run time (evidence for 00-retro), 3. Existing findings baked into this plan, 4. Fix:feat ratio / reactive-loop check, 5. Recommendation, Run #35 — Gate 0 retro: transactional email layer (P1-41)
 
-### Community 475 - "CreateDisputeDto"
-Cohesion: 0.25
-Nodes (6): CreateDisputeDto, ApiPropertyOptional, IsEnum, IsOptional, IsString, MaxLength
+### Community 475 - ".setEmail"
+Cohesion: 0.24
+Nodes (9): MailerController, ApiOperation, ApiTags, Body, Controller, HttpCode, Patch, Throttle (+1 more)
 
 ### Community 476 - "AppGateway"
-Cohesion: 0.08
-Nodes (17): match_messages, AppGateway, AuthenticatedSocket, DB, makeDb(), makeGateway(), UserRow, Inject (+9 more)
+Cohesion: 0.05
+Nodes (28): match_messages, ConversationsService, Inject, Injectable, AppGateway, AuthenticatedSocket, DB, makeDb() (+20 more)
 
 ### Community 477 - "Factory Run #36 — 2026-09-06T01:18Z"
 Cohesion: 0.20
@@ -1868,9 +1878,9 @@ Nodes (9): Blockers & decisions, Board changes, Built this run (all committed + 
 Cohesion: 0.25
 Nodes (7): Conclusion, Evidence base (why now), Prior-cycle verification (this run, evidence), Refuted reviewer product-gaps (recorded, not boarded), Run 37 — Gate 0 Retro (joinMatch row locks + WS limiter eviction), Standing bug-class sweep (Reviewer A, this run), What this cycle touches
 
-### Community 479 - "ReportsService"
-Cohesion: 0.33
-Nodes (3): ReportsService, Inject, Injectable
+### Community 479 - "GetPartnerMatchesDto"
+Cohesion: 0.17
+Nodes (11): GetPartnerMatchesDto, MATCH_STATUSES, ApiPropertyOptional, IsIn, IsInt, IsOptional, IsString, Max (+3 more)
 
 ### Community 483 - "Run 37 — Program Design (compact Gates 1-3)"
 Cohesion: 0.29
@@ -1888,9 +1898,49 @@ Nodes (5): Audit of the touched area, Decisions, E2E Waitlist & Capacity Standar
 Cohesion: 0.33
 Nodes (5): 004 — Profile Screen Redesign (Impeccable-driven), Context, Decision, Follow-up (2026-09-06, same evening): system standardisation, Variants (all: real i18n copy EN+AR, 390px, brand tokens, RTL mirrored, Arabic-Indic numerals)
 
+### Community 488 - "GenerateSlotsDto"
+Cohesion: 0.23
+Nodes (12): GenerateSlotsDto, ApiPropertyOptional, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString (+4 more)
+
 ### Community 489 - "Status — Waitlist & Capacity Standardisation"
 Cohesion: 0.40
 Nodes (4): Contracts (verified live), Defects the live E2E caught (fixed in 5f61ec0), Run it, Status — Waitlist & Capacity Standardisation
+
+### Community 490 - "MailerService"
+Cohesion: 0.17
+Nodes (7): MailTemplateKey, MailerService, Inject, Injectable, Inject, Inject, Optional
+
+### Community 491 - "Run #40 — Program Design (Gates 1–3 compact) + Status"
+Cohesion: 0.17
+Nodes (10): Audit of the areas touched, Decision record, Findings → classification, Run #40 — Gate 0 Retrospective (compact, autonomous mode), 00-status.md, Contracts, Gate 3 verification checklist (shown explicitly), Problem (user story) (+2 more)
+
+### Community 495 - "Factory Run #40 — 2026-09-07T10:19Z"
+Cohesion: 0.20
+Nodes (9): Blockers & decisions, Board changes, Built this run (slices, commits, verification evidence), Factory Run #40 — 2026-09-07T10:19Z, Findings (GLM reviewers + self, merged, evidence-cited), Next-run recommendation, Preflight, Previous-run verification (claims ≠ facts) (+1 more)
+
+### Community 496 - "VerifyOtpDto"
+Cohesion: 0.22
+Nodes (8): ApiProperty, ApiPropertyOptional, IsIn, IsOptional, IsPhoneNumber, IsString, Length, VerifyOtpDto
+
+### Community 497 - "SubmitVerificationDto"
+Cohesion: 0.25
+Nodes (6): SubmitVerificationDto, ApiProperty, ApiPropertyOptional, IsOptional, IsString, Put
+
+### Community 499 - "PromoBillboard.tsx"
+Cohesion: 0.31
+Nodes (5): PromoBillboard(), Slide, SlideKey, SLIDES, swipeToStep()
+
+### Community 500 - "WalletHistoryDto"
+Cohesion: 0.25
+Nodes (7): ApiPropertyOptional, IsInt, IsOptional, Max, Min, Type, WalletHistoryDto
+
+### Community 501 - ".getHistory"
+Cohesion: 0.32
+Nodes (4): ApiOkResponse, ApiOperation, Get, Query
+
+### Community 502 - "HIG: Feedback"
+Cohesion: 0.33
+Nodes (7): HIG: Feedback, HIG: Game Controls, HIG: Gestures, Playing Audio, Audio Categories, Playing Haptics, Custom Haptics
 
 ## Ambiguous Edges - Review These
 - `4-Gate Software Factory` → `CI Pipeline — Lint, Type-Check, Test, Build`  [AMBIGUOUS]
@@ -1901,7 +1951,7 @@ Nodes (4): Contracts (verified live), Defects the live E2E caught (fixed in 5f61
   README.md · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **2409 isolated node(s):** `nextConfig`, `name`, `version`, `private`, `dev` (+2404 more)
+- **2426 isolated node(s):** `nextConfig`, `name`, `version`, `private`, `dev` (+2421 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **93 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -1914,11 +1964,11 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **What is the exact relationship between `KoraLink Workspace Quick Reference` and `KoraLink README`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **Why does `.next/**` connect `outputs` to `app/layout.tsx`, `[locale]/layout.tsx`?**
+- **Why does `.next/**` connect `outputs` to `app/layout.tsx`, `player-pwa/src/providers/ObservabilityProvider.tsx`?**
   _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `CurrentUser` connect `CurrentUser` to `UsersController`, `MatchWaitlistService`, `JwtCookieAuthGuard`, `FollowsService`, `conversations.controller.ts`, `MailerUsersService`, `wallet.service.ts`, `matches/matches.controller.ts`, `PartnerService`, `ConversationsService`, `ReportsController`, `ActivitiesController`, `users/users.service.ts`, `.completeProfile`, `auth.controller.ts`, `NotificationsController`, `reports/reports.service.ts`, `partner.controller.ts`?**
+- **Why does `CurrentUser` connect `CurrentUser` to `UsersController`, `MatchWaitlistController`, `ConversationsController`, `auth.controller.ts`, `NotificationsController`, `partner.controller.ts`, `FollowsService`, `wallet.service.ts`, `ReportsController`, `ActivitiesController`, `TopupWalletDto`, `reports/reports.service.ts`, `UpdateProfileDto`, `ApiOkResponse`, `JwtCookieAuthGuard`, `.setEmail`, `matches/matches.controller.ts`, `PartnerService`, `.completeProfile`, `SubmitVerificationDto`, `.getPublicProfile`, `.getHistory`?**
   _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **Why does `withTimestamp()` connect `withTimestamp` to `UpdateProfileDto`, `transactions.service.ts`, `RealtimeService`, `UsersController`, `admin/pitches.service.ts`, `admin/users.service.ts`, `auth.service.ts`, `wallet.service.ts`, `users/users.service.ts`, `MatchesService`, `admin/venues.service.ts`, `admin/reports.service.ts`, `.completeProfile`, `OtpStoreService`, `matches/matches.service.ts`, `schema.ts`, `UpdatePushPreferencesDto`?**
+- **Why does `withTimestamp()` connect `withTimestamp` to `admin/matches.service.ts`, `admin/venues.service.ts`, `schema.ts`, `users`, `RealtimeService`, `wallet.service.ts`, `MatchesService`, `admin/pitches.service.ts`, `matches/matches.service.ts`, `ApiOkResponse`, `OtpStoreService`, `MatchesScheduler`, `admin/users.service.ts`, `auth.service.ts`, `MailerService`, `PartnerService`, `admin/reports.service.ts`, `.completeProfile`, `.getPublicProfile`?**
   _High betweenness centrality (0.008) - this node is a cross-community bridge._
 - **What connects `nextConfig`, `name`, `version` to the rest of the system?**
-  _2409 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2426 weakly-connected nodes found - possible documentation gaps or missing edges._
