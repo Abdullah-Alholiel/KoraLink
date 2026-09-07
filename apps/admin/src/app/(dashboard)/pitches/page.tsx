@@ -12,6 +12,8 @@ import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
 import PitchFormDrawer from '@/components/PitchFormDrawer';
 import ScheduleDrawer from '@/components/ScheduleDrawer';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+import RecordDrawer from '@/components/RecordDrawer';
 import type { PitchFormResult } from '@/components/PitchFormDrawer';
 
 interface SlotsResponse {
@@ -19,12 +21,13 @@ interface SlotsResponse {
 }
 
 /**
- * HQ pitch management (admin-ux-overhaul slice 2): every pitch across all
- * venues with owner resolution, search, and admin edit (rate, size, active,
- * cross-venue move = effective ownership hand-off for pitches).
+ * HQ pitch management (admin-ux-overhaul slice 2; restructured 2026-09-07):
+ * every pitch across all venues with owner resolution, search, and admin edit
+ * (rate, size, active, cross-venue move = effective ownership hand-off).
  */
 export default function AdminPitchesPage() {
   const t = useTranslations('adminPitches');
+  const ts = useTranslations('status');
   const tc = useTranslations('common');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -32,6 +35,7 @@ export default function AdminPitchesPage() {
   const [editing, setEditing] = useState<AdminPitchRow | null>(null);
   const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AdminPitchRow | null>(null);
 
   // Debounced search: 300ms after the last keystroke, back to page 1.
   useEffect(() => {
@@ -94,6 +98,63 @@ export default function AdminPitchesPage() {
     }
   }
 
+  const columns: ColumnDef<AdminPitchRow>[] = [
+    {
+      key: 'pitch',
+      header: t('thPitch'),
+      role: 'identity',
+      render: (p) => <span className="font-medium text-gray-900">{p.name}</span>,
+      secondary: (p) => `${p.venue_name} · ${p.venue_city}`,
+    },
+    {
+      key: 'rate',
+      header: t('thRate'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (p) => formatMoney(p.hourly_rate),
+    },
+    {
+      key: 'status',
+      header: t('thStatus'),
+      role: 'meta',
+      render: (p) => <StatusBadge status={p.is_active ? 'active' : 'inactive'} />,
+    },
+    {
+      key: 'slots',
+      header: t('thSlots'),
+      role: 'meta',
+      cardLabel: t('thSlots'),
+      tabular: true,
+      render: (p) => (
+        <span dir="ltr">
+          {p.slots_booked ?? 0}/{p.slots_total ?? 0}
+        </span>
+      ),
+    },
+    {
+      key: 'owner',
+      header: t('thOwner'),
+      role: 'detail',
+      render: (p) => (
+        <>
+          {p.owner_name ?? <span className="text-gray-400">{t('ownerNone')}</span>}
+          {p.owner_phone && (
+            <span className="ms-2 text-xs text-gray-400" dir="ltr">
+              {p.owner_phone}
+            </span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'size',
+      header: t('thSize'),
+      role: 'detail',
+      render: (p) => <span dir="ltr">{p.size}</span>,
+    },
+  ];
+
   return (
     <div>
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
@@ -111,102 +172,98 @@ export default function AdminPitchesPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {loading && !data ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> {tc('loading')}
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-sm text-brand-red">
-              {tc('failedToLoad', { error })}
-              <button onClick={reload} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-                {tc('retry')}
-              </button>
-            </div>
-          ) : (
-            <>
-              <table className="w-full text-start text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 text-start font-medium">{t('thPitch')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thVenue')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thOwner')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thSize')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thRate')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thSlots')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('thStatus')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{tc('actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data?.pitches ?? []).map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {p.venue_name}
-                        <span className="block text-xs text-gray-400">{p.venue_city}</span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {p.owner_name ?? <span className="text-gray-400">{t('ownerNone')}</span>}
-                        {p.owner_phone && (
-                          <span className="block text-xs text-gray-400" dir="ltr">
-                            {p.owner_phone}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700" dir="ltr">{p.size}</td>
-                      <td className="px-4 py-3 text-gray-700">{formatMoney(p.hourly_rate)}</td>
-                      <td className="px-4 py-3 text-gray-700" dir="ltr">
-                        {p.slots_booked ?? 0}/{p.slots_total ?? 0}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={p.is_active ? 'active' : 'inactive'} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setSchedulePitchId(p.id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}
-                          </button>
-                          <button
-                            onClick={() => toggleActive(p)}
-                            disabled={busyId === p.id}
-                            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            {busyId === p.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : p.is_active ? (
-                              '−'
-                            ) : (
-                              '✓'
-                            )}
-                          </button>
-                          <button
-                            onClick={() => setEditing(p)}
-                            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700"
-                          >
-                            {tc('edit')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!data?.pitches.length && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
-                        {t('empty')}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {data && <Pagination page={data.page} perPage={data.perPage} total={data.total} onPage={setPage} />}
-            </>
-          )}
-        </div>
+        {loading && !data ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> {tc('loading')}
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-sm text-brand-red">
+            {tc('failedToLoad', { error })}
+            <button onClick={reload} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+              {tc('retry')}
+            </button>
+          </div>
+        ) : (
+          <>
+            <DataTable
+              columns={columns}
+              rows={data?.pitches ?? []}
+              rowKey={(p) => p.id}
+              onRowClick={(p) => setSelected(p)}
+              empty={<p className="px-4 py-12 text-center text-sm text-gray-400">{t('empty')}</p>}
+            />
+            {data && <Pagination page={data.page} perPage={data.perPage} total={data.total} onPage={setPage} />}
+          </>
+        )}
       </div>
+
+      <RecordDrawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        page="admin.pitches"
+        title={selected?.name ?? t('thPitch')}
+        recordId={selected?.id}
+        fields={
+          selected
+            ? [
+                { label: t('thVenue'), value: `${selected.venue_name} · ${selected.venue_city}` },
+                {
+                  label: t('thOwner'),
+                  value: (
+                    <>
+                      {selected.owner_name ?? t('ownerNone')}
+                      {selected.owner_phone && (
+                        <span className="ms-2 text-xs text-gray-400" dir="ltr">
+                          {selected.owner_phone}
+                        </span>
+                      )}
+                    </>
+                  ),
+                },
+                { label: t('thSize'), value: <span dir="ltr">{selected.size}</span> },
+                { label: t('thRate'), value: formatMoney(selected.hourly_rate) },
+                {
+                  label: t('thSlots'),
+                  value: (
+                    <span dir="ltr">
+                      {selected.slots_booked ?? 0}/{selected.slots_total ?? 0}
+                    </span>
+                  ),
+                },
+                { label: t('thStatus'), value: <StatusBadge status={selected.is_active ? 'active' : 'inactive'} /> },
+              ]
+            : []
+        }
+        actions={
+          selected ? (
+            busyId === selected.id ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setSchedulePitchId(selected.id)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}
+                </button>
+                <button
+                  onClick={() => toggleActive(selected)}
+                  aria-label={selected.is_active ? ts('inactive') : ts('active')}
+                  className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {selected.is_active ? '−' : '✓'}
+                </button>
+                <button
+                  onClick={() => setEditing(selected)}
+                  className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gray-700"
+                >
+                  {tc('edit')}
+                </button>
+              </div>
+            )
+          ) : undefined
+        }
+      />
 
       <ScheduleDrawer
         open={!!schedulePitch}

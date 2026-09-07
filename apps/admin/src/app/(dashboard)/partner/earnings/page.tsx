@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -8,10 +9,70 @@ import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+import RecordDrawer from '@/components/RecordDrawer';
+
+interface PartnerSettlement {
+  id: string;
+  venue_name?: string | null;
+  amount: number | string;
+  period_start: string;
+  period_end: string;
+  status: string;
+  payout_ref?: string | null;
+  created_at: string;
+}
 
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
+  const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+
+  const columns: ColumnDef<PartnerSettlement>[] = [
+    {
+      key: 'venue',
+      header: t('thVenue'),
+      role: 'identity',
+      render: (s) => <span className="font-medium text-gray-900">{s.venue_name ?? '—'}</span>,
+    },
+    {
+      key: 'amount',
+      header: t('thAmount'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (s) => formatMoney(s.amount),
+    },
+    {
+      key: 'status',
+      header: t('thStatus'),
+      role: 'meta',
+      render: (s) => <StatusBadge status={s.status} />,
+    },
+    {
+      key: 'period',
+      header: t('thPeriod'),
+      role: 'meta',
+      cardLabel: t('thPeriod'),
+      render: (s) => (
+        <span dir="ltr">
+          {formatDate(s.period_start)} → {formatDate(s.period_end)}
+        </span>
+      ),
+    },
+    {
+      key: 'payoutRef',
+      header: t('thPayoutRef'),
+      role: 'detail',
+      render: (s) => <span dir="ltr">{s.payout_ref ?? '—'}</span>,
+    },
+    {
+      key: 'created',
+      header: t('thCreated'),
+      role: 'detail',
+      render: (s) => <span dir="ltr">{formatDate(s.created_at)}</span>,
+    },
+  ];
 
   return (
     <div>
@@ -29,45 +90,46 @@ export default function PartnerEarningsPage() {
               <MetricCard label={t('totalPaid')} value={formatMoney(data?.totalPaid ?? 0)} icon={Wallet} />
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div>
               <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('settlementsTitle')}</h2>
-              <table className="w-full text-start text-sm">
-                <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">{t('thId')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thVenue')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thAmount')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thPeriod')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thPayoutRef')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thCreated')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data?.settlements ?? []).map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600" dir="ltr">#{s.id.slice(0, 8).toUpperCase()}</td>
-                      <td className="px-4 py-3 text-gray-900">{s.venue_name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-700">{formatMoney(s.amount)}</td>
-                      <td className="px-4 py-3 text-gray-600" dir="ltr">
-                        {formatDate(s.period_start)} → {formatDate(s.period_end)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={s.status} />
-                      </td>
-                      <td className="px-4 py-3 text-gray-500" dir="ltr">{s.payout_ref ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500" dir="ltr">{formatDate(s.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!data?.settlements?.length && (
-                <div className="py-4 text-sm text-gray-400">{t('empty')}</div>
-              )}
+              <DataTable
+                columns={columns}
+                rows={data?.settlements ?? []}
+                rowKey={(s) => s.id}
+                onRowClick={(s) => setSelected(s)}
+                empty={<p className="px-4 py-10 text-sm text-gray-400">{t('empty')}</p>}
+              />
             </div>
           </>
         )}
       </div>
+
+      <RecordDrawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        page="partner.earnings"
+        title={selected?.venue_name ?? t('thVenue')}
+        recordId={selected?.id}
+        fields={
+          selected
+            ? [
+                { label: t('thVenue'), value: selected.venue_name ?? '—' },
+                { label: t('thAmount'), value: formatMoney(selected.amount) },
+                { label: t('thStatus'), value: <StatusBadge status={selected.status} /> },
+                {
+                  label: t('thPeriod'),
+                  value: (
+                    <span dir="ltr">
+                      {formatDate(selected.period_start)} → {formatDate(selected.period_end)}
+                    </span>
+                  ),
+                },
+                { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
+                { label: t('thCreated'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

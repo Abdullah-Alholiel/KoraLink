@@ -48,11 +48,13 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
   if (!open) return null;
 
   return (
-    // The overlay starts AFTER the sidebar column (left-64): the main menu
-    // stays pinned left and fully visible/clickable while a drawer is open
-    // (Abdullah 2026-08-31: "i always need the main menu to be shown").
+    // The overlay starts AFTER the sidebar column (left-64) on desktop: the
+    // main menu stays pinned left and fully visible/clickable while a drawer
+    // is open (Abdullah 2026-08-31: "i always need the main menu to be
+    // shown"). Below md the sidebar is hidden (2026-09-07), so the overlay
+    // starts at left-0 and the drawer spans the full viewport width.
     <div
-      className="fixed inset-y-0 left-64 right-0 z-[80]"
+      className="fixed inset-y-0 left-0 right-0 z-[80] md:left-64"
       role="dialog"
       aria-modal="true"
       aria-label={title}

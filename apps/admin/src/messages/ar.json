@@ -580,6 +580,23 @@
     "unbanAction": "إلغاء الحظر",
     "banAction": "حظر",
     "refundAction": "استرداد",
-    "loadFailed": "فشل تحميل البيانات"
+    "loadFailed": "فشل تحميل البيانات",
+    "liftAction": "رفع الإيقاف",
+    "suspendAction": "إيقاف 7 أيام",
+    "payAction": "صرف الدفعة",
+    "generatePayouts": "توليد الدفعات",
+    "thSubjectType": "نوع العنصر"
+  },
+  "list": {
+    "sortLabel": "الترتيب",
+    "sortNewest": "الأحدث أولاً",
+    "sortOldest": "الأقدم أولاً",
+    "sortAmountHigh": "المبلغ: من الأعلى إلى الأقل",
+    "sortAmountLow": "المبلغ: من الأقل إلى الأعلى",
+    "sortNameAZ": "الاسم أ–ي",
+    "details": "التفاصيل",
+    "idLabel": "المعرّف",
+    "openPage": "فتح الصفحة الكاملة",
+    "noDetails": "لا توجد تفاصيل إضافية."
   }
 }

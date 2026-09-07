@@ -11,6 +11,8 @@ import type { AdminVenue, ListResponse, PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+import RecordDrawer from '@/components/RecordDrawer';
 import VenueTransferDrawer from '@/components/VenueTransferDrawer';
 import VenueFormDrawer from '@/components/VenueFormDrawer';
 
@@ -19,6 +21,7 @@ type VenuesResponse = ListResponse<AdminVenue> & { venues: AdminVenue[] };
 export default function VenuesPage() {
   const t = useTranslations('hq');
   const ts = useTranslations('status');
+  const tc = useTranslations('common');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -26,6 +29,7 @@ export default function VenuesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferring, setTransferring] = useState<AdminVenue | null>(null);
   const [editing, setEditing] = useState<PartnerVenueRow | null>(null);
+  const [selected, setSelected] = useState<AdminVenue | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (search) qs.set('search', search);
@@ -38,6 +42,7 @@ export default function VenuesPage() {
     try {
       await api.post(`/admin/venues/${id}/decision`, { decision });
       reload();
+      setSelected(null);
     } finally {
       setBusyId(null);
     }
@@ -49,10 +54,62 @@ export default function VenuesPage() {
     try {
       const detail = await api.get<PartnerVenueRow>(`/admin/venues/${v.id}`);
       setEditing(detail);
+      setSelected(null);
     } finally {
       setBusyId(null);
     }
   }
+
+  const columns: ColumnDef<AdminVenue>[] = [
+    {
+      key: 'venue',
+      header: t('thVenue'),
+      role: 'identity',
+      render: (v) => (
+        <Link
+          href={`/venues/${v.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-medium text-gray-900 hover:text-brand-600"
+        >
+          {v.name}
+        </Link>
+      ),
+      secondary: (v) => v.address,
+    },
+    {
+      key: 'pitches',
+      header: t('thPitches'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      cardLabel: t('thPitches'),
+      render: (v) => v.pitch_count ?? 0,
+    },
+    {
+      key: 'verification',
+      header: t('thVerification'),
+      role: 'meta',
+      render: (v) => <StatusBadge status={v.verification_status ?? 'pending'} />,
+    },
+    {
+      key: 'approved',
+      header: ts('approved'),
+      role: 'meta',
+      render: (v) => <StatusBadge status={v.is_approved ? 'approved' : 'pending'} />,
+    },
+    {
+      key: 'city',
+      header: t('thCity'),
+      role: 'detail',
+      render: (v) => v.city,
+    },
+    {
+      key: 'owner',
+      header: t('thOwner'),
+      role: 'detail',
+      render: (v) => v.owner_name ?? '—',
+    },
+  ];
 
   return (
     <div>
@@ -102,85 +159,76 @@ export default function VenuesPage() {
         <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-8 py-3 font-medium">{t('thVenue')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thCity')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thOwner')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thPitches')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thVerification')}</th>
-                  <th className="px-4 py-3 font-medium">{ts('approved')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thActions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(data?.venues ?? []).map((v) => {
-                  const busy = busyId === v.id;
-                  return (
-                    <tr key={v.id} className="hover:bg-gray-50">
-                      <td className="px-8 py-3">
-                        <Link href={`/venues/${v.id}`} className="font-medium text-gray-900 hover:text-brand-600">
-                          {v.name}
-                        </Link>
-                        <div className="text-xs text-gray-500">{v.address}</div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{v.city}</td>
-                      <td className="px-4 py-3 text-gray-700">{v.owner_name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-700">{v.pitch_count ?? 0}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={v.verification_status ?? 'pending'} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={v.is_approved ? 'approved' : 'pending'} />
-                      </td>
-                      <td className="px-4 py-3">
-                        {busy ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {!v.is_approved && (
-                              <>
-                                <button
-                                  onClick={() => decide(v.id, 'approve')}
-                                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('approveAction')}
-                                </button>
-                                <button
-                                  onClick={() => decide(v.id, 'reject')}
-                                  className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
-                                >
-                                  <XCircle className="h-3.5 w-3.5" /> {t('rejectAction')}
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => setTransferring(v)}
-                              className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
-                            >
-                              <UserCog className="h-3.5 w-3.5" /> {t('transferAction')}
-                            </button>
-                            <button
-                              onClick={() => startEdit(v)}
-                              disabled={busyId === v.id}
-                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            >
-                              {busyId === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />} Edit
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="px-8">
+            <DataTable
+              columns={columns}
+              rows={data?.venues ?? []}
+              rowKey={(v) => v.id}
+              onRowClick={(v) => setSelected(v)}
+              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+            />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
         </>
       )}
+
+      <RecordDrawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        page="admin.venues"
+        title={selected?.name ?? t('thVenue')}
+        recordId={selected?.id}
+        fields={
+          selected
+            ? [
+                { label: t('thCity'), value: selected.city },
+                { label: t('thOwner'), value: selected.owner_name ?? '—' },
+                { label: t('thPitches'), value: selected.pitch_count ?? 0 },
+                { label: t('thVerification'), value: <StatusBadge status={selected.verification_status ?? 'pending'} /> },
+                { label: ts('approved'), value: <StatusBadge status={selected.is_approved ? 'approved' : 'pending'} /> },
+                { label: t('thVenue'), value: selected.address },
+              ]
+            : []
+        }
+        actions={
+          selected ? (
+            busyId === selected.id ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {!selected.is_approved && (
+                  <>
+                    <button
+                      onClick={() => decide(selected.id, 'approve')}
+                      className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {t('approveAction')}
+                    </button>
+                    <button
+                      onClick={() => decide(selected.id, 'reject')}
+                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> {t('rejectAction')}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setTransferring(selected)}
+                  className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
+                >
+                  <UserCog className="h-3.5 w-3.5" /> {t('transferAction')}
+                </button>
+                <button
+                  onClick={() => startEdit(selected)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
+                </button>
+              </div>
+            )
+          ) : undefined
+        }
+      />
 
       <VenueTransferDrawer
         venue={transferring}

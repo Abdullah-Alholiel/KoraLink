@@ -580,6 +580,23 @@
     "unbanAction": "Unban",
     "banAction": "Ban",
     "refundAction": "Refund",
-    "loadFailed": "Failed to load"
+    "loadFailed": "Failed to load",
+    "liftAction": "Lift suspension",
+    "suspendAction": "Suspend 7d",
+    "payAction": "Pay out",
+    "generatePayouts": "Generate payouts",
+    "thSubjectType": "Subject type"
+  },
+  "list": {
+    "sortLabel": "Sort",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
+    "sortAmountHigh": "Amount: high to low",
+    "sortAmountLow": "Amount: low to high",
+    "sortNameAZ": "Name A–Z",
+    "details": "Details",
+    "idLabel": "ID",
+    "openPage": "Open full page",
+    "noDetails": "No extra details."
   }
 }

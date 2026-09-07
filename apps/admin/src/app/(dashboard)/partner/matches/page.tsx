@@ -2,12 +2,16 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
-import type { AdminVenue, PartnerMatchList } from '@/lib/types';
+import type { AdminVenue, PartnerMatchList, PartnerMatchRow } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+import SortSelect from '@/components/SortSelect';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 const STATUS_OPTIONS = ['Open', 'Full', 'InProgress', 'Completed', 'Cancelled'];
 const PAGE_SIZE = 20;
@@ -21,8 +25,11 @@ interface PitchOption {
 
 export default function PartnerMatchesPage() {
   const t = useTranslations('partner.matches');
+  const tl = useTranslations('list');
+  const router = useRouter();
   const [scope, setScope] = useState<'today' | 'upcoming'>('today');
   const [status, setStatus] = useState<string>('');
+  const [sort, setSort] = useState('');
   // P2-30: venue/pitch narrowing + server-side pager.
   const [venueId, setVenueId] = useState<string>('');
   const [pitchId, setPitchId] = useState<string>('');
@@ -41,15 +48,20 @@ export default function PartnerMatchesPage() {
     if (status) qs.set('status', status);
     if (venueId) qs.set('venueId', venueId);
     if (pitchId) qs.set('pitchId', pitchId);
+    if (sort) {
+      const [field, dir] = sort.split(':');
+      qs.set('sortBy', field);
+      qs.set('dir', dir);
+    }
     qs.set('limit', String(PAGE_SIZE));
     qs.set('offset', String((page - 1) * PAGE_SIZE));
     return `/partner/matches?${qs.toString()}`;
-  }, [scope, status, venueId, pitchId, page]);
+  }, [scope, status, venueId, pitchId, sort, page]);
 
   // Any filter change resets to the first page.
   useEffect(() => {
     setPage(1);
-  }, [scope, status, venueId, pitchId]);
+  }, [scope, status, venueId, pitchId, sort]);
 
   const { data, loading, error } = useLiveAdminData<PartnerMatchList>(path, ['matches']);
 
@@ -114,6 +126,21 @@ export default function PartnerMatchesPage() {
               </option>
             ))}
           </select>
+          <SortSelect
+            value={sort}
+            options={[
+              { value: '', label: tl('sortNewest') },
+              { value: 'scheduled_at:asc', label: tl('sortOldest') },
+            ]}
+            onChange={(v) => {
+              setSort(v);
+              setPage(1);
+              if (v) {
+                const [field, dir] = v.split(':');
+                trackEvent('admin_list_sort', { page: 'partner.matches', sortBy: field, dir });
+              }
+            }}
+          />
           {!loading && !error && (
             <span className="text-xs text-gray-500" dir="ltr">
               {t('showing', { count: data?.matches.length ?? 0, total })}
@@ -127,58 +154,84 @@ export default function PartnerMatchesPage() {
           <div className="text-sm text-red-600">{t('error', { error })}</div>
         ) : (
           <>
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
-              <table className="w-full text-start text-sm">
-                <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">{t('thMatch')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thPitch')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thVenue')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thTime')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thPlayers')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thNoShows')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data?.matches ?? []).map((m) => (
-                    <tr key={m.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/partner/matches/${m.id}`}
-                          className="font-medium text-gray-900 hover:underline"
-                        >
-                          {m.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{m.pitch_name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-700">{m.venue_name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-600" dir="ltr">
-                        {formatDate(m.scheduled_at)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700" dir="ltr">
+            <DataTable
+              columns={
+                [
+                  {
+                    key: 'match',
+                    header: t('thMatch'),
+                    role: 'identity',
+                    render: (m: PartnerMatchRow) => (
+                      <Link
+                        href={`/partner/matches/${m.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-gray-900 hover:underline"
+                      >
+                        {m.title}
+                      </Link>
+                    ),
+                  },
+                  {
+                    key: 'players',
+                    header: t('thPlayers'),
+                    role: 'value',
+                    align: 'end',
+                    tabular: true,
+                    cardLabel: t('thPlayers'),
+                    render: (m: PartnerMatchRow) => (
+                      <span dir="ltr">
                         {m.spots_filled}/{m.max_players}
-                      </td>
-                      <td className="px-4 py-3" dir="ltr">
-                        {m.no_show_count > 0 ? (
-                          <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                            {m.no_show_count}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">0</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={m.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!data?.matches.length && (
-                <div className="py-4 text-sm text-gray-400">{t('empty')}</div>
-              )}
-            </div>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    header: t('thStatus'),
+                    role: 'meta',
+                    render: (m: PartnerMatchRow) => <StatusBadge status={m.status} />,
+                  },
+                  {
+                    key: 'time',
+                    header: t('thTime'),
+                    role: 'meta',
+                    cardLabel: t('thTime'),
+                    render: (m: PartnerMatchRow) => (
+                      <span dir="ltr">{formatDate(m.scheduled_at)}</span>
+                    ),
+                  },
+                  {
+                    key: 'noShows',
+                    header: t('thNoShows'),
+                    role: 'detail',
+                    tabular: true,
+                    render: (m: PartnerMatchRow) =>
+                      m.no_show_count > 0 ? (
+                        <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                          {m.no_show_count}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">0</span>
+                      ),
+                  },
+                  {
+                    key: 'pitch',
+                    header: t('thPitch'),
+                    role: 'detail',
+                    render: (m: PartnerMatchRow) => m.pitch_name ?? '—',
+                  },
+                  {
+                    key: 'venue',
+                    header: t('thVenue'),
+                    role: 'detail',
+                    render: (m: PartnerMatchRow) => m.venue_name ?? '—',
+                  },
+                ] satisfies ColumnDef<PartnerMatchRow>[]
+              }
+              rows={data?.matches ?? []}
+              rowKey={(m) => m.id}
+              onRowClick={(m) => router.push(`/partner/matches/${m.id}`)}
+              empty={<div className="py-4 text-sm text-gray-400">{t('empty')}</div>}
+            />
 
             {/* P2-30: server-side pager (page size 20). */}
             {totalPages > 1 && (

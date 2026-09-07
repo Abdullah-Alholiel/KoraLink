@@ -53,3 +53,26 @@ body {
 .animate-slide-in-end {
   animation: slide-in-end 0.22s ease-out;
 }
+
+/* ── DataTable container-query restructure (admin-table-restructure) ──────
+   The breakpoint belongs to the TABLE, not the screen (2026-09-07): .dt-root
+   is a CSS container — at ≥700px inline size it renders the classic table;
+   below that the columns restructure into stacked rows. The same table
+   dropped into a narrow desktop side panel restructures automatically. */
+.dt-root {
+  container-type: inline-size;
+}
+
+.dt-cards {
+  display: none;
+}
+
+@container (max-width: 699.98px) {
+  .dt-table {
+    display: none;
+  }
+
+  .dt-cards {
+    display: block;
+  }
+}

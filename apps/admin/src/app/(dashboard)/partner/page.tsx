@@ -10,6 +10,16 @@ import PageHeader from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
 import WeeklyTrendChart from '@/components/WeeklyTrendChart';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+
+/** Row shape of PartnerDashboard.scheduleToday. */
+interface ScheduleSlot {
+  pitchName: string | null;
+  startTime: string;
+  endTime: string;
+  isBooked: boolean;
+  matchTitle: string | null;
+}
 
 export default function PartnerDashboardPage() {
   const t = useTranslations('partner.dashboard');
@@ -115,37 +125,50 @@ export default function PartnerDashboardPage() {
         {/* Today's schedule */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('scheduleTitle')}</h2>
-          <table className="w-full text-start text-sm">
-            <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-4 py-3 text-start font-medium">{t('thPitch')}</th>
-                <th className="px-4 py-3 text-start font-medium">{t('thStart')}</th>
-                <th className="px-4 py-3 text-start font-medium">{t('thEnd')}</th>
-                <th className="px-4 py-3 text-start font-medium">{t('thStatus')}</th>
-                <th className="px-4 py-3 text-start font-medium">{t('thMatch')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(data.scheduleToday ?? []).map((s, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-900">{s.pitchName ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600" dir="ltr">{s.startTime?.slice(0, 5)}</td>
-                  <td className="px-4 py-3 text-gray-600" dir="ltr">{s.endTime?.slice(0, 5)}</td>
-                  <td className="px-4 py-3">
+          <DataTable
+            columns={
+              [
+                {
+                  key: 'pitch',
+                  header: t('thPitch'),
+                  role: 'identity',
+                  render: (s: ScheduleSlot) => (
+                    <span className="font-medium text-gray-900">{s.pitchName ?? '—'}</span>
+                  ),
+                },
+                {
+                  key: 'slot',
+                  header: t('thStart'),
+                  role: 'value',
+                  align: 'end',
+                  tabular: true,
+                  render: (s: ScheduleSlot) => (
+                    <span dir="ltr">
+                      {s.startTime?.slice(0, 5)}–{s.endTime?.slice(0, 5)}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'status',
+                  header: t('thStatus'),
+                  role: 'meta',
+                  render: (s: ScheduleSlot) => (
                     <StatusBadge status={s.isBooked ? 'booked' : 'available'} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{s.matchTitle ?? '—'}</td>
-                </tr>
-              ))}
-              {!data.scheduleToday?.length && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-4 text-sm text-gray-400">
-                    {t('noSchedule')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  ),
+                },
+                {
+                  key: 'match',
+                  header: t('thMatch'),
+                  role: 'meta',
+                  cardLabel: t('thMatch'),
+                  render: (s: ScheduleSlot) => s.matchTitle ?? '—',
+                },
+              ] satisfies ColumnDef<ScheduleSlot>[]
+            }
+            rows={data.scheduleToday ?? []}
+            rowKey={(s, i) => String(i)}
+            empty={<div className="py-4 text-sm text-gray-400">{t('noSchedule')}</div>}
+          />
         </div>
 
         {/* Recent deposits */}

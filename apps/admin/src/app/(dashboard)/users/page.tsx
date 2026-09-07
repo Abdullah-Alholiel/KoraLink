@@ -12,6 +12,10 @@ import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+import RecordDrawer from '@/components/RecordDrawer';
+import SortSelect from '@/components/SortSelect';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
 
@@ -41,17 +45,27 @@ function purgeInfo(u: AdminUser): { purged: boolean; daysRemaining?: number } {
 export default function UsersPage() {
   const t = useTranslations('hq');
   const ts = useTranslations('status');
+  const tl = useTranslations('list');
+  const tc = useTranslations('common');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState('all');
+  const [sort, setSort] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AdminUser | null>(null);
+
+  const sortParts = sort ? sort.split(':') : null;
+  const sortField = sortParts?.[0] ?? '';
+  const sortDir = sortParts?.[1] ?? '';
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (search) qs.set('search', search);
   if (role) qs.set('role', role);
   if (status && status !== 'all') qs.set('status', status);
+  if (sortField) qs.set('sortBy', sortField);
+  if (sortDir) qs.set('dir', sortDir);
 
   const { data, loading, error, reload } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
 
@@ -60,8 +74,101 @@ export default function UsersPage() {
     try {
       await api.patch(`/admin/users/${id}`, body);
       reload();
+      setSelected(null);
     } finally {
       setBusyId(null);
+    }
+  }
+
+  const columns: ColumnDef<AdminUser>[] = [
+    {
+      key: 'user',
+      header: t('thUser'),
+      role: 'identity',
+      render: (u) => (
+        <Link
+          href={`/users/${u.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-medium text-gray-900 hover:text-brand-600"
+        >
+          {u.full_name ?? '—'}
+        </Link>
+      ),
+      secondary: (u) => `@${u.handle ?? 'no-handle'}`,
+    },
+    {
+      key: 'wallet',
+      header: t('thWallet'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (u) => formatMoney(u.wallet_balance),
+    },
+    {
+      key: 'status',
+      header: t('thStatus'),
+      role: 'meta',
+      render: (u) => <StatusBadge status={userStatus(u)} />,
+    },
+    {
+      key: 'joined',
+      header: t('thJoined'),
+      role: 'meta',
+      cardLabel: t('thJoined'),
+      render: (u) => <span dir="ltr">{formatDate(u.created_at)}</span>,
+    },
+    {
+      key: 'phone',
+      header: t('thPhone'),
+      role: 'detail',
+      render: (u) => <span dir="ltr">{u.phone}</span>,
+    },
+    {
+      key: 'role',
+      header: t('thRole'),
+      role: 'detail',
+      render: (u) => u.role,
+    },
+    {
+      key: 'karma',
+      header: t('thKarma'),
+      role: 'detail',
+      tabular: true,
+      render: (u) => u.karma_score,
+    },
+    {
+      key: 'noShows',
+      header: t('thNoShows'),
+      role: 'detail',
+      tabular: true,
+      render: (u) => u.no_show_count,
+    },
+    {
+      key: 'purge',
+      header: t('thPurgeScheduled'),
+      role: 'detail',
+      render: (u) => {
+        const info = purgeInfo(u);
+        if (info.purged) return <span className="text-gray-500">{ts('purged')}</span>;
+        if (info.daysRemaining !== undefined) return ts('purgeInDays', { count: info.daysRemaining });
+        return '—';
+      },
+    },
+  ];
+
+  const sortOptions = [
+    { value: '', label: tl('sortNewest') },
+    { value: 'created_at:asc', label: tl('sortOldest') },
+    { value: 'wallet_balance:desc', label: tl('sortAmountHigh') },
+    { value: 'full_name:asc', label: tl('sortNameAZ') },
+  ];
+
+  function onSortChange(v: string) {
+    setSort(v);
+    setPage(1);
+    if (v) {
+      const [field, dir] = v.split(':');
+      trackEvent('admin_list_sort', { page: 'admin.users', sortBy: field, dir });
     }
   }
 
@@ -123,6 +230,8 @@ export default function UsersPage() {
           <option value="suspended">{ts('suspended')}</option>
           <option value="deleted">{ts('deleted')}</option>
         </select>
+
+        <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
       </div>
 
       {loading ? (
@@ -131,115 +240,95 @@ export default function UsersPage() {
         <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-8 py-3 font-medium">{t('thUser')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thPhone')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thRole')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thWallet')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thKarma')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thNoShows')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thStatus')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thPurgeScheduled')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thJoined')}</th>
-                  <th className="px-4 py-3 font-medium">{t('thActions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(data?.users ?? []).map((u) => {
-                  const st = userStatus(u);
-                  const busy = busyId === u.id;
-                  return (
-                    <tr key={u.id} className="hover:bg-gray-50">
-                      <td className="px-8 py-3">
-                        <Link href={`/users/${u.id}`} className="font-medium text-gray-900 hover:text-brand-600">
-                          {u.full_name ?? '—'}
-                        </Link>
-                        <div className="text-xs text-gray-500">@{u.handle ?? 'no-handle'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{u.phone}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-gray-700">{u.role}</span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{formatMoney(u.wallet_balance)}</td>
-                      <td className="px-4 py-3 text-gray-700">{u.karma_score}</td>
-                      <td className="px-4 py-3 text-gray-700">{u.no_show_count}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={st} />
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {(() => {
-                          const info = purgeInfo(u);
-                          if (info.purged) return <span className="text-gray-500">{ts('purged')}</span>;
-                          if (info.daysRemaining !== undefined) {
-                            return ts('purgeInDays', { count: info.daysRemaining });
-                          }
-                          return '—';
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{formatDate(u.created_at)}</td>
-                      <td className="px-4 py-3">
-                        {/* P1-37 (run #31): deleted/purged rows carry no
-                            moderation actions — a ghost account cannot be
-                            banned or suspended. */}
-                        {st === 'deleted' ? (
-                          <span className="text-xs text-gray-400">—</span>
-                        ) : (
-                        <div className="flex items-center gap-2">
-                          {busy ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                          ) : (
-                            <>
-                              {st === 'banned' ? (
-                                <button
-                                  onClick={() => act(u.id, { banned: false })}
-                                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('unbanAction')}
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => act(u.id, { banned: true })}
-                                  className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
-                                >
-                                  <Ban className="h-3.5 w-3.5" /> {t('banAction')}
-                                </button>
-                              )}
-                              {st === 'suspended' ? (
-                                <button
-                                  onClick={() => act(u.id, { suspendedUntil: null })}
-                                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                                >
-                                  Lift
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() =>
-                                    act(u.id, {
-                                      suspendedUntil: new Date(Date.now() + 7 * 86400000).toISOString(),
-                                    })
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                                >
-                                  <TimerOff className="h-3.5 w-3.5" /> Suspend 7d
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="px-8">
+            <DataTable
+              columns={columns}
+              rows={data?.users ?? []}
+              rowKey={(u) => u.id}
+              onRowClick={(u) => setSelected(u)}
+              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+            />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
         </>
       )}
+
+      <RecordDrawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        page="admin.users"
+        title={selected?.full_name ?? t('thUser')}
+        recordId={selected?.id}
+        fields={
+          selected
+            ? [
+                { label: t('thUser'), value: selected.full_name ?? '—' },
+                { label: t('thPhone'), value: <span dir="ltr">{selected.phone}</span> },
+                { label: t('thRole'), value: selected.role },
+                { label: t('thWallet'), value: formatMoney(selected.wallet_balance) },
+                { label: t('thKarma'), value: selected.karma_score },
+                { label: t('thNoShows'), value: selected.no_show_count },
+                { label: t('thStatus'), value: <StatusBadge status={userStatus(selected)} /> },
+                { label: t('thJoined'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
+                {
+                  label: t('thPurgeScheduled'),
+                  value: (() => {
+                    const info = purgeInfo(selected);
+                    if (info.purged) return <span className="text-gray-500">{ts('purged')}</span>;
+                    if (info.daysRemaining !== undefined) {
+                      return ts('purgeInDays', { count: info.daysRemaining });
+                    }
+                    return '—';
+                  })(),
+                },
+              ]
+            : []
+        }
+        actions={
+          selected && userStatus(selected) !== 'deleted' ? (
+            busyId === selected.id ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {userStatus(selected) === 'banned' ? (
+                  <button
+                    onClick={() => act(selected.id, { banned: false })}
+                    className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {t('unbanAction')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => act(selected.id, { banned: true })}
+                    className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                  >
+                    <Ban className="h-3.5 w-3.5" /> {t('banAction')}
+                  </button>
+                )}
+                {userStatus(selected) === 'suspended' ? (
+                  <button
+                    onClick={() => act(selected.id, { suspendedUntil: null })}
+                    className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {t('liftAction')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() =>
+                      act(selected.id, {
+                        suspendedUntil: new Date(Date.now() + 7 * 86400000).toISOString(),
+                      })
+                    }
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                  >
+                    <TimerOff className="h-3.5 w-3.5" /> {t('suspendAction')}
+                  </button>
+                )}
+              </div>
+            )
+          ) : undefined
+        }
+      />
     </div>
   );
 }

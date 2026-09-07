@@ -8,6 +8,16 @@ import type { PartnerMatchDetail } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
+import DataTable, { type ColumnDef } from '@/components/DataTable';
+
+/** Row shape of PartnerMatchDetail.players (local: keeps the table generic). */
+interface RosterPlayer {
+  user_id: string;
+  full_name: string | null;
+  phone: string;
+  is_host: boolean;
+  no_show: boolean;
+}
 
 export default function PartnerMatchDetailPage() {
   const t = useTranslations('partner.matches');
@@ -79,47 +89,65 @@ export default function PartnerMatchDetailPage() {
                   {data?.visibility === 'private' ? t('visibilityPrivate') : t('visibilityPublic')}
                 </span>
               </div>
-              <table className="w-full text-start text-sm">
-                <thead className="border-y border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">{t('rosterPlayer')}</th>
-                    <th className="px-4 py-3 font-medium">{t('rosterPhone')}</th>
-                    <th className="px-4 py-3 font-medium">{t('host')}</th>
-                    <th className="px-4 py-3 font-medium">{t('thNoShows')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data?.players ?? []).map((p) => (
-                    <tr key={p.user_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">{p.full_name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-600" dir="ltr">
-                        {p.phone}
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.is_host ? (
+              <DataTable
+                columns={
+                  [
+                    {
+                      key: 'player',
+                      header: t('rosterPlayer'),
+                      role: 'identity',
+                      render: (p: RosterPlayer) => (
+                        <span className="font-medium text-gray-900">{p.full_name ?? '—'}</span>
+                      ),
+                      secondary: (p: RosterPlayer) => (
+                        <span dir="ltr">{p.phone}</span>
+                      ),
+                    },
+                    {
+                      key: 'state',
+                      header: t('host'),
+                      role: 'value',
+                      render: (p: RosterPlayer) =>
+                        p.is_host ? (
                           <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             {t('host')}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.no_show ? (
+                        ) : p.no_show ? (
                           <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
                             {t('noShow')}
                           </span>
                         ) : (
                           <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!data?.players.length && (
-                <div className="py-4 text-sm text-gray-400">{t('empty')}</div>
-              )}
+                        ),
+                    },
+                    {
+                      key: 'noShow',
+                      header: t('thNoShows'),
+                      role: 'meta',
+                      cardLabel: t('thNoShows'),
+                      render: (p: RosterPlayer) =>
+                        p.no_show ? (
+                          <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                            {t('noShow')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        ),
+                    },
+                    {
+                      key: 'phone',
+                      header: t('rosterPhone'),
+                      role: 'detail',
+                      render: (p: RosterPlayer) => (
+                        <span dir="ltr">{p.phone}</span>
+                      ),
+                    },
+                  ] satisfies ColumnDef<RosterPlayer>[]
+                }
+                rows={data?.players ?? []}
+                rowKey={(p) => p.user_id}
+                empty={<div className="py-4 text-sm text-gray-400">{t('empty')}</div>}
+              />
             </div>
           </>
         )}
