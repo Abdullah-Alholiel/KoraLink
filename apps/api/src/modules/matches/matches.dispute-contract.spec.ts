@@ -133,7 +133,7 @@ describe('MatchesService.createDispute contract (P2-5, run #39)', () => {
     expect(result.status).toBe('opened');
   });
 
-  it('shape parity: createDispute and findMyDispute expose the same key set', async () => {
+  it('createDispute exposes exactly the MyDispute key set (contract pin; TS return type derives from findMyDispute, which is the drift guard)', async () => {
     const inserted = {
       id: 'd-2',
       match_id: MATCH_ID,

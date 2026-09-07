@@ -76,9 +76,12 @@ describe('drizzle migration journal parity (run #39 tripwire)', () => {
     entries.forEach((e, i) => {
       expect(e.idx).toBe(i);
       expect(typeof e.when).toBe('number');
-      expect(e.version).toBe('7');
+      // Any numeric version passes (a drizzle-kit bump to '8' must not fail the
+      // tripwire spuriously) — the CURRENT entries are all version '7'.
+      expect(e.version).toMatch(/^\d+$/);
       if (i > 0) expect(e.when).toBeGreaterThan(entries[i - 1].when);
     });
+    expect(entries[entries.length - 1].version).toBe('7');
   });
 
   it('fresh-DB replay reaches the documented P1-17/P0-10 schema state (static SQL pins)', () => {
