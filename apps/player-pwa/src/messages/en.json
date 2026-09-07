@@ -219,6 +219,7 @@
     "surface": "Surface",
     "matchRules": "Standard rules",
     "leaveMatch": "Leave Match",
+    "waitlistCovered": "{count, plural, =0 {No one is waiting} one {# player waiting} other {# players waiting}} — your spot is covered instantly if you leave",
     "cancelMatch": "Cancel Match",
     "emergencyCancelMatch": "Emergency Cancel",
     "hostBadge": "Match Host",
@@ -280,6 +281,7 @@
   "leaveMatch": {
     "title": "Leave Match?",
     "info": "Your spot will be released. You can rejoin later if spots are available. Refund policy applies.",
+    "covered": "{count, plural, one {# player is waiting to take your spot — the match stays full and no one is let down.} other {# players are waiting to take your spot — the match stays full and no one is let down.}}",
     "confirm": "Leave Match",
     "stay": "Stay"
   },

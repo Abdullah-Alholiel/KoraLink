@@ -548,6 +548,17 @@ export default function MatchDetailPage({
                             {/* Leave Match Button — only for active (not started/completed/cancelled) matches */}
                             {!isUserHost && (match.status === 'open' || match.status === 'full') && (
                                 <div className="px-5 pt-6">
+                                    {(match.waitlistCount ?? 0) > 0 && (
+                                        <div
+                                            data-testid="waitlist-covered-note"
+                                            className="mb-3 bg-brand-green/5 border border-brand-green/20 rounded-xl px-4 py-3 flex items-center gap-2.5"
+                                        >
+                                            <Users className="w-4 h-4 text-brand-green flex-shrink-0" strokeWidth={2} />
+                                            <p className="text-xs font-semibold text-brand-green leading-relaxed" dir="auto">
+                                                {t('matchDetail.waitlistCovered', { count: match.waitlistCount })}
+                                            </p>
+                                        </div>
+                                    )}
                                     <button
                                         onClick={() => setShowLeaveSheet(true)}
                                         className="w-full py-3 rounded-xl border border-brand-red/30 text-brand-red text-sm font-semibold active:scale-[0.98] transition-transform"
@@ -966,6 +977,7 @@ export default function MatchDetailPage({
                     onConfirm={() => { leaveMatch.mutate(id); setShowLeaveSheet(false); }}
                     matchTitle={match.title}
                     matchTime={`${match.date}, ${match.time}`}
+                    waitingCount={match.waitlistCount}
                     isPending={leaveMatch.isPending}
                 />
             )}

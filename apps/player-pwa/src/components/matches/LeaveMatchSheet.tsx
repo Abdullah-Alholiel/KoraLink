@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Info, X } from 'lucide-react';
+import { Info, Users, X } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 interface LeaveMatchSheetProps {
@@ -10,10 +10,12 @@ interface LeaveMatchSheetProps {
     onConfirm: () => void;
     matchTitle: string;
     matchTime: string;
+    /** Waitlist depth on this match — when > 0, reassure the leaver their spot is instantly covered. */
+    waitingCount?: number;
     isPending?: boolean;
 }
 
-export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle, matchTime, isPending }: LeaveMatchSheetProps) {
+export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle, matchTime, waitingCount, isPending }: LeaveMatchSheetProps) {
     const t = useTranslations();
 
     if (!isOpen) return null;
@@ -43,6 +45,18 @@ export default function LeaveMatchSheet({ isOpen, onClose, onConfirm, matchTitle
                     <Info className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
                     <p className="text-xs text-gray-500 leading-relaxed">{t('leaveMatch.info')}</p>
                 </div>
+
+                {(waitingCount ?? 0) > 0 && (
+                    <div
+                        data-testid="leave-sheet-covered"
+                        className="mt-3 bg-brand-green/5 border border-brand-green/20 rounded-xl p-4 flex items-start gap-3"
+                    >
+                        <Users className="w-5 h-5 text-brand-green flex-shrink-0 mt-0.5" strokeWidth={2} />
+                        <p className="text-xs font-semibold text-brand-green leading-relaxed" dir="auto">
+                            {t('leaveMatch.covered', { count: waitingCount })}
+                        </p>
+                    </div>
+                )}
             </div>
 
             <div className="px-5 pb-8 space-y-3 flex-shrink-0">
