@@ -206,4 +206,55 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     const svc = makeService(tx);
     await expect(svc.removePlayer('intruder', MATCH_ID, USER)).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  // ── startMatch / completeMatch (run #41 — Reviewer A IMPORTANT #1) ────────
+  // Same P2-49 class: the status transition UPDATE was only guarded by the
+  // pre-check; two concurrent calls could both pass it. The matches-row lock
+  // serializes the check-then-act inside the tx (cancelMatch already had it).
+
+  it('startMatch locks the matches row FOR UPDATE before the status flip', async () => {
+    const { tx, selects } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Full', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+    });
+    const svc = makeService(tx);
+    await svc.startMatch(HOST, MATCH_ID);
+    const first = selects[0];
+    expect(first).toBeDefined();
+    expect(first.lock).toBe('update');
+    expect(first.table === matches || first.table === '__raw__').toBe(true);
+  });
+
+  it('startMatch still rejects a non-Full match (BadRequest) after taking the lock', async () => {
+    const { tx } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Open', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+    });
+    const svc = makeService(tx);
+    await expect(svc.startMatch(HOST, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('completeMatch locks the matches row FOR UPDATE before the status flip', async () => {
+    const { tx, selects } = makeTx({
+      match: {
+        id: MATCH_ID, host_id: HOST, status: 'InProgress',
+        scheduled_at: new Date(Date.now() - 3 * 60 * 60_000), duration_mins: 90,
+      },
+    });
+    const svc = makeService(tx);
+    await svc.completeMatch(HOST, MATCH_ID);
+    const first = selects[0];
+    expect(first).toBeDefined();
+    expect(first.lock).toBe('update');
+    expect(first.table === matches || first.table === '__raw__').toBe(true);
+  });
+
+  it('completeMatch still rejects a non-InProgress match (BadRequest) after taking the lock', async () => {
+    const { tx } = makeTx({
+      match: {
+        id: MATCH_ID, host_id: HOST, status: 'Full',
+        scheduled_at: new Date(Date.now() - 3 * 60 * 60_000), duration_mins: 90,
+      },
+    });
+    const svc = makeService(tx);
+    await expect(svc.completeMatch(HOST, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

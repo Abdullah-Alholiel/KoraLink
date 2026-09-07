@@ -1718,7 +1718,8 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
@@ -1778,7 +1779,8 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
