@@ -8,6 +8,7 @@
 | Slice 2 PWA | commit 4a64415 | ✅ `npm run build` 3/3 |
 | Slice 3 Data | `seed-e2e-waitlist.sql` + `run-e2e-waitlist.sh` | ✅ **34 PASS / 0 FAIL** live |
 | Slice 4 Demo | `demo-waitlist-promotion.sh` | ✅ 16/16 — 3 leaves → FIFO auto-promotion (p15→Ahmed→Yousef), queue drained live |
+| Reassurance | commit 8d88ec3 | ✅ joined players see 'N waiting — your spot is covered' above Leave + in leave sheet (EN+AR plurals); browser-verified 3/3 |
 | CTA fix | commit d8fada7 | ✅ queued CTA reads "Queued · #N of M waiting" (bare #N read as queue count); build 3/3, browser-verified EN+AR |
 | Migration 0034 | applied + bookkeeping row | ✅ 0 capacity violations in DB |
 
