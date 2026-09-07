@@ -2,8 +2,30 @@
 
 | Gate | Artifact | State |
 |---|---|---|
-| 0 Retro | `00-retro.md` | ✅ done (owner-triggered, evidence above) |
-| 1 Product | `01-program-design.md` §Problem | ✅ capacity invariant + waitlist CTA |
-| 2 Architecture | `01-program-design.md` §schema/contract | ✅ trigger + derived capacity + FIFO table |
-| 3 Program design | `01-program-design.md` + checklist | ✅ contract verified vs live code |
-| 4 Slices | commits | 🔄 in progress |
+| 0 Retro | `00-retro.md` | ✅ done (owner-triggered) |
+| 1–3 Design | `01-program-design.md` | ✅ approved via "proceed" |
+| Slice 1 API | commits 971f01d → 5f61ec0 | ✅ built, 92/92 spec tests |
+| Slice 2 PWA | commit 4a64415 | ✅ `npm run build` 3/3 |
+| Slice 3 Data | `seed-e2e-waitlist.sql` + `run-e2e-waitlist.sh` | ✅ **34 PASS / 0 FAIL** live |
+| Migration 0034 | applied + bookkeeping row | ✅ 0 capacity violations in DB |
+
+## Defects the live E2E caught (fixed in 5f61ec0)
+1. `matches.waitlist` relation had no `one()` inverse → Drizzle 500 on EVERY
+   `GET /matches/:id` ("Something went wrong" on all match pages). Unit specs
+   mocked the db, so tsc+jest never saw it — relational queries need BOTH sides.
+2. `leaveMatch` contained a duplicated `promoteNextInTx` call → double-promoted
+   past capacity (live: 15/14). Exactly one call per freeing path now.
+3. Roster join now auto-dequeues the player's stale waitlist row.
+
+## Contracts (verified live)
+- Join = **201**; leave = DELETE → 200; cancel = `POST /matches/:id/cancel` (host-only).
+- Waitlist: `POST /matches/:id/waitlist` → 201 `{position}`; `DELETE` → 200;
+  `GET` → `{count, yourPosition, queue[]}` (non-host sees own entry only).
+- Capacity: `max_players` derived `2 × pitch.size` in createMatch + DB trigger
+  `trg_match_capacity` backstop (rejects violations with a clear error).
+
+## Run it
+```bash
+cd /home/ubuntu/projects/koralink && bash docs/plans/e2e-waitlist-join/run-e2e-waitlist.sh
+```
+Self-seeding + deterministic reset; users `wl-e2e-*` phones `+966570000000`…`+966570000015`.

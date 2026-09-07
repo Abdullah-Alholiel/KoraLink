@@ -28,25 +28,25 @@ ul { padding-left:18px; } li { margin-bottom:5px; }
 .banner { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:10px 14px; margin-top:14px; }
 </style></head><body>
 <h1>🏟️ KoraLink Factory — Control Tower</h1>
-<div class="sub">run #38 next · rotation: Admin console · lens: ADMIN STATE CHECK first; owner-WIP holds · generated 2026-09-06 21:08 UTC · auto-refresh 10 min</div>
+<div class="sub">run #39 next · rotation: DB &amp; Infra · lens: SECURITY + RELEASE lenses (gates, migrations, health) · generated 2026-09-06 22:15 UTC · auto-refresh 10 min</div>
 
 <div class="grid">
-  <div class="card kpi"><div class="n">75</div><div class="l">done ✅</div></div>
-  <div class="card kpi"><div class="n">20</div><div class="l">todo</div></div>
+  <div class="card kpi"><div class="n">77</div><div class="l">done ✅</div></div>
+  <div class="card kpi"><div class="n">19</div><div class="l">todo</div></div>
   <div class="card kpi"><div class="n">1</div><div class="l">in-review</div></div>
   <div class="card kpi"><div class="n">2</div><div class="l">blocked</div></div>
-  <div class="card kpi"><div class="n">153</div><div class="l">commits / 7d</div></div>
-  <div class="card"><div class='gauge'><div class='glabel'>z.ai weekly</div><div class='gbar'><div class='gfill' style='width:19%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>19%</div></div><div class='gauge'><div class='glabel'>z.ai 5h</div><div class='gbar'><div class='gfill' style='width:17%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>17%</div></div></div>
+  <div class="card kpi"><div class="n">155</div><div class="l">commits / 7d</div></div>
+  <div class="card"><div class='gauge'><div class='glabel'>z.ai weekly</div><div class='gbar'><div class='gfill' style='width:38%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>38%</div></div><div class='gauge'><div class='glabel'>z.ai 5h</div><div class='gbar'><div class='gfill' style='width:17%;background:#22c55e'></div></div><div class='gpct' style='color:#22c55e'>17%</div></div></div>
 </div>
 
 <div class="banner">🎯 <b>Recommendations (deterministic — scored, not vibes):</b>
-verify 2 in-review item(s) first, then build down the picks below. 12 items sit in the CEO queue — they need Abdullah, the loop will not touch them.</div>
+verify 1 in-review item(s) first, then build down the picks below. 12 items sit in the CEO queue — they need Abdullah, the loop will not touch them.</div>
 
-<h2>🔨 Build picks for run #38</h2>
+<h2>🔨 Build picks for run #39</h2>
 <div class='pick'><div class='pick-head'><span class='pid'>P1-3</span><span class='parea'>API/Chat</span><span class='score'>72</span></div><div class='ptitle'>Chat idempotency + pagination indexes — idempotency DONE + VERIFIED: `client_message_id` dedup backed by unique index `match_messages_client</div><div class='pwhy dim'>why: base P1=60; unblocks 1 item(s) (+12) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
-<div class='pick'><div class='pick-head'><span class='pid'>P1-17</span><span class='parea'>PWA/API</span><span class='score'>60</span></div><div class='ptitle'>No waitlist/overflow for full matches — 0 hits for &quot;waitlist&quot; across apps/; a Full match gives players no queue path (churn point for popula</div><div class='pwhy dim'>why: base P1=60 · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P2-48</span><span class='parea'>Infra/Docker</span><span class='score'>62</span></div><div class='ptitle'>Admin image build-breakers (latent — deliberately NOT rebuilt) — run #32 fixed these in-tree (Dockerfile `RUN mkdir -p public` + declare `so</div><div class='pwhy dim'>why: base P2=25; rotation fit (+25); unblocks 1 item(s) (+12) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
 <div class='pick'><div class='pick-head'><span class='pid'>P1-27</span><span class='parea'>PWA/Wallet</span><span class='score'>60</span></div><div class='ptitle'>No wallet withdrawal / cash-out — withdraw button only shows a `wallet.comingSoon` toast; API has no withdraw/refund endpoints (wallet.contr</div><div class='pwhy dim'>why: base P1=60 · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
-<div class='pick'><div class='pick-head'><span class='pid'>P2-1</span><span class='parea'>Admin</span><span class='score'>50</span></div><div class='ptitle'>No generic &quot;refund player&quot; tool — refunds only via dispute no-show reversal + host cancelMatch; payouts = manual status flip with synthetic </div><div class='pwhy dim'>why: base P2=25; rotation fit (+25) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
+<div class='pick'><div class='pick-head'><span class='pid'>P1-43</span><span class='parea'>PWA</span><span class='score'>60</span></div><div class='ptitle'>No in-app notification center — pushes exist (web-push + per-category prefs, run #27) but users who miss/clear a push have NO in-app surface</div><div class='pwhy dim'>why: base P1=60 · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
 <div class='pick'><div class='pick-head'><span class='pid'>P2-4</span><span class='parea'>API</span><span class='score'>37</span></div><div class='ptitle'>Money aggregated via `::float` casts in settlement/user totals — rounding risk in sums. run #5 reviewer added: `settlements.service.ts:115` </div><div class='pwhy dim'>why: base P2=25; unblocks 1 item(s) (+12) · lanes: Reviewers A+B scoped here · QA live-probe · Release gates</div></div>
 
 <div class="cols">
@@ -67,11 +67,11 @@ verify 2 in-review item(s) first, then build down the picks below. 12 items sit 
 </div>
 <div>
 <h2>🕘 Recent shifts</h2>
-<ul><li class='dim'>2026-09-06T10-21Z</li>
+<ul><li class='dim'>2026-09-07T21-50Z</li>
+<li class='dim'>2026-09-06T10-21Z</li>
 <li class='dim'>2026-09-06T01-18Z</li>
 <li class='dim'>2026-09-05T16-20Z</li>
-<li class='dim'>2026-09-05T11-40Z</li>
-<li class='dim'>2026-09-05T10-45Z</li></ul>
+<li class='dim'>2026-09-05T11-40Z</li></ul>
 </div>
 </div>
 
