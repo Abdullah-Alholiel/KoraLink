@@ -30,14 +30,15 @@
 ```bash
 cd /home/ubuntu/projects/koralink && bash docs/plans/e2e-waitlist-join/run-e2e-waitlist.sh
 ```
-Self-seeding + deterministic reset; users `wl-e2e-*` phones `+966****0000`…`+966****0015`.
+Self-seeding + deterministic reset; users `wl-e2e-*` phones `+966570000000`…`+966570000015`.
 
 ## Promotion demo (owner-requested 2026-09-07)
 ```bash
 cd /home/ubuntu/projects/koralink && bash docs/plans/e2e-waitlist-join/demo-waitlist-promotion.sh
 ```
-Requires the seeded state (run the pack runner first): match A at 14/14 Full with
-queue p15 → Ahmed (+966500000001) → Yousef (+966500000005). Three roster players
-leave via the real API; asserts each seat is auto-refilled from the queue head
-(FIFO), roster stays 14/14 at 7H/7A parity, queue drains to 0. Idempotent within
-a single run — re-seed via the runner before re-running the demo.
+Self-contained + re-runnable: seeds the pack, runs the pack runner (A → 14/14
+Full, queue = p15), queues Ahmed (+966500000001) and Yousef (+966500000005)
+behind p15 via the API, then three roster players leave via the real API.
+Asserts each freed seat is auto-refilled from the queue head (FIFO
+p15 → Ahmed → Yousef), roster stays 14/14 at 7H/7A parity, queue drains 3→0.
+Live result 2026-09-07: 23/23 PASS.
