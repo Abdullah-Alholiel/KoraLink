@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, ShieldCheck, WifiOff } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, ShieldCheck } from 'lucide-react';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useMyReports, type MyReportApi } from '@/hooks/useReports';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -50,13 +51,8 @@ export default function ReportsPage() {
         </h1>
       </div>
 
-      {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
-      {!isOnline && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
-          <WifiOff className="w-4 h-4 flex-shrink-0" />
-          <span>{tc('offlineBanner')}</span>
-        </div>
-      )}
+      {/* P2-31(4)/P2-52: offline banner — shared component (run #40) */}
+      <OfflineBanner isOffline={!isOnline} className="mx-4" />
 
       {/* STANDARD (single-scroller): plain content block — <main class="scroll-container">
           (ScrollableMain) is the ONLY scroller. A nested overflow-y-auto wrapper here

@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, WifiOff, Rss, ArrowUp } from 'lucide-react';
+import { AlertCircle, Rss, ArrowUp } from 'lucide-react';
 import { useFeed } from '@/hooks/useFeed';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import ActivityCard from '@/components/feed/ActivityCard';
 import NotificationBell from '@/components/layout/NotificationBell';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import PromoBillboard from '@/components/feed/PromoBillboard';
 import PullToRefresh from '@/components/feed/PullToRefresh';
 
@@ -15,7 +16,6 @@ const LAST_SEEN_KEY = 'koralink_feed_last_seen';
 
 export default function CommunityFeedPage() {
   const t = useTranslations('feed');
-  const tc = useTranslations('common');
   const locale = useLocale();
   const queryClient = useQueryClient();
   const { data, isLoading, isError, refetch, dataUpdatedAt } = useFeed();
@@ -82,12 +82,7 @@ export default function CommunityFeedPage() {
     <PullToRefresh onRefresh={handleRefresh}>
       <div className="pb-4">
         {/* ── Offline Banner ── */}
-        {!isOnline && (
-          <div className="mx-4 mt-2 mb-0 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-            <WifiOff className="w-4 h-4 flex-shrink-0" />
-            <span>{tc('offlineBanner')}</span>
-          </div>
-        )}
+        <OfflineBanner isOffline={!isOnline} className="mb-0" />
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 pt-[var(--top-safe-inset)] pb-3">

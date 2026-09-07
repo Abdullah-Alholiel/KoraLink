@@ -22,7 +22,7 @@ import {
   Flag,
   type LucideIcon,
 } from 'lucide-react';
-import { useNotificationsFeed, useMarkNotificationsRead } from '@/hooks/useNotificationsFeed';
+import { useNotificationsFeed, useMarkNotificationsRead, useUnreadNotificationCount } from '@/hooks/useNotificationsFeed';
 import { useAppStore } from '@/store/useAppStore';
 import type { ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
@@ -83,6 +83,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
   const locale = useLocale();
   const setNotificationBadge = useAppStore((s) => s.setNotificationBadge);
   const { data, isLoading, isError, refetch } = useNotificationsFeed();
+  const { data: unread } = useUnreadNotificationCount(open);
   const markRead = useMarkNotificationsRead();
 
   // Lock body scroll while the sheet is open.
@@ -106,11 +107,21 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
   if (!open) return null;
 
   const items = data?.items ?? [];
-  const unreadCount = items.filter((i) => !i.isRead).length;
+  // Server-authoritative unread total (all pages, not just the loaded first
+  // page — Reviewer A, run #40): with hasMore the first page alone undercounts
+  // and could hide the "Mark all read" action entirely.
+  const unreadCount = unread?.unreadCount ?? items.filter((i) => !i.isRead).length;
 
   const handleMarkAllRead = () => {
     setNotificationBadge(0); // optimistic
-    markRead.mutate({ all: true });
+    markRead.mutate({ all: true }, {
+      onError: () => {
+        // Roll the optimistic badge back; the refetch restores server truth.
+        refetch();
+        const server = unread?.unreadCount;
+        if (server !== undefined) setNotificationBadge(server);
+      },
+    });
   };
 
   const itemHref = (verb: ActivityVerb, matchId: string | null) => {
@@ -167,6 +178,13 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
                 <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
               </div>
               <p className="text-sm font-bold text-brand-black">{t('common.error')}</p>
+              {/* SR announcement (P2-52): mark-read failures here are silent
+                  otherwise — the optimistic badge reset was already applied. */}
+              {markRead.isError && (
+                <p role="status" className="mt-2 text-xs font-medium text-brand-red">
+                  {t('notifications.markAllFailed')}
+                </p>
+              )}
               <button
                 onClick={() => refetch()}
                 className="mt-4 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold active:scale-95 transition-transform"

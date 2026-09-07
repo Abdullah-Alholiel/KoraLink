@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2 } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
+import { useNow } from '@/hooks/useNow';
 import { formatDistance } from '@/lib/format';
 
 interface MatchCardProps {
@@ -31,10 +32,18 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     // after the final whistle. Prefer the adapter-computed votingClosesAt (uses
     // the match's real duration); fall back to the coarse 60-min default only
     // when it's absent. The API's voting guard remains authoritative on submit.
-    const votingOpen = match.votingClosesAt
-      ? Date.now() < new Date(match.votingClosesAt).getTime()
-      : isPotmVotingOpen(match.scheduledAt);
-    const canVotePotm = match.status === 'completed' && (isJoined || isHost) && votingOpen;
+    // `now` comes from useNow(): pre-mount it is null → optimistic open, and
+    // both server render and first client render agree (hydration-safe).
+    const now = useNow();
+    const votingOpen = isPotmVotingOpen(match.scheduledAt, 60, now);
+    // Prefer the adapter-computed absolute deadline when present — it uses the
+    // match's REAL duration, vs the 60-min default above. Post-mount the wall
+    // clock is hydration-safe; pre-mount (null) stay optimistic-open.
+    const votingOpenReal = match.votingClosesAt
+        ? now === null || now < new Date(match.votingClosesAt).getTime()
+        : null;
+    const votingOpenFinal = votingOpenReal ?? votingOpen;
+    const canVotePotm = match.status === 'completed' && (isJoined || isHost) && votingOpenFinal;
     // POTM vote state comes from the feed/my-matches SQL (has_voted) via the adapter.
     const hasVotedPotm = match.hasVotedPotm ?? false;
 

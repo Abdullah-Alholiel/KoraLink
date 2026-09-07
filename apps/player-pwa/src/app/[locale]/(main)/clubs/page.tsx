@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, MapPin, Users, WifiOff } from 'lucide-react';
+import { Search, MapPin, Users } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useVenues } from '@/hooks/useVenues';
 import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance } from '@/lib/format';
@@ -23,7 +24,6 @@ const FILTER_LABEL_MAP: Record<FilterKey, string> = {
 
 export default function ClubsPage() {
     const t = useTranslations();
-    const tc = useTranslations('common');
     const isOnline = useOnlineStatus();
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
@@ -79,13 +79,8 @@ export default function ClubsPage() {
                     automatically when location permission is granted. */}
             </div>
 
-            {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
-            {!isOnline && (
-                <div className="mx-5 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
-                    <WifiOff className="w-4 h-4 flex-shrink-0" />
-                    <span>{tc('offlineBanner')}</span>
-                </div>
-            )}
+            {/* P2-31(4)/P2-52: offline banner — shared component (run #40) */}
+            <OfflineBanner isOffline={!isOnline} />
 
             {/* ── Search ── */}
             <div className="px-5 pb-3">

@@ -25,6 +25,9 @@ const config: Config = {
         'safe-top': 'env(safe-area-inset-top, 0px)',
         'safe-start': 'env(safe-area-inset-left, 0px)',
         'safe-end': 'env(safe-area-inset-right, 0px)',
+        // WCAG 2.5.8 minimum hit target (P2-52, run #40): use as min-h-hit /
+        // min-w-hit on icon buttons and pill chips.
+        hit: '44px',
       },
       boxShadow: {
         card: '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',

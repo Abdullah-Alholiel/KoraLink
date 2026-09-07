@@ -221,12 +221,22 @@ export function pricePerPlayer(pitchCostSar: number, maxPlayers: number): number
   return round2(pitchCostSar / (maxPlayers - 1) + PLATFORM_MARGIN_SAR);
 }
 
-/** True while the POTM voting window (match end + 24h) is open. */
-export function isPotmVotingOpen(scheduledAt?: string, durationMins = 60): boolean {
+/** True while the POTM voting window (match end + 24h) is open. When `now`
+ *  is omitted the live `Date.now()` is used (server contexts + tests); UI
+ *  render paths MUST pass the hydration-safe `useNow()` value instead —
+ *  a raw render-path clock SSRs a different answer than the device
+ *  (Reviewer A CRITICAL, run #40; `null` = pre-mount = optimistic open,
+ *  the API re-validates authoritatively on submit). */
+export function isPotmVotingOpen(
+  scheduledAt?: string,
+  durationMins = 60,
+  now?: number | null,
+): boolean {
   if (!scheduledAt) return false;
   const endMs = new Date(scheduledAt).getTime() + durationMins * 60_000;
   const closesAtMs = endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000;
-  return Date.now() < closesAtMs;
+  if (now === null) return true; // pre-mount: optimistic open
+  return (now ?? Date.now()) < closesAtMs;
 }
 
 function fmtEnd(scheduled: Date, durationMins: number): string {

@@ -59,7 +59,8 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                     <button
                         key={f}
                         onClick={() => toggleFormat(f)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${
+                        aria-pressed={filters.format === f}
+                        className={`min-h-hit px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${
                             filters.format === f
                                 ? 'bg-brand-green text-white'
                                 : 'bg-white text-gray-500 border border-gray-200'

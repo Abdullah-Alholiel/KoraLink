@@ -4,41 +4,52 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play, WifiOff } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useNow } from '@/hooks/useNow';
 import { useMyMatches } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
 /** True while POTM voting is still open — uses the authoritative API deadline
- *  when present, falling back to the coarse scheduled-end estimate otherwise. */
-const isVotingOpen = (m: { scheduledAt?: string; votingClosesAt?: string }) =>
-  m.votingClosesAt
-    ? Date.now() < new Date(m.votingClosesAt).getTime()
-    : isPotmVotingOpen(m.scheduledAt);
+ *  when present, falling back to the coarse scheduled-end estimate otherwise.
+ *  `now` is the hydration-safe useNow() clock (null pre-mount → optimistic
+ *  open on BOTH server and first client render); a raw Date.now() here SSRs a
+ *  different answer than the device (Reviewer A CRITICAL, run #40). */
+const isVotingOpen = (
+  m: { scheduledAt?: string; votingClosesAt?: string },
+  now: number | null,
+) => {
+  if (m.votingClosesAt) {
+    if (now === null) return true;
+    return now < new Date(m.votingClosesAt).getTime();
+  }
+  return isPotmVotingOpen(m.scheduledAt, 60, now);
+};
 
 export default function MyGamesPage() {
   const router = useRouter();
   const pathname = usePathname();
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations();
-  const tc = useTranslations('common');
   const isOnline = useOnlineStatus();
 
   const { data: matchesApi, isLoading, error, refetch } = useMyMatches();
   const storeUser = useAppStore(selectUser);
+  const now = useNow();
   const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
 
   const activeMatches = matches.filter((m) =>
     // Active = joinable OR played within the POTM voting window (24h after
     // the final whistle) so players can still vote after midnight.
     ['open', 'full', 'in_progress'].includes(m.status) ||
-    (m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m))
+    (m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m, now))
   );
   const historyMatches = matches.filter((m) =>
     ['completed', 'cancelled'].includes(m.status) &&
-    !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m))
+    !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m, now))
   );
 
   return (
@@ -57,12 +68,7 @@ export default function MyGamesPage() {
       </div>
 
       {/* P2-31(4) (run #22): offline banner — same idiom as the feed */}
-      {!isOnline && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
-          <WifiOff className="w-4 h-4 flex-shrink-0" />
-          <span>{tc('offlineBanner')}</span>
-        </div>
-      )}
+      <OfflineBanner isOffline={!isOnline} className="mx-4" />
 
       {/* STANDARD (single-scroller): plain content block — <main class="scroll-container">
           (ScrollableMain) is the ONLY scroller. A nested overflow-y-auto wrapper here

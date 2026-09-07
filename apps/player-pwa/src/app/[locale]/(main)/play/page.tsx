@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import AppBar from '@/components/layout/AppBar';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import { useMatches } from '@/hooks/useMatches';
@@ -217,11 +218,7 @@ export default function PlayPage() {
 
             {/* 5. Edge Case — offline/connection error indicator */}
             {error && !isLoading && (
-                <div className="mx-4 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
-                    <p className="text-xs text-amber-700 font-medium">
-                        {t('common.offlineBanner')}
-                    </p>
-                </div>
+                <OfflineBanner isOffline variant="plain" className="mx-4 mb-3" />
             )}
         </div>
     );

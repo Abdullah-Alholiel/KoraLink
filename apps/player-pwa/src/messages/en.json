@@ -878,6 +878,7 @@
     "title": "Notifications",
     "empty": "You're all caught up",
     "markAllRead": "Mark all read",
+    "markAllFailed": "Could not mark notifications as read. Your unread count was restored — try again.",
     "emptyDescription": "New follows, messages and match updates will appear here",
     "newActivity": "New activity",
     "newMessage": "New message",

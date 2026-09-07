@@ -20,6 +20,7 @@ import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useW
 import { useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 import BottomSheet from '@/components/layout/BottomSheet';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -301,13 +302,9 @@ export default function WalletPage() {
                             </div>
                         ))}
 
-                        {/* Offline fallback indicator */}
+                        {/* Offline fallback indicator (shared OfflineBanner, run #40) */}
                         {historyError && historyData === undefined && (
-                            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mt-4">
-                                <p className="text-xs text-amber-700 font-medium">
-                                    {t('common.offlineBanner')}
-                                </p>
-                            </div>
+                            <OfflineBanner isOffline variant="plain" className="mt-4" />
                         )}
                     </>
                 )}
