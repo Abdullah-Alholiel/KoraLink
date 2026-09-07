@@ -95,7 +95,11 @@ export class PartnerService {
     return rows;
   }
 
-  /** Owner-created venue — starts unapproved (admin approval queue). */
+  /** Owner-created venue — starts unapproved (admin approval queue).
+   * P2-5 contract (run #39): returns the FULL inserted row (every venues
+   * column) instead of the sparse {id,name,city} projection — the admin
+   * partner-venues row type (PartnerVenueRow) is the full column set, and a
+   * mutation must return a complete entity per API Contract Rule §2. */
   async createVenue(ownerId: string, dto: CreateVenueDto) {
     const [created] = await this.db
       .insert(venues)
@@ -106,7 +110,7 @@ export class PartnerService {
         address: dto.address,
         is_approved: false,
       })
-      .returning({ id: venues.id, name: venues.name, city: venues.city });
+      .returning();
 
     this.realtime.broadcastOps('venues');
 

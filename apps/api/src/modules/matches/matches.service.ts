@@ -2540,8 +2540,34 @@ export class MatchesService {
    * Opens a dispute on a match (most commonly a player appealing a no-show
    * mark). Only match participants can open one, and a `no_show` appeal
    * requires the player to actually have been marked no-show.
+   *
+   * P2-5 contract (run #39): returns the SAME shape as `findMyDispute`
+   * ({id,type,status,decision,has_appealed,created_at,updated_at}) — the PWA
+   * `useAppeal` hook types this response as `MyDispute`. Previously returned
+   * the bare inserted row (raw evidence json, no has_appealed → silent
+   * undefined on a typed field).
    */
-  async createDispute(userId: string, matchId: string, dto: CreateDisputeDto) {
+  async createDispute(
+    userId: string,
+    matchId: string,
+    dto: CreateDisputeDto,
+  ): Promise<NonNullable<Awaited<ReturnType<MatchesService['findMyDispute']>>>> {
+    const toMyDispute = (
+      row: typeof disputes.$inferSelect,
+    ): NonNullable<Awaited<ReturnType<MatchesService['findMyDispute']>>> => {
+      const evidence = Array.isArray(row.evidence) ? row.evidence : [];
+      const hasAppealed = evidence.some((e) => (e as { action?: string }).action === 'appeal');
+      return {
+        id: row.id,
+        type: row.type,
+        status: row.status,
+        decision: row.decision,
+        has_appealed: hasAppealed,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+    };
+
     const type = dto.type ?? 'no_show';
 
     const [match] = await this.db
@@ -2583,7 +2609,7 @@ export class MatchesService {
         .set({ evidence: evidence as never })
         .where(eq(disputes.id, disputeId))
         .returning();
-      return updated;
+      return toMyDispute(updated);
     };
 
     const [existing] = await this.db
@@ -2648,7 +2674,7 @@ export class MatchesService {
       this.logger.warn(`ops ping failed on createDispute: ${(err as Error).message}`);
     }
 
-    return created;
+    return toMyDispute(created);
   }
 
   /**
