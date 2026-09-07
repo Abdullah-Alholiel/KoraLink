@@ -183,6 +183,7 @@
     "joinSuccess": "You're on the waitlist — we'll notify you when a spot opens",
     "joinFailed": "Couldn't join the waitlist",
     "queuedPrefix": "Queued · #{position}",
+    "queuedOf": "Queued · #{position} of {count} waiting",
     "leave": "Leave",
     "leaving": "Leaving…",
     "leaveFailed": "Couldn't leave the waitlist"

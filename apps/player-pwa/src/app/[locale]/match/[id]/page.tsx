@@ -881,7 +881,14 @@ export default function MatchDetailPage({
                                     >
                                         <span className="flex items-center gap-2 text-sm font-bold text-brand-green" dir="auto">
                                             <Clock className="h-4 w-4 shrink-0" />
-                                            {t('waitlist.queuedPrefix', { position: match.yourWaitlistPosition })}
+                                            {(match.waitlistCount ?? 0) > 0
+                                                ? t('waitlist.queuedOf', {
+                                                      position: match.yourWaitlistPosition,
+                                                      count: match.waitlistCount,
+                                                  })
+                                                : t('waitlist.queuedPrefix', {
+                                                      position: match.yourWaitlistPosition,
+                                                  })}
                                         </span>
                                         <button
                                             onClick={() => leaveWaitlist.mutate(id, {
