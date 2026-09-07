@@ -16,6 +16,22 @@ import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
+/**
+ * Normalize a Postgres numeric(12,2) aggregate (returned as an exact decimal
+ * STRING) to a 2dp decimal string WITHOUT routing the value through a float.
+ * P2-4 (run #41): generatePending previously did SUM(...)::float then
+ * Math.round(x*100)/100 — a float sat in the path that decides venue payout
+ * amounts. Numeric SUM at scale 2 is already exact 2dp, so this degenerates to
+ * a normalize-guard; the Number() fallback only fires for malformed shapes
+ * (defensive, unreachable for numeric(12,2) SUM output).
+ */
+function quantizeMoney2dp(raw: string | number | null | undefined): string {
+  if (typeof raw === 'string' && /^-?\d+\.\d{2}$/.test(raw)) return raw;
+  const n = Number(raw ?? 0);
+  if (!Number.isFinite(n)) return '0.00';
+  return n.toFixed(2);
+}
+
 @Injectable()
 export class AdminSettlementsService {
   constructor(
@@ -34,7 +50,7 @@ export class AdminSettlementsService {
 
     const rows = (await this.db.execute(sql`
       SELECT
-        s.id, s.venue_id, s.amount::float AS amount,
+        s.id, s.venue_id, s.amount::text AS amount,
         s.period_start, s.period_end, s.status, s.payout_ref, s.paid_at, s.created_at,
         v.name AS venue_name
       FROM settlements s
@@ -119,7 +135,7 @@ export class AdminSettlementsService {
     const rows = (await this.db.execute(sql`
       SELECT
         v.id AS venue_id,
-        COALESCE(SUM(m.pitch_cost_sar), 0)::float AS amount
+        COALESCE(SUM(m.pitch_cost_sar), 0)::text AS amount
       FROM matches m
       INNER JOIN pitches p ON p.id = m.pitch_id
       INNER JOIN venues v ON v.id = p.venue_id
@@ -132,7 +148,7 @@ export class AdminSettlementsService {
         )
       GROUP BY v.id
       HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
-    `)) as unknown as Array<{ venue_id: string; amount: number }>;
+    `)) as unknown as Array<{ venue_id: string; amount: string }>;
 
     const created: Array<Record<string, unknown>> = [];
     // Insert inside a transaction and rely on the `(venue_id, period_start)`
@@ -141,13 +157,15 @@ export class AdminSettlementsService {
     const inserted = await this.db.transaction(async (tx) => {
       const out: Array<Record<string, unknown>> = [];
       for (const row of rows) {
-        const amount = Math.round(row.amount * 100) / 100;
-        if (amount <= 0) continue;
+        // P2-4: row.amount arrives as Postgres' EXACT decimal string (numeric
+        // SUM); it is quantized as a string and never routed through a float.
+        const amount = quantizeMoney2dp(row.amount);
+        if (Number(amount) <= 0) continue;
         const [settlement] = await tx
           .insert(settlements)
           .values({
             venue_id: row.venue_id,
-            amount: amount.toFixed(2),
+            amount,
             period_start: windowStartIso.slice(0, 10),
             period_end: new Date().toISOString().slice(0, 10),
             status: 'pending',

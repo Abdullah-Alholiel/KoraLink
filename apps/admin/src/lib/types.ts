@@ -35,7 +35,7 @@ export interface AdminUser {
   last_seen_at: string | null;
   created_at: string;
   matchesPlayed?: number;
-  totalSpent?: number;
+  totalSpent?: number | string;
 }
 
 export interface AdminVenue {
@@ -197,7 +197,7 @@ export interface PartnerDashboard {
   pitchCount: number;
   todayUtilization: number;
   upcomingMatches: number;
-  revenueToday: number;
+  revenueToday: number | string;
   nextMatchInMinutes: number | null;
   scheduleToday: {
     pitchName: string | null;

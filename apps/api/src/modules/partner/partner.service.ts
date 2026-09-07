@@ -244,7 +244,7 @@ export class PartnerService {
 
     const [revenue] = await this.db
       .select({
-        total: sql<number>`coalesce(sum(${matches.pitch_cost_sar}), 0)::float`,
+        total: sql<string>`coalesce(sum(${matches.pitch_cost_sar}), 0)::text`,
       })
       .from(matches)
       .where(
@@ -333,13 +333,13 @@ export class PartnerService {
     const weekRevenue = (await this.db.execute(sql`
       SELECT
         to_char(${matches.scheduled_at} AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD') AS date,
-        COALESCE(SUM(${matches.pitch_cost_sar}), 0)::float AS revenue
+        COALESCE(SUM(${matches.pitch_cost_sar}), 0)::text AS revenue
       FROM ${matches}
       WHERE ${inArray(matches.pitch_id, pitchIds)}
         AND ${matches.scheduled_at} >= (CURRENT_DATE - INTERVAL '6 days')
         AND ${matches.scheduled_at} < (CURRENT_DATE + INTERVAL '1 day')
       GROUP BY 1
-    `)) as unknown as Array<{ date: string; revenue: number }>;
+    `)) as unknown as Array<{ date: string; revenue: string }>;
 
     // Fill all 7 Riyadh days so the chart never has holes.
     const slotByDay = new Map<string, number>(weekSlots.map((r) => [String(r.date), Number(r.booked)]));

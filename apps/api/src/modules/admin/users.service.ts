@@ -129,10 +129,10 @@ export class AdminUsersService {
     `) as unknown as Array<{ matchesPlayed: number }>;
 
     const [{ totalSpent }] = await this.db.execute(sql`
-      SELECT COALESCE(SUM(amount), 0)::float AS "totalSpent"
+      SELECT COALESCE(SUM(amount), 0)::text AS "totalSpent"
       FROM transactions
       WHERE user_id = ${id}::text AND type = 'DEBIT' AND status = 'Completed'
-    `) as unknown as Array<{ totalSpent: number }>;
+    `) as unknown as Array<{ totalSpent: string }>;
 
     return { ...user, matchesPlayed: matchesPlayed ?? 0, totalSpent: totalSpent ?? 0 };
   }

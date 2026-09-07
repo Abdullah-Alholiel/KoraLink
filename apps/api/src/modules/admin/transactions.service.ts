@@ -44,7 +44,7 @@ export class AdminTransactionsService {
 
     const rows = (await this.db.execute(sql`
       SELECT
-        t.id, t.user_id, t.type, t.amount::float AS amount,
+        t.id, t.user_id, t.type, t.amount::text AS amount,
         t.reference_type, t.reference_id, t.status, t.created_at,
         u.full_name AS user_name, u.phone AS user_phone
       FROM transactions t
