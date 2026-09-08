@@ -23,6 +23,9 @@ import { JwtCookieStrategy } from './jwt-cookie.strategy';
   ],
   controllers: [AuthController],
   providers: [AuthService, OtpStoreService, UnifonicService, JwtCookieStrategy],
-  exports: [JwtModule, PassportModule],
+  // P1-19 (run #44): OtpStoreService + UnifonicService are exported so
+  // UsersService (phone-change flow) injects the SAME singletons AuthService
+  // uses — shared abuse-cap counters require a shared cache-backed store.
+  exports: [JwtModule, PassportModule, OtpStoreService, UnifonicService],
 })
 export class AuthModule {}
