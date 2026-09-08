@@ -30,7 +30,7 @@ const SURFACE_ROLES: Record<'player' | 'ops', string[]> = {
   ops: ['Admin', 'VenueOwner'],
 };
 
-function assertSurfaceRole(surface: 'player' | 'ops' | undefined, role: string): void {
+export function assertSurfaceRole(surface: 'player' | 'ops' | undefined, role: string): void {
   if (!surface) return; // legacy/internal calls without a surface
   if (!SURFACE_ROLES[surface].includes(role)) {
     throw new ForbiddenException(

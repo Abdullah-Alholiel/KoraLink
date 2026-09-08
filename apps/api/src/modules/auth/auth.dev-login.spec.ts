@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpStoreService } from './otp-store.service';
 
