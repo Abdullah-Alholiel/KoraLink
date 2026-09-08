@@ -26,14 +26,26 @@ const tajawal = Tajawal({
   weight: ['300', '400', '500', '700', '800'],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  // P2-29 stretch (run #44): per-locale manifests — /ar installs get
+  // Arabic metadata + rtl, /en gets English + ltr. /manifest.json stays
+  // as the locale-agnostic fallback (byte-stable for installed clients;
+  // browsers that resolve <link rel="manifest"> from metadata get the
+  // locale file, and the [locale] layout emits the same tag in raw JSX
+  // for iOS Safari, which skips streamed metadata).
+  const resolved = await params;
+  const locale = resolved?.locale === 'en' ? 'en' : 'ar';
   return {
     title: {
       default: 'KoraLink',
       template: '%s | KoraLink',
     },
     description: 'منصة كرة القدم الرائدة في السعودية',
-    manifest: '/manifest.json',
+    manifest: `/manifest.${locale}.json`,
     icons: {
       icon: [
         { url: '/favicon.ico', sizes: 'any' },
@@ -99,7 +111,8 @@ export default async function RootLayout({
         {/* iOS PWA standalone meta tags — rendered directly in the JSX so they
             are present in the initial HTML (the metadata export is streamed for
             this dynamic [locale] layout, which iOS Safari does not read). */}
-        <link rel="manifest" href="/manifest.json" />
+        {/* Per-locale manifest (run #44, P2-29): matches generateMetadata. */}
+        <link rel="manifest" href={`/manifest.${locale}.json`} />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
