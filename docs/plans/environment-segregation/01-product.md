@@ -28,7 +28,7 @@ verifiable preconditions — no big-bang cutover:
 |---|---|---|
 | Branch | `staging` (all daily work) | `main` (release-only, via PR) |
 | Player PWA | VPS `https://aa.tail2948f9.ts.net:9450` | Vercel `kora-link-player-pwa.vercel.app` |
-| Admin | VPS `https://aa.tail2948f9.ts.net` (:443→3002) | Vercel `kora-link-admin.vercel.app` |
+| Admin | VPS `https://aa.tail2948f9.ts.net:9451` (:9451→3002, tailnet-only) | Vercel `kora-link-admin.vercel.app` |
 | API | VPS funnel `:8443` → :3001 | Render `koralink-api.onrender.com` (→ Coolify in Phase 2) |
 | DB | VPS PG docker `koralink_dev` (loopback bind after Slice 2) | Neon `falling-frost-44866281` (→ Coolify PG in Phase 2) |
 | Auth | dev-login ON forever + seeded phones `+966500000001–005`, both apps | OTP via Unifonic (Phase 1); dev-login OFF |

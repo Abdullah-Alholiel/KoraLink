@@ -45,6 +45,8 @@ if [ "$HEAD_SHA" = "$ORIGIN_SHA" ]; then
 elif git merge-base --is-ancestor "$HEAD_SHA" "$ORIGIN_SHA"; then
   git merge --ff-only origin/staging
   echo "    fast-forwarded to $ORIGIN_SHA"
+elif git merge-base --is-ancestor "$ORIGIN_SHA" "$HEAD_SHA"; then
+  echo "    local ahead of origin (unpushed commits) — proceeding with local tree"
 else
   die "staging diverged from origin/staging (HEAD=$HEAD_SHA origin=$ORIGIN_SHA) — push or reconcile first" 3
 fi
@@ -88,8 +90,8 @@ probe "H2 api /health alias" \
   bash -c "curl -sf --max-time 10 https://$TS_NET:8443/health | grep -q 'ok'" || FAIL=1
 probe "H3 pwa :9450" \
   bash -c "c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://$TS_NET:9450/); [ \"\$c\" = 200 ] || [ \"\$c\" = 307 ]" || FAIL=1
-probe "H4 admin funnel 443" \
-  bash -c "c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://$TS_NET/); [ \"\$c\" = 200 ] || [ \"\$c\" = 307 ]" || FAIL=1
+probe "H4 admin :9451" \
+  bash -c "c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://$TS_NET:9451/); [ \"\$c\" = 200 ] || [ \"\$c\" = 307 ]" || FAIL=1
 probe "H5 dev-login (staging only)" \
   bash -c "curl -sf --max-time 10 -X POST https://$TS_NET:8443/api/v1/auth/dev-login -H 'Content-Type: application/json' -d '{\"phone\":\"+966500000001\"}' | grep -q token" || FAIL=1
 probe "H6 docker postgres" \
