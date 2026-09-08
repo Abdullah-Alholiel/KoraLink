@@ -1,38 +1,45 @@
-# 00 — Retrospective: Environment Segregation (2026-09-08)
+# 00 — Retrospective v2: Environment Segregation (2026-09-08, redone under devops-cycle)
 
-Baseline: `c5038e1` (docs(kanban): push-auth blocker resolved — 12 commits pushed).
+Baseline: `c5038e1`. Cycle redone under the new `devops-cycle` skill after Abdullah's
+instruction: "review and assess implementation … re do this cycle." Two prior
+conversations (attached) set a new direction: Coolify-as-future-prod, Cloudflare DNS,
+six-capability harness. All claims below were verified against the live box.
 
-## What changed since the last audit
+## Corrections to v1 (what the first pass got wrong or soft-pedaled)
 
-| Item | Status |
+| v1 said | Reality (verified) |
 |---|---|
-| Push auth (was P0 blocker) | ✅ RESOLVED — write-scoped PAT standardized, 12 commits pushed, `main == origin/main` |
-| Vercel deploys (were 100% failing) | ✅ FIXED — `kora-link-player-pwa` READY @ `3ea4a30`, `kora-link-admin` READY @ `593177b` (verified via CLI-token API) |
-| Render demo API | LIVE @ `3ea4a30`, auto-deploys `origin/main`, health 200 (verified) |
-| Demo DB | **Neon** (`ep-snowy-river-arbt59ht…neon.tech`, project `falling-frost-44866281`) — Render hosts NO Postgres (verified `GET /v1/postgres` → empty) |
+| "12 local commits are deployed nowhere" | STALE — push auth was fixed the same day; `main == origin/main` at `c5038e1` |
+| Branch model implied creating `staging` and continuing on `main` for docs | Fixed: `staging` branch created FIRST; all cycle work lands there (commit f63edd3 was a one-off docs push that triggered harmless prod rebuilds) |
+| VPS Postgres exposure = "firewall-only" footnote | Downgraded risk. Actual exposure: OCI netfilter REJECTs non-SSH inbound (rules.v4, active) + OCI Security List. Fix to loopback bind is still correct (defense-in-depth), but this is not an open internet DB |
+| "Render is a fine prod bundle for now" | attachment-verified concern stands: Render FREE cold-starts 30–60s if the keep-warm ping lapses → OTP (real users waiting for SMS) cannot rely on it. Prod API must move to Coolify (Phase 2) before real users |
+| (missing) | **Coolify is installed and healthy on this very VPS** — `coolify`, `coolify-proxy` (Traefik), `coolify-db`, `coolify-redis`, `coolify-realtime`, `coolify-sentinel`, all up, `coolify-proxy` on :80/:443. The future prod platform already runs here |
+| (missing) | drizzle-kit is UNAVAILABLE on the VPS — migrations must use the hand-rolled applier (established procedure: filename order + `__drizzle_migrations` journal) |
+| (missing) | VPS services run directly from the repo tree (systemd units point at `apps/api/dist`, `.next/standalone/...`) — no release dir, no atomic symlink swap; staging rollback = checkout + rebuild + restart |
+| (missing) | Foreign WIP is normal on this shared tree (factory run #44 editing `auth.module.ts` mid-cycle, documented). Deploy tooling must refuse to clobber it, never silently stash/discard |
 
-## Findings (this cycle's drivers)
+## Findings
 
-| ID | Finding | Class | Cascade if unaddressed |
+| ID | Finding | Class | Disposition |
 |---|---|---|---|
-| F1 | Single deploy lane: every push to `main` auto-deploys Render (API) AND Vercel (PWA+admin) instantly, with **no migration step** (P2-51) and no staging verification. VPS builds from the same branch. | CRITICAL | A schema-breaking push 500s public demo + Vercel prod simultaneously; no release gate exists. |
-| F2 | `UNIFONIC_APP_SID` is **empty in every environment** (VPS `.env`, Render env-vars, `.deploy-tokens`). Graceful fallback verified: `unifonic.service.ts` logs the SMS instead of sending. | CRITICAL (prod-prep) | Real OTP auth has never been exercised end-to-end anywhere; production cannot onboard real users. |
-| F3 | Render (future PROD API) runs `DEV_LOGIN_ENABLED=true`; Neon likely contains seeded dummy phones. | CRITICAL (prod-prep) | Production bundle would ship with a CVSS-9.1-class dev-login path and dummy accounts. |
-| F4 | Sentry environment = `NODE_ENV` (API only); PWA/admin never set `environment`. | IMPORTANT | Staging and production errors indistinguishable in Sentry. |
-| F5 | Factory cron + agents commit directly to `main`. Under the new model `main` = production release trigger. | IMPORTANT | Any cron run would silently release to production. Cron/kanban runbook must switch default branch to `staging`. |
-| F6 | VPS Postgres publishes `0.0.0.0:5432` (firewall-only protection). | MINOR (re-raise) | Defense-in-depth gap on the staging DB host. |
+| F1 | Single deploy lane: every `main` push instantly deploys Render + Vercel ×2 with no migration step (P2-51) and no staging gate | CRITICAL | This cycle: branch split + deploy script + promote runbook |
+| F2 | `UNIFONIC_APP_SID` empty in EVERY environment (VPS `.env`, Render env-vars, `.deploy-tokens`). Graceful fallback verified in code: SMS logged, not sent | CRITICAL (prod-prep) | Phase 1 (needs Abdullah's AppSid — §7 handoff protocol) |
+| F3 | Render (public) runs `DEV_LOGIN_ENABLED=true`; accepted interim risk until OTP wiring | CRITICAL (prod-prep) | Flip `false` at Phase 1; documented in devops-cycle §1 |
+| F4 | Sentry: env tag = `NODE_ENV` on API only; PWA/admin untagged | IMPORTANT | Slice 3: `NEXT_PUBLIC_SENTRY_ENV` in both frontends |
+| F5 | Factory cron/agents commit to `main` — under the new model that releases to prod | IMPORTANT | `staging` created + pushed; STATE/BOARD retarget noted in slice 4 runbook |
+| F6 | `koralink-postgres` publishes `0.0.0.0:5432` (docker), protected only by OCI netfilter + Security List | IMPORTANT | Slice 2: bind `127.0.0.1:5432` (defense-in-depth) |
+| F7 | Render FREE cold-start (30–60s) makes it unfit as the OTP-grade prod API | CRITICAL (Phase 2 driver) | Phase 2 cutover to Coolify, gated by devops-cycle §8 preconditions |
 
 ## Verified-good (no action)
 
-- CORS is fully env-driven (`PLAYER_URL`/`ADMIN_URL` comma lists → `enableCors` callback) — segregation needs zero CORS code.
-- PWA CSP `connect-src` auto-derives the API origin from `NEXT_PUBLIC_API_URL` (`next.config.mjs:141-156`) — new frontends need no CSP edits.
-- DevLoginBar is build-time gated (`NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true` tree-shakes it; Strix P0-7 fix) — public staging URLs can hide it while VPS keeps it.
-- VPS funnel topology already matches the staging layout (PWA :9450, API :8443 funnel → 3001, Admin 443 → 3002).
-
-## Admin state check
-
-`kanban/BOARD.md` has in-flight uncommitted edits (factory cron territory) — this cycle will **not** touch `apps/admin` code; no overlap. Commit discipline: stage only `docs/plans/environment-segregation/**`.
+- CORS fully env-driven (`PLAYER_URL`/`ADMIN_URL`) — segregation = env config, zero API code.
+- PWA CSP `connect-src` auto-derives API origin from `NEXT_PUBLIC_API_URL` (`next.config.mjs:141–156`).
+- DevLoginBar build-time gate (`NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true` tree-shakes the bar; Strix P0-7).
+- Vercel prod deploys both READY; Render deploy pipeline healthy; keep-warm cron exists.
+- Coolify + Traefik already serving this box; UnifonicService degrades safely when AppSid empty.
 
 ## Recommendation
 
-Proceed to Gate 1. No code contract breaks found; the entire cycle is env/infra + two tiny Sentry init changes + a deploy script.
+Proceed. Implementation slices 1–3 are T1 (staging-auto) under `devops-cycle` §2; all prod
+surfaces stay T2 (user-gated). Phase 1 (OTP) + Phase 2 (Coolify cutover) are explicitly NOT
+part of this cycle's autonomous scope.

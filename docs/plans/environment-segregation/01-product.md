@@ -1,68 +1,81 @@
-# 01 — Product Spec: Environment Segregation
+# 01 — Product Spec v2: Environment Segregation
 
 ## Problem statement
 
-KoraLink has one deploy lane. Every push to `main` simultaneously and instantly deploys the
-Render API, the Vercel PWA and the Vercel admin — with no migration step and no pre-production
-verification. The VPS runs the same branch. Abdullah cannot prepare a real production
-environment (clean DB, OTP live, dev-login hard-off) without breaking the day-to-day dev
-workflow, and cannot verify a release on real infrastructure before it is public.
+KoraLink has one deploy lane: every push to `main` instantly deploys the Render API and both
+Vercel frontends — no migrations, no staging verification, no release gate. Production
+readiness (real OTP auth, clean DB, hardened surfaces) cannot be prepared without breaking
+the dev workflow. Additionally, the intended future prod API platform (Render FREE)
+cold-starts 30–60s — unfit for real users waiting on SMS codes.
 
-## Target environment map (the contract this cycle delivers)
+## Product decision (v2): phased production
 
-| Layer | 🟡 STAGING (test bed) | 🔴 PRODUCTION (real users) |
+Production readiness is delivered in gated PHASES (per `devops-cycle` §8), each with
+verifiable preconditions — no big-bang cutover:
+
+- **Phase 0 (this cycle)**: segregation itself — staging quartet vs public bundle, branch
+  gate, deploy tooling, observability split. Public bundle = Vercel ×2 + Render + Neon
+  (demo-grade, dev-login interim ON).
+- **Phase 1 — OTP go-live**: Unifonic AppSid wired on Render → test OTP → flip
+  `DEV_LOGIN_ENABLED=false` → Neon reset to clean schema. Prod becomes real-user ready.
+- **Phase 2 — Coolify cutover**: prod API+DB move to Coolify on this VPS (always-on, no
+  cold-start), Render+Neon become documented fallback. Gated by backup-restore drill +
+  bind + monitoring preconditions.
+
+## Environment map (the contract)
+
+| Layer | 🟡 STAGING (test bed) | 🔴 PRODUCTION |
 |---|---|---|
-| Branch | `staging` | `main` |
-| Player PWA | VPS `https://aa.tail2948f9.ts.net:9450` | Vercel `kora-link-player-pwa` (exists, READY) |
-| Admin console | VPS `https://aa.tail2948f9.ts.net` (:443→3002) | Vercel `kora-link-admin` (exists, READY) |
-| API | VPS `https://aa.tail2948f9.ts.net:8443` (funnel → :3001) | Render FREE `koralink-api.onrender.com` (exists, LIVE) |
-| Database | VPS Postgres docker (`koralink_dev`, keeps dummy data) | **Neon** `falling-frost-44866281` (reset to clean schema) |
-| Auth | **dev-login ON** (`DEV_LOGIN_ENABLED=true`) + dummy seed phones — both VPS apps | **OTP via Unifonic** (AppSid — Abdullah's step); dev-login OFF at wiring time |
-| Migrations | runbook: deploy script order (DB before API restart) | documented manual runbook (Render pre-deploy is PAID-only — verified) |
+| Branch | `staging` (all daily work) | `main` (release-only, via PR) |
+| Player PWA | VPS `https://aa.tail2948f9.ts.net:9450` | Vercel `kora-link-player-pwa.vercel.app` |
+| Admin | VPS `https://aa.tail2948f9.ts.net` (:443→3002) | Vercel `kora-link-admin.vercel.app` |
+| API | VPS funnel `:8443` → :3001 | Render `koralink-api.onrender.com` (→ Coolify in Phase 2) |
+| DB | VPS PG docker `koralink_dev` (loopback bind after Slice 2) | Neon `falling-frost-44866281` (→ Coolify PG in Phase 2) |
+| Auth | dev-login ON forever + seeded phones `+966500000001–005`, both apps | OTP via Unifonic (Phase 1); dev-login OFF |
+| Migrations | in `scripts/deploy-staging.sh` (before restarts) | runbook (Render pre-deploy is paid-only) |
 
 ## User stories
 
-- **S1 (P0) Branch split**: A `staging` branch exists; VPS stack deploys from it; `main`
-  deploys only the production bundle (Render + Vercel prod). Nothing merges to `main`
-  without first running on staging.
-- **S2 (P0) Env separation**: Every app resolves its full env set per environment
-  (API URL, CORS origins, CSP origin, DB, dev-login, Sentry env tag). No cross-env leakage:
-  staging frontends never call the Render API; prod frontends never call the VPS API.
-- **S3 (P0) VPS keeps dummy-data login**: dev-login bar + seeded phones `+966500000001–005`
-  keep working on both VPS apps after the switch (regression-checked).
-- **S4 (P1) Production prep**: Neon reset to clean migrated schema (no dummy data); Render
-  `DEV_LOGIN_ENABLED` flip documented; Unifonic AppSid wiring documented (Abdullah provides
-  the SID; agent applies via Render env-vars API + verify).
-- **S5 (P1) Promote flow**: staging → main via PR (CI runs on PR); merge = production release.
-  Factory cron/agents retarget `staging` as their working branch.
-- **S6 (P1) Observability separation**: Sentry errors tag `staging` vs `production` in all
-  three apps.
+- **S1 (P0) Branch gate**: `staging` is the factory working branch; `main` is reached only
+  via promote PR; VPS deploys only ever run from `staging`.
+- **S2 (P0) One-command staging deploy**: `scripts/deploy-staging.sh` = preflight → build →
+  migrate → deploy assets → restart → verify (health matrix), idempotent, safe on the
+  shared dirty tree.
+- **S3 (P0) CORS segregation**: staging API allows only staging origins; prod API allows
+  only Vercel origins. Cross-env API calls impossible.
+- **S4 (P0) VPS dummy-data login intact**: dev-login bar + seeded phones keep working on
+  both VPS apps after every change (regression-gated each deploy).
+- **S5 (P1) Observability split**: Sentry events visibly tagged `staging` (VPS) vs
+  `production` (Vercel/Render) in all three apps.
+- **S6 (P1) Hardened staging DB**: postgres reachable only via loopback.
+- **S7 (P1) Prod-prep runbooks**: promote flow, prod migrations, OTP wiring, Neon reset,
+  Coolify Phase-2 preconditions — written, not yet executed.
+- **S8 (P2) Vercel prod env hardening**: `NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true` +
+  prod API URL + Sentry env baked into both prod frontends (T2, user-gated, verified by
+  chunk-grep after redeploy).
 
-## Out of scope
+## Out of scope (this cycle)
 
-Paid tiers (Render pre-deploy, Vercel Pro), custom domains, Render/Vercel preview-env
-matrices, Redis for staging beyond current config, Neon branching/poolers, load balancing.
+Phase 1 and Phase 2 EXECUTION (OTP wiring, Neon reset, Coolify cutover, Cloudflare DNS),
+paid tiers, custom domains, new Vercel staging projects (explicitly rejected — VPS is
+staging), Redis changes.
 
-## Success criteria (all verifiable)
+## Success criteria (verifiable)
 
-1. Push to `staging` → VPS services rebuild + restart on the new commit; health matrix green.
-2. Push to `main` → Vercel prod ×2 + Render deploy; **VPS untouched**.
-3. VPS PWA + admin: dev-login bar visible, dev-login 200, seeded data flows end-to-end.
-4. Staging frontends (VPS): dev-login bar visible, OTP flow works with the code readable from
-   `journalctl` (Unifonic log fallback), API calls hit the VPS API only.
-4b. PROD frontends (Vercel): dev-login bar absent (build-time flag), API URL = Render only —
-   verified by grepping the deployed JS chunk for the API origin.
-5. Vercel prod PWA/admin: API URL = `koralink-api.onrender.com`, dev-login absent, prod DB = Neon.
-6. `NODE_ENV=staging` on the VPS API: verified no prod-coupled code branches break (grep audit).
-7. Sentry: one staging event + one production event visibly tagged per env.
+1. `bash scripts/deploy-staging.sh` runs green end-to-end on the VPS; re-run is idempotent.
+2. Health matrix green afterward: API health (+/health alias), PWA 200/307, Admin 200/307,
+   dev-login 200 + token, seeded data flows.
+3. Staging API CORS: staging origins allowed; Vercel origins NOT echoed (OPTIONS probe).
+4. Render CORS: Vercel origins only (OPTIONS probe) — T2.
+5. `koralink-postgres` no longer reachable on a non-loopback bind from the host.
+6. VPS API reports `NODE_ENV=staging`; no code path regresses (grep audit + build + matrix).
+7. Sentry: `environment` set in all three apps; Vercel builds tagged `production`, VPS `staging`.
+8. Promote PR staging→main exists/merged per runbook; post-promote chunk-grep verifies the
+   baked API URL + absent dev-login markers in prod bundles.
 
-## Open questions for Gate 2
+## Resolved decisions (v1 open questions → answers)
 
-- Q1 Flip VPS API `NODE_ENV` to `staging`? (Proposed: yes — gives free Sentry env tagging;
-  grep-audit `NODE_ENV` usages first. `next build` forces its own NODE_ENV, unaffected.)
-- Q2 Deploy trigger for VPS: manual `scripts/deploy-staging.sh` only, or + a poll cron?
-  (Proposed: script now; poll cron optional follow-up.)
-- Q3 Reset Neon now (demo loses its data) — acceptable? (Proposed: yes; Render demo will show
-  an empty-but-working app until real data exists. Dummy data stays on VPS only, per spec.)
-- Q4 Flip Render `DEV_LOGIN_ENABLED=false` now or at OTP wiring? (Proposed: at OTP wiring, so
-  the public demo stays usable until real auth exists. Flagged as a conscious interim risk.)
+- Q1 VPS `NODE_ENV=staging`: **YES** (grep-audited before flip; Sentry API tag rides on it).
+- Q2 VPS deploy trigger: **manual script now**; poll-cron is a follow-up once stable.
+- Q3 Neon reset: **DEFERRED to Phase 1** (demo keeps its data until OTP go-live).
+- Q4 Render `DEV_LOGIN_ENABLED`: **stays true until Phase 1** (documented interim risk F3).

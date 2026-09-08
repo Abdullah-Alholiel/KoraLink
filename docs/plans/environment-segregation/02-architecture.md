@@ -1,102 +1,92 @@
-# 02 — Architecture: Environment Segregation
+# 02 — Architecture v2: Environment Segregation
 
 ## Overview
 
-Two fully disjoint environment sets. The **branch is the release gate**: `staging` → VPS
-quartet; `main` → public bundle. No shared deploy triggers.
+Two disjoint environment sets; the branch is the release gate. Production topology evolves
+in phases (01-product v2); this cycle delivers Phase 0.
 
 ```
-                    ┌───────────────────────────────┐
-   git push         │  branch: staging              │
-  ─────────────────►│  (all day-to-day work lands   │
-                    │   here via factory cron/agents)│
-                    └──────────────┬────────────────┘
-                                   │ scripts/deploy-staging.sh
-                                   ▼
-   🟡 STAGING (test bed, dummy data, dev-login ON)
-   ┌──────────────────────── VPS (100.93.99.24) ────────────────────────┐
-   │ PWA   :9450 ◄─ funnel ─ aa.tail2948f9.ts.net:9450                  │
-   │ Admin :3002 ◄─ funnel ─ aa.tail2948f9.ts.net:443                   │
-   │ API   :3001 ◄─ funnel ─ aa.tail2948f9.ts.net:8443  NODE_ENV=staging│
-   │ PG    :5432  koralink/koralink_dev (docker, seeded dummy data)     │
-   └────────────────────────────────────────────────────────────────────┘
+  git push ──► branch: staging (factory working branch)
+                    │  scripts/deploy-staging.sh  (T1, autonomous)
+                    ▼
+   🟡 STAGING — VPS quartet (dummy data, dev-login ON)
+   ┌──────────────────────────────────────────────────────────────┐
+   │ PWA :3000 ◄─ funnel :9450      Admin :3002 ◄─ funnel :443    │
+   │ API :3001 ◄─ funnel :8443      NODE_ENV=staging              │
+   │ PG koralink-postgres → 127.0.0.1:5432/koralink_dev           │
+   └──────────────────────────────────────────────────────────────┘
 
-                    ┌───────────────────────────────┐
-   git push         │  branch: main = RELEASE       │
-  ─────────────────►│  (merge staging→main via PR)  │
-                    └──────────────┬────────────────┘
-                                   │ auto-deploy (Render + Vercel webhooks)
-                                   ▼
-   🔴 PRODUCTION (real users, OTP, dev-login OFF)
-   ┌──────────────────── Public bundle ─────────────────────────────────┐
-   │ Vercel  kora-link-player-pwa.vercel.app  ─┐                        │
-   │ Vercel  kora-link-admin.vercel.app        ─┤→ Render API (FREE)    │
-   │                                           ─┤  koralink-api.        │
-   │                                            │  onrender.com         │
-   │                                            └→ Neon Postgres        │
-   │                                               falling-frost-44866281│
-   └────────────────────────────────────────────────────────────────────┘
+  promote PR (T2) ──► branch: main = RELEASE
+                    │  auto-deploy (Render + Vercel webhooks)
+                    ▼
+   🔴 PRODUCTION — public bundle (Phase 0: demo-grade)
+   ┌──────────────────────────────────────────────────────────────┐
+   │ Vercel kora-link-player-pwa ─┐                               │
+   │ Vercel kora-link-admin ──────┼──► Render API (FREE)          │
+   │                              └──► Neon PG falling-frost-…    │
+   │ Phase 1: + Unifonic OTP, dev-login off                       │
+   │ Phase 2: API+DB → Coolify (this VPS), Render/Neon = fallback │
+   └──────────────────────────────────────────────────────────────┘
 ```
 
-**Leak-proofing rule:** the staging API's CORS lists (`PLAYER_URL`/`ADMIN_URL`) DROP the two
-Vercel prod origins; the prod API's lists contain ONLY the two Vercel prod origins. A prod
-frontend physically cannot call the staging API (CORS rejection) and vice versa.
+**Leak-proofing:** staging API CORS drops the Vercel origins; prod API CORS lists ONLY
+Vercel origins. A prod frontend physically cannot call the staging API and vice versa.
 
 ## Component changes
 
 | # | Component | Change | Why |
 |---|---|---|---|
-| 1 | `scripts/deploy-staging.sh` (NEW) | fetch `staging` → `npm run build` via `turbo` (with `env -u NODE_ENV` guard) → migrate VPS PG in filename order → rsync `public/` into both standalone dirs (hot-edit trap) → restart `koralink-{api,pwa,admin}.service` → health matrix probe | one-command, ordered staging deploy; kills the stale-dist + skipped-migration classes (P0-10) |
-| 2 | VPS `apps/api/.env` | `NODE_ENV=development→staging`; drop Vercel origins from `PLAYER_URL`/`ADMIN_URL` | Sentry env tag = `NODE_ENV` (free separation); CORS leak-proofing |
-| 3 | Render env-vars (via API) | `NODE_ENV=production`; `PLAYER_URL`/`ADMIN_URL` = ONLY the Vercel origins; `UNIFONIC_SENDER_ID=KoraLink` (present in tokens, missing on Render) | prod identity; OTP-ready |
-| 4 | Vercel project envs (dashboard — Abdullah's console step, agent provides exact list) | `NEXT_PUBLIC_API_URL=https://koralink-api.onrender.com/api/v1`, `NEXT_PUBLIC_APP_URL=<own prod URL>`, `NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true` on the PWA project; same API URL on admin | prod bundle points at prod API; dev-login tree-shaken (Strix P0-7 gate) |
-| 5 | PWA/admin Sentry init (2-line change) | `environment: process.env.NEXT_PUBLIC_SENTRY_ENV ?? 'production'` in client config; Vercel env carries `NEXT_PUBLIC_SENTRY_ENV=production`; VPS builds get `staging` via `.env.local` | S: `staging` vs `production` visible per event in all 3 apps |
-| 6 | `docs/plans/environment-segregation/env-matrices.md` (NEW) | full per-env variable matrices (source of truth) | prevents the "which env var where" drift class |
-| 7 | `docs/plans/environment-segregation/runbooks/*.md` (NEW) | promote-flow (staging→main PR), Neon reset + migration application, Unifonic AppSid wiring + Render dev-login flip | paid-tier constraints documented; Render pre-deploy is PAID-only (verified) so migrations are a runbook, not a hook |
-| 8 | Branch setup | create `staging` at current `origin/main`; VPS clone tracks it; main becomes promote-only | S1, S5 |
-| 9 | `kanban/STATE.json` + BOARD note | factory default branch → `staging` | F5: cron must never release to prod |
+| 1 | `scripts/deploy-staging.sh` (NEW) | FIXED order: preflight (branch=staging; dirty tree allowed+logged) → fetch/checkout → `npm install` → `env -u NODE_ENV npx turbo run build --filter=api --filter=player-pwa --filter=admin --force` → `scripts/migrate-vps.mjs` → rsync `public/` into both standalone dirs (hot-edit trap) → restart API→PWA→Admin → inline health matrix | one-command, ordered, idempotent staging deploys; kills stale-dist (P0-10) + skipped-migration (P2-51) classes |
+| 2 | `scripts/migrate-vps.mjs` (NEW) | drizzle-kit is unavailable on this VPS → reads `drizzle/*.sql` filename-ordered, diffs against `__drizzle_migrations`, applies pending (statement-breakpoint split), reconciles journal rows; loads `DATABASE_URL` from `apps/api/.env` itself | migrations run inside the deploy loop, DB before restarts |
+| 3 | `docker-compose.yml` (repo) | postgres ports `"5432:5432"` → `"127.0.0.1:5432:5432"` + `docker compose up -d postgres` | F6: loopback bind, defense-in-depth (OCI netfilter remains outer gate) |
+| 4 | VPS `apps/api/.env` | `NODE_ENV=staging`; `PLAYER_URL`/`ADMIN_URL` drop the two Vercel origins (localhost + TS IP + funnel origins remain) | Sentry API env tag; S3 CORS segregation |
+| 5 | Render env-vars (T2, via API) | `NODE_ENV=production`; `PLAYER_URL=https://kora-link-player-pwa.vercel.app`; `ADMIN_URL=https://kora-link-admin.vercel.app`; `UNIFONIC_SENDER_ID=KoraLink` | prod CORS-only-Vercel; OTP-ready |
+| 6 | `sentry.client.config.ts` ×2 (PWA+admin) | `environment: process.env.NEXT_PUBLIC_SENTRY_ENV ?? 'production'` | S5; Vercel bakes `production`, VPS `.env.local` sets `staging` |
+| 7 | Vercel project envs (T2, CLI or dashboard) | `NEXT_PUBLIC_API_URL=https://koralink-api.onrender.com/api/v1`, `NEXT_PUBLIC_DISABLE_DEV_LOGIN_BAR=true`, `NEXT_PUBLIC_SENTRY_ENV=production` (both projects) + `NEXT_PUBLIC_APP_URL` (PWA) | S8; verified by chunk-grep post-redeploy (bake rule) |
+| 8 | `kanban/STATE.json` + BOARD row | factory default branch → `staging` | F5: cron must never release to prod |
+| 9 | `docs/plans/environment-segregation/runbooks/*.md` (NEW) | promote-flow, prod-migrations, otp-go-live (Phase 1), coolify-cutover (Phase 2), neon-reset | S7; phases documented, not executed |
 
-## Data flow: staging auth (dummy)
+## Data flow: staging auth (unchanged, regression-gated)
 
-`DevLoginBar (VPS build, flag unset) → POST :8443/api/v1/auth/dev-login {phone:+9665000000xx}
-→ DEV_LOGIN_ENABLED=true → JWT cookie + Bearer → VPS PG seeded users` — unchanged behavior,
-regression-gated by success criterion 3.
+`DevLoginBar (VPS build) → POST :8443/api/v1/auth/dev-login {phone:+9665000000xx} →
+DEV_LOGIN_ENABLED=true → JWT cookie+Bearer → VPS PG seeded users`.
 
-## Data flow: production auth (real)
+## Data flow: production auth (Phase 1 target)
 
-`Login form → POST /auth/request-otp → UnifonicService.sendSms (APP_SID set → real SMS)
-→ user enters code → POST /auth/verify-otp → JWT cookie (same-origin Vercel↔Render? No —
-cross-origin → existing Bearer dual-extraction path) → Neon users table`.
-Interim (before APP_SID): SMS logged to Render logs; dev-login still enabled (flagged risk F3,
-flips off at OTP wiring per 01-product Q4).
+`Login → POST /auth/request-otp → UnifonicService.sendSms (AppSid set → real SMS) →
+POST /auth/verify-otp → JWT (cross-origin → Bearer dual-extraction path) → Neon users`.
+Until Phase 1: SMS logged to Render logs; dev-login interim-true (F3, accepted).
 
-## Files changed (full list)
+## Files changed
 
-| File | Type |
-|---|---|
-| `scripts/deploy-staging.sh` | new (executable) |
-| `apps/api/.env` (VPS only, not committed) | edit |
-| Render env-vars (remote, via API) | edit |
-| Vercel project envs (dashboard) | edit (user) |
-| `apps/player-pwa/sentry.client.config.ts` (+ admin equivalent) | 1-line each |
-| `apps/player-pwa/.env.local` (VPS): add `NEXT_PUBLIC_SENTRY_ENV=staging` | edit |
-| `docs/plans/environment-segregation/**` (this dir) | new |
-| `kanban/STATE.json`, `kanban/BOARD.md` row | edit (factory bookkeeping) |
+| File | Type | Tier |
+|---|---|---|
+| `scripts/deploy-staging.sh`, `scripts/migrate-vps.mjs` | new | T1 |
+| `docker-compose.yml` | edit (bind) | T1 |
+| `apps/api/.env` (VPS-only, uncommitted) | edit | T1 |
+| `apps/player-pwa/.env.local` + admin equivalent (VPS) | edit (SENTRY_ENV) | T1 |
+| `sentry.client.config.ts` ×2 | 1-line each | T1 (code) |
+| Render env-vars | remote edit | **T2** |
+| Vercel project envs + redeploy | remote edit | **T2** |
+| promote PR merge | git | **T2** |
+| `docs/plans/environment-segregation/**`, `kanban/*` | docs/bookkeeping | T1 |
 
-No API module code, no schema, no DTO, no i18n changes — zero contract surface.
+No API module code, no schema, no DTO, no i18n changes — zero contract surface. Foreign WIP
+(factory run #44 on `auth.module.ts`) is logged by the deploy script and never touched.
 
 ## Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
-| VPS `NODE_ENV=staging` breaks a prod-coupled branch (unaudited) | grep audit + full build + health matrix before declaring the flip done (success criterion 6); revert = one env line + restart |
-| Docs-only push to `main` triggers wasteful Render/Vercel builds during transition | all cycle work lands on `staging`; `main` only receives the promote PR |
-| Factory cron pushes `main` mid-cycle (F5) | STATE.json/BOARD retarget lands in the same slice as branch creation |
-| Neon reset nukes demo data while dev-login still on (empty app confusion) | accepted in 01-product Q3 — demo shows empty-but-working app; VPS keeps dummy data |
-| Vercel env edits sit behind Abdullah's dashboard | exact copy-paste var list provided; agent verifies baked output post-deploy by grepping live JS chunks (P0-7 audit pattern) |
-| Render free spin-down makes staging↔prod contract tests flaky | keep-warm cron 527c30dea3a7 already exists; document cold-start ~50s in runbook |
+| `NODE_ENV=staging` breaks an unguarded prod-coupled branch | grep audit BEFORE flip (`NODE_ENV` consumers: Sentry init, next-pwa disable flag — both safe); full build + health matrix after; revert = one env line + restart |
+| Postgres re-bind breaks local API | compose edit keeps port number; API uses 127.0.0.1 already; probe health immediately after `up -d` |
+| deploy script runs during sibling agent's edit window | script never stashes/discards; logs dirty files; git-level operations only; restarts are the only mutation of service state |
+| docs-only `main` pushes waste prod builds | all cycle work on `staging`; `main` receives only the promote PR |
+| Vercel env change with no redeploy = stale bundle (bake rule) | slice 3 verifies by chunk-grep AFTER redeploy, not by env listing |
+| Render env change breaks demo mid-flight | T2 gate shows exact key→value diff first; revert = previous values recorded in ops-log |
+| drizzle applier mis-handles a 0018-style enum ADD VALUE | applier reuses the proven hand-apply procedure (filename order, statement split, journal reconcile) — the same steps run #43 executed manually |
 
 ## Descoped
 
-Paid tiers, custom domains, preview environments, Neon branching, Redis for staging, CI
-changes beyond what exists (`ci.yml` already builds+type-checks on PRs — promote PRs get it free).
+Phase 1/2 execution, paid tiers, custom domains, preview envs, Neon branching, Redis for
+staging, Cloudflare DNS (needs `CLOUDFLARE_API_TOKEN`, §7 handoff).
