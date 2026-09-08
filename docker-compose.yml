@@ -1,8 +1,7 @@
 services:
   # ── PostgreSQL 16 + PostGIS ───────────────────────────────────────────────
   postgres:
-    image: postgis/postgis:16-3.5
-    platform: linux/amd64
+    image: imresamu/postgis:16-3.5
     container_name: koralink-postgres
     restart: unless-stopped
     environment:
@@ -10,7 +9,7 @@ services:
       POSTGRES_PASSWORD: koralink_dev
       POSTGRES_DB: koralink
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./apps/api/drizzle/gist_indexes.sql:/docker-entrypoint-initdb.d/01_gist_indexes.sql:ro
