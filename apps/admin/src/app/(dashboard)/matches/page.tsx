@@ -4,6 +4,8 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { Ban, Loader2, Pencil } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -43,7 +45,7 @@ export default function MatchesPage() {
   if (sortField) qs.set('sortBy', sortField);
   if (sortDir) qs.set('dir', sortDir);
 
-  const { data, loading, error, reload } = useLiveAdminData<MatchesResponse>(`/admin/matches?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<MatchesResponse>(`/admin/matches?${qs.toString()}`);
 
   async function cancel(id: string) {
     setBusyId(id);
@@ -122,7 +124,7 @@ export default function MatchesPage() {
 
   return (
     <div>
-      <PageHeader title={t('matchesTitle')} subtitle={t('matchesSubtitle')} />
+      <PageHeader title={t('matchesTitle')} subtitle={t('matchesSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <select
@@ -155,7 +157,7 @@ export default function MatchesPage() {
               rows={data?.matches ?? []}
               rowKey={(m) => m.id}
               onRowClick={(m) => setSelected(m)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />

@@ -4,6 +4,8 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -40,7 +42,7 @@ export default function TransactionsPage() {
     qs.set('dir', dir);
   }
 
-  const { data, loading, error, reload } = useLiveAdminData<TxResponse>(`/admin/transactions?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<TxResponse>(`/admin/transactions?${qs.toString()}`);
 
   async function refund(id: string) {
     setBusyId(id);
@@ -121,7 +123,7 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <PageHeader title={hq('transactionsTitle')} subtitle={hq('transactionsSubtitle')} />
+      <PageHeader title={hq('transactionsTitle')} subtitle={hq('transactionsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
@@ -162,7 +164,7 @@ export default function TransactionsPage() {
               rows={data?.transactions ?? []}
               rowKey={(t) => t.id}
               onRowClick={(t) => setSelected(t)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />

@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import type { DisputeListItem, ListResponse } from '@/lib/types';
@@ -27,7 +29,7 @@ export default function DisputesPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
 
-  const { data, loading, error, reload } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
 
   const columns: ColumnDef<DisputeListItem>[] = [
     {
@@ -72,7 +74,7 @@ export default function DisputesPage() {
 
   return (
     <div>
-      <PageHeader title={t('disputesTitle')} subtitle={t('disputesSubtitle')} />
+      <PageHeader title={t('disputesTitle')} subtitle={t('disputesSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select
@@ -103,7 +105,7 @@ export default function DisputesPage() {
               rows={data?.disputes ?? []}
               rowKey={(d) => d.id}
               onRowClick={(d) => setSelected(d)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />

@@ -39,6 +39,10 @@ export function useLiveAdminData<T>(
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState(false);
+  // P2-55 (run #42): true once the live socket CONNECTED and then dropped —
+  // the rendered data may be aging. Never-connected is not stale.
+  const [stale, setStale] = useState(false);
+  const wasConnectedRef = useRef(false);
   const entitiesRef = useRef(entities);
   entitiesRef.current = entities;
 
@@ -72,8 +76,18 @@ export function useLiveAdminData<T>(
       reconnectionDelay: 1000,
     });
 
-    socket.on('connect', () => setLive(true));
-    socket.on('disconnect', () => setLive(false));
+    socket.on('connect', () => {
+      wasConnectedRef.current = true;
+      setLive(true);
+      setStale(false);
+    });
+    socket.on('disconnect', () => {
+      setLive(false);
+      // Only "stale" after a REAL drop (connected at least once). A page
+      // whose socket never connected (e.g. missing token) is not stale —
+      // it simply never had live updates (P2-55, run #42).
+      if (wasConnectedRef.current) setStale(true);
+    });
     socket.on('ops-data-changed', (payload: { entity: OpsEntity }) => {
       const wanted = entitiesRef.current;
       if (wanted.length === 0 || wanted.includes(payload.entity)) {
@@ -106,5 +120,5 @@ export function useLiveAdminData<T>(
     };
   }, [reload, options?.pollMs]);
 
-  return { data, error, loading, reload, live };
+  return { data, error, loading, reload, live, stale };
 }

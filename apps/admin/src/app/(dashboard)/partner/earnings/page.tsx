@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings } from '@/lib/types';
@@ -27,7 +28,7 @@ interface PartnerSettlement {
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
-  const { data, loading, error, reload } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
 
   const columns: ColumnDef<PartnerSettlement>[] = [
     {
@@ -77,7 +78,7 @@ export default function PartnerEarningsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="space-y-6 p-8">
         {loading ? (

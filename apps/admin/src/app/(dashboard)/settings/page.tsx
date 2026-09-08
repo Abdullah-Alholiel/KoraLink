@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -23,7 +24,7 @@ const KNOWN_SETTINGS: { key: string; label: string; type: 'number' | 'text' }[] 
 export default function SettingsPage() {
   const t = useTranslations('hq');
   const ts = useTranslations('status');
-  const { data, loading, error, reload } = useLiveAdminData<SettingsResponse>('/admin/settings', ['settings']);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<SettingsResponse>('/admin/settings', ['settings']);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -51,7 +52,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title={t('settingsTitle')} subtitle={t('settingsSubtitle')} />
+      <PageHeader title={t('settingsTitle')} subtitle={t('settingsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettings')}</div>

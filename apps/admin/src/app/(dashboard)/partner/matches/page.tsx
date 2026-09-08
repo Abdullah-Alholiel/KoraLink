@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import type { AdminVenue, PartnerMatchList, PartnerMatchRow } from '@/lib/types';
@@ -36,7 +37,7 @@ export default function PartnerMatchesPage() {
   const [pitchId, setPitchId] = useState<string>('');
   const [page, setPage] = useState(1);
 
-  const { data: venues, reload } = useLiveAdminData<AdminVenue[]>('/partner/venues', ['venues']);
+  const { data: venues, reload, live, stale } = useLiveAdminData<AdminVenue[]>('/partner/venues', ['venues']);
   const { data: pitches } = useLiveAdminData<PitchOption[]>('/partner/pitches', ['pitches']);
 
   const venuePitches = useMemo(
@@ -71,7 +72,7 @@ export default function PartnerMatchesPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="space-y-6 p-8">
         <div className="flex flex-wrap items-center gap-3">

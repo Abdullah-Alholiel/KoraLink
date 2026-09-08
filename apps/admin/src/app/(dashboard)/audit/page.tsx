@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import type { AuditLog, ListResponse } from '@/lib/types';
@@ -22,7 +24,7 @@ export default function AuditPage() {
 
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
 
-  const { data, loading, error, reload } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
   const columns: ColumnDef<AuditLog>[] = [
     {
@@ -70,7 +72,7 @@ export default function AuditPage() {
 
   return (
     <div>
-      <PageHeader title={t('auditTitle')} subtitle={t('auditSubtitle')} />
+      <PageHeader title={t('auditTitle')} subtitle={t('auditSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingAudit')}</div>
@@ -84,7 +86,7 @@ export default function AuditPage() {
               rows={data?.logs ?? []}
               rowKey={(l) => l.id}
               onRowClick={(l) => setSelected(l)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={50} total={data?.total ?? 0} onPage={setPage} />

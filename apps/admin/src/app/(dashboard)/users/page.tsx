@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -68,7 +70,7 @@ export default function UsersPage() {
   if (sortField) qs.set('sortBy', sortField);
   if (sortDir) qs.set('dir', sortDir);
 
-  const { data, loading, error, reload } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusyId(id);
@@ -175,7 +177,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <PageHeader title={t('usersTitle')} subtitle={t('usersSubtitle')} />
+      <PageHeader title={t('usersTitle')} subtitle={t('usersSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <form
@@ -247,7 +249,7 @@ export default function UsersPage() {
               rows={data?.users ?? []}
               rowKey={(u) => u.id}
               onRowClick={(u) => setSelected(u)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />

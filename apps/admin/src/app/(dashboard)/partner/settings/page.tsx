@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -12,7 +13,7 @@ import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerSettingsPage() {
   const t = useTranslations('partner.settings');
-  const { data, loading, error, reload } = useLiveAdminData<PartnerVerificationRow[]>('/partner/verification', ['venues']);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerVerificationRow[]>('/partner/verification', ['venues']);
   const [selected, setSelected] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -59,7 +60,7 @@ export default function PartnerSettingsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="max-w-2xl p-8">
         {loading ? (

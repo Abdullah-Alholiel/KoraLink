@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Pencil, Search, UserCog, XCircle } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
+import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
@@ -36,7 +38,7 @@ export default function VenuesPage() {
   if (search) qs.set('search', search);
   if (status !== 'all') qs.set('status', status);
 
-  const { data, loading, error, reload } = useLiveAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
+  const { data, loading, error, reload, live, stale } = useLiveAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
 
   async function decide(id: string, decision: 'approve' | 'reject') {
     setBusyId(id);
@@ -114,7 +116,7 @@ export default function VenuesPage() {
 
   return (
     <div>
-      <PageHeader title={t('venuesTitle')} subtitle={t('venuesSubtitle')} />
+      <PageHeader title={t('venuesTitle')} subtitle={t('venuesSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <form
@@ -166,7 +168,7 @@ export default function VenuesPage() {
               rows={data?.venues ?? []}
               rowKey={(v) => v.id}
               onRowClick={(v) => setSelected(v)}
-              empty={<p className="px-8 py-10 text-sm text-gray-400">{tc('noData')}</p>}
+              empty={<EmptyState message={tc('noData')} />}
             />
           </div>
           <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
