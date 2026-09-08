@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 import PersonalInfoPage from '@/app/[locale]/(main)/personal-info/page';
 import {
@@ -48,10 +49,13 @@ function mockData() {
 }
 
 function renderPage() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
-        <NextIntlClientProvider messages={enMessages} locale="en">
-            <PersonalInfoPage />
-        </NextIntlClientProvider>,
+        <QueryClientProvider client={queryClient}>
+            <NextIntlClientProvider messages={enMessages} locale="en">
+                <PersonalInfoPage />
+            </NextIntlClientProvider>
+        </QueryClientProvider>,
     );
 }
 
