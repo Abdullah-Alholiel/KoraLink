@@ -41,7 +41,10 @@ const withPWA = withPWAInit({
             maxEntries: 50,
           },
           cacheableResponse: {
-            statuses: [0, 200],
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry (wrong feed/profile served offline). [200] only.
+            statuses: [200],
           },
         },
       },
@@ -56,7 +59,10 @@ const withPWA = withPWAInit({
             maxEntries: 100,
           },
           cacheableResponse: {
-            statuses: [0, 200],
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry (wrong feed/profile served offline). [200] only.
+            statuses: [200],
           },
         },
       },
@@ -86,7 +92,10 @@ const withPWA = withPWAInit({
             maxEntries: 30,
           },
           cacheableResponse: {
-            statuses: [0, 200],
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry (wrong feed/profile served offline). [200] only.
+            statuses: [200],
           },
         },
       },
@@ -101,7 +110,10 @@ const withPWA = withPWAInit({
             maxEntries: 5,
           },
           cacheableResponse: {
-            statuses: [0, 200],
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry (wrong feed/profile served offline). [200] only.
+            statuses: [200],
           },
           networkTimeoutSeconds: 3,
         },
