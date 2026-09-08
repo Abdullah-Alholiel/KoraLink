@@ -3,26 +3,17 @@
 | Gate | Name | Status | Artifact |
 |------|------|--------|----------|
 | 0 | Retrospective | folded into environment-segregation v2 (same day) | — |
-| 1 | Product Spec | ✅ | [01-product.md](./01-product.md) |
-| 2 | Architecture | ✅ | [02-architecture.md](./02-architecture.md) |
-| 3 | Program Design | ✅ | [03-program-design.md](./03-program-design.md) |
-| 4 | Slices | 🔄 | slice table below |
+| 1 | Product | ✅ | 01-product.md |
+| 2 | Architecture | ✅ (phone-nullable 0038, P2-11 responseToken exception, email-keyed caps) | 02-architecture.md |
+| 3 | Program Design | ✅ (contracts locked) | 03-program-design.md |
+| 4 | Vertical Slices | ✅ 5/5 on staging — 449 jest + 422 vitest green, build 3/3, deploy H1–H6 ×2, live E2E matrix pass (see kanban/RUNS/2026-09-08T16-11Z-run46.md) | — |
+| Promote | T2 — **AWAITING EXPLICIT GO** (Neon migration first, then PR staging→main) | ⏸️ | runbooks/prod-migrations.md |
 
-Autonomy: "continue in best standard" standing directive; owner made the P0-9 call
-(email OTP via Resend). Implementation proceeds on `staging` when `kanban/LOCK.json` is free.
-
-## Slices
-
-| # | Slice | Status |
-|---|---|---|
-| 1 | migration 0038 + schema phone nullable + redaction null-safe | 🔄 |
-| 2 | ResendService + email-otp.service + endpoints + DTOs (+ tests) | ⏳ |
-| 3 | PWA: login toggle + email form + verify channel + hooks + i18n EN/AR | ⏳ |
-| 4 | staging deploy + live E2E (dev box) + dev-login regression | ⏳ |
-| 5 | promote PR → prod; Render RESEND_API_KEY; real-email E2E gate | ⏳ (T2 promote = Abdullah) |
-
-## Decisions
-
-- 2026-09-08: Email OTP via Resend (P0-9 owner call). Unifonic/SMS remains future.
-- 2026-09-08: P2-11 body-token exception on verify endpoints, explicit `responseToken` opt-in
-  (third-party-cookie reality on Render↔Vercel cross-origin; obsoleted by Phase-2 same-domain).
+## Post-promote checklist
+- [ ] Neon: reconcile journal (36 vs VPS 40), apply missing incl. 0038, verify, journal
+- [ ] PR staging→main, CI green, merge
+- [ ] Render deploy live + /api/v1/health 200
+- [ ] Vercel ×2 READY; chunk-grep prod API origin; dev-login markers absent
+- [ ] CORS: Vercel origin allowed / staging rejected
+- [ ] (User) Resend sending-domain verified → prod OTP reaches arbitrary recipients
+- [ ] (Later) turn dev-login OFF on prod once email OTP is the proven path (otp-go-live.md)
