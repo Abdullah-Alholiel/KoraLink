@@ -128,6 +128,7 @@ export default function MatchesPage() {
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
         <select
+          aria-label={tc('filterByStatus')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);

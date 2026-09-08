@@ -206,6 +206,7 @@ export default function UsersPage() {
         </form>
 
         <select
+          aria-label={tc('filterByRole')}
           value={role}
           onChange={(e) => {
             setRole(e.target.value);
@@ -220,6 +221,7 @@ export default function UsersPage() {
         </select>
 
         <select
+          aria-label={tc('filterByStatus')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);

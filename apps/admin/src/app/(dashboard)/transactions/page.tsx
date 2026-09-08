@@ -126,14 +126,14 @@ export default function TransactionsPage() {
       <PageHeader title={hq('transactionsTitle')} subtitle={hq('transactionsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select aria-label={tc('filterByStatus')} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">{hq('allStatuses')}</option>
           <option value="Pending">{ts('pending')}</option>
           <option value="Completed">{ts('completed')}</option>
           <option value="Failed">{ts('failed')}</option>
           <option value="Reversed">{ts('reversed')}</option>
         </select>
-        <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select aria-label={tc('filterByType')} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">{hq('allTypes')}</option>
           <option value="DEBIT">{hq('typeDebit')}</option>
           <option value="CREDIT">{hq('typeCredit')}</option>

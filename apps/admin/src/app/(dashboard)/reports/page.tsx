@@ -77,6 +77,7 @@ export default function ReportsPage() {
 
       <div className="flex items-center gap-3 px-8 py-4">
         <select
+          aria-label={tc('filterByStatus')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
@@ -91,6 +92,7 @@ export default function ReportsPage() {
           <option value="dismissed">{ts('dismissed')}</option>
         </select>
         <select
+          aria-label={tc('filterBySubject')}
           value={subjectType}
           onChange={(e) => {
             setSubjectType(e.target.value);

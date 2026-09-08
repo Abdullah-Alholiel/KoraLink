@@ -142,6 +142,7 @@ export default function VenuesPage() {
         </form>
 
         <select
+          aria-label={tc('filterByStatus')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);

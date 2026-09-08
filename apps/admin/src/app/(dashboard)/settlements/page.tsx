@@ -132,7 +132,7 @@ export default function SettlementsPage() {
       <PageHeader title={t('settlementsTitle')} subtitle={t('settlementsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select aria-label={tc('filterByStatus')} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">{t('allStatuses')}</option>
           <option value="pending">{ts('pending')}</option>
           <option value="paid">{ts('paid')}</option>
