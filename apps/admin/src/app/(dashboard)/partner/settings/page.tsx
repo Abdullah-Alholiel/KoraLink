@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { PartnerVerificationRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -64,7 +65,7 @@ export default function PartnerSettingsPage() {
         {loading ? (
           <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : !data?.length ? (
           <div className="text-sm text-gray-400">{t('noVenues')}</div>
         ) : (

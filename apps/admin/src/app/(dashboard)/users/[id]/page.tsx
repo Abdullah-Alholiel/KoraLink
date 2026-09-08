@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { AdminUser } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -49,7 +50,7 @@ export default function UserDetailPage() {
     return (
       <div>
         <PageHeader title="User" />
-        <div className="p-8 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="m-8" />
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2, MapPin, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -41,7 +42,7 @@ export default function PartnerVenuesPage() {
         {loading ? (
           <div className="py-10 text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="py-10 text-sm text-brand-red">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(data ?? []).map((v) => (

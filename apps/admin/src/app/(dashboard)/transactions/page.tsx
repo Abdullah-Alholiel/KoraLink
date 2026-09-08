@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { AdminTransaction, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -152,7 +153,7 @@ export default function TransactionsPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{hq('loadingTransactions')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">{hq('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
           <div className="px-8">

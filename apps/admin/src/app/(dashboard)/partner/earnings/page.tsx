@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { PartnerEarnings } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -26,7 +27,7 @@ interface PartnerSettlement {
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
-  const { data, loading, error } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+  const { data, loading, error, reload } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
 
   const columns: ColumnDef<PartnerSettlement>[] = [
     {
@@ -82,7 +83,7 @@ export default function PartnerEarningsPage() {
         {loading ? (
           <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -161,7 +162,7 @@ export default function MyPitchesPage() {
         {loading ? (
           <div className="py-10 text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="py-10 text-sm text-brand-red">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(data ?? []).map((p) => {

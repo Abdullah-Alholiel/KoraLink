@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { PartnerMatchDetail } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -24,7 +25,7 @@ export default function PartnerMatchDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
 
-  const { data, loading, error } = useLiveAdminData<PartnerMatchDetail>(
+  const { data, loading, error, reload } = useLiveAdminData<PartnerMatchDetail>(
     `/partner/matches/${id}`,
     ['matches'],
   );
@@ -44,7 +45,7 @@ export default function PartnerMatchDetailPage() {
         {loading ? (
           <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

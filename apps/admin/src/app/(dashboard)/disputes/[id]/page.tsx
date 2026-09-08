@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -134,7 +135,7 @@ export default function DisputeDetailPage() {
     return (
       <div>
         <PageHeader title={t('title')} />
-        <div className="p-8 text-sm text-brand-red">{t('loadFailed')}</div>
+        <LoadError error={error} onRetry={reload} className="m-8" />
       </div>
     );
   }

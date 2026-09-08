@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Activity, Menu, X } from 'lucide-react';
 import { getRole, canAccessPath, homeForRole } from '@/lib/rbac';
 import Sidebar from '@/components/Sidebar';
+import OfflineBanner from '@/components/OfflineBanner';
 
 /**
  * Console layout guard.
@@ -81,6 +82,10 @@ export default function DashboardLayout({
           <span className="text-base font-semibold text-white">KoraLink</span>
         </div>
       </div>
+
+      {/* Console-wide offline indicator (run #42) — one banner covers every
+          HQ + partner route; renders nothing while online. */}
+      <OfflineBanner />
 
       <main className="md:pl-64">{children}</main>
     </div>

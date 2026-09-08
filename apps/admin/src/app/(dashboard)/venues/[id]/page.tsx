@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { AdminVenueDetail } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -41,7 +42,7 @@ export default function VenueDetailPage() {
     return (
       <div>
         <PageHeader title="Venue" />
-        <div className="p-8 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="m-8" />
       </div>
     );
   }

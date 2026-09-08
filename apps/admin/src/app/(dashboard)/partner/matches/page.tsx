@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { AdminVenue, PartnerMatchList, PartnerMatchRow } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -35,7 +36,7 @@ export default function PartnerMatchesPage() {
   const [pitchId, setPitchId] = useState<string>('');
   const [page, setPage] = useState(1);
 
-  const { data: venues } = useLiveAdminData<AdminVenue[]>('/partner/venues', ['venues']);
+  const { data: venues, reload } = useLiveAdminData<AdminVenue[]>('/partner/venues', ['venues']);
   const { data: pitches } = useLiveAdminData<PitchOption[]>('/partner/pitches', ['pitches']);
 
   const venuePitches = useMemo(
@@ -151,7 +152,7 @@ export default function PartnerMatchesPage() {
         {loading ? (
           <div className="text-sm text-gray-500">{t('loading')}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">{t('error', { error })}</div>
+          <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <>
             <DataTable

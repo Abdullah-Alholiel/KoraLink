@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { AdminReportListItem, ListResponse } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -28,7 +29,7 @@ export default function ReportsPage() {
   if (status) qs.set('status', status);
   if (subjectType) qs.set('subjectType', subjectType);
 
-  const { data, loading, error } = useLiveAdminData<ReportsResponse>(
+  const { data, loading, error, reload } = useLiveAdminData<ReportsResponse>(
     `/admin/reports?${qs.toString()}`,
     ['reports'],
   );
@@ -106,7 +107,7 @@ export default function ReportsPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingReports')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
           <div className="px-8">

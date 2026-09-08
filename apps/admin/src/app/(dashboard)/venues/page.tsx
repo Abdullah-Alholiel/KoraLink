@@ -6,6 +6,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Pencil, Search, UserCog, XCircle } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { AdminVenue, ListResponse, PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -156,7 +157,7 @@ export default function VenuesPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingVenues')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
           <div className="px-8">

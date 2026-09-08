@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { CalendarClock, Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -177,12 +178,7 @@ export default function AdminPitchesPage() {
             <Loader2 className="h-4 w-4 animate-spin" /> {tc('loading')}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-sm text-brand-red">
-            {tc('failedToLoad', { error })}
-            <button onClick={reload} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-              {tc('retry')}
-            </button>
-          </div>
+          <LoadError error={error} onRetry={reload} className="my-16 self-center" />
         ) : (
           <>
             <DataTable

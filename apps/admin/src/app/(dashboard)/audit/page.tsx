@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { AuditLog, ListResponse } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -21,7 +22,7 @@ export default function AuditPage() {
 
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
 
-  const { data, loading, error } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
+  const { data, loading, error, reload } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
   const columns: ColumnDef<AuditLog>[] = [
     {
@@ -74,7 +75,7 @@ export default function AuditPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingAudit')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
           <div className="px-8">

@@ -23,15 +23,16 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { AdminMetrics } from '@/lib/types';
-import { formatMoney, formatPercent } from '@/lib/utils';
+import { formatMoney, formatPercent, formatMetricInt } from '@/lib/utils';
 import MetricCard from '@/components/MetricCard';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function DashboardPage() {
   const t = useTranslations('hq');
-  const { data, loading, error } = useLiveAdminData<AdminMetrics>('/admin/metrics', ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
+  const { data, loading, error, reload } = useLiveAdminData<AdminMetrics>('/admin/metrics', ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
   const recentTx = useLiveAdminData<{ transactions: { id: string; user_name: string | null; reference_type: string; amount: number; status: string }[] }>(
     '/admin/transactions?page=1&perPage=5',
     ['users', 'matches', 'venues', 'disputes', 'transactions', 'settlements']);
@@ -52,7 +53,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader title={t('dashboardTitle')} />
-        <div className="p-8 text-sm text-red-600">{t('errorMetrics')}: {error}</div>
+        <LoadError error={error} className="p-8" />
       </div>
     );
   }
@@ -63,9 +64,9 @@ export default function DashboardPage() {
 
       <div className="space-y-6 p-8">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MetricCard label={t('metricUsers')} value={data.totals.users.toLocaleString()} icon={Users} />
-          <MetricCard label={t('metricMatches')} value={data.totals.matches.toLocaleString()} icon={CalendarDays} />
-          <MetricCard label={t('metricVenues')} value={data.totals.venues.toLocaleString()} icon={MapPin} />
+          <MetricCard label={t('metricUsers')} value={formatMetricInt(data.totals.users)} icon={Users} />
+          <MetricCard label={t('metricMatches')} value={formatMetricInt(data.totals.matches)} icon={CalendarDays} />
+          <MetricCard label={t('metricVenues')} value={formatMetricInt(data.totals.venues)} icon={MapPin} />
           <MetricCard
             label={t('metricCompletionRate')}
             value={formatPercent(data.completionRate)}

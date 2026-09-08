@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CalendarClock, ChevronRight, MapPin, Plus, TrendingUp, Users, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import type { PartnerDashboard } from '@/lib/types';
 import { formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -42,7 +43,7 @@ export default function PartnerDashboardPage() {
     return (
       <div>
         <PageHeader title={t('title')} />
-        <div className="p-8 text-sm text-brand-red">{t('error', { error })}</div>
+        <LoadError error={error} className="p-8" />
       </div>
     );
   }

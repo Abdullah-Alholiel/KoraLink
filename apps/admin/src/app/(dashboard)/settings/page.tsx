@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import LoadError from '@/components/LoadError';
 import { api } from '@/lib/api';
 import PageHeader from '@/components/PageHeader';
 
@@ -55,7 +56,7 @@ export default function SettingsPage() {
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettings')}</div>
       ) : error ? (
-        <div className="px-8 py-10 text-sm text-red-600">{t('loadFailed')}: {error}</div>
+        <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <div className="max-w-2xl p-8">
           {saved && <p className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{t('savedOk')}</p>}

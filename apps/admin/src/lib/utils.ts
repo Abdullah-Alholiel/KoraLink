@@ -25,6 +25,17 @@ export function formatPercent(value: number): string {
 }
 
 /**
+ * Metric integers (counts on cards/tables) — pinned to en-US with grouped
+ * digits. Run #42: replaces bare .toLocaleString() (device-locale dependent,
+ * unstable across the language toggle — Reviewer A run #22 + run #42).
+ * Console convention: Latin digits in BOTH locales (matches formatMoney /
+ * formatDate).
+ */
+export function formatMetricInt(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+/**
  * Timestamp formatter. Kept on the en-GB shape for BOTH locales (v1):
  * timestamps render inside dir="ltr" cells, and Latin-digit dates stay
  * scannable for operations staff in either language.

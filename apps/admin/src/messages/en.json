@@ -17,7 +17,10 @@
     "confirm": "Confirm",
     "search": "Search",
     "actions": "Actions",
-    "optional": "optional"
+    "optional": "optional",
+    "loadErrorTitle": "Failed to load this data",
+    "loadErrorHint": "Check your connection, then try again. The technical detail is shown above for support.",
+    "offlineBanner": "You're offline — live updates paused, showing last loaded data."
   },
   "nav": {
     "dashboard": "Dashboard",
