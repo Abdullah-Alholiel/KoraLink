@@ -1,0 +1,88 @@
+# Run #43 — DB & Infra cycle (rotation 43 % 4 = 3)
+
+## Gate 0 — Retrospective (audit of the area this cycle touches)
+
+**Baseline:** d07da0b (run #42) → HEAD 1359195 (docs addendum). Local main is 6 commits ahead of
+origin (push auth lost — see Blockers).
+
+**Recent-commit pattern (last 15):** fix:feat ratio healthy — 3 fixes (a49033f money strings,
+3ea4a30 transition locks, cefb4a0 a11y) vs 5 features since run #40. No reactive loop. Mutation
+returns conform (verified-OK list stands; run #42 Reviewer B confirmed 11/11 run-#41 claims, this
+run's Reviewer B confirmed all 12 run-#42 claim points — see RUNS report).
+
+**Tech debt scan of the DB/Infra area (this cycle's focus):**
+1. `apps/api/src/database/database.module.ts:18-21` — postgres-js client created with `{ ssl }`
+   ONLY: no `max`, no `idle_timeout`, no `connect_timeout`. A socket-traffic spike (or a Neon
+   cold-start stall) exhausts the default pool (10) with no fail-fast; requests queue forever.
+   Reviewer B flagged same (run #43). CONFIRMED by reading the factory.
+2. `apps/player-pwa/next.config.mjs` runtimeCaching — FOUR routes carry
+   `cacheableResponse: { statuses: [0, 200] }` (:44 matches feed, :59 static assets, :89
+   clubs/venues, :104 user profile). Status 0 = opaque response. All four routes are same-origin;
+   caching an opaque/error-shaped response poisons the cache entry until maxAge expiry. Workbox
+   guidance: `[0, 200]` is for cross-origin no-CORS CDNs only. Reviewer B flagged; generated
+   public/sw.js verified live this run (grep `statuses:[0,200]` → present in all four RouteRegistry
+   entries). CONFIRMED.
+3. Reviewer A IMPORTANT claimed `0014_admin_notification_verbs.sql` unjournaled + duplicate tag —
+   **REFUTED**: documented run-#23/P1-33 orphan, folded into the journaled chain via 0029's
+   `ADD VALUE IF NOT EXISTS`, allowlisted in `drizzle-migration-journal.spec.ts` KNOWN_ORPHANS
+   (line 29). Tripwire suite green. No action.
+4. Reviewer A IMPORTANT claimed "ZERO plain .index() calls / missing FK indexes". Half-refuted:
+   schema.ts has 15 index blocks with many plain indexes; the precise gap = 11 FK columns that lead
+   NO index. But query-path audit (grep across apps/api/src) shows ALL 11 legs are only ever probed
+   from the PK side (e.g. `pitch_slots.booked_match_id` appears in LEFT JOIN ... ON matches.id,
+   never `WHERE booked_match_id = X`); live EXPLAIN on the partner slot join = hash join over
+   16-row matches seq scan (sub-ms). No index-worthy reverse lookup exists today → **index batch
+   DEFERRED to a pre-launch boarding** (write-cost not justified at current scale; ALSO: any
+   migration this run re-triggers P2-51 Render deploy-before-migrate drift, owner call pending).
+   Boarded as P2-56.
+5. Backup posture (Reviewer B "P0 no offsite, restore never rehearsed"): nightly dumps RUN
+   (03:01 today, retention 30d, gzip -t integrity guard) and a THROWAWAY-DB restore drill WAS
+   executed 2026-09-02 (scripts/db-restore-runbook.md: "First drill executed 2026-09-02").
+   Reviewer B missed the runbook file. Residual true gaps: offsite copy (owner call — P1-18
+   rider, needs Abdullah's storage account) and drill staleness → this run RE-DRILLS on today's
+   dump (slice 3).
+6. ADMIN STATE CHECK (Phase 3.5 step 0): `git status --short apps/admin apps/api/src/modules/partner`
+   → clean; admin service active; no hold. Not needed anyway — this cycle touches no admin code.
+
+**Classify:** (1) IMPORTANT (resilience), (2) IMPORTANT (cache hygiene), (4)(5) re-scoped as above.
+**Proceed to Gate 1:** YES.
+
+## Gates 1–3 compact — 01-program-design.md (this cycle's contract)
+
+### Problem
+A stalled/dead Postgres connection (Neon cold start, Render-demo-style drops — Sentry API-16/17
+show the class is real) currently wedges API requests with default pool settings; and the PWA
+service worker can pin poisoned/opaque responses for up to maxAge (30 days on static assets).
+
+### User stories
+- As a player, when the DB briefly stalls, I get a fast error + retry (LoadError path) instead of
+  an infinite spinner. (pool connect_timeout)
+- As a player, my PWA never serves me a cached broken response for the feed/profile. (SW statuses)
+- As the owner, a disk-loss disaster is recoverable within the documented RPO — proven by drill,
+  not assertion. (restore drill)
+
+### Scope
+IN: pool options env-tunable in database.module.ts + jest specs; SW cacheable statuses [0,200]→[200]
+(4 sites in next.config.mjs); .env.example documents pool vars + ADMIN_URL; restore drill execution
++ evidence. OUT: 0037 FK-index migration (P2-56, pre-launch batch + P2-51 first), WAL archiving,
+offsite backup leg (owner call), log shipping.
+
+### Architecture delta
+- `database.module.ts`: exported pure `buildPoolOptions(env)` → `{ ssl, max, idle_timeout,
+  connect_timeout }`; useFactory consumes it. No module/DI shape change.
+- `next.config.mjs`: literal change only; sw.js regenerated by build (postbuild syncs standalone
+  public/). **Deploy note (memory trap): public/sw.js must reach
+  .next/standalone/apps/player-pwa/public — sync-standalone.mjs does this at postbuild; verified
+  after build.**
+- No DB schema change → **no migration → no P2-51 exposure this run.**
+
+### Contracts (Gate 3 checklist)
+- [x] No API response shape changes; no DTO changes; no adapter changes.
+- [x] `buildPoolOptions` signature: `(env: Record<string, string | undefined>) => {
+      ssl: 'require' | false; max: number; idle_timeout: number; connect_timeout: number }`.
+      Defaults: max 10, idle_timeout 30 (s), connect_timeout 10 (s). NaN/negative → default.
+      Env names: DATABASE_POOL_MAX / DATABASE_IDLE_TIMEOUT / DATABASE_CONNECT_TIMEOUT.
+- [x] i18n: zero user-facing strings → no key changes (parity untouched).
+- [x] Verify every item explicitly: SSL_MODE=require passthrough pinned by spec; defaults pinned
+      by spec; env-override pinned by spec; sw.js grep shows `statuses:[200]` ×4 and
+      `statuses:[0,200]` ×0 after build; restore drill prints matching table counts.

@@ -47,3 +47,18 @@ rm /tmp/restore-test.sql
    unacceptable, add WAL archiving (board P1-18 rider).
 
 First drill executed 2026-09-02 (lead agent) — see kanban/RUNS for the proof.
+
+## 4. Drill log
+
+- **2026-09-08 (factory run #43, slice 3):** throwaway restore of
+  `koralink-20260908-030122.sql.gz` (3237 SQL lines) into
+  `koralink_restore_drill_20260908` (uniquely named — no DROP needed to
+  re-run). RESTORE_EXIT=0 (only benign setval notices). Verified: tables
+  29=29 live vs drill; users 44=44, matches 16=16, transactions 24=24,
+  drizzle.__drizzle_migrations 35=35; users CREATE TABLE carries zero
+  `skill_level` (post-0035 schema confirmed — the dump's single
+  `skill_level` string is the 0035 bookkeeping row itself). NOTE:
+  bookkeeping shows 35 rows here vs 37 earlier on Sep 8 — see RUNS #43
+  for the dedupe of two phantom 0035 rows (harmless duplicates). Cleanup
+  pending (DROP DATABASE needs interactive approval on cron):
+  `docker exec koralink-postgres psql -U koralink -d postgres -c "DROP DATABASE koralink_restore_drill_20260908"`.
