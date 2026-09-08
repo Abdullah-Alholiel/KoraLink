@@ -80,6 +80,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         key={section}
         href={item.href}
         onClick={onMobileClose}
+        aria-current={active ? 'page' : undefined}
         className={cn(linkClass, active ? 'bg-brand-600 text-white' : 'hover:bg-white/5 hover:text-white')}
       >
         <item.icon className="h-5 w-5" />

@@ -176,7 +176,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('recurringPattern')}</h3>
-            <button onClick={() => setShowGenerator(false)} className="text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
+            <button onClick={() => setShowGenerator(false)} className="rounded-md p-1.5 text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {dayLabels.map((label, i) => {
@@ -237,7 +237,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('addSingleTitle')}</h3>
-            <button onClick={() => setShowAddSlot(false)} className="text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
+            <button onClick={() => setShowAddSlot(false)} className="rounded-md p-1.5 text-gray-400 hover:text-gray-600" aria-label={tc('close')}><X className="h-4 w-4" /></button>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <label className="text-xs text-gray-500">
@@ -298,10 +298,14 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
                         <button
                           onClick={() => remove(s.id)}
                           disabled={busyId === s.id}
-                          className="opacity-0 transition-opacity group-hover:opacity-100 text-gray-400 hover:text-red-500"
+                          // P2-54 (run #42): focus-reveal + 24px min hit target —
+                          // the delete action was opacity-0 and invisible to
+                          // keyboard focus (WCAG 2.4.7), and 12px glyphs sat
+                          // below the 24x24 target minimum (WCAG 2.5.8).
+                          className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 rounded-md p-1.5 text-gray-400 hover:text-red-500"
                           aria-label={t('deleteSlotAria')}
                         >
-                          {busyId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                          {busyId === s.id ? <Loader2 className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       )}
                     </div>
