@@ -1,0 +1,42 @@
+name: Release Verify
+
+# After ANY push to main (i.e., a production release via merged promote PR):
+# wait for the platforms to build, then run the §6 cutover matrix against the
+# PUBLIC production surfaces and stamp the commit with the result.
+# Read-only probes; no repo secrets required.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for platform deploys (Render + Vercel)
+        run:
+          sleep 420   # Render FREE cold-builds ~5-8 min after the merge
+
+      - name: Cutover matrix (public probes)
+        run: |
+          bash scripts/release-verify.sh \
+            https://koralink-api.onrender.com/api/v1 \
+            https://kora-link-player-pwa.vercel.app \
+            https://kora-link-admin.vercel.app
+
+      - name: Stamp result on the commit
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ok = '${{ job.status }}' === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: ok ? 'success' : 'failure',
+              context: 'release-verify/prod',
+              description: ok ? 'prod cutover matrix ALL GREEN' : 'prod cutover matrix FAILED — check logs',
+            });

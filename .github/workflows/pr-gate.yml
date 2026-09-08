@@ -1,0 +1,89 @@
+name: PR Gate
+
+# Every PR (including staging → main promotes) must pass ALL of:
+#   lint → typecheck → unit tests → turbo build → migration-journal check
+#   → fresh-apply smoke (applies every migration to a scratch Postgres+PostGIS
+#     with the real applier; catches unapplyable files BEFORE any real
+#     environment does) → idempotency proof.
+# Merge is blocked (branch protection) until this workflow is green.
+
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [staging]
+
+concurrency:
+  group: pr-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Soft in v1 (repo has pre-existing style debt); hard gates are below.
+      - name: Lint (report-only in v1)
+        run: |
+          npx eslint apps/api/src --ext .ts || true
+          npx eslint "apps/player-pwa/src/**/*.{ts,tsx}" || true
+
+      - name: Typecheck API
+        run: cd apps/api && npx tsc --noEmit
+
+      - name: Typecheck PWA
+        run: cd apps/player-pwa && npx tsc --noEmit
+
+      - name: API unit tests
+        run: cd apps/api && npx jest --silent
+
+      - name: PWA unit tests
+        run: cd apps/player-pwa && npx vitest run --silent
+
+      - name: Turbo build (hard gate)
+        run: npx turbo run build --filter=api --filter=player-pwa --filter=admin
+
+      - name: Migration journal consistency
+        run: node scripts/check-migration-journal.mjs
+
+  fresh-apply:
+    # Applies EVERY migration to a scratch Postgres+PostGIS 16 (same image as
+    # staging) using the real applier — then proves idempotency. A migration
+    # that cannot apply cleanly from zero can never reach staging or Neon.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: imresamu/postgis:16-3.5
+        env:
+          POSTGRES_USER: koralink
+          POSTGRES_PASSWORD: koralink_dev
+          POSTGRES_DB: koralink_scratch
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U koralink"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIGRATE_DATABASE_URL: postgres://koralink:koralink_dev@localhost:5432/koralink_scratch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Apply all migrations to scratch DB
+        run: node scripts/migrate-vps.mjs
+      - name: Idempotency proof (second run = 0 applied)
+        run: |
+          OUT=$(node scripts/migrate-vps.mjs)
+          echo "$OUT"
+          echo "$OUT" | grep -q "0 applied" || { echo "NOT idempotent"; exit 1; }
