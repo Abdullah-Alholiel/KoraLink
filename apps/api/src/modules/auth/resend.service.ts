@@ -20,12 +20,15 @@ export class ResendService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(to: string, subject: string, html: string): Promise<void> {
+  async send(to: string, subject: string, html: string, debugCode?: string): Promise<void> {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       // Dev/staging parity with UnifonicService: no provider key → log only.
+      // The OTP code rides the log line (devCode) so staging E2E can verify
+      // the full flow without a real mailbox — NEVER logged when a key is set.
       this.logger.warn(
-        `RESEND_API_KEY empty — logging email instead to=${to} subject="${subject}"`,
+        `RESEND_API_KEY empty — logging email instead to=${to} subject="${subject}"` +
+          (debugCode ? ` code=${debugCode}` : ''),
       );
       return;
     }

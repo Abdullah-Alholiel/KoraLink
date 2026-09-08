@@ -132,6 +132,7 @@ export class EmailOtpService {
       email,
       'Your KoraLink login code',
       renderOtpEmail(code),
+      code,
     );
     this.logger.log(`email OTP dispatched to ${email}`);
   }

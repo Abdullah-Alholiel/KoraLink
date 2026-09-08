@@ -89,6 +89,7 @@ describe('EmailOtpService', () => {
       'User@Example.com',
       expect.any(String),
       expect.stringContaining('KoraLink'),
+      expect.any(String),
     );
   });
 
