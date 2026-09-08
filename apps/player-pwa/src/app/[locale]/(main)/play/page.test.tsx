@@ -55,6 +55,17 @@ describe('Play page — host pill + pinned header group', () => {
         expect(pill).toHaveTextContent('Host a Match');
     });
 
+    it('featured host CTA (P2-29): solid green + informative hint line, EN+AR', () => {
+        renderPage();
+        const pill = screen.getByTestId('host-plus-button');
+        // Featured = solid brand-green surface (no outline), soft shadow.
+        expect(pill.className).toContain('bg-brand-green');
+        expect(pill.className).not.toContain('border-');
+        expect(pill.className).toContain('shadow-');
+        // Informative = hint of what hosting does (EN fixture).
+        expect(pill).toHaveTextContent('Create your game — players nearby join');
+    });
+
     it('pins app bar + search + calendar, but NOT the filter bar (Abdullah, r4)', () => {
         const { container } = renderPage();
         // The sticky container exists from scroll-zero (no empty-gap problem)

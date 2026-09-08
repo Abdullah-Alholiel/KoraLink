@@ -97,15 +97,20 @@ export default function PlayPage() {
                     </div>
                     <Link
                         href={`/${locale}/host`}
-                        className="flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-brand-green bg-white ps-1.5 pe-3.5 active:scale-95 transition-transform"
+                        className="flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full bg-brand-green ps-1.5 pe-3.5 shadow-[0_2px_10px_rgba(37,65,50,0.35)] active:scale-95 transition-transform"
                         aria-label={t('host.title')}
                         data-testid="host-plus-button"
                     >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-green text-white">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green">
                             <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
                         </span>
-                        <span className="text-[12.5px] font-bold text-brand-green">
-                            {t('play.hostMatch')}
+                        <span className="flex flex-col items-start leading-none">
+                            <span className="text-[12.5px] font-bold text-white">
+                                {t('play.hostMatch')}
+                            </span>
+                            <span className="mt-0.5 text-[9.5px] font-medium text-white/75">
+                                {t('play.hostMatchHint')}
+                            </span>
                         </span>
                     </Link>
                 </div>
