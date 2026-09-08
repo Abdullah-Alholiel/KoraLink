@@ -19,12 +19,20 @@ const ENV_FILE = path.join(ROOT, 'apps/api/.env');
 const DRIZZLE_DIR = path.join(ROOT, 'apps/api/drizzle');
 
 // ── load DATABASE_URL ────────────────────────────────────────────────────────
-const envText = fs.readFileSync(ENV_FILE, 'utf8');
-const dbUrl = envText.split('\n')
-  .map((l) => l.trim())
-  .find((l) => l.startsWith('DATABASE_URL=') && !l.trim().startsWith('#'))
-  ?.slice('DATABASE_URL='.length)
-  .replace(/^["']|["']$/g, '');
+// MIGRATE_DATABASE_URL env override targets a different database (Neon runbook,
+// CI scratch). ONLY when absent is apps/api/.env read (staging default) — so CI
+// runners without a .env file work by simply exporting the override.
+const dbUrl =
+  process.env.MIGRATE_DATABASE_URL ||
+  (() => {
+    const envText = fs.readFileSync(ENV_FILE, 'utf8');
+    return envText
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.startsWith('DATABASE_URL=') && !l.trim().startsWith('#'))
+      ?.slice('DATABASE_URL='.length)
+      .replace(/^["']|["']$/g, '');
+  })();
 if (!dbUrl) {
   console.error('migrate-vps: DATABASE_URL not found in apps/api/.env');
   process.exit(5);
@@ -76,7 +84,17 @@ try {
   for (const f of pending) {
     const content = fs.readFileSync(path.join(DRIZZLE_DIR, f), 'utf8');
     const hash = sha256(content);
-    const statements = content.split('--> statement-breakpoint').map((s) => s.trim()).filter(Boolean);
+    // Comment-aware split: drop pure comment lines FIRST (outside $$ blocks),
+    // so a `--> statement-breakpoint` marker inside comment prose (0037 header)
+    // cannot shred a file into garbage statements. File hashes are unaffected.
+    let inDollar = false;
+    const codeLines = content.split('\n').filter((l) => {
+      if ((l.match(/\$\$/g) || []).length % 2 === 1) inDollar = !inDollar;
+      if (inDollar) return true;            // inside $$…$$: keep everything
+      return !/^\s*--/.test(l);             // outside: drop pure comment lines
+    });
+    const statements = codeLines.join('\n')
+      .split('--> statement-breakpoint').map((s) => s.trim()).filter(Boolean);
     let ok = true;
     for (const stmt of statements) {
       try {

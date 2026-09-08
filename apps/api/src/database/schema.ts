@@ -200,7 +200,9 @@ export const users = pgTable('users', {
   id: varchar('id', { length: 36 })
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  phone: varchar('phone', { length: 20 }).notNull().unique(),
+  // Nullable since 0038 (email+OTP login): email-only signups have phone NULL.
+  // UNIQUE kept — PG counts NULLs as distinct; real numbers stay unique.
+  phone: varchar('phone', { length: 20 }).unique(),
   full_name: varchar('full_name', { length: 255 }),
   handle: varchar('handle', { length: 50 }).unique(),
   avatar_url: text('avatar_url'),

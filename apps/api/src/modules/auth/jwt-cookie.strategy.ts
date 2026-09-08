@@ -31,7 +31,13 @@ function requestPathOf(req: Request | undefined): string {
 
 export interface JwtPayload {
   sub: string;
-  phone: string;
+  /**
+   * Nullable since migration 0038 (email+OTP login): email-first accounts
+   * have NO phone. The claim is OMITTED (not null) in tokens minted by
+   * EmailOtpService; phone-flow tokens always carry it. Consumers must use
+   * jwt-cookie.strategy's DB-backed user, never this claim, for identity.
+   */
+  phone?: string;
   role: string;
   iat?: number;
   exp?: number;

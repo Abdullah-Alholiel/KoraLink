@@ -21,12 +21,13 @@ const JOURNAL_PATH = join(DRIZZLE_DIR, 'meta', '_journal.json');
 const NON_MIGRATION_FILES = new Set(['gist_indexes.sql']);
 
 /**
- * Documented ORPHAN (run #23, P1-33): folded back into the journaled chain via
- * 0029's `ADD VALUE IF NOT EXISTS` trio; deliberately left unjournaled as a
- * historical record. Exempted here so the tripwire stays actionable — a NEW
- * unjournaled file still fails the suite.
+ * Formerly the run #23 "known orphan" (deliberately unjournaed as a historical
+ * record). Run #46's CI/CD cycle formally adopted it: a meta/_journal.json
+ * entry now exists (idx 39) and all three environments (VPS, Neon, CI scratch)
+ * have it hash-journaled. The KNOWN_ORPHANS exemption is therefore REMOVED —
+ * a new unjournaled file still fails this suite, with no exceptions left.
  */
-const KNOWN_ORPHANS = new Set(['0014_admin_notification_verbs.sql']);
+const KNOWN_ORPHANS = new Set<string>([]);
 
 interface JournalEntry {
   idx: number;

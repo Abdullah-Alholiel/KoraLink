@@ -83,7 +83,11 @@
       "title": "Restore your account?",
       "body": "Your account is scheduled for deletion in {days} day(s). Tap Restore to keep it active.",
       "restore": "Restore"
-    }
+    },
+    "emailToggle": "Continue with email instead",
+    "phoneToggle": "Use phone number instead",
+    "emailPlaceholder": "Email address",
+    "invalidEmail": "Enter a valid email address"
   },
   "verify": {
     "title": "Enter the code",
@@ -98,7 +102,8 @@
     "expiredCode": "Code expired. Request a new one.",
     "needHelp": "Need help?",
     "contactSupport": "Contact Support",
-    "profileFetchError": "Couldn't load your profile. Please try again."
+    "profileFetchError": "Couldn't load your profile. Please try again.",
+    "emailSubtitle": "We sent a code to"
   },
   "completeProfile": {
     "title": "Complete your profile",
@@ -548,27 +553,27 @@
     "hostGuide": "Host Guide",
     "saving": "Saving…",
     "emailSection": {
-        "title": "Email notifications",
-        "inputLabel": "Email address",
-        "add": "Add email",
-        "save": "Save email",
-        "saving": "Saving…",
-        "cancel": "Cancel",
-        "change": "Change email",
-        "verified": "Verified",
-        "verify": "Verify",
-        "resend": "Resend",
-        "resent": "Sent",
-        "resentHint": "Verification email sent — check your inbox.",
-        "invalid": "That doesn't look like a valid email address.",
-        "taken": "That email is already in use on another account.",
-        "error": "Couldn't save your email. Please try again.",
-        "why": "Optional. Used only for important updates about your matches and account. No marketing.",
-        "mute": "Email notifications",
-        "muteHint": "Turn off to stop all non-essential emails. Critical account notices still apply."
+      "title": "Email notifications",
+      "inputLabel": "Email address",
+      "add": "Add email",
+      "save": "Save email",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "change": "Change email",
+      "verified": "Verified",
+      "verify": "Verify",
+      "resend": "Resend",
+      "resent": "Sent",
+      "resentHint": "Verification email sent — check your inbox.",
+      "invalid": "That doesn't look like a valid email address.",
+      "taken": "That email is already in use on another account.",
+      "error": "Couldn't save your email. Please try again.",
+      "why": "Optional. Used only for important updates about your matches and account. No marketing.",
+      "mute": "Email notifications",
+      "muteHint": "Turn off to stop all non-essential emails. Critical account notices still apply."
     },
     "hostGuidePage": {
-        "close": "Close host guide"
+      "close": "Close host guide"
     },
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",

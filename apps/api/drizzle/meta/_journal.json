@@ -267,6 +267,20 @@
       "when": 1788747886743,
       "tag": "0037_phone_changed_verb",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788747887743,
+      "tag": "0038_email_login_phone_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788747888743,
+      "tag": "0014_admin_notification_verbs",
+      "breakpoints": true
     }
   ]
 }

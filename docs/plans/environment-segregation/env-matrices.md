@@ -13,7 +13,7 @@ written here — only key names and non-secret values. `…` = existing secret, 
 | `DATABASE_URL` | VPS PG docker (`127.0.0.1:5432/koralink_dev`, value already in `.env`) | — | — |
 | `DEV_LOGIN_ENABLED` | `true` | — | — |
 | `PLAYER_URL` | `http://localhost:3000, http://100.93.99.24:3000, https://aa.tail2948f9.ts.net:9450, https://aa.tail2948f9.ts.net:10000` — **Vercel origins REMOVED** | — | — |
-| `ADMIN_URL` | `http://localhost:3002, http://100.93.99.24:3002, https://aa.tail2948f9.ts.net` — **Vercel origins REMOVED** | — | — |
+| `ADMIN_URL` | `http://localhost:3002,http://100.93.99.24:3002,https://aa.tail2948f9.ts.net:9451` | — | — |
 | CORS effect | allows ONLY staging origins | — | — |
 | `NEXT_PUBLIC_API_URL` | — | `https://aa.tail2948f9.ts.net:8443/api/v1` (unchanged) | `https://aa.tail2948f9.ts.net:8443/api/v1` (unchanged) |
 | `NEXT_PUBLIC_APP_URL` | — | `https://aa.tail2948f9.ts.net:9450` (unchanged) | own origin (unchanged) |

@@ -89,6 +89,40 @@ export function useVerifyOtp() {
   });
 }
 
+// ─── Email + OTP (email-otp-login cycle, run #46) ────────────────
+
+interface EmailSendOtpResponse {
+  message: string;
+}
+
+interface EmailVerifyOtpResponse {
+  isNewUser: boolean;
+  /** Present because the email flow sends responseToken:true — the prod
+   * API (render) cannot set a working cross-origin cookie for the PWA
+   * (vercel); P2-11 documented exception. */
+  token?: string;
+}
+
+export function useSendEmailOtp() {
+  return useMutation<EmailSendOtpResponse, Error, { email: string }>({
+    mutationFn: ({ email }) =>
+      fetcher<EmailSendOtpResponse>('/auth/email/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+  });
+}
+
+export function useVerifyEmailOtp() {
+  return useMutation<EmailVerifyOtpResponse, Error, { email: string; otp: string }>({
+    mutationFn: ({ email, otp }) =>
+      fetcher<EmailVerifyOtpResponse>('/auth/email/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, code: otp, surface: 'player', responseToken: true }),
+      }),
+  });
+}
+
 // ─── Complete Profile ─────────────────────────────────
 
 export function useCompleteProfile() {

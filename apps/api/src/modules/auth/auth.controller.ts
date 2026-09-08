@@ -89,6 +89,8 @@ export class AuthController {
       this.configService.get<string>('NODE_ENV') === 'production';
 
     // Issue the JWT exclusively as an HttpOnly cookie — never in the body.
+    // (Exception, documented: the email+OTP flow's opt-in `responseToken`,
+    // email-auth.controller.ts — required by prod's cross-origin topology.)
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       secure: isProd,
