@@ -19,15 +19,20 @@ const ENV_FILE = path.join(ROOT, 'apps/api/.env');
 const DRIZZLE_DIR = path.join(ROOT, 'apps/api/drizzle');
 
 // ── load DATABASE_URL ────────────────────────────────────────────────────────
-// MIGRATE_DATABASE_URL env override targets a different database (e.g. the
-// prod-migrations runbook against Neon). Absent → apps/api/.env (staging).
-const envText = fs.readFileSync(ENV_FILE, 'utf8');
-const dbUrl = process.env.MIGRATE_DATABASE_URL ||
-  envText.split('\n')
-  .map((l) => l.trim())
-  .find((l) => l.startsWith('DATABASE_URL=') && !l.trim().startsWith('#'))
-  ?.slice('DATABASE_URL='.length)
-  .replace(/^["']|["']$/g, '');
+// MIGRATE_DATABASE_URL env override targets a different database (Neon runbook,
+// CI scratch). ONLY when absent is apps/api/.env read (staging default) — so CI
+// runners without a .env file work by simply exporting the override.
+const dbUrl =
+  process.env.MIGRATE_DATABASE_URL ||
+  (() => {
+    const envText = fs.readFileSync(ENV_FILE, 'utf8');
+    return envText
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.startsWith('DATABASE_URL=') && !l.trim().startsWith('#'))
+      ?.slice('DATABASE_URL='.length)
+      .replace(/^["']|["']$/g, '');
+  })();
 if (!dbUrl) {
   console.error('migrate-vps: DATABASE_URL not found in apps/api/.env');
   process.exit(5);
