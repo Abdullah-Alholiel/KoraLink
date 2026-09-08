@@ -95,7 +95,7 @@ probe "H4 admin :9451" \
 probe "H5 dev-login (staging only)" \
   bash -c "curl -sf --max-time 10 -X POST https://$TS_NET:8443/api/v1/auth/dev-login -H 'Content-Type: application/json' -d '{\"phone\":\"+966500000001\"}' | grep -q token" || FAIL=1
 probe "H6 docker postgres" \
-  docker exec koralink-postgres pg_isready -U koralink -d koralink | grep -q "accepting connections" || FAIL=1
+  bash -c "docker exec koralink-postgres pg_isready -U koralink -d koralink 2>&1 | grep -q 'accepting connections'" || FAIL=1
 
 if [ "$FAIL" -ne 0 ]; then
   die "health matrix has failures (see [FAIL] lines above)" 1

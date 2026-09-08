@@ -17,11 +17,11 @@ autonomous mode for Phase 0.
 
 | # | Slice | Tier | Status |
 |---|---|---|---|
-| 1 | staging branch + `scripts/deploy-staging.sh` + `scripts/migrate-vps.mjs` + first green deploy | T1 | 🔄 |
-| 2 | postgres loopback bind; staging CORS cutover; `NODE_ENV=staging` + regression | T1 | ⏳ |
-| 3 | Sentry env split (code + VPS env) — Vercel env part is T2 in slice 3b | T1(+T2) | ⏳ |
-| 3b | Vercel prod envs + redeploy + chunk-grep verify; Render env-vars | **T2** | ⏳ user gate |
-| 4 | runbooks (promote/prod-migrations/otp-go-live/neon-reset/coolify-cutover) + factory branch retarget | T1 | ⏳ |
+| 1 | staging branch + `scripts/deploy-staging.sh` + `scripts/migrate-vps.mjs` + first green deploy | T1 | ✅ DONE (exit 0, all 6 probes; journal reconciled) |
+| 2 | postgres loopback bind (+ arm64 image fix); staging CORS cutover; `NODE_ENV=staging` + regression | T1 | ✅ DONE (C1/C2 green, dev-login 200, data intact) |
+| 3 | Sentry env split (code + VPS env) — VPS bundles bake `environment:"staging"` | T1 | ✅ DONE (chunk-grep verified both apps) |
+| 3b | Vercel prod envs + redeploy + chunk-grep verify; Render env-vars | **T2** | ⏸️ AWAITING ABDULLAH (see final report) |
+| 4 | runbooks ×5 (promote/prod-migrations/otp-go-live/neon-reset/coolify-cutover) + factory retarget | T1 | ✅ DONE |
 
 ## Decisions log
 
