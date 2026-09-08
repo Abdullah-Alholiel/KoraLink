@@ -4,9 +4,9 @@ import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useVerifyOtp, useSendOtp } from '@/hooks/useAuth';
+import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/useAppStore';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, setAuthToken } from '@/lib/fetcher';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -20,6 +20,10 @@ function VerifyContent() {
     const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
     const phone = searchParams?.get('phone') || '';
+    // email-otp-login (run #46): the login screen routes here with either
+    // ?phone=… (default) or ?email=… — one shared code-entry screen.
+    const email = searchParams?.get('email') || '';
+    const channel: 'phone' | 'email' = email ? 'email' : 'phone';
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
     const [error, setError] = useState<string | null>(null);
@@ -28,6 +32,8 @@ function VerifyContent() {
 
     const verifyOtp = useVerifyOtp();
     const sendOtp = useSendOtp();
+    const verifyEmailOtp = useVerifyEmailOtp();
+    const sendEmailOtp = useSendEmailOtp();
 
     // Resend countdown timer
     useEffect(() => {
@@ -61,47 +67,76 @@ function VerifyContent() {
     const isComplete = otp.every((d) => d !== '');
 
     const handleVerify = () => {
-        if (!isComplete || !phone) return;
+        if (!isComplete) return;
+        if (channel === 'phone' && !phone) return;
         setError(null);
+
+        const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
+            // P2-11 exception consumption (email channel): the email verify
+            // call opts into responseToken:true because the prod API (render)
+            // cannot deliver a working cross-origin cookie to the PWA
+            // (vercel). Persist it so the fetcher's existing Bearer path
+            // authenticates every subsequent call — the same mechanism
+            // dev-login already uses. Phone channel: cookie-only, untouched.
+            if (data.token) setAuthToken(data.token);
+            if (data.isNewUser) {
+                router.push(`/${locale}/complete-profile`);
+                return;
+            }
+            // Populate Zustand user for returning users — cascade-fixes
+            // join detection, host detection, isAuthenticated, and profile display.
+            try {
+                const profile = await fetcher<UserProfileApi>('/users/me');
+                useAppStore.getState().login({
+                    id: profile.id,
+                    fullName: profile.full_name ?? '',
+                    handle: profile.handle ?? '',
+                    avatarUrl: profile.avatar_url ?? '',
+                    phone: profile.phone,
+                    preferredLocation: profile.preferred_location ?? '',
+                    preferredPosition: profile.preferred_position ?? '',
+                    locale: locale as 'ar' | 'en',
+                }, '');
+            } catch (profileErr) {
+                // Profile fetch failed — show error instead of silently navigating
+                // as guest. This usually means the auth cookie didn't set properly.
+                setError(t('verify.profileFetchError'));
+                return;
+            }
+            router.push(`/${locale}/play`);
+        };
+
+        if (channel === 'email') {
+            verifyEmailOtp.mutate(
+                { email, otp: otp.join('') },
+                {
+                    onSuccess,
+                    onError: () => setError(tErrors('otpFailed')),
+                },
+            );
+            return;
+        }
         verifyOtp.mutate(
             { phone, otp: otp.join('') },
             {
-                onSuccess: async (data) => {
-                    if (data.isNewUser) {
-                        router.push(`/${locale}/complete-profile`);
-                    } else {
-                        // Populate Zustand user for returning users — cascade-fixes
-                        // join detection, host detection, isAuthenticated, and profile display.
-                        try {
-                            const profile = await fetcher<UserProfileApi>('/users/me');
-                            useAppStore.getState().login({
-                                id: profile.id,
-                                fullName: profile.full_name ?? '',
-                                handle: profile.handle ?? '',
-                                avatarUrl: profile.avatar_url ?? '',
-                                phone: profile.phone,
-                                preferredLocation: profile.preferred_location ?? '',
-                                preferredPosition: profile.preferred_position ?? '',
-                                locale: locale as 'ar' | 'en',
-                            }, '');
-                        } catch (profileErr) {
-                            // Profile fetch failed — show error instead of silently navigating
-                            // as guest. This usually means the auth cookie didn't set properly.
-                            setError(t('verify.profileFetchError'));
-                            return;
-                        }
-                        router.push(`/${locale}/play`);
-                    }
-                },
+                onSuccess,
                 onError: () => setError(tErrors('otpFailed')),
             },
         );
     };
 
     const handleResend = () => {
-        if (resendCountdown > 0 || !phone) return;
+        if (resendCountdown > 0) return;
+        if (channel === 'phone' && !phone) return;
         setError(null);
         setResendCountdown(RESEND_COOLDOWN);
+        if (channel === 'email') {
+            sendEmailOtp.mutate(
+                { email },
+                { onError: () => setError(tErrors('otpSendFailed')) },
+            );
+            return;
+        }
         sendOtp.mutate(
             { phone },
             {
@@ -110,10 +145,18 @@ function VerifyContent() {
         );
     };
 
-    // Mask phone for display: +966 5X XXX XXXX
+    // Channel-appropriate identifier display. Phone: +966 5X XXX XXXX.
+    // Email: local part masked, domain kept (ab****@gmail.com).
     const maskedPhone = phone
         ? `+966 ${phone.slice(0, 1)}X XXX ${phone.slice(-4).padStart(4, 'X')}`
         : '+966 5X XXX XXXX';
+    const maskedEmail = email
+        ? (() => {
+            const [local, domain] = email.split('@');
+            const head = local.slice(0, 2);
+            return `${head}${'*'.repeat(Math.max(2, local.length - 2))}@${domain}`;
+        })()
+        : '';
 
     return (
         <div className="flex flex-col min-h-full px-6">
@@ -139,9 +182,11 @@ function VerifyContent() {
                     {t('title')}
                 </h1>
                 <p className="text-sm text-gray-400 mt-2 text-center">
-                    {t('subtitle')}
+                    {channel === 'email' ? t('emailSubtitle') : t('subtitle')}
                     <br />
-                    <span className="font-medium text-gray-600">{maskedPhone}</span>
+                    <span className="font-medium text-gray-600" dir={channel === 'email' ? 'ltr' : undefined}>
+                        {channel === 'email' ? maskedEmail : maskedPhone}
+                    </span>
                 </p>
 
                 {/* Error */}

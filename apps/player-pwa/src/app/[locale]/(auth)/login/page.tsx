@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Trophy, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Trophy, Loader2, AlertCircle, Mail } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useSendOtp } from '@/hooks/useAuth';
+import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import { useRestoreAccount } from '@/hooks/useUser';
 
@@ -17,7 +17,15 @@ export default function LoginPage() {
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
 
+    // email-otp-login (run #46): phone-first by default; a subtle toggle
+    // swaps the input to email. Both channels share the verify screen.
+    const [mode, setMode] = useState<'phone' | 'email'>('phone');
+    const [email, setEmail] = useState('');
+
     const sendOtp = useSendOtp();
+    const sendEmailOtp = useSendEmailOtp();
+
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
     // token persists to localStorage. Surface a one-tap "Restore" affordance
@@ -58,8 +66,23 @@ export default function LoginPage() {
     };
 
     const handleContinue = () => {
-        if (phone.length < 7) return;
         setError(null);
+        if (mode === 'email') {
+            if (!EMAIL_RE.test(email)) {
+                setError(t('invalidEmail'));
+                return;
+            }
+            sendEmailOtp.mutate(
+                { email: email.trim().toLowerCase() },
+                {
+                    onSuccess: () =>
+                        router.push(`/${locale}/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`),
+                    onError: () => setError(tErrors('otpSendFailed')),
+                },
+            );
+            return;
+        }
+        if (phone.length < 7) return;
         sendOtp.mutate(
             { phone },
             {
@@ -138,7 +161,8 @@ export default function LoginPage() {
                     {t('subtitleLine2')}
                 </p>
 
-                {/* Phone Input */}
+                {/* Phone Input (default channel) */}
+                {mode === 'phone' ? (
                 <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className="text-lg">🇸🇦</span>
@@ -155,6 +179,22 @@ export default function LoginPage() {
                         autoFocus
                     />
                 </div>
+                ) : (
+                /* Email Input (email-otp-login run #46) */
+                <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
+                    <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                    <input
+                        type="email"
+                        dir="ltr"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={t('emailPlaceholder')}
+                        className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                        autoComplete="email"
+                        autoFocus
+                    />
+                </div>
+                )}
             </div>
 
             {/* ── Bottom Section ────────────────────── */}
@@ -168,17 +208,17 @@ export default function LoginPage() {
 
                 <button
                     onClick={handleContinue}
-                    disabled={sendOtp.isPending || phone.length < 7}
+                    disabled={(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (mode === 'email' ? !EMAIL_RE.test(email) : phone.length < 7)}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${!sendOtp.isPending && phone.length >= 7
+            ${!(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) && (mode === 'email' ? EMAIL_RE.test(email) : phone.length >= 7)
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    {sendOtp.isPending ? (
+                    {(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             {t('sending')}
@@ -195,6 +235,20 @@ export default function LoginPage() {
                     <a href={`/${locale}/terms`} className="text-brand-green font-medium underline">{t('termsOfService')}</a> {t('and')}{' '}
                     <a href={`/${locale}/privacy`} className="text-brand-green font-medium underline">{t('privacyPolicy')}</a>
                 </p>
+
+                {/* email-otp-login (run #46): subtle secondary-channel toggle —
+                    small, muted, below the legal row; never competes with the
+                    primary phone CTA. */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        setError(null);
+                        setMode((m) => (m === 'phone' ? 'email' : 'phone'));
+                    }}
+                    className="mt-4 w-full text-center text-xs text-gray-400 underline underline-offset-2 hover:text-brand-green transition-colors"
+                >
+                    {mode === 'phone' ? t('emailToggle') : t('phoneToggle')}
+                </button>
 
                 <DevLoginBar />
             </div>
