@@ -25,6 +25,7 @@ import { useAppStore as useStore } from '@/store/useAppStore';
 import AppBar from '@/components/layout/AppBar';
 import GlassStats from '@/components/profile/GlassStats';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
+import ChangePhoneSheet from '@/components/profile/ChangePhoneSheet';
 
 const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'] as const;
 
@@ -44,6 +45,8 @@ export default function PersonalInfoPage() {
   const [handle, setHandle] = useState('');
   const [position, setPosition] = useState('');
   const [location, setLocation] = useState('');
+  // P1-19 (run #44): lost-SIM recovery — phone is no longer a dead-end row.
+  const [showChangePhone, setShowChangePhone] = useState(false);
 
   const startEdit = () => {
     setFullName(apiUser?.full_name ?? storeUser?.fullName ?? '');
@@ -195,18 +198,33 @@ export default function PersonalInfoPage() {
           {!editing ? (
             <dl className="mx-6 mt-2">
               <DetailRow label={t('profile.phoneNumber')} value={phone} ltr />
+              <button
+                onClick={() => setShowChangePhone(true)}
+                data-testid="change-phone-entry"
+                className="w-full border-b border-gray-100 py-2.5 text-end text-xs font-bold text-brand-green active:scale-[0.98] transition-transform"
+              >
+                {t('profile.changePhone')}
+              </button>
               <DetailRow label={t('completeProfile.preferredPosition')} value={apiUser?.preferred_position ?? storeUser?.preferredPosition ?? t('common.empty')} />
               <DetailRow label={t('completeProfile.preferredLocation')} value={apiUser?.preferred_location ?? storeUser?.preferredLocation ?? t('common.empty')} />
             </dl>
           ) : (
             <div className="mx-6 mt-2">
               <FlatSectionLabel label={t('profile.sectionDetails')} />
-              <p className="py-3.5 text-sm font-semibold text-brand-black" dir="ltr">
-                <span className="me-3 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 rtl:me-0 rtl:ms-3">
-                  {t('profile.phoneNumber')}
-                </span>
-                {phone}
-              </p>
+              <div className="flex items-center justify-between border-b border-gray-100 py-3.5">
+                <p className="text-sm font-semibold text-brand-black" dir="ltr">
+                  <span className="me-3 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 rtl:me-0 rtl:ms-3">
+                    {t('profile.phoneNumber')}
+                  </span>
+                  {phone}
+                </p>
+                <button
+                  onClick={() => setShowChangePhone(true)}
+                  className="text-xs font-bold text-brand-green active:scale-95 transition-transform"
+                >
+                  {t('profile.changePhone')}
+                </button>
+              </div>
               <div className="space-y-5 border-t border-gray-100 pt-5">
                 <EditField label={t('completeProfile.fullName')} value={fullName} onChange={setFullName} />
                 <EditField label={t('completeProfile.handle')} value={handle} onChange={setHandle} prefix="@" />
@@ -217,6 +235,14 @@ export default function PersonalInfoPage() {
           )}
         </div>
       )}
+
+      {/* P1-19 (run #44): lost-SIM recovery flow */}
+      <ChangePhoneSheet
+        open={showChangePhone}
+        onClose={() => setShowChangePhone(false)}
+        currentPhone={phone}
+        onVerified={() => showToast(t('profile.changePhoneSuccess'), 'success')}
+      />
     </div>
   );
 }

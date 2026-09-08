@@ -8,20 +8,27 @@ import {
   Body,
   Query,
   Res,
+  Req,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import type { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiBadRequestResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
+import { RequestPhoneChangeDto } from './dto/request-phone-change.dto';
+import { VerifyPhoneChangeDto } from './dto/verify-phone-change.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -105,6 +112,48 @@ export class UsersController {
   @ApiOkResponse({ description: 'Full push preference set.' })
   getPushPreferences(@CurrentUser() user: { sub: string }) {
     return this.usersService.getPushPreferences(user.sub);
+  }
+
+  // ── POST /users/me/change-phone/request — P1-19 (run #44) ───────────
+  // Step 1 of the lost-SIM recovery flow: dispatch a fresh OTP to the NEW
+  // number under the scoped otp:change:* key. Auth-guarded (the caller still
+  // has their OLD session); abuse caps (60s cooldown, 10/day/phone,
+  // 50/day/IP) are the SAME counters the login flow uses — one SMS budget.
+  // 409 when the new number is already registered (localized client-side
+  // via errors.conflict + profile.changePhoneNumberTaken).
+  @Post('me/change-phone/request')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  @ApiOperation({
+    summary: 'Request an OTP for changing the account phone number',
+  })
+  @ApiOkResponse({ description: 'OTP dispatched to the new number.' })
+  @ApiBadRequestResponse({ description: 'Invalid Saudi phone number, or number already in use.' })
+  requestPhoneChange(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: RequestPhoneChangeDto,
+    @Req() req: Request,
+  ) {
+    const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    return this.usersService.requestPhoneChange(user.sub, dto.phone, ip);
+  }
+
+  // ── POST /users/me/change-phone/verify — P1-19 (run #44) ────────────
+  // Step 2: consume the OTP, flip users.phone, write the audit activity
+  // (verb phone_changed, migration 0037). Returns the same populated
+  // profile shape as PATCH /users/me so the client reconciles in one
+  // round-trip. Live JWTs stay valid (session resolves by `sub`).
+  @Post('me/change-phone/verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @ApiOperation({ summary: 'Verify the OTP and move the account to the new number' })
+  @ApiOkResponse({ description: 'Updated profile (same shape as PATCH /users/me).' })
+  @ApiBadRequestResponse({ description: 'Invalid or expired OTP.' })
+  verifyPhoneChange(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: VerifyPhoneChangeDto,
+  ) {
+    return this.usersService.verifyPhoneChange(user.sub, dto.phone, dto.code);
   }
 
   // ── GET /users/:id — Public profile ──────────────────────

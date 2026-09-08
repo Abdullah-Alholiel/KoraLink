@@ -1,5 +1,19 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+  Optional,
+  Logger,
+} from '@nestjs/common';
 import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
+import { randomInt } from 'node:crypto';
+import * as Sentry from '@sentry/node';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -10,17 +24,39 @@ import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { MailerService } from '../mailer/mailer.service';
+import { OtpStoreService } from '../auth/otp-store.service';
+import { UnifonicService } from '../auth/unifonic.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
+/** Profile projection returned by mutations (PATCH /users/me contract). */
+export interface UpdatedProfile {
+  id: string;
+  phone: string;
+  full_name: string | null;
+  handle: string | null;
+  avatar_url: string | null;
+  preferred_location: string | null;
+  preferred_position: string | null;
+  role: string;
+}
+
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     // P1-41 (run #35): optional — deletion-confirmation email (E15).
     @Optional() private readonly mailer?: MailerService,
+    // P1-19 (run #44): phone-change OTP dispatch + scoped storage. Optional
+    // marker mirrors mailer (AuthModule is always imported by UsersModule, so
+    // DI always provides them; the marker keeps direct-test construction
+    // ergonomic and trailing-optionals TS-valid).
+    @Optional() private readonly otpStore?: OtpStoreService,
+    @Optional() private readonly unifonic?: UnifonicService,
   ) {}
 
   /**
@@ -307,6 +343,259 @@ export class UsersService {
     }
 
     return updated;
+  }
+
+  // ── P1-19 (run #44): phone-change flow ──────────────────────────────────
+  // A user who loses their SIM is otherwise permanently locked out (OTP is
+  // the sole credential; PDPL soft-delete+recreate loses history). Flow:
+  //   1. request: validate + prove nothing yet — dispatch a fresh OTP to the
+  //      NEW number under the SCOPED otp:change:* key (login codes can never
+  //      verify a change, and change codes can never log in).
+  //   2. verify: consume that code → flip users.phone → audit activity +
+  //      Pino log. Live JWTs stay valid (JwtCookieStrategy resolves by `sub`,
+  //      never re-checks the phone claim); new logins use the new number.
+  // Abuse caps (60s cooldown, 10/day/phone, 50/day/IP, 5-fail lockout) are
+  // the SAME counters the login flow uses — one SMS budget.
+
+  /** Normalized-status users blocked from changing their phone. */
+  private async getPhoneChangeActor(userId: string) {
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        phone: users.phone,
+        role: users.role,
+        banned_at: users.banned_at,
+        suspended_until: users.suspended_until,
+        deleted_at: users.deleted_at,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+    if (user.banned_at) {
+      throw new ForbiddenException('Account banned.');
+    }
+    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+      throw new ForbiddenException('Account suspended.');
+    }
+    // Mirror the login-side PDPL guard: a soft-deleted account cannot mint
+    // or consume change-flow OTPs (restore is the only escape there).
+    if (user.deleted_at) {
+      throw new ForbiddenException('Account scheduled for deletion.');
+    }
+    return user;
+  }
+
+  /** Map a PG unique-violation on users.phone to a localized-able 409. */
+  private phoneTakenConflict(): ConflictException {
+    return new ConflictException('This phone number is already registered.');
+  }
+
+  /** Shared caps/daily-counters (P1-19 otpStore is DI-provided in prod). */
+  private otp(): OtpStoreService {
+    if (!this.otpStore || !this.unifonic) {
+      throw new HttpException(
+        'Phone changes are unavailable in this environment.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    return this.otpStore;
+  }
+
+  private sms(): UnifonicService {
+    if (!this.unifonic) {
+      throw new HttpException(
+        'Phone changes are unavailable in this environment.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    return this.unifonic;
+  }
+
+  async requestPhoneChange(
+    userId: string,
+    newPhone: string,
+    ip?: string,
+  ): Promise<{ message: string; cooldownSeconds: number }> {
+    const actor = await this.getPhoneChangeActor(userId);
+
+    // Self-change guard: same number ⇒ nothing to verify, don't burn SMS.
+    if (actor.phone === newPhone) {
+      throw new BadRequestException('This is already your phone number.');
+    }
+
+    // Fast path 409 (the authoritative one is the 23505 catch below — a
+    // concurrent signup can take the number between check and verify).
+    const [taken] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.phone, newPhone))
+      .limit(1);
+    if (taken) {
+      throw this.phoneTakenConflict();
+    }
+
+    // ── Shared abuse caps (identical semantics to auth sendOtp) ──
+    const otp = this.otp();
+    if (await otp.isCooldownActive(newPhone)) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Please wait before requesting another code.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    const dailyCount = await otp.getDailyCount(newPhone);
+    if (dailyCount >= OtpStoreService.DAILY_CAP) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Daily SMS limit reached. Try again tomorrow.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (ip) {
+      const ipDailyCount = await otp.getIpDailyCount(ip);
+      if (ipDailyCount >= OtpStoreService.DAILY_IP_CAP) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Daily SMS limit reached for this IP. Try again tomorrow.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    // NOTE: deliberately NO users upsert (login sendOtp pre-creates the row;
+    // here the actor already exists and the target number must stay free).
+
+    const code = randomInt(100_000, 1_000_000).toString();
+    await otp.setChangeOtp(newPhone, code);
+    await otp.setCooldown(newPhone);
+    await otp.incrementDaily(newPhone);
+    if (ip) {
+      await otp.incrementIpDaily(ip);
+    }
+
+    try {
+      await this.sms().sendSms(
+        newPhone,
+        `KoraLink: your number-change code is ${code}. If you did not request this, ignore this message.`,
+      );
+    } catch (err) {
+      // No stale code left behind: the user retries with a clean slate and
+      // the failure is observable (Sentry + Pino) — money-path discipline
+      // applied to credential flows.
+      await otp.deleteChangeOtp(newPhone);
+      this.logger.error(
+        { event: 'phone_change_sms_failed', new_phone: newPhone, err },
+        'phone-change SMS dispatch failed; stored code rolled back',
+      );
+      Sentry.captureException(err, {
+        tags: { scope: 'users.requestPhoneChange' },
+      });
+      throw new HttpException(
+        'Could not send the verification SMS. Try again in a moment.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    this.logger.log(
+      { event: 'phone_change_requested', user_id: userId },
+      'phone-change OTP dispatched to the new number',
+    );
+    return { message: 'OTP sent to your new number.', cooldownSeconds: 60 };
+  }
+
+  async verifyPhoneChange(
+    userId: string,
+    newPhone: string,
+    code: string,
+  ): Promise<UpdatedProfile> {
+    const actor = await this.getPhoneChangeActor(userId);
+
+    if (actor.phone === newPhone) {
+      throw new BadRequestException('This is already your phone number.');
+    }
+
+    // The verify body must match the number the code was dispatched to.
+    // Without this, a code for phone A could be spent moving the account to
+    // phone B (possession of A must prove possession of exactly A).
+    const otp = this.otp();
+    const storedCode = await otp.getChangeOtp(newPhone);
+    if (!storedCode) {
+      // Distinguish lockout from a plain wrong/expired code.
+      const fails = await otp.getFailCount(newPhone);
+      if (fails >= OtpStoreService.FAIL_LIMIT) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Too many attempts. Try again later.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      throw new UnauthorizedException('Invalid or expired OTP.');
+    }
+    if (storedCode !== code) {
+      await otp.incrementFail(newPhone);
+      throw new UnauthorizedException('Invalid or expired OTP.');
+    }
+
+    try {
+      await this.db
+        .update(users)
+        .set(withTimestamp({ phone: newPhone }))
+        .where(and(eq(users.id, userId), isNull(users.deleted_at)));
+    } catch (err) {
+      // Race window: a signup took the number between request and verify
+      // (PG 23505 on users.phone_unique) → same localized 409 shape as the
+      // request-step pre-check. OTP is consumed either way (single use).
+      if (
+        err &&
+        typeof err === 'object' &&
+        (err as { code?: string }).code === '23505'
+      ) {
+        throw this.phoneTakenConflict();
+      }
+      throw err;
+    }
+
+    await otp.deleteChangeOtp(newPhone);
+    await otp.resetFails(newPhone);
+
+    // Audit trail (verb added to ActivityVerb by migration 0037). No feed
+    // fan-out — feed_items only materialize for templated social verbs.
+    await this.db.insert(activities).values({
+      actor_id: userId,
+      verb: 'phone_changed',
+      subject_id: userId,
+    });
+
+    this.logger.log(
+      {
+        event: 'phone_changed',
+        user_id: userId,
+        // Audit log carries the NEW number masked to last-4 only.
+        new_phone_suffix: newPhone.slice(-4),
+      },
+      'user changed their phone number',
+    );
+
+    // Same projection as updateProfile — the PWA reconciles its caches with
+    // one response shape. getProfile re-reads committed state (outside any
+    // transaction) per the mutation-return contract.
+    return this.getProfile(userId) as Promise<UpdatedProfile>;
   }
 
   /**

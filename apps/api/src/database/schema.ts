@@ -118,7 +118,9 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'waitlist_promoted',
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   'venue_ownership_added',
-  'venue_ownership_removed'
+  'venue_ownership_removed',
+  // ── Account security (P1-19 phone change) ──
+  'phone_changed'
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

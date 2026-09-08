@@ -17,6 +17,9 @@ const keys = {
   day: (phone: string) => `otp:day:${phone}`,
   ip_day: (ip: string) => `otp:ip_day:${ip}`,
   fails: (phone: string) => `otp:fails:${phone}`,
+  // P1-19 (run #44): phone-change flow — separate namespace so a login OTP
+  // can never verify a phone change (and vice versa).
+  changeOtp: (phone: string) => `${OTP_PREFIX}change:${phone}`,
 };
 
 /**
@@ -100,5 +103,23 @@ export class OtpStoreService {
 
   async resetFails(phone: string): Promise<void> {
     await this.cache.del(keys.fails(phone));
+  }
+
+  // ── Phone-change flow OTP (P1-19, run #44) ───────────────────────────────
+  // SEPARATE key namespace from the login OTP. A login OTP stored under
+  // otp:<phone> can NEVER satisfy a phone-change verification, and a
+  // change-flow code can never be replayed as a login (both directions).
+  // Abuse caps (cooldown, per-phone daily, per-IP daily, fail lockout) are
+  // SHARED with the login flow — one budget across both surfaces.
+  async getChangeOtp(phone: string): Promise<string | undefined> {
+    return this.cache.get<string>(keys.changeOtp(phone));
+  }
+
+  async setChangeOtp(phone: string, code: string): Promise<void> {
+    await this.cache.set(keys.changeOtp(phone), code, OTP_TTL_MS);
+  }
+
+  async deleteChangeOtp(phone: string): Promise<void> {
+    await this.cache.del(keys.changeOtp(phone));
   }
 }

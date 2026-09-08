@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { useAppStore } from '@/store/useAppStore';
 // ─── API Response Types ────────────────────────────────
 
 export interface UserProfileApi {
@@ -190,6 +191,59 @@ export function useUpdateProfile() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
+    },
+  });
+}
+
+// ─── Phone Change (P1-19, run #44) ─────────────────────
+// Two-step: request an OTP for the NEW number, then verify. The verify
+// response is the same populated profile the API returns from PATCH
+// /users/me, so both caches reconcile in one round-trip. The Zustand
+// phone (login identity mirror) is patched via the store's updateUser.
+
+export interface ChangePhoneRequestResponse {
+  message: string;
+  cooldownSeconds: number;
+}
+
+export interface RequestPhoneChangeInput {
+  /** E.164 (+9665XXXXXXXX) — the NEW number. */
+  phone: string;
+}
+
+export function useRequestPhoneChange() {
+  return useMutation<ChangePhoneRequestResponse, FetchError, RequestPhoneChangeInput>({
+    mutationFn: ({ phone }) =>
+      fetcher<ChangePhoneRequestResponse>('/users/me/change-phone/request', {
+        method: 'POST',
+        body: JSON.stringify({ phone }),
+      }),
+  });
+}
+
+export interface VerifyPhoneChangeInput {
+  /** E.164 — must match the number the code was sent to. */
+  phone: string;
+  code: string;
+}
+
+export function useVerifyPhoneChange() {
+  const queryClient = useQueryClient();
+  const updateUser = useAppStore((s) => s.updateUser);
+
+  return useMutation<UserProfileApi, FetchError, VerifyPhoneChangeInput>({
+    mutationFn: ({ phone, code }) =>
+      fetcher<UserProfileApi>('/users/me/change-phone/verify', {
+        method: 'POST',
+        body: JSON.stringify({ phone, code }),
+      }),
+    onSuccess: (updated) => {
+      // React Query cache: write-through (same idiom as push-preferences).
+      queryClient.setQueryData<UserProfileApi>(['user', 'profile'], updated);
+      // Zustand mirror: the login identity must follow immediately, or a
+      // remounted component would briefly read the stale phone from the
+      // persisted store.
+      updateUser({ phone: updated.phone });
     },
   });
 }
