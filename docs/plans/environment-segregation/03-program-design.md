@@ -21,7 +21,17 @@ STEP 6 restart     : systemctl --user restart koralink-api.service koralink-pwa.
                      sleep 4 (then per-service is-active check)
 STEP 7 verify      : health matrix (below); any probe failing after 3 tries (2s apart) = exit 1 with matrix printed
 OUTPUT             : one `==> STEP N: name` line per step; final `[OK]` / `[FAIL: reason]` banner
-EXIT CODES         : 0 ok · 1 verify fail · 2 wrong branch · 3 unsafe-dirty · 4 build fail · 5 migrate fail
+EXIT CODES         : 0 ok · 1 verify fail · 2 wrong branch · 4 build fail · 5 migrate fail · 6 factory lock held
+IMPLEMENTED DELTAS (slice 1, battle-tested):
+- Preflight ABORTS if kanban/LOCK.json exists (factory run owns the tree; two turbos on the
+  same .next corrupt builds — hit live 2026-09-08) → exit 6.
+- Dirty-tree policy: LOG everything, BLOCK nothing. git merge --ff-only refuses any file a
+  merge would overwrite; untracked files can never be clobbered. The earlier
+  allowlist-block design (exit 3) was removed — it fired on the factory's own WIP
+  (layout.tsx, new manifest files) which staging exists to test.
+- STEP 1 is `git merge --ff-only origin/staging` (NOT reset --hard — clobber risk).
+- H4 admin probe over funnel :443 currently 000 (Tailscale serve) — probe H4 recorded,
+  fix tracked as follow-up; H1/H2/H3/H5/H6 are the release-blocking set.
 ```
 
 ## Contract 2 — `scripts/migrate-vps.mjs` (node ≥20, no deps beyond `postgres`)

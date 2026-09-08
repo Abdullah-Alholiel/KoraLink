@@ -23,18 +23,17 @@ probe() { # probe <name> <cmd...> — 3 tries, 2s apart
 say "STEP 0: preflight"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = "staging" ] || die "deploy-staging must run on branch 'staging' (HEAD=$BRANCH)" 2
+if [ -f kanban/LOCK.json ]; then
+  die "factory run ACTIVE (kanban/LOCK.json present) — it owns the tree; concurrent builds corrupt .next. Retry after the run releases the lock." 6
+fi
 command -v node >/dev/null || die "node not found" 2
 command -v npm  >/dev/null || die "npm not found" 2
 DIRTY="$(git status --porcelain || true)"
 if [ -n "$DIRTY" ]; then
-  echo "    dirty shared tree (allowed, logged — never stashed/discarded):"
+  echo "    dirty shared factory tree (logged, never stashed/discarded — builds the tree as-is):"
   echo "$DIRTY" | sed 's/^/      /'
-  # Tracked dirty files OUTSIDE the shared-tree allowlist would be clobber-risk for
-  # sibling agents' work: abort (ff-only merge refuses overlap anyway; this fails early).
-  UNSAFE="$(echo "$DIRTY" | awk '{print $2}' \
-    | grep -vE '^(kanban/|docs/|\.local/|package-lock\.json$|apps/[^/]+/package-lock\.json$)' \
-    | grep -vE '\.local$' || true)"
-  [ -z "$UNSAFE" ] || die "dirty tracked files outside kanban/docs/*.local — resolve first: $UNSAFE" 3
+  echo "    safety: merge --ff-only refuses to touch any dirty file git would overwrite;"
+  echo "    untracked files can never be clobbered by a merge. WIP deploys to staging by design."
 fi
 
 say "STEP 1: sync with origin/staging (fast-forward only — never clobbers dirty files)"
