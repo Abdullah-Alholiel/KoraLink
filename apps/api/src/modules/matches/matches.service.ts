@@ -97,6 +97,121 @@ export async function chargeMatchFeeTx(
     throw err;
   }
 }
+
+/** round to 2 d.p. (halves away from zero) for money amounts. */
+function roundMoney2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Slice 3 (player-host-responsibility): release the HOST's held payout in the
+ * CALLER's transaction (the completion tx). The host earns the joiner fee pool
+ * minus the platform margin per paying joiner:
+ *
+ *     payout = round2( SUM(fee_paid_sar of current roster payers)
+ *                      - margin × paying-joiner-count ), floored at 0
+ *
+ * Forfeited fees (slice 4) were already credited to the host at leave-time and
+ * are NOT re-counted here. Exactly-once guarantee (double-payout tripwire):
+ * the matches row is locked FOR UPDATE, an early return fires when the state
+ * is not 'held', and the settle is a single guarded UPDATE
+ * `SET host_payout_state='released' WHERE id=? AND host_payout_state='held'`.
+ * The PRIZE ledger key is per-match (`host-payout-${matchId}`) so a unique
+ * violation is a second belt on the same suspenders.
+ */
+export async function releaseHostPayoutInTx(
+  tx: Tx,
+  deps: { matchesTable: typeof matches; matchPlayersTable: typeof match_players; usersTable: typeof users; transactionsTable: typeof transactions },
+  match: { id: string; host_id: string; price_per_player: string | number | null },
+  marginSar: number,
+): Promise<{ paid: boolean; amountSar: string }> {
+  // 1. Lock the match row (same lock order as complete/cancel: matches first).
+  const [locked] = await tx
+    .select({ id: deps.matchesTable.id, host_id: deps.matchesTable.host_id, payout_state: deps.matchesTable.host_payout_state })
+    .from(deps.matchesTable)
+    .where(eq(deps.matchesTable.id, match.id))
+    .limit(1)
+    .for('update');
+
+  if (!locked || locked.host_id !== match.host_id) {
+    return { paid: false, amountSar: '0.00' };
+  }
+  if (locked.payout_state !== 'held') {
+    // already released / cancelled / n/a — idempotent no-op
+    return { paid: false, amountSar: '0.00' };
+  }
+
+  // 2. Sum the CURRENT roster's per-episode fee snapshots (joiners only —
+  //    the host row carries fee_paid_sar = NULL by design).
+  const [sums] = await tx
+    .select({
+      total: sql<string>`COALESCE(SUM(${deps.matchPlayersTable.fee_paid_sar}), 0)::text`,
+      payers: sql<number>`COUNT(${deps.matchPlayersTable.fee_paid_sar})::int`,
+    })
+    .from(deps.matchPlayersTable)
+    .where(
+      and(
+        eq(deps.matchPlayersTable.match_id, match.id),
+        sql`${deps.matchPlayersTable.fee_paid_sar} IS NOT NULL`,
+      ),
+    );
+
+  const total = parseFloat(sums?.total ?? '0');
+  const payers = sums?.payers ?? 0;
+  const payout = Math.max(0, roundMoney2(total - marginSar * payers));
+
+  if (payout > 0) {
+    // 3. Guarded wallet credit (no negative balances) + immutable PRIZE ledger.
+    const [credited] = await tx
+      .update(deps.usersTable)
+      .set(
+        withTimestamp({
+          wallet_balance: sql`${deps.usersTable.wallet_balance} + ${payout}`,
+        }),
+      )
+      .where(eq(deps.usersTable.id, match.host_id))
+      .returning({ wallet_balance: deps.usersTable.wallet_balance });
+
+    if (!credited) {
+      throw new NotFoundException(`Host ${match.host_id} not found for payout.`);
+    }
+
+    await tx.insert(deps.transactionsTable).values({
+      user_id: match.host_id,
+      type: 'CREDIT',
+      amount: payout.toFixed(2),
+      reference_type: 'PRIZE',
+      reference_id: match.id,
+      idempotency_key: `host-payout-${match.id}`,
+      status: 'Completed',
+    });
+  }
+
+  // 4. Single-shot settle: rowCount 0 ⇒ a concurrent release won — our credit
+  //    above would have been a double payout, so ABORT the tx (the winner's
+  //    commit stands; our retry sees state != 'held' and no-ops).
+  const settled = await tx
+    .update(deps.matchesTable)
+    .set(withTimestamp({ host_payout_state: 'released' }))
+    .where(
+      and(
+        eq(deps.matchesTable.id, match.id),
+        eq(deps.matchesTable.host_payout_state, 'held'),
+      ),
+    );
+
+  // postgres-js returns a ResultSet with rowCount/count for statements without
+  // RETURNING; drizzle wraps it — read whichever is present.
+  const affected =
+    (settled as unknown as { rowCount?: number; count?: number }).rowCount ??
+    (settled as unknown as { count?: number }).count ??
+    1; // optimistic default: tests + drivers that don't report it
+  if (affected === 0) {
+    throw new ConflictException('Payout already settled by a concurrent completion.');
+  }
+
+  return { paid: payout > 0, amountSar: payout.toFixed(2) };
+}
 import {
   GetMatchesDto,
   normalizeGenderRule,
@@ -277,7 +392,50 @@ export class MatchesService {
         AND scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval < NOW()
     `);
     const res = result as unknown as { count?: number; length?: number };
-    return res.count ?? res.length ?? 0;
+    const flipped = res.count ?? res.length ?? 0;
+
+    // Slice 3 (player-host-responsibility): flip only changes status — release
+    // each flipped player-hosted match's held payout (exactly-once per match;
+    // state guard + per-match ledger key make re-runs no-ops). Failures are
+    // logged and skipped so one bad match cannot block the scheduler.
+    const flippedRows = await this.db
+      .select({
+        id: matches.id,
+        host_id: matches.host_id,
+        price_per_player: matches.price_per_player,
+      })
+      .from(matches)
+      .where(and(eq(matches.status, 'Completed'), eq(matches.host_payout_state, 'held')));
+
+    for (const m of flippedRows) {
+      try {
+        const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
+        const out = await this.db.transaction(async (tx) =>
+          releaseHostPayoutInTx(
+            tx,
+            {
+              matchesTable: matches,
+              matchPlayersTable: match_players,
+              usersTable: users,
+              transactionsTable: transactions,
+            },
+            m,
+            margin,
+          ),
+        );
+        if (out.paid) {
+          this.logger.log(
+            `host_payout_released(auto) match=${m.id} host=${m.host_id} amount_sar=${out.amountSar}`,
+          );
+        }
+      } catch (err) {
+        this.logger.error(
+          `auto payout release failed for ${m.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return flipped;
   }
 
   /**
@@ -1932,6 +2090,9 @@ export class MatchesService {
   async completeMatch(userId: string, matchId: string) {
     // P1-17: ex-queued players collected in-tx for the post-commit push.
     let queueUserIds: string[] = [];
+    // Slice 3: host payout outcome captured in-tx, logged after commit.
+    // (`as` avoids TS treating the callback assignment as unreachable.)
+    let hostPayout = null as { paid: boolean; amountSar: string } | null;
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -1940,6 +2101,9 @@ export class MatchesService {
           status: matches.status,
           scheduled_at: matches.scheduled_at,
           duration_mins: matches.duration_mins,
+          is_player_hosted: matches.is_player_hosted,
+          host_payout_state: matches.host_payout_state,
+          price_per_player: matches.price_per_player,
         })
         .from(matches)
         .where(eq(matches.id, matchId))
@@ -1990,12 +2154,38 @@ export class MatchesService {
           .delete(schema.match_waitlist)
           .where(eq(schema.match_waitlist.match_id, matchId));
       }
+
+      // Slice 3 (player-host-responsibility): the host's held payout releases
+      // in the SAME tx as the status flip — exactly once, guarded by the
+      // payout-state column (see releaseHostPayoutInTx).
+      if (match.is_player_hosted && match.host_payout_state === 'held') {
+        const margin = await this.settings.getNumber(
+          'platform_margin_sar',
+          PLATFORM_MARGIN_SAR,
+        );
+        hostPayout = await releaseHostPayoutInTx(
+          tx,
+          {
+            matchesTable: matches,
+            matchPlayersTable: match_players,
+            usersTable: users,
+            transactionsTable: transactions,
+          },
+          { id: match.id, host_id: match.host_id, price_per_player: match.price_per_player },
+          margin,
+        );
+      }
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
     const updatedMatch = await this.findOne(matchId);
 
-    // P1-17: tell ex-queued players the game ended without them (localized).
+    // Slice 3: structured observability for the payout release (Pino + Sentry breadcrumb).
+    if (hostPayout !== null && hostPayout.paid) {
+      this.logger.log(
+        `host_payout_released match=${matchId} host=${updatedMatch.host?.id ?? ''} amount_sar=${hostPayout.amountSar}`,
+      );
+    }
     if (queueUserIds.length > 0) {
       try {
         await this.notificationsService.sendPushToUsers(queueUserIds, {
@@ -2032,7 +2222,8 @@ export class MatchesService {
       // host's refund is silently skipped while the match still cancels.
       const [match] = await tx.execute(sql`
         SELECT id, host_id, status, booking_mode, booking_slot_id,
-               pitch_cost_sar, price_per_player, max_players
+               pitch_cost_sar, price_per_player, max_players,
+               is_player_hosted, host_payout_state
         FROM matches
         WHERE id = ${matchId}::text
         FOR UPDATE
@@ -2040,6 +2231,7 @@ export class MatchesService {
         id: string; host_id: string; status: string;
         booking_mode: string; booking_slot_id: string | null;
         pitch_cost_sar: string | null; price_per_player: string; max_players: number;
+        is_player_hosted: boolean; host_payout_state: string;
       }>;
 
       if (!match) {
@@ -2079,6 +2271,20 @@ export class MatchesService {
         await tx
           .delete(schema.match_waitlist)
           .where(eq(schema.match_waitlist.match_id, matchId));
+      }
+
+      // Slice 3 (player-host-responsibility): a cancelled match must never pay
+      // out. Guarded flip held → cancelled (idempotent; no-op when not held).
+      if (match.is_player_hosted && match.host_payout_state === 'held') {
+        await tx
+          .update(matches)
+          .set(withTimestamp({ host_payout_state: 'cancelled' }))
+          .where(
+            and(
+              eq(matches.id, matchId),
+              eq(matches.host_payout_state, 'held'),
+            ),
+          );
       }
 
       // Release slot + refund (koralink mode)
