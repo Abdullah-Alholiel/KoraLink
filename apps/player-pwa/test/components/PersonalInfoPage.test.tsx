@@ -65,11 +65,13 @@ describe('PersonalInfoPage — Stadium Night system (sketches/004 follow-up)', (
         useAppStore.setState({ user: null } as never);
     });
 
-    it('renders the green hero with the standard AppBar (same header as Play/Profile)', () => {
+    it('renders the green hero WITHOUT the brand bar (title+logo live on main pages only, 2026-09-09)', () => {
         mockData();
         renderPage();
         expect(document.querySelector('.bg-profile-hero')).not.toBeNull();
-        expect(screen.getByText('KoraLink')).toBeInTheDocument();
+        // The KoraLink logo/wordmark (AppBar) is intentionally absent here —
+        // it renders on main pages (Play/Profile/Feed), not sub-screens.
+        expect(screen.queryByText('KoraLink')).toBeNull();
         expect(screen.getByText('Ahmed Al-Rashid')).toBeInTheDocument();
     });
 

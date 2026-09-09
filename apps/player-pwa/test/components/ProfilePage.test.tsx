@@ -123,8 +123,10 @@ describe('ProfilePage — Stadium Night redesign (sketches/004, 2026-09-06)', ()
         expect(screen.getByText('KoraLink')).toBeInTheDocument();
         expect(screen.getByText('Ahmed Al-Rashid')).toBeInTheDocument();
         expect(screen.getByText('@ahmed.rashid')).toBeInTheDocument();
-        // V2 r2: TWO edit affordances — the white pill + the camera badge on the avatar
-        expect(screen.getAllByRole('button', { name: 'Edit Profile' })).toHaveLength(2);
+        // 2026-09-09: ONE edit affordance — the white pill only. The camera
+        // badge (photo-add) was removed: there is no photo storage yet, and
+        // "Edit Profile" navigates to personal-info (text fields only).
+        expect(screen.getAllByRole('button', { name: 'Edit Profile' })).toHaveLength(1);
         // V2 r2: hero carries the profile-hero gradient token (Abdullah:
         // "not too dark, same colours as the design system")
         expect(document.querySelector('.bg-profile-hero')).not.toBeNull();

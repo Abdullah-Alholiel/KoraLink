@@ -15,7 +15,6 @@ import {
     FileText,
     BookOpen,
     ChevronRight,
-    Camera,
     Bell,
     BellOff,
     MessageCircle,
@@ -261,13 +260,6 @@ export default function ProfilePage() {
                                     </span>
                                 </div>
                             )}
-                            <button
-                                className="absolute bottom-0 end-0 flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md active:scale-95 transition-transform"
-                                aria-label={t('profile.editProfile')}
-                                onClick={() => router.push(`/${locale}/personal-info`)}
-                            >
-                                <Camera className="h-3.5 w-3.5" strokeWidth={2} />
-                            </button>
                         </div>
                         <div className="min-w-0 flex-1">
                             <h1 className="truncate text-[21px] font-bold leading-tight">{fullName}</h1>
