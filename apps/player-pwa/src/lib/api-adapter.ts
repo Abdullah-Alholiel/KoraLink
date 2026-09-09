@@ -40,6 +40,10 @@ export interface NearbyMatchApi {
   last_message?: string | null;
   /** Authoritative POTM voting deadline from the API (effective completion + 24h). */
   voting_closes_at?: string | Date | null;
+  /** Player-host responsibility fields (0040): flat feed/my-matches SQL columns. */
+  booking_mode?: 'koralink' | 'self';
+  is_player_hosted?: boolean;
+  host_payout_state?: 'held' | 'released' | 'cancelled' | 'not_applicable' | string;
 }
 
 /** Shape returned by GET /matches/:id — Drizzle findFirst with relations */
@@ -59,6 +63,10 @@ export interface MatchDetailApi {
   visibility?: 'public' | 'private';
   booking_mode?: 'koralink' | 'self';
   booking_slot_id?: string | null;
+  /** Player-host responsibility fields (0040): Drizzle relational columns. */
+  is_player_hosted?: boolean;
+  host_payout_state?: 'held' | 'released' | 'cancelled' | 'not_applicable' | string;
+  host_accepted_terms_at?: string | null;
   created_at?: string;
   updated_at?: string;
   /** P1-17: players queued on this match (CTA counter). */
@@ -378,6 +386,15 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     hasVotedPotm: row.has_voted ?? false,
     distanceM: row.distance_m ?? null,
     isPrivate: row.visibility === 'private',
+    // Player-host responsibility (0040): mode-aware labeling source of truth.
+    bookingMode: row.booking_mode,
+    isPlayerHosted: !!row.is_player_hosted,
+    hostPayoutState:
+      row.host_payout_state === 'held' ||
+      row.host_payout_state === 'released' ||
+      row.host_payout_state === 'cancelled'
+        ? row.host_payout_state
+        : 'not_applicable',
   };
 }
 
@@ -442,6 +459,14 @@ export function adaptMatchDetail(
     bookingSlotId: detail.booking_slot_id ?? null,
     waitlistCount: detail.waitlist_count ?? 0,
     yourWaitlistPosition: detail.your_waitlist_position ?? null,
+    // Player-host responsibility (0040): mode-aware labeling source of truth.
+    isPlayerHosted: !!detail.is_player_hosted,
+    hostPayoutState:
+      detail.host_payout_state === 'held' ||
+      detail.host_payout_state === 'released' ||
+      detail.host_payout_state === 'cancelled'
+        ? detail.host_payout_state
+        : 'not_applicable',
   };
 }
 

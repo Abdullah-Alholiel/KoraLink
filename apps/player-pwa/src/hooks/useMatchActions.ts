@@ -116,10 +116,19 @@ export function useJoinMatch() {
   const showToast = useToast();
   const t = useTranslations('errors');
 
-  return useMutation<unknown, FetchError, string, { snapshot: DetailSnapshot }>({
-    mutationFn: (matchId) =>
-      fetcher(`/matches/${matchId}/join`, { method: 'POST' }),
-    onMutate: async (matchId) => {
+  return useMutation<unknown, FetchError, string | { matchId: string; idempotencyKey?: string }, { snapshot: DetailSnapshot; matchId: string }>({
+    mutationFn: (input) => {
+      const { matchId, idempotencyKey } =
+        typeof input === 'string' ? { matchId: input, idempotencyKey: undefined } : input;
+      return fetcher(`/matches/${matchId}/join`, {
+        method: 'POST',
+        ...(idempotencyKey
+          ? { body: JSON.stringify({ idempotencyKey }) }
+          : {}),
+      });
+    },
+    onMutate: async (input) => {
+      const matchId = typeof input === 'string' ? input : input.matchId;
       // Cancel any in-flight detail refetch so it can't overwrite the
       // optimistic state before the server confirms.
       await queryClient.cancelQueries({ queryKey: ['match', matchId] });
@@ -131,9 +140,9 @@ export function useJoinMatch() {
           old && !Array.isArray(old) ? optimisticallyJoin(old, actor) : old,
         );
       }
-      return { snapshot };
+      return { snapshot, matchId };
     },
-    onError: (error, _matchId, context) => {
+    onError: (error, _input, context) => {
       if (context?.snapshot) {
         for (const [key, data] of context.snapshot) {
           queryClient.setQueryData(key, data);
@@ -141,10 +150,15 @@ export function useJoinMatch() {
       }
       showToast(t('joinFailed'), 'error', { detail: kindDetail(t, error) });
     },
-    onSuccess: (_, matchId) => {
+    onSuccess: (_data, _input, context) => {
+      const matchId = context.matchId;
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
+      // Join now moves money server-side (player-host-responsibility slice 2):
+      // the ledger changed, so wallet caches must refetch.
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
       showToast('Successfully joined the match! 🎉', 'success');
     },
   });
@@ -193,8 +207,16 @@ export function useLeaveMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  // Slice 4: outcome-specific toasts (the API states the exact refund rule
+  // that applied to THIS leave — refunded / backfilled_refunded / forfeited).
+  const tRefund = useTranslations('refund');
 
-  return useMutation<unknown, FetchError, string, { snapshot: DetailSnapshot }>({
+  return useMutation<
+    { your_leave_refund?: 'refunded' | 'backfilled_refunded' | 'forfeited' | null } & Record<string, unknown>,
+    FetchError,
+    string,
+    { snapshot: DetailSnapshot }
+  >({
     mutationFn: (matchId) =>
       fetcher(`/matches/${matchId}/leave`, { method: 'DELETE' }),
     onMutate: async (matchId) => {
@@ -217,11 +239,27 @@ export function useLeaveMatch() {
       }
       showToast(t('leaveFailed'), 'error', { detail: kindDetail(t, error) });
     },
-    onSuccess: (_, matchId) => {
+    onSuccess: (data, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('You left the match.', 'info');
+      // Money moved (refund / forfeit) — wallet caches must refetch.
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
+
+      switch (data?.your_leave_refund) {
+        case 'refunded':
+          showToast(tRefund('leftRefunded'), 'success');
+          break;
+        case 'backfilled_refunded':
+          showToast(tRefund('leftBackfilled'), 'success');
+          break;
+        case 'forfeited':
+          showToast(tRefund('leftForfeited'), 'error');
+          break;
+        default:
+          showToast('You left the match.', 'info');
+      }
     },
   });
 }

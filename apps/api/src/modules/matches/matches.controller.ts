@@ -31,6 +31,7 @@ import { MarkNoShowDto } from './dto/mark-no-show.dto';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
 import { CreateMatchMessageDto } from './dto/create-match-message.dto';
+import { JoinMatchDto } from './dto/join-match.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { escapeIcsText } from '../../common/security/ics-text';
@@ -149,8 +150,9 @@ export class MatchesController {
   joinMatch(
     @CurrentUser() user: { sub: string },
     @Param('id') id: string,
+    @Body() dto: JoinMatchDto,
   ) {
-    return this.matchesService.joinMatch(user.sub, id);
+    return this.matchesService.joinMatch(user.sub, id, dto?.idempotencyKey);
   }
 
   // ── DELETE /matches/:id/leave — Leave a match ─────────────────────────

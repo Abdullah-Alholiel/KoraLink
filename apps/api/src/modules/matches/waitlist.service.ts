@@ -1,9 +1,11 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { asc, eq, sql } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
+import { chargeMatchFeeTx } from './match-fees';
 
 type DB = PostgresJsDatabase<typeof schema>;
 /** Tx handle carried into promoteNextInTx (must share the caller's transaction). */
@@ -206,8 +208,20 @@ export class MatchWaitlistService {
    * never call this with the root db handle. Skips stale entries (players
    * already rostered through another path) and returns the promotion payload
    * for post-commit notification, or null when nothing was promotable.
+   *
+   * Slice 4 (player-host-responsibility): when `opts.feePriceSar` is set, the
+   * promoted player is CHARGED the fee in this same tx (chargeMatchFeeTx,
+   * per-episode key from their fresh roster row) — a paid backfill. Their
+   * roster row carries the fee snapshot exactly like a direct join, so the
+   * payout formula and any future refund keep working. A failed charge
+   * (e.g. insufficient balance) aborts the whole tx: the seat is not given
+   * away without payment.
    */
-  async promoteNextInTx(tx: Tx, matchId: string): Promise<WaitlistPromotion | null> {
+  async promoteNextInTx(
+    tx: Tx,
+    matchId: string,
+    opts?: { feePriceSar?: number },
+  ): Promise<WaitlistPromotion | null> {
     for (;;) {
       const [head] = await tx
         .select({
@@ -270,6 +284,32 @@ export class MatchWaitlistService {
         is_host: false,
         team: homeCount <= awayCount ? 'Home' : 'Away',
       });
+
+      // Slice 4: paid backfill — charge the promoted player's fee in-tx and
+      // snapshot it on their roster row (per-EPISODE key from the fresh row).
+      if (opts?.feePriceSar && opts.feePriceSar > 0) {
+        const [ep] = await tx
+          .select({ id: schema.match_players.id })
+          .from(schema.match_players)
+          .where(
+            sql`${schema.match_players.match_id} = ${matchId} AND ${schema.match_players.user_id} = ${head.user_id}`,
+          )
+          .limit(1);
+        if (!ep) {
+          throw new Error('Backfill promotion did not produce a roster row.');
+        }
+        await chargeMatchFeeTx(
+          tx,
+          head.user_id,
+          matchId,
+          opts.feePriceSar,
+          `join:${ep.id}:${randomUUID()}`,
+        );
+        await tx
+          .update(schema.match_players)
+          .set({ fee_paid_sar: opts.feePriceSar.toFixed(2) })
+          .where(eq(schema.match_players.id, ep.id));
+      }
 
       await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));
       await this.resequenceInTx(tx, matchId);

@@ -76,7 +76,7 @@ export default function ChatSheet({
     isConnected,
     sendMessage,
     retryMessage,
-  } = useMatchChat(matchId);
+  } = useMatchChat(isOpen ? matchId : null);
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);

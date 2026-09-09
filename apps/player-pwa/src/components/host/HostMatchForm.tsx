@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
+import { useWalletBalance } from '@/hooks/useWallet';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
 import { pitchCostForDuration, pricePerPlayer, riyadhISO, parseHostDateParam } from '@/lib/api-adapter';
-import { classifyPublishError, PUBLISH_ERROR_KEYS } from '@/lib/publish-error';
+import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall, computeShortfall } from '@/lib/publish-error';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
@@ -42,7 +44,6 @@ export default function HostMatchForm() {
     const [mode, setMode] = useState<'koralink' | 'self'>('koralink');
     const [visibility, setVisibility] = useState<Visibility>('public');
     const [showWarning, setShowWarning] = useState(false);
-
     /* ── Form State ─────────────────────────────── */
     const [showVenuePicker, setShowVenuePicker] = useState(false);
     const [selectedVenue, setSelectedVenue] = useState<VenueApi | null>(() => {
@@ -101,6 +102,14 @@ export default function HostMatchForm() {
     };
     const [date, setDate] = useState(dateFromQuery ?? '');
     const [time, setTime] = useState('');
+    // Hosting-terms consent (cycle player-host-responsibility): reset per
+    // publish attempt; the publish button stays disabled until accepted and
+    // the flag is sent to the API, which independently rejects booking
+    // without it (defense in depth — client gate + server gate).
+    const [hostingConsent, setHostingConsent] = useState(false);
+    useEffect(() => {
+        if (!showWarning) setHostingConsent(false);
+    }, [showWarning]);
 
     // Derive pitch cost from the selected pitch's hourly rate, prorated by
     // duration (mirrors the server's authoritative calculation — the server
@@ -114,6 +123,19 @@ export default function HostMatchForm() {
     const playersPerSide = effectiveFormat ? parseInt(effectiveFormat.split('v')[0]) : 0;
     const maxPlayers = playersPerSide * 2;
     const playerShare = maxPlayers > 1 ? pricePerPlayer(pitchCostSar, maxPlayers) : pitchCostSar;
+
+    /* ── Wallet deposit pre-check (koralink mode) ───────────────────
+     * The API debits the FULL pitch cost from the host's wallet at publish
+     * (and refunds it in full on cancel / underfill auto-cancel). The sheet
+     * shows the deposit up front and blocks publishing when the balance is
+     * short — with the exact deficit and a top-up route. The balance query
+     * only runs while the sheet is open in koralink mode. */
+    const wallet = useWalletBalance({ enabled: showWarning && mode === 'koralink' });
+    const depositSar = mode === 'koralink' && pitchCostSar > 0 ? pitchCostSar : null;
+    const walletBalanceSar = wallet.data != null ? wallet.data.balance : null;
+    const shortBy = depositSar != null && walletBalanceSar != null
+        ? computeShortfall(depositSar, walletBalanceSar)
+        : 0;
 
     /* ── Handlers ────────────────────────────────── */
 
@@ -152,6 +174,7 @@ export default function HostMatchForm() {
             booking_mode: mode,
             booking_slot_id: mode === 'koralink' ? selectedSlot?.id : undefined,
             visibility,
+            acceptedHostingTerms: hostingConsent,
         };
 
         createMatch.mutate(payload, {
@@ -170,10 +193,55 @@ export default function HostMatchForm() {
         && (mode === 'self' || (mode === 'koralink' && selectedSlot)));
 
     // Classified publish error shown inside the warning sheet (localized, at
-    // the moment of failure — not a generic toast).
-    const publishErrorKey = createMatch.isError
-        ? PUBLISH_ERROR_KEYS[classifyPublishError(createMatch.error)]
+    // the moment of failure — not a generic toast). A server-confirmed
+    // insufficient-balance 400 carries the exact Required/Available amounts —
+    // parsed here so the sheet can show the precise deficit even when the
+    // proactive pre-check raced (balance changed mid-flow).
+    const publishErrorKind = createMatch.isError
+        ? classifyPublishError(createMatch.error)
         : null;
+    const publishErrorKey = publishErrorKind
+        ? PUBLISH_ERROR_KEYS[publishErrorKind]
+        : null;
+    const serverShortfall = publishErrorKind === 'insufficient_balance' && createMatch.error
+        ? parseWalletShortfall(String((createMatch.error as { message?: string }).message ?? ''))
+        : null;
+
+    // Observability (AGENTS.md §4): the deposit wall is a funnel choke point —
+    // track every block with the exact amounts so product can size the impact.
+    const proactiveShort = depositSar != null
+        && walletBalanceSar != null
+        && walletBalanceSar < depositSar;
+    useEffect(() => {
+        if (showWarning && proactiveShort) {
+            trackEvent('publish_blocked_insufficient_balance', {
+                phase: 'precheck',
+                deposit_sar: depositSar,
+                wallet_balance_sar: walletBalanceSar,
+                shortfall_sar: shortBy,
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showWarning, proactiveShort]);
+    useEffect(() => {
+        if (publishErrorKind === 'insufficient_balance') {
+            trackEvent('publish_blocked_insufficient_balance', {
+                phase: 'server_error',
+                deposit_sar: serverShortfall?.requiredSar ?? depositSar ?? null,
+                wallet_balance_sar: serverShortfall?.availableSar ?? walletBalanceSar ?? null,
+                shortfall_sar: serverShortfall?.shortfallSar ?? shortBy ?? null,
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [publishErrorKind]);
+
+    const handleTopUp = () => {
+        createMatch.reset();
+        setShowWarning(false);
+        // Push (not replace) — the host returns from the wallet to this
+        // filled-out form to retry publishing.
+        router.push(`/${locale}/wallet`);
+    };
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -362,6 +430,13 @@ export default function HostMatchForm() {
                 open={showWarning}
                 mode={mode}
                 errorKey={publishErrorKey}
+                depositSar={depositSar}
+                walletBalanceSar={serverShortfall?.availableSar ?? walletBalanceSar}
+                balanceResolved={wallet.isSuccess}
+                serverShortfallSar={serverShortfall?.shortfallSar ?? null}
+                consentAccepted={hostingConsent}
+                onConsentChange={setHostingConsent}
+                onTopUp={handleTopUp}
                 onConfirm={doPublish}
                 onCancel={() => {
                     createMatch.reset();

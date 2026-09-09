@@ -1,6 +1,7 @@
 import {
   Injectable,
   Inject,
+  Logger,
   BadRequestException,
   ForbiddenException,
   NotFoundException,
@@ -54,6 +55,8 @@ export interface PersonalMessage {
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly activitiesService: ActivitiesService,
@@ -80,21 +83,50 @@ export class ConversationsService {
       return this.findConversation(existing[0].id);
     }
 
-    const created = await this.db.transaction(async (tx) => {
-      const [conv] = await tx
-        .insert(conversations)
-        .values({})
-        .returning({ id: conversations.id });
+    // Canonical sorted-pair key — the unique index conv_pair_unique_idx
+    // (migration 0039) makes a concurrent find-or-create for the same pair
+    // lose the race atomically instead of inserting a duplicate conversation.
+    const pairKey = userId < targetUserId
+      ? `${userId}:${targetUserId}`
+      : `${targetUserId}:${userId}`;
 
-      await tx.insert(conversation_participants).values([
-        { conversation_id: conv.id, user_id: userId },
-        { conversation_id: conv.id, user_id: targetUserId },
-      ]);
+    try {
+      const created = await this.db.transaction(async (tx) => {
+        const [conv] = await tx
+          .insert(conversations)
+          .values({ pair_key: pairKey })
+          .returning({ id: conversations.id });
 
-      return conv;
-    });
+        await tx.insert(conversation_participants).values([
+          { conversation_id: conv.id, user_id: userId },
+          { conversation_id: conv.id, user_id: targetUserId },
+        ]);
 
-    return this.findConversation(created.id);
+        return conv;
+      });
+
+      return this.findConversation(created.id);
+    } catch (err) {
+      // 23505 unique_violation: a concurrent request created the pair first.
+      // Re-select by pair_key and return the winner — the caller always gets
+      // a valid conversation id and never sees the race.
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        (err as { code?: string }).code === '23505'
+      ) {
+        const [raced] = (await this.db.execute(sql`
+          SELECT id FROM ${conversations} WHERE pair_key = ${pairKey} LIMIT 1
+        `)) as unknown as Array<{ id: string }>;
+        if (raced?.id) {
+          this.logger.log(
+            `conversation pair-key collision resolved (pair ${pairKey})`,
+          );
+          return this.findConversation(raced.id);
+        }
+      }
+      throw err;
+    }
   }
 
   async listForUser(userId: string): Promise<{

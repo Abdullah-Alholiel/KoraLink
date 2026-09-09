@@ -157,6 +157,18 @@ const nextConfig = {
       'ws:',
       'wss:',
     ].join(' ');
+    // PostHog injects its reverse-proxy bundle (exception-autocapture, surveys)
+    // as a <script> from the -assets reverse-proxy host, so script-src needs it
+    // too — connect-src alone does NOT cover script loading (blocked live in
+    // prod 2026-09-09: us-assets.i.posthog.com/static/exception-autocapture.js).
+    const scriptSrc = [
+      "'self'",
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      'https://api.mapbox.com',
+      'https://cdn.moyasar.com',
+      'https://*.posthog.com',
+    ].join(' ');
 
     return [
       {
@@ -182,7 +194,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://cdn.moyasar.com",
+              `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://*.mapbox.com",
               `connect-src ${connectSrc}`,

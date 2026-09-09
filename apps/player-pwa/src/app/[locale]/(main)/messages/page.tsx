@@ -9,15 +9,14 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useDiscussions } from '@/hooks/useMessages';
-import { useConversations } from '@/hooks/useConversations';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
-import Link from 'next/link';
 import DiscussionCard from '@/components/matches/DiscussionCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import type { Discussion } from '@/types';
 
-// ── Group discussions by time category ─────────────────
+// ── Group match discussions by time category (personal chats render in the
+//    Direct Messages section above, recency-sorted by the API) ─────────────
 
 function groupDiscussions(
   discussions: Discussion[],
@@ -66,7 +65,6 @@ export default function MessagesPage() {
   const locale = (pathname ?? '').split('/')[1] || 'en';
 
   const { data: discussions, isLoading, error, refetch } = useDiscussions();
-  const { data: conversations } = useConversations();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
@@ -83,7 +81,14 @@ export default function MessagesPage() {
     );
   }, [discussions, searchQuery]);
 
-  const groups = useMemo(() => groupDiscussions(filtered, t), [filtered, t]);
+  const personalChats = useMemo(
+    () => filtered.filter((d) => d.type === 'personal'),
+    [filtered],
+  );
+  const matchGroups = useMemo(
+    () => groupDiscussions(filtered.filter((d) => d.type !== 'personal'), t),
+    [filtered, t],
+  );
 
   const totalCount = discussions?.length ?? 0;
 
@@ -169,7 +174,7 @@ export default function MessagesPage() {
       )}
 
       {/* ── Empty State ── */}
-      {!isLoading && !error && filtered.length === 0 && (!conversations || conversations.length === 0) && (
+      {!isLoading && !error && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 px-8">
           <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
             <MessageSquare className="w-8 h-8 text-gray-300" strokeWidth={1.5} />
@@ -185,8 +190,8 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* ── Direct Messages ── */}
-      {!isLoading && !error && !searchQuery && conversations && conversations.length > 0 && (
+      {/* ── Direct Messages (personal 1:1 chats — via shared DiscussionCard) ── */}
+      {!isLoading && !error && personalChats.length > 0 && (
         <div className="mb-2">
           <div className="px-5 pt-3 pb-1.5">
             <p className="text-[10px] font-bold text-brand-green uppercase tracking-widest">
@@ -194,38 +199,19 @@ export default function MessagesPage() {
             </p>
           </div>
           <div className="divide-y divide-gray-50">
-            {conversations.map((conv) => (
-              <Link
+            {personalChats.map((conv) => (
+              <DiscussionCard
                 key={conv.id}
+                discussion={conv}
                 href={`/${locale}/messages/${conv.id}`}
-                className="flex items-center gap-3 px-5 py-3.5 active:bg-gray-50 transition-colors"
-              >
-                <div className="w-12 h-12 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-brand-green">
-                    {(conv.otherParticipant.fullName ?? conv.otherParticipant.handle ?? '?').charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-brand-black truncate">
-                      {conv.otherParticipant.fullName ?? conv.otherParticipant.handle ?? t('messages.directMessages')}
-                    </p>
-                    {conv.unreadCount > 0 && (
-                      <span className="text-[10px] font-bold text-white bg-brand-green rounded-full px-2 py-0.5 flex-shrink-0 ms-2" dir="ltr">
-                        {conv.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-400 truncate">{conv.lastMessage ?? ''}</p>
-                </div>
-              </Link>
+              />
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Populated: grouped discussion cards ── */}
-      {!isLoading && !error && groups.map((group) => (
+      {/* ── Populated: grouped match discussion cards ── */}
+      {!isLoading && !error && matchGroups.map((group) => (
         <div key={group.label} className="mb-1">
           {/* Section header */}
           <div className="px-5 pt-4 pb-1.5">

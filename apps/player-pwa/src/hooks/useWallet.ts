@@ -12,7 +12,8 @@ import {
 
 // ─── Fetch Wallet Balance ───────────────────────────
 
-export function useWalletBalance() {
+export function useWalletBalance(params?: { enabled?: boolean }) {
+  const { enabled = true } = params ?? {};
   return useQuery<{ balance: number; currency: string }, FetchError>({
     queryKey: ['wallet', 'balance'],
     queryFn: async () => {
@@ -21,6 +22,7 @@ export function useWalletBalance() {
     },
     staleTime: 60_000,
     retry: false,
+    enabled,
   });
 }
 

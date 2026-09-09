@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2 } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2, ShieldAlert, UserCheck } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
 import { useNow } from '@/hooks/useNow';
@@ -167,6 +167,22 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <MapPin className="w-3 h-3" strokeWidth={1.5} />
                     {match.location}
                 </span>
+                {/* Player-host responsibility badge (cycle player-host-responsibility):
+                    mode-aware — amber warning for self-booked (host runs ALL pitch ops),
+                    neutral green for koralink-booked (shared responsibility). Never
+                    rendered for venue-hosted matches. */}
+                {match.isPlayerHosted && match.bookingMode === 'self' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
+                        <ShieldAlert className="w-3 h-3" strokeWidth={2} />
+                        {t('matchCard.selfHostedBadge')}
+                    </span>
+                )}
+                {match.isPlayerHosted && match.bookingMode === 'koralink' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-green bg-brand-green/10 rounded-full px-2 py-1">
+                        <UserCheck className="w-3 h-3" strokeWidth={2} />
+                        {t('matchCard.playerHostedBadge')}
+                    </span>
+                )}
                 {match.isPrivate && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
                         <LockIcon className="w-3 h-3" strokeWidth={2} />

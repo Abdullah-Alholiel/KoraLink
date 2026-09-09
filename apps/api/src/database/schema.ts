@@ -125,6 +125,17 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
 
+// Player-host responsibility & payout regulation (cycle player-host-responsibility):
+// 'held' = fee match awaiting completion; 'released' = host paid on completion;
+// 'cancelled' = match cancelled (roster refunded, nothing payable);
+// 'not_applicable' = venue-hosted / free matches (legacy default).
+export const hostPayoutStateEnum = pgEnum('HostPayoutState', [
+  'held',
+  'released',
+  'cancelled',
+  'not_applicable',
+]);
+
 export const disputeTypeEnum = pgEnum('DisputeType', [
   'no_show',
   'double_booking',
@@ -440,6 +451,14 @@ export const matches = pgTable(
     booking_mode: bookingModeEnum('booking_mode').notNull().default('koralink'),
     booking_slot_id: varchar('booking_slot_id', { length: 36 })
       .references(() => pitch_slots.id, { onDelete: 'set null' }),
+    // Player-host responsibility & payout regulation (cycle player-host-responsibility):
+    // is_player_hosted is PERSISTED at create (never derived from users.role at read
+    // time — labeling must not depend on a JOIN and must survive role changes).
+    is_player_hosted: boolean('is_player_hosted').notNull().default(false),
+    host_payout_state: hostPayoutStateEnum('host_payout_state')
+      .notNull()
+      .default('not_applicable'),
+    host_accepted_terms_at: timestamp('host_accepted_terms_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -471,6 +490,13 @@ export const match_players = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     team: teamEnum('team'),
     is_host: boolean('is_host').notNull().default(false),
+    // Player-host responsibility (cycle player-host-responsibility): per-EPISODE
+    // fee snapshot. Refund/forfeit ledger keys derive from THIS row's id — never
+    // {match_id, user_id}, which collides on a legal leave→rejoin cycle (run #20).
+    fee_paid_sar: numeric('fee_paid_sar', {
+      precision: 10,
+      scale: 2,
+    }),
     no_show: boolean('no_show').notNull().default(false),
   },
   (t) => [
@@ -756,6 +782,9 @@ export const conversations = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdateFn(() => new Date()),
+    // Canonical sorted-pair key (least(u1):greatest(u2)) — enforces one 1:1
+    // conversation per user pair via conv_pair_unique_idx (migration 0039).
+    pair_key: varchar('pair_key', { length: 73 }),
   },
 );
 

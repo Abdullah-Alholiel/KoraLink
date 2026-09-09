@@ -22,14 +22,20 @@ export default function TermsPage() {
                 </h1>
             </div>
             <div className="p-6 prose prose-sm max-w-none text-gray-600">
-                <p className="text-sm text-gray-500 mb-4">{t('lastUpdated')}: August 2026</p>
+                <p className="text-sm text-gray-500 mb-4">{t('lastUpdated')}: September 2026</p>
                 <p className="text-sm leading-relaxed mb-4">{t('termsIntro')}</p>
                 <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsAccounts')}</h2>
                 <p className="text-sm leading-relaxed">{t('termsAccountsDesc')}</p>
                 <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsMatches')}</h2>
                 <p className="text-sm leading-relaxed">{t('termsMatchesDesc')}</p>
+                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsHostingTitle')}</h2>
+                <p className="text-sm leading-relaxed">{t('termsHostingDesc')}</p>
                 <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsPayments')}</h2>
                 <p className="text-sm leading-relaxed">{t('termsPaymentsDesc')}</p>
+                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsHostingPayoutTitle')}</h2>
+                <p className="text-sm leading-relaxed">{t('termsHostingPayoutDesc')}</p>
+                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsRefundTitle')}</h2>
+                <p className="text-sm leading-relaxed">{t('termsRefundDesc')}</p>
                 <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('privacyContact')}</h2>
                 <p className="text-sm leading-relaxed">hello@koralink.sa</p>
             </div>

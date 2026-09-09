@@ -203,6 +203,9 @@ export class UsersService {
         COALESCE((SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1), '') AS last_message,
         EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${userId}::text) AS has_voted,
         m.visibility AS visibility,
+        m.booking_mode AS booking_mode,
+        m.is_player_hosted AS is_player_hosted,
+        m.host_payout_state AS host_payout_state,
         v.name AS venue_name,
         v.city AS venue_city,
         COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at
@@ -248,6 +251,9 @@ export class UsersService {
       pitch_surface: string;
       last_message: string;
       has_voted: boolean;
+      booking_mode: 'koralink' | 'self';
+      is_player_hosted: boolean;
+      host_payout_state: 'held' | 'released' | 'cancelled' | 'not_applicable';
       venue_name: string;
       venue_city: string;
       voting_closes_at: Date;
@@ -255,33 +261,78 @@ export class UsersService {
   }
 
   /**
-   * Get unified discussions list — all matches the user is in, with
-   * last message preview and unread count. Foundation for the Messages screen.
+   * Get unified discussions list — match group chats AND personal 1:1
+   * conversations in ONE recency-sorted list, with last message preview
+   * and unread counts. Single source for the Messages screen.
    */
   async getMyDiscussions(userId: string) {
     const rows = await this.db.execute(sql`
-      SELECT
-        m.id,
-        'match'::text AS type,
-        m.title,
-        m.status,
-        m.scheduled_at,
-        u.full_name AS host_name,
-        u.avatar_url AS host_avatar,
-        (SELECT COUNT(*) FROM match_players mp2 WHERE mp2.match_id = m.id)::int AS participant_count,
-        (SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message,
-        (SELECT mm.created_at FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message_at,
-        (SELECT u2.full_name FROM match_messages mm INNER JOIN users u2 ON u2.id = mm.user_id WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1) AS last_message_sender_name
-      FROM match_players my
-      INNER JOIN matches m ON m.id = my.match_id
-      INNER JOIN users u ON u.id = m.host_id
-      WHERE my.user_id = ${userId}
-        AND m.status NOT IN ('Cancelled')
-      ORDER BY
-        COALESCE(
-          (SELECT mm.created_at FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1),
-          m.scheduled_at
-        ) DESC
+      SELECT * FROM (
+        SELECT
+          m.id,
+          'match'::text AS type,
+          m.title,
+          m.status::text AS match_status,
+          m.scheduled_at,
+          u.full_name AS other_name,
+          u.avatar_url AS other_avatar,
+          (SELECT COUNT(*) FROM match_players mp2 WHERE mp2.match_id = m.id)::int AS participant_count,
+          last_msg.content AS last_message,
+          last_msg.created_at AS last_message_at,
+          last_msg.sender_name AS last_message_sender_name,
+          0::int AS unread_count,
+          COALESCE(last_msg.created_at, m.scheduled_at) AS last_activity
+        FROM match_players my
+        INNER JOIN matches m ON m.id = my.match_id
+        INNER JOIN users u ON u.id = m.host_id
+        LEFT JOIN LATERAL (
+          SELECT mm.content, mm.created_at, u2.full_name AS sender_name
+          FROM match_messages mm
+          INNER JOIN users u2 ON u2.id = mm.user_id
+          WHERE mm.match_id = m.id
+          ORDER BY mm.created_at DESC
+          LIMIT 1
+        ) last_msg ON true
+        WHERE my.user_id = ${userId}
+          AND m.status NOT IN ('Cancelled')
+
+        UNION ALL
+
+        SELECT
+          c.id,
+          'personal'::text AS type,
+          COALESCE(other.full_name, other.handle, 'KoraLink') AS title,
+          NULL::text AS match_status,
+          NULL::timestamptz AS scheduled_at,
+          COALESCE(other.full_name, other.handle, 'KoraLink') AS other_name,
+          other.avatar_url AS other_avatar,
+          2::int AS participant_count,
+          last_pm.content AS last_message,
+          last_pm.created_at AS last_message_at,
+          sender_u.full_name AS last_message_sender_name,
+          (SELECT COUNT(*)::int
+            FROM personal_messages pm2
+            WHERE pm2.conversation_id = c.id
+              AND pm2.sender_id != ${userId}::text
+              AND pm2.created_at > COALESCE(cp.last_read_at, 'epoch'::timestamptz)
+          ) AS unread_count,
+          COALESCE(last_pm.created_at, c.updated_at) AS last_activity
+        FROM conversation_participants cp
+        INNER JOIN conversations c ON c.id = cp.conversation_id
+        INNER JOIN conversation_participants cp2
+          ON cp2.conversation_id = c.id AND cp2.user_id != ${userId}::text
+        INNER JOIN users other ON other.id = cp2.user_id
+        LEFT JOIN LATERAL (
+          SELECT pm.content, pm.created_at, pm.sender_id
+          FROM personal_messages pm
+          WHERE pm.conversation_id = c.id
+          ORDER BY pm.created_at DESC
+          LIMIT 1
+        ) last_pm ON true
+        LEFT JOIN users sender_u ON sender_u.id = last_pm.sender_id
+        WHERE cp.user_id = ${userId}
+      ) unified
+      ORDER BY unified.last_activity DESC
       LIMIT 30
     `);
 
@@ -290,27 +341,30 @@ export class UsersService {
         id: string;
         type: string;
         title: string;
-        status: string;
-        scheduled_at: Date;
-        host_name: string | null;
-        host_avatar: string | null;
+        match_status: string | null;
+        scheduled_at: Date | null;
+        other_name: string | null;
+        other_avatar: string | null;
         participant_count: number;
         last_message: string | null;
         last_message_at: Date | null;
         last_message_sender_name: string | null;
+        unread_count: number;
       }>).map((r) => ({
         id: r.id,
         type: r.type,
         title: r.title,
-        matchStatus: r.status,
+        matchStatus: r.match_status,
         scheduledAt: r.scheduled_at,
-        hostName: r.host_name,
-        hostAvatar: r.host_avatar,
+        hostName: r.other_name,
+        hostAvatar: r.other_avatar,
+        avatarUrl: r.other_avatar,
+        personal: r.type === 'personal' ? true : undefined,
         participantCount: r.participant_count,
         lastMessage: r.last_message,
         lastMessageAt: r.last_message_at,
         lastMessageSenderName: r.last_message_sender_name,
-        unreadCount: 0, // stub — future feature
+        unreadCount: r.unread_count ?? 0,
       })),
       total: rows.length,
       hasMore: rows.length >= 30,

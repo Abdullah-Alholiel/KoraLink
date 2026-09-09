@@ -393,6 +393,32 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     await this.conversationsService.markRead(client.userId, data.conversationId);
   }
 
+  // ── Mark a conversation read (read receipts) ─────────────────────────────
+
+  /**
+   * Client emits this when new messages arrive while the thread is open
+   * (join-conversation only covers the moment of joining). Marks the caller's
+   * cursor and tells the OTHER participant 'dm-read' so their list/badge
+   * updates live. Fires no side effects beyond the cursor write.
+   */
+  @SubscribeMessage('mark-read')
+  async handleMarkRead(
+    @MessageBody() data: { conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+
+    const ok = await this.conversationsService.isParticipant(client.userId, data.conversationId);
+    if (!ok) throw new WsException('You are not a participant in this conversation.');
+
+    await this.conversationsService.markRead(client.userId, data.conversationId);
+    // Read receipt → the other participant clears their unread badge live.
+    client.to(`conv:${data.conversationId}`).emit('dm-read', {
+      conversationId: data.conversationId,
+      readerId: client.userId,
+    });
+  }
+
   // ── Send a direct message ────────────────────────────────────────────────
 
   @SubscribeMessage('send-dm')
