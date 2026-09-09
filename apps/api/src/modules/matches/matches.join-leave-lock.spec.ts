@@ -73,7 +73,13 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
       }),
       update: () => ({ set: () => ({ where: () => thenable() }) }),
       delete: () => ({ where: () => thenable() }),
-      insert: () => ({ values: () => thenable() }),
+      // Slice 2 (player-host-responsibility): joinMatch inserts the roster
+      // row with .returning({ id }) — stub the episode id the DB would mint.
+      insert: () => ({
+        values: () => ({
+          returning: () => ({ then: (r: (v: unknown) => void) => r([{ id: 'episode-1' }]) }),
+        }),
+      }),
       execute: (q: unknown) => {
         selects.push({ table: '__raw__', thenRows: [], lock: 'update', raw: q } as SelectRecord & { raw?: unknown });
         return thenable();

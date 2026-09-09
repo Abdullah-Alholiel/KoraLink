@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Inject,
   NotFoundException,
+  InternalServerErrorException,
   Logger,
   Optional,
 } from '@nestjs/common';
@@ -13,6 +14,89 @@ import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
+
+/**
+ * Slice 2 (player-host-responsibility): charge a match fee as a MATCH_FEE
+ * DEBIT inside the CALLER's transaction (the join tx) — never a nested
+ * transaction of its own, so "seat + charge" commit or roll back together.
+ *
+ * Mirrors WalletService.recordTransaction exactly (ledger row → balance
+ * write → negative-balance guard) with two join-specific differences:
+ * - replay detection is a pre-check on (idempotency_key, user_id): the fee
+ *   key is per-EPISODE, so a sequential retry (client timeout after commit)
+   * lands here with the seat already present and must NOT re-charge;
+ * - a concurrent unique-violation aborts this tx — surfaced as 409 so the
+ *   client retry resolves through the replay path.
+ */
+export async function chargeMatchFeeTx(
+  tx: Tx,
+  userId: string,
+  matchId: string,
+  amountSar: number,
+  idempotencyKey: string,
+): Promise<string | 'REPLAYED'> {
+  if (!(amountSar > 0)) {
+    throw new BadRequestException('Fee amount must be positive.');
+  }
+
+  // Sequential replay: this episode's fee was already charged.
+  const [prior] = await tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.idempotency_key, idempotencyKey),
+        eq(transactions.user_id, userId),
+      ),
+    )
+    .limit(1);
+  if (prior) return 'REPLAYED';
+
+  try {
+    // 1. Immutable ledger entry (matches MATCH_FEE convention in wallet.service).
+    const [ledgerEntry] = await tx
+      .insert(transactions)
+      .values({
+        user_id: userId,
+        type: 'DEBIT',
+        amount: amountSar.toFixed(2),
+        reference_type: 'MATCH_FEE',
+        reference_id: matchId,
+        idempotency_key: idempotencyKey,
+        status: 'Completed',
+      })
+      .returning({ id: transactions.id });
+
+    // 2. Balance write — guarded numeric (no negative balances).
+    const [updatedUser] = await tx
+      .update(users)
+      .set(
+        withTimestamp({
+          wallet_balance: sql`${users.wallet_balance} - ${amountSar}`,
+        }),
+      )
+      .where(eq(users.id, userId))
+      .returning({ wallet_balance: users.wallet_balance });
+
+    if (parseFloat(updatedUser.wallet_balance) < 0) {
+      // Rolls back the ENTIRE join tx: no seat without payment.
+      throw new BadRequestException('Insufficient wallet balance.');
+    }
+
+    return ledgerEntry.id;
+  } catch (err) {
+    // Lost a concurrent same-key race: this tx is aborted by Postgres —
+    // surface 409; the client retry resolves via the replay pre-check.
+    if (
+      err &&
+      typeof err === 'object' &&
+      (err as { code?: unknown }).code === '23505'
+    ) {
+      throw new ConflictException('Concurrent join detected — retry.');
+    }
+    throw err;
+  }
+}
 import {
   GetMatchesDto,
   normalizeGenderRule,
@@ -94,6 +178,8 @@ export interface NearbyMatchRow {
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
+/** Tx handle carried into module-level tx helpers (shares the caller's transaction). */
+type Tx = Parameters<Parameters<DB['transaction']>[0]>[0];
 
 @Injectable()
 export class MatchesService {
@@ -1006,8 +1092,12 @@ export class MatchesService {
   // Join a match (add player to roster)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async joinMatch(userId: string, matchId: string) {
-    await this.db.transaction(async (tx) => {
+  async joinMatch(
+    userId: string,
+    matchId: string,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    const joinResult = await this.db.transaction(async (tx) => {
       // 1. Verify match exists and is Open — FOR UPDATE row lock serializes
       //    concurrent joins (P2-49 overbook race, run #37): the spot count
       //    below can no longer be read by two txs at once. Lock ORDER:
@@ -1018,6 +1108,7 @@ export class MatchesService {
           id: matches.id,
           status: matches.status,
           max_players: matches.max_players,
+          price_per_player: matches.price_per_player,
         })
         .from(matches)
         .where(eq(matches.id, matchId))
@@ -1083,8 +1174,10 @@ export class MatchesService {
 
       const assignedTeam = homeCount <= awayCount ? 'Home' : 'Away';
 
-      // 5. Insert match_players row with team assignment
-      await tx
+      // 5. Insert match_players row with team assignment. RETURNING gives the
+      //    roster-episode id — the fee idempotency key derives from it
+      //    (per-EPISODE, never {match,user}: run #20 lesson).
+      const [episode] = await tx
         .insert(schema.match_players)
         .values({
           match_id: matchId,
@@ -1092,7 +1185,12 @@ export class MatchesService {
           is_host: false,
           team: assignedTeam,
           no_show: false,
-        });
+        })
+        .returning({ id: schema.match_players.id });
+
+      if (!episode) {
+        throw new InternalServerErrorException('Join did not produce a roster row.');
+      }
 
       // 6. P1-17: a queued player who lands a seat by hand leaves the queue —
       // otherwise promoteNextInTx would later seat them a second time.
@@ -1126,6 +1224,41 @@ export class MatchesService {
           .set(withTimestamp({ status: 'Full' }))
           .where(and(eq(matches.id, matchId), eq(matches.status, 'Open')));
       }
+
+      // ── 7. Slice 2 (player-host-responsibility): charge the fee INSIDE the
+      // same transaction. Payment failure = NO seat: everything above rolls
+      // back, so a roster row can never exist without its matching charge.
+      // Only JOINERS are charged here — the host fronts the pitch cost at
+      // createMatch and collects the fee pool as payout at completion (slice 3).
+      // Idempotency key is per-EPISODE (run #20 lesson: never {match,user},
+      // which 500s on a legal join→leave→rejoin).
+      const price = Number(match.price_per_player ?? 0);
+      let feeTransactionId: string | null = null;
+      let idempotentReplay = false;
+
+      if (price > 0) {
+        if (!idempotencyKey) {
+          throw new BadRequestException(
+            'idempotencyKey is required to join a paid match.',
+          );
+        }
+        const feeKey = `join:${episode.id}:${idempotencyKey}`;
+        const charged = await chargeMatchFeeTx(tx, userId, matchId, price, feeKey);
+        if (charged === 'REPLAYED') {
+          // Retried request (e.g. client timeout after commit): seat already
+          // exists (the uniqueness check above passed) — report, don't re-charge.
+          idempotentReplay = true;
+        } else {
+          feeTransactionId = charged;
+          // Per-episode fee snapshot (0040) — drives slice-4 refunds/forfeit.
+          await tx
+            .update(schema.match_players)
+            .set({ fee_paid_sar: price.toFixed(2) })
+            .where(eq(schema.match_players.id, episode.id));
+        }
+      }
+
+      return { episodeId: episode.id, feeTransactionId, idempotentReplay };
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
@@ -1151,7 +1284,7 @@ export class MatchesService {
       })
       .catch(() => undefined);
 
-    return updatedMatch;
+    return { updatedMatch, join: joinResult };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

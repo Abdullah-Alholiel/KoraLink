@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Calendar, MapPin, Info, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
-import { usePayWallet } from '@/hooks/useWallet';
+import { fetcher } from '@/lib/fetcher';
 import { uuid } from '@/lib/uuid';
 import BottomSheet from '@/components/layout/BottomSheet';
 
@@ -42,32 +42,44 @@ export default function PaymentSheet({
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [agreed, setAgreed] = useState(false);
-    // Stable idempotency key per logical payment attempt — prevents double-charge on retry.
+    const [isJoining, setIsJoining] = useState(false);
+    const [joinError, setJoinError] = useState<string | null>(null);
+    // Stable idempotency key per logical join+pay attempt. Slice 2: the key
+    // rides the JOIN request — the server charges inside the join transaction
+    // and replays return the original outcome (no double charge, no double seat).
     // Only regenerates when the user explicitly re-opens the sheet.
-    const [idempotencyKey] = useState(() => `match-join-${matchId}-${uuid()}`);
-    const payWallet = usePayWallet();
+    const [idempotencyKey] = useState(() => uuid());
+
     const toPay = Math.max(0, price - walletBalance);
     const canAfford = walletBalance >= price;
 
     // Reset checkbox state when sheet closes
     useEffect(() => {
-        if (!isOpen) setAgreed(false);
+        if (!isOpen) {
+            setAgreed(false);
+            setJoinError(null);
+        }
     }, [isOpen]);
 
     const handlePay = async () => {
-        if (!agreed) return;
-
-        // Pay from wallet
-        payWallet.mutate(
-            {
-                amount: price,
-                idempotencyKey,
-                referenceId: matchId,
-            },
-            {
-                onSuccess: () => onPaySuccess(),
-            }
-        );
+        if (!agreed || isJoining) return;
+        setIsJoining(true);
+        setJoinError(null);
+        try {
+            // Slice 2 (player-host-responsibility): ONE server call joins AND
+            // charges — the fee is debited inside the join transaction, so a
+            // paid seat can never exist without its payment (and vice versa).
+            // The idempotency key makes a retry return the original outcome.
+            await fetcher(`/matches/${matchId}/join`, {
+                method: 'POST',
+                body: JSON.stringify({ idempotencyKey }),
+            });
+            onPaySuccess();
+        } catch (err) {
+            setJoinError(err instanceof Error ? err.message : 'Payment failed');
+        } finally {
+            setIsJoining(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -204,14 +216,14 @@ export default function PaymentSheet({
             <div className="mx-5 mt-5 pb-8 flex-shrink-0">
                 <button
                     onClick={handlePay}
-                    disabled={!agreed || payWallet.isPending || !canAfford}
+                    disabled={!agreed || isJoining || !canAfford}
                     className={`w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all ${
-                        agreed && !payWallet.isPending && canAfford
+                        agreed && !isJoining && canAfford
                             ? 'bg-brand-green shadow-[0_4px_16px_rgba(27,67,50,0.3)] active:scale-[0.98]'
                             : 'bg-gray-300 cursor-not-allowed'
                     }`}
                 >
-                    {payWallet.isPending ? (
+                    {isJoining ? (
                         <>
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             {t('payment.processing')}
@@ -222,7 +234,7 @@ export default function PaymentSheet({
                         <>{t('payment.payWithWallet')} SAR {price.toFixed(2)}</>
                     )}
                 </button>
-                {payWallet.isError && (
+                {joinError && (
                     <p className="text-xs text-brand-red mt-2 text-center">
                         {t('errors.walletPayFailed')}
                     </p>

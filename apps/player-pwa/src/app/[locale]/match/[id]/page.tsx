@@ -190,8 +190,12 @@ export default function MatchDetailPage({
     };
 
     const handlePaySuccess = () => {
+        // Slice 2 (player-host-responsibility): the PaymentSheet call already
+        // JOINED and CHARGED in one server transaction — re-mutating here
+        // would 409 ("already joined"). A refetch picks up the new roster +
+        // refreshed wallet balance instead.
         setShowPayment(false);
-        joinMatch.mutate(id);
+        void refetch();
     };
 
     /* ── Universal share / copy (works on HTTP origins + iOS PWA) ──
