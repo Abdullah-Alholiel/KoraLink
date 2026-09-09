@@ -31,6 +31,7 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
     const startConversation = useStartConversation();
+    const { isSuccess: startSuccess, data: startData, reset: startReset } = startConversation;
     const showToast = useAppStore((s) => s.showToast);
     const storeUser = useAppStore(selectUser);
     const isSelf = player?.userId === storeUser?.id;
@@ -39,13 +40,13 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
 
     // Navigate to the 1:1 conversation once find-or-create resolves.
     useEffect(() => {
-        if (!startConversation.isSuccess || !startConversation.data) return;
-        const conversationId = startConversation.data.id;
+        if (!startSuccess || !startData) return;
+        const conversationId = startData.id;
         trackEvent('dm_started', { locale });
-        startConversation.reset();
+        startReset();
         onClose();
         router.replace(`/${locale}/messages/${conversationId}`);
-    }, [startConversation.isSuccess, startConversation.data, startConversation.reset, router, locale, onClose]);
+    }, [startSuccess, startData, startReset, router, locale, onClose]);
 
     const handleStartConversation = () => {
         if (!player) return;

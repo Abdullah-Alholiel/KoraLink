@@ -208,7 +208,7 @@ export function useConversationMessages(conversationId: string | null) {
       // Keep the conversation list (last message + unread) in sync.
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    [queryClient],
+    [queryClient, currentUser?.id],
   );
 
   useEffect(() => {
