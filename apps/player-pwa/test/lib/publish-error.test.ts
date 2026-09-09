@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyPublishError, PUBLISH_ERROR_KEYS } from '@/lib/publish-error';
+import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall } from '@/lib/publish-error';
 
 describe('classifyPublishError', () => {
   it('classifies insufficient wallet balance', () => {
@@ -33,5 +33,27 @@ describe('classifyPublishError', () => {
   it('every kind maps to a distinct i18n key', () => {
     const keys = Object.values(PUBLISH_ERROR_KEYS);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('parseWalletShortfall', () => {
+  it('extracts Required/Available and computes the deficit from the API message', () => {
+    const parsed = parseWalletShortfall(
+      'API 400: POST /matches — Insufficient wallet balance. Required: SAR 375.00, Available: SAR 120.00',
+    );
+    expect(parsed).toEqual({ requiredSar: 375, availableSar: 120, shortfallSar: 255 });
+  });
+
+  it('rounds the deficit up to whole halalas', () => {
+    const parsed = parseWalletShortfall(
+      'Insufficient wallet balance. Required: SAR 100.01, Available: SAR 40.00',
+    );
+    expect(parsed?.shortfallSar).toBe(60.01);
+  });
+
+  it('returns null for other errors and for balance errors without amounts', () => {
+    expect(parseWalletShortfall('This slot has already been booked by another host')).toBeNull();
+    expect(parseWalletShortfall('Insufficient wallet balance.')).toBeNull();
+    expect(parseWalletShortfall('')).toBeNull();
   });
 });

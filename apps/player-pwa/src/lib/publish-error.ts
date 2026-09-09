@@ -17,6 +17,46 @@ export type PublishErrorKind =
   | 'validation'
   | 'generic';
 
+/** Exact amounts extracted from the API's insufficient-balance 400 message.
+ *  The API emits: "Insufficient wallet balance. Required: SAR 375.00, Available: SAR 120.00" */
+export interface WalletShortfall {
+    requiredSar: number;
+    availableSar: number;
+    /** required − available, rounded up to 2 d.p. (≥ 0.01 by construction). */
+    shortfallSar: number;
+}
+
+/**
+ * Deficit in SAR a wallet is short of a required amount, rounded UP to whole
+ * halalas (min 0.01). Computed in halalas with an epsilon guard — naive
+ * `(100.01 − 40.00) * 100` produces 6001.000000000001 and a bare Math.ceil
+ * silently overcharges one halala.
+ */
+export function computeShortfall(requiredSar: number, availableSar: number): number {
+    return Math.max(1, Math.ceil((requiredSar - availableSar) * 100 - 1e-6)) / 100;
+}
+
+/**
+ * Parse the API's wallet-shortfall amounts out of an error message. Returns null
+ * when the message isn't an insufficient-balance error or carries no parseable
+ * amounts (e.g. the reschedule variant without "wallet"). Used as the race
+ * fallback when the proactive pre-check passed but the server rejected the debit.
+ */
+export function parseWalletShortfall(message: string): WalletShortfall | null {
+    if (!/insufficient wallet balance/i.test(message)) return null;
+    const req = message.match(/Required:\s*SAR\s*([\d.]+)/i);
+    const avail = message.match(/Available:\s*SAR\s*([\d.]+)/i);
+    if (!req || !avail) return null;
+    const requiredSar = parseFloat(req[1]);
+    const availableSar = parseFloat(avail[1]);
+    if (!Number.isFinite(requiredSar) || !Number.isFinite(availableSar)) return null;
+    return {
+        requiredSar,
+        availableSar,
+        shortfallSar: computeShortfall(requiredSar, availableSar),
+    };
+}
+
 /** i18n key per error kind (host.* namespace). */
 export const PUBLISH_ERROR_KEYS: Record<PublishErrorKind, string> = {
   insufficient_balance: 'host.errorInsufficientBalance',
