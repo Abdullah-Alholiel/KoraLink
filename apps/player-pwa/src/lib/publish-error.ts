@@ -12,6 +12,7 @@ import { classifyError } from './error-classify';
 
 export type PublishErrorKind =
   | 'insufficient_balance'
+  | 'hosting_terms'
   | 'slot_taken'
   | 'network'
   | 'validation'
@@ -57,9 +58,10 @@ export function parseWalletShortfall(message: string): WalletShortfall | null {
     };
 }
 
-/** i18n key per error kind (host.* namespace). */
+/** i18n key per error kind (full key path — the sheet resolves it at root). */
 export const PUBLISH_ERROR_KEYS: Record<PublishErrorKind, string> = {
   insufficient_balance: 'host.errorInsufficientBalance',
+  hosting_terms: 'host.hostingConsentRequired',
   slot_taken: 'host.errorSlotTaken',
   network: 'host.errorNetwork',
   validation: 'host.errorValidation',
@@ -74,6 +76,13 @@ export function classifyPublishError(err: unknown): PublishErrorKind {
   // balance" must map to the balance copy, not generic conflict copy.
   if (/insufficient wallet balance/i.test(message)) {
     return 'insufficient_balance';
+  }
+  // Consent gate (player-host-responsibility). The normal UI path can't hit
+  // this (Confirm is disabled until the checkbox is accepted and the Zod
+  // schema forwards the flag) — it fires only for stale bundles / stale
+  // sessions. Message: "Hosting terms must be accepted before booking."
+  if (/hosting terms must be accepted/i.test(message)) {
+    return 'hosting_terms';
   }
   if (/slot.*booked|already been booked/i.test(message)) {
     return 'slot_taken';
