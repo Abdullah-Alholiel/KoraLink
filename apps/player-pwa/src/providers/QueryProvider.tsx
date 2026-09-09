@@ -3,8 +3,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { attachCachePersistence } from '@/lib/query-persister';
+import { FetchError } from '@/lib/fetcher';
 
-function makeQueryClient() {
+/** Exported for tests (test/providers/query-retry.test.ts). */
+export function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
@@ -12,8 +14,17 @@ function makeQueryClient() {
         staleTime: 60 * 1000,
         // Don't re-fetch on window focus – avoids hammering the backend
         refetchOnWindowFocus: false,
-        // Retry once on failure before surfacing the error
-        retry: 1,
+        // Retry transient failures (network, 5xx) once — but NEVER retry
+        // deterministic 4xx rejections (401/403/404/409 …): the answer cannot
+        // change, so retrying only multiplies console noise and backend load
+        // (403 chat 403 ×4 in prod console, 2026-09-09). AuthBootstrap opts out
+        // of retrying entirely with its own `retry: false`.
+        retry: (failureCount, error) => {
+          if (error instanceof FetchError && error.status >= 400 && error.status < 500) {
+            return false;
+          }
+          return failureCount < 1;
+        },
       },
     },
   });

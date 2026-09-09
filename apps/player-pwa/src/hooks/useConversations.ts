@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 import type { MessageStatus } from '@/hooks/useMessages';
+import type { Discussion } from '@/lib/discussion-adapter';
 
 export interface ConversationSummary {
   id: string;
@@ -161,10 +162,52 @@ export function useStartConversation() {
  * or `failed` after ack timeout/error with retry). REST fallback on socket
  * disconnect, mirroring `useMatchChat`.
  */
+/**
+ * Optimistically zero the unread count for one conversation in EVERY cached
+ * query that renders an unread badge — the bottom-nav badge cache
+ * (['conversations'], infinite pages) and the Messages list cache
+ * (['user','me','discussions'], a plain array). Called when the user reads a
+ * thread (incoming-while-open or on leaving), so the list never shows a stale
+ * unread dot for messages they've seen. A following invalidation reconciles
+ * with the server's authoritative counts.
+ */
+function zeroCachedUnread(queryClient: QueryClient, conversationId: string | null) {
+  if (!conversationId) return;
+  queryClient.setQueriesData<{ pages: { items: ConversationSummary[] }[] }>(
+    { queryKey: ['conversations'] },
+    (data) => {
+      if (!data?.pages) return data;
+      let changed = false;
+      const pages = data.pages.map((page) => ({
+        ...page,
+        items: page.items.map((conv) => {
+          if (conv.id !== conversationId || conv.unreadCount === 0) return conv;
+          changed = true;
+          return { ...conv, unreadCount: 0 };
+        }),
+      }));
+      return changed ? { ...data, pages } : data;
+    },
+  );
+  queryClient.setQueriesData<Discussion[]>({ queryKey: ['user', 'me', 'discussions'] }, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const next = data.map((d) => {
+      if (d.id !== conversationId || d.unreadCount === 0) return d;
+      changed = true;
+      return { ...d, unreadCount: 0 };
+    });
+    return changed ? next : data;
+  });
+}
+
 export function useConversationMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
   const [localMessages, setLocalMessages] = useState<PersonalMessage[]>([]);
+  // Messages from the OTHER user that arrived while this thread is open —
+  // cleared by emitting mark-read once the socket confirms delivery.
+  const [unreadIncomingIds, setUnreadIncomingIds] = useState<Set<string>>(new Set());
   const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -202,6 +245,11 @@ export function useConversationMessages(conversationId: string | null) {
           return next;
         }
         if (prev.some((m) => m.id === message.id)) return prev; // dedup by server id
+        // A message from the OTHER user arrived while the thread is open —
+        // flag it so the mark-read effect advances the read cursor.
+        if (message.sender.id !== currentUser?.id) {
+          setUnreadIncomingIds((prevIds) => new Set(prevIds).add(message.id));
+        }
         return [...prev, message];
       });
 
@@ -209,6 +257,36 @@ export function useConversationMessages(conversationId: string | null) {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
     [queryClient, currentUser?.id],
+  );
+
+  // ── Read receipts ─────────────────────────────────────────────────────────
+  // Advance my own read cursor when: the thread opens, or a message from the
+  // OTHER user lands while it's open (join-conversation only covers entry).
+  useEffect(() => {
+    if (!conversationId) return;
+    if (unreadIncomingIds.size === 0) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) return;
+    socket.emit('mark-read', { conversationId });
+    setUnreadIncomingIds(new Set());
+    zeroCachedUnread(queryClient, conversationId);
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  }, [conversationId, unreadIncomingIds, queryClient]);
+
+  // The user is leaving the thread — persist the final read cursor AND zero
+  // the cached unread badge so the list doesn't show a stale dot for messages
+  // they just saw (the common case: message was already in the history).
+  const conversationIdRef = useRef<string | null>(conversationId);
+  conversationIdRef.current = conversationId;
+  useEffect(
+    () => () => {
+      const id = conversationIdRef.current;
+      if (socketRef.current?.connected && id) {
+        socketRef.current.emit('mark-read', { conversationId: id });
+      }
+      zeroCachedUnread(queryClient, id);
+    },
+    [queryClient],
   );
 
   useEffect(() => {

@@ -8,6 +8,9 @@ export default createMiddleware({
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-.*|worker-.*|fallback-.*|landing|.*\\.png|.*\\.svg|.*\\.ico).*)',
+    // PWA static artifacts MUST bypass locale routing: next-intl would 307
+    // /manifest.ar.json → /en/manifest.ar.json → 404, and Workbox then fails
+    // its precache install (bad-precaching-response) for EVERY returning user.
+    '/((?!api|_next/static|_next/image|favicon.ico|manifest(?:\\..+)?\\.json|sw\\.js|workbox-.*|worker-.*|fallback-.*|landing|.*\\.png|.*\\.svg|.*\\.ico).*)',
   ],
 };
