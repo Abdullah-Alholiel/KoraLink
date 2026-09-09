@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 
 /**
- * Play page header tests (Abdullah, 2026-09-03 redesign):
- * - the labeled "+ Host a Match" pill replaces the bare "+" icon;
- * - search + calendar + filter bar live in ONE sticky group that pins while
- *   scrolling the games list (IntersectionObserver sentinel drives isPinned).
+ * Play page header tests (Abdullah, 2026-09-03 redesign; compact pill
+ * 2026-09-09): the "+ Host a Match" pill next to search is COMPACT —
+ * single-line label, no hint line — and search + calendar + filter bar
+ * live in ONE sticky group that pins while scrolling the games list
+ * (IntersectionObserver sentinel drives isPinned).
  *
  * The page pulls useMatches/useLocation; both are mocked (no network/socket).
  */
@@ -55,15 +56,17 @@ describe('Play page — host pill + pinned header group', () => {
         expect(pill).toHaveTextContent('Host a Match');
     });
 
-    it('featured host CTA (P2-29): solid green + informative hint line, EN+AR', () => {
+    it('pill is COMPACT single-line (no hint line) on solid brand-green (2026-09-09)', () => {
         renderPage();
         const pill = screen.getByTestId('host-plus-button');
         // Featured = solid brand-green surface (no outline), soft shadow.
         expect(pill.className).toContain('bg-brand-green');
         expect(pill.className).not.toContain('border-');
         expect(pill.className).toContain('shadow-');
-        // Informative = hint of what hosting does (EN fixture).
-        expect(pill).toHaveTextContent('Create your game — players nearby join');
+        // Compact = exactly ONE text line — the hint ("Create your game —…")
+        // was removed (Abdullah, 2026-09-09) and its i18n key deleted.
+        expect(pill).toHaveTextContent('Host a Match');
+        expect(pill.textContent).not.toContain('Create your game');
     });
 
     it('pins app bar + search + calendar, but NOT the filter bar (Abdullah, r4)', () => {
@@ -86,5 +89,19 @@ describe('Play page — host pill + pinned header group', () => {
         const img = container.querySelector('img[alt=""]');
         expect(img).not.toBeNull();
         expect(img!.getAttribute('src')).toContain('icon-192x192');
+    });
+
+    it('host pill can SHRINK (no flex-shrink-0) and truncates its text — it may never push the frame past the screen (Abdullah, 2026-09-09 production overflow)', () => {
+        renderPage();
+        const pill = screen.getByTestId('host-plus-button');
+        // The pill must be allowed to shrink inside the flex row.
+        expect(pill.className).not.toContain('flex-shrink-0');
+        expect(pill.className).toContain('min-w-0');
+        // The single compact label truncates instead of forcing width.
+        const truncated = pill.querySelectorAll('.truncate');
+        expect(truncated.length).toBe(1);
+        // The search field is also shrinkable (min-w-0) so the row fits 320px.
+        const searchWrap = pill.parentElement!.firstElementChild as HTMLElement;
+        expect(searchWrap.className).toContain('min-w-0');
     });
 });

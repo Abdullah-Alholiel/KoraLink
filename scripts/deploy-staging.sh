@@ -60,6 +60,10 @@ if ! env -u NODE_ENV npx turbo run build --filter=api --filter=player-pwa --filt
 fi
 
 say "STEP 4: migrate DB (before any restart — P0-10/P2-51 rule)"
+# Anti-foot-gun (same class as the NODE_ENV trap): an ambient
+# MIGRATE_DATABASE_URL (Neon runbook, CI drills) must NEVER redirect a
+# staging deploy. Staging migrates the .env database, unconditionally.
+unset MIGRATE_DATABASE_URL
 if ! node scripts/migrate-vps.mjs; then
   die "migration step failed" 5
 fi
