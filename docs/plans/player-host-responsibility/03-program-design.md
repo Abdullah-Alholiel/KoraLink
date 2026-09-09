@@ -147,6 +147,19 @@ PaymentSheet: pay action = `joinMatch.mutate({ matchId, idempotencyKey: crypto.r
 
 ```jsonc
 // ── Mode-aware responsibility labeling ──
+// en.json — payment (joiner responsibility notice — shown INSIDE PaymentSheet above the pay
+// button, and one-line variant in OngoingGameJoinSheet; Abdullah 2026-09-09: joiners must see
+// who operates the match BEFORE paying)
+"selfHostedNotice": "This game is booked and operated fully by its host — not by KoraLink. The host arranges the venue and runs the match. KoraLink is the platform only.",
+"selfHostedNoticeShort": "Booked & operated fully by the host — not KoraLink",
+"playerHostedNotice": "A player hosts and runs this match; KoraLink booked the pitch and will help resolve any venue problem the host cannot solve.",
+"playerHostedNoticeShort": "Hosted by a player · pitch booked via KoraLink",
+// ar.json — payment
+"selfHostedNotice": "هذه المباراة محجوزة ويديرها المضيف بالكامل — وليس كورالينك. المضيف يوفّر الملعب ويدير المباراة. كورالينك منصة فقط.",
+"selfHostedNoticeShort": "محجوزة ويديرها المضيف بالكامل — وليس كورالينك",
+"playerHostedNotice": "لاعب يستضيف ويدير هذه المباراة؛ كورالينك حجز الملعب ويساعد في حل أي مشكلة في الملعب لا يستطيع المضيف حلها.",
+"playerHostedNoticeShort": "مستضافة من لاعب · الملعب محجوز عبر كورالينك"
+
 // en.json — matchCard
 "playerHostedBadge": "Player-hosted · Booked on KoraLink",
 "selfHostedBadge": "Host-run · Self-booked"
@@ -219,6 +232,10 @@ PaymentSheet: pay action = `joinMatch.mutate({ matchId, idempotencyKey: crypto.r
 - Detail banner: amber left-border callout for self; neutral gray callout for koralink; both
   above the fold under the hero card. Host additionally sees the payout note; joiners see the
   refund note.
+- PaymentSheet notice: full-width callout directly above the pay button — amber bg
+  (`bg-amber-50 border border-amber-200` + ShieldAlert icon) for self, neutral
+  (`bg-gray-50 border border-gray-200` + Info icon) for koralink player-hosted; absent for
+  venue-owned. Same component reused one-line in `OngoingGameJoinSheet`.
 
 ## 9. Contract verification checklist (run at Gate 3→4, show every result)
 - [ ] joinMatch / leaveMatch / startMatch / completeMatch / cancelMatch still return the fully populated match (findOne outside tx); leave adds ONLY `your_leave_refund`
@@ -232,4 +249,5 @@ PaymentSheet: pay action = `joinMatch.mutate({ matchId, idempotencyKey: crypto.r
 - [ ] Self mode: NO koralink slot book, NO pitch-cost debit; payout state 'held' when fee condition, else 'not_applicable'
 - [ ] Legacy rows: `not_applicable` → no payouts, no badge, zero behavior change
 - [ ] i18n: every key above in BOTH en.json and ar.json; no hardcoded strings; badges/banner styled per §8
+- [ ] Joiner warning coverage: MatchCard badge + detail banner + PaymentSheet notice + OngoingGameJoinSheet short notice — self-booked amber everywhere; NONE render for venue-owned matches
 - [ ] `turbo run build` zero errors; `npx vitest run` (from apps/player-pwa) green; `npx tsc --noEmit` (apps/api) green
