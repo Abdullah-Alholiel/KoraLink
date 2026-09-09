@@ -756,6 +756,9 @@ export const conversations = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdateFn(() => new Date()),
+    // Canonical sorted-pair key (least(u1):greatest(u2)) — enforces one 1:1
+    // conversation per user pair via conv_pair_unique_idx (migration 0039).
+    pair_key: varchar('pair_key', { length: 73 }),
   },
 );
 

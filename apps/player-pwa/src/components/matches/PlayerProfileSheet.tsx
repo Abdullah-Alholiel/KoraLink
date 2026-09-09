@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { X, Trophy, Users, UserX, Loader2, AlertTriangle, Flag, UserMinus } from 'lucide-react';
+import { X, Trophy, Users, UserX, Loader2, AlertTriangle, Flag, UserMinus, MessageCircle } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
+import { useStartConversation } from '@/hooks/useConversations';
 import FollowButton from '@/components/features/FollowButton';
 import { selectUser, useAppStore } from '@/store/useAppStore';
+import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
 import type { RosterPlayer } from '@/types';
@@ -22,12 +25,37 @@ interface PlayerProfileSheetProps {
 
 export default function PlayerProfileSheet({ player, onClose, showRemove = false, removePending = false, onRemove }: PlayerProfileSheetProps) {
     const t = useTranslations();
+    const router = useRouter();
+    const pathname = usePathname();
+    const locale = (pathname ?? '').split('/')[1] || 'en';
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
+    const startConversation = useStartConversation();
+    const showToast = useAppStore((s) => s.showToast);
     const storeUser = useAppStore(selectUser);
     const isSelf = player?.userId === storeUser?.id;
     const [showReport, setShowReport] = useState(false);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+    // Navigate to the 1:1 conversation once find-or-create resolves.
+    useEffect(() => {
+        if (!startConversation.isSuccess || !startConversation.data) return;
+        const conversationId = startConversation.data.id;
+        trackEvent('dm_started', { locale });
+        startConversation.reset();
+        onClose();
+        router.replace(`/${locale}/messages/${conversationId}`);
+    }, [startConversation.isSuccess, startConversation.data, startConversation.reset, router, locale, onClose]);
+
+    const handleStartConversation = () => {
+        if (!player) return;
+        startConversation.mutate(player.userId, {
+            onError: (err) => {
+                captureError(err, { scope: 'startConversation', targetUserId: player.userId });
+                showToast(t('messages.startFailed'), 'error');
+            },
+        });
+    };
 
     // Reset the two-step confirm whenever the sheet opens for another player.
     const playerId = player?.userId ?? null;
@@ -137,6 +165,23 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
                         </div>
                         <FollowButton targetUserId={player.userId} size="sm" />
                     </div>
+                )}
+
+                {/* ── Message (hidden for self) — opens/creates the 1:1 conversation ── */}
+                {!isSelf && (
+                    <button
+                        data-testid="profile-message-btn"
+                        onClick={handleStartConversation}
+                        disabled={startConversation.isPending}
+                        className="w-full bg-white rounded-xl shadow-card p-4 mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-brand-green disabled:opacity-50"
+                    >
+                        {startConversation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+                        ) : (
+                            <MessageCircle className="w-4 h-4" strokeWidth={2} />
+                        )}
+                        {t('profile.messageUser')}
+                    </button>
                 )}
 
                 {/* ── Host moderation: remove from roster (pre-match, host only) ── */}

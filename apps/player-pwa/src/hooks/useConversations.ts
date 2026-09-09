@@ -6,6 +6,7 @@ import type { Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
+import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 import type { MessageStatus } from '@/hooks/useMessages';
 
 export interface ConversationSummary {
@@ -122,6 +123,38 @@ export function useConversations() {
   });
 }
 
+interface ConversationCreatedApi {
+  id: string;
+  participants: Array<{
+    id: string;
+    full_name: string | null;
+    handle: string | null;
+    avatar_url: string | null;
+  }>;
+  created_at: string;
+}
+
+/**
+ * Find-or-create the 1:1 conversation with a target user (profile → Message).
+ * The server dedupes per user pair (pair_key unique index + race recovery),
+ * so repeated taps always converge on the same conversation id.
+ */
+export function useStartConversation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ConversationCreatedApi, FetchError, string>({
+    mutationFn: (targetUserId: string) =>
+      fetcher<ConversationCreatedApi>('/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ userId: targetUserId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['discussions'] });
+    },
+  });
+}
+
 /**
  * Conversation history + real-time DM via the /lobby WebSocket.
  * Sends are optimistic (append `sending` → reconcile `sent` on `new-dm`,
@@ -160,6 +193,10 @@ export function useConversationMessages(conversationId: string | null) {
           (m) => m.clientMessageId && m.clientMessageId === message.clientMessageId,
         );
         if (index >= 0) {
+          // Our optimistic message got its authoritative echo/REST ack.
+          if (message.sender.id === currentUser?.id) {
+            trackEvent('dm_message_sent', { conversationId: message.conversationId });
+          }
           const next = [...prev];
           next[index] = { ...message, status: 'sent' };
           return next;
@@ -258,6 +295,7 @@ export function useConversationMessages(conversationId: string | null) {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
     onError: (_err, { clientMessageId }) => {
+      captureError(_err, { scope: 'dmSend', conversationId, clientMessageId });
       setLocalMessages((prev) =>
         prev.map((m) =>
           m.clientMessageId === clientMessageId ? { ...m, status: 'failed' } : m,
