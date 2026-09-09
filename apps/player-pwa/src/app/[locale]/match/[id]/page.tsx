@@ -20,6 +20,7 @@ import {
     ChevronRight,
     Crown,
     ShieldAlert,
+    UserCheck,
     Lock as LockIcon,
     UserPlus,
     Clock,
@@ -496,6 +497,61 @@ export default function MatchDetailPage({
                                     location={match.location}
                                 />
                             </div>
+
+                            {/* Player-host responsibility banner (cycle
+                                player-host-responsibility): mode-aware. Amber =
+                                self-booked (host runs ALL pitch ops, stronger warning);
+                                neutral = koralink-booked (shared responsibility). Hosts
+                                additionally see the payout note; joiners the refund
+                                note. Never rendered for venue-hosted matches. */}
+                            {match.isPlayerHosted && match.bookingMode === 'self' && (
+                                <div className="mx-5 mt-4 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                                    <div className="flex items-start gap-3">
+                                        <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-amber-900">
+                                                {t('matchDetail.selfHostedTitle')}
+                                            </p>
+                                            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                                                {t('matchDetail.selfHostedBanner')}
+                                            </p>
+                                            {match.isUserHost ? (
+                                                <p className="text-xs font-semibold text-amber-800 mt-2">
+                                                    {t('matchDetail.playerHostedPayoutNoteHost')}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs font-semibold text-amber-800 mt-2">
+                                                    {t('matchDetail.playerHostedPayoutNotePlayer')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {match.isPlayerHosted && match.bookingMode === 'koralink' && (
+                                <div className="mx-5 mt-4 rounded-2xl bg-gray-50 border border-gray-200 p-4">
+                                    <div className="flex items-start gap-3">
+                                        <UserCheck className="w-5 h-5 text-brand-green flex-shrink-0 mt-0.5" strokeWidth={2} />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-brand-black">
+                                                {t('matchDetail.playerHostedTitle')}
+                                            </p>
+                                            <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
+                                                {t('matchDetail.playerHostedBanner', { host: match.organizer.name })}
+                                            </p>
+                                            {match.isUserHost ? (
+                                                <p className="text-xs font-semibold text-brand-green mt-2">
+                                                    {t('matchDetail.playerHostedPayoutNoteHost')}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs font-semibold text-brand-green mt-2">
+                                                    {t('matchDetail.playerHostedPayoutNotePlayer')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Private match banner — invite link is the only way in */}
                             {match.isPrivate && (
@@ -993,6 +1049,8 @@ export default function MatchDetailPage({
                     matchTitle={match.title}
                     price={match.price}
                     currency={match.currency}
+                    isPlayerHosted={match.isPlayerHosted}
+                    bookingMode={match.bookingMode}
                 />
             )}
 
@@ -1008,6 +1066,8 @@ export default function MatchDetailPage({
                 matchId={match.id}
                 price={match.price}
                 walletBalance={walletBalance}
+                isPlayerHosted={match.isPlayerHosted}
+                bookingMode={match.bookingMode}
             />
             )}
 

@@ -725,6 +725,9 @@ export class MatchesService {
         COALESCE(BOOL_OR(mp.user_id = ${currentUserId}::text), FALSE) AS is_joined,
         EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${currentUserId}::text) AS has_voted,
         m.visibility               AS visibility,
+        m.booking_mode             AS booking_mode,
+        m.is_player_hosted         AS is_player_hosted,
+        m.host_payout_state        AS host_payout_state,
         COALESCE(
           m.completed_at,
           m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')
@@ -1315,8 +1318,20 @@ export class MatchesService {
       booking_mode?: 'koralink' | 'self';
       booking_slot_id?: string;
       visibility?: 'public' | 'private';
+      // Player-host responsibility: mandatory acceptance of the hosting terms
+      // (responsibility split + payout-on-completion + refund policy).
+      acceptedHostingTerms?: boolean;
     },
   ) {
+    // Consent gate (cycle player-host-responsibility): NO booking without the
+    // host accepting the hosting terms — enforced BEFORE any write, BOTH modes
+    // (self-booked hosts run everything; koralink-booked hosts run the match).
+    if (!dto.acceptedHostingTerms) {
+      throw new BadRequestException(
+        'Hosting terms must be accepted before booking.',
+      );
+    }
+
     // Validate pitch exists and fetch venue location + hourly rate.
     // The pitch cost is DERIVED server-side from hourly_rate × duration — the
     // client-supplied `pitchCostSar` is ignored (single source of truth).
@@ -1360,6 +1375,19 @@ export class MatchesService {
     // the client never sets it. Computed from the DERIVED capacity.
     const minPlayers = MatchesService.minPlayersFor(capacity);
 
+    // Booker distinction (cycle player-host-responsibility): persist whether the
+    // host is a PLAYER at create time — labeling must never depend on a read-time
+    // role JOIN. A player-hosted match with a positive per-player price is a fee
+    // match → the host payout is HELD until completion.
+    const [host] = await this.db
+      .select({ role: schema.users.role })
+      .from(schema.users)
+      .where(eq(schema.users.id, hostId))
+      .limit(1);
+    const isPlayerHosted = host?.role === 'Player';
+    const hostPayoutState: (typeof schema.hostPayoutStateEnum.enumValues)[number] =
+      isPlayerHosted && pricePerPlayer > 0 ? 'held' : 'not_applicable';
+
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
       if (bookingMode === 'koralink') {
@@ -1397,6 +1425,9 @@ export class MatchesService {
           pitch_cost_sar: pitchCostSar.toString(),
           max_players: capacity,
           min_players: minPlayers,
+          is_player_hosted: isPlayerHosted,
+          host_payout_state: hostPayoutState,
+          host_accepted_terms_at: new Date(),
           status: 'Open',
           visibility,
           booking_mode: bookingMode,

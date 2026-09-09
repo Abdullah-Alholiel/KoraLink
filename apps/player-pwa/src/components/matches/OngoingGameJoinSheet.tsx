@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { AlertCircle, X, Play } from 'lucide-react';
+import { AlertCircle, X, Play, ShieldAlert } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 interface OngoingGameJoinSheetProps {
@@ -11,6 +11,9 @@ interface OngoingGameJoinSheetProps {
     matchTitle: string;
     price: number;
     currency?: string;
+    /** Player-host responsibility: who operates this match (drives the warning). */
+    isPlayerHosted?: boolean;
+    bookingMode?: 'koralink' | 'self';
 }
 
 export default function OngoingGameJoinSheet({
@@ -20,6 +23,8 @@ export default function OngoingGameJoinSheet({
     matchTitle,
     price,
     currency = 'SAR',
+    isPlayerHosted,
+    bookingMode,
 }: OngoingGameJoinSheetProps) {
     const t = useTranslations();
 
@@ -62,6 +67,34 @@ export default function OngoingGameJoinSheet({
                         {t('matchDetail.ongoingMatchWarning')}
                     </p>
                 </div>
+
+                {/* Player-host responsibility warning (cycle player-host-responsibility):
+                    one-line mode-aware notice at the late-join decision point. */}
+                {isPlayerHosted && (bookingMode === 'self' || bookingMode === 'koralink') && (
+                    <div
+                        className={`mt-3 rounded-xl p-3 flex items-start gap-2.5 ${
+                            bookingMode === 'self'
+                                ? 'bg-amber-50 border border-amber-200'
+                                : 'bg-gray-50 border border-gray-200'
+                        }`}
+                    >
+                        <ShieldAlert
+                            className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
+                                bookingMode === 'self' ? 'text-amber-600' : 'text-brand-green'
+                            }`}
+                            strokeWidth={2}
+                        />
+                        <p
+                            className={`text-xs font-semibold leading-relaxed ${
+                                bookingMode === 'self' ? 'text-amber-800' : 'text-gray-600'
+                            }`}
+                        >
+                            {bookingMode === 'self'
+                                ? t('payment.selfHostedNoticeShort')
+                                : t('payment.playerHostedNoticeShort')}
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Actions */}

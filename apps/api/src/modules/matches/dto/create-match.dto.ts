@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsISO8601,
   IsOptional,
+  IsBoolean,
   Min,
   Max,
   MinLength,
@@ -69,4 +70,9 @@ export class CreateMatchDto {
   @IsOptional()
   @IsEnum(['public', 'private'])
   visibility?: 'public' | 'private';
+
+  @ApiPropertyOptional({ description: 'Host accepted the hosting responsibility terms (responsibility split, payout held until completion, refund policy). The service rejects the booking when absent/false.' })
+  @IsOptional()
+  @IsBoolean()
+  acceptedHostingTerms?: boolean;
 }

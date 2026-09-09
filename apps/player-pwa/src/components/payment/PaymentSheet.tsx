@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Calendar, MapPin, Info, X, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Info, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
 import { usePayWallet } from '@/hooks/useWallet';
 import { uuid } from '@/lib/uuid';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -19,6 +19,9 @@ interface PaymentSheetProps {
     matchId: string;
     price: number;
     walletBalance: number;
+    /** Player-host responsibility: who operates this match (drives the notice). */
+    isPlayerHosted?: boolean;
+    bookingMode?: 'koralink' | 'self';
 }
 
 export default function PaymentSheet({
@@ -31,6 +34,8 @@ export default function PaymentSheet({
     matchId,
     price,
     walletBalance,
+    isPlayerHosted,
+    bookingMode,
 }: PaymentSheetProps) {
     const t = useTranslations();
     const router = useRouter();
@@ -151,6 +156,31 @@ export default function PaymentSheet({
                         </div>
                     </div>
                 </div>
+
+                {/* Player-host responsibility notice (cycle player-host-responsibility):
+                    joiners MUST see who operates the match BEFORE paying — amber warning
+                    for self-booked (host runs ALL pitch ops), neutral for koralink-booked.
+                    Absent for venue-hosted matches. */}
+                {isPlayerHosted && bookingMode === 'self' && (
+                    <div className="mx-5 mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                                {t('payment.selfHostedNotice')}
+                            </p>
+                        </div>
+                    </div>
+                )}
+                {isPlayerHosted && bookingMode === 'koralink' && (
+                    <div className="mx-5 mt-4 bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                        <div className="flex items-start gap-3">
+                            <UserCheck className="w-5 h-5 text-brand-green flex-shrink-0 mt-0.5" strokeWidth={2} />
+                            <p className="text-xs text-gray-600 leading-relaxed">
+                                {t('payment.playerHostedNotice')}
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Agree Checkbox */}
                 <div className="mx-5 mt-5 flex items-start gap-3">

@@ -75,6 +75,18 @@ export interface Match {
     waitlistCount?: number;
     /** The current user's queue position (null when not queued). */
     yourWaitlistPosition?: number | null;
+    /**
+     * Player-host responsibility: true when the host is a player (NOT the venue).
+     * Persisted server-side at create — drives the mode-aware responsibility badge
+     * and banners (self-booked = stronger amber warning).
+     */
+    isPlayerHosted?: boolean;
+    /**
+     * Host payout state machine (player-hosted fee matches):
+     * held → released on completion | cancelled on cancellation;
+     * not_applicable for venue-hosted / free matches.
+     */
+    hostPayoutState?: 'held' | 'released' | 'cancelled' | 'not_applicable';
 }
 
 export interface RosterPlayer {

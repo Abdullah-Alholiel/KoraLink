@@ -159,6 +159,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
     duration_mins: 30,
     max_players: 10,
     visibility: 'public' as const,
+    acceptedHostingTerms: true,
   };
 
   it('treats an OMITTED booking_mode as koralink (slot lock + wallet + ledger)', async () => {

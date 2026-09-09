@@ -211,6 +211,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
 
     await svc.createMatch(HOST_ID, {
       pitch_id: PITCH_ID,
+        acceptedHostingTerms: true,
       title: 'Tuesday football',
       match_type: 'Casual',
       gender_rule: 'Mixed',
@@ -256,6 +257,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
     await expect(
       svc.createMatch(HOST_ID, {
         pitch_id: PITCH_ID,
+        acceptedHostingTerms: true,
         title: 'Tuesday football',
         match_type: 'Casual',
         gender_rule: 'Mixed',
@@ -284,6 +286,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
 
     await svcA.createMatch(HOST_ID, {
       pitch_id: PITCH_ID,
+        acceptedHostingTerms: true,
       title: 'First booking',
       match_type: 'Casual',
       gender_rule: 'Mixed',
@@ -304,6 +307,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
     await expect(
       svcB.createMatch(HOST_ID, {
         pitch_id: PITCH_ID,
+        acceptedHostingTerms: true,
         title: 'Second booking',
         match_type: 'Casual',
         gender_rule: 'Mixed',
@@ -329,6 +333,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
 
     await svc.createMatch(HOST_ID, {
       pitch_id: PITCH_ID,
+        acceptedHostingTerms: true,
       title: 'Self-mode booking',
       match_type: 'Casual',
       gender_rule: 'Mixed',

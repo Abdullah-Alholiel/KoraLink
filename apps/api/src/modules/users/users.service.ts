@@ -203,6 +203,9 @@ export class UsersService {
         COALESCE((SELECT mm.content FROM match_messages mm WHERE mm.match_id = m.id ORDER BY mm.created_at DESC LIMIT 1), '') AS last_message,
         EXISTS(SELECT 1 FROM match_votes mv WHERE mv.match_id = m.id AND mv.voter_id = ${userId}::text) AS has_voted,
         m.visibility AS visibility,
+        m.booking_mode AS booking_mode,
+        m.is_player_hosted AS is_player_hosted,
+        m.host_payout_state AS host_payout_state,
         v.name AS venue_name,
         v.city AS venue_city,
         COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at
@@ -248,6 +251,9 @@ export class UsersService {
       pitch_surface: string;
       last_message: string;
       has_voted: boolean;
+      booking_mode: 'koralink' | 'self';
+      is_player_hosted: boolean;
+      host_payout_state: 'held' | 'released' | 'cancelled' | 'not_applicable';
       venue_name: string;
       venue_city: string;
       voting_closes_at: Date;
