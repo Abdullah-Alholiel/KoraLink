@@ -82,10 +82,15 @@ export default function PlayPage() {
                     one header across screens; bells live on the Feed only) */}
                 <AppBar />
 
-                {/* Search bar + labeled Host pill (Abdullah, 2026-09-03:
-                    "+ Host a Match" text next to search for easy visual) */}
+                {/* Search bar + compact "+ Host a Match" pill (Abdullah,
+                    2026-09-03; compact single-line 2026-09-09 — the hint
+                    line is gone). Overflow rule (2026-09-09): BOTH row
+                    children are shrinkable (min-w-0, no flex-shrink-0) and
+                    the pill label truncates — the pill can never push this
+                    row past the screen edge (mobile-first hard rule:
+                    nothing surpasses the frame). */}
                 <div className="flex items-center gap-2 px-4 pb-2.5 pt-1">
-                    <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
+                    <div className="min-w-0 flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
                         <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
                         <input
                             type="text"
@@ -97,20 +102,15 @@ export default function PlayPage() {
                     </div>
                     <Link
                         href={`/${locale}/host`}
-                        className="flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full bg-brand-green ps-1.5 pe-3.5 shadow-[0_2px_10px_rgba(37,65,50,0.35)] active:scale-95 transition-transform"
+                        className="flex h-10 min-w-0 items-center gap-1.5 rounded-full bg-brand-green ps-1.5 pe-3.5 shadow-[0_2px_10px_rgba(37,65,50,0.35)] active:scale-95 transition-transform"
                         aria-label={t('host.title')}
                         data-testid="host-plus-button"
                     >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green">
+                        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-white text-brand-green">
                             <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
                         </span>
-                        <span className="flex flex-col items-start leading-none">
-                            <span className="text-[12.5px] font-bold text-white">
-                                {t('play.hostMatch')}
-                            </span>
-                            <span className="mt-0.5 text-[9.5px] font-medium text-white/75">
-                                {t('play.hostMatchHint')}
-                            </span>
+                        <span className="min-w-0 max-w-[10rem] truncate whitespace-nowrap text-[12.5px] font-bold text-white">
+                            {t('play.hostMatch')}
                         </span>
                     </Link>
                 </div>
