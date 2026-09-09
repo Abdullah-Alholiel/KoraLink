@@ -18,11 +18,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, ChevronDown, Loader2, Camera } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Loader2, Pencil } from 'lucide-react';
 import { useUserProfile, useUserStats, useUpdateProfile } from '@/hooks/useUser';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import { useAppStore as useStore } from '@/store/useAppStore';
-import AppBar from '@/components/layout/AppBar';
 import GlassStats from '@/components/profile/GlassStats';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import ChangePhoneSheet from '@/components/profile/ChangePhoneSheet';
@@ -157,7 +156,8 @@ export default function PersonalInfoPage() {
               }}
             />
             <div className="relative px-6 pb-7">
-              <AppBar light />
+              {/* Brand logo/wordmark intentionally absent (Abdullah,
+                  2026-09-09: title+logo live on main pages only). */}
 
               <div className="mt-4 flex flex-col items-center">
                 <div className="relative">
@@ -175,7 +175,7 @@ export default function PersonalInfoPage() {
                       className="absolute bottom-0 end-0 flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md active:scale-95 transition-transform"
                       aria-label={t('common.edit')}
                     >
-                      <Camera className="h-3.5 w-3.5" strokeWidth={2} />
+                      <Pencil className="h-3 w-3" strokeWidth={2.5} />
                     </button>
                   )}
                 </div>
