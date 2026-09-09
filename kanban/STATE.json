@@ -41,12 +41,5 @@
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": "Run #45 (2026-09-08T15:22Z, scheduled cron): review+board-only cycle. zai delegation child 401 (intermittent, probe was 200) \u2192 OmniRoute free tier fallback for reviewers (mimo-v2.5-free). All gates green: turbo 3/3 (full cache), vitest 59/59 422/422, API tsc 0. Reviewer A CLEAN (0 CRITICAL/IMPORTANT, 1 MINOR \u2014 WS idempotency pre-check outside tx). Reviewer B verified all 4 run-#44 in-review items PASS + product gap scan (no P0s). Fixed 1 test regression (PersonalInfoPage.test.tsx missing QueryClientProvider after run #44's ChangePhoneSheet, 3 failures \u2192 0 with fix). Cleaned stale P2-49 from STATE (done run #37). Devops cycle on staging verified: 2c88dd5 gates OK (deploy-staging.sh syntax + migrate-vps.mjs syntax + build green + sibling 427dfb7 self-verified). No board items built this run (review-only \u2014 all high-priority items blocked or need owner call). PUSH PENDING: need to push to origin/staging.",
   "default_branch": "staging",
-  "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) \u2014 set 2026-09-08 environment-segregation cycle",
-  "last_release": {
-    "sha": "16dc206",
-    "pr": 15,
-    "at": "2026-09-08T21:30:00Z",
-    "matrix": "ALL GREEN"
-  },
-  "p0_9": "RELEASED to prod 2026-09-08 \u2014 pending: Resend domain verify (owner) + real-inbox test, then DEV_LOGIN_ENABLED=false flip"
+  "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) \u2014 set 2026-09-08 environment-segregation cycle"
 }
