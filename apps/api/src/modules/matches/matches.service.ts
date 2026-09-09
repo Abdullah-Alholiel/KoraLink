@@ -15,89 +15,6 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
 
-/**
- * Slice 2 (player-host-responsibility): charge a match fee as a MATCH_FEE
- * DEBIT inside the CALLER's transaction (the join tx) — never a nested
- * transaction of its own, so "seat + charge" commit or roll back together.
- *
- * Mirrors WalletService.recordTransaction exactly (ledger row → balance
- * write → negative-balance guard) with two join-specific differences:
- * - replay detection is a pre-check on (idempotency_key, user_id): the fee
- *   key is per-EPISODE, so a sequential retry (client timeout after commit)
-   * lands here with the seat already present and must NOT re-charge;
- * - a concurrent unique-violation aborts this tx — surfaced as 409 so the
- *   client retry resolves through the replay path.
- */
-export async function chargeMatchFeeTx(
-  tx: Tx,
-  userId: string,
-  matchId: string,
-  amountSar: number,
-  idempotencyKey: string,
-): Promise<string | 'REPLAYED'> {
-  if (!(amountSar > 0)) {
-    throw new BadRequestException('Fee amount must be positive.');
-  }
-
-  // Sequential replay: this episode's fee was already charged.
-  const [prior] = await tx
-    .select({ id: transactions.id })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.idempotency_key, idempotencyKey),
-        eq(transactions.user_id, userId),
-      ),
-    )
-    .limit(1);
-  if (prior) return 'REPLAYED';
-
-  try {
-    // 1. Immutable ledger entry (matches MATCH_FEE convention in wallet.service).
-    const [ledgerEntry] = await tx
-      .insert(transactions)
-      .values({
-        user_id: userId,
-        type: 'DEBIT',
-        amount: amountSar.toFixed(2),
-        reference_type: 'MATCH_FEE',
-        reference_id: matchId,
-        idempotency_key: idempotencyKey,
-        status: 'Completed',
-      })
-      .returning({ id: transactions.id });
-
-    // 2. Balance write — guarded numeric (no negative balances).
-    const [updatedUser] = await tx
-      .update(users)
-      .set(
-        withTimestamp({
-          wallet_balance: sql`${users.wallet_balance} - ${amountSar}`,
-        }),
-      )
-      .where(eq(users.id, userId))
-      .returning({ wallet_balance: users.wallet_balance });
-
-    if (parseFloat(updatedUser.wallet_balance) < 0) {
-      // Rolls back the ENTIRE join tx: no seat without payment.
-      throw new BadRequestException('Insufficient wallet balance.');
-    }
-
-    return ledgerEntry.id;
-  } catch (err) {
-    // Lost a concurrent same-key race: this tx is aborted by Postgres —
-    // surface 409; the client retry resolves via the replay pre-check.
-    if (
-      err &&
-      typeof err === 'object' &&
-      (err as { code?: unknown }).code === '23505'
-    ) {
-      throw new ConflictException('Concurrent join detected — retry.');
-    }
-    throw err;
-  }
-}
-
 /** round to 2 d.p. (halves away from zero) for money amounts. */
 function roundMoney2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -221,6 +138,12 @@ import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
+import { chargeMatchFeeTx, creditWalletTx } from './match-fees';
+import { REFUND_WINDOW_HOURS } from '../../common/constants';
+
+// Slice 2/4 money primitives live in ./match-fees (shared with the waitlist
+// promotion fee path). Re-exported for backwards compatibility with specs.
+export { chargeMatchFeeTx } from './match-fees';
 import { AppGateway } from '../gateway/app.gateway';
 import { RealtimeService } from '../gateway/realtime.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -684,7 +607,7 @@ export class MatchesService {
     // ── Pass 2: auto-cancel matches below minimum within the hour. ──
     const expiring = await this.db.execute(sql`
       SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
-             m.pitch_cost_sar, m.min_players,
+             m.pitch_cost_sar, m.min_players, m.is_player_hosted,
              (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
                AS total_players
       FROM matches m
@@ -701,7 +624,7 @@ export class MatchesService {
     for (const row of (expiring as unknown as Array<{
       id: string; title: string; host_id: string; booking_mode: string;
       booking_slot_id: string | null; pitch_cost_sar: string | null;
-      min_players: number; total_players: number;
+      min_players: number; is_player_hosted: boolean | null; total_players: number;
     }>)) {
       try {
         // Atomic single-shot transition (P0-4): status flip + refund + ledger +
@@ -722,6 +645,64 @@ export class MatchesService {
           `);
           if ((guard as unknown as { rowCount?: number }).rowCount === 0) return;
           guardWon = true;
+
+          // Slice 4 (player-host-responsibility): refund EVERY current-roster
+          // payer 100% — auto-cancel is never the player's fault. Per-episode
+          // keys; fee snapshots are cleared so a later delete can't double-
+          // count them (the rows themselves are preserved as the attendance/
+          // audit record; forfeited fees were never snapshotted).
+          const payers = await tx
+            .select({
+              id: schema.match_players.id,
+              user_id: schema.match_players.user_id,
+              fee_paid_sar: schema.match_players.fee_paid_sar,
+            })
+            .from(schema.match_players)
+            .where(
+              and(
+                eq(schema.match_players.match_id, row.id),
+                sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+              ),
+            );
+          for (const p of payers) {
+            const amt = p.fee_paid_sar ? parseFloat(p.fee_paid_sar) : 0;
+            if (amt > 0) {
+              await creditWalletTx(
+                tx,
+                p.user_id,
+                amt,
+                `refund-join-${p.id}`,
+                'REFUND',
+                row.id,
+              );
+            }
+          }
+          if (payers.length > 0) {
+            await tx
+              .update(schema.match_players)
+              .set({ fee_paid_sar: null })
+              .where(
+                and(
+                  eq(schema.match_players.match_id, row.id),
+                  sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+                ),
+              );
+          }
+
+          // Slice 3: a cancelled player-hosted match must never pay out —
+          // guarded flip held → cancelled (idempotent; no-op when not held,
+          // skipped entirely for venue-owned legacy rows).
+          if (row.is_player_hosted) {
+            await tx
+              .update(matches)
+              .set(withTimestamp({ host_payout_state: 'cancelled' }))
+              .where(
+                and(
+                  eq(matches.id, row.id),
+                  eq(matches.host_payout_state, 'held'),
+                ),
+              );
+          }
 
           // Release a koralink slot + refund the host exactly what he was
           // debited (same semantics as manual cancelMatch).
@@ -1456,6 +1437,13 @@ export class MatchesService {
     // P1-17: set inside the tx when a queue head was promoted into the freed
     // spot — drives the post-commit notification.
     let promoted: WaitlistPromotion | null = null;
+    // Slice 4: refund outcome for the leaver's fee row (null = no fee row).
+    // Re-annotated to defeat TS closure-narrowing (assigned inside the tx cb).
+    let leaveRefundOutcome = null as
+      | 'refunded'
+      | 'backfilled_refunded'
+      | 'forfeited'
+      | null;
     await this.db.transaction(async (tx) => {
       // 0. Lock the match row FIRST (P2-49, run #37) — serializes against
       //     concurrent joins/removePlayers so the roster count read below and
@@ -1466,11 +1454,13 @@ export class MatchesService {
         sql`SELECT id FROM matches WHERE id = ${matchId}::text FOR UPDATE`,
       );
 
-      // 1. Verify user is in the match
+      // 1. Verify user is in the match (fee snapshot comes with the row —
+      // slice 4: the refund engine needs the per-episode amount + id).
       const [membership] = await tx
         .select({
           id: schema.match_players.id,
           is_host: schema.match_players.is_host,
+          fee_paid_sar: schema.match_players.fee_paid_sar,
         })
         .from(schema.match_players)
         .where(
@@ -1498,11 +1488,13 @@ export class MatchesService {
       // 3. If match was Full, revert to Open. Also capture host/min info so
       //    the post-tx underfill re-nudge can fire when the total drops below
       //    minimum (armed hourly nudge resets → host hears about it now).
+      //    scheduled_at feeds the slice-4 refund window.
       const [match] = await tx
         .select({
           status: matches.status,
           host_id: matches.host_id,
           min_players: matches.min_players,
+          scheduled_at: matches.scheduled_at,
           total_players: sql<number>`(SELECT COUNT(*)::int FROM ${schema.match_players} mp WHERE mp.match_id = ${matches.id})`,
         })
         .from(matches)
@@ -1518,13 +1510,62 @@ export class MatchesService {
           .where(and(eq(matches.id, matchId), eq(matches.status, 'Full')));
       }
 
-      // P1-17 waitlist: the freed spot goes to the queue head in the SAME
-      // transaction — a crash can never leave a free spot with a stale queue.
-      // Runs BEFORE the underfill check: when the queue refills the roster,
-      // the host must NOT get a "players needed" nudge for a full match.
-      // EXACTLY ONE call per freeing path: a second call would seat ANOTHER
-      // queued player past capacity (live E2E proved 15/14 — regression S4).
-      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+      // 4. Slice 4 — CONDITIONAL REFUND ENGINE + the EXACTLY-ONE queue
+      //    promotion for this freeing path (S4 regression: two calls seat
+      //    past capacity). Abdullah rule:
+      //    ≥4h to kickoff          → 100% refund, always.
+      //    <4h AND waitlist exists → 100% refund (queue head backfills, paid).
+      //    <4h AND no backfill     → fee forfeited to the host (ToS-stated).
+      //    Per-episode ledger keys (run #20 lesson). All inside THIS tx.
+      const feeSar = membership.fee_paid_sar ? parseFloat(membership.fee_paid_sar) : 0;
+      if (feeSar > 0 && match) {
+        const hoursToKickoff =
+          (match.scheduled_at.getTime() - Date.now()) / 3_600_000;
+
+        if (hoursToKickoff >= REFUND_WINDOW_HOURS) {
+          await creditWalletTx(
+            tx,
+            userId,
+            feeSar,
+            `refund-join-${membership.id}`,
+            'REFUND',
+            matchId,
+          );
+          leaveRefundOutcome = 'refunded';
+          promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+        } else {
+          // Inside the window: refund ONLY on a paid backfill.
+          const backfill = await this.waitlist.promoteNextInTx(tx, matchId, {
+            feePriceSar: feeSar,
+          });
+          if (backfill) {
+            await creditWalletTx(
+              tx,
+              userId,
+              feeSar,
+              `refund-join-${membership.id}`,
+              'REFUND',
+              matchId,
+            );
+            leaveRefundOutcome = 'backfilled_refunded';
+            promoted = backfill;
+          } else {
+            // No queue: forfeit to the host (anti-abuse, ToS §refunds).
+            await creditWalletTx(
+              tx,
+              match.host_id,
+              feeSar,
+              `host-forfeit-${membership.id}`,
+              'REFUND',
+              `forfeit:${membership.id}`,
+            );
+            leaveRefundOutcome = 'forfeited';
+          }
+        }
+      } else {
+        // Free match / legacy row: no money moves, queue fills as before.
+        promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+      }
 
       // Below minimum after this withdrawal → re-arm the hourly nudge clock
       // so the scheduler's next tick may nudge again, and remember the state
@@ -1580,7 +1621,9 @@ export class MatchesService {
       }
     }
 
-    // Return fully populated match with relations (API Contract Rule §2)
+    // Return fully populated match with relations (API Contract Rule §2),
+    // plus the leaver's refund outcome so the PWA can toast the exact rule
+    // that applied (refunded / backfilled_refunded / forfeited / null).
     const updatedMatch = await this.findOne(matchId);
     try {
       this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
@@ -1588,7 +1631,7 @@ export class MatchesService {
     } catch (err) {
       this.logger.error(`WS broadcast error on leaveMatch: ${(err as Error).message}`);
     }
-    return updatedMatch;
+    return { ...updatedMatch, your_leave_refund: leaveRefundOutcome };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2287,6 +2330,49 @@ export class MatchesService {
           );
       }
 
+      // Slice 4 (player-host-responsibility): refund EVERY current-roster
+      // payer 100% — cancellation is never the joiner's fault. Per-episode
+      // keys; snapshots cleared after paying out (rows preserved for audit).
+      // Forfeited fees were credited to the host at leave-time and are NOT
+      // touched here (ToS-stated anti-abuse rule).
+      const payers = await tx
+        .select({
+          id: schema.match_players.id,
+          user_id: schema.match_players.user_id,
+          fee_paid_sar: schema.match_players.fee_paid_sar,
+        })
+        .from(schema.match_players)
+        .where(
+          and(
+            eq(schema.match_players.match_id, matchId),
+            sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+          ),
+        );
+      for (const p of payers) {
+        const amt = p.fee_paid_sar ? parseFloat(p.fee_paid_sar) : 0;
+        if (amt > 0) {
+          await creditWalletTx(
+            tx,
+            p.user_id,
+            amt,
+            `refund-join-${p.id}`,
+            'REFUND',
+            matchId,
+          );
+        }
+      }
+      if (payers.length > 0) {
+        await tx
+          .update(schema.match_players)
+          .set({ fee_paid_sar: null })
+          .where(
+            and(
+              eq(schema.match_players.match_id, matchId),
+              sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+            ),
+          );
+      }
+
       // Release slot + refund (koralink mode)
       if (match.booking_mode === 'koralink' && match.booking_slot_id) {
         const [slot] = await tx
@@ -2840,7 +2926,10 @@ export class MatchesService {
       }
 
       const [player] = await tx
-        .select({ id: schema.match_players.id })
+        .select({
+          id: schema.match_players.id,
+          fee_paid_sar: schema.match_players.fee_paid_sar,
+        })
         .from(schema.match_players)
         .where(
           and(
@@ -2857,6 +2946,21 @@ export class MatchesService {
       await tx
         .delete(schema.match_players)
         .where(eq(schema.match_players.id, player.id));
+
+      // Slice 4: the HOST removed this player — 100% fee refund ALWAYS
+      // (host decision ≠ player fault), inside this tx, before the queue
+      // promotion. Per-episode ledger key (run #20 lesson).
+      const removedFeeSar = player.fee_paid_sar ? parseFloat(player.fee_paid_sar) : 0;
+      if (removedFeeSar > 0) {
+        await creditWalletTx(
+          tx,
+          targetUserId,
+          removedFeeSar,
+          `refund-join-${player.id}`,
+          'REFUND',
+          matchId,
+        );
+      }
 
       if (match.status === 'Full') {
         // P2-49 (run #36): predicate on the read's premise. A concurrent

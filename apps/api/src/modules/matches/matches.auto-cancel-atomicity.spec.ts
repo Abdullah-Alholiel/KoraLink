@@ -72,6 +72,17 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
 
     const tx = {
       execute: jest.fn(async () => ({ rowCount: opts.guardRowCount ?? 1 })),
+      // Slice 4: the payer-refund sweep reads match_players fee rows inside
+      // the tx. Default fixture roster has NO fee snapshots (legacy rows) —
+      // resolve []; the payer-refund scenario overrides below.
+      select: () => ({
+        from: () => {
+          const chain: Record<string, unknown> = {};
+          chain.where = () => chain;
+          chain.then = (resolve: (v: unknown) => void) => resolve([]);
+          return chain;
+        },
+      }),
       update: (table: unknown) => ({
         set: (setArg: Record<string, unknown>) => ({
           where: () =>

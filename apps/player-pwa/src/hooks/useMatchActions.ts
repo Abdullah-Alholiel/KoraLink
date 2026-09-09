@@ -207,8 +207,16 @@ export function useLeaveMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  // Slice 4: outcome-specific toasts (the API states the exact refund rule
+  // that applied to THIS leave — refunded / backfilled_refunded / forfeited).
+  const tRefund = useTranslations('refund');
 
-  return useMutation<unknown, FetchError, string, { snapshot: DetailSnapshot }>({
+  return useMutation<
+    { your_leave_refund?: 'refunded' | 'backfilled_refunded' | 'forfeited' | null } & Record<string, unknown>,
+    FetchError,
+    string,
+    { snapshot: DetailSnapshot }
+  >({
     mutationFn: (matchId) =>
       fetcher(`/matches/${matchId}/leave`, { method: 'DELETE' }),
     onMutate: async (matchId) => {
@@ -231,11 +239,27 @@ export function useLeaveMatch() {
       }
       showToast(t('leaveFailed'), 'error', { detail: kindDetail(t, error) });
     },
-    onSuccess: (_, matchId) => {
+    onSuccess: (data, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('You left the match.', 'info');
+      // Money moved (refund / forfeit) — wallet caches must refetch.
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
+
+      switch (data?.your_leave_refund) {
+        case 'refunded':
+          showToast(tRefund('leftRefunded'), 'success');
+          break;
+        case 'backfilled_refunded':
+          showToast(tRefund('leftBackfilled'), 'success');
+          break;
+        case 'forfeited':
+          showToast(tRefund('leftForfeited'), 'error');
+          break;
+        default:
+          showToast('You left the match.', 'info');
+      }
     },
   });
 }

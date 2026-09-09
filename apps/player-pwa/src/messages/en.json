@@ -169,6 +169,11 @@
     "hostMatch": "Host a Match",
     "loadMore": "Load More"
   },
+  "refund": {
+    "leftRefunded": "You left the match — your fee has been refunded to your wallet.",
+    "leftBackfilled": "You left the match — another player took your spot and your fee has been refunded.",
+    "leftForfeited": "You left within 4 hours of kickoff and no one replaced you — the fee was forfeited to the host per our policy."
+  },
   "matchCard": {
     "playerHostedBadge": "Player-hosted · Booked on KoraLink",
     "selfHostedBadge": "Host-run · Self-booked",
