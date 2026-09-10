@@ -210,8 +210,11 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
     const calls: { method: string; clause?: string }[] = [];
     const db = {
       select: () => ({
-        from: () => ({
-          where: (clause: unknown) => {
+        from: () => {
+          // Handler shared by `.where()` (no-join chains) and
+          // `.innerJoin(...)` (completed-only games_played chain, 2026-09-10):
+          // both count as one query and receive their SQL clause.
+          const handleClause = (clause: unknown) => {
             calls.push({
               method: 'select',
               clause: new PgDialect().sqlToQuery(clause as never).sql,
@@ -229,8 +232,14 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
               ) => resolve(rows),
             };
             return afterWhere;
-          },
-        }),
+          };
+          return {
+            where: handleClause,
+            innerJoin: (_table: unknown, on: unknown) => ({
+              where: handleClause,
+            }),
+          };
+        },
       }),
       execute: async () => [],
     };

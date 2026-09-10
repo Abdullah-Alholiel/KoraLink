@@ -163,10 +163,16 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
+    // Games played = COMPLETED games only (owner directive 2026-09-10):
+    // merely booking/hosting/joining a match must NEVER count as played.
+    // Cancelled or reported-not-played matches drop out automatically (live
+    // computation — no stored counter to backfill), including matches that
+    // get cancelled at any later point.
     const [{ count }] = await this.db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(match_players)
-      .where(eq(match_players.user_id, userId));
+      .innerJoin(matches, eq(matches.id, match_players.match_id))
+      .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
     return {
       games_played: count,
@@ -782,15 +788,23 @@ export class UsersService {
 
     const pom_count = await this.getPomCount(userId);
 
+    // Same completed-games-only rule as getStats (owner directive 2026-09-10):
+    // a game counts as played ONLY when matches.status = 'Completed'. Matches
+    // that were never played, were cancelled, or get cancelled at any later
+    // point (e.g. via an admin-resolved not-played report) never count —
+    // the count is computed live from status, so nothing to backfill.
     const [{ games_played, no_show_count }] = await this.db
       .select({
         games_played: sql<number>`COUNT(*)::int`,
         // Same query, second aggregate: completed-game no-shows for this user
-        // (P1-39 reputation visibility).
+        // (P1-39 reputation visibility). The completed-only join also makes
+        // this match its documented contract — no-shows inside cancelled or
+        // never-played matches no longer pollute the count.
         no_show_count: sql<number>`COUNT(*) FILTER (WHERE ${match_players.no_show} = true)::int`,
       })
       .from(match_players)
-      .where(eq(match_players.user_id, userId));
+      .innerJoin(matches, eq(matches.id, match_players.match_id))
+      .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
     const [counts] = (await this.db.execute(sql`
       SELECT
