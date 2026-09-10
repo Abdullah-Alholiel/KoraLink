@@ -25,6 +25,12 @@ export default function LoginPage() {
     const sendOtp = useSendOtp();
     const sendEmailOtp = useSendEmailOtp();
 
+    // Double-send guard: mutation.isPending only flips on the NEXT render, so
+    // a fast double-tap fired two send-otp requests (the second either 429'd
+    // on the server cooldown or sent a second email that invalidates the
+    // first code). This flips synchronously inside the click handler.
+    const [submitting, setSubmitting] = useState(false);
+
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
@@ -66,28 +72,33 @@ export default function LoginPage() {
     };
 
     const handleContinue = () => {
+        if (submitting) return;
         setError(null);
         if (mode === 'email') {
             if (!EMAIL_RE.test(email)) {
                 setError(t('invalidEmail'));
                 return;
             }
+            setSubmitting(true);
             sendEmailOtp.mutate(
                 { email: email.trim().toLowerCase() },
                 {
                     onSuccess: () =>
                         router.push(`/${locale}/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`),
                     onError: () => setError(tErrors('otpSendFailed')),
+                    onSettled: () => setSubmitting(false),
                 },
             );
             return;
         }
         if (phone.length < 7) return;
+        setSubmitting(true);
         sendOtp.mutate(
             { phone },
             {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
                 onError: () => setError(tErrors('otpSendFailed')),
+                onSettled: () => setSubmitting(false),
             },
         );
     };
@@ -208,17 +219,17 @@ export default function LoginPage() {
 
                 <button
                     onClick={handleContinue}
-                    disabled={(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (mode === 'email' ? !EMAIL_RE.test(email) : phone.length < 7)}
+                    disabled={submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (mode === 'email' ? !EMAIL_RE.test(email) : phone.length < 7)}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${!(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) && (mode === 'email' ? EMAIL_RE.test(email) : phone.length >= 7)
+            ${!(submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)) && (mode === 'email' ? EMAIL_RE.test(email) : phone.length >= 7)
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    {(mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) ? (
+                    {(submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)) ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             {t('sending')}
