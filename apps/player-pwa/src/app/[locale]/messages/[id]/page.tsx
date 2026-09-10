@@ -10,6 +10,7 @@ import type { PersonalMessage } from '@/hooks/useConversations';
 import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
 import { selectUser, useAppStore } from '@/store/useAppStore';
+import { useNow } from '@/hooks/useNow';
 import { uuid } from '@/lib/uuid';
 import type { RosterPlayer } from '@/types';
 
@@ -31,9 +32,10 @@ function groupMessages(
   messages: PersonalMessage[],
   t: (key: string) => string,
   locale: string,
+  nowMs: number,
 ) {
   const groups: { label: string; messages: PersonalMessage[] }[] = [];
-  const now = new Date();
+  const now = new Date(nowMs);
 
   for (const msg of messages) {
     const group = getDateGroup(msg.createdAt, now);
@@ -67,6 +69,13 @@ export default function ConversationPage({
   const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
 
   const [draft, setDraft] = useState('');
+  // Hydration-safe clock (run #49): `now` is null during SSR AND the first
+  // client render — identical on both sides — so the date-divider grouping
+  // and per-bubble time labels can never server/client diverge (Reviewer A
+  // IMPORTANT, run #49). Post-mount it flips to the device clock, refreshing
+  // labels on the next render.
+  const now = useNow();
+  const nowMs = now ?? 0;
   // P1-31: the message being reported (overflow ⋯ on a received bubble).
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   // Profile sheet for the other participant (avatar / header taps).
@@ -113,7 +122,7 @@ export default function ConversationPage({
     }
   };
 
-  const groups = groupMessages(messages, t, locale);
+  const groups = groupMessages(messages, t, locale, nowMs);
 
   return (
     <MobileFrame>
@@ -187,11 +196,13 @@ export default function ConversationPage({
 
               {group.messages.map((m) => {
                 const mine = m.sender.id === storeUser?.id;
-                const timeStr = new Date(m.createdAt).toLocaleTimeString(locale, {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true,
-                });
+                const timeStr = now === null
+                  ? ' '
+                  : new Date(m.createdAt).toLocaleTimeString(locale, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    });
 
                 return (
                   // Full-width row (ChatSheet anatomy) — the bubble's
