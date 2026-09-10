@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useDiscussions } from '@/hooks/useMessages';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useNow } from '@/hooks/useNow';
 
 import DiscussionCard from '@/components/matches/DiscussionCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
@@ -21,8 +22,9 @@ import type { Discussion } from '@/types';
 function groupDiscussions(
   discussions: Discussion[],
   t: (key: string) => string,
+  nowMs: number,
 ): { label: string; items: Discussion[] }[] {
-  const now = new Date();
+  const now = new Date(nowMs);
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterdayStart = new Date(todayStart.getTime() - 86400000);
   const weekStart = new Date(todayStart.getTime() - 7 * 86400000);
@@ -65,6 +67,13 @@ export default function MessagesPage() {
   const locale = (pathname ?? '').split('/')[1] || 'en';
 
   const { data: discussions, isLoading, error, refetch } = useDiscussions();
+  // Hydration-safe clock (run #49): null during SSR and the FIRST client
+  // render — both sides then bucket "no lastMessageAt → Older", identical
+  // output, no divider can diverge. Post-mount the real clock buckets by the
+  // device's day boundary. Previously a render-path `new Date()` (Reviewer A
+  // IMPORTANT, run #49; same class as the run-#40 MatchCard fix).
+  const now = useNow();
+  const nowMs = now ?? 0;
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
@@ -86,8 +95,8 @@ export default function MessagesPage() {
     [filtered],
   );
   const matchGroups = useMemo(
-    () => groupDiscussions(filtered.filter((d) => d.type !== 'personal'), t),
-    [filtered, t],
+    () => groupDiscussions(filtered.filter((d) => d.type !== 'personal'), t, nowMs),
+    [filtered, t, nowMs],
   );
 
   const totalCount = discussions?.length ?? 0;

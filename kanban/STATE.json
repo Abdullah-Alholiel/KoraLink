@@ -1,17 +1,13 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 46,
-  "last_run_at": "2026-09-08T17:20:00Z",
+  "last_run": 49,
+  "last_run_at": "2026-09-10T09:05:00Z",
   "last_run_commits": [
-    "deae9c2",
-    "6f98d46",
-    "ba00c32",
-    "bea076b",
-    "1c5214a",
-    "109281a"
+    "736a960",
+    "f0dbbd7"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-08T16-11Z-run46.md",
+  "last_run_report": "kanban/RUNS/2026-09-10T08-35Z-run49.md",
   "in_review_items": [],
   "open_blockers": [
     "zai delegation-path 401 history \u2014 run #45: probe 200, delegation child 401 (intermittent gateway issue, same as runs #24-30/#32). Fell back to OmniRoute free tier for reviewers. 3rd consecutive zai child-401 failure (after runs #36-#37 clean). Policy unchanged: try zai first, failover on first child error.",
@@ -39,7 +35,7 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #45 (2026-09-08T15:22Z, scheduled cron): review+board-only cycle. zai delegation child 401 (intermittent, probe was 200) \u2192 OmniRoute free tier fallback for reviewers (mimo-v2.5-free). All gates green: turbo 3/3 (full cache), vitest 59/59 422/422, API tsc 0. Reviewer A CLEAN (0 CRITICAL/IMPORTANT, 1 MINOR \u2014 WS idempotency pre-check outside tx). Reviewer B verified all 4 run-#44 in-review items PASS + product gap scan (no P0s). Fixed 1 test regression (PersonalInfoPage.test.tsx missing QueryClientProvider after run #44's ChangePhoneSheet, 3 failures \u2192 0 with fix). Cleaned stale P2-49 from STATE (done run #37). Devops cycle on staging verified: 2c88dd5 gates OK (deploy-staging.sh syntax + migrate-vps.mjs syntax + build green + sibling 427dfb7 self-verified). No board items built this run (review-only \u2014 all high-priority items blocked or need owner call). PUSH PENDING: need to push to origin/staging.",
+  "notes": "Run #49 (2026-09-10T08:35Z, manual WebUI): review+build cycle interleaved with Brevo key handoff. zai glm-5.3-flash reviewers clean (143s/509s). Sentry triage: API-B=scanner noise (correctly rejected), API-1B=REAL prod email 503s (Resend no-domain) -> Brevo cutover staged; API-13/4/19/A + WEB-8 = stale artifacts (proven by timestamps + live repro). Built: (A) auth hardening \u2014 otpMatches constant-time compare both flows, email-verify create-race 23505 recovery, @IsUUID on create-conversation, deleted-account send silent-drop (202 contract); jest 39/39, api tsc 0. (B) hydration \u2014 useNow() clock on both messages surfaces; vitest 465/465, type-check 0. turbo 3/3, API restarted post-build, health green, live E2E send/verify/UUID-validation PASS. Board: +P2-57 offline content fallback, +P2-58 unread-badge asymmetry; POTM-locale gap REFUTED (P2-8/P2-27 DONE). BLOCKER: Brevo cutover awaits Abdullah console steps (authorise VPS IP 145.241.109.213 + verified sender); key stored in .deploy-tokens. EMAIL_PROVIDER not flipped early (blocked key would 503 sends).",
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) \u2014 set 2026-09-08 environment-segregation cycle"
 }
