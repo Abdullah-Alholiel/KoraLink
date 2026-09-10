@@ -72,4 +72,27 @@ describe('Host-a-match default mode — Book via Us (koralink)', () => {
         });
         expect(parsed.booking_mode).toBe('self');
     });
+
+    it('FORWARDS acceptedHostingTerms instead of stripping it (live 400 regression: '
+        + 'Zod silently drops unknown keys, so an unlisted consent flag 400s every publish)', () => {
+        const parsed = hostMatchSchema.parse({
+            pitch_id: 'pitch-1',
+            title: 'Friday Night 7v7',
+            match_type: 'Casual',
+            gender_rule: 'Mixed',
+            scheduled_at: '2026-09-05T19:00:00.000Z',
+            booking_mode: 'self',
+            acceptedHostingTerms: true,
+        });
+        expect(parsed.acceptedHostingTerms).toBe(true);
+        // omitted → defaults false, still PRESENT (never stripped to undefined)
+        const omitted = hostMatchSchema.parse({
+            pitch_id: 'pitch-1',
+            title: 'Friday Night 7v7',
+            match_type: 'Casual',
+            gender_rule: 'Mixed',
+            scheduled_at: '2026-09-05T19:00:00.000Z',
+        });
+        expect(omitted.acceptedHostingTerms).toBe(false);
+    });
 });

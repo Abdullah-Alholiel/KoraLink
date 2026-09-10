@@ -267,6 +267,7 @@ describe('useMatches hooks', () => {
         pitchCostSar: 37,
         booking_mode: 'self' as const,
         visibility: 'public' as const,
+        acceptedHostingTerms: true,
       };
 
       await waitFor(() => {

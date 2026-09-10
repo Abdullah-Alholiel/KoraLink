@@ -46,3 +46,21 @@ needed, framed as a security deposit, with an action (top up).
 - `test/components/PublishWarningSheet.test.tsx` — deposit card, shortfall block, top-up,
   confirm disabled/enabled, loading/unknown balance, self-mode untouched.
 - `cd apps/player-pwa && npx vitest run` green; `npm run build` zero errors; type-check clean.
+
+## Follow-up fix (same day, 2026-09-09 — commit 993552b)
+
+Abdullah hit `POST /matches 400` on **every** publish in self-booked mode. Root cause was
+NOT the deposit slice: the hosting-consent slice added `acceptedHostingTerms` to the API
+DTO but never to the PWA's `hostMatchSchema` in `useMatches.ts` — Zod silently STRIPPED
+the flag on `parse()`, so the API always rejected with "Hosting terms must be accepted
+before booking." (frontend-backend schema drift; the exact failure mode the
+schema-alignment rule exists for). Fixed by adding the field to the schema, mapping the
+API message to a new `hosting_terms` classifier kind + `host.hostingConsentRequired`
+i18n, typing the mutation input as `z.input<>` (defaults optional for callers), and
+adding regression tests (schema preserves flag; classifier maps the 400).
+
+Live E2E (Playwright, staging, self-booked mode, wallet SAR 120): consent gating verified
+(Confirm disabled until checkbox), publish SUCCEEDS → match detail, ZERO POST /matches
+400s. Rerun lesson: never trust click-only steps in this app — overlays mount late;
+verify every step against resulting state (aria-pressed / visible label / dump on fail).
+

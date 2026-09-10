@@ -43,9 +43,13 @@ export const hostMatchSchema = z.object({
   booking_mode: z.enum(['koralink', 'self']).default('koralink'),
   booking_slot_id: z.string().min(1).optional(),
   visibility: z.enum(['public', 'private']).default('public'),
+  // Hosting-terms consent (player-host-responsibility). MUST be listed here:
+  // Zod strips unknown keys in .parse(), so an unlisted field never reaches
+  // the API and every publish 400s with "Hosting terms must be accepted".
+  acceptedHostingTerms: z.boolean().default(false),
 });
 
-export type HostMatchInput = z.infer<typeof hostMatchSchema>;
+export type HostMatchInput = z.input<typeof hostMatchSchema>;
 
 // ─── Fetch Nearby Matches (paged — P1-19) ─────────────
 

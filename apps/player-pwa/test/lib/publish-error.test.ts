@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall } from '@/lib/publish-error';
+import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 
 describe('classifyPublishError', () => {
   it('classifies insufficient wallet balance', () => {
@@ -13,6 +15,15 @@ describe('classifyPublishError', () => {
   it('classifies a slot conflict', () => {
     expect(classifyPublishError(new Error('This slot has already been booked by another host'))).toBe('slot_taken');
     expect(classifyPublishError(new Error('Conflict: slot booked'))).toBe('slot_taken');
+  });
+
+  it('classifies the hosting-terms consent rejection (stale bundle/session path)', () => {
+    const err = new Error('Hosting terms must be accepted before booking.');
+    expect(classifyPublishError(err)).toBe('hosting_terms');
+    expect(PUBLISH_ERROR_KEYS.hosting_terms).toBe('host.hostingConsentRequired');
+    // The key must exist in BOTH locales (the sheet resolves it via t(errorKey)).
+    expect((enMessages as { host: Record<string, string> }).host.hostingConsentRequired).toBeTruthy();
+    expect((arMessages as { host: Record<string, string> }).host.hostingConsentRequired).toBeTruthy();
   });
 
   it('classifies network failures', () => {
