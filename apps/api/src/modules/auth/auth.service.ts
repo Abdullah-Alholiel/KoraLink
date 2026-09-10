@@ -19,6 +19,7 @@ import { UnifonicService } from './unifonic.service';
 import { OtpStoreService } from './otp-store.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { otpMatches } from '../../common/security/otp-compare';
 import { randomInt } from 'node:crypto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -173,7 +174,7 @@ export class AuthService {
 
     const storedCode = await this.otpStore.getOtp(phone);
 
-    if (!storedCode || storedCode !== code) {
+    if (!storedCode || !otpMatches(storedCode, code)) {
       await this.otpStore.incrementFail(phone);
       throw new UnauthorizedException('Invalid or expired OTP.');
     }

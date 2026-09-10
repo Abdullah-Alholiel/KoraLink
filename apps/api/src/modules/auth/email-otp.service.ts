@@ -18,6 +18,7 @@ import { randomInt } from 'node:crypto';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
 import { OtpStoreService } from './otp-store.service';
+import { otpMatches } from '../../common/security/otp-compare';
 import { EMAIL_SENDER, EmailSender } from './email-sender.port';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { assertSurfaceRole } from './auth.service';
@@ -109,15 +110,15 @@ export class EmailOtpService {
       .where(sql`lower(${users.email}) = ${email}`)
       .limit(1);
     if (existing?.deleted_at) {
-      this.logger.warn(`email send-otp blocked (deleted_at IS NOT NULL) for ${email}`);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.FORBIDDEN,
-          message: 'Account scheduled for deletion.',
-          error: 'Forbidden',
-        },
-        HttpStatus.FORBIDDEN,
+      // PDPL soft-delete guard: a deleted account's address must not receive
+      // login codes (re-creation happens ONLY through support/restore flows).
+      // The endpoint's contract is ALWAYS-202 non-committal (anti-enumeration),
+      // so the drop is SILENT — externally identical to a send to an unknown
+      // address (a 403 here would confirm the address exists).
+      this.logger.warn(
+        `email send-otp silently dropped (deleted_at IS NOT NULL) for ${email}`,
       );
+      return;
     }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
@@ -162,7 +163,7 @@ export class EmailOtpService {
     }
 
     const storedCode = await this.otpStore.getOtp(key);
-    if (!storedCode || storedCode !== code) {
+    if (!storedCode || !otpMatches(storedCode, code)) {
       await this.otpStore.incrementFail(key);
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
@@ -180,11 +181,40 @@ export class EmailOtpService {
     // First successful verify for an unknown address → create the account
     // (email-only: phone stays NULL per migration 0038).
     if (!user) {
-      [user] = await this.db
-        .insert(users)
-        .values(withTimestamp({ email }))
-        .returning();
-      this.logger.log(`email signup: created user ${user.id} for ${email}`);
+      try {
+        [user] = await this.db
+          .insert(users)
+          .values(withTimestamp({ email }))
+          .returning();
+        this.logger.log(`email signup: created user ${user.id} for ${email}`);
+      } catch (err) {
+        // 23505 unique_violation: a concurrent verify holding the SAME fresh
+        // code created the account first (check-then-act between getOtp and
+        // the insert — both pass the gate before either deleteOtp lands).
+        // Re-select the winner and continue; the login still completes.
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          (err as { code?: string }).code === '23505'
+        ) {
+          [user] = await this.db
+            .select()
+            .from(users)
+            .where(sql`lower(${users.email}) = ${email}`)
+            .limit(1);
+          this.logger.log(
+            `email signup: lost create race, joined existing user ${user?.id ?? '?'}`,
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (!user) {
+      // Unreachable in practice (the 23505 winner row must exist); guards
+      // the moderation gates below from a missing row.
+      throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
     // Moderation gates — identical to the phone flow.

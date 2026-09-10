@@ -51,6 +51,7 @@ describe('EmailOtpService', () => {
       update: jest.fn().mockReturnThis(),
       set: jest.fn().mockReturnThis(),
       eq: jest.fn().mockResolvedValue(undefined),
+      ...(overrides.db ?? {}),
     };
 
     const jwt = { signAsync: jest.fn().mockResolvedValue('jwt-token') };
@@ -123,14 +124,15 @@ describe('EmailOtpService', () => {
     expect(emailSender.send).not.toHaveBeenCalled();
   });
 
-  it('send blocked for soft-deleted account (403) — no email dispatched', async () => {
-    const { service, emailSender } = setup({
+  it('send for soft-deleted account → SILENT drop (202 contract): no email, no code stored', async () => {
+    const { service, emailSender, otpStore } = setup({
       userRow: { ...BASE_USER, deleted_at: new Date() },
     });
-    await expect(service.requestEmailOtp('user@example.com')).rejects.toMatchObject({
-      status: HttpStatus.FORBIDDEN,
-    });
+    // Anti-enumeration: the response is indistinguishable from a send to an
+    // unknown address — resolves normally, no 403, nothing dispatched.
+    await expect(service.requestEmailOtp('user@example.com')).resolves.toBeUndefined();
     expect(emailSender.send).not.toHaveBeenCalled();
+    expect(otpStore.setOtp).not.toHaveBeenCalled();
   });
 
   it('verify: happy path (existing user) → token + isNewUser=false', async () => {
@@ -152,6 +154,65 @@ describe('EmailOtpService', () => {
     expect(jwt.signAsync).toHaveBeenCalledWith(
       expect.not.objectContaining({ phone: expect.anything() }),
       expect.anything(),
+    );
+  });
+
+  it('verify: lost create race (23505) → joins winner row, login still completes', async () => {
+    // Two concurrent verifies share one fresh code: both pass getOtp before
+    // either deleteOtp lands; the loser's INSERT hits the lower(email) unique
+    // index. The loser must re-select the winner and finish the login — not 500.
+    const raceErr = Object.assign(new Error('unique_violation'), { code: '23505' });
+    const winnerRow = {
+      ...BASE_USER,
+      id: 'winner-uuid',
+      email: 'new@example.com',
+      full_name: null,
+      email_verified_at: null,
+    };
+    let selects = 0;
+    const { service, jwt } = setup({
+      userRow: undefined,
+      db: {
+        select: jest.fn(() => ({
+          from: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          limit: jest.fn(() =>
+            ++selects === 1 ? Promise.resolve([]) : Promise.resolve([winnerRow]),
+          ),
+        })),
+        insert: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockRejectedValue(raceErr),
+        }),
+      },
+    });
+    const out = await service.verifyEmailOtp('new@example.com', '123456', 'player');
+    expect(out).toEqual({ token: 'jwt-token', isNewUser: true });
+    expect(selects).toBe(2);
+    expect(jwt.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: 'winner-uuid' }),
+      expect.anything(),
+    );
+  });
+
+  it('verify: non-23505 insert failure still surfaces (no swallow)', async () => {
+    const boom = Object.assign(new Error('connection terminated'), { code: '08006' });
+    const { service } = setup({
+      userRow: undefined,
+      db: {
+        select: jest.fn(() => ({
+          from: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          limit: jest.fn().mockResolvedValue([]),
+        })),
+        insert: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockRejectedValue(boom),
+        }),
+      },
+    });
+    await expect(service.verifyEmailOtp('new@example.com', '123456', 'player')).rejects.toThrow(
+      'connection terminated',
     );
   });
 
