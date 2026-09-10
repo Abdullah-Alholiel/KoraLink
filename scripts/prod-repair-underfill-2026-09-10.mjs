@@ -81,13 +81,13 @@ await sql.begin(async (tx) => {
     const roster = await tx`
       SELECT user_id FROM match_players WHERE match_id = ${id}`;
     const [act] = await tx`
-      INSERT INTO activities (actor_id, verb, match_id)
-      VALUES (${m.host_id}, 'match_auto_cancelled', ${id})
+      INSERT INTO activities (id, actor_id, verb, match_id)
+      VALUES (gen_random_uuid(), ${m.host_id}, 'match_auto_cancelled', ${id})
       RETURNING id`;
     if (roster.length > 0) {
       await tx`
-        INSERT INTO feed_items (recipient_id, activity_id)
-        SELECT user_id, ${act.id} FROM match_players WHERE match_id = ${id}`;
+        INSERT INTO feed_items (id, recipient_id, activity_id)
+        SELECT gen_random_uuid(), user_id, ${act.id} FROM match_players WHERE match_id = ${id}`;
     }
     console.log(
       `repaired ${id} "${m.title}" → Cancelled (activity ${act.id}, ${roster.length} feed row(s))`,
