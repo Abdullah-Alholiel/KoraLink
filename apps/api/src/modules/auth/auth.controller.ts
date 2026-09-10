@@ -73,7 +73,8 @@ export class AuthController {
   @ApiOkResponse({
     description:
       'OTP verified. Sets an `access_token` HttpOnly cookie. ' +
-      'No JWT is returned in the response body.',
+      'The JWT is returned in the body ONLY when the request opts in with responseToken:true ' +
+      '(cross-origin clients — same contract as the email channel).',
   })
   async verifyOtp(
     @Body() dto: VerifyOtpDto,
@@ -99,11 +100,13 @@ export class AuthController {
       path: '/',
     });
 
-    // P2-11 (run #22): the JWT rides ONLY the HttpOnly cookie — never the
-    // response body, dev or prod. The PWA reads the cookie; scripts use
-    // dev-login for a token. (Swagger contract already said "No JWT is
-    // returned in the response body".)
-    return { isNewUser };
+    // P2-11 exception, now on BOTH channels (email: email-auth.controller.ts,
+    // phone: here): when the request opts in with `responseToken:true`, the
+    // JWT also rides the body. Prod's cross-origin topology (vercel.app PWA
+    // ↔ onrender API) cannot store the cross-site cookie, so an opt-in body
+    // token is the only way a phone-OTP signup keeps a session past its
+    // first authenticated call. Legacy callers see { isNewUser } unchanged.
+    return dto.responseToken === true ? { isNewUser, token } : { isNewUser };
   }
 
   // ── POST /auth/complete-profile ──────────────────────────────────────────

@@ -57,7 +57,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<{ token?: string }>('/auth/verify-otp', { phone, code, surface: 'ops' });
+      const res = await api.post<{ token?: string }>('/auth/verify-otp', { phone, code, surface: 'ops', responseToken: true });
       if (res.token) {
         setToken(res.token);
         router.replace(defaultRoute());

@@ -14,6 +14,10 @@ interface SendOtpResponse {
 
 interface VerifyOtpResponse {
   isNewUser: boolean;
+  /** P2-11 parity (run #49 follow-up): present when the request opted in
+   *  with responseToken:true — the only session carrier on prod, where the
+   *  cross-site cookie is refused by the browser. */
+  token?: string;
 }
 
 interface CompleteProfileResponse {
@@ -84,7 +88,14 @@ export function useVerifyOtp() {
     mutationFn: ({ phone, otp }) =>
       fetcher<VerifyOtpResponse>('/auth/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: `+966${phone}`, code: otp, surface: 'player' }),
+        body: JSON.stringify({
+          phone: `+966${phone}`,
+          code: otp,
+          surface: 'player',
+          // P2-11 parity: prod (vercel ↔ onrender) can't store the cross-site
+          // cookie — opt into the body token like the email channel does.
+          responseToken: true,
+        }),
       }),
   });
 }
