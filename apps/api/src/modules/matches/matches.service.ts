@@ -1246,7 +1246,11 @@ export class MatchesService {
       duration_mins: match.duration_mins ?? 60,
       completed_at: match.completed_at,
       min_players: match.min_players,
-      total_players: match.players.length,
+      // Defensive read — findOne's findFirst always includes the players
+      // relation, but partial rows (unit-test mocks, future select narrowing)
+      // may omit it. Undefined → resolveEffectiveStatus's documented safe
+      // default (rule cannot engage), mirroring the waitlist read below.
+      total_players: match.players?.length,
     }) as typeof match.status;
 
     // Access control (P0-1): chat is members-only — the WS layer already enforces
