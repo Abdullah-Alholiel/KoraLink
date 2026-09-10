@@ -23,9 +23,15 @@ export class MatchesModule implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      const count = await this.matchesService.autoCompletePastMatches();
-      if (count > 0) {
-        this.logger.log(`Auto-completed ${count} past matches → Completed`);
+      const { completed, cancelled } =
+        await this.matchesService.autoCompletePastMatches();
+      if (completed > 0) {
+        this.logger.log(`Auto-completed ${completed} past matches → Completed`);
+      }
+      if (cancelled > 0) {
+        this.logger.log(
+          `Overdue underfill net cancelled ${cancelled} past match(es) → Cancelled`,
+        );
       }
     } catch (err) {
       // Transient DB connection resets (e.g. ECONNRESET during a deploy/restart)

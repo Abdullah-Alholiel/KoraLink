@@ -19,9 +19,15 @@ export class MatchesScheduler {
   @Cron('*/5 * * * *', { name: 'auto-complete-past-matches' })
   async handleAutoComplete(): Promise<void> {
     try {
-      const count = await this.matchesService.autoCompletePastMatches();
-      if (count > 0) {
-        this.logger.log(`Auto-completed ${count} past match(es) → Completed`);
+      const { completed, cancelled } =
+        await this.matchesService.autoCompletePastMatches();
+      if (completed > 0) {
+        this.logger.log(`Auto-completed ${completed} past match(es) → Completed`);
+      }
+      if (cancelled > 0) {
+        this.logger.log(
+          `Overdue underfill net cancelled ${cancelled} past match(es) → Cancelled`,
+        );
       }
     } catch (err) {
       this.logger.error(`autoCompletePastMatches tick failed: ${(err as Error).message}`);

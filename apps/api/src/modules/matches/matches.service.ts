@@ -257,14 +257,24 @@ export class MatchesService {
    * whose scheduled end time has passed without needing a DB write.
    *
    * Terminal states (Completed, Cancelled) are returned as-is.
-   * Active states (Open, Full, InProgress) are promoted to Completed
-   * when ``scheduled_at + duration_mins`` is in the past.
+   * Active states (Open, Full, InProgress) are promoted to Completed when
+   * ``scheduled_at + duration_mins`` is in the past — EXCEPT matches that
+   * never reached their `min_players` while still Open/Full (underfill rule,
+   * 2026-09-10 KSU incident): a match below its minimum can never have been
+   * played, so it reads as `Cancelled` at query time even before the
+   * scheduler persists the flip — mirroring `autoCompletePastMatches`.
+   * InProgress is exempt: a started match may legitimately dip below the
+   * minimum through mid-game withdrawals and still completes.
    */
   private static resolveEffectiveStatus(match: {
     status: string;
     scheduled_at: Date;
     duration_mins: number;
     completed_at: Date | null;
+    /** Underfill rule engages only when > 0 (legacy rows exempt). */
+    min_players?: number;
+    /** Roster total incl. host; unknown → rule cannot engage (safe default). */
+    total_players?: number;
   }): string {
     if (['Completed', 'Cancelled'].includes(match.status)) {
       return match.status;
@@ -273,6 +283,14 @@ export class MatchesService {
       match.scheduled_at.getTime() + match.duration_mins * 60 * 1000,
     );
     if (new Date() >= endTime) {
+      const underfilled =
+        (match.min_players ?? 0) > 0 &&
+        match.status !== 'InProgress' &&
+        (match.total_players ?? Number.MAX_SAFE_INTEGER) <
+          (match.min_players as number);
+      if (underfilled) {
+        return 'Cancelled';
+      }
       return 'Completed';
     }
     return match.status;
@@ -303,9 +321,30 @@ export class MatchesService {
    * Query-time ``resolveEffectiveStatus`` handles the window between
    * match end and the next restart.
    *
-   * @returns number of rows updated.
+   * Underfill net (2026-09-10 KSU incident): BEFORE the bulk complete, every
+   * past-kickoff match still Open/Full below its `min_players` is cancelled
+   * through the SAME atomic refund+notify path as the proactive
+   * `checkMinPlayers` band — a match that never reached its minimum can never
+   * be recorded as played, even if the whole band fell into a downtime window
+   * (Render FREE spin-down). The bulk UPDATE additionally carries the
+   * NOT-underfilled guard as a second belt against the net↔complete race.
+   * Legacy rows (`min_players = 0`) are exempt everywhere.
+   *
+   * @returns completed rows updated + matches cancelled by the net.
    */
-  async autoCompletePastMatches(): Promise<number> {
+  async autoCompletePastMatches(): Promise<{ completed: number; cancelled: number }> {
+    // ── Underfill pass FIRST (2026-09-10 KSU incident): a match whose kickoff
+    // has passed while still Open/Full and below `min_players` can never have
+    // been played — it must be CANCELLED (refund + notify, exactly like the
+    // 60-min band in `checkMinPlayers` Pass 2), never auto-completed. This
+    // pass is the safety net for downtime windows: Render FREE spins down
+    // when idle, so the `check-min-players` cron can miss the entire
+    // 60-minute band overnight; without it, the morning wake-up flipped a
+    // 1/14-player match to "Completed" (hit in prod 3× — KSU 7v7 + two
+    // Sep-6 matches). Cancelled rows are excluded from the bulk complete
+    // below both by their status and by the explicit NOT-UNDERFILLED guard.
+    const cancelledByNet = await this.autoCancelUnderfilledPastMatches();
+
     const result = await this.db.execute(sql`
       UPDATE ${matches}
       SET status = 'Completed',
@@ -313,10 +352,15 @@ export class MatchesService {
           updated_at = NOW()
       WHERE status IN ('Open', 'Full', 'InProgress')
         AND scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval < NOW()
+        AND NOT (
+          status IN ('Open', 'Full')
+          AND min_players > 0
+          AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = ${matches.id})
+                < min_players
+        )
     `);
     const res = result as unknown as { count?: number; length?: number };
     const flipped = res.count ?? res.length ?? 0;
-
     // Slice 3 (player-host-responsibility): flip only changes status — release
     // each flipped player-hosted match's held payout (exactly-once per match;
     // state guard + per-match ledger key make re-runs no-ops). Failures are
@@ -358,7 +402,9 @@ export class MatchesService {
       }
     }
 
-    return flipped;
+    // Underfill net + bulk complete are both done — report both counters
+    // (the scheduler logs; tests assert ordering net-before-complete).
+    return { completed: flipped, cancelled: cancelledByNet };
   }
 
   /**
@@ -627,162 +673,9 @@ export class MatchesService {
       min_players: number; is_player_hosted: boolean | null; total_players: number;
     }>)) {
       try {
-        // Atomic single-shot transition (P0-4): status flip + refund + ledger +
-        // slot release commit together or not at all. Before run #13 the guard
-        // UPDATE committed FIRST and the money/slot side-effects ran as separate
-        // auto-committed statements — a failure in between left a cancelled
-        // match with a permanently booked slot and a host who was never
-        // refunded (silent money loss in an automated path, no retry possible
-        // once status left Open/Full). Mirrors manual cancelMatch (in-tx
-        // release + refund from pitch_cost_sar, `refund-<id>` idempotency key).
-        let guardWon = false;
-        let releasedSlot = false;
-        let refundedSar = 0;
-        await this.db.transaction(async (tx) => {
-          const guard = await tx.execute(sql`
-            UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
-            WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
-          `);
-          if ((guard as unknown as { rowCount?: number }).rowCount === 0) return;
-          guardWon = true;
-
-          // Slice 4 (player-host-responsibility): refund EVERY current-roster
-          // payer 100% — auto-cancel is never the player's fault. Per-episode
-          // keys; fee snapshots are cleared so a later delete can't double-
-          // count them (the rows themselves are preserved as the attendance/
-          // audit record; forfeited fees were never snapshotted).
-          const payers = await tx
-            .select({
-              id: schema.match_players.id,
-              user_id: schema.match_players.user_id,
-              fee_paid_sar: schema.match_players.fee_paid_sar,
-            })
-            .from(schema.match_players)
-            .where(
-              and(
-                eq(schema.match_players.match_id, row.id),
-                sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
-              ),
-            );
-          for (const p of payers) {
-            const amt = p.fee_paid_sar ? parseFloat(p.fee_paid_sar) : 0;
-            if (amt > 0) {
-              await creditWalletTx(
-                tx,
-                p.user_id,
-                amt,
-                `refund-join-${p.id}`,
-                'REFUND',
-                row.id,
-              );
-            }
-          }
-          if (payers.length > 0) {
-            await tx
-              .update(schema.match_players)
-              .set({ fee_paid_sar: null })
-              .where(
-                and(
-                  eq(schema.match_players.match_id, row.id),
-                  sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
-                ),
-              );
-          }
-
-          // Slice 3: a cancelled player-hosted match must never pay out —
-          // guarded flip held → cancelled (idempotent; no-op when not held,
-          // skipped entirely for venue-owned legacy rows).
-          if (row.is_player_hosted) {
-            await tx
-              .update(matches)
-              .set(withTimestamp({ host_payout_state: 'cancelled' }))
-              .where(
-                and(
-                  eq(matches.id, row.id),
-                  eq(matches.host_payout_state, 'held'),
-                ),
-              );
-          }
-
-          // Release a koralink slot + refund the host exactly what he was
-          // debited (same semantics as manual cancelMatch).
-          if (row.booking_mode === 'koralink' && row.booking_slot_id) {
-            const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
-            if (refundSar > 0) {
-              await tx
-                .update(users)
-                .set({
-                  wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
-                  updated_at: new Date(),
-                })
-                .where(eq(users.id, row.host_id));
-
-              await tx.insert(transactions).values({
-                user_id: row.host_id,
-                type: 'CREDIT',
-                amount: refundSar.toString(),
-                reference_type: 'REFUND',
-                reference_id: row.id,
-                idempotency_key: `refund-${row.id}`,
-                status: 'Completed',
-              });
-              refundedSar = refundSar;
-            }
-            await tx
-              .update(pitch_slots)
-              .set(withTimestamp({ is_booked: false, booked_match_id: null }))
-              .where(eq(pitch_slots.id, row.booking_slot_id));
-            releasedSlot = true;
-          }
-        });
-        if (!guardWon) {
-          // Guard lost the race — the match was cancelled concurrently.
-          continue;
+        if (await this.autoCancelExpiringRow(row)) {
+          cancelled += 1;
         }
-
-        // Notify every roster player (host included) — bell + push.
-        const players = await this.db
-          .select({ user_id: match_players.user_id })
-          .from(match_players)
-          .where(eq(match_players.match_id, row.id));
-        const rosterIds = players.map((p) => p.user_id);
-        if (rosterIds.length > 0) {
-          await this.activitiesService.record({
-            actorId: row.host_id,
-            verb: 'match_auto_cancelled',
-            matchId: row.id,
-            recipients: rosterIds,
-            excludeActor: false,
-          });
-          await this.notificationsService.sendPushToUsers(rosterIds, {
-            key: 'match_cancelled', // P2-8: text localized per subscriber
-            vars: { title: row.title },
-            data: { type: 'match-cancelled', matchId: row.id },
-          });
-        }
-
-        // P1-17: the queue dies with the match — clear it and tell the waiters.
-        const queuedPlayers = await this.db
-          .select({ user_id: match_waitlist.user_id })
-          .from(match_waitlist)
-          .where(eq(match_waitlist.match_id, row.id));
-        if (queuedPlayers.length > 0) {
-          await this.db
-            .delete(match_waitlist)
-            .where(eq(match_waitlist.match_id, row.id));
-          await this.notificationsService.sendPushToUsers(
-            queuedPlayers.map((q) => q.user_id),
-            {
-              key: 'waitlist_closed', // P2-8: text localized per subscriber
-              vars: { title: row.title },
-              data: { type: 'match-cancelled', matchId: row.id },
-            },
-          );
-        }
-        cancelled += 1;
-        this.logger.log(
-          `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players, refunded=${refundedSar} SAR, slotReleased=${releasedSlot}).`,
-        );
       } catch (err) {
         this.logger.error(
           `Auto-cancel failed for match ${row.id}: ${(err as Error).message}`,
@@ -796,6 +689,232 @@ export class MatchesService {
       );
     }
     return { nudged, cancelled };
+  }
+
+  /**
+   * Single-shot atomic auto-cancel of ONE underfilled match row (P0-4).
+   *
+   * Shared by both underfill enforcement paths:
+   * - `checkMinPlayers` Pass 2 (the every-10-minutes "check-min-players"
+   *   cron — the proactive band, kickoff within 60 minutes), and
+   * - `autoCancelUnderfilledPastMatches` (the reactive net inside
+   *   `autoCompletePastMatches` — past-kickoff matches the cron missed, e.g.
+   *   the whole band fell into a Render FREE spin-down window).
+   *
+   * Guard + refund + ledger + slot release commit together or not at all
+   * (before run #13 the guard committed FIRST and a later failure left a
+   * cancelled match with a booked slot and an unrefunded host — silent money
+   * loss, no retry possible once status left Open/Full). Mirrors manual
+   * cancelMatch (in-tx release + refund from pitch_cost_sar,
+   * `refund-<id>` idempotency key). Post-commit: roster + waiters notified
+   * (bell + push, verb `match_auto_cancelled`), queue cleared.
+   */
+  private async autoCancelExpiringRow(row: {
+    id: string; title: string; host_id: string; booking_mode: string;
+    booking_slot_id: string | null; pitch_cost_sar: string | null;
+    min_players: number; is_player_hosted: boolean | null; total_players: number;
+  }): Promise<boolean> {
+    let guardWon = false;
+    let releasedSlot = false;
+    let refundedSar = 0;
+    await this.db.transaction(async (tx) => {
+      const guard = await tx.execute(sql`
+        UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
+        WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
+      `);
+      if ((guard as unknown as { rowCount?: number }).rowCount === 0) return;
+      guardWon = true;
+
+      // Slice 4 (player-host-responsibility): refund EVERY current-roster
+      // payer 100% — auto-cancel is never the player's fault. Per-episode
+      // keys; fee snapshots are cleared so a later delete can't double-
+      // count them (the rows themselves are preserved as the attendance/
+      // audit record; forfeited fees were never snapshotted).
+      const payers = await tx
+        .select({
+          id: schema.match_players.id,
+          user_id: schema.match_players.user_id,
+          fee_paid_sar: schema.match_players.fee_paid_sar,
+        })
+        .from(schema.match_players)
+        .where(
+          and(
+            eq(schema.match_players.match_id, row.id),
+            sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+          ),
+        );
+      for (const p of payers) {
+        const amt = p.fee_paid_sar ? parseFloat(p.fee_paid_sar) : 0;
+        if (amt > 0) {
+          await creditWalletTx(
+            tx,
+            p.user_id,
+            amt,
+            `refund-join-${p.id}`,
+            'REFUND',
+            row.id,
+          );
+        }
+      }
+      if (payers.length > 0) {
+        await tx
+          .update(schema.match_players)
+          .set({ fee_paid_sar: null })
+          .where(
+            and(
+              eq(schema.match_players.match_id, row.id),
+              sql`${schema.match_players.fee_paid_sar} IS NOT NULL`,
+            ),
+          );
+      }
+
+      // Slice 3: a cancelled player-hosted match must never pay out —
+      // guarded flip held → cancelled (idempotent; no-op when not held,
+      // skipped entirely for venue-owned legacy rows).
+      if (row.is_player_hosted) {
+        await tx
+          .update(matches)
+          .set(withTimestamp({ host_payout_state: 'cancelled' }))
+          .where(
+            and(
+              eq(matches.id, row.id),
+              eq(matches.host_payout_state, 'held'),
+            ),
+          );
+      }
+
+      // Release a koralink slot + refund the host exactly what he was
+      // debited (same semantics as manual cancelMatch).
+      if (row.booking_mode === 'koralink' && row.booking_slot_id) {
+        const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
+        if (refundSar > 0) {
+          await tx
+            .update(users)
+            .set({
+              wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
+              updated_at: new Date(),
+            })
+            .where(eq(users.id, row.host_id));
+
+          await tx.insert(transactions).values({
+            user_id: row.host_id,
+            type: 'CREDIT',
+            amount: refundSar.toString(),
+            reference_type: 'REFUND',
+            reference_id: row.id,
+            idempotency_key: `refund-${row.id}`,
+            status: 'Completed',
+          });
+          refundedSar = refundSar;
+        }
+        await tx
+          .update(pitch_slots)
+          .set(withTimestamp({ is_booked: false, booked_match_id: null }))
+          .where(eq(pitch_slots.id, row.booking_slot_id));
+        releasedSlot = true;
+      }
+    });
+    if (!guardWon) {
+      // Guard lost the race — the match was cancelled concurrently.
+      return false;
+    }
+
+    // Notify every roster player (host included) — bell + push.
+    const players = await this.db
+      .select({ user_id: match_players.user_id })
+      .from(match_players)
+      .where(eq(match_players.match_id, row.id));
+    const rosterIds = players.map((p) => p.user_id);
+    if (rosterIds.length > 0) {
+      await this.activitiesService.record({
+        actorId: row.host_id,
+        verb: 'match_auto_cancelled',
+        matchId: row.id,
+        recipients: rosterIds,
+        excludeActor: false,
+      });
+      await this.notificationsService.sendPushToUsers(rosterIds, {
+        key: 'match_cancelled', // P2-8: text localized per subscriber
+        vars: { title: row.title },
+        data: { type: 'match-cancelled', matchId: row.id },
+      });
+    }
+
+    // P1-17: the queue dies with the match — clear it and tell the waiters.
+    const queuedPlayers = await this.db
+      .select({ user_id: match_waitlist.user_id })
+      .from(match_waitlist)
+      .where(eq(match_waitlist.match_id, row.id));
+    if (queuedPlayers.length > 0) {
+      await this.db
+        .delete(match_waitlist)
+        .where(eq(match_waitlist.match_id, row.id));
+      await this.notificationsService.sendPushToUsers(
+        queuedPlayers.map((q) => q.user_id),
+        {
+          key: 'waitlist_closed', // P2-8: text localized per subscriber
+          vars: { title: row.title },
+          data: { type: 'match-cancelled', matchId: row.id },
+        },
+      );
+    }
+    this.logger.log(
+      `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players, refunded=${refundedSar} SAR, slotReleased=${releasedSlot}).`,
+    );
+    return true;
+  }
+
+  /**
+   * Reactive underfill net (2026-09-10 KSU incident): cancel past-kickoff
+   * matches that are STILL Open/Full below `min_players` — the ones the
+   * proactive `checkMinPlayers` band missed during a downtime window. Runs
+   * inside `autoCompletePastMatches` BEFORE the bulk complete, on every tick
+   * AND at module init, so a match can never be recorded as "played" when it
+   * never had the minimum. Same SELECT shape as the Pass-2 band minus the
+   * time window; `autoCancelExpiringRow` re-checks status atomically, so a
+   * row already cancelled by the concurrent cron is a no-op.
+   *
+   * @returns number of matches cancelled this pass.
+   */
+  async autoCancelUnderfilledPastMatches(): Promise<number> {
+    const overdue = await this.db.execute(sql`
+      SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
+             m.pitch_cost_sar, m.min_players, m.is_player_hosted,
+             (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+               AS total_players
+      FROM matches m
+      WHERE m.status IN ('Open', 'Full')
+        AND m.min_players > 0
+        AND m.scheduled_at + (COALESCE(m.duration_mins, 60) || ' minutes')::interval
+              <= NOW()
+        AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+              < m.min_players
+      ORDER BY m.scheduled_at ASC
+      LIMIT 50
+    `);
+
+    let cancelled = 0;
+    for (const row of (overdue as unknown as Array<{
+      id: string; title: string; host_id: string; booking_mode: string;
+      booking_slot_id: string | null; pitch_cost_sar: string | null;
+      min_players: number; is_player_hosted: boolean | null; total_players: number;
+    }>)) {
+      try {
+        if (await this.autoCancelExpiringRow(row)) {
+          cancelled += 1;
+        }
+      } catch (err) {
+        this.logger.error(
+          `Overdue underfill auto-cancel failed for match ${row.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+    if (cancelled > 0) {
+      this.logger.log(
+        `Overdue underfill net: auto-cancelled ${cancelled} past-kickoff match(es) below minimum.`,
+      );
+    }
+    return cancelled;
   }
 
   /** Tally POTM votes for one match (POTM invariant: roster member, no no-show). */
@@ -1119,12 +1238,15 @@ export class MatchesService {
       throw new NotFoundException(`Match ${matchId} not found.`);
     }
 
-    // Apply virtual status — past matches show as Completed
+    // Apply virtual status — past matches show as Completed (or Cancelled
+    // under the underfill rule: below min_players when time expired).
     match.status = MatchesService.resolveEffectiveStatus({
       status: match.status,
       scheduled_at: match.scheduled_at,
       duration_mins: match.duration_mins ?? 60,
       completed_at: match.completed_at,
+      min_players: match.min_players,
+      total_players: match.players.length,
     }) as typeof match.status;
 
     // Access control (P0-1): chat is members-only — the WS layer already enforces
@@ -3328,6 +3450,12 @@ export class MatchesService {
         completed_at: matches.completed_at,
         pom_winner_id: matches.pom_winner_id,
         pom_announced_at: matches.pom_announced_at,
+        // Underfill rule inputs (2026-09-10 KSU incident): a past-due match
+        // still Open/Full below its minimum reads as Cancelled here too.
+        min_players: matches.min_players,
+        total_players:
+          sql<number>`(SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = ${matches.id})`
+            .as('total_players'),
       })
       .from(matches)
       .where(eq(matches.id, matchId))
