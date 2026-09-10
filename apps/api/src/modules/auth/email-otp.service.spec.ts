@@ -315,7 +315,7 @@ describe('BrevoService', () => {
     global.fetch = fetchSpy as never;
     await svc.send('a@b.com', 's', '<p>x</p>', '123456');
     expect(fetchSpy).toHaveBeenCalledWith(
-      'https://api.brevo.com/api/v3/smtp/email',
+      'https://api.brevo.com/v3/smtp/email',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'api-key': 'brevo_key' }),

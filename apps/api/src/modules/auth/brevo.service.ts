@@ -12,11 +12,11 @@ import { EmailSender } from './email-sender.port';
  * address, not a domain) is verified in their console, which unblocks OTP
  * delivery before KoraLink owns a domain.
  *
- * Brevo API: POST https://api.brevo.com/api/v3/smtp/email
+ * Brevo API: POST https://api.brevo.com/v3/smtp/email
  *   headers: { 'api-key': <key>, 'content-type': 'application/json' }
  *   body:    { sender: { name, email }, to: [{ email }], subject, htmlContent }
  */
-const BREVO_ENDPOINT = 'https://api.brevo.com/api/v3/smtp/email';
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 
 /** Parses "KoraLink <no-reply@example.com>" into Brevo's {name, email}. */
 export function parseFromAddress(from: string): { name: string; email: string } {
