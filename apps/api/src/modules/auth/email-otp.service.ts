@@ -1,4 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -14,7 +18,7 @@ import { randomInt } from 'node:crypto';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
 import { OtpStoreService } from './otp-store.service';
-import { ResendService } from './resend.service';
+import { EMAIL_SENDER, EmailSender } from './email-sender.port';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { assertSurfaceRole } from './auth.service';
 
@@ -46,7 +50,7 @@ export class EmailOtpService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly otpStore: OtpStoreService,
-    private readonly resend: ResendService,
+    @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {}
 
   async requestEmailOtp(email: string, ip?: string): Promise<void> {
@@ -128,7 +132,7 @@ export class EmailOtpService {
     // NOTE: no user upsert here — creation is deferred to a successful
     // verify so a send never leaves a half-identity row behind, and the
     // endpoint cannot be probed to discover which addresses exist.
-    await this.resend.send(
+    await this.emailSender.send(
       email,
       'Your KoraLink login code',
       renderOtpEmail(code),

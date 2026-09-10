@@ -1,6 +1,8 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { EmailSender } from './email-sender.port';
+
 /**
  * Resend transactional-email client (P0-9 / email-otp-login cycle).
  *
@@ -15,7 +17,7 @@ import { ConfigService } from '@nestjs/config';
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 @Injectable()
-export class ResendService {
+export class ResendService implements EmailSender {
   private readonly logger = new Logger(ResendService.name);
 
   constructor(private readonly config: ConfigService) {}

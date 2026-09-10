@@ -9,6 +9,8 @@ import { AuthService } from './auth.service';
 import { EmailOtpService } from './email-otp.service';
 import { OtpStoreService } from './otp-store.service';
 import { ResendService } from './resend.service';
+import { BrevoService } from './brevo.service';
+import { EMAIL_SENDER_PROVIDER } from './email-sender.provider';
 import { UnifonicService } from './unifonic.service';
 import { JwtCookieStrategy } from './jwt-cookie.strategy';
 
@@ -31,13 +33,22 @@ import { JwtCookieStrategy } from './jwt-cookie.strategy';
     OtpStoreService,
     UnifonicService,
     ResendService,
+    BrevoService,
+    EMAIL_SENDER_PROVIDER,
     JwtCookieStrategy,
   ],
   // P1-19 (run #44): OtpStoreService + UnifonicService are exported so
   // UsersService (phone-change flow) injects the SAME singletons AuthService
   // uses — shared abuse-cap counters require a shared cache-backed store.
-  // ResendService + EmailOtpService join the run #46 (email OTP) cycle;
-  // ResendService is exported for UsersService's future email-change flow.
-  exports: [JwtModule, PassportModule, OtpStoreService, UnifonicService, ResendService],
+  // The EMAIL_SENDER port replaces the concrete ResendService export: the
+  // future email-change flow consumes the port too, so provider swaps stay
+  // env-only (EMAIL_PROVIDER=brevo|resend).
+  exports: [
+    JwtModule,
+    PassportModule,
+    OtpStoreService,
+    UnifonicService,
+    EMAIL_SENDER_PROVIDER,
+  ],
 })
 export class AuthModule {}
