@@ -57,7 +57,14 @@ export default function AuthBootstrap() {
             phone: profile.phone,
             preferredLocation: profile.preferred_location ?? '',
             preferredPosition: profile.preferred_position ?? '',
-            locale: 'en',
+            // The URL IS the user's chosen locale (persisted by LocaleSync on
+            // every view); never hardcode one here — it silently flipped the
+            // store back to 'en' for Arabic users (language-toggle incident).
+            locale: ((): 'ar' | 'en' => {
+              if (typeof window === 'undefined') return 'ar';
+              const seg = window.location.pathname.split('/')[1]?.toLowerCase();
+              return seg === 'en' ? 'en' : 'ar';
+            })(),
           },
           '', // No new token — cookie already valid
         );

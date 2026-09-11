@@ -62,8 +62,15 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }, [coords, storeUser?.id]);
 
-  const showPrompt = status === 'idle' && !dismissed;
-  const showDenied = status === 'denied' && !coords && !dismissed;
+  const isAuthed = Boolean(storeUser?.id);
+  // The permission banner renders ONLY for signed-in users: it exists to power
+  // nearby-match discovery (and PATCHes /users/me with the fix), so showing it
+  // on login/verify was pure harm — its pointer-events-auto card sits exactly
+  // over the auth pages' header row and swallowed taps on the language toggle
+  // (language-toggle incident 2026-09-11). Dismissal is intentionally
+  // session-scoped; auth-scoping is the anti-nag boundary.
+  const showPrompt = isAuthed && status === 'idle' && !dismissed;
+  const showDenied = isAuthed && status === 'denied' && !coords && !dismissed;
 
   return (
     <LocationContext.Provider value={value}>

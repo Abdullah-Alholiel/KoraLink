@@ -146,8 +146,15 @@ export async function fetcher<T>(
       if (!isAuthPath && !isRestorePath) {
         clearAuthToken();
         useAppStore.getState().logout();
+        // Keep the user's CURRENT URL locale — a bare '/login' lets the
+        // middleware locale-detect the (often stale) NEXT_LOCALE cookie and
+        // snap an /en user back to Arabic (language-toggle incident 2026-09-11).
+        // The endsWith guard prevents a reload loop when a background 401
+        // (e.g. the AuthBootstrap probe) fires while already on /login.
         if (!window.location.pathname.endsWith('/login')) {
-          window.location.href = '/login';
+          const seg = (window.location.pathname.split('/')[1] || '').toLowerCase();
+          const localePrefix = seg === 'en' || seg === 'ar' ? `/${seg}` : '';
+          window.location.assign(`${localePrefix}/login`);
         }
       }
     }

@@ -33,6 +33,7 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { navigatePreservingLocale } from '@/lib/locale-routing';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
 import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
@@ -397,7 +398,10 @@ export default function ProfilePage() {
                         const newPath = (pathname ?? "").replace(`/${locale}`, `/${newLocale}`);
                         // Full page reload ensures complete server re-render with
                         // fresh i18n messages — router.push() may reuse cached RSC.
-                        window.location.href = newPath;
+                        // navigatePreservingLocale ALSO persists NEXT_LOCALE so
+                        // unprefixed navigations (PWA relaunch, 401 bounce) keep
+                        // the chosen locale (language-toggle incident 2026-09-11).
+                        navigatePreservingLocale(newPath);
                     }}
                 />
                 {mounted && isSupported && (

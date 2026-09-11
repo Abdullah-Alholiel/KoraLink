@@ -1,16 +1,19 @@
 /**
- * Regression test — login header language toggle (2026-09-11).
+ * Regression tests — login header language toggle (2026-09-11 incident).
  *
- * The login screen is the entry point of the auth flow, so the top-right
- * back arrow had nothing to go back to (router.back() on a fresh entry is
- * a no-op / exits the PWA). Abdullah: replace it with a language toggle.
+ * Incident v1: header was a dead-end back arrow → replaced with a toggle.
+ * Incident v2 (real-device report): the toggle changed the URL but the app
+ * snapped back to Arabic — the NEXT_LOCALE cookie (read by the middleware on
+ * every UNPREFIXED navigation: PWA relaunch to start_url, the fetcher 401
+ * bounce, cold deep links) was never written by any code path, so it stayed
+ * at the visitor's first-detected locale forever.
  *
- * Guards:
- *  1. The header button is a Globe language toggle (no ArrowLeft anywhere).
- *  2. Clicking it navigates to the SAME path with the locale prefix flipped,
- *     via a FULL location reload (mirrors the profile screen's toggle —
- *     router.push may reuse cached RSC with stale i18n messages).
- *  3. router.back() is never wired to the header button.
+ * Guards here (integration-style — the REAL locale-routing module runs):
+ *  1. Globe renders; no back arrow anywhere on the login header.
+ *  2. /en/login click → navigates to /ar/login AND persists NEXT_LOCALE=ar.
+ *  3. /ar/login click → navigates to /en/login AND persists NEXT_LOCALE=en
+ *     (Arabic aria-label parity guard for ar.json).
+ *  4. router.back() is never wired to the header button.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -53,6 +56,8 @@ describe('login header language toggle', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockPathname = '/en/login';
+        document.cookie = 'NEXT_LOCALE=; max-age=0; path=/';
+        localStorage.removeItem('koralink_locale');
         Object.defineProperty(window, 'location', {
             writable: true,
             value: { ...window.location, assign: assignMock, href: 'http://localhost/en/login' },
@@ -66,19 +71,41 @@ describe('login header language toggle', () => {
         expect(container.querySelector('.lucide-arrow-left')).toBeNull();
     });
 
-    it('flips /en → /ar via a full location assign on click', () => {
+    it('/en/login click → navigates to /ar/login AND persists NEXT_LOCALE=ar', () => {
         renderPage('en');
         fireEvent.click(screen.getByRole('button', { name: 'Change language' }));
         expect(assignMock).toHaveBeenCalledTimes(1);
         expect(assignMock).toHaveBeenCalledWith('/ar/login');
+        expect(document.cookie).toContain('NEXT_LOCALE=ar');
         expect(backMock).not.toHaveBeenCalled();
     });
 
-    it('flips /ar → /en (Arabic-first entry)', () => {
+    it('/ar/login click → /en/login + NEXT_LOCALE=en (Arabic aria-label parity)', () => {
         mockPathname = '/ar/login';
         renderPage('ar');
-        // Arabic aria-label resolves from ar.json — key parity guard too.
         fireEvent.click(screen.getByRole('button', { name: 'تغيير اللغة' }));
         expect(assignMock).toHaveBeenCalledWith('/en/login');
+        expect(document.cookie).toContain('NEXT_LOCALE=en');
+    });
+
+    it('content block is click-transparent (its -mt-16 overlaps the header row)', () => {
+        // Dead-tap incident 2026-09-11: the centered content block slid up over
+        // the header and intercepted every header-button tap. Guard the fix:
+        const { container } = renderPage('en');
+        const block = container.querySelector('.-mt-16');
+        expect(block).not.toBeNull();
+        expect(block?.className).toContain('pointer-events-none');
+        // Interactive descendants re-enable hit-testing via arbitrary variants
+        // on the block itself (inputs, buttons, links).
+        expect(block?.className).toContain('[&_input]:pointer-events-auto');
+        expect(block?.className).toContain('[&_button]:pointer-events-auto');
+        expect(block?.className).toContain('[&_a]:pointer-events-auto');
+        // The phone input must not carry its own pointer-events suppression.
+        const input = block?.querySelector('input');
+        expect(input).not.toBeNull();
+        expect(input?.className).not.toContain('pointer-events-none');
+        // The continue CTA (in the bottom section) stays a real button.
+        const continueCtas = screen.getAllByRole('button', { name: /Continue/ });
+        expect(continueCtas.length).toBeGreaterThanOrEqual(1);
     });
 });

@@ -54,6 +54,7 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
   function makeService(
     opts: {
       overdueRows?: unknown[];
+      strandedRows?: unknown[];
       completedCount?: number;
       guardRowCount?: number;
     } = {},
@@ -106,6 +107,12 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
           return { count: opts.completedCount ?? 0 };
         }
         if (text.includes('FROM matches m')) {
+          // The stranded-row sweep (2026-09-11 Al-Nakheel heal) also reads
+          // FROM matches m — it is the one filtering status = 'Completed'.
+          if (text.includes("'Completed'")) {
+            order.push('sweep:select');
+            return opts.strandedRows ?? [];
+          }
           order.push('net:select');
           return opts.overdueRows ?? [];
         }
@@ -155,7 +162,8 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
 
     const result = await svc.autoCompletePastMatches();
 
-    // The net cancelled it — the match is NOT counted as completed.
+    // The net cancelled it — the match is NOT counted as completed. The
+    // stranded-row sweep (3rd statement, Al-Nakheel heal) found nothing here.
     expect(result.cancelled).toBe(1);
     expect(result.completed).toBe(0);
     // Cancel ran through the shared atomic path (guard + host refund + ledger
@@ -165,6 +173,7 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     expect(txCalls.map((c) => c.op)).toEqual(['tx:credit', 'tx:ledger', 'tx:slot']);
     expect(order.indexOf('tx:credit')).toBeGreaterThan(-1);
     expect(order.indexOf('bulk:complete')).toBeGreaterThan(order.indexOf('tx:slot'));
+    expect(order).toContain('sweep:select');
     // Roster told "cancelled" — bell + push, never "completed".
     expect(recordActivity).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -195,7 +204,7 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     expect(result.completed).toBe(3);
     expect(result.cancelled).toBe(0);
     expect(db.transaction).not.toHaveBeenCalled();
-    expect(order).toEqual(['net:select', 'bulk:complete']);
+    expect(order).toEqual(['net:select', 'bulk:complete', 'sweep:select']);
   });
 
   it('exempts legacy rows (min_players = 0) from the net and the bulk guard', async () => {
