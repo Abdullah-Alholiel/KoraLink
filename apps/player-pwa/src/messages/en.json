@@ -87,7 +87,8 @@
     "emailToggle": "Continue with email instead",
     "phoneToggle": "Use phone number instead",
     "emailPlaceholder": "Email address",
-    "invalidEmail": "Enter a valid email address"
+    "invalidEmail": "Enter a valid email address",
+    "changeLanguage": "Change language"
   },
   "verify": {
     "title": "Enter the code",

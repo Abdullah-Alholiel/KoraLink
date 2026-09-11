@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Trophy, Loader2, AlertCircle, Mail } from 'lucide-react';
+import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Globe } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
@@ -32,6 +32,19 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    // Login header (2026-09-11): the old back arrow was redundant — login is
+    // the entry screen of the auth flow, so there is nothing to go back to.
+    // Replaced with a language toggle that mirrors the profile screen's
+    // behavior: swap the /{locale} path prefix, then FULL reload so the server
+    // re-renders with the other locale's messages (router.push may reuse
+    // cached RSC with stale i18n). location.assign() over href= keeps the
+    // navigation spy-able in jsdom tests.
+    const toggleLocale = () => {
+        const newLocale = locale === 'ar' ? 'en' : 'ar';
+        const newPath = (pathname ?? '').replace(`/${locale}`, `/${newLocale}`);
+        window.location.assign(newPath);
+    };
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
     // token persists to localStorage. Surface a one-tap "Restore" affordance
@@ -108,10 +121,11 @@ export default function LoginPage() {
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center gap-3 pt-[var(--top-safe-inset)] pb-4">
                 <button
-                    onClick={() => router.back()}
-                    className="w-10 h-10 flex items-center justify-center"
+                    onClick={toggleLocale}
+                    aria-label={t('changeLanguage')}
+                    className="w-10 h-10 flex items-center justify-center active:scale-95 transition-transform"
                 >
-                    <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                    <Globe className="w-5 h-5 text-brand-black" strokeWidth={2} />
                 </button>
                 <div className="flex items-center gap-2 flex-1 justify-center pe-10">
                     <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
