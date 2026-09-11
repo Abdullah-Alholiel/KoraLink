@@ -80,7 +80,9 @@ describe('useAuth hooks', () => {
 
       expect(mockFetcher).toHaveBeenCalledWith('/auth/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: '+966512345678', code: '123456', surface: 'player' }),
+        // P2-11 parity: the phone channel now opts into the body token
+        // (prod is cross-origin — the cookie alone can't carry the session).
+        body: JSON.stringify({ phone: '+966512345678', code: '123456', surface: 'player', responseToken: true }),
       });
     });
 

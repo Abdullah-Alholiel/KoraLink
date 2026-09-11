@@ -7,10 +7,19 @@ import { useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken } from '@/lib/fetcher';
+import { classifyError } from '@/lib/error-classify';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
-const RESEND_COOLDOWN = 30; // seconds
+// MUST match the API's resend cooldown (apps/api otp-store.service.ts
+// OTP_COOLDOWN_MS = 60s). A shorter client countdown lets the button unlock
+// while the server still 429s — the "Resend → Too Many Requests" trap.
+const RESEND_COOLDOWN = 60; // seconds — must stay ≥ API OTP_COOLDOWN_MS
+
+/** Arabic-Indic digits (٠-٩) → ASCII, so an Arabic keyboard can fill the boxes. */
+function normalizeDigits(value: string): string {
+    return value.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+}
 
 function VerifyContent() {
     const router = useRouter();
@@ -42,17 +51,48 @@ function VerifyContent() {
         return () => clearTimeout(timer);
     }, [resendCountdown]);
 
+    // Reflect the SERVER's 60s resend cooldown from the moment the page opens.
+    // Without this, a user who just sent a code from the login screen can tap
+    // Resend immediately — the API (correctly) 429s, and the old UI showed a
+    // generic "send failed" that looked like a bug.
+    useEffect(() => {
+        setResendCountdown(RESEND_COOLDOWN);
+    }, []);
+
+    const clearOtp = useCallback(() => {
+        setOtp(Array(OTP_LENGTH).fill(''));
+        inputRefs.current[0]?.focus();
+    }, []);
+
     const handleChange = useCallback(
         (index: number, value: string) => {
-            if (!/^\d*$/.test(value)) return;
+            const normalized = normalizeDigits(value);
+            if (!/^\d*$/.test(normalized)) return;
             const newOtp = [...otp];
-            newOtp[index] = value.slice(-1);
+            newOtp[index] = normalized.slice(-1);
             setOtp(newOtp);
-            if (value && index < OTP_LENGTH - 1) {
+            if (normalized && index < OTP_LENGTH - 1) {
                 inputRefs.current[index + 1]?.focus();
             }
         },
         [otp],
+    );
+
+    // Support pasting the full 6-digit code (email clients, password managers,
+    // SMS/email copy) — previously only per-box typing worked, and a paste
+    // silently dropped all but one digit into a single box.
+    const handlePaste = useCallback(
+        (e: React.ClipboardEvent<HTMLInputElement>) => {
+            e.preventDefault();
+            const pasted = normalizeDigits(e.clipboardData.getData('text'));
+            const digits = pasted.replace(/\D/g, '').slice(0, OTP_LENGTH);
+            if (!digits) return;
+            const next = Array(OTP_LENGTH).fill('');
+            digits.split('').forEach((d, i) => { next[i] = d; });
+            setOtp(next);
+            inputRefs.current[Math.min(digits.length, OTP_LENGTH - 1)]?.focus();
+        },
+        [],
     );
 
     const handleKeyDown = useCallback(
@@ -111,7 +151,16 @@ function VerifyContent() {
                 { email, otp: otp.join('') },
                 {
                     onSuccess,
-                    onError: () => setError(tErrors('otpFailed')),
+                    onError: (err) => {
+                        // 401 = wrong/expired code; 429 = fail-lockout (5 tries).
+                        // Stale digits would fail again — clear for a fresh entry.
+                        clearOtp();
+                        setError(
+                            classifyError(err) === 'rateLimited'
+                                ? tErrors('rateLimited')
+                                : tErrors('otpFailed'),
+                        );
+                    },
                 },
             );
             return;
@@ -120,7 +169,14 @@ function VerifyContent() {
             { phone, otp: otp.join('') },
             {
                 onSuccess,
-                onError: () => setError(tErrors('otpFailed')),
+                onError: (err) => {
+                    clearOtp();
+                    setError(
+                        classifyError(err) === 'rateLimited'
+                            ? tErrors('rateLimited')
+                            : tErrors('otpFailed'),
+                    );
+                },
             },
         );
     };
@@ -130,6 +186,10 @@ function VerifyContent() {
         if (channel === 'phone' && !phone) return;
         setError(null);
         setResendCountdown(RESEND_COOLDOWN);
+        // A resend invalidates the PREVIOUS code server-side (the fresh code
+        // overwrites it). Keeping the old digits in the boxes is exactly how
+        // users ended up verifying a dead code → 401. Clear them.
+        clearOtp();
         if (channel === 'email') {
             sendEmailOtp.mutate(
                 { email },
@@ -208,6 +268,7 @@ function VerifyContent() {
                             value={digit}
                             onChange={(e) => handleChange(idx, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(idx, e)}
+                            onPaste={handlePaste}
                             disabled={verifyOtp.isPending}
                             className={`
                 w-12 h-14 rounded-xl border-2 text-center text-xl font-bold
@@ -224,13 +285,17 @@ function VerifyContent() {
                     ))}
                 </div>
 
-                {/* Resend */}
+                {/* Resend — pending/spinner keyed to the ACTIVE channel's
+                    mutation (sendOtp always exists; email must watch its own). */}
                 <button
                     onClick={handleResend}
-                    disabled={resendCountdown > 0 || sendOtp.isPending}
+                    disabled={
+                        resendCountdown > 0 ||
+                        (channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)
+                    }
                     className="flex items-center gap-1.5 mt-6 text-sm text-brand-green font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    {sendOtp.isPending ? (
+                    {(channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                         <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
@@ -245,17 +310,21 @@ function VerifyContent() {
             <div className="pb-8 pb-safe">
                 <button
                     onClick={handleVerify}
-                    disabled={!isComplete || verifyOtp.isPending}
+                    disabled={
+                        !isComplete ||
+                        verifyOtp.isPending ||
+                        verifyEmailOtp.isPending
+                    }
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${!verifyOtp.isPending && isComplete
+            ${!(verifyOtp.isPending || verifyEmailOtp.isPending) && isComplete
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
           `}
                 >
-                    {verifyOtp.isPending ? (
+                    {(verifyOtp.isPending || verifyEmailOtp.isPending) ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             {t('verifying')}

@@ -24,7 +24,7 @@
     "waitlistJoinFailed": "Couldn't join the waitlist — it may already be open or you may be in it. Refresh and try.",
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
-    "otpSendFailed": "Couldn't send the code right now. Check your number and try again.",
+    "otpSendFailed": "Couldn't send a new code just now. If you recently requested one, wait about a minute and try again.",
     "genericRetry": "Try again"
   },
   "common": {
@@ -87,7 +87,8 @@
     "emailToggle": "Continue with email instead",
     "phoneToggle": "Use phone number instead",
     "emailPlaceholder": "Email address",
-    "invalidEmail": "Enter a valid email address"
+    "invalidEmail": "Enter a valid email address",
+    "changeLanguage": "Change language"
   },
   "verify": {
     "title": "Enter the code",
