@@ -719,20 +719,41 @@ export class MatchesService {
    * `refund-<id>` idempotency key). Post-commit: roster + waiters notified
    * (bell + push, verb `match_auto_cancelled`), queue cleared.
    */
-  private async autoCancelExpiringRow(row: {
-    id: string; title: string; host_id: string; booking_mode: string;
-    booking_slot_id: string | null; pitch_cost_sar: string | null;
-    min_players: number; is_player_hosted: boolean | null; total_players: number;
-  }): Promise<boolean> {
+  private async autoCancelExpiringRow(
+    row: {
+      id: string; title: string; host_id: string; booking_mode: string;
+      booking_slot_id: string | null; pitch_cost_sar: string | null;
+      min_players: number; is_player_hosted: boolean | null; total_players: number;
+    },
+    fromStatuses: string[] = ['Open', 'Full'],
+  ): Promise<boolean> {
     let guardWon = false;
     let releasedSlot = false;
     let refundedSar = 0;
     await this.db.transaction(async (tx) => {
+      // Statuses are code-controlled enum literals (never user input), so
+      // inlining them as SQL literals is safe. The heal path cancels FROM
+      // 'Completed' (stranded rows); the live nets cancel from Open/Full.
+      const statusList = sql.join(
+        fromStatuses.map((s) => sql`${s}`),
+        sql`, `,
+      );
       const guard = await tx.execute(sql`
-        UPDATE ${matches} SET status = 'Cancelled', updated_at = NOW()
-        WHERE id = ${row.id}::text AND status IN ('Open', 'Full')
+        UPDATE ${matches}
+        SET status = 'Cancelled', completed_at = NULL, updated_at = NOW()
+        WHERE id = ${row.id}::text AND status IN (${statusList})
       `);
-      if ((guard as unknown as { rowCount?: number }).rowCount === 0) return;
+      // Driver-shape-tolerant affected-rows check (2026-09-11 Al-Nakheel E2E):
+      // drizzle over postgres-js returns a RowList carrying `.count` — the
+      // previous `.rowCount` read was a jest-mock shape, undefined in prod,
+      // so the guard "won" even at 0 affected rows and the post-guard money/
+      // notify steps ran on a row the guard never flipped. jest mocks return
+      // { rowCount }; production returns { count }; accept either.
+      const affected =
+        (guard as unknown as { rowCount?: number; count?: number }).rowCount ??
+        (guard as unknown as { count?: number }).count ??
+        0;
+      if (affected === 0) return;
       guardWon = true;
 
       // Slice 4 (player-host-responsibility): refund EVERY current-roster
@@ -991,7 +1012,9 @@ export class MatchesService {
       min_players: number; is_player_hosted: boolean | null; total_players: number;
     }>)) {
       try {
-        if (await this.autoCancelExpiringRow(row)) {
+        // Stranded rows are TERMINAL (Completed) — the heal must cancel FROM
+        // 'Completed', unlike the live nets whose rows are Open/Full.
+        if (await this.autoCancelExpiringRow(row, ['Open', 'Full', 'Completed'])) {
           healed += 1;
         }
       } catch (err) {
