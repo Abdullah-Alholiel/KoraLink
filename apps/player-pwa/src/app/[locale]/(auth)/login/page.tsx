@@ -8,6 +8,7 @@ import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import { useRestoreAccount } from '@/hooks/useUser';
 import { navigatePreservingLocale } from '@/lib/locale-routing';
+import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, getAuthPhoneDraft, setAuthPhoneDraft, type AuthChannel } from '@/lib/auth-flow';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -20,8 +21,21 @@ export default function LoginPage() {
 
     // email-otp-login (run #46): phone-first by default; a subtle toggle
     // swaps the input to email. Both channels share the verify screen.
-    const [mode, setMode] = useState<'phone' | 'email'>('phone');
+    // 2026-09-11: channel + email draft persist in sessionStorage
+    // (lib/auth-flow) — a reload (language toggle, SW activation) or a
+    // round-trip to the verify screen used to reset the user to phone mode
+    // with an empty form. Storage is hydrated in an effect (SSR-safe).
+    const [mode, setMode] = useState<AuthChannel>('phone');
     const [email, setEmail] = useState('');
+    useEffect(() => {
+        const storedChannel = getAuthChannel();
+        if (storedChannel !== mode) setMode(storedChannel);
+        const draft = getAuthEmailDraft();
+        if (draft && !email) setEmail(draft);
+        const phoneDraft = getAuthPhoneDraft();
+        if (phoneDraft && !phone) setPhone(phoneDraft);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const sendOtp = useSendOtp();
     const sendEmailOtp = useSendEmailOtp();
@@ -201,7 +215,11 @@ export default function LoginPage() {
                     <input
                         type="tel"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => {
+                            const v = e.target.value.replace(/\D/g, '');
+                            setPhone(v);
+                            setAuthPhoneDraft(v); // survives reloads + back-nav
+                        }}
                         placeholder={t('phonePlaceholder')}
                         className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                         maxLength={9}
@@ -216,7 +234,10 @@ export default function LoginPage() {
                         type="email"
                         dir="ltr"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                            setEmail(e.target.value);
+                            setAuthEmailDraft(e.target.value); // survives reloads + back-nav
+                        }}
                         placeholder={t('emailPlaceholder')}
                         className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                         autoComplete="email"
@@ -272,7 +293,9 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => {
                         setError(null);
-                        setMode((m) => (m === 'phone' ? 'email' : 'phone'));
+                        const next: AuthChannel = mode === 'phone' ? 'email' : 'phone';
+                        setMode(next);
+                        setAuthChannel(next); // survives reloads + verify round-trips
                     }}
                     className="mt-4 w-full text-center text-xs text-gray-400 underline underline-offset-2 hover:text-brand-green transition-colors"
                 >

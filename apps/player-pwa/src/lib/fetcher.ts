@@ -144,15 +144,20 @@ export async function fetcher<T>(
       const isRestorePath =
         path === '/users/me/restore' || path.endsWith('/users/me/restore');
       if (!isAuthPath && !isRestorePath) {
+        // The WHOLE (auth) route group is pre-auth territory: the verify
+        // screen runs a background /users/me probe whose 401 used to fire
+        // this redirect and FLING the user out of their OTP entry back to
+        // login mid-flow (2026-09-11 report: "pages refresh and return me
+        // to the phone login page"). Only bounce from authed surfaces.
+        const p = window.location.pathname;
+        const onAuthFlow = p.endsWith('/login') || p.endsWith('/verify') || p.endsWith('/complete-profile');
         clearAuthToken();
         useAppStore.getState().logout();
-        // Keep the user's CURRENT URL locale — a bare '/login' lets the
-        // middleware locale-detect the (often stale) NEXT_LOCALE cookie and
-        // snap an /en user back to Arabic (language-toggle incident 2026-09-11).
-        // The endsWith guard prevents a reload loop when a background 401
-        // (e.g. the AuthBootstrap probe) fires while already on /login.
-        if (!window.location.pathname.endsWith('/login')) {
-          const seg = (window.location.pathname.split('/')[1] || '').toLowerCase();
+        if (!onAuthFlow) {
+          // Keep the user's CURRENT URL locale — a bare '/login' lets the
+          // middleware locale-detect the (often stale) NEXT_LOCALE cookie and
+          // snap an /en user back to Arabic (language-toggle incident).
+          const seg = (p.split('/')[1] || '').toLowerCase();
           const localePrefix = seg === 'en' || seg === 'ar' ? `/${seg}` : '';
           window.location.assign(`${localePrefix}/login`);
         }

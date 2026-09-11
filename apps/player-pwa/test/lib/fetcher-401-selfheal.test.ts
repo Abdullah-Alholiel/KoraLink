@@ -101,4 +101,39 @@ describe('fetcher 401 self-heal (P2-17)', () => {
     await expect(fetcher('/wallet/balance')).rejects.toBeInstanceOf(FetchError);
     expect(assignSpy).toHaveBeenCalledWith('/en/login');
   });
+
+  it('401 on the VERIFY page does NOT redirect (user stays in OTP flow)', async () => {
+    // 2026-09-11 report: tapping Continue with email landed on /verify, the
+    // background /users/me probe 401'd, and the self-heal flung the user
+    // back to phone login — mid-flow. Auth-flow surfaces must never bounce.
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, assign: assignSpy, pathname: '/en/verify' },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockResponse(401, { message: 'Unauthorized' })),
+    );
+
+    await expect(fetcher('/users/me')).rejects.toBeInstanceOf(FetchError);
+    expect(assignSpy).not.toHaveBeenCalled();
+  });
+
+  it('401 on complete-profile does NOT redirect (same auth-flow rule)', async () => {
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, assign: assignSpy, pathname: '/ar/complete-profile' },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockResponse(401, { message: 'Unauthorized' })),
+    );
+
+    await expect(fetcher('/wallet/balance')).rejects.toBeInstanceOf(FetchError);
+    expect(assignSpy).not.toHaveBeenCalled();
+  });
 });
