@@ -348,7 +348,9 @@ export class MatchesService {
     const result = await this.db.execute(sql`
       UPDATE ${matches}
       SET status = 'Completed',
-          completed_at = scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval,
+          completed_at = CASE WHEN status = 'InProgress'
+            THEN NOW()
+            ELSE scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval END,
           updated_at = NOW()
       WHERE status IN ('Open', 'Full', 'InProgress')
         AND scheduled_at + (COALESCE(${matches.duration_mins}, 60) || ' minutes')::interval < NOW()
@@ -402,9 +404,17 @@ export class MatchesService {
       }
     }
 
-    // Underfill net + bulk complete are both done — report both counters
+    // ── Stranded-row sweep AFTER the net (2026-09-11 Al-Nakheel incident):
+    // rows the OLD code wrongly completed while the new code was not yet
+    // live (deploy gap / downtime spanning a cutover) are terminal and
+    // therefore invisible to every other enforcement path — heal them on
+    // every tick. Zero-cost no-op when there are no stranded rows; the
+    // bulk-complete equality signature keeps genuinely-played rows safe.
+    const healedStranded = await this.healStrandedCompletedMatches();
+
+    // Underfill net + bulk complete are both done — report all counters
     // (the scheduler logs; tests assert ordering net-before-complete).
-    return { completed: flipped, cancelled: cancelledByNet };
+    return { completed: flipped, cancelled: cancelledByNet + healedStranded };
   }
 
   /**
@@ -915,6 +925,87 @@ export class MatchesService {
       );
     }
     return cancelled;
+  }
+
+  /**
+   * Self-healing sweep for stranded rows (2026-09-11 Al-Nakheel incident).
+   *
+   * The underfill net can only cancel rows it can still SEE (status Open or
+   * Full). If an entire enforcement window falls into a deploy gap — Render
+   * FREE spun down while `main` carried the OLD code (no net), or the net's
+   * cron missed the band across a code cutover — the old bulk complete flips
+   * a below-minimum match to `Completed` and, because terminal states are
+   * never re-examined, it stays wrongly Completed FOREVER. Hit in prod: the
+   * Al-Nakheel 11v11 (1/22 roster, min 20) was flipped at 13:20 UTC on Sep 10
+   * by pre-PR-#22 code; PR #22 went live 2.5 hours later and could never see
+   * the terminal row.
+   *
+   * The healing predicate is FALSE-POSITIVE-PROOF via the bulk-complete
+   * signature: `completed_at = scheduled_at + duration` at microsecond
+   * precision is ONLY ever written by the auto-completer onto rows that
+   * were Open/Full at flip time (2026-09-11: the bulk UPDATE now stamps
+   * NOW() for InProgress rows — their true end — precisely so a match that
+   * played with mid-game withdrawals can never carry the signature; on
+   * legacy rows completed before this change, a signature match with a
+   * below-minimum roster is still impossible-to-confuse, because InProgress
+   * matches were EXCLUDED from every underfill cancel by design and the
+   * roster of a genuinely-played game was ≥ minimum when the bulk flip
+   * stamped it — dips below minimum require leaves, which are blocked on
+   * Completed rows by the terminal-state guard shipped in the same change).
+   * A host's UI completion stamps `completed_at = NOW()` at an arbitrary
+   * click instant, which can never equal the computed scheduled end exactly.
+   * The roster predicate re-checks below-minimum from the
+   * SELECT, and `autoCancelExpiringRow` re-checks status atomically in its
+   * guard, so a concurrently-joined match is never cancelled. Legacy rows
+   * (min_players = 0) are exempt, mirroring every other underfill path.
+   *
+   * Runs every tick right after the net (see autoCompletePastMatches), so a
+   * newly stranded row heals on the very next tick after the deploy lands.
+   * Money is safe: `autoCancelExpiringRow` refunds every fee payer, flips
+   * the player-host payout held → cancelled, and releases the koralink slot.
+   *
+   * @returns number of stranded matches healed this tick.
+   */
+  async healStrandedCompletedMatches(): Promise<number> {
+    const stranded = await this.db.execute(sql`
+      SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
+             m.pitch_cost_sar, m.min_players, m.is_player_hosted,
+             (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+               AS total_players
+      FROM matches m
+      WHERE m.status = 'Completed'
+        AND m.completed_at IS NOT NULL
+        AND m.completed_at
+              = m.scheduled_at + (COALESCE(m.duration_mins, 60) || ' minutes')::interval
+        AND m.min_players > 0
+        AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
+              < m.min_players
+      ORDER BY m.scheduled_at ASC
+      LIMIT 50
+    `);
+
+    let healed = 0;
+    for (const row of (stranded as unknown as Array<{
+      id: string; title: string; host_id: string; booking_mode: string;
+      booking_slot_id: string | null; pitch_cost_sar: string | null;
+      min_players: number; is_player_hosted: boolean | null; total_players: number;
+    }>)) {
+      try {
+        if (await this.autoCancelExpiringRow(row)) {
+          healed += 1;
+        }
+      } catch (err) {
+        this.logger.error(
+          `Stranded-row heal failed for match ${row.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+    if (healed > 0) {
+      this.logger.log(
+        `Stranded-row sweep: healed ${healed} wrongly-completed below-minimum match(es) → Cancelled.`,
+      );
+    }
+    return healed;
   }
 
   /** Tally POTM votes for one match (POTM invariant: roster member, no no-show). */
@@ -1601,6 +1692,29 @@ export class MatchesService {
       if (membership.is_host) {
         throw new BadRequestException(
           'Host cannot leave the match. Cancel the match instead.',
+        );
+      }
+
+      // Terminal-state guard (2026-09-11 Al-Nakheel incident): once a match
+      // is Completed or Cancelled the roster is the attendance/audit record
+      // — a post-facto leave would mutate it (games-played, no-show stats,
+      // POTM eligibility) and, worse, could shrink a legitimately-played
+      // roster BELOW min_players, disguising a real match as an underfill
+      // stranded row. removePlayer has blocked InProgress/Completed since
+      // P1-24; leaveMatch now blocks the terminal states too (InProgress
+      // stays leavable — mid-game withdrawals are a documented product
+      // behaviour and the refund engine already treats them as forfeits).
+      const [statusRow] = await tx
+        .select({ status: matches.status })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1);
+      if (!statusRow) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
+      if (statusRow.status === 'Completed' || statusRow.status === 'Cancelled') {
+        throw new BadRequestException(
+          'This match has ended — the roster is final and cannot be changed.',
         );
       }
 
