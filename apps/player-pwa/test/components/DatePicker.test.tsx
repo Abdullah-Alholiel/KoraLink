@@ -98,11 +98,13 @@ describe('DatePicker — shared calendar-day strip', () => {
     );
     const pressed = chips().find((c) => c.getAttribute('aria-pressed') === 'true');
     expect(pressed).toBeDefined();
-    const dayNumber = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Riyadh',
-      day: '2-digit',
-    }).format(far);
-    expect(pressed!).toHaveTextContent(String(dayNumber));
+    // The chip renders the UNPADDED UTC day number (d.getUTCDate()); the
+    // fixture date must be keyed the same way — run #38 keyed the expectation
+    // as Riyadh '2-digit' ("01"), which only ever matched by coincidence and
+    // broke on every month where now+20d lands on days 1–9 (hit 2026-09-11:
+    // now+20d = Oct 1 → expected "01" vs rendered "1").
+    const dayNumber = String(far.getUTCDate());
+    expect(pressed!).toHaveTextContent(dayNumber);
     // Controlled: tapping a chip fires the callback but does NOT steal the
     // active state — the parent's selectedDate keeps precedence.
     await user.click(chips()[5]);
