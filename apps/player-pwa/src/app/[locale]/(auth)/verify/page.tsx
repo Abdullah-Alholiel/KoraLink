@@ -8,6 +8,7 @@ import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
+import { clearAuthFlow } from '@/lib/auth-flow';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -112,6 +113,9 @@ function VerifyContent() {
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
+            // The auth flow is DONE — clear the session-scoped channel + email
+            // draft so they never leak into a future login on this tab.
+            clearAuthFlow();
             // P2-11 exception consumption (email channel): the email verify
             // call opts into responseToken:true because the prod API (render)
             // cannot deliver a working cross-origin cookie to the PWA
@@ -223,10 +227,18 @@ function VerifyContent() {
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center gap-3 pt-[var(--top-safe-inset)] pb-4">
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => {
+                        // Deep-link/opened-directly guard: back() would exit the
+                        // app when verify is the first history entry.
+                        if (typeof window !== 'undefined' && window.history.length <= 1) {
+                            router.push(`/${locale}/login`);
+                            return;
+                        }
+                        router.back();
+                    }}
                     className="w-10 h-10 flex items-center justify-center"
                 >
-                    <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                    <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
                 </button>
                 <div className="flex items-center gap-2 flex-1 justify-center pe-10">
                     <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
