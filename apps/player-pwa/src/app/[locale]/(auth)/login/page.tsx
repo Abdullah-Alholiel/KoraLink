@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import { useRestoreAccount } from '@/hooks/useUser';
+import { navigatePreservingLocale } from '@/lib/locale-routing';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -35,15 +36,14 @@ export default function LoginPage() {
 
     // Login header (2026-09-11): the old back arrow was redundant — login is
     // the entry screen of the auth flow, so there is nothing to go back to.
-    // Replaced with a language toggle that mirrors the profile screen's
-    // behavior: swap the /{locale} path prefix, then FULL reload so the server
-    // re-renders with the other locale's messages (router.push may reuse
-    // cached RSC with stale i18n). location.assign() over href= keeps the
-    // navigation spy-able in jsdom tests.
+    // Replaced with a language toggle. A bare path swap is NOT enough: the
+    // NEXT_LOCALE cookie (which the middleware uses on every unprefixed
+    // navigation — PWA relaunch, 401 bounce) stays at the old locale and
+    // snaps the UI back. navigatePreservingLocale persists the choice first,
+    // then full-reloads so the server re-renders with fresh i18n messages.
     const toggleLocale = () => {
-        const newLocale = locale === 'ar' ? 'en' : 'ar';
-        const newPath = (pathname ?? '').replace(`/${locale}`, `/${newLocale}`);
-        window.location.assign(newPath);
+        const target = locale === 'ar' ? '/en/login' : '/ar/login';
+        navigatePreservingLocale(target);
     };
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
@@ -136,7 +136,11 @@ export default function LoginPage() {
             </div>
 
             {/* ── Content ───────────────────────────── */}
-            <div className="flex-1 flex flex-col items-center justify-center -mt-16">
+            {/* pointer-events-none: this block's -mt-16 pulls it OVER the
+                header row, silently intercepting taps on the header buttons
+                (the language toggle never received the click — incident
+                2026-09-11). Interactive children re-enable hit-testing. */}
+            <div className="flex-1 flex flex-col items-center justify-center -mt-16 pointer-events-none [&_a]:pointer-events-auto [&_input]:pointer-events-auto [&_button]:pointer-events-auto">
                 {/* P0-6 (run #30): restore banner when the user soft-deleted
                     on profile and the restore token is still valid. Tap →
                     fetcher falls back to the PDPL restore-token Bearer. */}
@@ -144,7 +148,7 @@ export default function LoginPage() {
                     <div
                         role="alert"
                         data-testid="restore-account-banner"
-                        className="w-full mt-4 mb-4 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3"
+                        className="w-full mt-4 mb-4 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 pointer-events-auto"
                     >
                         <div className="flex items-start gap-3">
                             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={1.5} />

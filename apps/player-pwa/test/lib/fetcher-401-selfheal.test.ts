@@ -83,4 +83,22 @@ describe('fetcher 401 self-heal (P2-17)', () => {
     expect(logoutSpy).not.toHaveBeenCalled();
     expect(localStorage.getItem('koralink_token')).toBe('stale-jwt');
   });
+
+  it('401 bounce keeps the CURRENT URL locale (no middleware re-detect)', async () => {
+    // Language-toggle incident 2026-09-11: a bare '/login' let the middleware
+    // locale-detect the stale NEXT_LOCALE cookie and snap an /en user back to ar.
+    const assignSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, assign: assignSpy, pathname: '/en/wallet' },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockResponse(401, { message: 'Unauthorized' })),
+    );
+
+    await expect(fetcher('/wallet/balance')).rejects.toBeInstanceOf(FetchError);
+    expect(assignSpy).toHaveBeenCalledWith('/en/login');
+  });
 });

@@ -5,6 +5,7 @@ import QueryProvider from '@/providers/QueryProvider';
 import { ObservabilityProvider } from '@/providers/ObservabilityProvider';
 import { LocationProvider } from '@/providers/LocationProvider';
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
+import LocaleSync from '@/components/layout/LocaleSync';
 import ServiceWorkerUpdater from '@/components/auth/ServiceWorkerUpdater';
 import ChunkLoadErrorHandler from '@/components/auth/ChunkLoadErrorHandler';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
@@ -129,6 +130,7 @@ export default async function RootLayout({
             <IntlClientProvider locale={locale} messages={messages}>
               <LocationProvider>
                 <AuthBootstrap />
+                <LocaleSync locale={locale} />
                 <ViewportHeightSync />
                 <ServiceWorkerUpdater />
                 <ChunkLoadErrorHandler />
