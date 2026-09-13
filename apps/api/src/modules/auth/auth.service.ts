@@ -53,7 +53,7 @@ export class AuthService {
     private readonly unifonic: UnifonicService,
     private readonly otpStore: OtpStoreService,
   ) {
-    this.logger.log('OTP store backed by Redis (cache-manager).');
+    this.logger.log('OTP store backed by in-memory cache-manager.');
   }
 
   async sendOtp(phone: string, ip?: string): Promise<void> {

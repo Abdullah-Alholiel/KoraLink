@@ -29,9 +29,9 @@ if [ ! -f "$API_DIR/.env" ]; then
   echo "📄 Created apps/api/.env"
 fi
 
-# ── Start PostgreSQL + Redis ─────────────────────────────────────────────────
-echo "🐘 Starting PostgreSQL + Redis..."
-docker compose -f "$ROOT/docker-compose.yml" up -d postgres redis 2>/dev/null || {
+# ── Start PostgreSQL ─────────────────────────────────────────────────────────
+echo "🐘 Starting PostgreSQL..."
+docker compose -f "$ROOT/docker-compose.yml" up -d postgres 2>/dev/null || {
   echo "❌ Docker not running. Start Docker Desktop first."
   exit 1
 }
