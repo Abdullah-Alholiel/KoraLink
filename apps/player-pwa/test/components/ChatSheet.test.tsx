@@ -226,8 +226,9 @@ describe('ChatSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('CS-6: shows error state with retry button on API failure', () => {
+  it('CS-6: shows CLASSIFIED error copy + retry on API failure (P2-63)', () => {
     const mockRefetch = vi.fn();
+    // Plain Error (no status, non-network message) → classifyError → 'unknown'.
     mockReturn({
       messages: [],
       isLoading: false,
@@ -237,11 +238,28 @@ describe('ChatSheet', () => {
 
     renderWithProviders(<ChatSheet {...baseProps} />);
 
-    expect(screen.getByText("Couldn't load data. Check your connection.")).toBeTruthy();
+    expect(
+      screen.getByText("That didn't work. Try again — if it keeps failing, check your connection."),
+    ).toBeTruthy();
     expect(screen.getByText('Try Again')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Try Again'));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('CS-6b: 5xx failures show the server-class copy (P2-63 — errors.server, not generic)', () => {
+    mockReturn({
+      messages: [],
+      isLoading: false,
+      error: Object.assign(new Error('Internal server error'), { status: 503 }),
+      refetch: vi.fn(),
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    expect(
+      screen.getByText('Our servers hit a snag — your data is safe. Try again in a moment.'),
+    ).toBeTruthy();
   });
 
   it('CS-7: clears the input and sends with a clientMessageId on send', () => {

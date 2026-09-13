@@ -7,6 +7,7 @@ import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, Shield
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useMyReports, type MyReportApi } from '@/hooks/useReports';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { classifyError, errorKey } from '@/lib/error-classify';
 
 /** P2-23 (run #17): "My Reports" — reporters see their reports and outcomes. */
 
@@ -23,6 +24,8 @@ export default function ReportsPage() {
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations('reports');
   const tc = useTranslations('common');
+  // Root-scope translator for the classified `errors.*` keys (P2-63).
+  const terr = useTranslations();
   const isOnline = useOnlineStatus();
 
   const { reports, isLoading, error, refetch, hasMore, fetchNextPage, isFetchingNextPage } =
@@ -70,7 +73,8 @@ export default function ReportsPage() {
         {error && !isLoading && (
           <div className="flex flex-col items-center py-20 text-center">
             <AlertTriangle className="w-10 h-10 text-gray-400 mb-3" strokeWidth={1.5} />
-            <p className="text-sm text-gray-500">{t('error')}</p>
+            {/* P2-63: classified what/why/next copy — was a flat "Error" line. */}
+            <p className="text-sm text-gray-500">{terr(errorKey(classifyError(error)))}</p>
             <button
               onClick={() => refetch()}
               className="mt-3 text-sm font-semibold text-brand-green"

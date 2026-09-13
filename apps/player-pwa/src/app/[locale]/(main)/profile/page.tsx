@@ -41,6 +41,8 @@ import RestoreAccountBanner from '@/components/profile/RestoreAccountBanner';
 import EmailSection from '@/components/profile/EmailSection';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import AppBar from '@/components/layout/AppBar';
+import OfflineBanner from '@/components/layout/OfflineBanner';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -101,6 +103,9 @@ export default function ProfilePage() {
     const router = useRouter();
     const t = useTranslations();
     const locale = (pathname ?? '').split('/')[1] || 'en';
+    // P2-63 (run #51): offline signal on the profile surface too (was one of
+    // the last banner-less pages — Reviewer B run #51).
+    const isOnline = useOnlineStatus();
 
     // Guard against hydration mismatch — browser-only APIs (Push) differ
     // between server and client, causing DOM tree divergence.
@@ -221,6 +226,9 @@ export default function ProfilePage() {
                     }}
                 />
             )}
+
+            {/* P2-63: shared offline banner (Reviewer B run #51 coverage gap). */}
+            <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
 
             {/* ── Identity hero (sketches/004-profile-redesign V2 r2) ──
                 Brand-green gradient — Abdullah: "not too dark, same colours

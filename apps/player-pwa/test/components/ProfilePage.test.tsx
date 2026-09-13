@@ -55,6 +55,13 @@ vi.mock('@/hooks/usePushNotifications', () => ({
     usePushNotifications: vi.fn(),
 }));
 
+// P2-63 (run #51): the page now renders the shared OfflineBanner — drive its
+// network state from tests (default online → banner null).
+const mockIsOnline = vi.fn(() => true);
+vi.mock('@/hooks/useOnlineStatus', () => ({
+    useOnlineStatus: () => mockIsOnline(),
+}));
+
 function mockUserData(overrides?: {
     stats?: { data?: Record<string, number>; isLoading?: boolean; error?: unknown };
     profile?: Record<string, unknown> | undefined;
@@ -99,6 +106,9 @@ function renderPage() {
 describe('ProfilePage — Stadium Night redesign (sketches/004, 2026-09-06)', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        // resetAllMocks wipes factory implementations — re-seed the network state
+        // (P2-63: the page renders the shared OfflineBanner from this mock).
+        mockIsOnline.mockImplementation(() => true);
         refetchStats.mockResolvedValue(undefined);
         refetchWallet.mockResolvedValue(undefined);
     const stubMutation = () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false, error: null });
@@ -201,5 +211,18 @@ describe('ProfilePage — Stadium Night redesign (sketches/004, 2026-09-06)', ()
         // With stats healthy, the only "Try Again" on screen is the wallet's
         await user.click(screen.getByRole('button', { name: 'Try Again' }));
         expect(refetchWallet).toHaveBeenCalled();
+    });
+
+    it('P2-63: renders NO offline banner when online (null-render contract)', () => {
+        mockUserData();
+        renderPage();
+        expect(screen.queryByText("You're offline — showing cached data")).toBeNull();
+    });
+
+    it('P2-63: renders the shared offline banner when the network drops', () => {
+        mockUserData();
+        mockIsOnline.mockImplementation(() => false);
+        renderPage();
+        expect(screen.getByText("You're offline — showing cached data")).toBeInTheDocument();
     });
 });

@@ -8,6 +8,7 @@ import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 interface ChatSheetProps {
@@ -184,7 +185,7 @@ export default function ChatSheet({
                 <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
               </div>
               <p className="text-sm text-gray-400 text-center mb-4">
-                {t('common.errorDescription')}
+                {t(errorKey(classifyError(error)))}
               </p>
               <button
                 onClick={() => refetch()}
