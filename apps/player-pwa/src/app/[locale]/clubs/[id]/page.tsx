@@ -217,16 +217,30 @@ export default function ClubPage() {
                     );
                   })()}
 
-                  {/* Address */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                  {/* Address — P2-map-pin (run #51): tappable maps deep-link.
+                      The venues table carries no coordinates (schema.ts venues:
+                      name/city/address only), so the link uses a free-form
+                      maps query (name + address + city) — Google/Apple Maps
+                      both resolve it; no coords = nothing to fake. The hero's
+                      MapPin stays decorative (image caption, not an affordance). */}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${venue.name} ${venue.address} ${venue.city}`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${venue.name} — ${t('clubs.openInMaps')}`}
+                    className="flex items-center gap-3 group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-active:bg-brand-green/20 transition-colors">
                       <MapPin className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-400">{t('clubs.address')}</p>
                       <p className="text-sm font-semibold text-brand-black truncate">{venue.address}</p>
                     </div>
-                  </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 rtl:-scale-x-100 flex-shrink-0" strokeWidth={2} />
+                  </a>
 
                   {/* P1-32: operating hours row (Riyadh-local wall clock).
                       Rendered only when BOTH bounds exist — never invent

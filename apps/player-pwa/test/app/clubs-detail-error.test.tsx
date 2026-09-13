@@ -188,3 +188,27 @@ describe('ClubPage match-list error state (P1-46, run #51)', () => {
     expect(screen.queryByText('No matches scheduled')).not.toBeInTheDocument();
   });
 });
+
+describe('ClubPage address maps deep-link (P2-map-pin, run #51 — dead-UI fix)', () => {
+  it('MAP-1: the address row is a real maps link with encoded name+address+city', () => {
+    mockState.matches = [];
+    renderPage();
+
+    const link = screen.getByRole('link', { name: /Open in Maps/i });
+    expect(link).toBeTruthy();
+    const href = link.getAttribute('href') ?? '';
+    expect(href).toContain('https://www.google.com/maps/search/?api=1&query=');
+    expect(href).toContain(encodeURIComponent('Riyadh Padel Club'));
+    expect(href).toContain(encodeURIComponent('King Fahd Rd'));
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('MAP-2: the hero MapPin stays decorative — exactly ONE maps link on the page', () => {
+    mockState.matches = [];
+    renderPage();
+
+    const links = screen.getAllByRole('link', { name: /Open in Maps/i });
+    expect(links.length).toBe(1);
+  });
+});
