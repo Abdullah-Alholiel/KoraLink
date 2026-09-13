@@ -214,4 +214,53 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
     expect(readCalls.length).toBeLessThanOrEqual(2);
     expect(readCalls.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('MW-6: dedup set resets on match switch (P2-62, run #51) — no stale suppression', async () => {
+    stubSocket.connected = true;
+    const msg = (id: string, matchId: string) => ({
+      id,
+      match_id: matchId,
+      user_id: 'user-other',
+      content: 'hello',
+      created_at: new Date().toISOString(),
+    });
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages') return Promise.resolve([msg('srv-1', 'm1')]);
+      if (url === '/matches/m2/messages') return Promise.resolve([msg('srv-2', 'm2')]);
+      return Promise.resolve({ ok: true });
+    });
+
+    const { wrapper } = createWrapper();
+    const { rerender } = renderHook(
+      ({ id }: { id: string | null }) => useMatchChat(id),
+      { wrapper, initialProps: { id: 'm1' as string | null } },
+    );
+
+    connect();
+
+    // m1's unseen srv-1 gets marked (open-mark and/or batch — any channel).
+    await waitFor(() => {
+      expect(mockEmit).toHaveBeenCalledWith('mark-chat-read', { matchId: 'm1' });
+    });
+    // (assert on ONE channel so the reset claim stays precise)
+    const m1WsMarks = mockEmit.mock.calls.filter(
+      (c) => c[0] === 'mark-chat-read' && c[1]?.matchId === 'm1',
+    ).length;
+    expect(m1WsMarks).toBeGreaterThanOrEqual(1);
+
+    mockEmit.mockClear();
+
+    // Switch the SAME hook instance to m2 — the ref must reset, so m2's own
+    // unseen srv-2 is NOT suppressed by m1's leftover dedup entries.
+    rerender({ id: 'm2' });
+    connect();
+
+    await waitFor(() => {
+      expect(mockEmit).toHaveBeenCalledWith('mark-chat-read', { matchId: 'm2' });
+    });
+    const m2WsMarks = mockEmit.mock.calls.filter(
+      (c) => c[0] === 'mark-chat-read' && c[1]?.matchId === 'm2',
+    ).length;
+    expect(m2WsMarks).toBeGreaterThanOrEqual(1);
+  });
 });

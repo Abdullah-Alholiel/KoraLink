@@ -218,6 +218,14 @@ export function useMatchChat(matchId: string | null) {
   // merged `messages` view is computed (see bottom of the hook).
   const markedReadIdsRef = useRef<Set<string>>(new Set());
 
+  // Reset the dedup set on match switch (P2-62, run #51): the ref lives for
+  // the hook's lifetime, so ids from a previous match would otherwise
+  // accumulate unbounded within a session. Runs in the same pass as the
+  // open-mark effect above — the new match's marks are never suppressed.
+  useEffect(() => {
+    markedReadIdsRef.current = new Set();
+  }, [matchId]);
+
   // ── Send message (optimistic + WS primary, REST fallback) ──
   const sendMessage = useMutation<
     MatchMessage | undefined,
