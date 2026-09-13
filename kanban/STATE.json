@@ -1,14 +1,30 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 49,
+  "last_run": 50,
   "last_run_at": "2026-09-10T09:05:00Z",
   "last_run_commits": [
-    "736a960",
-    "f0dbbd7"
+    "4726498",
+    "7e9d325"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-10T08-35Z-run49.md",
-  "in_review_items": [],
+  "last_run_report": "kanban/RUNS/2026-09-13T15-25Z-run50.md",
+  "in_review_items": [
+    {
+      "id": "P2-58",
+      "claim": "match-chat read watermark end-to-end (0041 applied, REST+WS surfaces, PWA hook); live E2E 24-unread\u21920, non-member 403",
+      "commit": "7e9d325"
+    },
+    {
+      "id": "P2-59",
+      "claim": "hydration trio on useNow() + ChatSheet hook-order fix; vitest green",
+      "commit": "4726498"
+    },
+    {
+      "id": "P2-60",
+      "claim": "SW registration owned by ServiceWorkerUpdater, register:false, captureError; SWU specs",
+      "commit": "4726498"
+    }
+  ],
   "open_blockers": [
     "zai delegation-path 401 history \u2014 run #45: probe 200, delegation child 401 (intermittent gateway issue, same as runs #24-30/#32). Fell back to OmniRoute free tier for reviewers. 3rd consecutive zai child-401 failure (after runs #36-#37 clean). Policy unchanged: try zai first, failover on first child error.",
     "P1-41 RESEND PROVISIONING: email layer is log-only until Abdullah provisions Resend (API key + verified sender domain) and sets RESEND_API_KEY + MAIL_FROM (+ optional API_PUBLIC_URL) in apps/api/.env, then restarts koralink-api. Feature self-disables until then.",
@@ -35,7 +51,8 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "Run #49 (2026-09-10T08:35Z, manual WebUI): review+build cycle interleaved with Brevo key handoff. zai glm-5.3-flash reviewers clean (143s/509s). Sentry triage: API-B=scanner noise (correctly rejected), API-1B=REAL prod email 503s (Resend no-domain) -> Brevo cutover staged; API-13/4/19/A + WEB-8 = stale artifacts (proven by timestamps + live repro). Built: (A) auth hardening \u2014 otpMatches constant-time compare both flows, email-verify create-race 23505 recovery, @IsUUID on create-conversation, deleted-account send silent-drop (202 contract); jest 39/39, api tsc 0. (B) hydration \u2014 useNow() clock on both messages surfaces; vitest 465/465, type-check 0. turbo 3/3, API restarted post-build, health green, live E2E send/verify/UUID-validation PASS. Board: +P2-57 offline content fallback, +P2-58 unread-badge asymmetry; POTM-locale gap REFUTED (P2-8/P2-27 DONE). BLOCKER: Brevo cutover awaits Abdullah console steps (authorise VPS IP 145.241.109.213 + verified sender); key stored in .deploy-tokens. EMAIL_PROVIDER not flipped early (blocked key would 503 sends).",
+  "notes": "run50 takeover: 11:26Z catch-up run crashed after committing review a8b4946 + gates 0-3 (docs/plans/run50-admin-rotation-hydration/), before any gate ran; PID dead; lock taken over 15:25Z. Its ChatSheet useNow-after-early-return HARD-FAILED next build ESLint (fixed before commit). Journal trap: 0039/0040 when values were FUTURE-dated (178932480000x) above live bookkeeping newest (1788963406695) \u2192 would re-fire as phantoms on every migrate; normalized below newest (schema verified applied). migrate-vps.mjs is the working migration path on this VPS (drizzle-kit migrate errors with \"Please install latest version of drizzle-orm\"). zai delegation 401 streak BROKEN: run #50 both reviewers completed on zai glm-5.3-flash (130s/145s). New board rows: P1-46 (clubs match-list error state); P2-61 deferred to next admin touch (clean tree, deliberate).",
   "default_branch": "staging",
-  "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) \u2014 set 2026-09-08 environment-segregation cycle"
+  "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) \u2014 set 2026-09-08 environment-segregation cycle",
+  "last_run_id": "2026-09-13T15:25:03Z"
 }
