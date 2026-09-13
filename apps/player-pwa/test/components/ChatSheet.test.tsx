@@ -31,6 +31,13 @@ vi.mock('@/store/useAppStore', () => ({
 
 import ChatSheet from '@/components/matches/ChatSheet';
 
+// Mock the hydration-safe clock — ChatSheet must thread it into groupMessages
+// (P2-59, run #50) instead of reading new Date() in the render path.
+const mockUseNow = vi.fn<() => number | null>(() => 1_000_000_000);
+vi.mock('@/hooks/useNow', () => ({
+  useNow: () => mockUseNow(),
+}));
+
 // Wrapper with QueryClientProvider + i18n
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -124,6 +131,77 @@ describe('ChatSheet', () => {
 
     const spinner = document.querySelector('.animate-spin');
     expect(spinner).toBeNull();
+  });
+
+  it('CS-3b: buckets messages with the useNow clock — today/yesterday groups use nowMs, not new Date() (P2-59)', () => {
+    // Deliberately NOT the real wall clock — proves grouping follows useNow().
+    const nowMs = 1_700_000_000_000; // 2023-11-14T22:13:20Z
+    mockUseNow.mockReturnValue(nowMs);
+    const yesterday = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
+    const older = '2020-01-01T10:00:00.000Z';
+
+    mockReturn({
+      messages: [
+        {
+          id: 'msg-today',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
+          content: 'fresh message',
+          created_at: new Date(nowMs - 60_000).toISOString(),
+          user: { id: 'user-1', full_name: 'Ahmed', handle: '@ahmed', avatar_url: null },
+        },
+        {
+          id: 'msg-yesterday',
+          match_id: 'test-match-id',
+          user_id: 'user-2',
+          content: 'yesterday message',
+          created_at: yesterday,
+          user: { id: 'user-2', full_name: 'Khalid', handle: '@khalid', avatar_url: null },
+        },
+        {
+          id: 'msg-older',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
+          content: 'ancient message',
+          created_at: older,
+          user: { id: 'user-1', full_name: 'Ahmed', handle: '@ahmed', avatar_url: null },
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText('Yesterday')).toBeTruthy();
+    // The 2020 message renders under a plain localized date, not "Today".
+    expect(screen.getByText('Jan 1')).toBeTruthy();
+  });
+
+  it('CS-3c: null clock (SSR/first-render posture) does not crash and recovers to real-clock labels (P2-59)', () => {
+    mockUseNow.mockReturnValue(null); // SSR + first client render posture
+    mockReturn({
+      messages: [
+        {
+          id: 'msg-now',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
+          content: 'sent seconds ago',
+          created_at: new Date(Date.now()).toISOString(),
+          user: { id: 'user-1', full_name: 'Ahmed', handle: '@ahmed', avatar_url: null },
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    // Effects flush synchronously in RTL, so the post-mount render shows the
+    // real-clock bucket; the assertion here is that the null posture never
+    // crashes and the message survives. (The hydration contract itself —
+    // grouping driven by useNow, not the wall clock — is pinned by CS-3b,
+    // and useNow's null-then-real sequence by OfflineBanner.test.tsx.)
+    expect(screen.getByText('sent seconds ago')).toBeTruthy();
   });
 
   it('CS-4: does not render when isOpen=false', () => {

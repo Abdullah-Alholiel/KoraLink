@@ -7,6 +7,7 @@ import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 interface ChatSheetProps {
@@ -34,9 +35,13 @@ function groupMessages(
   messages: MatchMessage[],
   t: (key: string) => string,
   locale: string,
+  nowMs: number,
 ) {
   const groups: { label: string; messages: MatchMessage[] }[] = [];
-  const now = new Date();
+  // Hydration-safe clock (run #50, P2-59): `now` passed in from the
+  // component's useNow() — null pre-mount buckets everything "older"
+  // identically on both sides. Previously a render-path new Date().
+  const now = new Date(nowMs);
 
   for (const msg of messages) {
     const group = getDateGroup(msg.created_at, now);
@@ -96,9 +101,16 @@ export default function ChatSheet({
     }
   }, [isOpen]);
 
+  // Hydration-safe wall clock (P2-59, run #50): null pre-mount → 0 buckets
+  // all messages "older" on the first render, identical on both sides; the
+  // device clock takes over from the first effect onward.
+  // (Run #50 Reviewer A: the hook must run BEFORE any early return so hook
+  // order stays stable regardless of isOpen/mount behavior.)
+  const nowMs = useNow() ?? 0;
+
   if (!isOpen) return null;
 
-  const grouped = groupMessages(messages, t, locale);
+  const grouped = groupMessages(messages, t, locale, nowMs);
 
   const handleSend = () => {
     const trimmed = input.trim();

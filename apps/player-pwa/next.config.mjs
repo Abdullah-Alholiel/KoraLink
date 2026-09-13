@@ -7,7 +7,11 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const withPWA = withPWAInit({
   dest: 'public',
-  register: true,
+  // P2-60 (run #50): registration is owned by ServiceWorkerUpdater so a
+  // failed register() is captured (scope swRegister) instead of surfacing as
+  // an unhandled rejection from this injected script (Sentry WEB-2 — old
+  // browsers / enterprise CSPs blocking the worker).
+  register: false,
   disable: process.env.NODE_ENV === 'development',
   // Offline fallback: serve /ar/offline when a start-url or cached-asset request
   // fails (both cache and network). NOTE (P2-40, run #23): this config-level

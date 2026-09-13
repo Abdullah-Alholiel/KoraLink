@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
 import { useMatches } from '@/hooks/useMatches';
+import { useNow } from '@/hooks/useNow';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
@@ -37,8 +38,17 @@ const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-function formatDateLabel(date: Date, t: (k: string) => string, locale: string): string {
-  const today = new Date();
+function formatDateLabel(
+  date: Date,
+  t: (k: string) => string,
+  locale: string,
+  nowMs: number,
+): string {
+  // Hydration-safe clock (run #50, P2-59): `now` passed in from the
+  // component's useNow(); pre-mount (0) never matches a real day, so the
+  // label falls through to the localized date instead of a Today/Tomorrow
+  // that could disagree between server and device. Previously new Date().
+  const today = new Date(nowMs);
   today.setHours(0, 0, 0, 0);
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -73,6 +83,11 @@ export default function ClubPage() {
   const router = useRouter();
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations();
+
+  // Hydration-safe wall clock (P2-59, run #50): null during SSR and the first
+  // client render; 0 never matches a real day, so the chip label falls through
+  // to the plain localized date until the clock effect lands.
+  const clubNowMs = useNow() ?? 0;
 
   const { data: venue, isLoading, error } = useVenue(id);
 
@@ -304,7 +319,8 @@ export default function ClubPage() {
                     </p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="text-sm font-bold text-brand-black">
-                        {selectedDate ? formatDateLabel(selectedDate, t, locale) : t('clubs.allMatches')}
+                        {/* P2-59 (run #50): hydration-stable now from useNow(); pre-mount falls through to the localized date */}
+                        {selectedDate ? formatDateLabel(selectedDate, t, locale, clubNowMs) : t('clubs.allMatches')}
                       </span>
                       {selectedDate && (
                         <button

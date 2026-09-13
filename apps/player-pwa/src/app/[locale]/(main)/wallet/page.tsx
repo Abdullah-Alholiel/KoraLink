@@ -19,6 +19,7 @@ import {
 import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import type { Transaction } from '@/types';
@@ -38,9 +39,18 @@ function getTransactionIcon(icon: string) {
     }
 }
 
-function groupTransactionsByDay(transactions: Transaction[], t: (key: string) => string) {
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
+function groupTransactionsByDay(
+    transactions: Transaction[],
+    t: (key: string) => string,
+    nowMs: number,
+) {
+    // Hydration-safe clock (run #50, P2-59): `now` is passed in from the
+    // component's useNow() — null during SSR and the first client render, so
+    // both sides bucket identically ("Earlier"). Previously a render-path
+    // new Date()/Date.now() (Reviewer A, run #50; same class as the run-#40
+    // MatchCard and run-#49 messages fixes).
+    const today = new Date(nowMs).toDateString();
+    const yesterday = new Date(nowMs - 86400000).toDateString();
 
     const groups: { label: string; items: Transaction[] }[] = [];
     const todayItems = transactions.filter(
@@ -130,7 +140,11 @@ export default function WalletPage() {
     // Use API data only; show skeleton while loading
     const balance = balanceData?.balance ?? 0;
     const transactions: Transaction[] = historyData?.transactions ?? [];
-    const groups = groupTransactionsByDay(transactions, t);
+    // Hydration-safe wall clock (P2-59, run #50): null during SSR and the
+    // first client render; 0 buckets all transactions as "Earlier" on that
+    // one render, then the real clock buckets by the device's day boundary.
+    const now = useNow();
+    const groups = groupTransactionsByDay(transactions, t, now ?? 0);
 
     return (
         <div className="pb-4">
