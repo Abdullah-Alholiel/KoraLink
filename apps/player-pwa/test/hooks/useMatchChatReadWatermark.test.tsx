@@ -1,0 +1,217 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+
+// ── Mocks (before importing the hook) ────────────────────────────────
+
+const mockFetcher = vi.fn();
+vi.mock('@/lib/fetcher', () => ({
+  fetcher: (...args: unknown[]) => mockFetcher(...args),
+  FetchError: class FetchError extends Error {
+    status: number;
+    url: string;
+    constructor(msg: string, status: number, url: string) {
+      super(msg);
+      this.name = 'FetchError';
+      this.status = status;
+      this.url = url;
+    }
+  },
+}));
+
+/**
+ * Controllable lobby-socket stub: the test fires the `connect` handler and
+ * asserts on emits — mirroring how useMatchChat drives the real socket.
+ * `connected` mirrors the real Socket property the hook consults when
+ * choosing WS vs REST.
+ */
+type Handler = (...args: unknown[]) => void;
+type StubSocket = {
+  connected: boolean;
+  on: (event: string, handler: Handler) => void;
+  emit: (...args: unknown[]) => void;
+  disconnect: () => void;
+};
+const stubSocket: StubSocket = {
+  connected: false,
+  on(event, handler) {
+    const list = mockHandlers.get(event) ?? [];
+    list.push(handler);
+    mockHandlers.set(event, list);
+  },
+  emit: (...args) => mockEmit(...args),
+  disconnect: () => mockDisconnect(),
+};
+const mockHandlers = new Map<string, Handler[]>();
+const mockEmit = vi.fn();
+const mockDisconnect = vi.fn();
+
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => stubSocket),
+}));
+
+vi.mock('@/store/useAppStore', () => {
+  const selectUser = (s: { user?: { id: string } }) => s.user;
+  const useAppStore = Object.assign(
+    (selector: (s: { user?: { id: string } }) => unknown) => selector({ user: { id: 'user-me' } }),
+    {
+      getState: () => ({ user: { id: 'user-me' } }),
+      selectUser,
+    },
+  );
+  return { useAppStore, selectUser };
+});
+
+import { useMatchChat } from '@/hooks/useMessages';
+
+function connect() {
+  for (const h of mockHandlers.get('connect') ?? []) h();
+}
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+    queryClient,
+  };
+}
+
+describe('useMatchChat read watermark (P2-58, run #50)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHandlers.clear();
+    mockFetcher.mockResolvedValue([]);
+  });
+
+  it('MW-1: fresh sheet open marks read via REST (socket not yet connected)', async () => {
+    stubSocket.connected = false;
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages') return Promise.resolve([]);
+      return Promise.resolve({ ok: true }); // the read fallback POST
+    });
+
+    const { wrapper } = createWrapper();
+    renderHook(() => useMatchChat('m1'), { wrapper });
+
+    // The socket connects asynchronously — at open time the hook must take
+    // the REST path immediately, never wait for the socket.
+    await waitFor(() => {
+      expect(mockFetcher).toHaveBeenCalledWith(
+        '/matches/m1/messages/read',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    expect(mockEmit).not.toHaveBeenCalledWith('mark-chat-read', expect.anything());
+  });
+
+  it('MW-2: unseen messages after connect mark read via the WS emit', async () => {
+    stubSocket.connected = true; // connected session (socketRef set on connect)
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages') {
+        return Promise.resolve([
+          {
+            id: 'srv-1',
+            match_id: 'm1',
+            user_id: 'user-other',
+            content: 'hello',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
+      return Promise.resolve({ ok: true });
+    });
+
+    const { wrapper } = createWrapper();
+    renderHook(() => useMatchChat('m1'), { wrapper });
+
+    connect();
+
+    await waitFor(() => {
+      expect(mockEmit).toHaveBeenCalledWith('mark-chat-read', { matchId: 'm1' });
+    });
+    // Contract: open-mark fires via REST immediately (the socket cannot be
+    // connected yet at open time), and the unseen batch marks via WS once
+    // connected — both writes happen, both are idempotent watermark writes.
+    expect(mockFetcher).toHaveBeenCalledWith(
+      '/matches/m1/messages/read',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(mockEmit).toHaveBeenCalledWith('mark-chat-read', { matchId: 'm1' });
+  });
+
+  it('MW-3: does nothing when matchId is null (sheet closed → matchId null)', () => {
+    const { wrapper } = createWrapper();
+    renderHook(() => useMatchChat(null), { wrapper });
+
+    connect(); // even a connect fires nothing — no match to mark
+    expect(mockEmit).not.toHaveBeenCalled();
+    expect(mockFetcher).not.toHaveBeenCalled();
+  });
+
+  it('MW-4: a late socket connect does not duplicate the open-mark write', async () => {
+    stubSocket.connected = false;
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages') return Promise.resolve([]);
+      return Promise.resolve({ ok: true });
+    });
+
+    const { wrapper } = createWrapper();
+    renderHook(() => useMatchChat('m1'), { wrapper });
+
+    await waitFor(() => {
+      expect(mockFetcher).toHaveBeenCalledWith(
+        '/matches/m1/messages/read',
+        expect.anything(),
+      );
+    });
+
+    connect(); // socket comes up after the REST open-mark
+
+    // No WS mark-chat-read: the write already happened this open-cycle.
+    expect(mockEmit).not.toHaveBeenCalledWith('mark-chat-read', expect.anything());
+  });
+
+  it('MW-5: one watermark write per batch of unseen messages, own messages excluded', async () => {
+    const others = ['srv-a', 'srv-b', 'srv-c'].map((id) => ({
+      id,
+      match_id: 'm1',
+      user_id: 'user-other',
+      content: 'hi',
+      created_at: new Date().toISOString(),
+    }));
+    const mine = [
+      {
+        id: 'srv-own',
+        match_id: 'm1',
+        user_id: 'user-me', // the current user — must NOT trigger a write
+        content: 'my own',
+        created_at: new Date().toISOString(),
+      },
+    ];
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages') return Promise.resolve([...others, ...mine]);
+      return Promise.resolve({ ok: true });
+    });
+
+    const { wrapper } = createWrapper();
+    renderHook(() => useMatchChat('m1'), { wrapper });
+
+    await waitFor(() => {
+      expect(mockFetcher).toHaveBeenCalledWith(
+        '/matches/m1/messages/read',
+        expect.anything(),
+      );
+    });
+    // open-mark + at most ONE batch write — never per message.
+    const readCalls = mockFetcher.mock.calls.filter(
+      (c) => c[0] === '/matches/m1/messages/read',
+    );
+    expect(readCalls.length).toBeLessThanOrEqual(2);
+    expect(readCalls.length).toBeGreaterThanOrEqual(1);
+  });
+});

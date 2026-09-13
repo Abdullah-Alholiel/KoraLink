@@ -498,6 +498,12 @@ export const match_players = pgTable(
       scale: 2,
     }),
     no_show: boolean('no_show').notNull().default(false),
+    // P2-58 (run #50): per-user read watermark for match-chat unread counts.
+    // Roster-row-scoped (per match EPISODE): a leave→rejoin gets a fresh row
+    // and thus a fresh watermark, mirroring the fee_paid_sar episode
+    // convention. NULL = never read → count all other members' messages
+    // (same COALESCE('epoch') semantics as the personal-conversation branch).
+    last_read_at: timestamp('last_read_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('match_players_match_user_idx').on(t.match_id, t.user_id),

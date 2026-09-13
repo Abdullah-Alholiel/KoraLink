@@ -175,6 +175,49 @@ export function useMatchChat(matchId: string | null) {
     };
   }, [matchId, reconcile]);
 
+  // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
+  // While the sheet is open, advance the caller's match-chat read watermark
+  // on open and on every newly-reconciled message, so the Messages list stops
+  // counting the match as unread (parity with personal-conversation badges).
+  const markChatRead = useCallback(
+    () => {
+      if (!matchId) return;
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('mark-chat-read', { matchId });
+        return;
+      }
+      // Socket down → REST fallback (same guard chain server-side).
+      fetcher<{ ok: true }>(`/matches/${matchId}/messages/read`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }).catch(() => {
+        // Best-effort: a missed watermark only leaves a stale badge.
+      });
+    },
+    [matchId],
+  );
+
+  useEffect(() => {
+    if (!matchId) return;
+    // Open-mark fires UNCONDITIONALLY on matchId change (sheet open): WS when
+    // connected, REST otherwise. Gating it on isConnected would leave chats
+    // permanently unread whenever the sheet is opened while the socket is
+    // down — history lives in the query cache, so no other path would fire.
+    markChatRead();
+    // On close/unmount: invalidate the discussions cache so the Messages
+    // badge reflects the advanced watermark on back-navigation (staleTime
+    // would otherwise serve a pre-read count for up to 30s).
+    return () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'me', 'discussions'] });
+    };
+  }, [matchId, markChatRead, queryClient]);
+
+  // Track which server-ids we already marked read to avoid repeat writes
+  // when reconcile replays the same authoritative message (dedup by id);
+  // ONE watermark write per batch — never per message. Lives AFTER the
+  // merged `messages` view is computed (see bottom of the hook).
+  const markedReadIdsRef = useRef<Set<string>>(new Set());
+
   // ── Send message (optimistic + WS primary, REST fallback) ──
   const sendMessage = useMutation<
     MatchMessage | undefined,
@@ -262,6 +305,23 @@ export function useMatchChat(matchId: string | null) {
   );
 
   const messages = mergeMessages(historyQuery.data ?? [], localMessages);
+
+  // Batched read-mark: any newly-seen message authored by someone else marks
+  // the chat read (ONE watermark write per batch — never per message). Uses
+  // the merged authoritative+local view so history loads also count as read;
+  // declared after `messages` on purpose.
+  useEffect(() => {
+    if (!matchId) return;
+    let sawNew = false;
+    for (const m of messages) {
+      if (m.id.startsWith('local-')) continue;
+      if (m.user_id === currentUser?.id) continue; // own messages never count
+      if (markedReadIdsRef.current.has(m.id)) continue;
+      markedReadIdsRef.current.add(m.id);
+      sawNew = true;
+    }
+    if (sawNew) markChatRead();
+  }, [messages, matchId, markChatRead, currentUser?.id]);
 
   return {
     ...historyQuery,

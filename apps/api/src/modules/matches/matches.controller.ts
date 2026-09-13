@@ -191,6 +191,20 @@ export class MatchesController {
     return this.matchesService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);
   }
 
+  // ── POST /matches/:id/messages/read — advance match-chat read watermark (P2-58) ──
+  // Advances the CALLER's roster-row watermark (membership-gated); every
+  // member marks their own row when they read the chat.
+  @Post(':id/messages/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark the match chat as read (advances the read watermark)' })
+  @ApiOkResponse({ description: 'Watermark advanced.' })
+  markChatRead(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.markChatRead(user.sub, id);
+  }
+
   // ── POST /matches/:id/start — Start a match (host only) ────────────────
   @Post(':id/start')
   @HttpCode(HttpStatus.OK)

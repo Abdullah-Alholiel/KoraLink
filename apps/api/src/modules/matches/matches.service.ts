@@ -2209,6 +2209,36 @@ export class MatchesService {
   }
 
   /**
+   * Advance the caller's match-chat read watermark (P2-58, run #50).
+   * Members-only, mirroring the getMessages P0-1 guard. The watermark lives
+   * on the roster row (per match EPISODE — a leave→rejoin starts fresh).
+   * Read state has no read model to rehydrate, so the mutation contract's
+   * findOne does not apply; { ok: true } is the whole surface.
+   */
+  async markChatRead(userId: string, matchId: string): Promise<{ ok: true }> {
+    // Single atomic UPDATE … RETURNING: a zero-row result IS the membership
+    // miss (no separate pre-check → no TOCTOU window between check and write).
+    const updated = await this.db
+      .update(match_players)
+      // NOTE: no withTimestamp — match_players has no updated_at column; the
+      // helper would inject one and the UPDATE would 500 (42703).
+      .set({ last_read_at: new Date() })
+      .where(
+        and(
+          eq(match_players.match_id, matchId),
+          eq(match_players.user_id, userId),
+        ),
+      )
+      .returning({ id: match_players.id });
+
+    if (updated.length === 0) {
+      throw new ForbiddenException('You are not a member of this match.');
+    }
+
+    return { ok: true };
+  }
+
+  /**
    * Persist a match chat message with membership + idempotency checks.
    * REST fallback to the WebSocket `send-message` path.
    */

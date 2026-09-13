@@ -419,6 +419,36 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     });
   }
 
+  // ── Match chat read watermark (P2-58, run #50) ──────────────────────────
+  // ChatSheet emits this while the sheet is open; advances the caller's
+  // roster-row watermark so the Messages list stops counting the match as
+  // unread. NO broadcast — read state is private (unlike messages), so the
+  // room is never told. Membership miss (zero updated rows) → WsException,
+  // mirroring join-lobby.
+  @SubscribeMessage('mark-chat-read')
+  async handleMarkChatRead(
+    @MessageBody() data: { matchId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+
+    // NOTE: no withTimestamp — match_players has no updated_at column.
+    const updated = await this.db
+      .update(match_players)
+      .set({ last_read_at: new Date() })
+      .where(
+        and(
+          eq(match_players.match_id, data.matchId),
+          eq(match_players.user_id, client.userId),
+        ),
+      )
+      .returning({ id: match_players.id });
+
+    if (updated.length === 0) {
+      throw new WsException('You are not a member of this match.');
+    }
+  }
+
   // ── Send a direct message ────────────────────────────────────────────────
 
   @SubscribeMessage('send-dm')

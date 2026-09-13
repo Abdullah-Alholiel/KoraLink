@@ -286,7 +286,14 @@ export class UsersService {
           last_msg.content AS last_message,
           last_msg.created_at AS last_message_at,
           last_msg.sender_name AS last_message_sender_name,
-          0::int AS unread_count,
+          -- P2-58 (run #50): real unread count, mirroring the personal branch.
+          -- Watermark = caller's roster row (per episode); NULL = never read.
+          (SELECT COUNT(*)::int
+            FROM match_messages mm2
+            WHERE mm2.match_id = m.id
+              AND mm2.user_id != my.user_id
+              AND mm2.created_at > COALESCE(my.last_read_at, 'epoch'::timestamptz)
+          ) AS unread_count,
           COALESCE(last_msg.created_at, m.scheduled_at) AS last_activity
         FROM match_players my
         INNER JOIN matches m ON m.id = my.match_id
