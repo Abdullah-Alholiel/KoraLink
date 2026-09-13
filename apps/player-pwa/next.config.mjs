@@ -27,15 +27,71 @@ const withPWA = withPWAInit({
   workboxOptions: {
     skipWaiting: true,
     runtimeCaching: [
+      // NetworkOnly money/auth recipes are registered FIRST on purpose: workbox
+      // matches routes in registration order, and the static-assets CacheFirst
+      // recipe below would otherwise shadow them (e.g. the Moyasar SDK script
+      // ends in .js and would be served from cache — never for payment code).
       {
-        // Match feed API: NetworkFirst (P2-28, run #18 — was StaleWhileRevalidate).
-        // SWR served the cached response FIRST on every load, so players could
-        // see up to 60s-old availability even on a perfect connection (React
-        // Query then marked it fresh for its own 60s staleTime and never
-        // refetched). NetworkFirst prefers fresh data; the cache is only the
-        // offline/slow-network fallback (3s timeout), keeping resilience
-        // without silently stale availability.
-        urlPattern: /^https?:\/\/.*\/api\/matches(\/.*)?$/,
+        // Payment endpoints: NetworkOnly – never cache financial requests
+        // (our /payments API + anything on a moyasar host — the SDK's own hosts).
+        urlPattern: /^https?:\/\/[^/]*moyasar[^/]*\/|\/api\/v1\/payments(?:\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+      {
+        // Auth endpoints: NetworkOnly – never cache authentication
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/auth(?:\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+      {
+        // Wallet / transactions: NetworkOnly – financial data
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/wallet(?:\/.*)?$/,
+        handler: 'NetworkOnly',
+      },
+      // P2-57 (run #51) — PATTERN REALITY FIX, applies to EVERY recipe below:
+      // real API URLs are CROSS-ORIGIN `${host}/api/v1/...` (API global prefix
+      // `api/v1`, apps/api/src/main.ts:118) and workbox RegExpRoute matches the
+      // FULL href INCLUDING the query string (workbox-routing RegExpRoute:
+      // `regex.exec(url.href)`, cross-origin patterns must match from index 0).
+      // The old patterns (`^https?:\/\/.*\/api\/...`, no v1, `(...)?$` tail)
+      // therefore matched NOTHING in any deployed environment — the whole API
+      // caching table was inert (run #18's NetworkFirst flip, run #43's
+      // opaque-response hardening and the clubs/venues SWR never engaged
+      // offline). New rules: patterns are anchored `^scheme://host/api/v1/...`
+      // with query-tolerant tails `(?:\?.*)?$`, and single-segment scoping
+      // `[^/?#]+` so detail / feed / sub-resources route to the right recipe.
+      {
+        // Match DETAIL page: exactly one id segment after /matches/ — NetworkFirst
+        // with a 1h offline fallback window, so a revisit of an already-seen match
+        // renders last-good data instead of the offline banner (P2-57). Registered
+        // BEFORE the feed recipe so the more specific route wins (workbox matches
+        // in registration order). Chat messages / pom-result / actions are NOT
+        // cached here (multi-segment paths fail the pattern; actions are POSTs and
+        // bypass runtime caching anyway).
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/matches\/[^/?#]+(?:\?.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'match-detail-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxAgeSeconds: 60 * 60, // 1h — last-good detail survives an offline revisit
+            maxEntries: 30,
+          },
+          cacheableResponse: {
+            // Run #43 rule: [200] only — never cache opaque (status 0) responses.
+            statuses: [200],
+          },
+        },
+      },
+      {
+        // Match feed API (collection ONLY — single segment after v1): NetworkFirst
+        // (P2-28, run #18 — was StaleWhileRevalidate). SWR served the cached
+        // response FIRST on every load, so players could see up to 60s-old
+        // availability even on a perfect connection (React Query then marked it
+        // fresh for its own 60s staleTime and never refetched). NetworkFirst
+        // prefers fresh data; the cache is only the offline/slow-network fallback
+        // (3s timeout). The query-tolerant tail is load-bearing: the feed always
+        // carries ?lat=&lng= (geo) and venue-filter queries (?venue_id=).
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/matches(?:\?.*)?$/,
         handler: 'NetworkFirst',
         options: {
           cacheName: 'matches-feed-cache',
@@ -53,7 +109,8 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // Static assets: CacheFirst for performance
+        // Static assets: CacheFirst for performance (registered AFTER the
+        // NetworkOnly money/auth trio — see the ordering note at the top).
         urlPattern: /\.(?:js|css|woff2?|png|jpg|jpeg|svg|ico|webp)$/i,
         handler: 'CacheFirst',
         options: {
@@ -71,23 +128,10 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // Payment endpoints: NetworkOnly – never cache financial requests
-        urlPattern: /^https?:\/\/.*\/(api\/payments|moyasar)(\/.*)?$/,
-        handler: 'NetworkOnly',
-      },
-      {
-        // Auth endpoints: NetworkOnly – never cache authentication
-        urlPattern: /^https?:\/\/.*\/api\/auth(\/.*)?$/,
-        handler: 'NetworkOnly',
-      },
-      {
-        // Wallet / transactions: NetworkOnly – financial data
-        urlPattern: /^https?:\/\/.*\/api\/wallet(\/.*)?$/,
-        handler: 'NetworkOnly',
-      },
-      {
         // Clubs / venues API: StaleWhileRevalidate for offline browsing
-        urlPattern: /^https?:\/\/.*\/api\/(clubs|venues)(\/.*)?$/,
+        // (collection + single-segment detail; sub-resources like availability
+        // ride the match-feed recipe via ?venue_id=).
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/(?:clubs|venues)(?:\/[^/?#]+)?(?:\?.*)?$/,
         handler: 'StaleWhileRevalidate',
         options: {
           cacheName: 'clubs-venues-cache',
@@ -104,8 +148,9 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // User profile API: NetworkFirst with short cache fallback
-        urlPattern: /^https?:\/\/.*\/api\/user(\/.*)?$/,
+        // User profile API (/users/me and its sub-resources — own data only):
+        // NetworkFirst with a short 5-minute cache fallback.
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/users\/me(?:\/.*)?$/,
         handler: 'NetworkFirst',
         options: {
           cacheName: 'user-profile-cache',
