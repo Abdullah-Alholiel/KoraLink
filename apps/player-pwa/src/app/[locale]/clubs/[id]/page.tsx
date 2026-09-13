@@ -25,6 +25,7 @@ import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import DatePicker from '@/components/matches/DatePicker';
 import { dateInRiyadh } from '@/lib/api-adapter';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -100,12 +101,18 @@ export default function ClubPage() {
 
   // ── Fetch matches for this venue ──────────────────────────
   // No date → ALL upcoming matches (grouped by day). A date → that day only.
-  const { matches, isLoading: matchesLoading } = useMatches({
+  // useMatches returns adapted Match[] already — do NOT re-adapt
+  // (P1-46, run #51: the hook's error/refetch are consumed — a failed
+  // match-list fetch must never masquerade as "no games scheduled").
+  const {
+    matches,
+    isLoading: matchesLoading,
+    error: matchesError,
+    refetch: refetchMatches,
+  } = useMatches({
     date: dateStr,
     venue_id: id,
   });
-
-  // useMatches returns adapted Match[] already — do NOT re-adapt
 
   const storeUser = useAppStore(selectUser);
   const currentUserId = storeUser?.id;
@@ -347,6 +354,25 @@ export default function ClubPage() {
                 {matchesLoading ? (
                   <div className="flex justify-center py-12">
                     <Loader2 className="w-6 h-6 text-brand-green animate-spin" strokeWidth={2} />
+                  </div>
+                ) : matchesError ? (
+                  /* ── Error state (P1-46, run #51) — what/why/next + retry.
+                       Mirrors the venue-error block above; classified copy
+                       (errors.*) instead of a false "no games" empty state. ── */
+                  <div className="flex flex-col items-center justify-center py-12 px-8">
+                    <AlertTriangle
+                      className="w-8 h-8 text-brand-red mb-2"
+                      strokeWidth={1.5}
+                    />
+                    <p className="text-sm text-gray-400 text-center">
+                      {t(errorKey(classifyError(matchesError)))}
+                    </p>
+                    <button
+                      onClick={() => void refetchMatches()}
+                      className="mt-3 text-xs text-brand-green font-medium"
+                    >
+                      {t('common.retry')}
+                    </button>
                   </div>
                 ) : matches.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 px-8">
