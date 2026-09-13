@@ -156,6 +156,8 @@ const nextConfig = {
       apiOrigin,
       'ws:',
       'wss:',
+      // doop design-sync: POSTs DOM captures to the internal design canvas
+      'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
     // PostHog injects its reverse-proxy bundle (exception-autocapture, surveys)
     // as a <script> from the -assets reverse-proxy host, so script-src needs it
@@ -168,6 +170,8 @@ const nextConfig = {
       'https://api.mapbox.com',
       'https://cdn.moyasar.com',
       'https://*.posthog.com',
+      // doop design-sync: loads the capture snippet from the internal design canvas
+      'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
 
     return [
