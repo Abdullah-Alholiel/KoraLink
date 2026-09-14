@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import EmptyState from '@/components/EmptyState';
 import type { PartnerMatchDetail } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -147,7 +148,7 @@ export default function PartnerMatchDetailPage() {
                 }
                 rows={data?.players ?? []}
                 rowKey={(p) => p.user_id}
-                empty={<div className="py-4 text-sm text-gray-400">{t('empty')}</div>}
+                empty={<EmptyState message={t('empty')} className="py-4" />}
               />
             </div>
           </>

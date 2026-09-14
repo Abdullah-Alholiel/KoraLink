@@ -5,6 +5,7 @@ import { CalendarClock, Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -186,7 +187,7 @@ export default function AdminPitchesPage() {
               rows={data?.pitches ?? []}
               rowKey={(p) => p.id}
               onRowClick={(p) => setSelected(p)}
-              empty={<p className="px-4 py-12 text-center text-sm text-gray-400">{t('empty')}</p>}
+              empty={<EmptyState message={t('empty')} className="px-4 py-12 text-center" />}
             />
             {data && <Pagination page={data.page} perPage={data.perPage} total={data.total} onPage={setPage} />}
           </>

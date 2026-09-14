@@ -607,5 +607,25 @@
     "idLabel": "ID",
     "openPage": "Open full page",
     "noDetails": "No extra details."
+  },
+  "venueDetail": {
+    "backToVenues": "Back to venues",
+    "venue": "Venue",
+    "pitches": "Pitches",
+    "noPitches": "No pitches yet.",
+    "verification": "Verification",
+    "noVerification": "No verification submitted yet.",
+    "legalEntity": "Legal entity",
+    "commercialReg": "Commercial reg",
+    "taxId": "Tax ID",
+    "iban": "IBAN",
+    "manager": "Manager",
+    "owner": "Owner",
+    "rating": "Rating",
+    "partner": "KoraLink partner",
+    "yes": "Yes",
+    "no": "No",
+    "perHour": "/hr",
+    "decisionFailed": "The decision could not be saved — the venue is still pending. Check your connection and try again."
   }
 }

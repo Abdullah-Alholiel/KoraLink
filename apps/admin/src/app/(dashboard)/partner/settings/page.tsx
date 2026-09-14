@@ -74,8 +74,9 @@ export default function PartnerSettingsPage() {
             {saved && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{t('submitted')}</p>}
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">{t('venueLabel')}</label>
+              <label htmlFor="partner-settings-venue" className="mb-1 block text-sm font-medium text-gray-700">{t('venueLabel')}</label>
               <select
+                id="partner-settings-venue"
                 value={selectedRow?.venue_id ?? ''}
                 onChange={(e) => {
                   setSelected(e.target.value);
