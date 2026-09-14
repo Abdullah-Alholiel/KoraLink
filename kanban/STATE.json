@@ -1,35 +1,35 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 51,
-  "last_run_at": "2026-09-13T19:11:30Z",
+  "last_run": 52,
+  "last_run_at": "2026-09-14T10:20:02Z",
   "last_run_commits": [
-    "e305eb9",
-    "1e3778f",
-    "e6e7a9f"
+    "ecfab67",
+    "86723ea",
+    "1066a29"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-13T19-11Z-run51.md",
+  "last_run_report": "kanban/RUNS/2026-09-14T10-20Z-run52.md",
   "in_review_items": [
     {
-      "id": "P2-57",
-      "claim": "SW runtime caching actually engages: v1-anchored query-tolerant patterns, match-detail-cache NF 1h, NetworkOnly money/auth un-shadowed; 12-case URL-reality suite",
-      "commit": "e305eb9"
+      "id": "P2-59-survivor+P2-64",
+      "claim": "DiscussionCard render-path new Date() → useNow() null-pre-mount posture + resolved-locale Intl fallback; lib/format Gregorian-pinned helpers (resolveDateLocale/formatShortDate/riyadhDateFromYMD/formatShortTime) wired into MatchDetailsForm ×4; Hijri-regression + TZ-anchor specs. Reviewer A already PASSED the diff (hydration/TZ/i18n/tests) before commit.",
+      "commit": "ecfab67"
     },
     {
-      "id": "P2-63",
-      "claim": "ChatSheet + reports classified errors.* copy; OfflineBanner on profile + personal-info (claim re-scoped: other 7 surfaces already had it); P2-63 CLOSED",
-      "commit": "1e3778f"
+      "id": "P2-61",
+      "claim": "venues/[id] approval surface fully localized (venueDetail ns 18 keys EN+AR, parity 571/571), decision-failure role=alert, settings select htmlFor+id, 5 ad-hoc empties → shared EmptyState (14 files import it). Gates: admin tsc 0, turbo 3/3 exit 0, admin service restarted.",
+      "commit": "86723ea"
     },
     {
-      "id": "P2-map-pin",
-      "claim": "Club address row = Google Maps deep-link (encoded name+address+city); hero MapPin decorative; MAP-1/2 specs; clubs.openInMaps EN+AR",
-      "commit": "e6e7a9f"
+      "id": "P2-offline-banner-club-detail",
+      "claim": "OfflineBanner + useOnlineStatus on club detail (the last main PWA surface without a staleness signal; 9 other surfaces verified already covered). Gates: pwa tsc 0, vitest 546, turbo 3/3 exit 0, PWA service restarted.",
+      "commit": "1066a29"
     }
   ],
   "open_blockers": [
-    "zai delegation-path 401 history — run #45: probe 200, delegation child 401 (intermittent gateway issue, same as runs #24-30/#32). Fell back to OmniRoute free tier for reviewers. 3rd consecutive zai child-401 failure (after runs #36-#37 clean). Policy unchanged: try zai first, failover on first child error.",
-    "P1-41 RESEND PROVISIONING: email layer is log-only until Abdullah provisions Resend (API key + verified sender domain) and sets RESEND_API_KEY + MAIL_FROM (+ optional API_PUBLIC_URL) in apps/api/.env, then restarts koralink-api. Feature self-disables until then.",
-    "P2-51 (NEW run #36): Render demo deploy-before-migrate drift — demo auto-deploys main but has NO migration step; run #35's 0033 broke demo (Sentry API-10/11, incl. nightly purge) until run #36 hand-applied 0033 to the demo Neon DB (bookkeeping id 36). EVERY future migration re-breaks demo until fixed. Needs owner call: Render deploy hook (db:migrate) vs manual runbook in deploy-demo/. Demo DB creds: profile .deploy-tokens (KL_API_DATABASE_URL via Render env-vars API is the EXTERNAL neon URL; .deploy-tokens' own KL_API_DATABASE_URL is the internal koralink-postgres hostname — unusable off-Render).",
+    "zai delegation-path 401 history — run #52: probe 200 AND delegation children 200 (reviewers 71s/142s clean) — streak broken again (pattern: intermittent, never trust one clean run; policy unchanged: try zai first, failover on first child error).",
+    "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
+    "P2-51 (NEW run #36): Render demo deploy-before-migrate drift — demo auto-deploys main but has NO migration step; EVERY future migration re-breaks demo until fixed. Needs owner call: Render deploy hook (db:migrate) vs manual runbook in deploy-demo/. Demo DB creds: profile .deploy-tokens (KL_API_DATABASE_URL via Render env-vars API is the EXTERNAL neon URL).",
     "P2-47: admin cancel-purge vs restore-on-behalf — still needs Abdullah decision.",
     "P1-38+P2-50 upload pipeline — still needs Abdullah decision (one decision covers both).",
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
@@ -48,12 +48,13 @@
     "P2-42 CSP script-src migration — standing reviewer item, 2-PR effort.",
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
-    "strix_scan=not-due-2026-09 (day 7; window 1st-3rd; next due Oct 1)"
+    "strix_scan=not-due-2026-09 (day 7; window 1st-3rd; next due Oct 1)",
+    "OPS (run #52): a factory session KILLED mid-run (01:17Z, ~39 min in, pid dead, 0 commits) leaves uncommitted slices in-tree + a stale LOCK. Recovery recipe that worked: verify pid dead → rm lock → adopt in-flight work (verify via reviewers + full gates) → commit → continue. Check for this pattern whenever a run starts and the tree is dirty with coherent half-done work + a plan doc."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "run51 manual extra cycle (gateway-hosted, full budget): recovered the killed 31m run-51-manual — its 2 pushed commits (8e859b0 P1-46, 499065f P2-62) verified by both reviewers (SHIP/CONFIRMED) and promoted. Built 3 slices: P2-57 (found the ENTIRE SW API caching table inert — patterns matched /api/... but real URLs are cross-origin /api/v1/... with query strings; workbox RegExpRoute matches full href; also static CacheFirst shadowed payments NetworkOnly), P2-63 (classified error copy + banner re-scope + masked-phone-fixture hygiene), P2-map-pin (address row maps deep-link). Both reviewers ran clean on zai glm-5.3-flash (76s/190s). OPEN ISSUE: multica bridge in a 5-min reclaim loop on mirror card t_3fd910ae since 16:33Z (41 [multica] comments; daemon PID 656772, bridge PID 3562313) — factory work on the same card proceeded without collision (bridge works in scratch workspaces), but the loop needs ops attention. Vitest 78f/532t, type-check 0, turbo 3/3 x3 slices.",
+  "notes": "run52 (10:15Z cron slot, 10:20Z lock): RECOVERED a killed 01:17Z run-52 session (lock pid 909570 dead at ~39min, 0 commits) — adopted its uncommitted PWA hydration/locale slices + cycle docs, verified via 2 parallel GLM reviewers (A: PASS on hydration/TZ/i18n/tests; B: all 3 run-#51 in-review claims CONFIRMED → promoted DONE), committed as ecfab67. Built 2 more slices: 86723ea P2-61 (admin venues/[id] localized + a11y + 5 EmptyState swaps; ADMIN STATE CHECK clean), 1066a29 club-detail OfflineBanner (last uncovered surface; B's 9-surface claim re-scoped to 1 on inspection). NEW P2-64 boarded+closed same run (bare ar-SA = Hijri risk; standing rule: route Intl through lib/format). Sentry: WEB-D hydration RECURRING (n=5, last 09:02Z today) but from STALE-SW ZOMBIE TABS (URL :10000 — port closed since Sep-13 cleanup; prod release 6bb22d3c still carries the render-path new Date()) — root fix ecfab67 reaches prod at next promote; watch WEB-D stop-accumulating then. Reviewer-B hydration candidates PostMatchSection/RestoreAccountBanner REFUTED on inspection (loader/profile-gate render identically both sides — no clock text during hydration). Reviewers clean on zai glm-5.3-flash (71s/142s). Gates: turbo 3/3 ×3, vitest 79f/546t (+14), pwa tsc 0, admin tsc 0. Mirror: P2-61 t_04d66a1e + P2-59 t_7dded2f0 built-comments; P2-57 t_a34d0303 + P2-63 t_bde44ea9 + MapPin t_3fd910ae verified-comments; P2-64 created t_e881f155 + gated under t_ce9a513a (todo/parent verified). Multica bridge posted weekly digest t_d7f0d6ef — no card collision this run.",
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-13T19:11:30Z"
+  "last_run_id": "2026-09-14T10:20:02Z"
 }
