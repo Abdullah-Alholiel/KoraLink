@@ -26,6 +26,8 @@ import BottomNav from '@/components/layout/BottomNav';
 import DatePicker from '@/components/matches/DatePicker';
 import { dateInRiyadh } from '@/lib/api-adapter';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import OfflineBanner from '@/components/layout/OfflineBanner';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -127,10 +129,16 @@ export default function ClubPage() {
     setShowCalendar(false);
   }, []);
 
+  // Staleness signal for the SW-cached club surface (run #52): the club page
+  // is the last main PWA surface without an offline affordance — a stale
+  // cached list must never read as live data.
+  const isOnline = useOnlineStatus();
+
   // ── Scroll parallax ─────────────────────────────────────
 
   return (
     <MobileFrame>
+      <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
       {/* ── Header ── */}
       <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-3">
         <button
