@@ -25,6 +25,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
+import { otpMatches } from '../../common/security/otp-compare';
 import { UnifonicService } from '../auth/unifonic.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -598,8 +599,14 @@ export class UsersService {
     // Without this, a code for phone A could be spent moving the account to
     // phone B (possession of A must prove possession of exactly A).
     const otp = this.otp();
-    const storedCode = await otp.getChangeOtp(newPhone);
-    if (!storedCode) {
+    // Run-#53: atomic claim — inside the change lock the code is read AND
+    // deleted, so two concurrent verifies can never both see the fresh code
+    // (the old get→compare→delete double-spend: one code → two phone flips).
+    // A missed claim (code already consumed/expired) falls through to the
+    // lockout-aware 401 below; the constant-time compare kills the timing
+    // side-channel the plain `!==` comparison had.
+    const storedCode = await otp.claimChangeOtp(newPhone);
+    if (!storedCode || !otpMatches(storedCode, code)) {
       // Distinguish lockout from a plain wrong/expired code.
       const fails = await otp.getFailCount(newPhone);
       if (fails >= OtpStoreService.FAIL_LIMIT) {
@@ -612,18 +619,23 @@ export class UsersService {
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
-      throw new UnauthorizedException('Invalid or expired OTP.');
-    }
-    if (storedCode !== code) {
-      await otp.incrementFail(newPhone);
+      if (storedCode) {
+        // Claimed but mismatched: charge the shared fail counter. The code is
+        // already consumed — a genuine retry needs a fresh SMS (cooldown).
+        await otp.incrementFail(newPhone);
+      }
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
     try {
-      await this.db
-        .update(users)
-        .set(withTimestamp({ phone: newPhone }))
-        .where(and(eq(users.id, userId), isNull(users.deleted_at)));
+      // Consume under the same change lock: the verified flip + code deletion
+      // are atomic w.r.t. any concurrent verify for this number.
+      await otp.consumeChangeOtp(newPhone, async () => {
+        await this.db
+          .update(users)
+          .set(withTimestamp({ phone: newPhone }))
+          .where(and(eq(users.id, userId), isNull(users.deleted_at)));
+      });
     } catch (err) {
       // Race window: a signup took the number between request and verify
       // (PG 23505 on users.phone_unique) → same localized 409 shape as the
@@ -638,7 +650,6 @@ export class UsersService {
       throw err;
     }
 
-    await otp.deleteChangeOtp(newPhone);
     await otp.resetFails(newPhone);
 
     // Audit trail (verb added to ActivityVerb by migration 0037). No feed

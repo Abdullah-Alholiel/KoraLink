@@ -32,8 +32,25 @@ describe('UsersService phone-change (P1-19)', () => {
       getFailCount: jest.fn().mockResolvedValue(0),
       incrementFail: jest.fn().mockResolvedValue(1),
       resetFails: jest.fn().mockResolvedValue(undefined),
+      claimChangeOtp: jest.fn(),
+      consumeChangeOtp: jest.fn(),
       ...(overrides.otpStore ?? {}),
     };
+    // Run-#53 claim/consume semantics, mirrored inline against the mocked
+    // get/delete: claim reads AND deletes; consume runs the mutation then
+    // deletes. (The real atomicity — the per-key mutex — is unit-tested in
+    // otp-store.service.spec.ts.)
+    otpStore.claimChangeOtp.mockImplementation(async (phone: string) => {
+      const stored = await otpStore.getChangeOtp(phone);
+      if (stored !== undefined) await otpStore.deleteChangeOtp(phone);
+      return stored;
+    });
+    otpStore.consumeChangeOtp.mockImplementation(
+      async (phone: string, fn: () => Promise<unknown>) => {
+        await fn();
+        await otpStore.deleteChangeOtp(phone);
+      },
+    );
 
     // Chainable db mock with CALL-ORDERED select results:
     //   request:  select#1 = actor row, select#2 = taken-pre-check (empty)
@@ -212,6 +229,64 @@ describe('UsersService phone-change (P1-19)', () => {
       status: 401,
     });
     expect(otpStore.incrementFail).toHaveBeenCalledWith(NEW);
+  });
+
+  it('verify: replaying the SAME code after a successful flip → 401 (single use)', async () => {
+    // Store-aware closure: claim/delete actually consume the code, so the
+    // second presentation finds nothing (run-#53 single-use guarantee).
+    let stored: string | undefined = '123456';
+    const { service } = setup({
+      otpStore: {
+        getChangeOtp: jest.fn(() => Promise.resolve(stored)),
+        deleteChangeOtp: jest.fn(() => {
+          stored = undefined;
+          return Promise.resolve();
+        }),
+      },
+    });
+    // Actor lookup must succeed on EVERY verify (the shared setup queues only
+    // two select responses) — swap in an always-actor db.
+    const actorDb = {
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([
+        {
+          id: 'u1',
+          phone: OLD,
+          role: 'Player',
+          banned_at: null,
+          suspended_until: null,
+          deleted_at: null,
+        },
+      ]),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      insert: jest.fn().mockReturnValue({
+        values: jest.fn().mockResolvedValue(undefined),
+      }),
+      execute: jest.fn().mockResolvedValue({ rows: [{ pom_count: 0 }], length: 1 }),
+      query: {
+        users: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'u1',
+            phone: NEW,
+            full_name: 'Test',
+            handle: 'test',
+            avatar_url: null,
+            preferred_location: null,
+            preferred_position: null,
+            role: 'Player',
+            pom_count: 0,
+          }),
+        },
+      },
+    };
+    (service as unknown as { db: unknown }).db = actorDb;
+    await service.verifyPhoneChange('u1', NEW, '123456');
+    await expect(service.verifyPhoneChange('u1', NEW, '123456')).rejects.toMatchObject({
+      status: 401,
+    });
   });
 
   it('verify: unique-violation in the race window → localized 409', async () => {

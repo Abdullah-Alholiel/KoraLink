@@ -25,6 +25,9 @@ describe('AuthService OTP abuse protection', () => {
         overrides.incrementIpDaily ?? jest.fn().mockResolvedValue(1),
       getOtp: overrides.getOtp ?? jest.fn().mockResolvedValue(undefined),
       deleteOtp: jest.fn().mockResolvedValue(undefined),
+      // Run-#53: mutex pass-through — the real OtpStoreService serializes the
+      // fn per key; the mock just runs it inline.
+      withVerifyLock: jest.fn((_key: string, fn: () => Promise<unknown>) => fn()),
       getFailCount: overrides.getFailCount ?? jest.fn().mockResolvedValue(0),
       incrementFail: jest.fn().mockResolvedValue(1),
       resetFails: jest.fn().mockResolvedValue(undefined),
@@ -80,7 +83,7 @@ describe('AuthService OTP abuse protection', () => {
 
   it('sendOtp sends SMS and arms cooldown + daily counter on success', async () => {
     const { service, otpStore, unifonic } = setup();
-    await service.sendOtp('+966****0001');
+    await service.sendOtp('+966500000001');
     expect(otpStore.setOtp).toHaveBeenCalled();
     expect(otpStore.setCooldown).toHaveBeenCalled();
     expect(otpStore.incrementDaily).toHaveBeenCalled();
@@ -93,7 +96,7 @@ describe('AuthService OTP abuse protection', () => {
     const { service, otpStore, unifonic } = setup({
       getIpDailyCount: jest.fn().mockResolvedValue(OtpStoreService.DAILY_IP_CAP),
     });
-    const err = await service.sendOtp('+966****0001', '203.0.113.5').catch(
+    const err = await service.sendOtp('+966500000001', '203.0.113.5').catch(
       (e) => e,
     );
     expect(err).toBeInstanceOf(HttpException);
@@ -107,13 +110,13 @@ describe('AuthService OTP abuse protection', () => {
 
   it('sendOtp increments the per-IP daily counter on success', async () => {
     const { service, otpStore } = setup();
-    await service.sendOtp('+966****0001', '203.0.113.5');
+    await service.sendOtp('+966500000001', '203.0.113.5');
     expect(otpStore.incrementIpDaily).toHaveBeenCalledWith('203.0.113.5');
   });
 
   it('sendOtp works without an IP argument (per-IP cap is skipped)', async () => {
     const { service, otpStore, unifonic } = setup();
-    await service.sendOtp('+966****0001');
+    await service.sendOtp('+966500000001');
     expect(otpStore.getIpDailyCount).not.toHaveBeenCalled();
     expect(otpStore.incrementIpDaily).not.toHaveBeenCalled();
     expect(unifonic.sendSms).toHaveBeenCalled();

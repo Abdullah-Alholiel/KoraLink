@@ -20,6 +20,9 @@ describe('EmailOtpService', () => {
       incrementDaily: jest.fn().mockResolvedValue(1),
       getOtp: jest.fn().mockResolvedValue('123456'),
       deleteOtp: jest.fn().mockResolvedValue(undefined),
+      // Run-#53: mutex pass-through — the real OtpStoreService serializes the
+      // fn per key; the mock just runs it inline.
+      withVerifyLock: jest.fn((_key: string, fn: () => Promise<unknown>) => fn()),
       getFailCount: jest.fn().mockResolvedValue(0),
       incrementFail: jest.fn().mockResolvedValue(1),
       resetFails: jest.fn().mockResolvedValue(undefined),

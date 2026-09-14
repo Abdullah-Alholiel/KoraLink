@@ -158,29 +158,38 @@ export class AuthService {
     code: string,
     surface?: 'player' | 'ops',
   ): Promise<{ token: string; isNewUser: boolean }> {
-    // ── Abuse protection: attempt lockout ──
-    const failCount = await this.otpStore.getFailCount(phone);
-    if (failCount >= OtpStoreService.FAIL_LIMIT) {
-      this.logger.warn(`verify-otp blocked (lockout after ${failCount} fails) for ${phone}`);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: 'Too many attempts. Try again later.',
-          error: 'Too Many Requests',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    // Run-#53: the ENTIRE check-and-consume sequence runs under the per-phone
+    // verify lock. Compare + delete are now atomic w.r.t. concurrent verifies
+    // (cache-manager get/set is not atomic — one code can never mint two
+    // sessions), while a WRONG code still leaves the stored OTP in place for
+    // a genuine retry. The token mint below stays OUTSIDE the lock.
+    await this.otpStore.withVerifyLock(phone, async () => {
+      // ── Abuse protection: attempt lockout ──
+      const failCount = await this.otpStore.getFailCount(phone);
+      if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        this.logger.warn(
+          `verify-otp blocked (lockout after ${failCount} fails) for ${phone}`,
+        );
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Too many attempts. Try again later.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
 
-    const storedCode = await this.otpStore.getOtp(phone);
+      const storedCode = await this.otpStore.getOtp(phone);
 
-    if (!storedCode || !otpMatches(storedCode, code)) {
-      await this.otpStore.incrementFail(phone);
-      throw new UnauthorizedException('Invalid or expired OTP.');
-    }
+      if (!storedCode || !otpMatches(storedCode, code)) {
+        await this.otpStore.incrementFail(phone);
+        throw new UnauthorizedException('Invalid or expired OTP.');
+      }
 
-    await this.otpStore.deleteOtp(phone);
-    await this.otpStore.resetFails(phone);
+      await this.otpStore.deleteOtp(phone);
+      await this.otpStore.resetFails(phone);
+    });
 
     const [user] = await this.db
       .select()
