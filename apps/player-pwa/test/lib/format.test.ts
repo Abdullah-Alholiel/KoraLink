@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { formatDistance, formatDateSection, formatRelativeTime, formatTimeLeft } from '@/lib/format';
+import {
+  formatDistance,
+  formatDateSection,
+  formatRelativeTime,
+  formatTimeLeft,
+  resolveDateLocale,
+  formatShortDate,
+  formatShortTime,
+  riyadhDateFromYMD,
+} from '@/lib/format';
 
 describe('formatDistance', () => {
   it('returns null for null, undefined, or NaN', () => {
@@ -87,5 +96,56 @@ describe('formatTimeLeft', () => {
 
   it('returns null for an invalid timestamp', () => {
     expect(formatTimeLeft('not-a-date', 'en', NOW)).toBeNull();
+  });
+});
+
+describe('resolveDateLocale (P2-64, run #52)', () => {
+  it('pins Gregorian calendar for ar, en-GB for en', () => {
+    expect(resolveDateLocale('ar')).toBe('ar-SA-u-ca-gregory');
+    expect(resolveDateLocale('en')).toBe('en-GB');
+  });
+});
+
+describe('riyadhDateFromYMD (P2-64, run #52)', () => {
+  it('anchors YYYY-MM-DD so the RIYADH wall date equals the string, from any TZ', () => {
+    // 09:00Z = 12:00 Riyadh (+03, no DST) → wall date is exactly the YMD.
+    const d = riyadhDateFromYMD('2026-09-15');
+    expect(d.toISOString()).toBe('2026-09-15T09:00:00.000Z');
+    expect(
+      new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Riyadh', dateStyle: 'short' }).format(d),
+    ).toBe('15/09/2026');
+  });
+});
+
+describe('formatShortDate (P2-64, run #52)', () => {
+  it('formats Gregorian short dates in Riyadh time', () => {
+    // en-GB short month on current CLDR is "Sept" (older engines: "Sep").
+    expect(formatShortDate(new Date('2026-09-15T09:00:00Z'), 'en')).toBe('15 Sept 2026');
+    expect(formatShortDate(new Date('2026-09-15T09:00:00Z'), 'ar')).toBe('١٥ سبتمبر ٢٠٢٦');
+  });
+
+  it('never regresses to Hijri months for ar (the P2-64 defect)', () => {
+    // Hijri 1448/1449 months (ربيع الأول, شعبان, رمضان…) must never appear for
+    // a Gregorian September date.
+    const out = formatShortDate(new Date('2026-09-15T09:00:00Z'), 'ar');
+    expect(out).toContain('سبتمبر');
+    expect(out).not.toContain('رمضان');
+    expect(out).not.toContain('ربيع');
+    expect(out).not.toContain('شعبان');
+  });
+});
+
+describe('formatShortTime (P2-64, run #52)', () => {
+  it('renders 12-hour clock time, device-local (self-consistent in any TZ)', () => {
+    // Locally-parsed wall time — the exact pattern MatchDetailsForm uses.
+    const t = new Date('2025-01-01T19:30');
+    expect(formatShortTime(t, 'en')).toBe('7:30 pm');
+  });
+
+  it('renders Arabic-Indic digits with Arabic day-period for ar', () => {
+    const t = new Date('2025-01-01T19:30');
+    const out = formatShortTime(t, 'ar');
+    expect(out).toContain('٧:٣٠');
+    expect(out).toMatch(/م|PM/);
   });
 });

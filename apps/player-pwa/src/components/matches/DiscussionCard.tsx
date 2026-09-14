@@ -1,17 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { MessageSquare, Users } from 'lucide-react';
 import type { Discussion } from '@/types';
+import { useNow } from '@/hooks/useNow';
+import type { AppLocale } from '@/lib/format';
 
 // ── Helpers ────────────────────────────────────────────────
 
-function formatTime(dateStr: string | null, t: (k: string) => string): string {
+/**
+ * Relative timestamp for discussion rows. `now` comes from the caller's
+ * `useNow()` clock (null during server render AND the first client render —
+ * identical on both sides, so hydration can never mismatch, P2-59). A null
+ * now optimistically buckets everything into "justNow"; real deltas appear
+ * on the first effect, matching the ChatSheet groupMessages posture.
+ */
+function formatTime(
+  dateStr: string | null,
+  locale: AppLocale,
+  now: number | null,
+  t: (k: string) => string,
+): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
+  if (Number.isNaN(d.getTime())) return '';
+
+  if (now === null) return t('messages.justNow');
+  const diffMs = now - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHrs = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
@@ -20,8 +36,15 @@ function formatTime(dateStr: string | null, t: (k: string) => string): string {
   if (diffMins < 60) return `${diffMins} ${t('messages.minutesAgo')}`;
   if (diffHrs < 24) return `${diffHrs} ${t('messages.hoursAgo')}`;
   if (diffDays === 1) return t('messages.yesterday');
-  if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (diffDays < 7) {
+    return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA' : 'en-GB', {
+      weekday: 'short',
+    }).format(d);
+  }
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB', {
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
 }
 
 function truncateMessage(msg: string | null, maxLen = 45): string {
@@ -46,8 +69,10 @@ interface DiscussionCardProps {
 
 export default function DiscussionCard({ discussion, href }: DiscussionCardProps) {
   const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const now = useNow();
   const { title, lastMessage, lastMessageAt, lastMessageSenderName, unreadCount, matchStatus, participantCount, isOnline } = discussion;
-  const timeStr = formatTime(lastMessageAt, t);
+  const timeStr = formatTime(lastMessageAt, locale, now, t);
   const preview = truncateMessage(lastMessage);
   const statusConf = matchStatus ? STATUS_STYLES[matchStatus] ?? STATUS_STYLES.open : null;
 

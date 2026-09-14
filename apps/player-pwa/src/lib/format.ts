@@ -17,6 +17,61 @@ function dateLocale(locale: AppLocale): string {
 }
 
 /**
+ * Public resolver for date/time display locales (P2-64, run #52). Components
+ * must route ALL `toLocaleDateString`/`toLocaleTimeString`/`Intl` calls
+ * through this (or the helpers below) — a bare `'ar-SA'` lets engines pick
+ * the Hijri calendar, and `Intl`/`toLocale*` with `undefined` inherits the
+ * HOST locale, which can also drift Hijri on AR devices. Both defects
+ * surfaced in MatchDetailsForm's slot-locked summary.
+ */
+export function resolveDateLocale(locale: AppLocale): string {
+  return dateLocale(locale);
+}
+
+/**
+ * Short calendar date in Asia/Riyadh — "15 Sep 2026" (en) / "١٥ سبتمبر ٢٠٢٦" (ar).
+ * The input must be an instant whose RIYADH wall date is the wanted display
+ * date — for the host form's `YYYY-MM-DD` strings use `riyadhDateFromYMD`,
+ * never a naive local-midnight parse (a UTC+4 device's local midnight is the
+ * PREVIOUS Riyadh date).
+ */
+export function formatShortDate(date: Date, locale: AppLocale): string {
+  return new Intl.DateTimeFormat(resolveDateLocale(locale), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Riyadh',
+  }).format(date);
+}
+
+/**
+ * Parses the app's `YYYY-MM-DD` date strings as RIYADH calendar dates —
+ * TZ-proof: anchored at 09:00Z (= 12:00 Riyadh), so the Riyadh wall date of
+ * the returned instant equals the string from any device timezone. Mirrors
+ * `formatDateSection`'s UTC-noon anchor.
+ */
+export function riyadhDateFromYMD(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 9, 0, 0));
+}
+
+/**
+ * Clock time, 12-hour, DEVICE-LOCAL — "7:30 PM" (en) / "٧:٣٠ م" (ar). The
+ * input must be a locally-parsed wall time (e.g. the form's
+ * `new Date('2025-01-01T19:30')`): local parse + local display is self-
+ * consistent in every timezone and equals Riyadh wall time for the target
+ * market (UTC+3). Only the LOCALE resolution is applied here (P2-64 was a
+ * Hijri-calendar defect, not a timezone one).
+ */
+export function formatShortTime(date: Date, locale: AppLocale): string {
+  return new Intl.DateTimeFormat(resolveDateLocale(locale), {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+}
+
+/**
  * Formats a distance in metres as a human-readable, locale-aware string.
  *
  *   850  → "850 m"  (en) / "٨٥٠ م" (ar)
