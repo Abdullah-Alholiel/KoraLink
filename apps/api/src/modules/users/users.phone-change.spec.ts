@@ -231,6 +231,33 @@ describe('UsersService phone-change (P1-19)', () => {
     expect(otpStore.incrementFail).toHaveBeenCalledWith(NEW);
   });
 
+  it('verify: a MISSED claim (no code — expired or consumed by a concurrent verify) ALSO charges the fail counter', async () => {
+    // Run-#53: the old `if (storedCode)` guard returned 401 WITHOUT charging
+    // when claimChangeOtp found nothing — replay races got free brute-force
+    // attempts and the lockout never advanced. Now every miss charges.
+    const { service, otpStore } = setup({
+      otpStore: { getChangeOtp: jest.fn().mockResolvedValue(undefined) },
+    });
+    await expect(service.verifyPhoneChange('u1', NEW, '123456')).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(otpStore.claimChangeOtp).toHaveBeenCalledWith(NEW);
+    expect(otpStore.incrementFail).toHaveBeenCalledWith(NEW);
+  });
+
+  it('verify: lockout throws 429 WITHOUT charging further (counter semantics unchanged)', async () => {
+    const { service, otpStore } = setup({
+      otpStore: {
+        getChangeOtp: jest.fn().mockResolvedValue(undefined),
+        getFailCount: jest.fn().mockResolvedValue(OtpStoreService.FAIL_LIMIT),
+      },
+    });
+    await expect(service.verifyPhoneChange('u1', NEW, '123456')).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(otpStore.incrementFail).not.toHaveBeenCalled();
+  });
+
   it('verify: replaying the SAME code after a successful flip → 401 (single use)', async () => {
     // Store-aware closure: claim/delete actually consume the code, so the
     // second presentation finds nothing (run-#53 single-use guarantee).

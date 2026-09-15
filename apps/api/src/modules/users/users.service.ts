@@ -607,7 +607,8 @@ export class UsersService {
     // side-channel the plain `!==` comparison had.
     const storedCode = await otp.claimChangeOtp(newPhone);
     if (!storedCode || !otpMatches(storedCode, code)) {
-      // Distinguish lockout from a plain wrong/expired code.
+      // Distinguish lockout from a plain wrong/expired code (lockout throws
+      // 429 WITHOUT charging further — the counter got them there).
       const fails = await otp.getFailCount(newPhone);
       if (fails >= OtpStoreService.FAIL_LIMIT) {
         throw new HttpException(
@@ -619,11 +620,12 @@ export class UsersService {
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
-      if (storedCode) {
-        // Claimed but mismatched: charge the shared fail counter. The code is
-        // already consumed — a genuine retry needs a fresh SMS (cooldown).
-        await otp.incrementFail(newPhone);
-      }
+      // Run-#53: charge EVERY failed attempt, including a missed claim (code
+      // expired / already consumed by a concurrent verify). The old
+      // `if (storedCode)` guard let replay races brute-force the 6-digit
+      // space with free attempts — the lockout never advanced. Mirrors the
+      // login + email-verify flows, which charge on any miss.
+      await otp.incrementFail(newPhone);
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
