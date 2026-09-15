@@ -1004,6 +1004,7 @@
     "reportUser": "Report user",
     "reportMessage": "Report message",
     "subjectMessage": "Direct message",
+    "chatMessage": "Lobby message",
     "messageSheetTitle": "Report this message"
   },
   "pwa": {

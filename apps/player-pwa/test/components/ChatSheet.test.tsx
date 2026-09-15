@@ -310,4 +310,60 @@ describe('ChatSheet', () => {
     expect(retryMessage).toHaveBeenCalledTimes(1);
     expect(retryMessage).toHaveBeenCalledWith('abc', 'stuck message');
   });
+
+  it('CS-9: received messages carry a report button; own messages do NOT (P1-31 parity)', () => {
+    mockReturn({
+      messages: [
+        {
+          id: 'msg-mine',
+          match_id: 'test-match-id',
+          user_id: 'user-1',
+          content: 'my own message',
+          created_at: new Date().toISOString(),
+          user: { id: 'user-1', full_name: 'Ahmed', handle: null, avatar_url: null },
+        },
+        {
+          id: 'msg-theirs',
+          match_id: 'test-match-id',
+          user_id: 'user-2',
+          content: 'message from someone else',
+          created_at: new Date().toISOString(),
+          user: { id: 'user-2', full_name: 'Khalid', handle: null, avatar_url: null },
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    // Exactly one report affordance — on the received message only.
+    // Label = report.chatMessage ("Lobby message"), the lobby-specific key.
+    const reportButtons = screen.getAllByLabelText('Lobby message');
+    expect(reportButtons).toHaveLength(1);
+  });
+
+  it('CS-10: tapping report opens the ReportSheet for that message (P1-31 parity)', async () => {
+    mockReturn({
+      messages: [
+        {
+          id: 'msg-theirs-2',
+          match_id: 'test-match-id',
+          user_id: 'user-2',
+          content: 'abusive message',
+          created_at: new Date().toISOString(),
+          user: { id: 'user-2', full_name: 'Khalid', handle: null, avatar_url: null },
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<ChatSheet {...baseProps} />);
+
+    fireEvent.click(screen.getByLabelText('Lobby message'));
+
+    // The report sheet mounts with the lobby-specific subject label + title.
+    const dialogTitle = await screen.findByText('Report this message');
+    expect(dialogTitle).toBeTruthy();
+    expect(screen.getByText('Lobby message')).toBeTruthy();
+  });
 });

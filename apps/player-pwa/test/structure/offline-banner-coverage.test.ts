@@ -36,8 +36,11 @@ describe('offline staleness signal coverage (run #53)', () => {
       const src = readFileSync(file, 'utf-8');
       expect(src).toContain('useOnlineStatus');
       expect(src).toContain('OfflineBanner');
-      // The banner must actually be rendered (not just imported).
+      // The banner must actually be rendered (not just imported) AND wired to
+      // the live status — `isOffline={!isOnline}` (Reviewer A, run #53: a page
+      // hardcoding isOffline would otherwise pass).
       expect(src).toMatch(/<OfflineBanner\s/);
+      expect(src).toMatch(/isOffline=\{!\w+\}/);
     });
   }
 });

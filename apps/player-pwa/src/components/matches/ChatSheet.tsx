@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
@@ -10,6 +10,7 @@ import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import { classifyError, errorKey } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ReportSheet from '@/components/matches/ReportSheet';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -85,6 +86,9 @@ export default function ChatSheet({
   } = useMatchChat(isOpen ? matchId : null);
 
   const [input, setInput] = useState('');
+  // P1-31 parity (run #53): report an abusive RECEIVED lobby message — same
+  // pattern as the DM conversation surface (messages/[id]/page.tsx).
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -283,6 +287,16 @@ export default function ChatSheet({
                           <AlertCircle className="w-4 h-4 text-brand-red" strokeWidth={2} />
                         </button>
                       )}
+                      {!isMine && (
+                        // P1-31 parity: report an abusive received lobby message.
+                        <button
+                          onClick={() => setReportTargetId(msg.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all"
+                          aria-label={t('report.chatMessage')}
+                        >
+                          <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                        </button>
+                      )}
                     </span>
                   </div>
                 );
@@ -325,6 +339,16 @@ export default function ChatSheet({
             <Send className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
+
+        {/* P1-31 parity: report sheet for a received lobby message. */}
+        <ReportSheet
+          open={reportTargetId !== null}
+          onClose={() => setReportTargetId(null)}
+          subjectType="message"
+          subjectId={reportTargetId ?? ''}
+          subjectLabel={t('report.chatMessage')}
+          title={t('report.messageSheetTitle')}
+        />
     </BottomSheet>
   );
 }

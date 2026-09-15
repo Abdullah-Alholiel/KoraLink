@@ -1004,6 +1004,7 @@
     "reportUser": "الإبلاغ عن المستخدم",
     "reportMessage": "الإبلاغ عن الرسالة",
     "subjectMessage": "رسالة مباشرة",
+    "chatMessage": "رسالة في غرفة المباراة",
     "messageSheetTitle": "الإبلاغ عن هذه الرسالة"
   },
   "pwa": {
