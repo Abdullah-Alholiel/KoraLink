@@ -1,17 +1,19 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 54,
+  "last_run": 55,
   "last_run_at": "2026-09-16T01:17:29Z",
   "last_run_commits": [
-    "bb1143e"
+    "ef39d13",
+    "5676c23"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-16T01-17Z-run54.md",
+  "last_run_report": "kanban/RUNS/2026-09-16T10-19Z-run55.md",
   "in_review_items": [
     {
-      "id": "P2-67",
-      "claim": "bb1143e users/[id] detail fully localized (userDetail ns 21 keys EN+AR, parity 593/593) + Sidebar nav.closeMenu aria-label + role-select aria-label + RTL back arrow + verification via StatusBadge + structure guard pins (main)/my-games OfflineBanner (path fixed from dead session). Gates: admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed origin/staging bb1143e. NEXT RUN: spot-check /users/<id> renders Arabic under admin_locale=ar.",
-      "commit": "bb1143e"
+      "id": "P2-56",
+      "claim": "ef39d13 migration 0042_hot_fk_indexes (12 FK leading-column indexes) + schema.ts index blocks + journal idx43; applied to STAGING live DB (migrate-vps: 1 applied/43 skipped); fk-index-report.mjs audit 42/42 FK columns led; turbo 3/3, vitest 551/551, jest 527/527. PROD/Neon intentionally NOT migrated (P2-51 owner gate).",
+      "verify": "Read pg_indexes for the 12 names; re-run node scripts/fk-index-report.mjs (expect exit 0, 0 un-led); re-run gates; confirm journal entry idx43 present and 0042 file unmodified vs git show ef39d13.",
+      "built_in": "run #55"
     }
   ],
   "open_blockers": [
@@ -39,8 +41,13 @@
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NEW (DataTable/Drawer/ConfirmDialog aria batch, admin state check first); reports-triage note recorded on P2-66 row (product decision, not boarded). Reviewers clean on zai glm-5.3-flash (106s/255s — 4th consecutive clean). Next: verify bb1143e (AR spot-check /users/<id>), run #55 = DB/Infra rotation (55%4=3) -> P2-56 FK-index led fits, P2-69 small, P2-68 medium. || run53 (01:17Z): RECOVERED killed 15:17Z session (1bdf0fc OTP single-use adopted+pushed after re-verify; a4adca6 offline banner + structure guard); built 95200e7 (fail counter charges every miss, +2 specs) + ed5b7f5 (P2-66 lobby report, parity 948/948); run-#52 claims CONFIRMED -> DONE; P2-20 closed zero-code; ThrottlerGuard/w-withTimestamp refutations; WEB-D zombie-tabs only; reviewers clean zai (163s/137s).",
+  "notes": [
+    "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NEW (DataTable/Drawer/ConfirmDialog aria batch, admin state check first); reports-triage note recorded on P2-66 row (product decision, not boarded). Reviewers clean on zai glm-5.3-flash (106s/255s — 4th consecutive clean). Next: verify bb1143e (AR spot-check /users/<id>), run #55 = DB/Infra rotation (55%4=3) -> P2-56 FK-index led fits, P2-69 small, P2-68 medium. || run53 (01:17Z): RECOVERED killed 15:17Z session (1bdf0fc OTP single-use adopted+pushed after re-verify; a4adca6 offline banner + structure guard); built 95200e7 (fail counter charges every miss, +2 specs) + ed5b7f5 (P2-66 lobby report, parity 948/948); run-#52 claims CONFIRMED -> DONE; P2-20 closed zero-code; ThrottlerGuard/w-withTimestamp refutations; WEB-D zombie-tabs only; reviewers clean zai (163s/137s).",
+    "zai delegation-path 401 history — run #55: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE, 401); reviewers clean 175s combined — 5th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then."
+  ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-16T01:17:29Z"
+  "last_run_id": "2026-09-16T01:17:29Z",
+  "last_run_started_at": "2026-09-16T10:19:53Z"
 }
