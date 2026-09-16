@@ -396,6 +396,8 @@ export const pitch_slots = pgTable('pitch_slots', {
   uniqueIndex('uq_pitch_slot').on(table.pitch_id, table.slot_date, table.start_time),
   index('idx_slots_pitch_date').on(table.pitch_id, table.slot_date),
   index('idx_slots_available').on(table.is_booked).where(sql`${table.is_booked} = false`),
+  // P2-56 FK index: slot→match reverse lookup + delete enforcement
+  index('idx_pitch_slots_booked_match').on(table.booked_match_id),
 ]);
 
 export const matchVisibilityEnum = pgEnum('match_visibility', [
@@ -473,6 +475,9 @@ export const matches = pgTable(
     // P1-4 hot-FK indexes: my-matches by host, pitch availability lookups
     index('matches_host_id_idx').on(t.host_id),
     index('matches_pitch_id_idx').on(t.pitch_id),
+    // P2-56 FK indexes (run #55): booking slot + POTM winner legs
+    index('idx_matches_booking_slot').on(t.booking_slot_id),
+    index('idx_matches_pom_winner').on(t.pom_winner_id),
   ],
 );
 
@@ -598,6 +603,9 @@ export const match_votes = pgTable(
   (t) => [
     uniqueIndex('match_votes_voter_match_idx').on(t.match_id, t.voter_id),
     index('match_votes_match_idx').on(t.match_id),
+    // P2-56 FK indexes (run #55): per-voter / per-candidate vote lookups
+    index('idx_match_votes_voter').on(t.voter_id),
+    index('idx_match_votes_candidate').on(t.candidate_id),
   ],
 );
 
@@ -889,6 +897,8 @@ export const activities = pgTable(
   (t) => [index('activities_created_idx').on(t.created_at),
     // P1-4 hot-FK index: activity feed per actor
     index('activities_actor_id_idx').on(t.actor_id),
+    // P2-56 FK index (run #55): activity→match cascade enforcement
+    index('idx_activities_match').on(t.match_id),
   ],
 );
 
@@ -909,7 +919,11 @@ export const feed_items = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('feed_items_recipient_created_idx').on(t.recipient_id, t.created_at)],
+  (t) => [
+    index('feed_items_recipient_created_idx').on(t.recipient_id, t.created_at),
+    // P2-56 FK index (run #55): feed item→activity cascade enforcement
+    index('idx_feed_items_activity').on(t.activity_id),
+  ],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -954,6 +968,9 @@ export const disputes = pgTable(
     index('disputes_match_idx').on(t.match_id),
     // P1-4 hot-FK index: admin disputes queue by reporter
     index('disputes_reporter_id_idx').on(t.reporter_id),
+    // P2-56 FK indexes (run #55): admin-actor + respondent set-null legs
+    index('idx_disputes_decided_by').on(t.decided_by),
+    index('idx_disputes_respondent').on(t.respondent_id),
     // Dedup: at most one open/reviewing dispute per (match, reporter, type).
     // Partial so a resolved dispute does not block a new dispute on the same
     // match. Closes the createDispute TOCTOU race — a concurrent duplicate
@@ -982,7 +999,11 @@ export const dispute_messages = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('dispute_messages_dispute_idx').on(t.dispute_id)],
+  (t) => [
+    index('dispute_messages_dispute_idx').on(t.dispute_id),
+    // P2-56 FK index (run #55): messages by author
+    index('idx_dispute_messages_author').on(t.author_id),
+  ],
 );
 
 export const venue_verifications = pgTable(
@@ -1009,7 +1030,11 @@ export const venue_verifications = pgTable(
     }),
     reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
   },
-  (t) => [uniqueIndex('venue_verifications_venue_idx').on(t.venue_id)],
+  (t) => [
+    uniqueIndex('venue_verifications_venue_idx').on(t.venue_id),
+    // P2-56 FK index (run #55): reviews by admin actor
+    index('idx_venue_verifications_reviewed_by').on(t.reviewed_by),
+  ],
 );
 
 export const settlements = pgTable(
@@ -1096,6 +1121,8 @@ export const reports = pgTable(
     index('reports_subject_type_idx').on(t.subject_type),
     // P1-4 hot-FK index: reports moderation queue by reporter
     index('reports_reporter_id_idx').on(t.reporter_id),
+    // P2-56 FK index (run #55): resolutions by admin actor
+    index('idx_reports_resolved_by').on(t.resolved_by),
     // Dedup: at most one open/reviewing report per (reporter, subject). Partial
     // so a resolved report does not block re-reporting. Closes the create()
     // TOCTOU race — concurrent duplicate submits hit this constraint.

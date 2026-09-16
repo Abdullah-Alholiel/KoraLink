@@ -302,6 +302,13 @@
       "when": 1789316793123,
       "tag": "0041_match_chat_read_watermark",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789316793124,
+      "tag": "0042_hot_fk_indexes",
+      "breakpoints": true
     }
   ]
 }
