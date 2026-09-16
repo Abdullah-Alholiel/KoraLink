@@ -20,8 +20,21 @@ function userStatus(u: AdminUser): string {
   return 'active';
 }
 
+/**
+ * User detail + moderation surface. P2-67 (run #54): the page was the last
+ * English-only detail surface — title, loading, all 12 field labels, back link,
+ * role note and every action button shipped hardcoded English, breaking the AR
+ * console on one of the highest-stakes admin operations (ban/suspend). All copy
+ * now routes through the `userDetail` namespace (+ common.loading / nav for
+ * back — mirroring the P2-61 venues/[id] pattern, including the RTL-mirrored
+ * back arrow). Verification status keeps flowing through StatusBadge's `status`
+ * catalog (localized + safe fallback for unknown enums). Field VALUES are the
+ * user's data (phone/handle/dates via formatDate, money via formatMoney) —
+ * only labels are catalog-driven.
+ */
 export default function UserDetailPage() {
-  const t = useTranslations('hq');
+  const t = useTranslations('userDetail');
+  const tHQ = useTranslations('hq');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -41,15 +54,15 @@ export default function UserDetailPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="User" subtitle="Loading…" />
-        <div className="p-8 text-sm text-gray-500">Loading…</div>
+        <PageHeader title={t('titleFallback')} subtitle={t('loading')} />
+        <div className="p-8 text-sm text-gray-500">{t('loading')}</div>
       </div>
     );
   }
   if (error || !data) {
     return (
       <div>
-        <PageHeader title="User" />
+        <PageHeader title={t('titleFallback')} />
         <LoadError error={error} onRetry={reload} className="m-8" />
       </div>
     );
@@ -58,21 +71,28 @@ export default function UserDetailPage() {
   const st = userStatus(data);
   const busyState = busy;
   const rows: [string, React.ReactNode][] = [
-    ['Phone', data.phone],
-    ['Handle', data.handle ? `@${data.handle}` : '—'],
     [
-      'Role',
+      'phone',
+      data.phone,
+    ],
+    [
+      'handle',
+      data.handle ? `@${data.handle}` : t('na'),
+    ],
+    [
+      'role',
       (
         <div className="relative inline-flex">
           <select
             value={data.role}
             onChange={(e) => act({ role: e.target.value as AdminUser['role'] })}
             disabled={busyState}
+            aria-label={t('field_role')}
             className="appearance-none rounded-lg border border-gray-300 bg-white py-1 pe-7 ps-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none disabled:opacity-50"
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {tHQ(`role${r}`)}
               </option>
             ))}
           </select>
@@ -80,25 +100,25 @@ export default function UserDetailPage() {
         </div>
       ),
     ],
-    ['Wallet', formatMoney(data.wallet_balance)],
-    ['Karma', String(data.karma_score)],
-    ['Rating', String(data.rating)],
-    ['No-shows', String(data.no_show_count)],
-    ['Matches played', String(data.matchesPlayed ?? 0)],
-    ['Total spent', formatMoney(data.totalSpent ?? 0)],
-    ['Verification', data.verification_status],
-    ['Joined', formatDate(data.created_at)],
-    ['Last seen', formatDate(data.last_seen_at)],
+    ['wallet', formatMoney(data.wallet_balance)],
+    ['karma', String(data.karma_score)],
+    ['rating', String(data.rating)],
+    ['noShows', String(data.no_show_count)],
+    ['matchesPlayed', String(data.matchesPlayed ?? 0)],
+    ['totalSpent', formatMoney(data.totalSpent ?? 0)],
+    ['verification', <StatusBadge status={data.verification_status} />],
+    ['joined', formatDate(data.created_at)],
+    ['lastSeen', formatDate(data.last_seen_at)],
   ];
 
   return (
     <div>
       <PageHeader
-        title={data.full_name ?? 'User'}
+        title={data.full_name ?? t('titleFallback')}
         subtitle={`#${id.slice(0, 8).toUpperCase()}`}
         actions={
           <button onClick={() => router.push('/users')} className="text-sm text-gray-500 hover:text-gray-700">
-            ← Back to users
+            <span aria-hidden className="inline-block rtl:-scale-x-100">←</span> {t('backToUsers')}
           </button>
         }
       />
@@ -109,17 +129,15 @@ export default function UserDetailPage() {
         </div>
 
         <dl className="grid grid-cols-2 gap-4 rounded-xl border border-gray-200 bg-white p-5 text-sm">
-          {rows.map(([k, v]) => (
-            <div key={k}>
-              <dt className="text-xs text-gray-500">{k}</dt>
+          {rows.map(([key, v]) => (
+            <div key={key}>
+              <dt className="text-xs text-gray-500">{t(`field_${key}`)}</dt>
               <dd className="mt-0.5 text-gray-900">{v}</dd>
             </div>
           ))}
         </dl>
 
-        <p className="mt-4 text-xs text-gray-400">
-          Changing the role takes effect on the user's next sign-in (the JWT carries the role claim).
-        </p>
+        <p className="mt-4 text-xs text-gray-400">{t('roleNote')}</p>
 
         <div className="mt-6 flex items-center gap-3">
           {busy ? (
@@ -131,14 +149,14 @@ export default function UserDetailPage() {
                   onClick={() => act({ banned: false })}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> Unban
+                  <CheckCircle2 className="h-4 w-4" /> {t('unban')}
                 </button>
               ) : (
                 <button
                   onClick={() => act({ banned: true })}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
                 >
-                  <Ban className="h-4 w-4" /> Ban
+                  <Ban className="h-4 w-4" /> {t('ban')}
                 </button>
               )}
               {st === 'suspended' ? (
@@ -146,14 +164,14 @@ export default function UserDetailPage() {
                   onClick={() => act({ suspendedUntil: null })}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
                 >
-                  Lift suspension
+                  {t('liftSuspension')}
                 </button>
               ) : (
                 <button
                   onClick={() => act({ suspendedUntil: new Date(Date.now() + 7 * 86400000).toISOString() })}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
                 >
-                  <TimerOff className="h-4 w-4" /> Suspend 7d
+                  <TimerOff className="h-4 w-4" /> {t('suspend7d')}
                 </button>
               )}
             </>

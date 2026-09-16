@@ -99,7 +99,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       {/* Mobile-only close button (the desktop sidebar is always visible). */}
       <button
         onClick={onMobileClose}
-        aria-label="Close menu"
+        aria-label={t('closeMenu')}
         className="ms-auto rounded-lg p-1.5 text-gray-300 hover:bg-white/10 hover:text-white md:hidden"
       >
         <X className="h-5 w-5" />

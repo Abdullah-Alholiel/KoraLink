@@ -45,6 +45,7 @@
     "earnings": "Earnings",
     "partnerPortal": "Partner portal",
     "logout": "Log out",
+    "closeMenu": "Close menu",
     "rolePartner": "Partner",
     "roleHq": "HQ",
     "pitches": "Pitches"
@@ -627,5 +628,28 @@
     "no": "No",
     "perHour": "/hr",
     "decisionFailed": "The decision could not be saved — the venue is still pending. Check your connection and try again."
+  },
+  "userDetail": {
+    "titleFallback": "User",
+    "loading": "Loading user…",
+    "backToUsers": "Back to users",
+    "field_phone": "Phone",
+    "field_handle": "Handle",
+    "field_role": "Role",
+    "field_wallet": "Wallet",
+    "field_karma": "Karma",
+    "field_rating": "Rating",
+    "field_noShows": "No-shows",
+    "field_matchesPlayed": "Matches played",
+    "field_totalSpent": "Total spent",
+    "field_verification": "Verification",
+    "field_joined": "Joined",
+    "field_lastSeen": "Last seen",
+    "roleNote": "Changing the role takes effect on the user's next sign-in (the JWT carries the role claim).",
+    "ban": "Ban",
+    "unban": "Unban",
+    "suspend7d": "Suspend 7d",
+    "liftSuspension": "Lift suspension",
+    "na": "—"
   }
 }
