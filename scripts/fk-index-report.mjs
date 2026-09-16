@@ -51,7 +51,7 @@ try {
     idx.some(
       (i) =>
         i.tablename === table &&
-        new RegExp(String.raw`\((${column}),`).test(i.indexdef.replace(/\s+/g, ' ')),
+        new RegExp(String.raw`\(${column}[,)]`).test(i.indexdef.replace(/\s+/g, ' ')),
     );
 
   const unLed = [];
