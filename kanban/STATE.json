@@ -1,34 +1,20 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 53,
-  "last_run_at": "2026-09-15T01:17:29Z",
+  "last_run": 54,
+  "last_run_at": "2026-09-16T01:17:29Z",
   "last_run_commits": [
-    "1bdf0fc",
-    "a4adca6",
-    "95200e7",
-    "ed5b7f5"
+    "bb1143e"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-15T01-17Z-run53.md",
+  "last_run_report": "kanban/RUNS/2026-09-16T01-17Z-run54.md",
   "in_review_items": [
     {
-      "id": "P2-65 + OTP-adoption",
-      "claim": "a4adca6 match-detail OfflineBanner + structure guard (presence AND isOffline wiring pinned for both surfaces; adopted from the killed 15:17Z session); 1bdf0fc OTP single-use hardening adopted+pushed after jest 65/525 re-verify + Reviewer A six-axis APPROVE.",
-      "commit": "a4adca6/1bdf0fc"
-    },
-    {
-      "id": "P2-fail-counter",
-      "claim": "95200e7 phone-change verify charges fail counter on EVERY miss (guard removed; lockout still 429s without charging; contract byte-identical); +2 specs; turbo --force --filter=api dist-verified; service restarted, /health 200.",
-      "commit": "95200e7"
-    },
-    {
-      "id": "P2-66",
-      "claim": "ed5b7f5 lobby-chat message reporting (per-message ReportSheet on received messages, DM parity; report.chatMessage key; CS-9/CS-10); vitest 80f/550t, parity 948/948, turbo 3/3.",
-      "commit": "ed5b7f5"
+      "id": "P2-67",
+      "claim": "bb1143e users/[id] detail fully localized (userDetail ns 21 keys EN+AR, parity 593/593) + Sidebar nav.closeMenu aria-label + role-select aria-label + RTL back arrow + verification via StatusBadge + structure guard pins (main)/my-games OfflineBanner (path fixed from dead session). Gates: admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed origin/staging bb1143e. NEXT RUN: spot-check /users/<id> renders Arabic under admin_locale=ar.",
+      "commit": "bb1143e"
     }
   ],
   "open_blockers": [
-    "zai delegation-path 401 history — run #52: probe 200 AND delegation children 200 (reviewers 71s/142s clean) — streak broken again (pattern: intermittent, never trust one clean run; policy unchanged: try zai first, failover on first child error).",
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
     "P2-51 (NEW run #36): Render demo deploy-before-migrate drift — demo auto-deploys main but has NO migration step; EVERY future migration re-breaks demo until fixed. Needs owner call: Render deploy hook (db:migrate) vs manual runbook in deploy-demo/. Demo DB creds: profile .deploy-tokens (KL_API_DATABASE_URL via Render env-vars API is the EXTERNAL neon URL).",
     "P2-47: admin cancel-purge vs restore-on-behalf — still needs Abdullah decision.",
@@ -36,26 +22,25 @@
     "P0-2 wallet top-up: dummy kept per Abdullah (2026-08-26), prod-gated (f109cf6). Live box runs NODE_ENV=development so the gate is NOT exercised; must set NODE_ENV=production + real secrets before public launch.",
     "P1-8 joinMatch debit + P1-14 settlement payout — BLOCKED on P0-2 (real payment provider).",
     "P1-29 dispute money side-effect — needs P0-2 money-path decision before building.",
-    "P1-16 padel — CLOSED by Abdullah 2026-09-02: FOOTBALL ONLY. P1-2 skill_level filter — DROPPED 2026-09-02. P1-40 join-approval — REJECTED 2026-09-05.",
     "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box).",
-    "P2-29 host nav placement — DECIDED 2026-09-02: host OUT of tab bar; play-feed '+' featured CTA.",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
     "RUNBOOK: hermes cron sessions can't run execute_code (approval wall) — use terminal; foreground timeout cap 600s → run npm build with background=true + process wait.",
     "RUNBOOK: ALWAYS prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
     "OPS: first admin build can OOM (137); solo `turbo run build --filter=admin` retry passes.",
     "OPS (run #35): drizzle bookkeeping on this VPS = drizzle.__drizzle_migrations (sha256 file hash + journal when); migrations 0030+ are hand-written + journal-appended WITHOUT snapshot json — follow that convention.",
-    "P0-5 per-category push prefs — BUILT run #28. P0-6 PDPL — BUILT runs #29-31/#34. Sub-cycles deferred: PDPL email receipt NOW UNBLOCKED by P1-41 (needs Resend provisioning first).",
     "P2-42 CSP script-src migration — standing reviewer item, 2-PR effort.",
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
     "strix_scan=not-due-2026-09 (day 7; window 1st-3rd; next due Oct 1)",
-    "OPS (run #52): a factory session KILLED mid-run (01:17Z, ~39 min in, pid dead, 0 commits) leaves uncommitted slices in-tree + a stale LOCK. Recovery recipe that worked: verify pid dead → rm lock → adopt in-flight work (verify via reviewers + full gates) → commit → continue. Check for this pattern whenever a run starts and the tree is dirty with coherent half-done work + a plan doc."
+    "zai delegation-path 401 history — run #54: probe 200 AND reviewers clean (106s/255s) — 4th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "KILL-PATTERN (6 dead sessions through run #54, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
+    "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
-  "notes": "run53 (01:17Z cron slot): RECOVERED a killed 15:17Z run-53 session (lock pid 277842 dead) — adopted its committed-but-unpushed 1bdf0fc (OTP single-use; re-verified jest 65/525 + Reviewer A APPROVE before push) AND its uncommitted offline-banner slice (a4adca6, +structure test). Built 95200e7 (phone-change fail counter charges on EVERY miss — Reviewer-A find, +2 specs) and ed5b7f5 (P2-66 lobby-chat message reporting, DM parity, parity 948/948). P2-20 CLOSED zero-code (param audit: PWA sends exactly the 11 whitelisted params; admin/partner own endpoints). Run-#52's 3 in-review claims ALL CONFIRMED (Reviewer B file:line) -> DONE. Refuted: Reviewer-B chat-throttle lead (ThrottlerGuard wired app.module.ts:30), Reviewer-A withTimestamp findings (all 5 sites already wrap it; bare match_players set is correct — no updated_at column). Sentry: WEB-D n=7 still zombie-tab :10000 signatures (port closed, prod 6bb22d3c pre-fix) — not a 5th survivor; API quiet since Sep 11; journal 5h zero errors. Reviewers clean on zai glm-5.3-flash (163s/137s) — 3rd consecutive clean zai run. OmniRoute :20128 down (probe timeout) — not needed. Gates: turbo 3/3 x3, vitest 80f/550t, pwa tsc 0, jest 65/527, parity 948/948. Mirror: P2-65 t_94553c59 + P2-66 t_f95b84de created+gated under t_ce9a513a; verified-comments t_7dded2f0/t_04d66a1e/t_e881f155/t_bde44ea9; built-comment t_635278dc (P2-20 audit) + t_12d2fac6 (with explicit 'JWT-in-body stays OPEN' correction). Dead-run pattern now 3x — prestate watchdog check recommended (LOCK pid dead -> alert). || run52 (10:15Z cron slot, 10:20Z lock): RECOVERED a killed 01:17Z run-52 session (lock pid 909570 dead at ~39min, 0 commits) — adopted its uncommitted PWA hydration/locale slices + cycle docs, verified via 2 parallel GLM reviewers (A: PASS on hydration/TZ/i18n/tests; B: all 3 run-#51 in-review claims CONFIRMED → promoted DONE), committed as ecfab67. Built 2 more slices: 86723ea P2-61 (admin venues/[id] localized + a11y + 5 EmptyState swaps; ADMIN STATE CHECK clean), 1066a29 club-detail OfflineBanner (last uncovered surface; B's 9-surface claim re-scoped to 1 on inspection). NEW P2-64 boarded+closed same run (bare ar-SA = Hijri risk; standing rule: route Intl through lib/format). Sentry: WEB-D hydration RECURRING (n=5, last 09:02Z today) but from STALE-SW ZOMBIE TABS (URL :10000 — port closed since Sep-13 cleanup; prod release 6bb22d3c still carries the render-path new Date()) — root fix ecfab67 reaches prod at next promote; watch WEB-D stop-accumulating then. Reviewer-B hydration candidates PostMatchSection/RestoreAccountBanner REFUTED on inspection (loader/profile-gate render identically both sides — no clock text during hydration). Reviewers clean on zai glm-5.3-flash (71s/142s). Gates: turbo 3/3 ×3, vitest 79f/546t (+14), pwa tsc 0, admin tsc 0. Mirror: P2-61 t_04d66a1e + P2-59 t_7dded2f0 built-comments; P2-57 t_a34d0303 + P2-63 t_bde44ea9 + MapPin t_3fd910ae verified-comments; P2-64 created t_e881f155 + gated under t_ce9a513a (todo/parent verified). Multica bridge posted weekly digest t_d7f0d6ef — no card collision this run.",
+  "notes": "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NEW (DataTable/Drawer/ConfirmDialog aria batch, admin state check first); reports-triage note recorded on P2-66 row (product decision, not boarded). Reviewers clean on zai glm-5.3-flash (106s/255s — 4th consecutive clean). Next: verify bb1143e (AR spot-check /users/<id>), run #55 = DB/Infra rotation (55%4=3) -> P2-56 FK-index led fits, P2-69 small, P2-68 medium. || run53 (01:17Z): RECOVERED killed 15:17Z session (1bdf0fc OTP single-use adopted+pushed after re-verify; a4adca6 offline banner + structure guard); built 95200e7 (fail counter charges every miss, +2 specs) + ed5b7f5 (P2-66 lobby report, parity 948/948); run-#52 claims CONFIRMED -> DONE; P2-20 closed zero-code; ThrottlerGuard/w-withTimestamp refutations; WEB-D zombie-tabs only; reviewers clean zai (163s/137s).",
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-15T01:17:29Z"
+  "last_run_id": "2026-09-16T01:17:29Z"
 }
