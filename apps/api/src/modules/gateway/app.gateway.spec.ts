@@ -1,4 +1,5 @@
 import { AppGateway } from './app.gateway';
+import { users } from '../../database/schema';
 
 /**
  * Unit tests for `handleConnection` moderation enforcement (run #6).
@@ -271,3 +272,176 @@ describe('AppGateway.handleConnection — moderation enforcement', () => {
     expect(client.joined).toEqual(['user:u1', 'ops']);
   });
 });
+
+// ── P1-48 (run #57): mid-session moderation gate ────────────────────────────
+// A socket outlives the moderation action that bans its user (JWT lives 7
+// days). Every state-changing handler must therefore re-read the account
+// state BEFORE rate-limit consumption, membership reads, writes, or
+// broadcasts — the WS counterpart of jwt-cookie.strategy.validate().
+
+describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
+  type Row = {
+    id: string;
+    role?: string;
+    banned_at: Date | null;
+    suspended_until: Date | null;
+    deleted_at?: Date | null;
+  };
+
+  const active: Row = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null };
+
+  /** DB stub routed by table: `users` selects return userRow (null = missing row),
+   * `match_players` selects return the membership row; insert → returning. */
+  function makeRoutedDb(userRow: Row | null, membership: Array<{ id: string }> = [{ id: 'mp-1' }]) {
+    return {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => (table === users ? (userRow ? [userRow] : []) : membership),
+          }),
+        }),
+      }),
+      query: { match_messages: { findFirst: async () => undefined } },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: 'msg-1', match_id: 'm1', user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+  }
+
+  function makeGw(db: unknown, consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }))) {
+    const gateway = new AppGateway(
+      db as never,
+      { verify: () => ({ sub: 'u1', role: 'Player' }) } as never,
+      {
+        get: (_k: string, def?: string) => def,
+        getOrThrow: (k: string) => {
+          if (k === 'JWT_SECRET') return 'test-secret';
+          throw new Error(`config key not stubbed: ${k}`);
+        },
+      } as never,
+      { isParticipant: jest.fn(async () => true) } as never,
+      { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
+      {} as never,
+      {} as never,
+      { consume, release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return { gateway, consume: consume as jest.Mock, isParticipant: gateway['conversationsService']['isParticipant'] as jest.Mock };
+  }
+
+  function makeClient() {
+    return {
+      userId: 'u1',
+      to: () => ({ emit: () => undefined }),
+      join: async () => undefined,
+      leave: async () => undefined,
+    };
+  }
+
+  const BANNED: Row = { ...active, banned_at: new Date() };
+  const SUSPENDED: Row = { ...active, suspended_until: new Date(Date.now() + 86_400_000) };
+  const DELETED: Row = { ...active, deleted_at: new Date() };
+  const MSG = 'Your account can no longer perform this action.';
+
+  it('send-message: banned mid-session → rejected before consuming the rate-limit bucket', async () => {
+    const { gateway, consume } = makeGw(makeRoutedDb(BANNED));
+    const client = makeClient();
+
+    await expect(
+      gateway.handleMessage({ matchId: 'm1', content: 'still here' }, client as never),
+    ).rejects.toThrow(MSG);
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  it('send-message: suspended (future until) → rejected', async () => {
+    const { gateway } = makeGw(makeRoutedDb(SUSPENDED));
+
+    await expect(
+      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('send-message: soft-deleted → rejected', async () => {
+    const { gateway } = makeGw(makeRoutedDb(DELETED));
+
+    await expect(
+      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('send-message: account row removed entirely → rejected (fail closed)', async () => {
+    const { gateway } = makeGw(makeRoutedDb(null));
+
+    await expect(
+      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('send-message: clean account → full happy chain still works', async () => {
+    const { gateway } = makeGw(makeRoutedDb(active));
+
+    await expect(
+      gateway.handleMessage({ matchId: 'm1', content: 'glhf' }, makeClient() as never),
+    ).resolves.toBeUndefined();
+  });
+
+  it('send-dm: banned mid-session → rejected', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+
+    await expect(
+      gateway.handleDm({ conversationId: 'c1', content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('join-lobby: banned mid-session → rejected before the membership read', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+
+    await expect(
+      gateway.handleJoinLobby({ matchId: 'm1' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('join-conversation: banned mid-session → rejected before the participant check', async () => {
+    const { gateway, isParticipant } = makeGw(makeRoutedDb(BANNED));
+
+    await expect(
+      gateway.handleJoinConversation({ conversationId: 'c1' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+    expect(isParticipant).not.toHaveBeenCalled();
+  });
+
+  it('mark-read: banned mid-session → rejected', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+
+    await expect(
+      gateway.handleMarkRead({ conversationId: 'c1' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('mark-chat-read: banned mid-session → rejected', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+
+    await expect(
+      gateway.handleMarkChatRead({ matchId: 'm1' }, makeClient() as never),
+    ).rejects.toThrow(MSG);
+  });
+
+  it('leave-conversation: NOT gated — a banned user may still leave (P2-6 exemption)', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+    const client = makeClient();
+
+    await expect(
+      gateway.handleLeaveConversation({ conversationId: 'c1' }, client as never),
+    ).resolves.toBeUndefined();
+  });
+});
+

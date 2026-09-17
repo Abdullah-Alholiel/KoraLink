@@ -1,17 +1,38 @@
 import { WsException } from '@nestjs/websockets';
 import { AppGateway } from './app.gateway';
+import { users } from '../../database/schema';
 
 /**
  * P2-58 (run #50): the `mark-chat-read` WS handler must advance the caller's
  * roster-row read watermark, refuse unauthenticated sockets, and refuse
  * non-members (zero updated rows → WsException, mirroring join-lobby).
  * Read state is PRIVATE — the room must never be broadcast to.
+ *
+ * Run #57 (P1-48): every state-changing handler now passes through the
+ * mid-session moderation gate first (requireActiveUser — a users-table
+ * SELECT). The DB stub routes by table: `users` selects return the given
+ * account row (default: clean), everything else falls through to the
+ * match_players update chain under test.
  */
 
-function makeDb(returningRows: Array<{ id: string }>) {
+type UserRow = {
+  id: string;
+  banned_at: Date | null;
+  suspended_until: Date | null;
+  deleted_at?: Date | null;
+};
+
+function makeDb(returningRows: Array<{ id: string }>, userRow: UserRow | null = cleanUser()) {
   const setArgCapture: { value: unknown } = { value: undefined };
   return {
     db: {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => (table === users ? (userRow ? [userRow] : []) : []),
+          }),
+        }),
+      }),
       update: () => ({
         set: (arg: unknown) => {
           setArgCapture.value = arg;
@@ -25,6 +46,10 @@ function makeDb(returningRows: Array<{ id: string }>) {
     },
     setArgCapture,
   };
+}
+
+function cleanUser(): UserRow {
+  return { id: 'u1', banned_at: null, suspended_until: null };
 }
 
 function makeGateway(db: ReturnType<typeof makeDb>['db']) {
@@ -82,7 +107,7 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     ).rejects.toThrow(WsException);
   });
 
-  it('rejects non-members (zero updated rows) — join-lobby parity', async () => {
+  it('rejects non-members (zero updated rows)', async () => {
     const { db } = makeDb([]);
     const gateway = makeGateway(db);
     const client = makeClient('u1');
@@ -90,5 +115,21 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     await expect(
       gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
     ).rejects.toThrow('You are not a member of this match.');
+  });
+
+  // P1-48 (run #57): the moderation gate runs BEFORE the watermark write.
+  it('rejects a user banned mid-session before touching the roster row', async () => {
+    const { db, setArgCapture } = makeDb([{ id: 'mp-1' }], {
+      id: 'u1',
+      banned_at: new Date(),
+      suspended_until: null,
+    });
+    const gateway = makeGateway(db);
+    const client = makeClient('u1');
+
+    await expect(
+      gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
+    ).rejects.toThrow('Your account can no longer perform this action.');
+    expect(setArgCapture.value).toBeUndefined(); // no write attempted
   });
 });

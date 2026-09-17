@@ -140,14 +140,18 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         client.disconnect(true);
         return;
       }
-      if (user.banned_at) {
+      // P1-48 (run #57): the moderation predicate is shared with the
+      // per-message gate (requireActiveUser below) — one source of truth for
+      // "may this account act?" across handshake and message path.
+      const reason = this.moderationReason(user);
+      if (reason === 'banned') {
         this.logger.warn(`WS connection rejected: account ${payload.sub} is banned`);
         client.disconnect(true);
         return;
       }
-      if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
+      if (reason === 'suspended') {
         this.logger.warn(
-          `WS connection rejected: account ${payload.sub} suspended until ${user.suspended_until.toISOString()}`,
+          `WS connection rejected: account ${payload.sub} suspended until ${user.suspended_until?.toISOString()}`,
         );
         client.disconnect(true);
         return;
@@ -191,6 +195,58 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  // ── Per-message moderation gate (P1-48, run #57) ─────────────────────────
+  // The handshake check above rejects banned/suspended/deleted accounts at
+  // connect time, but a socket can outlive the moderation action by days (the
+  // JWT lives 7 days): an admin banning a user mid-session must stop their
+  // NEXT send-message/send-dm/join on the live connection, not just their
+  // next reconnect. REST re-reads the user row on EVERY request
+  // (jwt-cookie.strategy.validate()); the WS layer now does the same on every
+  // state-changing event. Cost: one PK SELECT over 3 columns per event —
+  // sub-millisecond, and send paths are already rate-limited (P1-42).
+  //
+  // leave-conversation is deliberately NOT gated: it only shrinks the
+  // caller's own event surface, and gating would trap a banned/removed user
+  // inside rooms they should be escaping (same rationale as P2-6).
+
+  /**
+   * Shared moderation predicate — same shape and order the handshake check
+   * and jwt-cookie.strategy.validate() enforce: banned → suspended (future
+   * only) → deleted. Returns why the account may not act, or null if active.
+   */
+  private moderationReason(user: {
+    banned_at: Date | null;
+    suspended_until: Date | null;
+    deleted_at?: Date | null;
+  }): 'banned' | 'suspended' | 'deleted' | null {
+    if (user.banned_at) return 'banned';
+    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) return 'suspended';
+    if (user.deleted_at) return 'deleted';
+    return null;
+  }
+
+  /**
+   * Re-read the caller's account state and throw when it may no longer act.
+   * Every state-changing @SubscribeMessage handler calls this right after its
+   * `!client.userId` guard, BEFORE rate-limit consumption, membership reads,
+   * writes, or broadcasts. A missing row (account hard-removed) blocks too.
+   */
+  private async requireActiveUser(userId: string): Promise<void> {
+    const [user] = await this.db
+      .select({
+        banned_at: users.banned_at,
+        suspended_until: users.suspended_until,
+        deleted_at: users.deleted_at,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || this.moderationReason(user) !== null) {
+      throw new WsException('Your account can no longer perform this action.');
+    }
+  }
+
   // ── Graceful shutdown ────────────────────────────────────────────────────
   // Runs on SIGTERM (systemd restart) once enableShutdownHooks() is set in
   // main.ts. Closes the io Server so active sockets drain instead of being cut.
@@ -210,6 +266,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
 
     const [membership] = await this.db
       .select({ id: match_players.id })
@@ -236,6 +294,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
@@ -385,6 +445,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
 
     const ok = await this.conversationsService.isParticipant(client.userId, data.conversationId);
     if (!ok) throw new WsException('You are not a participant in this conversation.');
@@ -407,6 +469,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
 
     const ok = await this.conversationsService.isParticipant(client.userId, data.conversationId);
     if (!ok) throw new WsException('You are not a participant in this conversation.');
@@ -431,6 +495,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
 
     // NOTE: no withTimestamp — match_players has no updated_at column.
     const updated = await this.db
@@ -457,6 +523,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
