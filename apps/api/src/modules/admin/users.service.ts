@@ -15,6 +15,7 @@ import { UpdateUserAdminDto } from './dto/update-user.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { AppGateway } from '../gateway/app.gateway';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -44,6 +45,7 @@ export class AdminUsersService {
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
     private readonly activities: ActivitiesService,
+    private readonly gateway: AppGateway,
   ) {}
 
   private buildWhere(dto: ListUsersDto): SQL | undefined {
@@ -225,6 +227,23 @@ export class AdminUsersService {
       ip,
     });
     this.realtime.broadcastOps('users');
+
+    // ── P1-50 (run #57): force-disconnect live sockets on ban/suspend ──
+    // The per-message moderation gate (app.gateway requireActiveUser) already
+    // blocks the banned/suspended user's NEXT action, but the stale socket
+    // lingers connected. Kill it now: the PWA sees 'disconnect', its
+    // reconnect re-runs the handshake, and the handshake refuses.
+    // Unban / suspension-lift must NOT disconnect (nothing to enforce).
+    const moderationDisconnect =
+      (updates.banned_at !== undefined && updates.banned_at !== null) ||
+      (updates.suspended_until !== undefined && updates.suspended_until !== null);
+    if (moderationDisconnect) {
+      try {
+        this.gateway.disconnectUser(id);
+      } catch {
+        // best-effort — the moderation write itself has already committed
+      }
+    }
 
     // ── Player notification for moderation actions ──
     // A ban/suspension ends the player's session on their next request (guard

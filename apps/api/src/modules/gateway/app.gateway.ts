@@ -572,6 +572,21 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     this.server.to(`match:${matchId}`).emit('roster-update', payload);
   }
 
+  // ── Admin-initiated force-disconnect (P1-50, run #57) ─────────────────────
+  /**
+   * Drop every live socket of a user (their personal room) — called by the
+   * admin users service right after a ban/suspension lands. The per-message
+   * gate (requireActiveUser) already blocks the user's NEXT action, but the
+   * stale socket would otherwise linger connected; killing it makes the
+   * enforcement immediate and visible: the PWA sees 'disconnect', its normal
+   * reconnect path re-runs the handshake, and the handshake now refuses.
+   */
+  disconnectUser(userId: string): void {
+    const room = this.realtime.userRoom(userId);
+    this.server.in(room).disconnectSockets(true);
+    this.logger.log(`Force-disconnected sockets for user ${userId} (moderation action)`);
+  }
+
   // ── Status update broadcast (called from MatchesService) ──────────────────
 
   broadcastStatusUpdate(matchId: string, payload: unknown): void {
