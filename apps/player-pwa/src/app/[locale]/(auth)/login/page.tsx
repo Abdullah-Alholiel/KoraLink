@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import { useRestoreAccount } from '@/hooks/useUser';
+import { classifyError } from '@/lib/error-classify';
 import { navigatePreservingLocale } from '@/lib/locale-routing';
 import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, getAuthPhoneDraft, setAuthPhoneDraft, type AuthChannel } from '@/lib/auth-flow';
 
@@ -112,7 +113,17 @@ export default function LoginPage() {
                 {
                     onSuccess: () =>
                         router.push(`/${locale}/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`),
-                    onError: () => setError(tErrors('otpSendFailed')),
+                    // P1-47: moderation blocks get their localized copy
+                    // (banned/suspended/deleted) instead of a generic send
+                    // failure — the user must know WHY they cannot log in.
+                    onError: (err) => {
+                        const kind = classifyError(err);
+                        setError(
+                            kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                                ? tErrors(kind)
+                                : tErrors('otpSendFailed'),
+                        );
+                    },
                     onSettled: () => setSubmitting(false),
                 },
             );
@@ -124,7 +135,14 @@ export default function LoginPage() {
             { phone },
             {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
-                onError: () => setError(tErrors('otpSendFailed')),
+                onError: (err) => {
+                    const kind = classifyError(err);
+                    setError(
+                        kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                            ? tErrors(kind)
+                            : tErrors('otpSendFailed'),
+                    );
+                },
                 onSettled: () => setSubmitting(false),
             },
         );

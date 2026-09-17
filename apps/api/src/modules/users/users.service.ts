@@ -443,16 +443,27 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
+    // P1-47: stable machine codes on moderation blocks — the PWA classifies
+    // via err.code (error-classify.ts) and renders localized blocked screens.
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        message: 'Account suspended.',
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     // Mirror the login-side PDPL guard: a soft-deleted account cannot mint
     // or consume change-flow OTPs (restore is the only escape there).
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
     return user;
   }

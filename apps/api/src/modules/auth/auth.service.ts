@@ -204,11 +204,20 @@ export class AuthService {
     // Moderation enforcement at login: a banned/suspended account must not be
     // able to mint a fresh 7-day JWT (the guard alone would just log them out,
     // which they could defeat by re-authenticating).
+    // P1-47: stable machine codes for PWA classification (error-classify.ts).
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        // End instant rides in the message — the PWA blocked card shows the
+        // exact date/time localized (what happened + when you're back).
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     // P0-6 (run #29): PDPL soft-delete. A deleted account must not be
     // able to mint a fresh 7-day JWT by re-authenticating — the only
@@ -216,7 +225,10 @@ export class AuthService {
     // mint at the source. (If the user has a still-valid JWT, the
     // jwt-cookie strategy already 401s on every guarded call.)
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
 
     // Surface separation — the PWA never issues sessions for staff roles and
@@ -297,10 +309,18 @@ export class AuthService {
    }
 
    if (user.banned_at) {
-     throw new ForbiddenException('Account banned.');
+     throw new ForbiddenException({
+       message: 'Account banned.',
+       code: 'ACCOUNT_BANNED',
+     });
    }
    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-     throw new ForbiddenException('Account suspended.');
+     throw new ForbiddenException({
+       // End instant rides in the message — PWA blocked card shows the
+       // exact date/time localized (see auth.service.ts:213 comment).
+       message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+       code: 'ACCOUNT_SUSPENDED',
+     });
    }
 
    assertSurfaceRole(surface, user.role);

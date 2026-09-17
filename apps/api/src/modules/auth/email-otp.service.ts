@@ -226,15 +226,25 @@ export class EmailOtpService {
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
-    // Moderation gates — identical to the phone flow.
+    // Moderation gates — identical to the phone flow (P1-47 stable codes;
+    // suspension message carries the end instant for the PWA blocked card).
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
 
     assertSurfaceRole(surface, user.role);

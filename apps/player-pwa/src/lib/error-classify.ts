@@ -16,7 +16,13 @@ export type ErrorKind =
   | 'validation'
   | 'rateLimited'
   | 'server'
-  | 'unknown';
+  | 'unknown'
+  // P1-47: moderation blocks carry stable API codes (ACCOUNT_BANNED /
+  // ACCOUNT_SUSPENDED / ACCOUNT_DELETED) — surfaces render localized
+  // blocked states instead of the generic forbidden/unauthorized copy.
+  | 'banned'
+  | 'suspended'
+  | 'deleted';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -29,6 +35,16 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   rateLimited: 'errors.rateLimited',
   server: 'errors.server',
   unknown: 'errors.unknown',
+  banned: 'errors.banned',
+  suspended: 'errors.suspended',
+  deleted: 'errors.deleted',
+};
+
+/** API error-body codes → moderation ErrorKinds (P1-47). */
+const CODE_KINDS: Record<string, ErrorKind> = {
+  ACCOUNT_BANNED: 'banned',
+  ACCOUNT_SUSPENDED: 'suspended',
+  ACCOUNT_DELETED: 'deleted',
 };
 
 /** i18n key for a classified error. */
@@ -63,6 +79,11 @@ export function classifyError(err: unknown): ErrorKind {
 
   // Client-side Zod validation (e.g. hostMatchSchema.parse in a mutation).
   if (name === 'ZodError' || /validation/i.test(name)) return 'validation';
+
+  // P1-47: a stable API code wins over status-based classification — a
+  // suspended account must never render as generic forbidden/unauthorized.
+  const code = (err as { code?: unknown })?.code;
+  if (typeof code === 'string' && CODE_KINDS[code]) return CODE_KINDS[code];
 
   const status = (err as { status?: unknown })?.status;
   if (typeof status === 'number' && status > 0) {

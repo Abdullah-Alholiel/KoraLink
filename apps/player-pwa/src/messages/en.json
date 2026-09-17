@@ -25,7 +25,21 @@
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
     "otpSendFailed": "Couldn't send a new code just now. If you recently requested one, wait about a minute and try again.",
-    "genericRetry": "Try again"
+    "genericRetry": "Try again",
+    "banned": "Your account has been banned. If you think this is a mistake, contact support.",
+    "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
+    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
+  },
+  "blocked": {
+    "title": "Account restricted",
+    "bannedTitle": "Your account has been banned",
+    "bannedBody": "This account can no longer access KoraLink. If you think this is a mistake, contact support.",
+    "suspendedTitle": "Your account is temporarily suspended",
+    "suspendedBody": "You can sign in again after {date}. Hang tight — your matches and wallet are untouched.",
+    "suspendedBodyNoDate": "You can sign in again once the suspension ends. Your matches and wallet are untouched.",
+    "deletedTitle": "Account scheduled for deletion",
+    "deletedBody": "This account is within its 30-day grace period. Sign in and choose Restore to recover it.",
+    "signOut": "Back to login"
   },
   "common": {
     "loading": "Loading…",

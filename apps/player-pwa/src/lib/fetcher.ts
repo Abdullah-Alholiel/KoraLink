@@ -12,7 +12,9 @@ export class FetchError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly url: string
+    public readonly url: string,
+    /** Stable machine code from the API body (`{ message, code }`), if sent. */
+    public readonly code?: string
   ) {
     super(message);
     this.name = 'FetchError';
@@ -111,12 +113,15 @@ export async function fetcher<T>(
     // (e.g. "Insufficient wallet balance…" → specific UI). Fall back to the
     // status text when the body isn't JSON or has no message.
     let apiMessage = '';
+    let apiCode: string | undefined;
     try {
       const body = await response.clone().json().catch(() => null);
       apiMessage =
         (body && (body.message ?? body.error))?.toString() ?? '';
       // NestJS validation errors return string[] — keep the first entry
       if (Array.isArray(body?.message)) apiMessage = body.message[0] ?? '';
+      // P1-47: stable machine code (e.g. ACCOUNT_BANNED) for classification.
+      if (body && typeof body.code === 'string') apiCode = body.code;
     } catch {
       apiMessage = '';
     }
@@ -167,7 +172,8 @@ export async function fetcher<T>(
     throw new FetchError(
       apiMessage || `Request failed with status ${response.status}`,
       response.status,
-      url.toString()
+      url.toString(),
+      apiCode
     );
   }
 

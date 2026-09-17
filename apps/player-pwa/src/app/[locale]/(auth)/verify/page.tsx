@@ -6,9 +6,12 @@ import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-reac
 import { useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/useAppStore';
-import { fetcher, setAuthToken } from '@/lib/fetcher';
+import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
 import { clearAuthFlow } from '@/lib/auth-flow';
+import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
+import type { BlockedReason } from '@/components/auth/BlockedCard';
+import type { AppLocale } from '@/lib/format';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -38,6 +41,13 @@ function VerifyContent() {
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
     const [error, setError] = useState<string | null>(null);
     const [resendCountdown, setResendCountdown] = useState(0);
+    // P1-47: when the verify response carries a moderation block
+    // (banned/suspended/deleted), the OTP UI is replaced by the localized
+    // BlockedCard — retrying can never succeed.
+    const [blocked, setBlocked] = useState<{
+        reason: BlockedReason;
+        suspendedUntil: string | null;
+    } | null>(null);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     const verifyOtp = useVerifyOtp();
@@ -159,8 +169,21 @@ function VerifyContent() {
                         // 401 = wrong/expired code; 429 = fail-lockout (5 tries).
                         // Stale digits would fail again — clear for a fresh entry.
                         clearOtp();
+                        const kind = classifyError(err);
+                        // P1-47: moderation block — swap the whole OTP form for
+                        // the localized blocked state (retry can never succeed).
+                        if (kind === 'banned' || kind === 'suspended' || kind === 'deleted') {
+                            setBlocked({
+                                reason: kind,
+                                suspendedUntil: extractSuspendedUntil(
+                                    (err as { message?: unknown })?.message,
+                                ),
+                            });
+                            clearAuthFlow();
+                            return;
+                        }
                         setError(
-                            classifyError(err) === 'rateLimited'
+                            kind === 'rateLimited'
                                 ? tErrors('rateLimited')
                                 : tErrors('otpFailed'),
                         );
@@ -175,8 +198,19 @@ function VerifyContent() {
                 onSuccess,
                 onError: (err) => {
                     clearOtp();
+                    const kind = classifyError(err);
+                    if (kind === 'banned' || kind === 'suspended' || kind === 'deleted') {
+                        setBlocked({
+                            reason: kind,
+                            suspendedUntil: extractSuspendedUntil(
+                                (err as { message?: unknown })?.message,
+                            ),
+                        });
+                        clearAuthFlow();
+                        return;
+                    }
                     setError(
-                        classifyError(err) === 'rateLimited'
+                        kind === 'rateLimited'
                             ? tErrors('rateLimited')
                             : tErrors('otpFailed'),
                     );
@@ -194,17 +228,29 @@ function VerifyContent() {
         // overwrites it). Keeping the old digits in the boxes is exactly how
         // users ended up verifying a dead code → 401. Clear them.
         clearOtp();
+        // P1-47: a blocked account also blocks the send path — surface the
+        // localized moderation copy instead of a generic "send failed".
+        const onSendError = (err: unknown) => {
+            const kind = classifyError(err);
+            setError(
+                kind === 'rateLimited'
+                    ? tErrors('rateLimited')
+                    : kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                        ? tErrors(kind)
+                        : tErrors('otpSendFailed'),
+            );
+        };
         if (channel === 'email') {
             sendEmailOtp.mutate(
                 { email },
-                { onError: () => setError(tErrors('otpSendFailed')) },
+                { onError: onSendError },
             );
             return;
         }
         sendOtp.mutate(
             { phone },
             {
-                onError: () => setError(tErrors('otpSendFailed')),
+                onError: onSendError,
             },
         );
     };
@@ -221,6 +267,26 @@ function VerifyContent() {
             return `${head}${'*'.repeat(Math.max(2, local.length - 2))}@${domain}`;
         })()
         : '';
+
+    // P1-47: a moderation block replaces the whole OTP screen — the card is
+    // the screen (what happened + why + what next, localized).
+    if (blocked) {
+        return (
+            <div className="flex min-h-full flex-col items-center justify-center px-6">
+                <BlockedCard
+                    reason={blocked.reason}
+                    suspendedUntil={blocked.suspendedUntil}
+                    locale={(locale === 'ar' ? 'ar' : 'en') as AppLocale}
+                    onSignOut={() => {
+                        clearAuthFlow();
+                        clearAuthToken();
+                        useAppStore.getState().logout();
+                        router.push(`/${locale}/login`);
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-full px-6">
