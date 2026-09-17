@@ -101,6 +101,7 @@
     "emailToggle": "Continue with email instead",
     "phoneToggle": "Use phone number instead",
     "emailPlaceholder": "Email address",
+    "titleEmail": "Enter your email address",
     "invalidEmail": "Enter a valid email address",
     "changeLanguage": "Change language"
   },

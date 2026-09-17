@@ -157,7 +157,14 @@ export function useCompleteProfile() {
         }),
       }),
     onSuccess: (data) => {
-      updateUser({
+      // 2026-09-17: locale now derives from the URL — this hook previously
+      // hardcoded 'ar' into the store on every complete-profile save.
+      const seg =
+        typeof window !== 'undefined'
+          ? window.location.pathname.split('/')[1]?.toLowerCase()
+          : undefined;
+      const locale: 'ar' | 'en' = seg === 'en' ? 'en' : 'ar';
+      const profile = {
         id: data.id,
         fullName: data.full_name,
         handle: data.handle,
@@ -165,8 +172,17 @@ export function useCompleteProfile() {
         phone: data.phone,
         preferredLocation: data.preferred_location ?? '',
         preferredPosition: data.preferred_position ?? '',
-        locale: 'ar',
-      });
+        locale,
+      };
+      // The verify page guarantees login() before this screen mounts, so the
+      // updateUser merge is the normal path. If the store user is STILL null
+      // (deep-link onto this page with a valid token), updateUser would
+      // silently no-op — promote with the FULL response row instead.
+      if (useAppStore.getState().user) {
+        updateUser(profile);
+      } else {
+        useAppStore.getState().login(profile, '');
+      }
       setOnboarded(true);
     },
   });

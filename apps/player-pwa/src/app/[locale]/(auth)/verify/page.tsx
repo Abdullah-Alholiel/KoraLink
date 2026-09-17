@@ -8,7 +8,7 @@ import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
-import { clearAuthFlow } from '@/lib/auth-flow';
+import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft } from '@/lib/auth-flow';
 import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
 import type { BlockedReason } from '@/components/auth/BlockedCard';
 import type { AppLocale } from '@/lib/format';
@@ -32,10 +32,25 @@ function VerifyContent() {
     const t = useTranslations('verify');
     const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
-    const phone = searchParams?.get('phone') || '';
     // email-otp-login (run #46): the login screen routes here with either
     // ?phone=… (default) or ?email=… — one shared code-entry screen.
-    const email = searchParams?.get('email') || '';
+    // 2026-09-17: the identifier SELF-HEALS from the auth-flow drafts when
+    // the query param is missing (iOS discards the backgrounded tab while
+    // the user reads the OTP → the restored URL can come back without
+    // params; back-navigation variants too) so the screen never blanks.
+    const [phone, setPhone] = useState(searchParams?.get('phone') || '');
+    const [email, setEmail] = useState(searchParams?.get('email') || '');
+    useEffect(() => {
+        if (phone || email) return;
+        if (getAuthChannel() === 'email') {
+            const draft = getAuthEmailDraft();
+            if (draft) setEmail(draft);
+        } else {
+            const draft = getAuthPhoneDraft();
+            if (draft) setPhone(draft);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const channel: 'phone' | 'email' = email ? 'email' : 'phone';
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -123,22 +138,23 @@ function VerifyContent() {
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
-            // The auth flow is DONE — clear the session-scoped channel + email
-            // draft so they never leak into a future login on this tab.
+            // The auth flow is DONE — clear the persisted channel + drafts so
+            // they never leak into a future login.
             clearAuthFlow();
-            // P2-11 exception consumption (email channel): the email verify
-            // call opts into responseToken:true because the prod API (render)
-            // cannot deliver a working cross-origin cookie to the PWA
-            // (vercel). Persist it so the fetcher's existing Bearer path
-            // authenticates every subsequent call — the same mechanism
-            // dev-login already uses. Phone channel: cookie-only, untouched.
+            // P2-11 exception consumption (email channel): the verify call opts
+            // into responseToken:true because the prod API (render) cannot
+            // deliver a working cross-origin cookie to the PWA (vercel). Persist
+            // it so the fetcher's existing Bearer path authenticates every
+            // subsequent call — the same mechanism dev-login already uses.
             if (data.token) setAuthToken(data.token);
-            if (data.isNewUser) {
-                router.push(`/${locale}/complete-profile`);
-                return;
-            }
-            // Populate Zustand user for returning users — cascade-fixes
-            // join detection, host detection, isAuthenticated, and profile display.
+            // Populate Zustand for BOTH paths BEFORE any navigation. Returning
+            // users: cascade-fixes join/host detection + profile display. NEW
+            // users: this is what lets complete-profile (and every page after
+            // it) pass the (main) AuthGuard — the store user used to stay null
+            // here and updateUser() no-opped on null, so isAuthenticated stayed
+            // false and the fresh signup was bounced back to /login for a
+            // SECOND OTP (2026-09-17 report). The token is persisted above, so
+            // /users/me is authenticated on both channels.
             try {
                 const profile = await fetcher<UserProfileApi>('/users/me');
                 useAppStore.getState().login({
@@ -154,7 +170,15 @@ function VerifyContent() {
             } catch (profileErr) {
                 // Profile fetch failed — show error instead of silently navigating
                 // as guest. This usually means the auth cookie didn't set properly.
-                setError(t('verify.profileFetchError'));
+                // (Key lives at verify.profileFetchError — a `t('verify.…')` call
+                // here resolved to verify.verify.* and rendered the raw key.)
+                setError(t('profileFetchError'));
+                return;
+            }
+            if (data.isNewUser) {
+                // Store user is populated ⇒ complete-profile's updateUser merge
+                // works, and the AuthGuard never treats this user as anonymous.
+                router.push(`/${locale}/complete-profile`);
                 return;
             }
             router.push(`/${locale}/play`);

@@ -29,9 +29,15 @@ export default function CompleteProfilePage() {
 
     const completeProfile = useCompleteProfile();
 
+    // Double-send guard (same pattern as login, §21.7): isPending only flips
+    // on the NEXT render — a fast double-tap on Save fired TWO PATCHes (the
+    // journal caught both in the same second). This flips synchronously.
+    const [submitting, setSubmitting] = useState(false);
+
     const handleFinish = () => {
-        if (!fullName.trim()) return;
+        if (!fullName.trim() || submitting) return;
         setError(null);
+        setSubmitting(true);
         completeProfile.mutate(
             {
                 fullName: fullName.trim(),
@@ -46,6 +52,7 @@ export default function CompleteProfilePage() {
                             ? tErrors('validation')
                             : tErrors('unknown')
                     ),
+                onSettled: () => setSubmitting(false),
             },
         );
     };

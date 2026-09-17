@@ -50,6 +50,9 @@ function remount(view: ReturnType<typeof renderLogin>) {
 describe('login flow state survives remount', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Drafts moved to localStorage (2026-09-17 — must survive iOS tab
+        // discard). Both storages cleared for test isolation.
+        localStorage.clear();
         sessionStorage.clear();
     });
 
