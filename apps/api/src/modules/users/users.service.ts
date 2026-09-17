@@ -453,7 +453,9 @@ export class UsersService {
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
       throw new ForbiddenException({
-        message: 'Account suspended.',
+        // End instant rides in the message — PWA blocked card shows the
+        // exact date/time localized (same contract as the auth-flow throws).
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
         code: 'ACCOUNT_SUSPENDED',
       });
     }
