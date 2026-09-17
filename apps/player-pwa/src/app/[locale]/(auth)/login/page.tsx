@@ -215,11 +215,7 @@ export default function LoginPage() {
                     {mode === 'email' ? (
                         t('titleEmail')
                     ) : (
-                        <>
-                            {t('titleLine1')}
-                            <br />
-                            {t('titleLine2')}
-                        </>
+                        t('title')
                     )}
                 </h1>
                 <p className="text-sm text-gray-400 mt-3 text-center">
