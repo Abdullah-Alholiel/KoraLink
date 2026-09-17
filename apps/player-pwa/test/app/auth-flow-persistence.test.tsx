@@ -58,16 +58,18 @@ describe('login flow state survives remount', () => {
 
     it('email typed + remount → email input restored WITH the typed address', () => {
         let view = renderLogin();
-        // Switch to email channel and type a (wrong) address — the exact
-        // incident scenario before heading to verify and coming back.
-        fireEvent.click(screen.getByRole('button', { name: /Continue with email instead/ }));
+        // Switch to email channel via the segmented selector (design A) and
+        // type a (wrong) address — the exact incident scenario before heading
+        // to verify and coming back.
+        fireEvent.click(screen.getByRole('button', { name: 'Email' }));
         const input = screen.getByPlaceholderText('Email address') as HTMLInputElement;
         fireEvent.change(input, { target: { value: 'wrong@typo.com' } });
 
         // "Reload": full unmount + fresh mount.
         view = remount(view);
 
-        expect(screen.getByRole('button', { name: /Use phone number instead/ })).toBeInTheDocument();
+        // Email segment still active + the typed address restored.
+        expect(screen.getByRole('button', { name: 'Email' })).toHaveAttribute('aria-pressed', 'true');
         expect((screen.getByPlaceholderText('Email address') as HTMLInputElement).value).toBe('wrong@typo.com');
     });
 

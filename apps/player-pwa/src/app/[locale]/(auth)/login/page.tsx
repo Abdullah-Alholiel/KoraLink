@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Globe } from 'lucide-react';
+import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Globe, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
@@ -228,9 +228,46 @@ export default function LoginPage() {
                     {t('subtitleLine2')}
                 </p>
 
+                {/* Channel selector (design A — Abdullah's pick, 2026-09-17):
+                    segmented Phone/Email pills directly under the title. The
+                    alternative-login affordance used to be muted fine-print at
+                    the very bottom (Gate 0 F3) — invisible on small phones.
+                    Both channels still share the ONE verify screen. */}
+                <div
+                    role="group"
+                    aria-label={t('channelSelector')}
+                    data-testid="channel-selector"
+                    className="w-full mt-6 flex rounded-full border border-gray-200 bg-white p-1 gap-1"
+                >
+                    {(['phone', 'email'] as const).map((ch) => {
+                        const SegIcon = ch === 'phone' ? Smartphone : Mail;
+                        const active = mode === ch;
+                        return (
+                            <button
+                                key={ch}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => {
+                                    setError(null);
+                                    setMode(ch);
+                                    setAuthChannel(ch); // survives reloads + verify round-trips
+                                }}
+                                className={`flex-1 h-11 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                                    active
+                                        ? 'bg-brand-green text-white shadow-[0_2px_8px_rgba(37,65,50,0.35)]'
+                                        : 'text-gray-500'
+                                }`}
+                            >
+                                <SegIcon className="w-4 h-4" strokeWidth={2} />
+                                {ch === 'phone' ? t('channelPhone') : t('channelEmail')}
+                            </button>
+                        );
+                    })}
+                </div>
+
                 {/* Phone Input (default channel) */}
                 {mode === 'phone' ? (
-                <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
+                <div className="w-full mt-4 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className="text-lg">🇸🇦</span>
                         <span className="text-sm font-medium text-brand-black">+966</span>
@@ -252,7 +289,7 @@ export default function LoginPage() {
                 </div>
                 ) : (
                 /* Email Input (email-otp-login run #46) */
-                <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
+                <div className="w-full mt-4 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
                     <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
                     <input
                         type="email"
@@ -309,22 +346,6 @@ export default function LoginPage() {
                     <a href={`/${locale}/terms`} className="text-brand-green font-medium underline">{t('termsOfService')}</a> {t('and')}{' '}
                     <a href={`/${locale}/privacy`} className="text-brand-green font-medium underline">{t('privacyPolicy')}</a>
                 </p>
-
-                {/* email-otp-login (run #46): subtle secondary-channel toggle —
-                    small, muted, below the legal row; never competes with the
-                    primary phone CTA. */}
-                <button
-                    type="button"
-                    onClick={() => {
-                        setError(null);
-                        const next: AuthChannel = mode === 'phone' ? 'email' : 'phone';
-                        setMode(next);
-                        setAuthChannel(next); // survives reloads + verify round-trips
-                    }}
-                    className="mt-4 w-full text-center text-xs text-gray-400 underline underline-offset-2 hover:text-brand-green transition-colors"
-                >
-                    {mode === 'phone' ? t('emailToggle') : t('phoneToggle')}
-                </button>
 
                 <DevLoginBar />
             </div>

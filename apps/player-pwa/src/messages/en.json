@@ -102,6 +102,9 @@
     "phoneToggle": "Use phone number instead",
     "emailPlaceholder": "Email address",
     "titleEmail": "Enter your email address",
+    "channelPhone": "Phone",
+    "channelEmail": "Email",
+    "channelSelector": "Login method",
     "invalidEmail": "Enter a valid email address",
     "changeLanguage": "Change language"
   },

@@ -27,6 +27,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 import VerifyPage from '@/app/[locale]/(auth)/verify/page';
 import LoginPage from '@/app/[locale]/(auth)/login/page';
 import { useAppStore } from '@/store/useAppStore';
@@ -35,10 +36,11 @@ import { clearAuthToken } from '@/lib/fetcher';
 const pushMock = vi.fn();
 
 const searchParamsMock = vi.fn(() => new URLSearchParams(''));
+const pathnameMock = vi.fn(() => '/en/verify');
 
 vi.mock('next/navigation', () => ({
     useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn() }),
-    usePathname: () => '/en/verify',
+    usePathname: () => pathnameMock(),
     useSearchParams: () => searchParamsMock(),
 }));
 
@@ -91,6 +93,7 @@ function fillBoxes(digits: string[]) {
 beforeEach(() => {
     vi.clearAllMocks();
     searchParamsMock.mockReturnValue(new URLSearchParams(''));
+    pathnameMock.mockReturnValue('/en/verify');
     localStorage.clear();
     sessionStorage.clear();
     clearAuthToken();
@@ -207,8 +210,8 @@ describe('verify identifier self-heal (tab-discard restoration)', () => {
 describe('drafts survive the storage tier iOS kills', () => {
     it('login draft survives a sessionStorage wipe (tab discard observable)', () => {
         const view = renderPage(<LoginPage />);
-        // jsdom: the login page's placeholders differ per channel; type an email.
-        fireEvent.click(screen.getByRole('button', { name: /Continue with email instead/ }));
+        // jsdom: switch to the email channel via the segmented selector.
+        fireEvent.click(screen.getByRole('button', { name: 'Email' }));
         const input = screen.getByPlaceholderText('Email address') as HTMLInputElement;
         fireEvent.change(input, { target: { value: 'survivor@gmail.com' } });
 
@@ -221,5 +224,35 @@ describe('drafts survive the storage tier iOS kills', () => {
         expect(
             (screen.getByPlaceholderText('Email address') as HTMLInputElement).value,
         ).toBe('survivor@gmail.com');
+    });
+});
+
+describe('channel selector (design A) — EN/AR parity', () => {
+    it('renders localized segments + group label in Arabic, phone active by default', () => {
+        pathnameMock.mockReturnValue('/ar/login');
+        const queryClient = new QueryClient({
+            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        });
+        render(
+            <QueryClientProvider client={queryClient}>
+                <NextIntlClientProvider messages={arMessages} locale="ar">
+                    <LoginPage />
+                </NextIntlClientProvider>
+            </QueryClientProvider>,
+        );
+
+        // Group carries the localized accessible name + test id.
+        expect(
+            screen.getByRole('group', { name: arMessages.login.channelSelector }),
+        ).toHaveAttribute('data-testid', 'channel-selector');
+        // Phone segment active by default; email inactive.
+        expect(screen.getByRole('button', { name: arMessages.login.channelPhone })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(screen.getByRole('button', { name: arMessages.login.channelEmail })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        );
     });
 });

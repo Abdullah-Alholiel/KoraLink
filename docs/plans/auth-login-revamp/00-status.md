@@ -7,8 +7,8 @@
 | 2 | Architecture | ✅ WRITTEN | autonomous (P0 fixes) | [02-architecture.md](./02-architecture.md) |
 | 3 | Program Design | ✅ WRITTEN (inside 02) | autonomous (P0 fixes) | [02-architecture.md](./02-architecture.md) |
 | 4 | Slices S1–S3 (P0 fixes) | ✅ BUILT + LIVE-VERIFIED | — | commit `fix(pwa): single-OTP signup…` on staging |
-| 3→4 | Channel-affordance stance (A/B/C) | ⏸️ PENDING ABDULLAH'S PICK | — | `sketches/005-auth-login-revamp/variants.png` |
-| 4 | Slice S4 (channel affordance) | 🔒 BLOCKED on the pick | — | login/page.tsx + i18n |
+| 3→4 | Channel-affordance stance (A/B/C) | ✅ PICKED — **A (segmented pills)** | Abdullah (chat, 2026-09-17) | `sketches/005-auth-login-revamp/` |
+| 4 | Slice S4 (channel affordance) | ✅ BUILT + LIVE-VERIFIED (24/25 probe EN+AR; fresh-visit default confirmed) | — | commit `feat(pwa): segmented channel selector…` on staging |
 
 ## Verification evidence (2026-09-17)
 
