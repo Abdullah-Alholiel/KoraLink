@@ -865,7 +865,11 @@
     "emptyActive": "You have no active matches",
     "emptyHistory": "No match history yet",
     "emptyCta": "Find a match",
-    "loading": "Loading your matches..."
+    "loading": "Loading your matches...",
+    "statsPlayed": "Played",
+    "statsWins": "Wins",
+    "statsHosted": "Hosted",
+    "historyCancelled": "{count} cancelled"
   },
   "chatSheet": {
     "title": "Match Chat",

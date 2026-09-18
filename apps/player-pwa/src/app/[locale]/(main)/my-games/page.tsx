@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, Play, Trophy } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useNow } from '@/hooks/useNow';
-import { useMyMatches } from '@/hooks/useUser';
+import { useMyMatches, useUserStats } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 
@@ -37,6 +37,10 @@ export default function MyGamesPage() {
   const isOnline = useOnlineStatus();
 
   const { data: matchesApi, isLoading, error, refetch } = useMyMatches();
+  // Official stats for the "after Active" strip — the SAME numbers as the
+  // profile hero (server-truth: completed played / POTM wins / hosted count),
+  // NOT counts derived from the client list.
+  const { data: stats, isLoading: statsLoading, error: statsError } = useUserStats();
   const storeUser = useAppStore(selectUser);
   const now = useNow();
   const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
@@ -51,6 +55,9 @@ export default function MyGamesPage() {
     ['completed', 'cancelled'].includes(m.status) &&
     !(m.status === 'completed' && (m.isJoined || m.isUserHost) && isVotingOpen(m, now))
   );
+  // History sub-caption (Abdullah, My Games tailored tags 2026-09-18): how many
+  // of the listed games were cancelled.
+  const cancelledCount = historyMatches.filter((m) => m.status === 'cancelled').length;
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -128,6 +135,49 @@ export default function MyGamesPage() {
               )}
             </div>
 
+            {/* ── Stats strip (after Active) — same server-truth numbers as the
+                profile hero GlassStats: completed games played / POTM wins /
+                matches hosted. Hidden if the stats read fails (secondary
+                surface — never blocks the games list). */}
+            <div className="px-4 pt-5" data-testid="my-games-stats">
+              {statsLoading ? (
+                <div className="bg-white rounded-2xl shadow-card px-2 py-4 flex animate-pulse">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="h-6 w-10 bg-gray-200 rounded" />
+                      <div className="h-2.5 w-12 bg-gray-100 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : !statsError && stats ? (
+                <div className="bg-white rounded-2xl shadow-card px-2 py-4 flex">
+                  <div className="flex-1 py-0.5 text-center">
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played}</p>
+                    <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      {t('myGames.statsPlayed')}
+                    </p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div className="flex-1 py-0.5 text-center">
+                    <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none text-brand-black">
+                      <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
+                      <span className="tabular-nums" dir="ltr">{stats.potm_count}</span>
+                    </p>
+                    <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      {t('myGames.statsWins')}
+                    </p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div className="flex-1 py-0.5 text-center">
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.matches_hosted}</p>
+                    <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      {t('myGames.statsHosted')}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             {/* Divider */}
             {activeMatches.length > 0 && historyMatches.length > 0 && (
               <div className="h-px bg-gray-100 mx-5 my-4" />
@@ -136,9 +186,19 @@ export default function MyGamesPage() {
             {/* History */}
             {historyMatches.length > 0 && (
               <div className="pb-32">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-5 mb-3">
-                  {t('myGames.history')}
-                </h2>
+                <div className="flex items-baseline justify-between px-5 mb-3">
+                  <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    {t('myGames.history')}
+                  </h2>
+                  {cancelledCount > 0 && (
+                    <span
+                      data-testid="history-cancelled-count"
+                      className="text-[11px] font-semibold text-brand-red"
+                    >
+                      {t('myGames.historyCancelled', { count: cancelledCount })}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
                   {historyMatches.map((match) => (
                     <MatchCard key={match.id} match={match} currentUserId={storeUser?.id} />
