@@ -140,6 +140,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
 import { chargeMatchFeeTx, creditWalletTx } from './match-fees';
 import { REFUND_WINDOW_HOURS } from '../../common/constants';
+import { riyadhDateKey, riyadhTimeNow } from '../../common/utils/riyadh';
 
 // Slice 2/4 money primitives live in ./match-fees (shared with the waitlist
 // promotion fee path). Re-exported for backwards compatibility with specs.
@@ -1993,10 +1994,10 @@ export class MatchesService {
         }
 
         const [slot] = await tx.execute(sql`
-          SELECT id, is_booked FROM pitch_slots
+          SELECT id, is_booked, slot_date, start_time FROM pitch_slots
           WHERE id = ${dto.booking_slot_id}::text
           FOR UPDATE
-        `) as unknown as [{ id: string; is_booked: boolean }];
+        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string }];
 
         if (!slot) {
           throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
@@ -2004,6 +2005,23 @@ export class MatchesService {
 
         if (slot.is_booked) {
           throw new ConflictException('This slot has already been booked by another host');
+        }
+
+        // Publish-time past-slot guard (owner directive 2026-09-18): a slot
+        // whose start has passed must never be bookable, even from a stale
+        // client that rendered it minutes ago. Strictly-future starts only —
+        // the EXACT mirror of the getPitchSlots today filter (start_time >
+        // now), so everything the picker lists is bookable and everything it
+        // hides is rejected here.
+        const todayKey = riyadhDateKey();
+        const slotStartMin = String(slot.start_time).slice(0, 5); // "HH:MM" from "HH:MM:SS"
+        const started =
+          slot.slot_date < todayKey ||
+          (slot.slot_date === todayKey && slotStartMin <= riyadhTimeNow());
+        if (started) {
+          throw new ConflictException(
+            `This slot has already started. Pick an upcoming slot (slot_date=${slot.slot_date}, start=${slotStartMin}, now=${riyadhTimeNow()} Riyadh).`,
+          );
         }
       }
 
@@ -2146,6 +2164,23 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async getPitchSlots(pitchId: string, date: string) {
+    // Past-slot filter (owner directive 2026-09-18): a pitch's bookable
+    // availability must depend on the CURRENT TIME. Riyadh is the product's
+    // canonical timezone (mirrors the PWA's lib/venue-hours.ts):
+    //  - past days (date < today) → nothing is bookable → [];
+    //  - today → drop slots whose START has passed. A match must occupy a
+    //    full future slot (duration locks to the slot window), so an
+    //    in-progress slot is dead too — this mirrors the createMatch
+    //    slot-started guard exactly: everything listed is bookable
+    //    (Abdullah's 19:00 report: "16:00–17:00 and 17:00–18:00 must not show").
+    //  - future dates → unfiltered.
+    // Handled in SQL so paginated/limited consumers can never resurface them.
+    const todayKey = riyadhDateKey();
+    const isToday = date === todayKey;
+    if (date < todayKey) {
+      return [];
+    }
+
     const rows = await this.db
       .select({
         id: pitch_slots.id,
@@ -2160,7 +2195,11 @@ export class MatchesService {
       })
       .from(pitch_slots)
       .where(
-        sql`${pitch_slots.pitch_id} = ${pitchId}::text AND ${pitch_slots.slot_date} = ${date}::date`,
+        isToday
+          ? sql`${pitch_slots.pitch_id} = ${pitchId}::text
+                AND ${pitch_slots.slot_date} = ${date}::date
+                AND ${pitch_slots.start_time} > ${riyadhTimeNow()}::time`
+          : sql`${pitch_slots.pitch_id} = ${pitchId}::text AND ${pitch_slots.slot_date} = ${date}::date`,
       )
       .orderBy(pitch_slots.start_time);
 

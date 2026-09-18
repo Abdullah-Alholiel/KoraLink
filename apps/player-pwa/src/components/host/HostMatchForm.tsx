@@ -326,7 +326,6 @@ export default function HostMatchForm() {
                             {mode === 'koralink' && selectedPitch && (
                                 <SlotPicker
                                     pitchId={selectedPitch.id}
-                                    initialDate={dateFromQuery}
                                     selectedSlot={selectedSlot}
                                     onSelectSlot={(slot) => {
                                         setSelectedSlot(slot);

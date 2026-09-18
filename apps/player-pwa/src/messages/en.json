@@ -411,7 +411,6 @@
     "slotBooked": "Booked",
     "slotDate": "Date",
     "slotTime": "Time",
-    "pickDateFirst": "Pick a date to see available slots",
     "warningTitle": "Before You Publish",
     "warningSelfBody": "You are responsible for booking the pitch, preparing it, and controlling match tempo. If the venue is unavailable at kick-off, your account will be held liable to refund all paying players.",
     "warningViaUsBody": "KoraLink guarantees this pitch at the time you selected. You are responsible for showing up and managing the match.",
@@ -442,7 +441,10 @@
     "pitchSelected": "Selected pitch",
     "changePitch": "Change",
     "slotSelected": "Selected slot",
-    "changeSlot": "Change"
+    "changeSlot": "Change",
+    "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
+    "slotsError": "Couldn't load available slots. Check your connection.",
+    "slotsRetry": "Try Again"
   },
   "hostOnboarding": {
     "skip": "Skip",
