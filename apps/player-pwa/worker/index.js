@@ -64,8 +64,11 @@ self.addEventListener('push', (event) => {
   const { title = 'KoraLink', body = '', data = {} } = payload;
 
   // Resolve the installed locale so the deep link preserves ar/en.
-  // Server injects the subscriber's locale per-push (P1-5); fall back to en.
-  const locale = data.locale || 'en';
+  // Server injects the subscriber's locale per-push (P1-5); payloads that
+  // omit it fall back to AR (P2-72, run #57) — the product is Arabic-first,
+  // so an unlabeled push renders Arabic copy/RTL and lands on /ar/… rather
+  // than English.
+  const locale = data.locale || 'ar';
 
   let url = '/';
   if (data.type === 'match-chat' && data.matchId) url = `/${locale}/match/${data.matchId}`;
