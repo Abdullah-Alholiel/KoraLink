@@ -14,12 +14,14 @@ import {
 import { useTranslations } from 'next-intl';
 import { useCompleteProfile } from '@/hooks/useAuth';
 import { classifyError } from '@/lib/error-classify';
+import { clearAuthFlow } from '@/lib/auth-flow';
 
 export default function CompleteProfilePage() {
     const router = useRouter();
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const t = useTranslations('completeProfile');
+    const tCommon = useTranslations('common');
     const tErrors = useTranslations('errors');
 
     const [fullName, setFullName] = useState('');
@@ -34,6 +36,17 @@ export default function CompleteProfilePage() {
     // journal caught both in the same second). This flips synchronously.
     const [submitting, setSubmitting] = useState(false);
 
+    // Back arrow (2026-09-17): the channel + identifier are still alive in
+    // auth-flow storage — clearAuthFlow now runs at the flow's TRUE finish
+    // line (verified success + navigation, in verify/page.tsx), not at OTP
+    // success — so back must land on the login screen in the channel the
+    // user actually chose, with their input restored by that page's hydrate
+    // effect. The old `router.back()` also depended on history shape; an
+    // explicit push to /login is deterministic.
+    const handleBack = () => {
+        router.push(`/${locale}/login`);
+    };
+
     const handleFinish = () => {
         if (!fullName.trim() || submitting) return;
         setError(null);
@@ -45,7 +58,15 @@ export default function CompleteProfilePage() {
                 preferredPosition: position || undefined,
             },
             {
-                onSuccess: () => router.push(`/${locale}/play`),
+                onSuccess: () => {
+                    // The flow's TRUE finish line for new users — the login
+                    // drafts have served their purpose; nothing may leak into
+                    // a future login. (verify/page.tsx deliberately does NOT
+                    // clear on the new-user path so back-navigation from here
+                    // still restores the channel + identifier.)
+                    clearAuthFlow();
+                    router.push(`/${locale}/play`);
+                },
                 onError: (err) =>
                     setError(
                         classifyError(err) === 'validation'
@@ -62,7 +83,8 @@ export default function CompleteProfilePage() {
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center gap-3 px-4 pt-[var(--top-safe-inset)] pb-2">
                 <button
-                    onClick={() => router.back()}
+                    onClick={handleBack}
+                    aria-label={tCommon('back')}
                     className="w-10 h-10 flex items-center justify-center"
                 >
                     <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />

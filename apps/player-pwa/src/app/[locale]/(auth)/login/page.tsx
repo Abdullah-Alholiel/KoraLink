@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Globe, Smartphone } from 'lucide-react';
+import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
+import LanguageToggle from '@/components/common/LanguageToggle';
 import { useRestoreAccount } from '@/hooks/useUser';
 import { classifyError } from '@/lib/error-classify';
-import { navigatePreservingLocale } from '@/lib/locale-routing';
 import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, getAuthPhoneDraft, setAuthPhoneDraft, type AuthChannel } from '@/lib/auth-flow';
+
 
 export default function LoginPage() {
     const router = useRouter();
@@ -48,18 +49,6 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-    // Login header (2026-09-11): the old back arrow was redundant — login is
-    // the entry screen of the auth flow, so there is nothing to go back to.
-    // Replaced with a language toggle. A bare path swap is NOT enough: the
-    // NEXT_LOCALE cookie (which the middleware uses on every unprefixed
-    // navigation — PWA relaunch, 401 bounce) stays at the old locale and
-    // snaps the UI back. navigatePreservingLocale persists the choice first,
-    // then full-reloads so the server re-renders with fresh i18n messages.
-    const toggleLocale = () => {
-        const target = locale === 'ar' ? '/en/login' : '/ar/login';
-        navigatePreservingLocale(target);
-    };
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
     // token persists to localStorage. Surface a one-tap "Restore" affordance
@@ -152,13 +141,10 @@ export default function LoginPage() {
         <div className="flex flex-col min-h-full px-6">
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center gap-3 pt-[var(--top-safe-inset)] pb-4">
-                <button
-                    onClick={toggleLocale}
-                    aria-label={t('changeLanguage')}
-                    className="w-10 h-10 flex items-center justify-center active:scale-95 transition-transform"
-                >
-                    <Globe className="w-5 h-5 text-brand-black" strokeWidth={2} />
-                </button>
+                {/* Language toggle (2026-09-17): segmented ع/EN pill replaces the
+                    bare globe icon — the choice is visible and pressed-state,
+                    not a hidden icon that flips the language on one tap. */}
+                <LanguageToggle size="sm" ariaLabel={t('changeLanguage')} />
                 <div className="flex items-center gap-2 flex-1 justify-center pe-10">
                     <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
                         <Trophy className="w-3.5 h-3.5 text-brand-green" strokeWidth={2.5} />

@@ -33,7 +33,7 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { navigatePreservingLocale } from '@/lib/locale-routing';
+import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
 import DeleteAccountSheet from '@/components/profile/DeleteAccountSheet';
@@ -397,21 +397,19 @@ export default function ProfilePage() {
                     </p>
                 )}
                 <div className="h-px bg-gray-100 ms-[60px]" />
-                <MenuItem
-                    icon={<Globe className="h-5 w-5" strokeWidth={1.5} />}
-                    label={t('profile.language')}
-                    endText={locale === 'ar' ? t('profile.languageAr') : t('profile.languageEn')}
-                    onClick={() => {
-                        const newLocale = locale === 'ar' ? 'en' : 'ar';
-                        const newPath = (pathname ?? "").replace(`/${locale}`, `/${newLocale}`);
-                        // Full page reload ensures complete server re-render with
-                        // fresh i18n messages — router.push() may reuse cached RSC.
-                        // navigatePreservingLocale ALSO persists NEXT_LOCALE so
-                        // unprefixed navigations (PWA relaunch, 401 bounce) keep
-                        // the chosen locale (language-toggle incident 2026-09-11).
-                        navigatePreservingLocale(newPath);
-                    }}
-                />
+                {/* Language row (2026-09-17): the pressed-state ع/EN toggle
+                    replaces the old row that switched locale on a single tap —
+                    the choice is visible before pressing, consistent with the
+                    login header. */}
+                <div className="w-full flex items-center gap-3.5 px-6 py-2">
+                    <div className="w-5 h-5 flex-shrink-0 text-brand-green">
+                        <Globe className="h-5 w-5" strokeWidth={1.5} />
+                    </div>
+                    <span className="flex-1 text-start text-sm font-medium text-brand-black">
+                        {t('profile.language')}
+                    </span>
+                    <LanguageToggle size="md" ariaLabel={t('profile.language')} />
+                </div>
                 {mounted && isSupported && (
                     <>
                         <div className="h-px bg-gray-100 ms-[60px]" />

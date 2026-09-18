@@ -8,7 +8,7 @@ import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
-import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft } from '@/lib/auth-flow';
+import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft, setAuthChannel, setAuthEmailDraft, setAuthPhoneDraft } from '@/lib/auth-flow';
 import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
 import type { BlockedReason } from '@/components/auth/BlockedCard';
 import type { AppLocale } from '@/lib/format';
@@ -41,7 +41,16 @@ function VerifyContent() {
     const [phone, setPhone] = useState(searchParams?.get('phone') || '');
     const [email, setEmail] = useState(searchParams?.get('email') || '');
     useEffect(() => {
-        if (phone || email) return;
+        if (phone || email) {
+            // Arrived with URL params (login push, deep link, reload): make
+            // the identifier DURABLE too — complete-profile's back-nav and a
+            // later self-heal both read storage, never the URL. This also
+            // freezes the channel exactly as the user chose it on login.
+            if (email) setAuthEmailDraft(email);
+            if (phone) setAuthPhoneDraft(phone);
+            setAuthChannel(email ? 'email' : 'phone');
+            return;
+        }
         if (getAuthChannel() === 'email') {
             const draft = getAuthEmailDraft();
             if (draft) setEmail(draft);
@@ -138,9 +147,6 @@ function VerifyContent() {
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
-            // The auth flow is DONE — clear the persisted channel + drafts so
-            // they never leak into a future login.
-            clearAuthFlow();
             // P2-11 exception consumption (email channel): the verify call opts
             // into responseToken:true because the prod API (render) cannot
             // deliver a working cross-origin cookie to the PWA (vercel). Persist
@@ -178,9 +184,14 @@ function VerifyContent() {
             if (data.isNewUser) {
                 // Store user is populated ⇒ complete-profile's updateUser merge
                 // works, and the AuthGuard never treats this user as anonymous.
+                // Do NOT clear drafts here: complete-profile is not the finish
+                // line — its back-navigation must restore the channel + input
+                // (2026-09-17 report). complete-profile's Save success clears.
                 router.push(`/${locale}/complete-profile`);
                 return;
             }
+            // Returning user — the flow is done the moment they're in.
+            clearAuthFlow();
             router.push(`/${locale}/play`);
         };
 

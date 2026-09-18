@@ -20,7 +20,9 @@
  *  5. Drafts survive a sessionStorage wipe (proves the storage tier — jsdom
  *     cannot simulate iOS tab discard, but clearing session storage is the
  *     same observable the device produces: session state gone, draft intact).
- *  6. clearAuthFlow() runs on success (drafts never leak into a future login).
+ *  6. Drafts live until the flow's TRUE finish line: verify KEEPS them on the
+ *     new-user path (complete-profile back-nav must restore channel + input);
+ *     complete-profile's Save success clears them (no leak into future logins).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -30,6 +32,7 @@ import enMessages from '@/messages/en.json';
 import arMessages from '@/messages/ar.json';
 import VerifyPage from '@/app/[locale]/(auth)/verify/page';
 import LoginPage from '@/app/[locale]/(auth)/login/page';
+import CompleteProfilePage from '@/app/[locale]/(auth)/complete-profile/page';
 import { useAppStore } from '@/store/useAppStore';
 import { clearAuthToken } from '@/lib/fetcher';
 
@@ -129,8 +132,11 @@ describe('signup: ONE OTP, straight in (isNewUser path)', () => {
         expect(state.user?.fullName).toBe('New Player');
         // Token persisted for the Bearer path (prod carrier).
         expect(localStorage.getItem('koralink_token')).toBe('jwt-token');
-        // Drafts cleared — no leak into a future login.
-        expect(localStorage.getItem('koralink_auth_email_draft')).toBeNull();
+        // Drafts SURVIVE the new-user path — complete-profile is not the flow's
+        // finish line; its back-navigation must restore the channel + input.
+        // (clearAuthFlow moved to complete-profile's Save success.)
+        expect(localStorage.getItem('koralink_auth_email_draft')).toBe('new@gmail.com');
+        expect(localStorage.getItem('koralink_auth_channel')).toBe('email');
     });
 
     it('returning user: store authenticated → /play', async () => {
@@ -148,7 +154,7 @@ describe('signup: ONE OTP, straight in (isNewUser path)', () => {
         expect(useAppStore.getState().isAuthenticated).toBe(true);
     });
 
-    it('profile fetch failure: NO navigation (no silent guest handoff)', async () => {
+    it('profile fetch failure: NO navigation + drafts KEPT (user can retry or edit)', async () => {
         searchParamsMock.mockReturnValue(new URLSearchParams('email=x%40gmail.com'));
         fetcherMock.mockResolvedValueOnce({ isNewUser: true, token: 'jwt-token' });
         fetcherMock.mockRejectedValueOnce(new Error('401'));
@@ -161,6 +167,7 @@ describe('signup: ONE OTP, straight in (isNewUser path)', () => {
             expect(screen.getByText(enMessages.verify.profileFetchError)).toBeInTheDocument();
         });
         expect(pushMock).not.toHaveBeenCalled();
+        expect(localStorage.getItem('koralink_auth_email_draft')).toBe('x@gmail.com');
     });
 });
 
@@ -224,6 +231,30 @@ describe('drafts survive the storage tier iOS kills', () => {
         expect(
             (screen.getByPlaceholderText('Email address') as HTMLInputElement).value,
         ).toBe('survivor@gmail.com');
+    });
+});
+
+describe('complete-profile exit (drafts live until the flow finishes)', () => {
+    it('Save success = finish line: navigates to /play AND clears the drafts', async () => {
+        // Complete-profile renders ONLY after a verified OTP; seed storage the
+        // way verify now leaves it (identifier + frozen channel still alive).
+        localStorage.setItem('koralink_auth_channel', 'email');
+        localStorage.setItem('koralink_auth_email_draft', 'new@gmail.com');
+        localStorage.setItem('koralink_auth_phone_draft', '');
+        fetcherMock.mockResolvedValueOnce({ success: true });
+
+        renderPage(<CompleteProfilePage />);
+        fireEvent.change(screen.getByPlaceholderText('Enter your full name'), {
+            target: { value: 'E2E Probe' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Save Profile/i }));
+
+        await waitFor(() => {
+            expect(pushMock).toHaveBeenCalledWith('/en/play');
+        });
+        // Nothing may leak into a future login.
+        expect(localStorage.getItem('koralink_auth_email_draft')).toBeNull();
+        expect(localStorage.getItem('koralink_auth_channel')).toBeNull();
     });
 });
 
