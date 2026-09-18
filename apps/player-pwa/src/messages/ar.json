@@ -63,6 +63,7 @@
     "done": "تم",
     "seeAll": "عرض الكل",
     "search": "بحث",
+    "clear": "مسح",
     "filter": "تصفية",
     "noResults": "لم يتم العثور على نتائج",
     "offlineBanner": "أنت غير متصل بالإنترنت — عرض البيانات المخزنة مؤقتاً",
@@ -687,6 +688,17 @@
     "earlier": "سابقاً",
     "invalidAmount": "يرجى إدخال مبلغ صحيح",
     "comingSoon": "قريباً"
+  },
+  "searchSuggestions": {
+    "title": "ابحث حسب المنطقة",
+    "venuesHere": "{count, plural, =0 {لا توجد أندية بعد} one {نادٍ واحد} two {ناديان} few {# أندية} other {# نادٍ}}",
+    "none": "لا توجد نتائج",
+    "noneFor": "لا توجد أندية في \"{query}\" بعد",
+    "noneHint": "جرّب اسم مدينة أو حيّ",
+    "cities": {
+      "riyadh": "الرياض",
+      "jeddah": "جدة"
+    }
   },
   "clubs": {
     "title": "الأندية",

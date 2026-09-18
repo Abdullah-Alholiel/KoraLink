@@ -191,15 +191,37 @@ export class VenuesService {
    * "Most important/popular" ordering = per-pair venue count DESC, then name.
    */
   async findSuggestions(dto: GetVenueSuggestionsDto): Promise<VenueSuggestionRow[]> {
-    const { q, city } = dto;
+    const { q, city, lat, lng } = dto;
+
+    if ((lat === undefined) !== (lng === undefined)) {
+      throw new BadRequestException('Both lat and lng must be provided together.');
+    }
 
     const prefix = q?.trim().toLowerCase();
     const searchClause = prefix
       ? sql`AND (LOWER(v.city) LIKE ${prefix + '%'} OR LOWER(v.address) LIKE ${'%' + prefix + '%'})`
       : sql``;
-    const cityClause = city?.trim()
+    const cityClause = city?.trim() && lat === undefined
       ? sql`AND v.city ILIKE ${'%' + city.trim() + '%'}`
       : sql``;
+
+    // Location-enabled users (search-suggestions contract): the exact user
+    // city is resolved server-side as the NEAREST approved venue's city
+    // (native PostGIS — no external geocoder dependency). A venue table with
+    // no approved rows degrades to city-wide suggestions (NULL city → no-op).
+    const nearestCityExpr = lat !== undefined && lng !== undefined
+      ? sql`(
+          SELECT nearest.city
+          FROM venues nearest
+          WHERE nearest.is_approved = true
+            AND nearest.location IS NOT NULL
+          ORDER BY ST_Distance(
+            nearest.location,
+            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
+          )
+          LIMIT 1
+        )`
+      : sql`NULL`;
 
     const rows = await this.db.execute(sql`
       SELECT
@@ -208,6 +230,7 @@ export class VenuesService {
         COUNT(*)::int AS venue_count
       FROM venues v
       WHERE v.is_approved = true
+        AND (${nearestCityExpr}::text IS NULL OR v.city = ${nearestCityExpr}::text)
         ${searchClause}
         ${cityClause}
       GROUP BY v.city, v.address

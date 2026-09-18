@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, MapPin, Users } from 'lucide-react';
+import { Search, MapPin, Users, X } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import SuggestionDropdown from '@/components/search/SuggestionDropdown';
+import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
+import { filterSuggestions } from '@/lib/search-suggestions';
 import { useVenues } from '@/hooks/useVenues';
 import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance } from '@/lib/format';
@@ -29,9 +32,23 @@ export default function ClubsPage() {
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [activeFilter, setActiveFilter] = useState<FilterKey>('Nearby');
     const [searchQuery, setSearchQuery] = useState('');
-    // P1-28 (run #21): search now runs SERVER-side (?search= additive name/city
-    // ILIKE over the whole venues table) — debounce the input 300ms so the
-    // queryKey change triggers one refetch, not one per keystroke.
+    // Search suggestions (2026-09-18): picking a city/neighborhood chip pins
+    // `suggestedFilter` — the club list then shows ONLY venues in that
+    // suggestion (server ?search= + client neighborhood pin). Typing free
+    // text CLEARS the pin, so the two inputs never fight each other.
+    const [suggestedFilter, setSuggestedFilter] = useState<string | null>(null);
+    const {
+        suggestions,
+        open,
+        listRef,
+        handleFocus,
+        handleBlur,
+        dismiss,
+        isLoading: suggestionsLoading,
+    } = useSearchSuggestions();
+    // P1-28 (run #21): search now runs SERVER-side (?search= additive name/
+    // city/address ILIKE over the whole venues table) — debounce the input
+    // 300ms so the queryKey change triggers one refetch, not one per keystroke.
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const { coords } = useLocation();
 
@@ -52,6 +69,11 @@ export default function ClubsPage() {
 
     // Pills filter the (already server-searched) fetched set client-side.
     const filteredVenues = (venues ?? []).filter((v) => {
+        // A tapped suggestion pins the list to its neighborhood (server search
+        // already matched city/address; this narrows to the exact district).
+        if (suggestedFilter && !v.address.toLowerCase().includes(suggestedFilter.toLowerCase())) {
+            return false;
+        }
         if (activeFilter === 'Top Rated') return true; // rating removed — show all
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
@@ -61,6 +83,8 @@ export default function ClubsPage() {
         if (activeFilter === 'Available Now') return isVenueOpenNow(v);
         return true;
     });
+
+    const visibleSuggestions = filterSuggestions(suggestions, searchQuery);
 
     return (
         <div className="pb-4">
@@ -84,15 +108,60 @@ export default function ClubsPage() {
 
             {/* ── Search ── */}
             <div className="px-5 pb-3">
-                <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
-                    <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={t('clubs.searchPlaceholder')}
-                        className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
-                    />
+                <div className="relative">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
+                        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setSuggestedFilter(null); // free text unpins a chip
+                            }}
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') dismiss();
+                            }}
+                            placeholder={t('clubs.searchPlaceholder')}
+                            className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                            aria-label={t('clubs.searchPlaceholder')}
+                            role="combobox"
+                            aria-expanded={open}
+                            aria-controls="clubs-search-suggestions"
+                            aria-autocomplete="list"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSuggestedFilter(null);
+                                    dismiss();
+                                }}
+                                aria-label={t('common.clear')}
+                                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 active:scale-95 transition-transform flex-shrink-0"
+                            >
+                                <X className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
+                            </button>
+                        )}
+                    </div>
+                    {/* Suggestions — ONLY after a user click/focus on the bar
+                        (never on typing alone; never before the first focus). */}
+                    {open && (
+                        <SuggestionDropdown
+                            id="clubs-search-suggestions"
+                            suggestions={visibleSuggestions}
+                            onSelect={(s) => {
+                                setSearchQuery(s.neighborhood);
+                                setSuggestedFilter(s.filterValue);
+                                dismiss();
+                            }}
+                            listRef={listRef}
+                            query={searchQuery}
+                            isLoading={suggestionsLoading}
+                        />
+                    )}
                 </div>
             </div>
 

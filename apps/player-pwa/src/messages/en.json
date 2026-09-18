@@ -63,6 +63,7 @@
     "done": "Done",
     "seeAll": "See All",
     "search": "Search",
+    "clear": "Clear",
     "filter": "Filter",
     "noResults": "No results found",
     "offlineBanner": "You're offline — showing cached data",
@@ -687,6 +688,17 @@
     "earlier": "Earlier",
     "invalidAmount": "Please enter a valid amount",
     "comingSoon": "Coming soon"
+  },
+  "searchSuggestions": {
+    "title": "Search by area",
+    "venuesHere": "{count, plural, =0 {No clubs yet} one {# club} other {# clubs}}",
+    "none": "No matches",
+    "noneFor": "Nothing in \"{query}\" yet",
+    "noneHint": "Try a city or neighborhood name",
+    "cities": {
+      "riyadh": "Riyadh",
+      "jeddah": "Jeddah"
+    }
   },
   "clubs": {
     "title": "Clubs",

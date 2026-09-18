@@ -92,6 +92,36 @@ describe('VenuesService findSuggestions — SQL shape', () => {
     expect(sql).toMatch(/v\.city ILIKE/);
     expect(getSql()!.params).toContain('%Riyadh%');
   });
+
+  it('lat+lng resolves the user city via a PostGIS nearest-venue subquery', async () => {
+    const { service, getSql } = makeService();
+    await service.findSuggestions({ lat: 24.71, lng: 46.68 });
+
+    const sql = getSql()!.sql;
+    expect(sql).toContain('ST_Distance');
+    expect(sql).toMatch(/v\.city = /); // exact-city lock (nearest venue's city)
+    expect(getSql()!.params).toContain(46.68);
+    expect(getSql()!.params).toContain(24.71);
+  });
+
+  it('locks to the nearest city even when a profile city is ALSO sent (geo wins)', async () => {
+    const { service, getSql } = makeService();
+    await service.findSuggestions({ lat: 21.49, lng: 39.19, city: 'Riyadh' });
+
+    const sql = getSql()!.sql;
+    expect(sql).toContain('ST_Distance');
+    expect(sql).not.toContain('ILIKE'); // profile-city clause suppressed
+  });
+
+  it('rejects lat without lng (and vice versa)', async () => {
+    const { service } = makeService();
+    await expect(
+      service.findSuggestions({ lat: 24.7 } as never),
+    ).rejects.toThrow(/Both lat and lng/);
+    await expect(
+      service.findSuggestions({ lng: 46.7 } as never),
+    ).rejects.toThrow(/Both lat and lng/);
+  });
 });
 
 describe('VenuesService findSuggestions — ranking', () => {
