@@ -36,7 +36,7 @@ const useUserState = {
     matchesLoading: false,
     matchesError: null as unknown,
     stats: null as
-        | { games_played: number; potm_count: number; matches_hosted: number; karma_score: number; no_show_count: number }
+        | { games_played: number; matches_hosted: number; karma_score: number; no_show_count: number }
         | null,
     statsLoading: false,
     statsError: null as unknown,
@@ -224,10 +224,9 @@ describe('My Games page — tailored tags', () => {
 // ── 3. Stats strip (after Active) ───────────────────────────────────────────
 
 describe('My Games page — stats strip', () => {
-    it('renders Played / Wins / Hosted from the server stats payload', () => {
+    it('renders Played / Hosted from the server stats payload', () => {
         useUserState.stats = {
             games_played: 12,
-            potm_count: 3,
             matches_hosted: 5,
             karma_score: 88,
             no_show_count: 0,
@@ -235,11 +234,12 @@ describe('My Games page — stats strip', () => {
         renderPage();
         const strip = screen.getByTestId('my-games-stats');
         expect(strip).toHaveTextContent('12');
-        expect(strip).toHaveTextContent('3');
         expect(strip).toHaveTextContent('5');
         expect(strip).toHaveTextContent('Played');
-        expect(strip).toHaveTextContent('Wins');
         expect(strip).toHaveTextContent('Hosted');
+        // No Wins cell — POTM is voted after a match, not collected at finish
+        // (Abdullah, 2026-09-18): the metric was removed from the strip.
+        expect(strip).not.toHaveTextContent('Wins');
     });
 
     it('renders a skeleton while stats load', () => {
@@ -264,7 +264,6 @@ describe('My Games page — stats strip', () => {
         navState.pathname = '/ar/my-games';
         useUserState.stats = {
             games_played: 12,
-            potm_count: 3,
             matches_hosted: 5,
             karma_score: 88,
             no_show_count: 0,
@@ -272,7 +271,7 @@ describe('My Games page — stats strip', () => {
         renderPage('ar');
         const strip = screen.getByTestId('my-games-stats');
         expect(strip).toHaveTextContent('لُعبت');
-        expect(strip).toHaveTextContent('فوز');
         expect(strip).toHaveTextContent('استضافتها');
+        expect(strip).not.toHaveTextContent('فوز');
     });
 });

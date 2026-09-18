@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play, Trophy } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
@@ -155,16 +155,6 @@ export default function MyGamesPage() {
                     <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played ?? 0}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsPlayed')}
-                    </p>
-                  </div>
-                  <div className="w-px bg-gray-100" />
-                  <div className="flex-1 py-0.5 text-center">
-                    <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none text-brand-black">
-                      <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
-                      <span className="tabular-nums" dir="ltr">{stats.potm_count ?? 0}</span>
-                    </p>
-                    <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      {t('myGames.statsWins')}
                     </p>
                   </div>
                   <div className="w-px bg-gray-100" />

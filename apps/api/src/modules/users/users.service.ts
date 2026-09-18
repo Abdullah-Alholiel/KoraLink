@@ -175,13 +175,14 @@ export class UsersService {
       .innerJoin(matches, eq(matches.id, match_players.match_id))
       .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
-    // POTM wins + hosted count (My Games stats strip, 2026-09-18). Both are
-    // server-truth so the My Games strip and the profile hero can never drift:
-    // potm wins reuse the tie-aware getPomCount() used by /users/me; hosted =
-    // every match row with host_id = me, ALL statuses (the strip answers "how
-    // many games did I host", including cancelled ones).
-    const [potm_count, matches_hosted] = await Promise.all([
-      this.getPomCount(userId),
+    // Hosted count (My Games stats strip, 2026-09-18): server-truth so the My
+    // Games strip and any other stat surface can never drift. Hosted = every
+    // match row with host_id = me, ALL statuses (the strip answers "how many
+    // games did I host", including cancelled ones). No POTM/"wins" metric
+    // here — Abdullah removed it 2026-09-18: POTM depends on post-match
+    // voting, it is not collected when a match finishes, so the cell read as
+    // a fake number. (Profile hero keeps its own pom_count from /users/me.)
+    const [matches_hosted] = await Promise.all([
       this.db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(matches)
@@ -191,7 +192,6 @@ export class UsersService {
 
     return {
       games_played: count,
-      potm_count,
       matches_hosted,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
