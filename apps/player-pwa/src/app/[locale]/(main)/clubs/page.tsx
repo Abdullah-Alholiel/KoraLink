@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Search, MapPin, Users, X } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
-import SuggestionDropdown from '@/components/search/SuggestionDropdown';
+import SuggestionChips from '@/components/search/SuggestionChips';
 import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
 import { filterSuggestions } from '@/lib/search-suggestions';
 import { useVenues } from '@/hooks/useVenues';
@@ -106,63 +106,64 @@ export default function ClubsPage() {
             {/* P2-31(4)/P2-52: offline banner — shared component (run #40) */}
             <OfflineBanner isOffline={!isOnline} />
 
-            {/* ── Search ── */}
+            {/* ── Search + dynamic suggestion chips ── */}
             <div className="px-5 pb-3">
-                <div className="relative">
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
-                        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setSuggestedFilter(null); // free text unpins a chip
-                            }}
-                            onFocus={handleFocus}
-                            onBlur={handleBlur}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Escape') dismiss();
-                            }}
-                            placeholder={t('clubs.searchPlaceholder')}
-                            className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
-                            aria-label={t('clubs.searchPlaceholder')}
-                            role="combobox"
-                            aria-expanded={open}
-                            aria-controls="clubs-search-suggestions"
-                            aria-autocomplete="list"
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSuggestedFilter(null);
-                                    dismiss();
-                                }}
-                                aria-label={t('common.clear')}
-                                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 active:scale-95 transition-transform flex-shrink-0"
-                            >
-                                <X className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
-                            </button>
-                        )}
-                    </div>
-                    {/* Suggestions — ONLY after a user click/focus on the bar
-                        (never on typing alone; never before the first focus). */}
-                    {open && (
-                        <SuggestionDropdown
-                            id="clubs-search-suggestions"
-                            suggestions={visibleSuggestions}
-                            onSelect={(s) => {
-                                setSearchQuery(s.neighborhood);
-                                setSuggestedFilter(s.filterValue);
+                <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
+                    <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setSuggestedFilter(null); // free text unpins a chip
+                        }}
+                        onFocus={handleFocus}
+                        onBlur={handleBlur}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') dismiss();
+                        }}
+                        placeholder={t('clubs.searchPlaceholder')}
+                        className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                        aria-label={t('clubs.searchPlaceholder')}
+                    />
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSearchQuery('');
+                                setSuggestedFilter(null);
                                 dismiss();
                             }}
-                            listRef={listRef}
-                            query={searchQuery}
-                            isLoading={suggestionsLoading}
-                        />
+                            aria-label={t('common.clear')}
+                            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 active:scale-95 transition-transform flex-shrink-0"
+                        >
+                            <X className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
+                        </button>
                     )}
                 </div>
+                {/* Suggestion chips — dynamic location filters UNDER the search
+                    bar (2026-09-18 redesign, replaces the overlay dropdown):
+                    tags change with the typed text, a tap pins the venue list
+                    to that neighborhood. Empty = renders nothing. */}
+                {open && (
+                    <SuggestionChips
+                        id="clubs-search-suggestions"
+                        suggestions={visibleSuggestions}
+                        onSelect={(s) => {
+                            // Toggle-pin: tapping the active chip unpins it
+                            // without blurring the input.
+                            setSearchQuery((prev) =>
+                                prev === s.neighborhood ? '' : s.neighborhood,
+                            );
+                            setSuggestedFilter((prev) =>
+                                prev === s.filterValue ? null : s.filterValue,
+                            );
+                        }}
+                        selectedValue={suggestedFilter}
+                        listRef={listRef}
+                        isLoading={suggestionsLoading}
+                    />
+                )}
             </div>
 
             {/* ── Filter Pills ── */}

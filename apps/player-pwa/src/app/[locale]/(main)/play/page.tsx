@@ -10,7 +10,7 @@ import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
-import SuggestionDropdown from '@/components/search/SuggestionDropdown';
+import SuggestionChips from '@/components/search/SuggestionChips';
 import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
 import { filterSuggestions } from '@/lib/search-suggestions';
 import { useMatches } from '@/hooks/useMatches';
@@ -115,7 +115,7 @@ export default function PlayPage() {
                     row past the screen edge (mobile-first hard rule:
                     nothing surpasses the frame). */}
                 <div className="flex items-center gap-2 px-4 pb-2.5 pt-1">
-                    <div className="min-w-0 flex-1 relative">
+                    <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
                             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
                             <input
@@ -133,10 +133,6 @@ export default function PlayPage() {
                                 placeholder={t('play.searchPlaceholder')}
                                 className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
                                 aria-label={t('play.searchPlaceholder')}
-                                role="combobox"
-                                aria-expanded={open}
-                                aria-controls="play-search-suggestions"
-                                aria-autocomplete="list"
                             />
                             {searchQuery && (
                                 <button
@@ -153,22 +149,6 @@ export default function PlayPage() {
                                 </button>
                             )}
                         </div>
-                        {/* Suggestions — ONLY after a user click/focus on the bar
-                            (never on typing alone; never before the first focus). */}
-                        {open && (
-                            <SuggestionDropdown
-                                id="play-search-suggestions"
-                                suggestions={filterSuggestions(suggestions, searchQuery)}
-                                onSelect={(s) => {
-                                    setSearchQuery(s.neighborhood);
-                                    setSuggestedNeighborhood(s.filterValue);
-                                    dismiss();
-                                }}
-                                listRef={listRef}
-                                query={searchQuery}
-                                isLoading={suggestionsLoading}
-                            />
-                        )}
                     </div>
                     <Link
                         href={`/${locale}/host`}
@@ -184,6 +164,34 @@ export default function PlayPage() {
                         </span>
                     </Link>
                 </div>
+
+                {/* ── Suggestion chips — dynamic location filters UNDER the
+                    search bar (2026-09-18 redesign, replaces the desktop-style
+                    overlay dropdown). Popular city/neighborhood tags that
+                    change with the typed text ("Jeddah" → Jeddah hoods); a tap
+                    pins the matches list to that neighborhood server-side.
+                    Render only while the bar is focused; empty = renders
+                    nothing (never an empty-state panel). ── */}
+                {open && (
+                    <SuggestionChips
+                        id="play-search-suggestions"
+                        suggestions={filterSuggestions(suggestions, searchQuery)}
+                        onSelect={(s) => {
+                            // Toggle-pin: tapping the active chip unpins it
+                            // (the matches list returns to the unfiltered
+                            // date/feed) without blurring the input.
+                            setSearchQuery((prev) =>
+                                prev === s.neighborhood ? '' : s.neighborhood,
+                            );
+                            setSuggestedNeighborhood((prev) =>
+                                prev === s.filterValue ? null : s.filterValue,
+                            );
+                        }}
+                        selectedValue={suggestedNeighborhood}
+                        listRef={listRef}
+                        isLoading={suggestionsLoading}
+                    />
+                )}
 
                 {/* ── Date Picker (all games by default; tap to filter, tap again to clear) ── */}
                 <DatePicker

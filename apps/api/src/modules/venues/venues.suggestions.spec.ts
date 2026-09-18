@@ -4,14 +4,20 @@ import { VenuesService, extractNeighborhood } from './venues.service';
 /**
  * Search-suggestions specs — GET /venues/suggestions.
  *
+ * 2026-09-18 chips redesign: the endpoint is PARAMETERLESS and NATIONWIDE.
+ * The client fetches once on focus (5-min cache) and filters per keystroke
+ * locally (lib/search-suggestions.ts) — no per-keystroke API load, and chips
+ * surface for ANY city regardless of the user's location (the old lat/lng
+ * nearest-city lock is gone: it made typing "Jeddah" in Riyadh yield zero
+ * suggestions, the "empty panel" bug).
+ *
  * Two layers are pinned here:
  *  1. `extractNeighborhood` — the deterministic address → neighborhood label
  *     extractor (the schema has NO district column; neighborhoods live in the
  *     free-text address).
  *  2. `findSuggestions` SQL shape — rendered via `PgDialect().sqlToQuery()`
- *     (same assertion pattern as venues.search.spec.ts): additive AND
- *     discipline, approved-only, prefix matching on city, substring on
- *     address, ranked by venue count.
+ *     (same assertion pattern as venues.search.spec.ts): approved-only,
+ *     grouped by city+address, ranked by venue count, capped at 50.
  */
 describe('extractNeighborhood', () => {
   it('strips the District type word from the leading segment', () => {
@@ -61,66 +67,34 @@ describe('VenuesService findSuggestions — SQL shape', () => {
     return { service, getSql: () => lastSql };
   }
 
+  it('takes NO query parameters (parameterless nationwide contract)', async () => {
+    const { service, getSql } = makeService();
+    await service.findSuggestions();
+
+    expect(getSql()!.params).toEqual([]); // zero bind params — no user input
+  });
+
   it('queries approved venues grouped by city+address, ranked by count', async () => {
     const { service, getSql } = makeService();
-    await service.findSuggestions({});
+    await service.findSuggestions();
 
     const sql = getSql()!.sql;
     expect(sql).toContain('v.is_approved = true');
     expect(sql).toContain('GROUP BY v.city, v.address');
     expect(sql).toContain('COUNT(*)::int');
-    expect(sql).not.toContain('ILIKE'); // no q/city → no text clauses
+    expect(sql).not.toContain('LIKE'); // nationwide: no text clauses at all
+    expect(sql).not.toContain('ILIKE');
+    expect(sql).not.toContain('ST_Distance'); // no city lock — the bug this fixes
   });
 
-  it('matches city as a case-insensitive PREFIX and address as a substring', async () => {
+  it('caps raw address groups at 200 in SQL; the service slices merged pairs to 50', async () => {
     const { service, getSql } = makeService();
-    await service.findSuggestions({ q: 'ola' });
+    await service.findSuggestions();
 
-    const sql = getSql()!.sql;
-    expect(sql).toMatch(/LOWER\(v\.city\) LIKE/);
-    expect(sql).toMatch(/LOWER\(v\.address\) LIKE/);
-    expect(getSql()!.params).toContain('ola%'); // city prefix
-    expect(getSql()!.params).toContain('%ola%'); // address substring
-  });
-
-  it('combines the typed prefix with a resolved-city filter (additive AND)', async () => {
-    const { service, getSql } = makeService();
-    await service.findSuggestions({ q: 'mal', city: 'Riyadh' });
-
-    const sql = getSql()!.sql;
-    expect(sql).toMatch(/LOWER\(v\.city\) LIKE/);
-    expect(sql).toMatch(/v\.city ILIKE/);
-    expect(getSql()!.params).toContain('%Riyadh%');
-  });
-
-  it('lat+lng resolves the user city via a PostGIS nearest-venue subquery', async () => {
-    const { service, getSql } = makeService();
-    await service.findSuggestions({ lat: 24.71, lng: 46.68 });
-
-    const sql = getSql()!.sql;
-    expect(sql).toContain('ST_Distance');
-    expect(sql).toMatch(/v\.city = /); // exact-city lock (nearest venue's city)
-    expect(getSql()!.params).toContain(46.68);
-    expect(getSql()!.params).toContain(24.71);
-  });
-
-  it('locks to the nearest city even when a profile city is ALSO sent (geo wins)', async () => {
-    const { service, getSql } = makeService();
-    await service.findSuggestions({ lat: 21.49, lng: 39.19, city: 'Riyadh' });
-
-    const sql = getSql()!.sql;
-    expect(sql).toContain('ST_Distance');
-    expect(sql).not.toContain('ILIKE'); // profile-city clause suppressed
-  });
-
-  it('rejects lat without lng (and vice versa)', async () => {
-    const { service } = makeService();
-    await expect(
-      service.findSuggestions({ lat: 24.7 } as never),
-    ).rejects.toThrow(/Both lat and lng/);
-    await expect(
-      service.findSuggestions({ lng: 46.7 } as never),
-    ).rejects.toThrow(/Both lat and lng/);
+    // Two-layer cap: SQL LIMIT 200 = pre-merge address groups (popular
+    // first), then findSuggestions merges spellings and slices to
+    // SUGGESTIONS_LIMIT (50) for the client.
+    expect(getSql()!.sql).toContain('LIMIT 200');
   });
 });
 
@@ -136,12 +110,25 @@ describe('VenuesService findSuggestions — ranking', () => {
       ],
     };
     const service = new VenuesService(db as never);
-    const rows = await service.findSuggestions({});
+    const rows = await service.findSuggestions();
 
     expect(rows[0]).toMatchObject({ city: 'Riyadh', neighborhood: 'Olaya', venue_count: 3 });
     // Olaya (3) first; the 1-venue tie breaks on city ASC (Jeddah < Riyadh).
     expect(rows.map((r) => r.neighborhood)).toEqual(['Olaya', 'Al-Nakheel', 'Al-Malqa']);
-    expect(rows.length).toBeLessThanOrEqual(8); // SUGGESTIONS_LIMIT
+    expect(rows.length).toBeLessThanOrEqual(50); // SUGGESTIONS_LIMIT
+  });
+
+  it('keeps rows from MULTIPLE cities (nationwide — the old lock kept one)', async () => {
+    const db = {
+      execute: async () => [
+        { city: 'Riyadh', address: 'Olaya District, Rd A, Riyadh', venue_count: 2 },
+        { city: 'Jeddah', address: 'Al-Nakheel District, Rd D, Jeddah', venue_count: 1 },
+      ],
+    };
+    const service = new VenuesService(db as never);
+    const rows = await service.findSuggestions();
+
+    expect(new Set(rows.map((r) => r.city))).toEqual(new Set(['Riyadh', 'Jeddah']));
   });
 
   it('drops rows whose address yields no neighborhood', async () => {
@@ -152,7 +139,7 @@ describe('VenuesService findSuggestions — ranking', () => {
       ],
     };
     const service = new VenuesService(db as never);
-    const rows = await service.findSuggestions({});
+    const rows = await service.findSuggestions();
     expect(rows).toHaveLength(1);
     expect(rows[0].neighborhood).toBe('Al-Malqa');
   });

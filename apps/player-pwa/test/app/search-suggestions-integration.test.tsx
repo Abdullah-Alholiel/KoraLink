@@ -1,27 +1,35 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 
 /**
- * Search-suggestions integration specs (2026-09-18 feature).
+ * Search-suggestions INTEGRATION specs — 2026-09-18 CHIPS REDESIGN.
  *
- * The visibility CONTRACT under test (Abdullah):
- *   1. Suggestions NEVER render before the user clicks/focuses the search
- *      input — not on mount, not on typing alone.
- *   2. Focus opens the dropdown; a city/neighborhood chip applies the filter
- *      (Play → server `neighborhood` param; Clubs → pinned venue list).
- *   3. The query only fetches AFTER first focus (enabled: focused).
+ * Replaces the dropdown-era specs: suggestions are now dynamic filter chips
+ * under the search bar (Abdullah: no desktop-style overlay, no empty-state
+ * panel). The visibility CONTRACT under test:
+ *   1. Chips NEVER render before the user focuses the search input — not on
+ *      mount, not from browser autofill.
+ *   2. Focus shows the popular nationwide chips; the list is fetched ONCE
+ *      (parameterless API) and filtered per keystroke — typing "Jeddah" on a
+ *      Riyadh profile surfaces Jeddah hoods (the old city-locked fetch could
+ *      only ever yield an empty panel here).
+ *   3. A chip tap pins the filter (Play → server `neighborhood` param;
+ *      Clubs → pinned venue list); tapping the active chip toggles it off.
+ *   4. A zero-match query renders NOTHING — the matches list below keeps
+ *      live-filtering; no "No matches" panel ever appears in the header.
  *
- * Play page mocks: useMatches + LocationProvider (no network/socket).
- * Clubs page mocks: useVenues + LocationProvider.
+ * Play page mocks: useMatches + LocationProvider + fetcher (no network).
+ * Clubs page mocks: useVenues + LocationProvider + fetcher.
  */
 
 const pushMock = vi.hoisted(() => vi.fn());
 const replaceMock = vi.hoisted(() => vi.fn());
 const useMatchesMock = vi.hoisted(() => vi.fn());
 const useVenuesMock = vi.hoisted(() => vi.fn());
+const fetcherMock = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/play',
@@ -40,8 +48,18 @@ vi.mock('@/providers/LocationProvider', () => ({
     useLocation: () => ({ coords: null, request: vi.fn(), loading: false }),
 }));
 
+vi.mock('@/lib/fetcher', () => ({
+    fetcher: fetcherMock,
+}));
+
 import PlayPage from '@/app/[locale]/(main)/play/page';
 import ClubsPage from '@/app/[locale]/(main)/clubs/page';
+
+const SUGGESTIONS_API = [
+    { city: 'Riyadh', neighborhood: 'Al-Malqa', venue_count: 5 },
+    { city: 'Riyadh', neighborhood: 'Olaya', venue_count: 4 },
+    { city: 'Jeddah', neighborhood: 'Al-Nakheel', venue_count: 3 },
+];
 
 function emptyMatchesResult() {
     return {
@@ -63,129 +81,182 @@ function renderPage(ui: React.ReactElement) {
     );
 }
 
-// The fetcher is network — assert it was never called before focus by
-// spying on global fetch (the hook queries /venues/suggestions via fetcher).
-const fetchSpy = vi.fn();
-
-beforeEach(() => {
-    vi.clearAllMocks();
-    global.fetch = fetchSpy as unknown as typeof global.fetch;
-    fetchSpy.mockResolvedValue(
-        new Response(JSON.stringify([
-            { city: 'Riyadh', neighborhood: 'Olaya', venue_count: 3 },
-            { city: 'Riyadh', neighborhood: 'Al-Malqa', venue_count: 1 },
-            { city: 'Jeddah', neighborhood: 'Al-Nakheel', venue_count: 1 },
-        ]), { status: 200 }),
-    );
-    useMatchesMock.mockReturnValue(emptyMatchesResult());
-    useVenuesMock.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
-});
-
-describe('Play page — search suggestions', () => {
-    it('shows NO suggestions before the user clicks the search bar (the contract)', async () => {
-        renderPage(<PlayPage />);
-        await waitFor(() => expect(screen.getByPlaceholderText('Where to play?')).toBeInTheDocument());
-        // Give any (incorrectly immediate) query a chance to misbehave.
-        await new Promise((r) => setTimeout(r, 20));
-        expect(screen.queryByTestId('search-suggestions')).toBeNull();
-        expect(fetchSpy).not.toHaveBeenCalled();
+describe('Play page — search suggestion chips (integration)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        useMatchesMock.mockReset().mockImplementation(() => emptyMatchesResult());
+        useVenuesMock.mockReset().mockImplementation(() => ({
+            data: [], isLoading: false, error: null, refetch: vi.fn(),
+        }));
+        fetcherMock.mockReset().mockImplementation(() => Promise.resolve(SUGGESTIONS_API));
     });
 
-    it('opens the dropdown on FOCUS and lists neighborhood chips grouped by city', async () => {
-        renderPage(<PlayPage />);
-        const input = screen.getByPlaceholderText('Where to play?');
-        fireEvent.focus(input);
-        await waitFor(() => expect(screen.getByTestId('search-suggestions')).toBeInTheDocument());
-        // Options carry the neighborhood; headers carry the city (i18n-mapped).
-        const options = await screen.findAllByRole('option');
-        expect(options.length).toBe(3);
-        expect(screen.getByRole('option', { name: /Al-Malqa/ })).toBeInTheDocument();
-        expect(screen.getByRole('group', { name: 'Riyadh' })).toBeInTheDocument();
-        expect(screen.getByRole('group', { name: 'Jeddah' })).toBeInTheDocument();
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
-    it('fetches suggestions only AFTER first focus (enabled: focused)', async () => {
+    it('fetches the suggestions list ONCE on first focus (parameterless, nationwide)', async () => {
         renderPage(<PlayPage />);
-        const input = screen.getByPlaceholderText('Where to play?');
-        await new Promise((r) => setTimeout(r, 20));
-        expect(fetchSpy).not.toHaveBeenCalled();
-        fireEvent.focus(input);
-        await waitFor(() =>
-            expect(fetchSpy).toHaveBeenCalledWith(
-                expect.stringContaining('/venues/suggestions'),
-                expect.anything(),
-            ),
+        expect(fetcherMock).not.toHaveBeenCalled(); // nothing before focus
+
+        const input = screen.getByLabelText('Where to play?');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        expect(fetcherMock).toHaveBeenCalledWith('/venues/suggestions');
+        expect(screen.getByTestId('search-suggestion-chips')).toBeInTheDocument();
+    });
+
+    it('typing "Jeddah" surfaces JEDDAH chips regardless of the user profile city', async () => {
+        renderPage(<PlayPage />);
+        const input = screen.getByLabelText('Where to play?');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        act(() => {
+            fireEvent.change(input, { target: { value: 'Jeddah' } });
+            vi.advanceTimersByTime(250); // pin debounce flush
+        });
+
+        const chips = screen.getAllByTestId('search-suggestion-chip');
+        expect(chips).toHaveLength(1);
+        expect(chips[0].textContent).toContain('Al-Nakheel');
+        // No "Nothing in Jeddah" empty panel — the old dropdown bug.
+        expect(screen.queryByText(/Nothing in/)).toBeNull();
+    });
+
+    it('tapping a chip pins the neighborhood into the matches query (server filter)', async () => {
+        renderPage(<PlayPage />);
+        const input = screen.getByLabelText('Where to play?');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        const chip = screen
+            .getAllByTestId('search-suggestion-chip')
+            .find((el) => el.textContent!.includes('Al-Nakheel'))!;
+        act(() => {
+            fireEvent.click(chip);
+        });
+        // Separate act: the debounce effect flushes at act exit — only then
+        // does the 200ms timer exist and can be advanced.
+        act(() => {
+            vi.advanceTimersByTime(250);
+        });
+
+        expect(useMatchesMock).toHaveBeenLastCalledWith(
+            expect.objectContaining({ neighborhood: 'Al-Nakheel' }),
         );
     });
 
-    it('tapping a neighborhood chip pins it into the matches query (server filter)', async () => {
+    it('Escape dismisses the chips without clearing the typed text', async () => {
         renderPage(<PlayPage />);
-        const input = screen.getByPlaceholderText('Where to play?');
-        fireEvent.focus(input);
-        await waitFor(() => expect(screen.getByTestId('search-suggestions')).toBeInTheDocument());
-        // Wait for the chips to actually render (fetch lands async), then click.
-        fireEvent.click(await screen.findByRole('option', { name: /Al-Malqa/ }));
-        // The chip fills the input AND pins the neighborhood for useMatches…
-        await waitFor(() => expect(useMatchesMock).toHaveBeenCalled());
-        // …after the debounce window the latest call carries the pin.
-        await new Promise((r) => setTimeout(r, 250));
-        const calls = useMatchesMock.mock.calls;
-        const latestCall = calls[calls.length - 1]?.[0] as { neighborhood?: string | null } | undefined;
-        expect(latestCall?.neighborhood).toBe('Al-Malqa');
-        // Dropdown dismissed after selection.
-        expect(screen.queryByTestId('search-suggestions')).toBeNull();
+        const input = screen.getByLabelText('Where to play?');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        act(() => {
+            fireEvent.change(input, { target: { value: 'Jeddah' } });
+            vi.advanceTimersByTime(250);
+        });
+        expect(screen.getByTestId('search-suggestion-chips')).toBeInTheDocument();
+
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(screen.queryByTestId('search-suggestion-chips')).toBeNull();
+        expect(input).toHaveValue('Jeddah'); // the text survives dismissal
     });
 
-    it('Escape dismisses the dropdown without clearing the typed text', async () => {
+    it('a zero-match query renders NO chips row — no empty-state panel in the header', async () => {
         renderPage(<PlayPage />);
-        const input = screen.getByPlaceholderText('Where to play?');
-        fireEvent.focus(input);
-        await waitFor(() => expect(screen.getByTestId('search-suggestions')).toBeInTheDocument());
-        fireEvent.change(input, { target: { value: 'Olaya' } });
-        fireEvent.keyDown(input, { key: 'Escape' });
-        expect(screen.queryByTestId('search-suggestions')).toBeNull();
-        expect((input as HTMLInputElement).value).toBe('Olaya');
+        const input = screen.getByLabelText('Where to play?');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        act(() => {
+            fireEvent.change(input, { target: { value: 'Nowhereville' } });
+            vi.advanceTimersByTime(250);
+        });
+
+        expect(screen.queryByTestId('search-suggestion-chips')).toBeNull();
+        expect(screen.queryByTestId('search-suggestions')).toBeNull(); // old dropdown id
+        expect(screen.queryByText('No matches')).toBeNull();
     });
 });
 
-describe('Clubs page — search suggestions', () => {
-    it('shows NO suggestions before the user clicks the search bar', async () => {
-        renderPage(<ClubsPage />);
-        await waitFor(() => expect(screen.getByPlaceholderText('Search clubs')).toBeInTheDocument());
-        await new Promise((r) => setTimeout(r, 20));
-        expect(screen.queryByTestId('search-suggestions')).toBeNull();
-        expect(fetchSpy).not.toHaveBeenCalled();
+describe('Clubs page — search suggestion chips (integration)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        useMatchesMock.mockReset().mockImplementation(() => emptyMatchesResult());
+        useVenuesMock.mockReset().mockImplementation(() => ({
+            data: [], isLoading: false, error: null, refetch: vi.fn(),
+        }));
+        fetcherMock.mockReset().mockImplementation(() => Promise.resolve(SUGGESTIONS_API));
     });
 
-    it('opens on focus and a chip filters the venue list client-side', async () => {
-        useVenuesMock.mockReturnValue({
-            data: [
-                {
-                    id: 'v1', name: 'Olaya Sports Park', city: 'Riyadh',
-                    address: 'Olaya District, Prince Mohammed Bin Abdulaziz Rd, Riyadh 12241',
-                    amenities: [], is_approved: true, is_koralink_partner: false,
-                    distance_m: null, owner_id: 'o', owner_name: null, pitch_count: 2,
-                },
-                {
-                    id: 'v2', name: 'Al-Nakheel Sports Complex', city: 'Jeddah',
-                    address: 'Al-Nakheel District, King Abdulaziz Rd, Jeddah 23441',
-                    amenities: [], is_approved: true, is_koralink_partner: false,
-                    distance_m: null, owner_id: 'o', owner_name: null, pitch_count: 1,
-                },
-            ],
-            isLoading: false, error: null, refetch: vi.fn(),
-        });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('opens on focus; a chip tap pins the venue list neighborhood', async () => {
         renderPage(<ClubsPage />);
-        const input = screen.getByPlaceholderText('Search clubs');
-        fireEvent.focus(input);
-        await waitFor(() => expect(screen.getByTestId('search-suggestions')).toBeInTheDocument());
-        // Wait for chips to render (fetch lands async), then click the Olaya
-        // OPTION (role-scoped — the venue card below also contains "Olaya").
-        fireEvent.click(await screen.findByRole('option', { name: /Olaya/ }));
-        // Pin applies after debounce → only the Olaya venue survives.
-        await new Promise((r) => setTimeout(r, 350));
-        expect(screen.getByText('Olaya Sports Park')).toBeInTheDocument();
-        expect(screen.queryByText('Al-Nakheel Sports Complex')).toBeNull();
-        expect(screen.queryByTestId('search-suggestions')).toBeNull();
+        expect(screen.queryByTestId('search-suggestion-chips')).toBeNull();
+
+        const input = screen.getByLabelText('Search clubs');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        expect(screen.getByTestId('search-suggestion-chips')).toBeInTheDocument();
+
+        const chip = screen
+            .getAllByTestId('search-suggestion-chip')
+            .find((el) => el.textContent!.includes('Al-Nakheel'))!;
+        fireEvent.click(chip);
+
+        // Clubs pins client-side: the input carries the neighborhood, and
+        // useVenues receives the server ?search= text (300ms debounce).
+        expect(input).toHaveValue('Al-Nakheel');
+        expect(chip.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('a zero-match query renders NOTHING — never the dropdown empty panel', async () => {
+        renderPage(<ClubsPage />);
+        const input = screen.getByLabelText('Search clubs');
+        act(() => {
+            fireEvent.focus(input);
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        act(() => {
+            fireEvent.change(input, { target: { value: 'Nowhereville' } });
+            vi.advanceTimersByTime(350);
+        });
+
+        expect(screen.queryByTestId('search-suggestion-chips')).toBeNull();
+        expect(screen.queryByText(/Nothing in/)).toBeNull();
     });
 });

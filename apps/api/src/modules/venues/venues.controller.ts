@@ -8,7 +8,6 @@ import {
 
 import { VenuesService } from './venues.service';
 import { GetVenuesDto } from './dto/get-venues.dto';
-import { GetVenueSuggestionsDto } from './dto/get-venue-suggestions.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 
 @ApiTags('venues')
@@ -19,18 +18,21 @@ export class VenuesController {
   constructor(private readonly venuesService: VenuesService) {}
 
   // ── GET /venues/suggestions — city + neighborhood suggestion chips ────
-  // MUST stay ABOVE /venues/:id or "suggestions" is captured as an :id.
-  // No cache interceptor — q/city vary per keystroke and per user.
+  // MUST stay ABOVE /venues/suggestions or "suggestions" is captured as :id.
+  // Parameterless + NATIONWIDE (2026-09-18 chips redesign): the client
+  // fetches once, caches 5min, and filters per keystroke locally — no
+  // per-keystroke API load, and chips for ANY city regardless of the
+  // user's location.
   @Get('suggestions')
   @ApiOperation({
     summary:
       'Popular city + neighborhood suggestions from approved venues (search bar chips)',
   })
   @ApiOkResponse({
-    description: 'Ranked { city, neighborhood, venue_count } rows (max 8).',
+    description: 'Ranked { city, neighborhood, venue_count } rows (max 50).',
   })
-  suggestions(@Query() dto: GetVenueSuggestionsDto) {
-    return this.venuesService.findSuggestions(dto);
+  suggestions() {
+    return this.venuesService.findSuggestions();
   }
 
   // ── GET /venues — Nearby venues (PostGIS geo-filter) ──────────────────

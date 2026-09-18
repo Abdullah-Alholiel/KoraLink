@@ -4,7 +4,6 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { venues } from '../../database/schema';
 import { GetVenuesDto } from './dto/get-venues.dto';
-import { GetVenueSuggestionsDto } from './dto/get-venue-suggestions.dto';
 
 /** Row shape returned by VenuesService.findSuggestions. */
 export interface VenueSuggestionRow {
@@ -19,8 +18,12 @@ export interface VenueSuggestionRow {
   venue_count: number;
 }
 
-/** Hard cap on suggestion rows returned to a client. */
-const SUGGESTIONS_LIMIT = 8;
+/**
+ * Hard cap on suggestion rows returned to a client. 2026-09-18 chips
+ * redesign: the list is NATIONWIDE (no city lock) and the client filters
+ * per keystroke, so the cap covers several cities × their neighborhoods.
+ */
+const SUGGESTIONS_LIMIT = 50;
 
 /**
  * Deterministic neighborhood extractor for venue addresses. The schema has NO
@@ -181,48 +184,20 @@ export class VenuesService {
 
   /**
    * Distinct city + neighborhood suggestion pairs for the Play/Clubs search
-   * bars (search-suggestions feature). Neighborhoods live INSIDE the
-   * free-text address column — there is no dedicated district column — so the
-   * address is passed to a deterministic prefix extractor:
+   * bars (search-suggestions feature, 2026-09-18 chips redesign). The list is
+   * NATIONWIDE and parameterless: the client fetches it once on focus, caches
+   * it, and filters per keystroke (Arabic-aware, lib/search-suggestions.ts) —
+   * so typing "Jeddah" surfaces Jeddah chips even for a Riyadh user, and no
+   * keystroke ever hits the API. Neighborhoods live INSIDE the free-text
+   * address column — there is no dedicated district column — so the address
+   * is passed to a deterministic prefix extractor:
    *   "Olaya District, Prince Mohammed Bin Abdulaziz Rd, Riyadh 12241"
    *     → neighborhood "Olaya"
    *   "King Saud University Campus, King Abdullah Rd, Riyadh 11451"
    *     → neighborhood "King Saud University"
    * "Most important/popular" ordering = per-pair venue count DESC, then name.
    */
-  async findSuggestions(dto: GetVenueSuggestionsDto): Promise<VenueSuggestionRow[]> {
-    const { q, city, lat, lng } = dto;
-
-    if ((lat === undefined) !== (lng === undefined)) {
-      throw new BadRequestException('Both lat and lng must be provided together.');
-    }
-
-    const prefix = q?.trim().toLowerCase();
-    const searchClause = prefix
-      ? sql`AND (LOWER(v.city) LIKE ${prefix + '%'} OR LOWER(v.address) LIKE ${'%' + prefix + '%'})`
-      : sql``;
-    const cityClause = city?.trim() && lat === undefined
-      ? sql`AND v.city ILIKE ${'%' + city.trim() + '%'}`
-      : sql``;
-
-    // Location-enabled users (search-suggestions contract): the exact user
-    // city is resolved server-side as the NEAREST approved venue's city
-    // (native PostGIS — no external geocoder dependency). A venue table with
-    // no approved rows degrades to city-wide suggestions (NULL city → no-op).
-    const nearestCityExpr = lat !== undefined && lng !== undefined
-      ? sql`(
-          SELECT nearest.city
-          FROM venues nearest
-          WHERE nearest.is_approved = true
-            AND nearest.location IS NOT NULL
-          ORDER BY ST_Distance(
-            nearest.location,
-            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
-          )
-          LIMIT 1
-        )`
-      : sql`NULL`;
-
+  async findSuggestions(): Promise<VenueSuggestionRow[]> {
     const rows = await this.db.execute(sql`
       SELECT
         v.city,
@@ -230,9 +205,6 @@ export class VenuesService {
         COUNT(*)::int AS venue_count
       FROM venues v
       WHERE v.is_approved = true
-        AND (${nearestCityExpr}::text IS NULL OR v.city = ${nearestCityExpr}::text)
-        ${searchClause}
-        ${cityClause}
       GROUP BY v.city, v.address
       ORDER BY venue_count DESC, v.city ASC, v.address ASC
       LIMIT 200

@@ -691,10 +691,6 @@
   },
   "searchSuggestions": {
     "title": "Search by area",
-    "venuesHere": "{count, plural, =0 {No clubs yet} one {# club} other {# clubs}}",
-    "none": "No matches",
-    "noneFor": "Nothing in \"{query}\" yet",
-    "noneHint": "Try a city or neighborhood name",
     "cities": {
       "riyadh": "Riyadh",
       "jeddah": "Jeddah"
