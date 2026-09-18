@@ -4,13 +4,15 @@
   "last_run": 58,
   "last_run_at": "2026-09-18T01:18:48Z",
   "last_run_commits": [
-    "16dd5f9"
+    "16dd5f9",
+    "081bb27",
+    "cc76eb4"
   ],
   "last_run_report": "kanban/RUNS/2026-09-18T01-18Z-run58.md",
   "in_review_items": [
     {
       "id": "run58-wallet-pay-removal",
-      "claim": "16dd5f9: POST /wallet/pay REMOVED from WalletController — it accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT with no server-side pricing (reviewer-B P1 run #58). Dead surface: zero PWA consumers (usePayWallet hook deleted with it), zero tests; the authoritative fee path is joinMatch's in-tx chargeMatchFeeTx at the server-derived price_per_player; refund/forfeit sweeps key off fee_paid_sar so client-minted MATCH_FEE rows were invisible to the money cycle. Removal pin added: wallet.controller.spec asserts prototype.pay undefined AND PATH_METADATA route list lacks 'pay'. Gates: jest wallet 17/17, api tsc 0, pwa tsc 0, turbo 3/3 exit 0, vitest 82f/578t. Topup flag behavior untouched (WALLET_TOPUP_ENABLED pins green).",
+      "claim": "16dd5f9: POST /wallet/pay REMOVED from WalletController — it accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT with no server-side pricing (reviewer-B P1 run #58). Dead surface: zero PWA consumers (usePayWallet hook deleted with it), zero tests; the authoritative fee path is joinMatch's in-tx chargeMatchFeeTx at the server-derived price_per_player; refund/forfeit sweeps key off fee_paid_sar so client-minted MATCH_FEE rows were invisible to the money cycle. Removal pin added: wallet.controller.spec asserts prototype.pay undefined AND PATH_METADATA route list lacks 'pay'. Gates: jest wallet 17/17, api tsc 0, pwa tsc 0, turbo 3/3 exit 0, vitest 82f/578t. Topup flag behavior untouched (WALLET_TOPUP_ENABLED pins green). LIVE-VERIFIED same run: staging deployed on cc76eb4 (deploy-staging.sh 6/6 health ok) → POST /api/v1/wallet/pay returns 404 Not Found; /wallet/topup still 401-guarded; 0 journal errors post-deploy.",
       "verify": "(1) cd apps/api && npx jest src/modules/wallet — 3 suites, pin case 'POST /wallet/pay stays REMOVED' green; (2) grep -rn 'wallet/pay' apps/api/src apps/player-pwa/src → only REMOVED-comment hits; (3) after the post-build API restart: POST /api/v1/wallet/pay → 404; (4) root npm run build green.",
       "built_in": "run #58"
     }
