@@ -1,20 +1,25 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 58,
-  "last_run_at": "2026-09-18T01:18:48Z",
+  "last_run": 59,
+  "last_run_at": "2026-09-18T15:47:00Z",
   "last_run_commits": [
-    "16dd5f9",
-    "081bb27",
-    "cc76eb4"
+    "42eca86",
+    "8585b5b"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-18T01-18Z-run58.md",
+  "last_run_report": "kanban/RUNS/2026-09-18T15-47Z-run59.md",
   "in_review_items": [
     {
-      "id": "run58-wallet-pay-removal",
-      "claim": "16dd5f9: POST /wallet/pay REMOVED from WalletController — it accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT with no server-side pricing (reviewer-B P1 run #58). Dead surface: zero PWA consumers (usePayWallet hook deleted with it), zero tests; the authoritative fee path is joinMatch's in-tx chargeMatchFeeTx at the server-derived price_per_player; refund/forfeit sweeps key off fee_paid_sar so client-minted MATCH_FEE rows were invisible to the money cycle. Removal pin added: wallet.controller.spec asserts prototype.pay undefined AND PATH_METADATA route list lacks 'pay'. Gates: jest wallet 17/17, api tsc 0, pwa tsc 0, turbo 3/3 exit 0, vitest 82f/578t. Topup flag behavior untouched (WALLET_TOPUP_ENABLED pins green). LIVE-VERIFIED same run: staging deployed on cc76eb4 (deploy-staging.sh 6/6 health ok) → POST /api/v1/wallet/pay returns 404 Not Found; /wallet/topup still 401-guarded; 0 journal errors post-deploy.",
-      "verify": "(1) cd apps/api && npx jest src/modules/wallet — 3 suites, pin case 'POST /wallet/pay stays REMOVED' green; (2) grep -rn 'wallet/pay' apps/api/src apps/player-pwa/src → only REMOVED-comment hits; (3) after the post-build API restart: POST /api/v1/wallet/pay → 404; (4) root npm run build green.",
-      "built_in": "run #58"
+      "id": "run59-p2-78-migrate-vps-23505",
+      "built_in": "run #59",
+      "claim": "42eca86: scripts/migrate-vps.mjs DUP_CODES no longer tolerates 23505 unique_violation — a data-level constraint error inside a migration now FAILS LOUD instead of being journaled as applied (Reviewer A CRITICAL, run #59). Tripwire spec migrate-vps-dup-codes.spec.ts pins the set (4/4 green, re-run by recovery).",
+      "verify": "(1) cd apps/api && npx jest src/database/migrate-vps-dup-codes — 4/4; (2) grep DUP_CODES scripts/migrate-vps.mjs — set is ['42P07','42710','42701','42P06'] with the NEVER-add-data-codes comment."
+    },
+    {
+      "id": "run59-p2-75-languagetoggle-arialabel",
+      "built_in": "run #59",
+      "claim": "8585b5b: LanguageToggle ariaLabel is REQUIRED (compile error on omission) + dev-mode throw for untyped renders — old = 'Language' default shipped English copy into AR UI (P2-75). language-toggle.test.tsx pins label/pressed-state/throw; call sites login/page.tsx:147 + profile/page.tsx:411 pass localized labels; admin has its own component.",
+      "verify": "(1) cd apps/player-pwa && npx vitest run — 84 files / 596 tests incl. language-toggle.test.tsx; (2) npx tsc --noEmit — 0; (3) root npm run build — 3/3 exit 0 (already run by recovery, postbuild restarted koralink-pwa.service)."
     }
   ],
   "open_blockers": [
@@ -46,6 +51,7 @@
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
+    "Run #59 (killed ~11:24Z, kill-pattern #9; finished 15:47Z by Abdullah-directed recovery): P2-78 (42eca86, dead-session commit, gates re-run) + P2-75 (8585b5b) DONE; P2-72/P2-69 BOARD annotations verified; fallback-ce627215 deletion REVERTED (test still references it). 15:15:00Z fire exited silently on the recovery's young live lock — zero overlap. WORKTREE LAYOUT (discovery): staging = linked worktree /home/ubuntu/worktrees/koralink-staging; /home/ubuntu/projects/koralink = feature lane (feat/search-neighborhood-suggestions). Preflight git checks MUST run in the staging worktree.",
     "Run #57: API lane (57%4=1). P1-48 built+probed live (381186f) — see in_review_items for the verify recipe. P1-47+P2-70 verified DONE by Reviewer B (all throw sites, code-first classify, BlockedCard, 960/960 parity). New rows: P1-50 (force-disconnect carve-out), P1-51 (rating flow, owner call), P2-72 (push locale ar default), P2-73 (offline URL preservation); P2-71 (wallet empty state) REFUTED — (main)/wallet/page.tsx:263-276 already renders it. OS research: none. Sentry 24h: zero new signatures.",
     "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NE...",
     "zai delegation-path 401 history — run #55: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE, 401); reviewers clean 175s combined — 5th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
@@ -55,6 +61,6 @@
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-18T01:18:48Z",
-  "last_run_started_at": "2026-09-17T15:18:00Z"
+  "last_run_id": "run59-finish",
+  "last_run_started_at": "2026-09-18T10:25:54Z"
 }
