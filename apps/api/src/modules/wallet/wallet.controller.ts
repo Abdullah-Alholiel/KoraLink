@@ -88,21 +88,14 @@ export class WalletController {
     });
   }
 
-  // ── POST /wallet/pay ─────────────────────────────────────────
-  @Post('pay')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Pay for a match from wallet balance' })
-  @ApiCreatedResponse({ description: 'Payment recorded successfully.' })
-  async pay(
-    @CurrentUser() user: { sub: string },
-    @Body() dto: TopupWalletDto,
-  ) {
-    return this.walletService.recordTransaction(user.sub, {
-      type: 'DEBIT',
-      amount: dto.amount,
-      referenceType: 'MATCH_FEE',
-      referenceId: dto.referenceId,
-      idempotencyKey: dto.idempotencyKey,
-    });
-  }
+  // ── POST /wallet/pay — REMOVED (run #58, reviewer-B P1) ────────────
+  // This endpoint accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT
+  // with no server-side pricing: any authenticated user could mint ledger
+  // debits disconnected from any roster/fee snapshot (the authoritative
+  // join-fee path is matches.service joinMatch — chargeMatchFeeTx inside
+  // the join tx at the server-derived price_per_player; refund/forfeit
+  // sweeps key off fee_paid_sar, so /wallet/pay rows were invisible to the
+  // money cycle). It had zero consumers (usePayWallet deleted with it) and
+  // zero tests. P0-2 (real payment provider) must NOT reintroduce a
+  // client-priced fee surface — fees flow through server-priced paths only.
 }
