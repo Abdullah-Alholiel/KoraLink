@@ -125,22 +125,29 @@ async function bootstrap(): Promise<void> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // ── Swagger (Cookie-Auth configured) ────────────────────────────────────
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('KoraLink API')
-    .setDescription(
-      'Hyper-local sports matchmaking platform — Saudi Arabia.\n\n' +
-        'Authentication uses **HttpOnly cookies** (no JWT in response body). ' +
-        'Call `POST /api/v1/auth/verify-otp` to receive the `access_token` cookie.',
-    )
-    .setVersion('1.0')
-    .addCookieAuth('access_token')
-    .build();
+  // ── Swagger (Cookie-Auth configured) — DEV ONLY ──────────────────────────
+  // Security audit run-1 (fingerprint: api-auth:swagger-unconditional-exposure):
+  // the OpenAPI document + UI were served unconditionally, publishing the full
+  // route/DTO surface to unauthenticated callers in production. Registered only
+  // outside production now; prod returns 404 on /api/docs (verification folded
+  // into the audit report).
+  if (configService.get<string>('NODE_ENV') !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('KoraLink API')
+      .setDescription(
+        'Hyper-local sports matchmaking platform — Saudi Arabia.\n\n' +
+          'Authentication uses **HttpOnly cookies** (no JWT in response body). ' +
+          'Call `POST /api/v1/auth/verify-otp` to receive the `access_token` cookie.',
+      )
+      .setVersion('1.0')
+      .addCookieAuth('access_token')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: { withCredentials: true },
-  });
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { withCredentials: true },
+    });
+  }
 
   // ── Socket.IO Redis adapter (env-gated — in-memory unless WS_REDIS_ADAPTER=true) ──
   // Reuses the same Redis as CacheModule/Bull (REDIS_HOST/PORT/PASSWORD). Opt-in so
