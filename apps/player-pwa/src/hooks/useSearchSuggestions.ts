@@ -8,6 +8,7 @@ import { useLocation } from '@/providers/LocationProvider';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import {
   adaptSuggestions,
+  CITY_I18N_KEYS,
   type SearchSuggestion,
   type SuggestionApi,
 } from '@/lib/search-suggestions';
@@ -79,15 +80,20 @@ export function useSearchSuggestions(): UseSearchSuggestionsResult {
 
   const suggestions = useMemo(() => adaptSuggestions(data ?? []), [data]);
 
-  // Localized display names for known neighborhoods (e.g. "Al-Malqa" →
-  // "الملقا"): the dropdown renders the label, and filterSuggestions matches
-  // against it so typing in the UI language finds Latin wire values.
+  // Localized display names (e.g. "Al-Malqa" → "الملقا", "Riyadh" →
+  // "الرياض"): the dropdown renders the labels, and filterSuggestions matches
+  // them so typing in the UI language finds Latin wire values.
   const t = useTranslations();
   const labeledSuggestions = useMemo(
     () =>
-      suggestions.map((s) =>
-        s.labelKey ? { ...s, label: t(s.labelKey) } : s,
-      ),
+      suggestions.map((s) => {
+        const cityKey = CITY_I18N_KEYS[s.city.toLowerCase()];
+        return {
+          ...s,
+          label: s.labelKey ? t(s.labelKey) : undefined,
+          cityLabel: cityKey ? t(cityKey) : undefined,
+        };
+      }),
     [suggestions, t],
   );
 

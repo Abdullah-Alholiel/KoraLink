@@ -33,6 +33,8 @@ export interface SearchSuggestion {
   labelKey?: string;
   /** Localized display label resolved from labelKey (set by the hook). */
   label?: string;
+  /** Localized city display label (e.g. "Riyadh" → "الرياض"; set by the hook). */
+  cityLabel?: string;
 }
 
 /**
@@ -118,7 +120,8 @@ export function filterSuggestions(
     };
     return suggestions.filter((s) => {
         if (textMatches(s.city) || textMatches(s.neighborhood)) return true;
-        return s.label ? textMatches(s.label) : false;
+        if (s.label && textMatches(s.label)) return true;
+        return s.cityLabel ? textMatches(s.cityLabel) : false;
     });
 }
 
