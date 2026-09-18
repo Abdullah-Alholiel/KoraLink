@@ -120,7 +120,7 @@ export default function SuggestionDropdown({
                                     </span>
                                     <span className="flex-1 min-w-0">
                                         <span className="block text-sm font-semibold text-brand-black truncate">
-                                            {s.neighborhood}
+                                            {s.label ?? s.neighborhood}
                                         </span>
                                         <span className="block text-xs text-gray-400 truncate">
                                             {cityLabel(s.city)} ·{' '}

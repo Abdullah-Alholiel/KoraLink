@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { fetcher } from '@/lib/fetcher';
 import { useLocation } from '@/providers/LocationProvider';
@@ -78,6 +79,18 @@ export function useSearchSuggestions(): UseSearchSuggestionsResult {
 
   const suggestions = useMemo(() => adaptSuggestions(data ?? []), [data]);
 
+  // Localized display names for known neighborhoods (e.g. "Al-Malqa" →
+  // "الملقا"): the dropdown renders the label, and filterSuggestions matches
+  // against it so typing in the UI language finds Latin wire values.
+  const t = useTranslations();
+  const labeledSuggestions = useMemo(
+    () =>
+      suggestions.map((s) =>
+        s.labelKey ? { ...s, label: t(s.labelKey) } : s,
+      ),
+    [suggestions, t],
+  );
+
   const handleFocus = useCallback(() => {
     setDismissed(false);
     setFocused(true);
@@ -96,7 +109,7 @@ export function useSearchSuggestions(): UseSearchSuggestionsResult {
   const dismiss = useCallback(() => setDismissed(true), []);
 
   return {
-    suggestions,
+    suggestions: labeledSuggestions,
     open: focused && !dismissed,
     listRef,
     handleFocus,

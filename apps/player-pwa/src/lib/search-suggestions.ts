@@ -25,6 +25,31 @@ export interface SearchSuggestion {
    * The NEIGHBORHOOD is the filter — never the display label's city prefix.
    */
   filterValue: string;
+  /**
+   * Optional i18n key for the neighborhood's localized display name
+   * (e.g. "Al-Malqa" → "الملقا" in ar). Unknown neighborhoods have no key
+   * and render their raw address-derived value.
+   */
+  labelKey?: string;
+  /** Localized display label resolved from labelKey (set by the hook). */
+  label?: string;
+}
+
+/**
+ * Known-neighborhood i18n label keys, keyed by the normalized (lowercase,
+ * dashes→spaces) address-derived value. Cities map through CITY_I18N_KEYS;
+ * neighborhoods through this — both because they arrive as DATA.
+ */
+export const NEIGHBORHOOD_I18N_KEYS: Record<string, string> = {
+  'al malqa': 'searchSuggestions.neighborhoods.alMalqa',
+  olaya: 'searchSuggestions.neighborhoods.olaya',
+  'king saud university campus': 'searchSuggestions.neighborhoods.ksu',
+  'al nakheel': 'searchSuggestions.neighborhoods.alNakheel',
+};
+
+/** Resolves the i18n key for an address-derived neighborhood value. */
+export function neighborhoodLabelKey(neighborhood: string): string | undefined {
+  return NEIGHBORHOOD_I18N_KEYS[neighborhood.trim().toLowerCase().replace(/-/g, ' ')];
 }
 
 export function adaptSuggestions(rows: SuggestionApi[]): SearchSuggestion[] {
@@ -33,6 +58,7 @@ export function adaptSuggestions(rows: SuggestionApi[]): SearchSuggestion[] {
     neighborhood: r.neighborhood,
     venueCount: r.venue_count,
     filterValue: r.neighborhood,
+    labelKey: neighborhoodLabelKey(r.neighborhood),
   }));
 }
 
@@ -71,6 +97,8 @@ function stripTrailingVowelish(input: string): string {
  *  - Neighborhood matches as a SUBSTRING ("malq" → Al-Malqa).
  *  - Arabic final-letter drift is tolerated via the vowelish fold.
  *  - Empty query keeps every suggestion (the location-enabled open-focus case).
+ *  - `label` (the localized display name, e.g. "الملقا") is matched too, so
+ *    typing in the UI language finds chips whose wire value is Latin.
  */
 export function filterSuggestions(
     suggestions: SearchSuggestion[],
@@ -79,18 +107,19 @@ export function filterSuggestions(
     const q = normalizeQuery(query);
     if (!q) return suggestions;
     const qLoose = stripTrailingVowelish(q);
-    return suggestions.filter(
-        (s) => {
-            const city = normalizeQuery(s.city);
-            const hood = normalizeQuery(s.neighborhood);
-            return (
-                city.startsWith(q) ||
-                (qLoose.length > 0 && city.startsWith(qLoose)) ||
-                hood.includes(q) ||
-                (qLoose.length > 0 && hood.includes(qLoose))
-            );
-        },
-    );
+    const textMatches = (text: string): boolean => {
+        const norm = normalizeQuery(text);
+        const normLoose = stripTrailingVowelish(norm);
+        return (
+            norm.includes(q) ||
+            (qLoose.length > 0 && norm.includes(qLoose)) ||
+            (normLoose.length > 0 && (normLoose.includes(qLoose) || normLoose.startsWith(qLoose)))
+        );
+    };
+    return suggestions.filter((s) => {
+        if (textMatches(s.city) || textMatches(s.neighborhood)) return true;
+        return s.label ? textMatches(s.label) : false;
+    });
 }
 
 /** Suggestion list grouped by city, preserving the API's popularity order. */

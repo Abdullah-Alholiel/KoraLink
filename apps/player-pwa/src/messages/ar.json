@@ -698,6 +698,12 @@
     "cities": {
       "riyadh": "الرياض",
       "jeddah": "جدة"
+    },
+    "neighborhoods": {
+      "alMalqa": "الملقا",
+      "olaya": "العليا",
+      "ksu": "حرم الملك سعود الجامعي",
+      "alNakheel": "النخيل"
     }
   },
   "clubs": {

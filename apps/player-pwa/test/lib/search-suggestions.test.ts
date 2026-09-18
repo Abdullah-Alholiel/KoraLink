@@ -5,6 +5,8 @@ import {
     groupSuggestions,
     normalizeQuery,
     CITY_I18N_KEYS,
+    NEIGHBORHOOD_I18N_KEYS,
+    neighborhoodLabelKey,
     type SuggestionApi,
 } from '@/lib/search-suggestions';
 
@@ -49,11 +51,40 @@ describe('adaptSuggestions', () => {
             neighborhood: 'Olaya',
             venueCount: 3,
             filterValue: 'Olaya',
+            labelKey: 'searchSuggestions.neighborhoods.olaya',
         });
     });
 
     it('tolerates a null/undefined list', () => {
         expect(adaptSuggestions(null as unknown as SuggestionApi[])).toEqual([]);
+    });
+});
+
+describe('neighborhood label mapping', () => {
+    it('resolves every seeded Riyadh/Jeddah neighborhood to an i18n key', () => {
+        expect(neighborhoodLabelKey('Al-Malqa')).toBe('searchSuggestions.neighborhoods.alMalqa');
+        expect(neighborhoodLabelKey('Olaya')).toBe('searchSuggestions.neighborhoods.olaya');
+        expect(neighborhoodLabelKey('King Saud University Campus')).toBe(
+            'searchSuggestions.neighborhoods.ksu',
+        );
+        expect(neighborhoodLabelKey('Al-Nakheel')).toBe('searchSuggestions.neighborhoods.alNakheel');
+        expect(neighborhoodLabelKey('Unknown District')).toBeUndefined();
+    });
+
+    it('keys stay in lockstep with the messages files (no silent key drift)', () => {
+        const en = require('../../src/messages/en.json') as {
+            searchSuggestions: { neighborhoods: Record<string, string> };
+        };
+        const ar = require('../../src/messages/ar.json') as {
+            searchSuggestions: { neighborhoods: Record<string, string> };
+        };
+        const expected = Object.values(NEIGHBORHOOD_I18N_KEYS).map((k) => k.split('.').pop()!);
+        for (const leaf of expected) {
+            expect(en.searchSuggestions.neighborhoods[leaf]).toBeDefined();
+            expect(ar.searchSuggestions.neighborhoods[leaf]).toBeDefined();
+        }
+        expect(Object.keys(en.searchSuggestions.neighborhoods)).toHaveLength(expected.length);
+        expect(Object.keys(ar.searchSuggestions.neighborhoods)).toHaveLength(expected.length);
     });
 });
 
@@ -83,6 +114,23 @@ describe('filterSuggestions', () => {
         ]);
         expect(filterSuggestions(arabic, 'الملقه')).toHaveLength(1);
         expect(filterSuggestions(arabic, 'الريا')).toHaveLength(1); // city prefix
+    });
+
+    it('matches the LOCALIZED label — Arabic query finds a Latin wire value via label', () => {
+        // Wire data is Latin (address-derived); the hook attaches the ar label.
+        const labeled = adaptSuggestions(ROWS).map((s) => ({
+            ...s,
+            label:
+                s.neighborhood === 'Al-Malqa'
+                    ? 'الملقا'
+                    : s.neighborhood === 'Olaya'
+                      ? 'العليا'
+                      : s.label,
+        }));
+        expect(filterSuggestions(labeled, 'الملقه').map((s) => s.neighborhood)).toEqual(['Al-Malqa']);
+        expect(filterSuggestions(labeled, 'العلي').map((s) => s.neighborhood)).toEqual(['Olaya']);
+        // Latin still matches the same chips (wire value path unchanged)
+        expect(filterSuggestions(labeled, 'malq')).toEqual([{ ...labeled[1] }]);
     });
 
     it('returns nothing for a non-matching query', () => {

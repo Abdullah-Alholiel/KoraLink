@@ -698,6 +698,12 @@
     "cities": {
       "riyadh": "Riyadh",
       "jeddah": "Jeddah"
+    },
+    "neighborhoods": {
+      "alMalqa": "Al-Malqa",
+      "olaya": "Olaya",
+      "ksu": "King Saud University Campus",
+      "alNakheel": "Al-Nakheel"
     }
   },
   "clubs": {
