@@ -1,27 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 56,
-  "last_run_at": "2026-09-17T10:19:29Z",
+  "last_run": 58,
+  "last_run_at": "2026-09-18T01:18:48Z",
   "last_run_commits": [
-    "5c55d46",
-    "a61e8fe",
-    "ddf9e82",
-    "73ae82f"
+    "16dd5f9"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-17T10-19Z-run56.md",
+  "last_run_report": "kanban/RUNS/2026-09-18T01-18Z-run58.md",
   "in_review_items": [
     {
-      "id": "P1-47",
-      "claim": "5c55d46+ddf9e82: stable moderation codes (ACCOUNT_BANNED/ACCOUNT_SUSPENDED/ACCOUNT_DELETED) on all 4 throw sites (users.service, auth.service login+verify, email-otp.service, jwt-cookie.strategy); suspension messages carry \"until <ISO>\"; PWA FetchError.code + classifyError banned/suspended/deleted kinds; verify page renders BlockedCard (suspension end date via lib/format), login/resend localized inline copy; blocked.* ns 9 keys x2 + errors.* 3 keys x2. Gates: turbo 3/3, vitest 567/567, jest 530/530, tsc 0 x2. Reviewers clean; Reviewer-A IMPORTANT (missing instant on users.service path) fixed same run.",
-      "verify": "Grep the 4 throw sites for code: ACCOUNT_; confirm all 4 suspension messages embed toISOString; npx vitest run in apps/player-pwa (BlockedCard + error-classify suites); npx jest auth.moderation-codes in apps/api; read verify/page.tsx blocked branch.",
-      "built_in": "run #56"
-    },
-    {
-      "id": "P2-70",
-      "claim": "a61e8fe: [locale]/offline/page.tsx drops hardcoded ar/en local map + English aria-label; copy via common.noInternet/noInternetDescription/retryConnection (pre-existing keys, EN+AR) through useTranslations; offline.test.tsx asserts through the messages provider. Gates: vitest 567/567, turbo 3/3.",
-      "verify": "Read offline/page.tsx (no literal strings); grep noInternet in both messages/*.json; npx vitest run offline in apps/player-pwa.",
-      "built_in": "run #56"
+      "id": "run58-wallet-pay-removal",
+      "claim": "16dd5f9: POST /wallet/pay REMOVED from WalletController — it accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT with no server-side pricing (reviewer-B P1 run #58). Dead surface: zero PWA consumers (usePayWallet hook deleted with it), zero tests; the authoritative fee path is joinMatch's in-tx chargeMatchFeeTx at the server-derived price_per_player; refund/forfeit sweeps key off fee_paid_sar so client-minted MATCH_FEE rows were invisible to the money cycle. Removal pin added: wallet.controller.spec asserts prototype.pay undefined AND PATH_METADATA route list lacks 'pay'. Gates: jest wallet 17/17, api tsc 0, pwa tsc 0, turbo 3/3 exit 0, vitest 82f/578t. Topup flag behavior untouched (WALLET_TOPUP_ENABLED pins green).",
+      "verify": "(1) cd apps/api && npx jest src/modules/wallet — 3 suites, pin case 'POST /wallet/pay stays REMOVED' green; (2) grep -rn 'wallet/pay' apps/api/src apps/player-pwa/src → only REMOVED-comment hits; (3) after the post-build API restart: POST /api/v1/wallet/pay → 404; (4) root npm run build green.",
+      "built_in": "run #58"
     }
   ],
   "open_blockers": [
@@ -42,15 +33,19 @@
     "P2-42 CSP script-src migration — standing reviewer item, 2-PR effort.",
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
-    "strix_scan=not-due-2026-09 (day 7; window 1st-3rd; next due Oct 1)",
-    "zai delegation-path 401 history — run #56: probe 200 (via ZAI_API_KEY; GLM_API_KEY .env line STALE/401) AND reviewers clean (124s/107s) — 6th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
-    "KILL-PATTERN (6 dead sessions through run #54, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
-    "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly."
+    "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
+    "zai delegation-path 401 history — run #58: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE/401); reviewers clean 272s+289s — 8th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "KILL-PATTERN (8 dead sessions through run #57, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
+    "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly.",
+    "P1-49 ban appeal CHANNEL — owner call (queued run #56, reconfirmed decisions queue run #57): reports/disputes channel vs support mailto on BlockedCard.",
+    "P1-51 post-match rating/MVP flow (NEW run #57, Reviewer B) — needs Abdullah decision on shape before API work: extend the existing POTM vote vs. per-player ratings; my-games rate UI depends on it.",
+    "ADMIN HOLD (continuing): Abdullah's uncommitted edits in apps/admin/src/components/ (ConfirmDialog/DataTable/Drawer) — P2-69/P2-68 held until the tree is clean."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
-    "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NEW (DataTable/Drawer/ConfirmDialog aria batch, admin state check first); reports-triage note recorded on P2-66 row (product decision, not boarded). Reviewers clean on zai glm-5.3-flash (106s/255s — 4th consecutive clean). Next: verify bb1143e (AR spot-check /users/<id>), run #55 = DB/Infra rotation (55%4=3) -> P2-56 FK-index led fits, P2-69 small, P2-68 medium. || run53 (01:17Z): RECOVERED killed 15:17Z session (1bdf0fc OTP single-use adopted+pushed after re-verify; a4adca6 offline banner + structure guard); built 95200e7 (fail counter charges every miss, +2 specs) + ed5b7f5 (P2-66 lobby report, parity 948/948); run-#52 claims CONFIRMED -> DONE; P2-20 closed zero-code; ThrottlerGuard/w-withTimestamp refutations; WEB-D zombie-tabs only; reviewers clean zai (163s/137s).",
+    "Run #57: API lane (57%4=1). P1-48 built+probed live (381186f) — see in_review_items for the verify recipe. P1-47+P2-70 verified DONE by Reviewer B (all throw sites, code-first classify, BlockedCard, 960/960 parity). New rows: P1-50 (force-disconnect carve-out), P1-51 (rating flow, owner call), P2-72 (push locale ar default), P2-73 (offline URL preservation); P2-71 (wallet empty state) REFUTED — (main)/wallet/page.tsx:263-276 already renders it. OS research: none. Sentry 24h: zero new signatures.",
+    "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NE...",
     "zai delegation-path 401 history — run #55: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE, 401); reviewers clean 175s combined — 5th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
@@ -58,6 +53,6 @@
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-16T01:17:29Z",
-  "last_run_started_at": "2026-09-16T10:19:53Z"
+  "last_run_id": "2026-09-18T01:18:48Z",
+  "last_run_started_at": "2026-09-17T15:18:00Z"
 }
