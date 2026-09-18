@@ -34,11 +34,22 @@ export type ToggleLocale = 'ar' | 'en';
 interface LanguageToggleProps {
     /** Visual size of the pill. `sm` = login header, `md` = profile row. */
     size?: 'sm' | 'md';
-    /** Localized group aria-label (endonyms on the segments are universal). */
-    ariaLabel?: string;
+    /** Localized group aria-label (endonyms on the segments are universal).
+     *  REQUIRED (P2-75, run #59): a default 'Language' shipped untranslated
+     *  English copy into Arabic UI when a call site omitted the prop. */
+    ariaLabel: string;
 }
 
-export default function LanguageToggle({ size = 'sm', ariaLabel = 'Language' }: LanguageToggleProps) {
+export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggleProps) {
+    // P2-75 (run #59): ariaLabel is REQUIRED — the old `= 'Language'` default
+    // shipped untranslated English copy into Arabic UI whenever a call site
+    // omitted the prop. TS makes omission a compile error; this guard keeps
+    // untyped renders (tests, dynamic wrappers) loud too.
+    if (process.env.NODE_ENV !== 'production' && !ariaLabel) {
+        throw new Error(
+            'LanguageToggle: ariaLabel is required — pass a localized label (e.g. t("changeLanguage")).',
+        );
+    }
     const pathname = usePathname() ?? '';
 
     // Current locale = first path segment (the [locale] layout guarantees it).
