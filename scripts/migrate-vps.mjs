@@ -39,7 +39,12 @@ if (!dbUrl) {
 }
 
 const sql = postgres(dbUrl, { max: 1, connect_timeout: 15 });
-const DUP_CODES = new Set(['42P07', '42710', '42701', '42P06', '23505']);
+// "Already exists" tolerance list — DDL-duplicate error classes ONLY.
+// NEVER add data-level codes here (e.g. 23505 unique_violation): a data error
+// inside a migration must FAIL LOUD, not be "tolerated" and half-applied
+// (run #59 / board P2-78; 23505 was removed — a genuine constraint violation
+// during a data backfill was silently journaled as applied).
+const DUP_CODES = new Set(['42P07', '42710', '42701', '42P06']);
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
