@@ -175,8 +175,24 @@ export class UsersService {
       .innerJoin(matches, eq(matches.id, match_players.match_id))
       .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
+    // POTM wins + hosted count (My Games stats strip, 2026-09-18). Both are
+    // server-truth so the My Games strip and the profile hero can never drift:
+    // potm wins reuse the tie-aware getPomCount() used by /users/me; hosted =
+    // every match row with host_id = me, ALL statuses (the strip answers "how
+    // many games did I host", including cancelled ones).
+    const [potm_count, matches_hosted] = await Promise.all([
+      this.getPomCount(userId),
+      this.db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(matches)
+        .where(eq(matches.host_id, userId))
+        .then((r) => r[0]?.count ?? 0),
+    ]);
+
     return {
       games_played: count,
+      potm_count,
+      matches_hosted,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
     };

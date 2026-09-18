@@ -865,7 +865,11 @@
     "emptyActive": "ليس لديك مباريات نشطة",
     "emptyHistory": "لا يوجد سجل مباريات بعد",
     "emptyCta": "ابحث عن مباراة",
-    "loading": "جارٍ تحميل مبارياتك..."
+    "loading": "جارٍ تحميل مبارياتك...",
+    "statsPlayed": "لُعبت",
+    "statsWins": "فوز",
+    "statsHosted": "استضافتها",
+    "historyCancelled": "{count} ملغاة"
   },
   "chatSheet": {
     "title": "محادثة المباراة",
