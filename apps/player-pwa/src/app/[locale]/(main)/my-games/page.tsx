@@ -152,7 +152,7 @@ export default function MyGamesPage() {
               ) : !statsError && stats ? (
                 <div className="bg-white rounded-2xl shadow-card px-2 py-4 flex">
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played ?? 0}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsPlayed')}
                     </p>
@@ -161,7 +161,7 @@ export default function MyGamesPage() {
                   <div className="flex-1 py-0.5 text-center">
                     <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none text-brand-black">
                       <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
-                      <span className="tabular-nums" dir="ltr">{stats.potm_count}</span>
+                      <span className="tabular-nums" dir="ltr">{stats.potm_count ?? 0}</span>
                     </p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsWins')}
@@ -169,7 +169,7 @@ export default function MyGamesPage() {
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.matches_hosted}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.matches_hosted ?? 0}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsHosted')}
                     </p>
