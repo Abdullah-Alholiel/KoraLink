@@ -9,6 +9,14 @@ on:
   push:
     branches: [main]
 
+# Least-privilege: read the repo, stamp the verify result as a commit
+# status. Without `statuses: write` the stamp step 403s
+# ("Resource not accessible by integration") and every clean release
+# shows a red X (PRs #23–#25 merges).
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   verify:
     runs-on: ubuntu-latest
