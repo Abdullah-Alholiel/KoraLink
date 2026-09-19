@@ -1,25 +1,32 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 59,
-  "last_run_at": "2026-09-18T15:47:00Z",
+  "last_run": 61,
+  "last_run_at": "2026-09-19T10:45:00Z",
   "last_run_commits": [
-    "42eca86",
-    "8585b5b"
+    "243f6d1",
+    "d8c4209",
+    "4661b61"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-18T15-47Z-run59.md",
+  "last_run_report": "kanban/RUNS/2026-09-19T10-20Z-run61.md",
   "in_review_items": [
     {
-      "id": "run59-p2-78-migrate-vps-23505",
-      "built_in": "run #59",
-      "claim": "42eca86: scripts/migrate-vps.mjs DUP_CODES no longer tolerates 23505 unique_violation — a data-level constraint error inside a migration now FAILS LOUD instead of being journaled as applied (Reviewer A CRITICAL, run #59). Tripwire spec migrate-vps-dup-codes.spec.ts pins the set (4/4 green, re-run by recovery).",
-      "verify": "(1) cd apps/api && npx jest src/database/migrate-vps-dup-codes — 4/4; (2) grep DUP_CODES scripts/migrate-vps.mjs — set is ['42P07','42710','42701','42P06'] with the NEVER-add-data-codes comment."
+      "id": "run61-p2-77-p2-74-moderation-ws",
+      "built_in": "run #61",
+      "claim": "d8c4209 (dead run #60 work adopted): (a) P2-77 — moderation force-disconnect keyed on the POST-WRITE row (unban-while-suspended + lift-while-banned disconnect; clean unban/lift or expired suspension does not); (b) P2-74 — ws-gate-coverage.spec.ts pins all 7 @SubscribeMessage handlers + requireActiveUser as first await, leave-conversation exempt. Reviewer A ran both suites 15/15 during the run.",
+      "verify": "(1) cd apps/api && npx jest src/modules/admin/users.moderation-disconnect.spec.ts src/modules/gateway/ws-gate-coverage.spec.ts → 15/15; (2) grep -n 'stillModerated' apps/api/src/modules/admin/users.service.ts → predicate on after.banned_at / after.suspended_until with Date.now() comparison."
     },
     {
-      "id": "run59-p2-75-languagetoggle-arialabel",
-      "built_in": "run #59",
-      "claim": "8585b5b: LanguageToggle ariaLabel is REQUIRED (compile error on omission) + dev-mode throw for untyped renders — old = 'Language' default shipped English copy into AR UI (P2-75). language-toggle.test.tsx pins label/pressed-state/throw; call sites login/page.tsx:147 + profile/page.tsx:411 pass localized labels; admin has its own component.",
-      "verify": "(1) cd apps/player-pwa && npx vitest run — 84 files / 596 tests incl. language-toggle.test.tsx; (2) npx tsc --noEmit — 0; (3) root npm run build — 3/3 exit 0 (already run by recovery, postbuild restarted koralink-pwa.service)."
+      "id": "run61-audit-swagger-gate",
+      "built_in": "run #61 (commit by dead run #60, gates+push by #61)",
+      "claim": "243f6d1 — audit run-1 fingerprint api-auth:swagger-unconditional-exposure FIXED on staging: Swagger doc+UI registered only when NODE_ENV !== production. Dev/live verification: /api/docs still 200 in dev (probed live after restart).",
+      "verify": "(1) grep -n \"NODE_ENV' )\" apps/api/src/main.ts (or '!== \\'production\\'') around the Swagger block → registration inside the if; (2) curl http://localhost:3001/api/docs → 200 (this box is dev; a prod-environment boot must 404 — final confirm on the next prod promote)."
+    },
+    {
+      "id": "run61-slotpicker-a11y",
+      "built_in": "run #61",
+      "claim": "4661b61 — host SlotPicker announces times (host.slotTimeAria), booked state (host.slotTimeAriaBooked), and fetch errors (role=status) to screen readers; EN+AR keys at messages/*.json:410-411; legacy accessible-name assertions updated; 11/11 in slot-picker.test.tsx (Reviewer-B design-lens refinements folded in).",
+      "verify": "(1) cd apps/player-pwa && npx vitest run test/components/host/slot-picker.test.tsx → 11/11; (2) grep -c slotTimeAriaBooked src/messages/ar.json src/messages/en.json → 1 each."
     }
   ],
   "open_blockers": [
@@ -51,16 +58,17 @@
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
+    "Run #61 (10:15Z cron, adopted dead run #60 — kill-pattern #10, pid 2070416 died ~01:42Z): adopted 243f6d1 (audit Swagger gate, committed-unpushed → gates re-run → PUSHED), d8c4209 (P2-77 post-write disconnect + P2-74 tripwire), 4661b61 (SlotPicker a11y + review refinements). Run #59 claims verified TRUE (Reviewer B). ADMIN HOLD LIFTED — apps/admin + partner clean; 80ba859 (P2-69) verified landed; P2-68/P1-52 admin items buildable again. 0043 min_players migration PARKED in feature lane: NOT applied (live journal newest 2026-09-16 10:46; live trg_match_capacity still the 0034 max-only function) — apply only together with the PR #26 (search-suggestions) merge per Phase 4.5. Sentry: API-17 null.write = stale Render/Neon blip (1 event Sep 7); API-19 = VPS postgres 6-min outage Sep 8 (infra, resolved); API-B CORS evil.example = probe noise, rejected by design, quiet since Sep 11. Live-deploy caveat: services still serve the feature-lane dist (deploy-target fork, owner decision pending).",
     "Run #59 (killed ~11:24Z, kill-pattern #9; finished 15:47Z by Abdullah-directed recovery): P2-78 (42eca86, dead-session commit, gates re-run) + P2-75 (8585b5b) DONE; P2-72/P2-69 BOARD annotations verified; fallback-ce627215 deletion REVERTED (test still references it). 15:15:00Z fire exited silently on the recovery's young live lock — zero overlap. WORKTREE LAYOUT (discovery): staging = linked worktree /home/ubuntu/worktrees/koralink-staging; /home/ubuntu/projects/koralink = feature lane (feat/search-neighborhood-suggestions). Preflight git checks MUST run in the staging worktree.",
     "Run #57: API lane (57%4=1). P1-48 built+probed live (381186f) — see in_review_items for the verify recipe. P1-47+P2-70 verified DONE by Reviewer B (all throw sites, code-first classify, BlockedCard, 960/960 parity). New rows: P1-50 (force-disconnect carve-out), P1-51 (rating flow, owner call), P2-72 (push locale ar default), P2-73 (offline URL preservation); P2-71 (wallet empty state) REFUTED — (main)/wallet/page.tsx:263-276 already renders it. OS research: none. Sentry 24h: zero new signatures.",
     "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NE...",
-    "zai delegation-path 401 history — run #55: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE, 401); reviewers clean 175s combined — 5th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path 401 history — run #61: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE/401); reviewers clean 77s+115s — 9th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
     "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design)."
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "run59-finish",
-  "last_run_started_at": "2026-09-18T10:25:54Z"
+  "last_run_id": "run61-20260919T1015Z",
+  "last_run_started_at": "2026-09-19T10:20:00Z"
 }
