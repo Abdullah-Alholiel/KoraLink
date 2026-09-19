@@ -407,6 +407,8 @@
     "yourselfDescription": "You handle everything — we connect the players.",
     "selectSlot": "Select a Time Slot",
     "noSlotsAvailable": "No slots available for this date",
+    "slotTimeAria": "Book slot from {start} to {end}",
+    "slotTimeAriaBooked": "Slot from {start} to {end} is already booked",
     "slotAvailable": "Available",
     "slotBooked": "Booked",
     "slotDate": "Date",

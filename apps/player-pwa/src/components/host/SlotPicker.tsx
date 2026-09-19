@@ -127,7 +127,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                     ))}
                 </div>
             ) : isError ? (
-                <div className="flex flex-col items-center py-4">
+                <div role="status" className="flex flex-col items-center py-4">
                     <div className="w-12 h-12 rounded-full bg-brand-red/10 flex items-center justify-center mb-2">
                         <AlertTriangle className="w-6 h-6 text-brand-red" strokeWidth={1.5} />
                     </div>
@@ -154,6 +154,11 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                                 key={slot.id}
                                 disabled={isBooked}
                                 onClick={() => onSelectSlot(slot)}
+                                aria-label={
+                                    isBooked
+                                        ? t('host.slotTimeAriaBooked', { start: startLabel, end: endLabel })
+                                        : t('host.slotTimeAria', { start: startLabel, end: endLabel })
+                                }
                                 className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-semibold transition-all
                                     ${isBooked
                                         ? 'bg-gray-100 border-gray-150 text-gray-400 cursor-not-allowed line-through'

@@ -407,6 +407,8 @@
     "yourselfDescription": "أنت تتولى كل شيء — ونحن نوصل اللاعبين.",
     "selectSlot": "اختر وقت الحجز",
     "noSlotsAvailable": "لا توجد أوقات متاحة لهذا التاريخ",
+    "slotTimeAria": "احجز فترة من {start} إلى {end}",
+    "slotTimeAriaBooked": "فترة من {start} إلى {end} محجوزة بالفعل",
     "slotAvailable": "متاح",
     "slotBooked": "محجوز",
     "slotDate": "التاريخ",
