@@ -204,6 +204,15 @@ export class AdminUsersService {
     if (dto.role !== undefined) updates.role = dto.role;
     if (dto.banned !== undefined) updates.banned_at = dto.banned ? new Date() : null;
     if (dto.suspendedUntil !== undefined) {
+      // Run #62: a past date writes an already-expired suspension silently —
+      // the row reads "not suspended" immediately (stillModerated=false, no
+      // disconnect, no player notice). Reject instead of storing a no-op.
+      if (
+        dto.suspendedUntil !== null &&
+        new Date(dto.suspendedUntil).getTime() <= Date.now()
+      ) {
+        throw new BadRequestException('Suspension must be in the future.');
+      }
       updates.suspended_until = dto.suspendedUntil ? new Date(dto.suspendedUntil) : null;
     }
 

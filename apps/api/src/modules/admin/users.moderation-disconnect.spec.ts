@@ -132,3 +132,33 @@ describe('AdminUsersService.update — moderation force-disconnect (P1-50/P2-77)
     expect(disconnectUser).not.toHaveBeenCalled();
   });
 });
+
+// ── Run #62: suspend-date sanity guard ──
+
+describe('AdminUsersService.update — suspension date guard (run #62)', () => {
+  it('past suspendedUntil → 400, no write, no disconnect', async () => {
+    const { svc, disconnectUser } = await makeService();
+    const past = new Date(Date.now() - 60_000).toISOString();
+
+    await expect(
+      svc.update(USER_ID, { suspendedUntil: past }, 'admin-1'),
+    ).rejects.toThrow('Suspension must be in the future.');
+    expect(disconnectUser).not.toHaveBeenCalled();
+  });
+
+  it('suspendedUntil equal to now → 400 (must be strictly future)', async () => {
+    const { svc } = await makeService();
+
+    await expect(
+      svc.update(USER_ID, { suspendedUntil: new Date().toISOString() }, 'admin-1'),
+    ).rejects.toThrow('Suspension must be in the future.');
+  });
+
+  it('suspendedUntil: null (lift) → allowed, no disconnect on clean account', async () => {
+    const { svc, disconnectUser } = await makeService();
+
+    await svc.update(USER_ID, { suspendedUntil: null }, 'admin-1');
+
+    expect(disconnectUser).not.toHaveBeenCalled();
+  });
+});

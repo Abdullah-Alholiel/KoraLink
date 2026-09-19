@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class ResolveReportDto {
   @ApiProperty({ enum: ['resolved', 'dismissed'] })
@@ -9,6 +9,7 @@ export class ResolveReportDto {
   @ApiPropertyOptional({ description: 'Resolution note / action taken' })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   resolution?: string;
 
   @ApiPropertyOptional({
