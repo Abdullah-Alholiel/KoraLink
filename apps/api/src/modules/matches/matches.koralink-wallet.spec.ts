@@ -109,10 +109,20 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
 
     const execute = async (query: unknown) => {
       // Slot FOR UPDATE: synthesize based on the slot id in the SQL.
+      // 686e383 widened the SELECT to `id, is_booked, slot_date,
+      // start_time` (past-slot publish guard) — match on the table, not
+      // the column list, so future column additions can't stale this mock.
       const { PgDialect } = await import('drizzle-orm/pg-core');
       const text = new PgDialect().sqlToQuery(query as never).sql;
-      if (text.includes('SELECT id, is_booked FROM pitch_slots')) {
-        return [{ id: SLOT_A, is_booked: false }];
+      if (/SELECT .* FROM pitch_slots/.test(text)) {
+        return [
+          {
+            id: SLOT_A,
+            is_booked: false,
+            slot_date: '2099-01-01', // strictly future → past-slot guard passes
+            start_time: '23:59:00',
+          },
+        ];
       }
       return [];
     };
