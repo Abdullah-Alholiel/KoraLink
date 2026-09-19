@@ -228,16 +228,23 @@ export class AdminUsersService {
     });
     this.realtime.broadcastOps('users');
 
-    // ── P1-50 (run #57): force-disconnect live sockets on ban/suspend ──
-    // The per-message moderation gate (app.gateway requireActiveUser) already
-    // blocks the banned/suspended user's NEXT action, but the stale socket
-    // lingers connected. Kill it now: the PWA sees 'disconnect', its
-    // reconnect re-runs the handshake, and the handshake refuses.
-    // Unban / suspension-lift must NOT disconnect (nothing to enforce).
-    const moderationDisconnect =
-      (updates.banned_at !== undefined && updates.banned_at !== null) ||
-      (updates.suspended_until !== undefined && updates.suspended_until !== null);
-    if (moderationDisconnect) {
+    // ── P1-50 (run #57) + P2-77 (run #60): force-disconnect live sockets on
+    // ban/suspend — and on any post-write state that still forbids acting.
+    // The per-message gate (app.gateway requireActiveUser) already blocks the
+    // banned/suspended user's NEXT action, but the stale socket lingers
+    // connected. Kill it now: the PWA sees 'disconnect', its reconnect
+    // re-runs the handshake, and the handshake refuses.
+    // Keyed on the POST-WRITE row (`after`), not the request delta: an unban
+    // that leaves an active suspension (P2-77) or a lift that leaves the ban
+    // must still disconnect, while a pure unban/lift of a fully clean account
+    // (or an expired suspension) disconnects nothing.
+    const moderationTouched =
+      updates.banned_at !== undefined || updates.suspended_until !== undefined;
+    const stillModerated =
+      after.banned_at !== null ||
+      (after.suspended_until !== null &&
+        new Date(after.suspended_until).getTime() > Date.now());
+    if (moderationTouched && stillModerated) {
       try {
         this.gateway.disconnectUser(id);
       } catch {
