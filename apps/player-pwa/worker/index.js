@@ -5,18 +5,27 @@
 
 // Offline navigation fallback (P2-40, run #23): workbox's document fallback
 // (`fallbacks.document: '/ar/offline'`) only fires via handlerDidError on the
-// routes registered in next.config.mjs — the start-url "/" and API/asset
-// subresources. An offline navigation to an inner page (/en/play, /ar/clubs)
-// matches NO route, so users got the browser's dinosaur error page. Worse, the
-// only fallback document is /ar/offline, so EN users landed on Arabic copy.
-// Fix: warm BOTH locale offline pages at install, then intercept document
-// navigations under /en/* and /ar/* ourselves — network first (so online
-// behavior is unchanged), and on network failure serve the locale-matching
-// offline page from the cache. The offline page itself re-detects locale from
-// the pathname, so copy always matches the user's locale.
+// routes registered in next.config.mjs — the worker's own fetch listener runs
+// FIRST (importScripts'd before precacheAndRoute/registerRoute), intercepting
+// /en|/ar document navigations: network-first, and on network failure serve
+// the locale-matching offline page from cache. The offline page itself
+// re-detects locale from the pathname, so copy always matches the user's
+// locale.
+
+// Offline URL restore (P2-73, run #64): before serving the offline page, the
+// failed navigation's URL is saved into a tiny Cache-API KV
+// (cache `koralink-offline-restore`, key '/__kl/restore-url', JSON `{u, t}`).
+// The offline page reads it (src/lib/sw-offline-restore.ts) and offers a
+// localized "back to the page" CTA. Cache-API KV is used because
+// sessionStorage/localStorage do not exist inside a service worker. The
+// entry is cleared on the next SUCCESSFUL document navigation (success path
+// below), so the restore target never outlives the offline journey (plus the
+// 24h TTL applied on read).
 
 /* eslint-disable no-undef */
 const OFFLINE_PAGES = { en: '/en/offline', ar: '/ar/offline' };
+const RESTORE_CACHE = 'koralink-offline-restore';
+const RESTORE_KEY = '/__kl/restore-url';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -43,10 +52,42 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       try {
-        return await fetch(req);
+        const response = await fetch(req);
+        if (response && response.ok && response.type === 'basic') {
+          // A successful navigation clears the restore entry (fire-and-
+          // forget: KV cleanup must never block respondWith).
+          caches
+            .open(RESTORE_CACHE)
+            .then((cache) => cache.delete(RESTORE_KEY))
+            .catch(() => undefined);
+        }
+        return response;
       } catch (err) {
+        // Save the failed navigation BEFORE serving the offline page so the
+        // user gets a way back once connectivity returns. Shape {u, t} is
+        // pinned by src/lib/sw-offline-restore.ts + test/lib/sw-offline-restore.test.ts.
+        try {
+          const cache = await caches.open(RESTORE_CACHE);
+          await cache.put(
+            RESTORE_KEY,
+            new Response(JSON.stringify({ u: req.url, t: Date.now() }), {
+              headers: { 'content-type': 'application/json' },
+            }),
+          );
+        } catch {
+          // KV failure must never break the offline fallback itself.
+        }
+
         const page = OFFLINE_PAGES[locale];
-        return (await caches.match(page)) || Response.error();
+        const cached = await caches.match(page);
+        if (cached) return cached;
+        // P2-80 hardening (run #64): a cache miss (install-time addAll
+        // failed) no longer yields Response.error() — redirect to the
+        // offline page so the browser fetches it live; if that also fails,
+        // the generic workbox document fallback (next.config.mjs
+        // fallbacks.document) still applies. The address bar keeps the
+        // original deep link up to the redirect (respondWith semantics).
+        return Response.redirect(page, 302);
       }
     })(),
   );

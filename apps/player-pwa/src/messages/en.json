@@ -30,6 +30,11 @@
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
     "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
   },
+  "offline": {
+    "backToPage": "Back to the page",
+    "backUnavailable": "You're still offline",
+    "backUnavailableHint": "Reconnect to the internet, then try again."
+  },
   "blocked": {
     "title": "Account restricted",
     "bannedTitle": "Your account has been banned",
