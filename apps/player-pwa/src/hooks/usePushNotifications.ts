@@ -37,6 +37,46 @@ export function usePushNotifications(locale: string = 'en') {
     });
   }, []);
 
+  // P2-76b (run #65): keep the server-side push locale in sync with the UI
+  // locale. push_subscriptions.locale is set at subscribe time only, so a
+  // user who switches ar/en would keep receiving pushes in the OLD language.
+  // Locale switches are URL-driven (/ar/... <-> /en/...) and remount this
+  // hook, so a prev-value ref would never observe the change — persist a
+  // last-synced marker in localStorage instead and re-upsert when it drifts.
+  // The subscribe endpoint is an idempotent upsert on endpoint, so this is
+  // a cheap metadata refresh, never a duplicate row. POST bodies always
+  // reach the server (unlike the old DELETE unsubscribe — P2-76a).
+  useEffect(() => {
+    if (!subscription) return;
+    if (typeof window === 'undefined') return;
+    const markerKey = 'kl.push.syncedLocale';
+    let marker: string | null = null;
+    try {
+      marker = window.localStorage.getItem(markerKey);
+    } catch {
+      // storage unavailable (private mode) — treat as never-synced
+    }
+    if (marker === locale) return;
+    (async () => {
+      try {
+        const sub = subscription.toJSON();
+        await fetcher('/notifications/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ ...sub, locale }),
+        });
+        try {
+          window.localStorage.setItem(markerKey, locale);
+        } catch {
+          // non-fatal — worst case we re-upsert next mount
+        }
+      } catch (err) {
+        // P2-16: ship to Sentry; a missed locale sync must not look like a
+        // failed subscription (the push sub itself is still valid).
+        captureError(err, { scope: 'pushLocaleSync' });
+      }
+    })();
+  }, [subscription, locale]);
+
   const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) {
       return false;
@@ -90,6 +130,13 @@ export function usePushNotifications(locale: string = 'en') {
         method: 'POST',
         body: JSON.stringify({ ...sub.toJSON(), locale }),
       });
+      // P2-76b: remember the synced locale so the locale-sync effect doesn't
+      // immediately re-upsert the identical payload.
+      try {
+        window.localStorage.setItem('kl.push.syncedLocale', locale);
+      } catch {
+        // non-fatal
+      }
 
       return true;
     } catch (err) {
@@ -115,6 +162,13 @@ export function usePushNotifications(locale: string = 'en') {
         });
         await subscription.unsubscribe();
         setSubscription(null);
+        // P2-76b: the server row is gone — drop the locale-sync marker so a
+        // future re-subscribe re-seeds it cleanly.
+        try {
+          window.localStorage.removeItem('kl.push.syncedLocale');
+        } catch {
+          // non-fatal
+        }
       }
     } catch (err) {
       // P2-16: ship to Sentry (console kept for local dev visibility).
