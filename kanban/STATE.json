@@ -1,25 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 63,
-  "last_run_at": "2026-09-20T01:15:00Z",
+  "last_run": 64,
+  "last_run_at": "2026-09-20T10:15:00Z",
   "last_run_commits": [
-    "29775ef",
-    "90099e8"
+    "91ab5e6"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-20T01-15Z-run63.md",
+  "last_run_report": "kanban/RUNS/2026-09-20T10-15Z-run64.md",
   "in_review_items": [
     {
-      "id": "run63-0043-recovery",
-      "built_in": "run #63 (migration itself applied live by dead run #62 2026-09-19T19:32:39Z)",
-      "claim": "29775ef commits the orphaned migration 0043 (min_players alignment) + journal idx44 with when=1789846359444 (= the live bookkeeping row's exact ms). Live probe: enforce_match_capacity has BOTH max+min invariants; 0 active matches with drifted min_players.",
-      "verify": "(1) sha256sum apps/api/drizzle/0043_min_players_alignment.sql → starts 1a2a08404e3a2198 (= live journal row hash prefix); (2) DB probe via one-shot node --env-file=apps/api/.env + postgres import: newest drizzle.__drizzle_migrations.created_at == 1789846359444; (3) prosrc of enforce_match_capacity contains 'min_players invariant'; active-drift query returns 0."
-    },
-    {
-      "id": "run63-p2-80-migrate-vps-gate",
-      "built_in": "run #63",
-      "claim": "90099e8 gates migrate-vps's /already exists/i message fallback on !e.code (wrapped/proxy paths only) — a coded data-level failure (23505 via custom RAISE wording) now fails loud instead of being tolerated+journaled; tripwire spec pins the gated shape.",
-      "verify": "(1) grep -n '!e.code && /already exists/i' scripts/migrate-vps.mjs → 1 hit in the catch branch; (2) cd apps/api && npx jest src/database/migrate-vps-dup-codes.spec.ts → 5 passed."
+      "id": "run64-p2-73-offline-restore",
+      "built_in": "run #64 (91ab5e6)",
+      "claim": "P2-73 DONE-staging: SW saves failed navigation {u,t} to Cache-API KV 'koralink-offline-restore' key '/__kl/restore-url' before serving the locale offline page; page (src/app/[locale]/offline/page.tsx) offers localized 'back to the page' CTA (offline.* keys ar/en) that re-attempts the saved URL via location.assign; still-offline toast via store showToast + tOffline; fresh-save (<15s) + offline auto-toasts on landing; success navigation clears the entry (worker fetch success path); reader (src/lib/sw-offline-restore.ts) enforces 24h TTL + http(s)-only + deletes invalid/stale on read. P2-80-PWA hardened same commit: cache-miss branch Response.redirect(offlinePage,302) instead of Response.error().",
+      "verify": "(1) grep -n 'koralink-offline-restore' apps/player-pwa/worker/index.js → save in catch + clear in success path; (2) grep -n 'RESTORE_KEY\\|MAX_AGE_MS\\|FRESH_SAVE_MS' apps/player-pwa/src/lib/sw-offline-restore.ts; (3) cd apps/player-pwa && npx vitest run test/lib/sw-offline-restore.test.ts test/app/offline-restore.test.tsx → 11 passed; (4) npx vitest run → 619/619; npm run type-check → 0; root turbo build → 3/3 exit 0; (5) i18n parity: offline ns 3 keys in BOTH en.json/ar.json (test/i18n.test.ts green); (6) curl https://aa.tail2948f9.ts.net:9450/ar/offline → 200 (funnel live, PWA serving fresh build)."
     }
   ],
   "open_blockers": [
