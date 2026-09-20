@@ -1,32 +1,25 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 61,
-  "last_run_at": "2026-09-19T10:45:00Z",
+  "last_run": 63,
+  "last_run_at": "2026-09-20T01:15:00Z",
   "last_run_commits": [
-    "243f6d1",
-    "d8c4209",
-    "4661b61"
+    "29775ef",
+    "90099e8"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-19T10-20Z-run61.md",
+  "last_run_report": "kanban/RUNS/2026-09-20T01-15Z-run63.md",
   "in_review_items": [
     {
-      "id": "run61-p2-77-p2-74-moderation-ws",
-      "built_in": "run #61",
-      "claim": "d8c4209 (dead run #60 work adopted): (a) P2-77 — moderation force-disconnect keyed on the POST-WRITE row (unban-while-suspended + lift-while-banned disconnect; clean unban/lift or expired suspension does not); (b) P2-74 — ws-gate-coverage.spec.ts pins all 7 @SubscribeMessage handlers + requireActiveUser as first await, leave-conversation exempt. Reviewer A ran both suites 15/15 during the run.",
-      "verify": "(1) cd apps/api && npx jest src/modules/admin/users.moderation-disconnect.spec.ts src/modules/gateway/ws-gate-coverage.spec.ts → 15/15; (2) grep -n 'stillModerated' apps/api/src/modules/admin/users.service.ts → predicate on after.banned_at / after.suspended_until with Date.now() comparison."
+      "id": "run63-0043-recovery",
+      "built_in": "run #63 (migration itself applied live by dead run #62 2026-09-19T19:32:39Z)",
+      "claim": "29775ef commits the orphaned migration 0043 (min_players alignment) + journal idx44 with when=1789846359444 (= the live bookkeeping row's exact ms). Live probe: enforce_match_capacity has BOTH max+min invariants; 0 active matches with drifted min_players.",
+      "verify": "(1) sha256sum apps/api/drizzle/0043_min_players_alignment.sql → starts 1a2a08404e3a2198 (= live journal row hash prefix); (2) DB probe via one-shot node --env-file=apps/api/.env + postgres import: newest drizzle.__drizzle_migrations.created_at == 1789846359444; (3) prosrc of enforce_match_capacity contains 'min_players invariant'; active-drift query returns 0."
     },
     {
-      "id": "run61-audit-swagger-gate",
-      "built_in": "run #61 (commit by dead run #60, gates+push by #61)",
-      "claim": "243f6d1 — audit run-1 fingerprint api-auth:swagger-unconditional-exposure FIXED on staging: Swagger doc+UI registered only when NODE_ENV !== production. Dev/live verification: /api/docs still 200 in dev (probed live after restart).",
-      "verify": "(1) grep -n \"NODE_ENV' )\" apps/api/src/main.ts (or '!== \\'production\\'') around the Swagger block → registration inside the if; (2) curl http://localhost:3001/api/docs → 200 (this box is dev; a prod-environment boot must 404 — final confirm on the next prod promote)."
-    },
-    {
-      "id": "run61-slotpicker-a11y",
-      "built_in": "run #61",
-      "claim": "4661b61 — host SlotPicker announces times (host.slotTimeAria), booked state (host.slotTimeAriaBooked), and fetch errors (role=status) to screen readers; EN+AR keys at messages/*.json:410-411; legacy accessible-name assertions updated; 11/11 in slot-picker.test.tsx (Reviewer-B design-lens refinements folded in).",
-      "verify": "(1) cd apps/player-pwa && npx vitest run test/components/host/slot-picker.test.tsx → 11/11; (2) grep -c slotTimeAriaBooked src/messages/ar.json src/messages/en.json → 1 each."
+      "id": "run63-p2-80-migrate-vps-gate",
+      "built_in": "run #63",
+      "claim": "90099e8 gates migrate-vps's /already exists/i message fallback on !e.code (wrapped/proxy paths only) — a coded data-level failure (23505 via custom RAISE wording) now fails loud instead of being tolerated+journaled; tripwire spec pins the gated shape.",
+      "verify": "(1) grep -n '!e.code && /already exists/i' scripts/migrate-vps.mjs → 1 hit in the catch branch; (2) cd apps/api && npx jest src/database/migrate-vps-dup-codes.spec.ts → 5 passed."
     }
   ],
   "open_blockers": [
@@ -48,12 +41,13 @@
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
-    "zai delegation-path 401 history — run #58: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE/401); reviewers clean 272s+289s — 8th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path history — run #63: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE), reviewers clean 88s — 10th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
     "KILL-PATTERN (8 dead sessions through run #57, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
     "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly.",
     "P1-49 ban appeal CHANNEL — owner call (queued run #56, reconfirmed decisions queue run #57): reports/disputes channel vs support mailto on BlockedCard.",
     "P1-51 post-match rating/MVP flow (NEW run #57, Reviewer B) — needs Abdullah decision on shape before API work: extend the existing POTM vote vs. per-player ratings; my-games rate UI depends on it.",
-    "ADMIN HOLD (continuing): Abdullah's uncommitted edits in apps/admin/src/components/ (ConfirmDialog/DataTable/Drawer) — P2-69/P2-68 held until the tree is clean."
+    "PROJECTS-DIR MERGE CONFLICT (run #63 finding): /home/ubuntu/projects/koralink (feature lane feat/search-neighborhood-suggestions) sits mid-merge — 4 unmerged paths (api users.service.ts, pwa profile/page.tsx, ServiceWorkerUpdater.tsx, PromoBillboard.tsx) + kanban/BOARD.md, plus staged admin/pwa Dockerfile/package.json changes, and NO .git/MERGE_HEAD — a foreign session's merge attempt during run #62 (20:03Z). Needs Abdullah or an explicitly directed session to finish/abort. Staging worktree unaffected; factory never touches foreign conflicts.",
+    "KILL-PATTERN #12 (run #62 died ~2026-09-19T20:03Z post-commit, no OOM, no gateway errors) + run #63's own background build process died 01:40Z mid-pipeline (also no OOM line) — next runs: correlate kill times with systemd-oom, gateway restarts, cron scheduler logs before assuming host health."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
