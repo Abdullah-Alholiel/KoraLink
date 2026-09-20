@@ -105,8 +105,12 @@ export function usePushNotifications(locale: string = 'en') {
   const unsubscribe = useCallback(async () => {
     try {
       if (subscription) {
+        // P2-76 (run #65): POST, not DELETE — some proxies/clients drop
+        // DELETE request bodies, which silently no-op'd the unsubscribe
+        // (scoped delete matched nothing → user keeps receiving pushes).
+        // The server keeps a deprecated DELETE dual-route for old bundles.
         await fetcher('/notifications/unsubscribe', {
-          method: 'DELETE',
+          method: 'POST',
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
         await subscription.unsubscribe();
