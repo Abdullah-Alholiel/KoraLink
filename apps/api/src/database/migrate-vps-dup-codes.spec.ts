@@ -56,6 +56,18 @@ describe('migrate-vps.mjs DUP_CODES tolerance (P2-78 pin, run #59)', () => {
 
   it('keeps the broad /already exists/ message fallback for unusual duplicate wordings', () => {
     const src = readFileSync(SCRIPT, 'utf8');
+    // P2-80 (run #63): the fallback must remain, but GATED on the error
+    // carrying no SQLSTATE — a coded data-level failure (23505) whose message
+    // happens to contain "already exists" (custom trigger/RAISE wording) must
+    // fail loud, not be tolerated and half-applied.
     expect(src).toMatch(/already exists/i);
+    expect(src).toMatch(/!\s*e\.code\s*&&\s*\/already exists\/i/);
+  });
+
+  it('gates the message fallback on the absence of a SQLSTATE (P2-80, run #63)', () => {
+    const src = readFileSync(SCRIPT, 'utf8');
+    expect(src).toMatch(
+      /DUP_CODES\.has\(e\.code\)\s*\|\|\s*\(!e\.code\s*&&\s*\/already exists\/i\.test\(e\.message \?\? ''\)\)/,
+    );
   });
 });
