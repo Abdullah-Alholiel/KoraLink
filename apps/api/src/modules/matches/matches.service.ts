@@ -10,7 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
@@ -2214,8 +2214,26 @@ export class MatchesService {
    * Returns recent chat messages for a match, newest last.
    * Complements the gateway's real-time `new-message` events with history
    * for initial render and offline caching.
+   *
+   * P1-3 (run #65): optional keyset pagination. The response stays a BARE
+   * array (zero contract change for existing clients); `opts.before` is a
+   * message id cursor — the window returns messages strictly OLDER than it
+   * in (created_at, id) order (stable tie-break: ids are random, but the
+   * order is deterministic, so pages never skip/dup). Callers probe with
+   * limit+1 and treat a full page as hasMore. Uses the keyset index
+   * match_messages_match_created_idx (migration 0014).
+   *
+   * Window fix (same P1-3 bug): the no-cursor default is now the LATEST
+   * page (probed DESC, reversed to ascending for the response). The old
+   * `ASC LIMIT 50` returned the EARLIEST 50 messages ever — any match with
+   * 50+ messages rendered a stale window whose new messages vanished on
+   * reload. The WS path keeps live traffic fresh in between.
    */
-  async getMessages(matchId: string, viewerId?: string) {
+  async getMessages(
+    matchId: string,
+    viewerId?: string,
+    opts: { before?: string; limit?: number } = {},
+  ) {
     // Access control (P0-1): chat history is members-only, mirroring the WS
     // gateway's join-lobby/send-message membership enforcement. Internal
     // callers (none today) may omit the viewer.
@@ -2228,10 +2246,56 @@ export class MatchesService {
       }
     }
 
+    // Clamp: hard bounds keep arbitrary limit values from dumping the table.
+    const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50) || 50, 1), 100);
+    const before = opts.before?.trim() || undefined;
+
+    if (before) {
+      // The cursor is a PK read; validating it (existence + same-match)
+      // turns a forged cursor into a clean 404 instead of a silent
+      // cross-match leak or an empty page.
+      const anchor = await this.db.query.match_messages.findFirst({
+        where: eq(match_messages.id, before),
+        columns: { id: true, match_id: true, created_at: true },
+      });
+      if (!anchor || anchor.match_id !== matchId) {
+        throw new NotFoundException('Unknown message cursor.');
+      }
+
+      return this.db.query.match_messages.findMany({
+        where: and(
+          eq(match_messages.match_id, matchId),
+          // Composite keyset: strictly before the anchor in (created_at, id).
+          or(
+            lt(match_messages.created_at, anchor.created_at),
+            and(
+              eq(match_messages.created_at, anchor.created_at),
+              lt(match_messages.id, anchor.id),
+            ),
+          ),
+        ),
+        orderBy: (msg, { asc }) => [asc(msg.created_at)],
+        limit,
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              handle: true,
+              avatar_url: true,
+            },
+          },
+        },
+      });
+    }
+
     const messages = await this.db.query.match_messages.findMany({
       where: eq(match_messages.match_id, matchId),
-      orderBy: (msg, { asc }) => [asc(msg.created_at)],
-      limit: 50,
+      // Latest page: probe DESC then reverse to ascending (newest last) —
+      // the response contract stays "chronological array" while the window
+      // becomes the most recent `limit` messages (P1-3 window fix).
+      orderBy: (msg, { desc }) => [desc(msg.created_at)],
+      limit,
       with: {
         user: {
           columns: {
@@ -2244,7 +2308,7 @@ export class MatchesService {
       },
     });
 
-    return messages;
+    return messages.reverse();
   }
 
   /**

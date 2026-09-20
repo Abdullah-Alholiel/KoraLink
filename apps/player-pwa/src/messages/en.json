@@ -886,7 +886,8 @@
     "emptyDescription": "Start the conversation!",
     "sendPlaceholder": "Type a message...",
     "sendError": "Failed to send. Tap to retry.",
-    "comingSoon": "Chat coming soon"
+    "comingSoon": "Chat coming soon",
+    "loadOlder": "Load earlier messages"
   },
   "pom": {
     "title": "Player of the Match",

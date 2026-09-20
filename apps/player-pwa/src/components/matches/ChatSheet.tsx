@@ -83,6 +83,9 @@ export default function ChatSheet({
     isConnected,
     sendMessage,
     retryMessage,
+    hasMore,
+    isLoadingOlder,
+    loadOlder,
   } = useMatchChat(isOpen ? matchId : null);
 
   const [input, setInput] = useState('');
@@ -92,12 +95,15 @@ export default function ChatSheet({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Auto-scroll to bottom on new messages ──
+  // ── Auto-scroll to bottom on NEW messages ──
+  // P1-3 (run #65): keyed on the LAST message id, not the list length —
+  // prepending an older page (load-older) must NOT yank the user to the
+  // bottom; only a genuinely new latest message should scroll.
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.length]);
+  }, [messages.length > 0 ? messages[messages.length - 1].id : '']);
 
   // ── Focus input on open ──
   useEffect(() => {
@@ -175,6 +181,22 @@ export default function ChatSheet({
 
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto scroll-container min-h-[200px] bg-gray-50/50">
+          {/* P1-3 (run #65): load-older affordance — scrollback past the
+              newest-50 window. Hidden while the initial history loads. */}
+          {!isLoading && hasMore && (
+            <div className="flex justify-center py-3">
+              <button
+                onClick={() => loadOlder()}
+                disabled={isLoadingOlder}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-green active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {isLoadingOlder && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} />
+                )}
+                {t('chatSheet.loadOlder')}
+              </button>
+            </div>
+          )}
           {/* Loading */}
           {isLoading && (
             <div className="flex items-center justify-center py-16">
