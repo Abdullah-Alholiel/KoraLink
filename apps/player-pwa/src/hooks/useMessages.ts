@@ -116,6 +116,7 @@ export function useMatchChat(matchId: string | null) {
   const currentUser = useAppStore(selectUser);
   const [localMessages, setLocalMessages] = useState<MatchMessage[]>([]);
   const [olderMessages, setOlderMessages] = useState<MatchMessage[]>([]);
+  const [olderExhausted, setOlderExhausted] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -136,7 +137,10 @@ export function useMatchChat(matchId: string | null) {
   // payload (contract drift / error shape) renders as empty, never crashes.
   const probe = Array.isArray(historyQuery.data) ? historyQuery.data : [];
   const history = probe.slice(-CHAT_PAGE_SIZE);
-  const hasMore = probe.length > CHAT_PAGE_SIZE;
+  // Run #66 (reviewer A): hasMore must also flip false when an older page
+  // comes back short — history's end is then known, and the affordance must
+  // disappear instead of refiring a terminal request on every tap.
+  const hasMore = !olderExhausted && probe.length > CHAT_PAGE_SIZE;
 
   // Load one older page before the oldest currently-known message.
   const loadOlder = useCallback(async () => {
@@ -151,6 +155,9 @@ export function useMatchChat(matchId: string | null) {
         { method: 'GET' },
       );
       if (!Array.isArray(older)) return; // contract drift — stay silent
+      // A short page = the API had fewer than PAGE rows older than the
+      // cursor: the beginning of history. Stop offering the affordance.
+      if (older.length < CHAT_PAGE_SIZE) setOlderExhausted(true);
       setOlderMessages((prev) => {
         const seen = new Set([...prev, ...history].map((m) => m.id));
         // `older` is chronological (ASC) and entirely older than `prev` —
@@ -164,12 +171,13 @@ export function useMatchChat(matchId: string | null) {
     } finally {
       setIsLoadingOlder(false);
     }
-  }, [matchId, isLoadingOlder, hasMore, olderMessages, history, localMessages]);
+  }, [matchId, isLoadingOlder, hasMore, olderExhausted, olderMessages, history, localMessages]);
 
   // Reset paged history when the sheet moves to another match (the local
   // message buffer below resets the same way).
   useEffect(() => {
     setOlderMessages([]);
+    setOlderExhausted(false);
   }, [matchId]);
 
   // Reconcile an authoritative message into local state (replace the matching

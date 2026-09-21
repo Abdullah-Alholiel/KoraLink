@@ -146,6 +146,33 @@ describe('useMatchChat — P1-3 history pagination (run #65)', () => {
     expect(olderCalls[1][0]).toBe('/matches/m1/messages?before=srv--49&limit=50');
   });
 
+  it('run #66: a short older page flips hasMore false (history end known)', async () => {
+    mockFetcher.mockImplementation((url: string) => {
+      if (url === '/matches/m1/messages?limit=51') return Promise.resolve(page(1, 51));
+      if (url === '/matches/m1/messages?before=srv-002&limit=50')
+        return Promise.resolve(page(-9, 0)); // only 10 OLDER messages exist
+      return Promise.resolve({ ok: true });
+    });
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useMatchChat('m1'), { wrapper });
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    await act(() => result.current.loadOlder());
+
+    // 10 older + 50 window prepended; the short page means history's start.
+    expect(result.current.messages).toHaveLength(60);
+    expect(result.current.messages[0].id).toBe('srv-0-9'); // msg(-9) padded to 3
+    expect(result.current.hasMore).toBe(false);
+
+    // The guard keeps further taps from refiring the terminal request.
+    await act(() => result.current.loadOlder());
+    const olderCalls = mockFetcher.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].includes('before='),
+    );
+    expect(olderCalls).toHaveLength(1);
+  });
+
   it('loadOlder is a no-op when hasMore history already loaded fully (no cursor)', async () => {
     mockFetcher.mockImplementation((url: string) => {
       if (url === '/matches/m1/messages?limit=51') return Promise.resolve(page(1, 10));
