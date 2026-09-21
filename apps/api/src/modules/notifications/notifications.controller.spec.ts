@@ -94,6 +94,12 @@ describe('UnsubscribeDto validation (P2-76, run #65)', () => {
     expect((await errorsOf({})).length).toBeGreaterThan(0);
   });
 
+  it('rejects a plain-http endpoint (run #66: protocols https-only)', async () => {
+    expect(
+      (await errorsOf({ endpoint: 'http://fcm.googleapis.com/fcm/send/abc' })).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('rejects TLD-less hosts (require_tld)', async () => {
     expect((await errorsOf({ endpoint: 'http://localhost:3000/x' })).length).toBeGreaterThan(0);
   });

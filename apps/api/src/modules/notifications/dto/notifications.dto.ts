@@ -6,11 +6,14 @@ import { IsNotEmpty, IsUrl } from 'class-validator';
  * (main.ts:110-113, whitelist + forbidNonWhitelisted) actually validate it,
  * which was impossible before (the controller used a plain TS interface,
  * invisible to the pipe). `@IsUrl` keeps junk/mistyped endpoints out of the
- * scoped delete; `require_tld` blocks localhost/internal meta-addresses
- * (defense-in-depth with the service's SSRF allowlist on the send path).
+ * scoped delete. Run #66 (reviewer A): web-push endpoints are https-only by
+ * spec, so the DTO now pins `protocols: ['https']` explicitly — validator's
+ * default accepts http/ftp too. `require_tld` blocks localhost/internal
+ * meta-addresses (defense-in-depth with the service's SSRF allowlist on the
+ * send path).
  */
 export class UnsubscribeDto {
-  @IsUrl({ require_tld: true })
+  @IsUrl({ protocols: ['https'], require_tld: true })
   @IsNotEmpty()
   endpoint!: string;
 }
