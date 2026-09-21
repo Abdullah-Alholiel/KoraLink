@@ -224,4 +224,32 @@ describe('SlotPicker — today-first, time-aware slots', () => {
 
         expect(container.querySelector('[role="status"]')).not.toBeNull();
     });
+
+    // ── run #66 P2-79 residual: loading + empty states announce too ──
+
+    it('announces the loading skeleton via role=status + aria-busy (P2-79 residual)', () => {
+        usePitchSlotsMock.mockReturnValue({
+            data: undefined, isLoading: true, isError: false, refetch: vi.fn(),
+        });
+
+        const { container } = renderPicker();
+
+        const live = container.querySelector('[role="status"][aria-busy="true"]');
+        expect(live).not.toBeNull();
+        expect(live?.getAttribute('aria-live')).toBe('polite');
+        expect(live?.getAttribute('aria-label')).toBe('Loading available slots…');
+        expect(live?.querySelectorAll('.animate-pulse').length).toBe(3);
+    });
+
+    it('announces the empty state via role=status (P2-79 residual)', () => {
+        usePitchSlotsMock.mockReturnValue({
+            data: [], isLoading: false, isError: false, refetch: vi.fn(),
+        });
+
+        const { container } = renderPicker();
+
+        const statuses = Array.from(container.querySelectorAll('[role="status"]'));
+        expect(statuses.length).toBe(1);
+        expect(statuses[0].textContent).toMatch(/no slots available for this date/i);
+    });
 });

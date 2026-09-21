@@ -450,6 +450,7 @@
     "slotSelected": "Selected slot",
     "changeSlot": "Change",
     "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
+    "slotsLoading": "Loading available slots…",
     "slotsError": "Couldn't load available slots. Check your connection.",
     "slotsRetry": "Try Again"
   },

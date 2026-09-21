@@ -121,7 +121,13 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
             {/* Time slots — fetched for the effective day the moment a pitch
                 is selected (no date pick needed). */}
             {isLoading ? (
-                <div className="space-y-2">
+                <div
+                    role="status"
+                    aria-live="polite"
+                    aria-busy="true"
+                    aria-label={t('host.slotsLoading')}
+                    className="space-y-2"
+                >
                     {[1, 2, 3].map((i) => (
                         <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
                     ))}
@@ -172,7 +178,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                     })}
                 </div>
             ) : (
-                <p className="text-xs text-gray-400 text-center py-4">
+                <p role="status" className="text-xs text-gray-400 text-center py-4">
                     {t('host.noSlotsAvailable')}
                 </p>
             )}
