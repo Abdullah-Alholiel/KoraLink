@@ -23,6 +23,10 @@ export function usePushNotifications(locale: string = 'en') {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  // P2-87 (run #67): pending state for the OFF switch — the profile toggle
+  // previously had no way to disable itself while the unsubscribe POST was in
+  // flight (double-tap guard) and no error contract to react to.
+  const [isUnsubscribing, setIsUnsubscribing] = useState(false);
 
   // Check current permission and subscription on mount
   useEffect(() => {
@@ -149,7 +153,13 @@ export function usePushNotifications(locale: string = 'en') {
     }
   }, [requestPermission, locale]);
 
-  const unsubscribe = useCallback(async () => {
+  // P2-87 (run #67): resolves TRUE on success, FALSE on failure. Failure
+  // already ships to Sentry (captureError below) — the boolean return lets
+  // the caller surface localized feedback without re-implementing the try/
+  // catch (was: silent void promise; user believed pushes were off while
+  // the server kept the subscription).
+  const unsubscribe = useCallback(async (): Promise<boolean> => {
+    setIsUnsubscribing(true);
     try {
       if (subscription) {
         // P2-76 (run #65): POST, not DELETE — some proxies/clients drop
@@ -170,10 +180,17 @@ export function usePushNotifications(locale: string = 'en') {
           // non-fatal
         }
       }
+      // No active subscription = nothing to unsubscribe; still a success.
+      return true;
     } catch (err) {
       // P2-16: ship to Sentry (console kept for local dev visibility).
       captureError(err, { scope: 'pushUnsubscribe' });
       console.error('[Push] Failed to unsubscribe:', err);
+      // P2-87 (run #67): the caller decides how to tell the user — the hook
+      // only owns the outcome contract (see 01-program-design.md Gate 3).
+      return false;
+    } finally {
+      setIsUnsubscribing(false);
     }
   }, [subscription]);
 
@@ -181,6 +198,7 @@ export function usePushNotifications(locale: string = 'en') {
     permission,
     isSubscribed: !!subscription,
     isSubscribing,
+    isUnsubscribing,
     subscribe,
     unsubscribe,
     isSupported:

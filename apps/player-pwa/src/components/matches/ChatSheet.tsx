@@ -99,11 +99,15 @@ export default function ChatSheet({
   // P1-3 (run #65): keyed on the LAST message id, not the list length —
   // prepending an older page (load-older) must NOT yank the user to the
   // bottom; only a genuinely new latest message should scroll.
+  // (P2-87 rider, run #67: extracted the expression to a variable so the
+  // dep array is statically checkable — clears the --max-warnings 0 CI rule.)
+  const lastMessageId =
+    messages.length > 0 ? messages[messages.length - 1].id : '';
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.length > 0 ? messages[messages.length - 1].id : '']);
+  }, [lastMessageId]);
 
   // ── Focus input on open ──
   useEffect(() => {
@@ -173,7 +177,7 @@ export default function ChatSheet({
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
-            aria-label="Close chat"
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
           </button>

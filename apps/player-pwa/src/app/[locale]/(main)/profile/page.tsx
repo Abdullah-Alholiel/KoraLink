@@ -144,6 +144,10 @@ export default function ProfilePage() {
     const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
     const logout = useAppStore((s) => s.logout);
+    // P2-87 (run #67): localized toast for unsubscribe failures (errors.*
+    // namespace; the root `t` above stays for common.* keys).
+    const showToast = useAppStore((s) => s.showToast);
+    const te = useTranslations('errors');
 
     // ── Real data from API (fills gaps when store is stale after dev-login) ──
     // P2-26: userStatsError drives the error state (profile still renders with
@@ -164,7 +168,7 @@ export default function ProfilePage() {
         : null;
     const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
     const {
-        isSubscribed, isSubscribing, isSupported,
+        isSubscribed, isSubscribing, isUnsubscribing, isSupported,
         subscribe, unsubscribe,
     } = usePushNotifications(useLocale());
 
@@ -415,7 +419,7 @@ export default function ProfilePage() {
                         <div className="h-px bg-gray-100 ms-[60px]" />
                         <MenuItem
                             icon={
-                                isSubscribing ? (
+                                isSubscribing || isUnsubscribing ? (
                                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
                                 ) : (
                                     <BellRing className="h-5 w-5" strokeWidth={1.5} />
@@ -425,7 +429,20 @@ export default function ProfilePage() {
                             endText={isSubscribed ? t('profile.notificationsOn') : t('profile.notificationsOff')}
                             onClick={() => {
                                 if (isSubscribed) {
-                                    unsubscribe();
+                                    // P2-87 (run #67): double-tap guard —
+                                    // ignore taps while the OFF call runs.
+                                    if (isUnsubscribing) return;
+                                    unsubscribe().then((ok) => {
+                                        if (!ok) {
+                                            // Error-message standard: what
+                                            // happened + why + what next —
+                                            // already localized in errors.*.
+                                            showToast(
+                                                te('pushUnsubscribeFailed'),
+                                                'error',
+                                            );
+                                        }
+                                    });
                                     return;
                                 }
                                 // P0.5 (run #28): wire the install-gate

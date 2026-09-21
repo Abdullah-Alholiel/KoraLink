@@ -50,6 +50,7 @@
     "loading": "Loading…",
     "error": "Something went wrong",
     "errorDescription": "Couldn't load data. Check your connection.",
+    "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",

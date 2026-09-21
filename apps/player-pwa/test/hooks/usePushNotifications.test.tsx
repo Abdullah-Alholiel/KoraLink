@@ -142,6 +142,63 @@ describe('usePushNotifications — P2-76b push locale sync (run #65)', () => {
     await waitFor(() => expect(result.current.isSubscribed).toBe(false));
   });
 
+  // ── P2-87 (run #67): the OFF switch must tell the truth ──
+  it('P2-87: unsubscribe() resolves true on success and flips isUnsubscribing during flight', async () => {
+    window.localStorage.setItem(MARKER, 'ar');
+    const sub = makeSub();
+    installBrowserStubs(sub);
+
+    // Hold the POST in flight so the pending flag is observable.
+    let releaseFetch!: (v: unknown) => void;
+    mockFetcher.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseFetch = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => usePushNotifications('ar'));
+    await waitFor(() => expect(result.current.isSubscribed).toBe(true));
+    mockFetcher.mockClear();
+
+    let outcome: boolean | undefined;
+    const inFlight = result.current.unsubscribe().then((ok) => {
+      outcome = ok;
+    });
+
+    await waitFor(() => expect(result.current.isUnsubscribing).toBe(true));
+    releaseFetch({});
+    await inFlight;
+
+    expect(outcome).toBe(true);
+    await waitFor(() => expect(result.current.isUnsubscribing).toBe(false));
+    await waitFor(() => expect(result.current.isSubscribed).toBe(false));
+  });
+
+  it('P2-87: unsubscribe() resolves false on failure and keeps the subscription', async () => {
+    window.localStorage.setItem(MARKER, 'ar');
+    const sub = makeSub();
+    installBrowserStubs(sub);
+
+    const { result } = renderHook(() => usePushNotifications('ar'));
+    await waitFor(() => expect(result.current.isSubscribed).toBe(true));
+    mockFetcher.mockClear();
+
+    mockFetcher.mockImplementation(() =>
+      Promise.reject(new Error('network down')),
+    );
+
+    await expect(result.current.unsubscribe()).resolves.toBe(false);
+
+    expect(mockCapture).toHaveBeenCalled();
+    // The browser subscription was never released — pushes keep flowing and
+    // the toggle stays ON so the user can retry.
+    expect(sub.unsubscribe).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(MARKER)).toBe('ar');
+    await waitFor(() => expect(result.current.isSubscribed).toBe(true));
+    expect(result.current.isUnsubscribing).toBe(false);
+  });
+
   it('a failed locale sync ships to Sentry and does NOT advance the marker', async () => {
     window.localStorage.setItem(MARKER, 'en');
     mockFetcher.mockImplementation((url: string) =>
