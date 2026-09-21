@@ -1,4 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { asc, desc } from 'drizzle-orm';
+import { match_messages } from '../../database/schema';
 import { MatchesService } from './matches.service';
 
 /**
@@ -44,6 +46,41 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
         out.push([obj.name, undefined]);
       }
     }
+  }
+
+  /**
+   * Flatten a Drizzle orderBy callback result into a comparable signature
+   * "col1,col2|dir". The service passes orderBy as a CALLBACK — Drizzle
+   * invokes it with (table, { asc, desc }) — so resolve it here with the real
+   * operators. asc(col) is a SQL object whose queryChunks are
+   * [StringChunk(''), PgColumn(name), StringChunk(' asc')]: column names ride
+   * .name on the column chunk, direction rides the trailing StringChunk.
+   */
+  function orderSignature(orderBy: unknown): string {
+    const resolved =
+      typeof orderBy === 'function'
+        ? (orderBy as (t: never, ops: { asc: typeof asc; desc: typeof desc }) => unknown[])(
+            match_messages as never,
+            { asc, desc },
+          )
+        : orderBy;
+    const rows = Array.isArray(resolved) ? resolved : [resolved];
+    const cols: string[] = [];
+    let dir = 'asc';
+    for (const row of rows) {
+      const chunks = (row as { queryChunks?: Array<Record<string, unknown>> })
+        ?.queryChunks;
+      if (!Array.isArray(chunks)) continue;
+      for (const chunk of chunks) {
+        const name = chunk?.name;
+        if (name === 'created_at' || name === 'id') cols.push(name);
+        const v = chunk?.value;
+        if (Array.isArray(v) && v.some((s) => typeof s === 'string' && s.includes('desc'))) {
+          dir = 'desc';
+        }
+      }
+    }
+    return `${cols.join(',')}|${dir}`;
   }
 
   function makeService(rows: {
@@ -167,6 +204,24 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
     await expect(
       svc.getMessages(MATCH_ID, MEMBER, { before: 'm-other' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('run #66: both windows order by (created_at, id) — timestamp ties page deterministically', async () => {
+    // The keyset predicate is composite (created_at, id) <; the ORDER BY must
+    // mirror it or duplicate created_at values straddling a page boundary
+    // make tie-order nondeterministic (a message can skip/dup across pages).
+    const anchorTime = new Date('2026-09-01T10:00:00Z');
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: { id: 'm-cursor', match_id: MATCH_ID, created_at: anchorTime },
+    });
+
+    await svc.getMessages(MATCH_ID, MEMBER, { before: 'm-cursor' });
+    await svc.getMessages(MATCH_ID, MEMBER);
+
+    expect(orderSignature(findManyCalls[0].orderBy)).toMatch(/^created_at,id\|asc$/);
+    expect(orderSignature(findManyCalls[1].orderBy)).toMatch(/^created_at,id\|desc$/);
   });
 
   it('membership check still precedes cursor handling (P0-1)', async () => {

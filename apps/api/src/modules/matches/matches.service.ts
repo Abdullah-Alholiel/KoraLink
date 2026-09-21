@@ -2274,7 +2274,7 @@ export class MatchesService {
             ),
           ),
         ),
-        orderBy: (msg, { asc }) => [asc(msg.created_at)],
+        orderBy: (msg, { asc }) => [asc(msg.created_at), asc(msg.id)],
         limit,
         with: {
           user: {
@@ -2294,7 +2294,7 @@ export class MatchesService {
       // Latest page: probe DESC then reverse to ascending (newest last) —
       // the response contract stays "chronological array" while the window
       // becomes the most recent `limit` messages (P1-3 window fix).
-      orderBy: (msg, { desc }) => [desc(msg.created_at)],
+      orderBy: (msg, { desc }) => [desc(msg.created_at), desc(msg.id)],
       limit,
       with: {
         user: {
