@@ -1,20 +1,21 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 65,
-  "last_run_at": "2026-09-20T16:45:00Z",
+  "last_run": 66,
+  "last_run_at": "2026-09-21T10:50:00Z",
   "last_run_commits": [
-    "8b510fb",
-    "7e364a8",
-    "3d1840d"
+    "25b3f70",
+    "afb53d7",
+    "80d7f0d",
+    "47ac2cc"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-20T16-45Z-run65.md",
+  "last_run_report": "kanban/RUNS/2026-09-21T10-50Z-run66-recovery.md",
   "in_review_items": [
     {
-      "id": "run65-p276-p13-api-push-chat",
-      "built_in": "run #65 (8b510fb, 7e364a8, 3d1840d)",
-      "claim": "P2-76(1)+P2-76b DONE-staging: POST /notifications/unsubscribe canonical with UnsubscribeDto (@IsUrl https+require_tld), deprecated DELETE dual-route byte-compatible, PWA hook on POST; push locale re-sync via kl.push.syncedLocale localStorage marker (drift -> re-upsert idempotent subscribe; failure -> Sentry pushLocaleSync, no marker advance; unsubscribe clears marker). P1-3 pagination DONE-staging: getMessages before/limit keyset (validated cursor 404 on forged/cross-match; clamp 1..100), latest-window fix (no-cursor default = newest page, DESC probe reversed; was earliest-50 stale window), bare-array contract kept; PWA probe limit=51 => hasMore, loadOlder dedup prepend, ChatSheet chatSheet.loadOlder ar/en strip, auto-scroll keyed to last message id.",
-      "verify": "(1) grep -c \"UnsubscribeDto\" apps/api/src/modules/notifications/notifications.controller.ts -> 2 (both handlers); grep \"@Post('unsubscribe')\" + \"@Delete('unsubscribe')\" both present; (2) cd apps/api && npx jest src/modules/notifications -> 36 passed (route-metadata tripwire + DTO matrix); npx jest src/modules/matches -> 159 passed (incl. matches.chat-pagination.spec.ts cursor/404/clamp cases); (3) cd apps/player-pwa && npx vitest run test/hooks/usePushNotifications.test.tsx test/hooks/useMatchChatPagination.test.tsx test/structure/push-unsubscribe-channel.test.ts -> 14 passed; full vitest 90 files / 630 tests; npm run type-check -> 0; (4) i18n parity: chatSheet.loadOlder present in BOTH en.json + ar.json; (5) root npm run build -> 3/3 exit 0 on the committed tree; (6) NOTE: commits are staging-only — systemd units serve the projects dir (deploy-target fork), going live needs the staging->projects merge (Abdullah gate)."
+      "id": "run66-recovery-review-fixes-p279",
+      "built_in": "dead run #66 session (25b3f70, afb53d7, 80d7f0d) + recovery session (P2-79 residual, see last_run_commits[3])",
+      "claim": "(1) 25b3f70: UnsubscribeDto pins protocols:[https]+require_tld (validator default allows http/ftp); spec rejects plain-http endpoint. (2) afb53d7: getMessages before-cursor orderBy composite (created_at,id) asc / latest-window desc — matches the composite keyset predicate, no skip/dup on timestamp ties. (3) 80d7f0d: useMatchChat hasMore = !olderExhausted && probe.length>PAGE; short older page sets olderExhausted -> Load-earlier button hides at history end. (4) P2-79 residual: SlotPicker loading skeleton role=status+aria-live polite+aria-busy+aria-label host.slotsLoading (new key EN+AR); empty branch role=status.",
+      "verify": "(1) grep 'protocols' apps/api/src/modules/notifications/dto/notifications.dto.ts -> ['https'] present; jest src/modules/notifications green. (2) grep -n 'asc(m.created_at), asc(m.id)' apps/api/src/modules/matches/matches.service.ts; jest src/modules/matches green. (3) grep -n 'olderExhausted' apps/player-pwa/src/hooks/useMessages.ts; vitest test/components/host/slot-picker.test.tsx + chat pagination specs green. (4) vitest slot-picker 13/13 incl. 2 new P2-79 cases; grep slotsLoading in messages/en.json AND messages/ar.json (parity). Full gates: turbo 3/3, vitest all green, pwa type-check 0."
     }
   ],
   "open_blockers": [
@@ -43,7 +44,8 @@
     "P1-51 post-match rating/MVP flow (NEW run #57, Reviewer B) — needs Abdullah decision on shape before API work: extend the existing POTM vote vs. per-player ratings; my-games rate UI depends on it.",
     "PROJECTS-DIR MERGE CONFLICT (run #63 finding): /home/ubuntu/projects/koralink (feature lane feat/search-neighborhood-suggestions) sits mid-merge — 4 unmerged paths (api users.service.ts, pwa profile/page.tsx, ServiceWorkerUpdater.tsx, PromoBillboard.tsx) + kanban/BOARD.md, plus staged admin/pwa Dockerfile/package.json changes, and NO .git/MERGE_HEAD — a foreign session's merge attempt during run #62 (20:03Z). Needs Abdullah or an explicitly directed session to finish/abort. Staging worktree unaffected; factory never touches foreign conflicts.",
     "KILL-PATTERN #12 (run #62 died ~2026-09-19T20:03Z post-commit, no OOM, no gateway errors) + run #63's own background build process died 01:40Z mid-pipeline (also no OOM line) — next runs: correlate kill times with systemd-oom, gateway restarts, cron scheduler logs before assuming host health.",
-    "P2-76(2) critical-event non-push channel — folds into P1-41 email decision (run #65 reconfirmed)."
+    "P2-76(2) critical-event non-push channel — folds into P1-41 email decision (run #65 reconfirmed).",
+    "RUN #66 RECOVERY (2026-09-21): the 01:17Z scheduled session was KILLED after committing 3 review fixes but before Phase 5 (no RUNS report, lock left with pid 'BATCH'). Recovery session per run-#51-manual recipe: lock cleared, gates re-run on final tree (turbo 3/3, vitest 90f/633t, notifications+matches jest 197/197), orphaned commits d9d1a8f..80d7f0d PUSHED. P2-79 residual built this session (SlotPicker loading/empty role=status). ADMIN HOLD continues: projects-dir merge conflict (UU users.service.ts, UU profile/page.tsx, UU ServiceWorkerUpdater, UU PromoBillboard, UU BOARD.md + Abdullah staged Dockerfile/package/users-page edits) still unresolved -> P2-12 held. zai probe: first attempt timed out (20s), retry 200 in 7.6s — treat single-timeout as transient, retry once before failing over. Deploy-target fork unchanged: units serve /home/ubuntu/projects/koralink; staging commits reach live only via Abdullah's merge go."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
