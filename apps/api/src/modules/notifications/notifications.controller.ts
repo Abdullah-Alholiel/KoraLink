@@ -15,24 +15,12 @@ import {
 import { Request } from 'express';
 
 import { NotificationsService } from './notifications.service';
-import { UnsubscribeDto } from './dto/notifications.dto';
+import {
+  SubscribeDto,
+  UnsubscribeDto,
+} from './dto/notifications.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-
-/**
- * P2-76 note (run #65): subscribe still uses a plain interface (below) —
- * `sub.toJSON()` can carry `expirationTime: null` (Chrome) and the global
- * pipe is forbidNonWhitelisted, so a strict SubscribeDto needs an explicit
- * allowlist decision first (board P2-76 follow-up).
- */
-interface SubscribeBody {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-  locale?: string;
-}
 
 @ApiTags('notifications')
 @ApiCookieAuth('access_token')
@@ -41,12 +29,21 @@ interface SubscribeBody {
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  /**
+   * P2-82 (run #69): subscribe is now a strict class DTO — the global
+   * ValidationPipe (whitelist + forbidNonWhitelisted) validates endpoint/
+   * keys/locale at the boundary instead of garbage surfacing later as
+   * web-push send failures. The Chrome `expirationTime: null` allowlist
+   * decision lives on SubscribeDto. Locale defaults to 'en' here (was the
+   * service's trailing-arg default) and the DTO never reaches the DB with
+   * non-ar/en values.
+   */
   @Post('subscribe')
   @ApiOperation({ summary: 'Subscribe to push notifications' })
   @ApiOkResponse({ description: 'Subscription stored.' })
   subscribe(
     @CurrentUser() user: { sub: string },
-    @Body() body: SubscribeBody,
+    @Body() body: SubscribeDto,
     @Req() req: Request,
   ) {
     return this.notificationsService.subscribe(

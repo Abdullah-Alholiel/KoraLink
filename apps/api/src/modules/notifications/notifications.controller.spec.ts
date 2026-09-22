@@ -5,7 +5,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 import { NotificationsController } from './notifications.controller';
-import { UnsubscribeDto } from './dto/notifications.dto';
+import { SubscribeDto, UnsubscribeDto } from './dto/notifications.dto';
 
 /**
  * P2-76 (run #65): POST /notifications/unsubscribe is the canonical
@@ -116,5 +116,120 @@ describe('UnsubscribeDto validation (P2-76, run #65)', () => {
     expect(
       (await errorsOf({ endpoint: 'https://fcm.googleapis.com/fcm/send/abc', evil: 1 })).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * P2-82 (run #69): subscribe had NO DTO at all — a plain TS interface is
+ * invisible to the global ValidationPipe (whitelist + forbidNonWhitelisted),
+ * so endpoint/keys/locale shipped unvalidated and garbage keys only failed
+ * later inside the push broadcast loop. These tests pin the class-DTO
+ * contract, including THE allowlist decision that kept it an interface until
+ * now: Chrome's `sub.toJSON()` carries `expirationTime: null` and the PWA
+ * sends `{...toJSON(), locale}` — without an explicit whitelisted
+ * `expirationTime`, forbidNonWhitelisted would 400 every real Chrome
+ * subscribe.
+ */
+describe('SubscribeDto validation (P2-82, run #69)', () => {
+  const GOOD_KEYS = {
+    p256dh: 'BOrf'.padEnd(88, 'x'), // realistic ~88-char base64url
+    auth: 'q5z'.padEnd(22, 'y'), // realistic ~22-char base64url
+  };
+  const GOOD = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/AAAA',
+    keys: GOOD_KEYS,
+  };
+
+  async function errorsOf(payload: unknown, validateOpts?: { whitelist?: boolean; forbidNonWhitelisted?: boolean }) {
+    const dto = plainToInstance(SubscribeDto, payload);
+    return validate(dto, { whitelist: true, forbidNonWhitelisted: true, ...validateOpts });
+  }
+
+  it('is what the subscribe handler binds (class, not plain interface)', () => {
+    const proto = NotificationsController.prototype as unknown as Record<string, unknown>;
+    const paramtypes = Reflect.getMetadata(
+      'design:paramtypes',
+      proto,
+      'subscribe',
+    ) as unknown[];
+    expect(paramtypes).toContain(SubscribeDto);
+  });
+
+  it('accepts the REAL Chrome/PWA payload: expirationTime null + 88/22-char keys + locale', async () => {
+    expect(
+      await errorsOf({ ...GOOD, expirationTime: null, locale: 'ar' }),
+    ).toHaveLength(0);
+  });
+
+  it('accepts an epoch-ms expirationTime and an absent locale', async () => {
+    expect(
+      await errorsOf({ ...GOOD, expirationTime: 1790000000000 }),
+    ).toHaveLength(0);
+    expect(await errorsOf(GOOD)).toHaveLength(0);
+  });
+
+  it('rejects a string/bool expirationTime (whitelisted as number|null only)', async () => {
+    expect((await errorsOf({ ...GOOD, expirationTime: 'soon' })).length).toBeGreaterThan(0);
+    expect((await errorsOf({ ...GOOD, expirationTime: true })).length).toBeGreaterThan(0);
+  });
+
+  it('rejects unknown extra fields (forbidNonWhitelisted parity with the global pipe)', async () => {
+    expect((await errorsOf({ ...GOOD, evil: 1 })).length).toBeGreaterThan(0);
+    expect(
+      (await errorsOf({ ...GOOD, keys: { ...GOOD_KEYS, evil: 1 } })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('rejects garbage keys: missing, wrong-typed, or over-cap blobs', async () => {
+    expect((await errorsOf({ endpoint: GOOD.endpoint })).length).toBeGreaterThan(0);
+    expect(
+      (await errorsOf({ endpoint: GOOD.endpoint, keys: { p256dh: 42, auth: 'ok' } })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await errorsOf({
+        endpoint: GOOD.endpoint,
+        keys: { p256dh: 'x'.repeat(257), auth: 'y'.repeat(10) },
+      })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await errorsOf({
+        endpoint: GOOD.endpoint,
+        keys: { p256dh: 'x'.repeat(88), auth: 'y'.repeat(65) },
+      })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('rejects a non-ar/en locale (column stays clean; read path already normalized)', async () => {
+    expect((await errorsOf({ ...GOOD, locale: 'fr' })).length).toBeGreaterThan(0);
+    expect((await errorsOf({ ...GOOD, locale: 'en-US' })).length).toBeGreaterThan(0);
+  });
+
+  it('endpoint follows the SAME https+require_tld rules as UnsubscribeDto', async () => {
+    expect((await errorsOf({ ...GOOD, endpoint: 'http://fcm.googleapis.com/x' })).length).toBeGreaterThan(0);
+    expect((await errorsOf({ ...GOOD, endpoint: 'https://localhost:3000/x' })).length).toBeGreaterThan(0);
+  });
+});
+
+describe('NotificationsController P2-82 subscribe delegation (run #69)', () => {
+  it('delegates to service.subscribe(userId, dto, userAgent, locale) with en default', async () => {
+    const svc = { subscribe: jest.fn(async () => ({ subscribed: true })) };
+    const ctrl = new NotificationsController(svc as never);
+    const user = { sub: 'user-1' };
+    const body = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'k'.repeat(88), auth: 'a'.repeat(22) } } as SubscribeDto;
+    const req = { headers: { 'user-agent': 'vitest' } } as never;
+
+    await ctrl.subscribe(user, body, req);
+
+    expect(svc.subscribe).toHaveBeenCalledWith('user-1', body, 'vitest', 'en');
+  });
+
+  it('passes the payload locale through when present', async () => {
+    const svc = { subscribe: jest.fn(async () => ({ subscribed: true })) };
+    const ctrl = new NotificationsController(svc as never);
+    const body = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'k'.repeat(88), auth: 'a'.repeat(22) }, locale: 'ar' } as SubscribeDto;
+
+    await ctrl.subscribe({ sub: 'user-1' }, body, { headers: {} } as never);
+
+    expect(svc.subscribe).toHaveBeenCalledWith('user-1', body, undefined, 'ar');
   });
 });
