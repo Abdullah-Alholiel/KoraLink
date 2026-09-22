@@ -1,18 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 67,
-  "last_run_at": "2026-09-21T16:00Z",
+  "last_run": 68,
+  "last_run_at": "2026-09-22T01:52Z",
   "last_run_commits": [
-    "d4b5ef1"
+    "fe546c9"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-21T16-00Z-run67.md",
+  "last_run_report": "kanban/RUNS/2026-09-22T01-52Z-run68.md",
   "in_review_items": [
     {
-      "id": "run67-p2-87-unsubscribe-feedback",
-      "built_in": "run #67 (d4b5ef1)",
-      "claim": "P2-87: usePushNotifications.unsubscribe() resolves Promise<boolean> + exposes isUnsubscribing (try/finally); profile toggle double-tap-guards, spins on isSubscribing||isUnsubscribing, and toasts errors.pushUnsubscribeFailed (EN+AR) on false. Riders: ChatSheet/ReportSheet close aria-labels -> common.close; ChatSheet auto-scroll dep extracted (lastMessageId).",
-      "verify": "grep -n 'Promise<boolean>' apps/player-pwa/src/hooks/usePushNotifications.ts; grep -n 'isUnsubscribing' same file + profile/page.tsx; grep pushUnsubscribeFailed in messages/en.json AND messages/ar.json (parity); vitest test/hooks/usePushNotifications.test.tsx (6/6, 2 P2-87 cases); full vitest 635/635; tsc 0; turbo 3/3. Next-run effort: ~5 min."
+      "id": "run68-p2-13-clubs-hygiene",
+      "built_in": "run #68 (fe546c9)",
+      "claim": "P2-13 residual CLOSED: clubs Nearby (default pill) applies stable ascending distance_m sort (null/missing last, ties stable); dead Top Rated pill removed (venues.rating all-zero, no write path); empty state split — filtered-empty keeps 'adjust your filters', zero venues renders new clubs.noClubsEmpty (EN+AR parity +1 leaf each). 7 new page tests.",
+      "verify": "grep -n \"FILTER_KEYS = ['Nearby', 'Indoor', 'Available Now']\" apps/player-pwa/src/app/[locale]/(main)/clubs/page.tsx; grep -c noClubsEmpty apps/player-pwa/src/messages/en.json apps/player-pwa/src/messages/ar.json (1 each); grep -c 'Top Rated' in the page (must be 0 in FILTER_KEYS); npx vitest run 'src/app/[locale]/(main)/clubs/page.test.tsx' (7/7) + test/i18n.test.ts (6/6); next-run spot-check one live clubs render if a browser lane exists. Effort ~5 min."
     }
   ],
   "open_blockers": [
@@ -34,7 +34,7 @@
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
-    "zai delegation-path history — run #67: probe 200 in 2.9s via ZAI_API_KEY (GLM_API_KEY .env line STALE), reviewers clean 233s+167s — 11th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path history — run #68: probe 200 in ~3s via ZAI_API_KEY (GLM_API_KEY line stays stale-401), reviewers clean 150s+132s — 12th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
     "KILL-PATTERN (8 dead sessions through run #57, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
     "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly.",
     "P1-49 ban appeal CHANNEL — owner call (queued run #56, reconfirmed decisions queue run #57): reports/disputes channel vs support mailto on BlockedCard.",
@@ -55,6 +55,6 @@
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "run67-151857",
-  "last_run_started_at": "2026-09-20T15:17:35Z"
+  "last_run_id": "run68-011738",
+  "last_run_started_at": "2026-09-22T01:17:38Z"
 }
