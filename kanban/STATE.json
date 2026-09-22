@@ -1,18 +1,32 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 68,
-  "last_run_at": "2026-09-22T01:52Z",
+  "last_run": 69,
+  "last_run_at": "2026-09-22T16:10Z",
   "last_run_commits": [
-    "fe546c9"
+    "7ea1cdb (adopted from OOM-killed 10:15Z session)",
+    "6159f83",
+    "2b4f080"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-22T01-52Z-run68.md",
+  "last_run_report": "kanban/RUNS/2026-09-22T15-15Z-run69.md",
   "in_review_items": [
     {
-      "id": "run68-p2-13-clubs-hygiene",
-      "built_in": "run #68 (fe546c9)",
-      "claim": "P2-13 residual CLOSED: clubs Nearby (default pill) applies stable ascending distance_m sort (null/missing last, ties stable); dead Top Rated pill removed (venues.rating all-zero, no write path); empty state split — filtered-empty keeps 'adjust your filters', zero venues renders new clubs.noClubsEmpty (EN+AR parity +1 leaf each). 7 new page tests.",
-      "verify": "grep -n \"FILTER_KEYS = ['Nearby', 'Indoor', 'Available Now']\" apps/player-pwa/src/app/[locale]/(main)/clubs/page.tsx; grep -c noClubsEmpty apps/player-pwa/src/messages/en.json apps/player-pwa/src/messages/ar.json (1 each); grep -c 'Top Rated' in the page (must be 0 in FILTER_KEYS); npx vitest run 'src/app/[locale]/(main)/clubs/page.test.tsx' (7/7) + test/i18n.test.ts (6/6); next-run spot-check one live clubs render if a browser lane exists. Effort ~5 min."
+      "id": "run69-p2-82-subscribe-dto",
+      "built_in": "run #69 (7ea1cdb, built by OOM-killed 10:15Z session; adopted + gated by 15:15Z session)",
+      "claim": "P2-82 CLOSED: subscribe endpoint validated by class DTO (PushKeysDto caps 256/64, endpoint https+require_tld, expirationTime @IsOptional @IsNumber for Chrome-null, locale @IsIn ar/en); old plain interfaces deleted; response {subscribed:true} unchanged.",
+      "verify": "grep -c \"class SubscribeDto\" apps/api/src/modules/notifications/dto/notifications.dto.ts (1); cd apps/api && npx jest --silent src/modules/notifications (5 suites 47/47 incl. SubscribeDto cases); npx tsc --noEmit -p tsconfig.json (0)."
+    },
+    {
+      "id": "run69-p2-91-subscribe-outcome",
+      "built_in": "run #69 (6159f83)",
+      "claim": "P2-91 DONE: subscribe() returns PushSubscribeOutcome (ok|not-installed|permission-denied|error); profile renders common.permissionDenied for denied permissions (was: install hint for everything) + errors.pushSubscribeFailed toast on error; EN+AR parity +2 leaves; serviceWorker.ready mount rejection guard.",
+      "verify": "grep -n \"PushSubscribeOutcome\" apps/player-pwa/src/hooks/usePushNotifications.ts; grep -c \"permissionDenied\" apps/player-pwa/src/messages/en.json apps/player-pwa/src/messages/ar.json (1 each); npx vitest run test/hooks/usePushNotifications.test.tsx (12/12)."
+    },
+    {
+      "id": "run69-p2-92-pushsubscriptionchange",
+      "built_in": "run #69 (2b4f080)",
+      "claim": "P2-92 DONE: worker handles pushsubscriptionchange — re-subscribes with the same VAPID key, re-upserts POST /notifications/subscribe (credentials:include) with the hook-synced locale from Cache-API KV koralink-push-meta//__kl/push-locale (ar fallback); all failure paths swallowed; handler verified present in the BUILT worker file.",
+      "verify": "grep -c \"pushsubscriptionchange\" apps/player-pwa/worker/index.js (>=1); npx vitest run test/structure/push-subscription-change.test.ts (5/5); after a build: grep -c pushsubscriptionchange in the built public/worker-*.js."
     }
   ],
   "open_blockers": [
@@ -48,6 +62,7 @@
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
+    "Run #69 (2026-09-22T15:15Z): DEAD-RUN ADOPTION — the 10:15Z fire was OOM-killed at 10:35Z; KILL-PATTERN #13 ROOT CAUSE CONFIRMED via kernel log (memcg OOM inside hermes-worker-cron cgroup, node pid killed, total-vm 12.2GB). Owner input requested: raise the cron-worker cgroup limit or pin turbo --concurrency=1 for cron fires. Adopted 7ea1cdb (P2-82, gates re-run: notifications jest 47/47, api tsc 0, Reviewer A CLEAN); built 6159f83 (P2-91 subscribe outcome contract) + 2b4f080 (P2-92 pushsubscriptionchange + worker locale KV). Gates: vitest 92f/653t, tsc 0, lint 0, turbo 3/3 x2. Reviewer B verified run-#68 P2-13 claims 5/5 -> DONE. zai probe 200 in 2.4s (13th consecutive clean run). NOTEPAD STALE AGAIN: P2-37/P2-20 candidates were already DONE (runs #21/#53) — always re-check BOARD rows. Reviewer-B residual leads (report-only, not boarded): notificationclick unconditional navigate(), push verb-map two-sources-of-truth, locale-presence spec assertion. ADMIN HOLD continues.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
     "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design).",
@@ -55,6 +70,6 @@
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "run68-011738",
-  "last_run_started_at": "2026-09-22T01:17:38Z"
+  "last_run_id": "run69-resume-151744",
+  "last_run_started_at": "2026-09-22T15:17:44Z"
 }
