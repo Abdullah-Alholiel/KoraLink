@@ -19,6 +19,19 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 const VAPID_PUBLIC_KEY =
   'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
 
+/**
+ * P2-91 (run #69): WHY a subscribe attempt did not produce a subscription.
+ * `false` collapsed three fixable-but-different failures into one, and the
+ * only consumer told every failure "install the PWA" — a dead end for a user
+ * whose real problem is a denied browser permission (they must re-enable it
+ * in browser settings, not install anything).
+ */
+export type PushSubscribeOutcome =
+  | 'ok'
+  | 'not-installed'
+  | 'permission-denied'
+  | 'error';
+
 export function usePushNotifications(locale: string = 'en') {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
@@ -36,9 +49,16 @@ export function usePushNotifications(locale: string = 'en') {
 
     setPermission(Notification.permission);
 
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then(setSubscription);
-    });
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        reg.pushManager.getSubscription().then(setSubscription);
+      })
+      .catch(() => {
+        // P2-91 (run #69): a rejecting serviceWorker.ready (SW registration
+        // torn down mid-boot, browser quirks) must not surface as an
+        // unhandled rejection from the mount effect — subscribe() already
+        // reports 'error' through its own try/catch.
+      });
   }, []);
 
   // P2-76b (run #65): keep the server-side push locale in sync with the UI
@@ -91,8 +111,16 @@ export function usePushNotifications(locale: string = 'en') {
     return result === 'granted';
   }, []);
 
-  const subscribe = useCallback(async () => {
-    if (!('serviceWorker' in navigator)) return false;
+  /**
+   * P2-91 (run #69): returns WHY the attempt did not end subscribed —
+   * 'not-installed' (iOS standalone contract), 'permission-denied'
+   * (browser permission refused or revoked since), or 'error' (SW/push
+   * manager/POST failure — already shipped to Sentry). Previously a bare
+   * `false` for all three; the caller could not tell a user what to do
+   * next and showed "install the app" for every failure.
+   */
+  const subscribe = useCallback(async (): Promise<PushSubscribeOutcome> => {
+    if (!('serviceWorker' in navigator)) return 'not-installed';
 
     setIsSubscribing(true);
     try {
@@ -103,7 +131,7 @@ export function usePushNotifications(locale: string = 'en') {
       // and creates a poor first impression. Surface a localized hint and
       // return false; the profile UI can pick it up and show the install
       // prompt. `mounted` guards the SSR window.
-      if (typeof window === 'undefined') return false;
+      if (typeof window === 'undefined') return 'not-installed';
       const isStandalone =
         (typeof window.matchMedia === 'function' &&
           window.matchMedia('(display-mode: standalone)').matches) ||
@@ -114,11 +142,14 @@ export function usePushNotifications(locale: string = 'en') {
         // No exception — the user is just not in the installed surface yet.
         // The profile UI surfaces `common.installRequired` if the consumer
         // wants to show a hint.
-        return false;
+        return 'not-installed';
       }
 
       const granted = await requestPermission();
-      if (!granted) return false;
+      // P2-91: distinguish a REFUSED permission prompt (user tapped "Block",
+      // or the stored permission was already 'denied') from the other
+      // failure modes — recovery is browser settings, not an install.
+      if (!granted) return 'permission-denied';
 
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
@@ -142,12 +173,12 @@ export function usePushNotifications(locale: string = 'en') {
         // non-fatal
       }
 
-      return true;
+      return 'ok';
     } catch (err) {
       // P2-16: ship to Sentry (console kept for local dev visibility).
       captureError(err, { scope: 'pushSubscribe' });
       console.error('[Push] Failed to subscribe:', err);
-      return false;
+      return 'error';
     } finally {
       setIsSubscribing(false);
     }

@@ -51,6 +51,7 @@
     "error": "Something went wrong",
     "errorDescription": "Couldn't load data. Check your connection.",
     "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
+    "pushSubscribeFailed": "We couldn't turn notifications on. Nothing was changed — check your connection and try again.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",
@@ -75,6 +76,7 @@
     "offline": "Offline",
     "dismiss": "Dismiss",
     "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "permissionDenied": "Notifications are blocked in your browser settings. Re-enable notifications for KoraLink there, then try again.",
     "or": "or"
   },
   "nav": {

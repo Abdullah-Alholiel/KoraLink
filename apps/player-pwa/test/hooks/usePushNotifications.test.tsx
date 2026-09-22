@@ -13,7 +13,10 @@ vi.mock('@/providers/ObservabilityProvider', () => ({
   captureError: (...args: unknown[]) => mockCapture(...args),
 }));
 
-import { usePushNotifications } from '@/hooks/usePushNotifications';
+import {
+  usePushNotifications,
+  type PushSubscribeOutcome,
+} from '@/hooks/usePushNotifications';
 
 /**
  * P2-76b (run #65): push locale stays in sync with the UI locale.
@@ -51,6 +54,8 @@ function installBrowserStubs(activeSub: PushSubscription | null) {
       ready: Promise.resolve({
         pushManager: {
           getSubscription: async () => activeSub,
+          // P2-91: the outcome-contract tests drive subscribe() end-to-end.
+          subscribe: vi.fn(async () => makeSub()),
         },
       }),
     },
@@ -214,5 +219,101 @@ describe('usePushNotifications — P2-76b push locale sync (run #65)', () => {
       scope: 'pushLocaleSync',
     });
     expect(window.localStorage.getItem(MARKER)).toBe('en');
+  });
+});
+
+/**
+ * P2-91 (run #69): subscribe() previously collapsed three different
+ * fixable-but-distinct failures into a bare `false`, and the only consumer
+ * told EVERY failure "install the PWA" — a dead end for a user whose browser
+ * permission was denied (recovery = browser settings, not an install). The
+ * hook now returns a PushSubscribeOutcome; these tests pin the outcome
+ * contract per failure mode.
+ */
+describe('usePushNotifications — P2-91 subscribe outcome contract (run #69)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockFetcher.mockResolvedValue({});
+    window.localStorage.clear();
+    installBrowserStubs(null);
+  });
+
+  async function subscribeOutcome(): Promise<string> {
+    const { result } = renderHook(() => usePushNotifications('en'));
+    let outcome: string | undefined;
+    await result.current.subscribe().then((o: PushSubscribeOutcome) => {
+      outcome = o;
+    });
+    return outcome as string;
+  }
+
+  it("standalone browser + granted permission + clean POST → 'ok'", async () => {
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+    // installBrowserStubs' NotificationStub defaults to granted.
+    expect(await subscribeOutcome()).toBe('ok');
+    expect(
+      mockFetcher.mock.calls.some((c) => c[0] === '/notifications/subscribe'),
+    ).toBe(true);
+  });
+
+  it("permission request refused → 'permission-denied' (not the install hint)", async () => {
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+    class DeniedStub {
+      static permission = 'default';
+      static requestPermission = vi.fn(async () => 'denied');
+    }
+    Object.defineProperty(window, 'Notification', {
+      configurable: true,
+      value: DeniedStub,
+    });
+
+    expect(await subscribeOutcome()).toBe('permission-denied');
+    // Nothing reached the backend and no browser subscription was created.
+    expect(mockFetcher).not.toHaveBeenCalled();
+  });
+
+  it("browser permission already 'denied' → 'permission-denied'", async () => {
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+    class DeniedStub {
+      static permission = 'denied';
+      static requestPermission = vi.fn(async () => 'denied');
+    }
+    Object.defineProperty(window, 'Notification', {
+      configurable: true,
+      value: DeniedStub,
+    });
+
+    expect(await subscribeOutcome()).toBe('permission-denied');
+  });
+
+  it("not in the installed (standalone) surface → 'not-installed'", async () => {
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as never;
+
+    expect(await subscribeOutcome()).toBe('not-installed');
+    expect(mockFetcher).not.toHaveBeenCalled();
+  });
+
+  it("push subscription throws → 'error' + Sentry capture", async () => {
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        ready: Promise.reject(new Error('sw dead')),
+      },
+    });
+
+    expect(await subscribeOutcome()).toBe('error');
+    await waitFor(() =>
+      expect(
+        mockCapture.mock.calls.some(
+          (c) => c[1] && (c[1] as { scope?: string }).scope === 'pushSubscribe',
+        ),
+      ).toBe(true),
+    );
   });
 });

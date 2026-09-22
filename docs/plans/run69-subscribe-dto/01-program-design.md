@@ -96,3 +96,42 @@ validator messages are server-side convention already used by every other DTO).
 - [✓] i18n keys exist — N/A (no user-facing string added).
 - [✓] No schema/migration — locale column already varchar(5) NOT NULL default 'en'.
 - [✓] Behavior-preservation proof required in slice: spec pins Chrome `expirationTime:null` + real 88-char keys PASS, and whitelist-trimmed extra keys PASS vs unknown key 400.
+
+---
+
+# Addendum — item 2: P2-91 push permission-denied mislabeled as "install required" (Reviewer B P1, run #69)
+
+## Problem
+`subscribe()` collapsed three fixable-but-different failures into a bare `false`:
+not-installed (iOS standalone contract), permission-denied, SW/push error. The only consumer
+(profile toggle) showed `common.installRequired` for EVERY failure — a user who denied browser
+permission was told to install the PWA (a dead end: recovery lives in browser settings).
+
+## Contract (Gate 3, compact)
+- `usePushNotifications.subscribe(): Promise<PushSubscribeOutcome>` —
+  `'ok' | 'not-installed' | 'permission-denied' | 'error'` (exported type).
+- Profile toggle mapping: `not-installed` → `common.installRequired` (existing hint);
+  `permission-denied` → NEW `common.permissionDenied` (EN+AR: what happened + where to fix +
+  what next); `error` → toast NEW `errors.pushSubscribeFailed` (what/why/next, mirrors the
+  P2-87 unsubscribe copy); `ok` → no copy (toggle flips via subscription state).
+- State rename: `installHintShown: boolean` → `subscribeHint: PushSubscribeOutcome | null`.
+- Hygiene (found by the new test): the mount effect's `navigator.serviceWorker.ready` promise
+  gains a `.catch` — a rejecting SW registration no longer surfaces as an unhandled rejection.
+- Single consumer (grep-verified): profile/page.tsx. No page test file exists for profile —
+  contract pinned in test/hooks/usePushNotifications.test.tsx (5 new cases: ok / refused /
+  already-denied / not-installed / error+Sentry).
+
+## i18n keys (parity +2 leaves each)
+- `common.permissionDenied`: EN "Notifications are blocked in your browser settings. Re-enable
+  notifications for KoraLink there, then try again." · AR "الإشعارات محظورة في إعدادات المتصفح.
+  أعد تفعيل إشعارات كورا لينك من هناك ثم حاول مجددًا."
+- `errors.pushSubscribeFailed`: EN "We couldn't turn notifications on. Nothing was changed —
+  check your connection and try again." · AR "لم نتمكن من تفعيل الإشعارات. لم يتغيّر شيء —
+  تحقّق من اتصالك وحاول مجددًا."
+
+## Checklist
+- [✓] Mutation contract: N/A — no API change (hook-internal contract + copy).
+- [✓] Every user-facing string i18n'd EN+AR (2 new leaves each, parity test pins).
+- [✓] Error-message standard: what happened + why + what next (both new keys).
+- [✓] No dead UI: hint renders per-outcome; error path toasts (no silent failure).
+- [✓] role="status" retained on the hint line; toast pattern matches P2-87.
