@@ -715,6 +715,7 @@
     },
     "noClubs": "No clubs found",
     "noClubsDescription": "Try adjusting your filters.",
+    "noClubsEmpty": "No clubs have been added yet — check back soon.",
     "book": "Book",
     "rating": "Rating",
     "surface": "Surface",
