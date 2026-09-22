@@ -316,4 +316,27 @@ describe('usePushNotifications — P2-91 subscribe outcome contract (run #69)', 
       ).toBe(true),
     );
   });
+
+  it('P2-92: a successful subscribe mirrors the locale into the worker-readable KV', async () => {
+    const cachePut = vi.fn(async () => undefined);
+    const cacheOpen = vi.fn(async () => ({ put: cachePut }));
+    // jsdom has no CacheStorage — stub the global the hook writes through.
+    Object.defineProperty(window, 'caches', {
+      configurable: true,
+      value: { open: cacheOpen },
+    });
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+
+    const { result } = renderHook(() => usePushNotifications('ar'));
+    await result.current.subscribe();
+
+    await waitFor(() => expect(cachePut).toHaveBeenCalled());
+    expect(cacheOpen).toHaveBeenCalledWith('koralink-push-meta');
+    const calls = cachePut.mock.calls as unknown as [string, Response][];
+    const [key, response] = calls[0];
+    expect(key).toBe('/__kl/push-locale');
+    const body = await (response as Response).json();
+    expect(body).toEqual({ l: 'ar' });
+  });
 });

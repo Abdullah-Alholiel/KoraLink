@@ -27,6 +27,31 @@ const OFFLINE_PAGES = { en: '/en/offline', ar: '/ar/offline' };
 const RESTORE_CACHE = 'koralink-offline-restore';
 const RESTORE_KEY = '/__kl/restore-url';
 
+// Push metadata KV (P2-92, run #69): the push locale the hook last synced
+// server-side, so pushsubscriptionchange can re-upsert with the RIGHT locale
+// (localStorage does not exist inside a service worker — Cache-API KV is the
+// established pattern here, cf. RESTORE_CACHE).
+const PUSH_META_CACHE = 'koralink-push-meta';
+const PUSH_LOCALE_KEY = '/__kl/push-locale';
+// Public VAPID key — same value the hook uses (public by design).
+const VAPID_PUBLIC_KEY =
+  'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
+// API base for the subscribe re-upsert. Same-origin paths work as-is; the
+// deploy tops expose the API on the same host (:8443/:3001 behind the TLS
+// proxy), so a relative /api/v1 route is correct everywhere the app runs.
+const API_SUBSCRIBE_URL = '/api/v1/notifications/subscribe';
+
+function pushVapidKeyToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -88,6 +113,65 @@ self.addEventListener('fetch', (event) => {
         // fallbacks.document) still applies. The address bar keeps the
         // original deep link up to the redirect (respondWith semantics).
         return Response.redirect(page, 302);
+      }
+    })(),
+  );
+});
+
+// P2-92 (run #69): browsers rotate web-push subscriptions (FCM pushes
+// `pushsubscriptionchange` at any time — sometimes years later, sometimes
+// seconds after grant). Without this handler the OLD endpoint dies while the
+// server keeps its row: the user silently stops receiving match/cancel
+// pushes until the 90-day stale sweep, with the profile toggle showing ON.
+// On rotation: re-subscribe locally (same VAPID key), re-upsert the new
+// subscription to /notifications/subscribe with the locale the hook last
+// synced (Cache-API KV), and update the KV marker on success. Any failure is
+// silent-by-design in the worker context — the NEXT successful app open
+// re-syncs via the hook's marker effect.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      let locale = 'ar';
+      try {
+        const cache = await caches.open(PUSH_META_CACHE);
+        const cached = await cache.match(PUSH_LOCALE_KEY);
+        if (cached) {
+          const body = await cached.json();
+          if (body && (body.l === 'en' || body.l === 'ar')) locale = body.l;
+        }
+      } catch (_) {
+        // missing/unreadable KV → Arabic-first default (P2-72 convention)
+      }
+
+      let newSub = null;
+      try {
+        newSub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: pushVapidKeyToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      } catch (_) {
+        return; // permission lost or push unavailable — nothing to re-point
+      }
+
+      try {
+        const res = await fetch(API_SUBSCRIBE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ...newSub.toJSON(), locale }),
+        });
+        if (res && res.ok) {
+          const cache = await caches.open(PUSH_META_CACHE);
+          await cache.put(
+            PUSH_LOCALE_KEY,
+            new Response(JSON.stringify({ l: locale }), {
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          );
+        }
+      } catch (_) {
+        // POST failed (offline / auth expired) — the browser keeps the new
+        // local subscription; the hook re-syncs on the next app open.
       }
     })(),
   );

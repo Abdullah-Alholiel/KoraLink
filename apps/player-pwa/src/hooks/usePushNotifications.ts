@@ -32,6 +32,28 @@ export type PushSubscribeOutcome =
   | 'permission-denied'
   | 'error';
 
+/**
+ * P2-92 (run #69): mirror the last server-synced push locale into a
+ * Cache-API KV the SERVICE WORKER can read (localStorage does not exist in a
+ * worker context). The worker's `pushsubscriptionchange` handler reads this
+ * to re-upsert a rotated subscription with the right locale. Same cache
+ * names as worker/index.js (koralink-push-meta // /__kl/push-locale).
+ */
+async function writePushLocaleKv(locale: string): Promise<void> {
+  try {
+    const cache = await caches.open('koralink-push-meta');
+    await cache.put(
+      '/__kl/push-locale',
+      new Response(JSON.stringify({ l: locale }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  } catch {
+    // Cache-API unavailable (private mode, old browser) — rotation falls
+    // back to the worker's Arabic-first default.
+  }
+}
+
 export function usePushNotifications(locale: string = 'en') {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
@@ -51,7 +73,13 @@ export function usePushNotifications(locale: string = 'en') {
 
     navigator.serviceWorker.ready
       .then((reg) => {
-        reg.pushManager.getSubscription().then(setSubscription);
+        reg.pushManager.getSubscription().then((sub) => {
+          setSubscription(sub);
+          // P2-92: keep the worker-readable locale KV warm even when the
+          // server row already matches — a rotation minutes later must not
+          // fall back to the wrong locale.
+          if (sub) void writePushLocaleKv(locale);
+        });
       })
       .catch(() => {
         // P2-91 (run #69): a rejecting serviceWorker.ready (SW registration
@@ -59,7 +87,10 @@ export function usePushNotifications(locale: string = 'en') {
         // unhandled rejection from the mount effect — subscribe() already
         // reports 'error' through its own try/catch.
       });
-  }, []);
+    // P2-92: `locale` is a dependency — a language switch re-primes the
+    // worker-readable KV so a later rotation re-upserts with the CURRENT
+    // locale (idempotent; re-running is safe).
+  }, [locale]);
 
   // P2-76b (run #65): keep the server-side push locale in sync with the UI
   // locale. push_subscriptions.locale is set at subscribe time only, so a
@@ -158,6 +189,9 @@ export function usePushNotifications(locale: string = 'en') {
       });
 
       setSubscription(sub);
+      // P2-92 (run #69): mirror the synced locale into the worker-readable
+      // KV so pushsubscriptionchange re-upserts with the RIGHT locale.
+      void writePushLocaleKv(locale);
 
       // Send to backend, including the active locale so push deep-links
       // preserve ar/en (P1-5).
