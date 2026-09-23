@@ -28,9 +28,6 @@ jobs:
       - name: PR-Agent /review (Docker CLI)
         run: |
           docker run --rm \
-            -e PR_AGENT__CONFIG__MODEL=openai/glm-5.3-flash \
-            -e PR_AGENT__CONFIG__FALLBACK_MODELS="[]" \
-            -e PR_AGENT__CONFIG__CUSTOM_MODEL_MAX_TOKENS=32000 \
             -e PR_AGENT__OPENAI__KEY="$ZAI_KEY" \
             -e PR_AGENT__OPENAI__API_BASE="$ZAI_BASE" \
             -e OPENAI.KEY="$ZAI_KEY" \
@@ -41,7 +38,10 @@ jobs:
             -e PR_AGENT__GITHUB__USER_TOKEN="$GH_PAT" \
             -e GITHUB.USER_TOKEN="$GH_PAT" \
             codiumai/pr-agent:latest \
-            --pr_url="$PR_URL" review
+            --pr_url="$PR_URL" review \
+            --config.model='openai/glm-5.3-flash' \
+            --config.fallback_models='["openai/glm-5.3-flash"]' \
+            --config.custom_model_max_tokens=32000
         env:
           ZAI_KEY: ${{ secrets.ZAI_PR_REVIEW_KEY }}
           ZAI_BASE: https://api.z.ai/api/coding/paas/v4
