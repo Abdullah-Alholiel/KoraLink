@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { useTranslations } from 'next-intl';
@@ -34,7 +34,6 @@ interface BadgeSyncEvent {
  */
 export default function NotificationProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const pathname = usePathname();
   const socketRef = useRef<Socket | null>(null);
 
@@ -46,6 +45,14 @@ export default function NotificationProvider({ children }: { children: React.Rea
   // the socket on locale/path changes.
   const tRef = useRef(useTranslations('notifications'));
   const t = tRef.current;
+  // F3 (2026-09-22): pathname lives in a REF, never in the socket effect's
+  // deps. With `pathname` as a dep, EVERY route change disconnected and
+  // re-handshaked the app-wide notification socket (JWT verify + a users-row
+  // SELECT per navigation) and opened a window where a `notification` event
+  // was lost mid-navigation. The toast guard reads the ref instead — same
+  // pattern as tRef above.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
@@ -64,8 +71,10 @@ export default function NotificationProvider({ children }: { children: React.Rea
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
 
-      // Toast — suppressed while the user is already reading that DM thread.
-      const inConversation = /\/messages\/[^/]+$/.test(pathname ?? '');
+      // Toast — suppressed while the user is already reading that DM thread
+      // (reads the pathname REF: the socket effect must not re-subscribe on
+      // navigation — F3).
+      const inConversation = /\/messages\/[^/]+$/.test(pathnameRef.current ?? '');
       if (payload.verb === 'messaged' && inConversation) return;
 
       const actorName = payload.actor?.name ?? '';
@@ -107,7 +116,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated, user?.id, queryClient, setNotificationBadge, pathname, t, router]);
+  }, [isAuthenticated, user?.id, queryClient, setNotificationBadge, t]);
 
   return <>{children}</>;
 }

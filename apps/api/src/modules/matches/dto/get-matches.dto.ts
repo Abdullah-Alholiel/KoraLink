@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Matches, Min, Max, IsIn } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Matches, Min, Max, IsIn, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -141,6 +141,17 @@ export class GetMatchesDto {
   @IsOptional()
   @IsString()
   venue_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Free-text location filter: venue address ILIKE (search-suggestions feature — the Play screen sends the tapped neighborhood chip)',
+    example: 'Olaya',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  neighborhood?: string;
 
   @ApiPropertyOptional({
     description:

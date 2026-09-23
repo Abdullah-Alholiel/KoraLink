@@ -76,8 +76,16 @@ export class UsersController {
   @Get('me/discussions')
   @ApiOperation({ summary: 'Get unified discussion list for Messages screen' })
   @ApiOkResponse({ description: 'Discussions with last message preview.' })
-  getMyDiscussions(@CurrentUser() user: { sub: string }) {
-    return this.usersService.getMyDiscussions(user.sub);
+  getMyDiscussions(
+    @CurrentUser() user: { sub: string },
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+  ) {
+    return this.usersService.getMyDiscussions(
+      user.sub,
+      page ? parseInt(page, 10) || 1 : 1,
+      perPage ? parseInt(perPage, 10) || 30 : 30,
+    );
   }
 
   // ── PATCH /users/me ────────────────────────────────────

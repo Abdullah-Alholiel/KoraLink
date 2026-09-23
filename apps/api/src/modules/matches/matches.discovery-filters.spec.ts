@@ -1,5 +1,6 @@
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { MatchesService } from './matches.service';
 import {
   GetMatchesDto,
@@ -183,6 +184,42 @@ describe('MatchesService.findNearby gender + limit', () => {
     });
     await svc.findNearby({} as GetMatchesDto, 'user-1');
     expect(params).toContain(50);
+  });
+});
+
+describe('MatchesService.findNearby neighborhood filter (search-suggestions)', () => {
+  it('binds the neighborhood term as an address substring (additive AND)', async () => {
+    let params: unknown[] = [];
+    let sqlText = '';
+    const db = {
+      execute: async (q: unknown) => {
+        params = collectParams(q);
+        sqlText = new PgDialect().sqlToQuery(q as never).sql;
+        return [];
+      },
+    };
+    const svc = new MatchesService(
+      db as never,
+      {} as never, // walletService
+      {} as never, // appGateway
+      {} as never, // notificationsService
+      {} as never, // activitiesService
+      { getNumber: async () => 0 } as never,
+      {} as never, // realtime
+      { promoteNextInTx: async () => null } as never
+    );
+    await svc.findNearby({ neighborhood: 'Olaya' } as GetMatchesDto, 'user-1');
+    expect(params).toContain('%Olaya%');
+    expect(sqlText).toMatch(/v\.address ILIKE/);
+  });
+
+  it('no neighborhood param → no address clause in the SQL', async () => {
+    let params: unknown[] = [];
+    const svc = makeService((q) => {
+      params = collectParams(q);
+    });
+    await svc.findNearby({} as GetMatchesDto, 'user-1');
+    expect(params.every((p) => !(typeof p === 'string' && p.startsWith('%')))).toBe(true);
   });
 });
 

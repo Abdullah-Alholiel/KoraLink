@@ -70,6 +70,7 @@
     "done": "Done",
     "seeAll": "See All",
     "search": "Search",
+    "clear": "Clear",
     "filter": "Filter",
     "noResults": "No results found",
     "offlineBanner": "You're offline — showing cached data",
@@ -701,6 +702,19 @@
     "invalidAmount": "Please enter a valid amount",
     "comingSoon": "Coming soon"
   },
+  "searchSuggestions": {
+    "title": "Search by area",
+    "cities": {
+      "riyadh": "Riyadh",
+      "jeddah": "Jeddah"
+    },
+    "neighborhoods": {
+      "alMalqa": "Al-Malqa",
+      "olaya": "Olaya",
+      "ksu": "King Saud University Campus",
+      "alNakheel": "Al-Nakheel"
+    }
+  },
   "clubs": {
     "title": "Clubs",
     "searchPlaceholder": "Search clubs",
@@ -784,7 +798,8 @@
     "noDiscussions": "No discussions yet",
     "noDiscussionsDescription": "Join or host a match to start chatting with players!",
     "older": "Older",
-    "noConversations": "No conversations yet"
+    "noConversations": "No conversations yet",
+    "loadMore": "Load more"
   },
   "feed": {
     "title": "Community Feed",
@@ -881,7 +896,6 @@
     "emptyCta": "Find a match",
     "loading": "Loading your matches...",
     "statsPlayed": "Played",
-    "statsWins": "Wins",
     "statsHosted": "Hosted",
     "historyCancelled": "{count} cancelled"
   },

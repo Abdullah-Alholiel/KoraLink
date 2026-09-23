@@ -53,6 +53,10 @@ next-env.d.ts
 # agents
 .agents/*
 
+# hermes local scratch (.local/ holds one-shot probe scripts; never committed)
+.local/
+**/.local/
+
 # graphify (knowledge graph) — commit graph.json/report/html, not local/cache/backups
 graphify-out/cost.json
 graphify-out/cache/

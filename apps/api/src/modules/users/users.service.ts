@@ -175,13 +175,14 @@ export class UsersService {
       .innerJoin(matches, eq(matches.id, match_players.match_id))
       .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
-    // POTM wins + hosted count (My Games stats strip, 2026-09-18). Both are
-    // server-truth so the My Games strip and the profile hero can never drift:
-    // potm wins reuse the tie-aware getPomCount() used by /users/me; hosted =
-    // every match row with host_id = me, ALL statuses (the strip answers "how
-    // many games did I host", including cancelled ones).
-    const [potm_count, matches_hosted] = await Promise.all([
-      this.getPomCount(userId),
+    // Hosted count (My Games stats strip, 2026-09-18): server-truth so the My
+    // Games strip and any other stat surface can never drift. Hosted = every
+    // match row with host_id = me, ALL statuses (the strip answers "how many
+    // games did I host", including cancelled ones). No POTM/"wins" metric
+    // here — Abdullah removed it 2026-09-18: POTM depends on post-match
+    // voting, it is not collected when a match finishes, so the cell read as
+    // a fake number. (Profile hero keeps its own pom_count from /users/me.)
+    const [matches_hosted] = await Promise.all([
       this.db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(matches)
@@ -191,7 +192,6 @@ export class UsersService {
 
     return {
       games_played: count,
-      potm_count,
       matches_hosted,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
@@ -287,10 +287,28 @@ export class UsersService {
    * Get unified discussions list — match group chats AND personal 1:1
    * conversations in ONE recency-sorted list, with last message preview
    * and unread counts. Single source for the Messages screen.
+   *
+   * Paginated (page/perPage, default 30/50): every joined match creates a
+   * discussion row, so active players outgrow one page quickly — the old
+   * hard LIMIT 30 made discussion #31 permanently unreachable. OFFSET for
+   * the same reasons as listForUser (bounded per-user union list, COALESCE
+   * sort key); `type,id` breaks ties deterministically across pages.
    */
-  async getMyDiscussions(userId: string) {
+  async getMyDiscussions(
+    userId: string,
+    page = 1,
+    perPage = 30,
+  ) {
+    const limit = Math.min(100, Math.max(1, perPage));
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * limit;
+
     const rows = await this.db.execute(sql`
       SELECT * FROM (
+        SELECT
+          COUNT(*) OVER()::int AS total_count,
+          unified_discussions.*
+        FROM (
         SELECT
           m.id,
           'match'::text AS type,
@@ -361,10 +379,14 @@ export class UsersService {
         ) last_pm ON true
         LEFT JOIN users sender_u ON sender_u.id = last_pm.sender_id
         WHERE cp.user_id = ${userId}
+      ) unified_discussions
       ) unified
-      ORDER BY unified.last_activity DESC
-      LIMIT 30
+      ORDER BY unified.last_activity DESC, unified.type ASC, unified.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const totalRows = rows as unknown as Array<{ total_count: number }>;
+    const total = Number(totalRows[0]?.total_count ?? 0);
 
     return {
       discussions: (rows as unknown as Array<{
@@ -396,8 +418,8 @@ export class UsersService {
         lastMessageSenderName: r.last_message_sender_name,
         unreadCount: r.unread_count ?? 0,
       })),
-      total: rows.length,
-      hasMore: rows.length >= 30,
+      total,
+      hasMore: offset + rows.length < total,
     };
   }
 

@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 import type { MessageStatus } from '@/hooks/useMessages';
-import type { Discussion } from '@/lib/discussion-adapter';
+import type { DiscussionsResponse } from '@/hooks/useMessages';
 
 export interface ConversationSummary {
   id: string;
@@ -58,7 +58,6 @@ interface MessageApi {
   created_at: string;
   client_message_id?: string | null;
 }
-interface ConversationsApiResponse { conversations: ConversationApi[]; total: number; hasMore: boolean; }
 interface MessagesApiResponse { messages: MessageApi[]; total: number; hasMore: boolean; }
 
 function mapSummary(r: ConversationApi): ConversationSummary {
@@ -112,16 +111,57 @@ function mergePersonalMessages(
   return [...history, ...extra];
 }
 
-/** Direct-message conversation list (Messages tab). */
+/** Canonical envelope of GET /conversations. */
+interface ConversationsResponse {
+  conversations: ConversationApi[];
+  total: number;
+  hasMore: boolean;
+}
+
+const CONVERSATIONS_PAGE_SIZE = 50;
+
+/**
+ * Direct-message conversation list (Messages tab), paged (50 per page).
+ * The API is paginated (?page=&perPage=) — conversation #51 is reachable via
+ * fetchNextPage instead of being hard-capped. Consumers get a flat array via
+ * `conversations` (all loaded pages concatenated); BadgeHydrator and the
+ * thread header consume page-1 semantics and are unaffected by the shape.
+ */
 export function useConversations() {
-  return useQuery<ConversationSummary[], FetchError>({
-    queryKey: ['conversations'],
-    queryFn: async () => {
-      const data = await fetcher<ConversationsApiResponse>('/conversations');
-      return data.conversations.map(mapSummary);
+  const query = useInfiniteQuery({
+    queryKey: ['conversations', 'infinite'],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }): Promise<ConversationsResponse> => {
+      const data = await fetcher<ConversationsResponse>(
+        `/conversations?page=${pageParam}&perPage=${CONVERSATIONS_PAGE_SIZE}`,
+      );
+      return data;
     },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.hasMore ? allPages.length + 1 : undefined,
+    maxPages: 10,
     staleTime: 30_000,
   });
+
+  const conversations = useMemo(
+    () => query.data?.pages.flatMap((page) => page.conversations.map(mapSummary)) ?? [],
+    [query.data],
+  );
+
+  return {
+    conversations,
+    total: query.data?.pages[0]?.total,
+    hasMore: Boolean(query.hasNextPage),
+    fetchNextPage: () => {
+      void query.fetchNextPage();
+    },
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    error: (query.error as FetchError | null) ?? null,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
 }
 
 interface ConversationCreatedApi {
@@ -164,23 +204,28 @@ export function useStartConversation() {
  */
 /**
  * Optimistically zero the unread count for one conversation in EVERY cached
- * query that renders an unread badge — the bottom-nav badge cache
- * (['conversations'], infinite pages) and the Messages list cache
- * (['user','me','discussions'], a plain array). Called when the user reads a
- * thread (incoming-while-open or on leaving), so the list never shows a stale
- * unread dot for messages they've seen. A following invalidation reconciles
- * with the server's authoritative counts.
+ * query that renders an unread badge:
+ * - ['conversations', 'infinite'] — InfiniteData<{conversations: ConversationSummary[]}> (DM list)
+ * - ['user','me','discussions']  — InfiniteData<{discussions: raw envelope}> (Messages screen, raw
+ *   pre-adapter envelope; its discussion rows carry the camelCase unreadCount)
+ * Called when the user reads a thread (incoming-while-open or on leaving), so
+ * no list shows a stale unread dot for messages they've seen. A following
+ * invalidation reconciles with the server's authoritative counts.
+ *
+ * (F2 fix, 2026-09-22: the old code wrote an infinite shape into a query that
+ * held a flat array, so the ['conversations'] branch never matched — the badge
+ * only cleared after the refetch. This walks the real cached shapes.)
  */
 function zeroCachedUnread(queryClient: QueryClient, conversationId: string | null) {
   if (!conversationId) return;
-  queryClient.setQueriesData<{ pages: { items: ConversationSummary[] }[] }>(
+  queryClient.setQueriesData<InfiniteData<ConversationsResponse>>(
     { queryKey: ['conversations'] },
     (data) => {
       if (!data?.pages) return data;
       let changed = false;
       const pages = data.pages.map((page) => ({
         ...page,
-        items: page.items.map((conv) => {
+        conversations: page.conversations.map((conv) => {
           if (conv.id !== conversationId || conv.unreadCount === 0) return conv;
           changed = true;
           return { ...conv, unreadCount: 0 };
@@ -189,16 +234,22 @@ function zeroCachedUnread(queryClient: QueryClient, conversationId: string | nul
       return changed ? { ...data, pages } : data;
     },
   );
-  queryClient.setQueriesData<Discussion[]>({ queryKey: ['user', 'me', 'discussions'] }, (data) => {
-    if (!data) return data;
-    let changed = false;
-    const next = data.map((d) => {
-      if (d.id !== conversationId || d.unreadCount === 0) return d;
-      changed = true;
-      return { ...d, unreadCount: 0 };
-    });
-    return changed ? next : data;
-  });
+  queryClient.setQueriesData<InfiniteData<DiscussionsResponse>>(
+    { queryKey: ['user', 'me', 'discussions'] },
+    (data) => {
+      if (!data?.pages) return data;
+      let changed = false;
+      const pages = data.pages.map((page) => ({
+        ...page,
+        discussions: page.discussions.map((d) => {
+          if (d.id !== conversationId || d.unreadCount === 0) return d;
+          changed = true;
+          return { ...d, unreadCount: 0 };
+        }),
+      }));
+      return changed ? { ...data, pages } : data;
+    },
+  );
 }
 
 export function useConversationMessages(conversationId: string | null) {

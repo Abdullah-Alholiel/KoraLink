@@ -61,21 +61,35 @@ const wrapper = (queryClient: QueryClient) => {
 };
 
 function seedCaches(queryClient: QueryClient) {
-  queryClient.setQueryData(['conversations'], {
+  // Real cache shapes (2026-09-22 pagination refactor):
+  // - ['conversations', 'infinite'] — InfiniteData<{conversations, total, hasMore}>
+  // - ['user','me','discussions']  — InfiniteData<{discussions, total, hasMore}> (raw envelope)
+  queryClient.setQueryData(['conversations', 'infinite'], {
     pages: [
       {
-        items: [
+        conversations: [
           { id: 'conv-1', unreadCount: 3, lastMessage: 'hi from other' },
           { id: 'conv-2', unreadCount: 1 },
         ],
+        total: 2,
+        hasMore: false,
       },
     ],
-    pageParams: [null],
+    pageParams: [1],
   });
-  queryClient.setQueryData(['user', 'me', 'discussions'], [
-    { id: 'conv-1', type: 'personal', unreadCount: 3 },
-    { id: 'conv-9', type: 'match', unreadCount: 2 },
-  ]);
+  queryClient.setQueryData(['user', 'me', 'discussions'], {
+    pages: [
+      {
+        discussions: [
+          { id: 'conv-1', type: 'personal', unreadCount: 3 },
+          { id: 'conv-9', type: 'match', unreadCount: 2 },
+        ],
+        total: 2,
+        hasMore: false,
+      },
+    ],
+    pageParams: [1],
+  });
 }
 
 describe('useConversationMessages — read receipts (seen state)', () => {
@@ -121,13 +135,17 @@ describe('useConversationMessages — read receipts (seen state)', () => {
       expect(markRead).toBeDefined();
     });
 
-    // Both caches zeroed for conv-1 only.
-    const convCache = queryClient.getQueryData<{ pages: { items: { id: string; unreadCount: number }[] }[] }>(['conversations']);
-    expect(convCache?.pages[0].items.find((c) => c.id === 'conv-1')?.unreadCount).toBe(0);
-    expect(convCache?.pages[0].items.find((c) => c.id === 'conv-2')?.unreadCount).toBe(1);
-    const discussions = queryClient.getQueryData<{ id: string; unreadCount: number }[]>(['user', 'me', 'discussions']);
-    expect(discussions?.find((d) => d.id === 'conv-1')?.unreadCount).toBe(0);
-    expect(discussions?.find((d) => d.id === 'conv-9')?.unreadCount).toBe(2);
+    // Both caches zeroed for conv-1 only (infinite-envelope shapes).
+    const convCache = queryClient.getQueryData<{
+      pages: { conversations: { id: string; unreadCount: number }[] }[];
+    }>(['conversations', 'infinite']);
+    expect(convCache?.pages[0].conversations.find((c) => c.id === 'conv-1')?.unreadCount).toBe(0);
+    expect(convCache?.pages[0].conversations.find((c) => c.id === 'conv-2')?.unreadCount).toBe(1);
+    const discussions = queryClient.getQueryData<{
+      pages: { discussions: { id: string; unreadCount: number }[] }[];
+    }>(['user', 'me', 'discussions']);
+    expect(discussions?.pages[0].discussions.find((d) => d.id === 'conv-1')?.unreadCount).toBe(0);
+    expect(discussions?.pages[0].discussions.find((d) => d.id === 'conv-9')?.unreadCount).toBe(2);
 
     unmount();
   });
@@ -150,11 +168,15 @@ describe('useConversationMessages — read receipts (seen state)', () => {
     expect(markReads.length).toBeGreaterThanOrEqual(1);
     expect(markReads.at(-1)?.payload).toEqual({ conversationId: 'conv-1' });
 
-    // Leaving zeroes the stale badge in both caches.
-    const convCache = queryClient.getQueryData<{ pages: { items: { id: string; unreadCount: number }[] }[] }>(['conversations']);
-    expect(convCache?.pages[0].items.find((c) => c.id === 'conv-1')?.unreadCount).toBe(0);
-    const discussions = queryClient.getQueryData<{ id: string; unreadCount: number }[]>(['user', 'me', 'discussions']);
-    expect(discussions?.find((d) => d.id === 'conv-1')?.unreadCount).toBe(0);
+    // Leaving zeroes the stale badge in both caches (infinite-envelope shapes).
+    const convCache = queryClient.getQueryData<{
+      pages: { conversations: { id: string; unreadCount: number }[] }[];
+    }>(['conversations', 'infinite']);
+    expect(convCache?.pages[0].conversations.find((c) => c.id === 'conv-1')?.unreadCount).toBe(0);
+    const discussions = queryClient.getQueryData<{
+      pages: { discussions: { id: string; unreadCount: number }[] }[];
+    }>(['user', 'me', 'discussions']);
+    expect(discussions?.pages[0].discussions.find((d) => d.id === 'conv-1')?.unreadCount).toBe(0);
   });
 
   it('does NOT emit mark-read when nothing new arrived and never flags my own messages', async () => {

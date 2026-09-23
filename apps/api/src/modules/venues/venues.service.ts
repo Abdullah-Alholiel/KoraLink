@@ -5,6 +5,72 @@ import * as schema from '../../database/schema';
 import { venues } from '../../database/schema';
 import { GetVenuesDto } from './dto/get-venues.dto';
 
+/** Row shape returned by VenuesService.findSuggestions. */
+export interface VenueSuggestionRow {
+  /** Venue city, e.g. "Riyadh" (canonical value from the venues table). */
+  city: string;
+  /**
+   * Neighborhood label extracted from the venue's free-text address
+   * ("Olaya District, …" → "Olaya"). Rendered as the suggestion chip label.
+   */
+  neighborhood: string;
+  /** Number of approved venues at this city + neighborhood pair. */
+  venue_count: number;
+}
+
+/**
+ * Hard cap on suggestion rows returned to a client. 2026-09-18 chips
+ * redesign: the list is NATIONWIDE (no city lock) and the client filters
+ * per keystroke, so the cap covers several cities × their neighborhoods.
+ */
+const SUGGESTIONS_LIMIT = 50;
+
+/**
+ * Deterministic neighborhood extractor for venue addresses. The schema has NO
+ * dedicated district column — the neighborhood is the leading segment of the
+ * free-text address. Strategy (first match wins):
+ *   1. "X District" / "X Neighbourhood" / "X Quarter" (EN or حي X in AR)
+ *   2. "<first segment>, …" — text before the first comma, stripped of a
+ *      trailing District-ish word. Length-capped and stop-word-guarded so a
+ *      leading street name never masquerades as a neighborhood.
+ * Returns null when no plausible neighborhood exists (caller drops the row).
+ */
+export function extractNeighborhood(address: string): string | null {
+  const text = (address ?? '').trim();
+  if (!text) return null;
+
+  // AR form: "حي الملقا" / "حي العليا"
+  const ar = text.match(/حي\s+([\u0600-\u06FF\u064E-\u0652\s]{2,40}?)(?:[،,]|$)/);
+  if (ar?.[1]) return ar[1].trim();
+
+  const first = text.split(/[،,]/)[0].trim();
+  if (!first) return null;
+
+  // EN form: "Olaya District" → "Olaya" (keep the name, drop the type word)
+  const en = first.match(
+    /^(.{2,40}?)\s+(?:district|neighbourhood|neighborhood|quarter)\b/i,
+  );
+  if (en?.[1]) return en[1].trim();
+
+  // Bare first segment: guard against street/road labels and number+name forms
+  // ("12241 Riyadh", "King Abdullah Rd") — those are not neighborhoods.
+  if (/^\d/.test(first)) return null;
+  if (/^(?:street|st\b|road|rd\b|avenue|ave\b|way|boulevard|blvd\b|highway|hwy\b|building|tower)\b/i.test(first)) {
+    return null;
+  }
+  // A segment ENDING in a road-type word is a street name, not a district
+  // ("King Abdullah Rd", "Prince Sultan Road", "طريق الملك عبدالله").
+  if (/(?:\b(?:rd|road|st|street|ave|avenue|blvd|boulevard|hwy|highway|way)|طريق)$/i.test(first)) {
+    return null;
+  }
+  if (!/[A-Za-z\u0600-\u06FF]/.test(first)) return null;
+  if (first.length > 40) return null;
+
+  // Drop a leading standalone postal/zone number ("11451 Riyadh 12" → keep
+  // only when at least one letter is present — already guaranteed above).
+  return first;
+}
+
 export interface NearbyVenueRow {
   id: string;
   name: string;
@@ -67,7 +133,7 @@ export class VenuesService {
     // city; pg_trgm similarity ranking is a later perf/ranking option.
     const searchTerm = search?.trim();
     const searchClause = searchTerm
-      ? sql`AND (v.name ILIKE ${'%' + searchTerm + '%'} OR v.city ILIKE ${'%' + searchTerm + '%'})`
+      ? sql`AND (v.name ILIKE ${'%' + searchTerm + '%'} OR v.city ILIKE ${'%' + searchTerm + '%'} OR v.address ILIKE ${'%' + searchTerm + '%'})`
       : sql``;
 
     const partnerClause = is_koralink_partner !== undefined
@@ -114,6 +180,65 @@ export class VenuesService {
     `);
 
     return rows as unknown as NearbyVenueRow[];
+  }
+
+  /**
+   * Distinct city + neighborhood suggestion pairs for the Play/Clubs search
+   * bars (search-suggestions feature, 2026-09-18 chips redesign). The list is
+   * NATIONWIDE and parameterless: the client fetches it once on focus, caches
+   * it, and filters per keystroke (Arabic-aware, lib/search-suggestions.ts) —
+   * so typing "Jeddah" surfaces Jeddah chips even for a Riyadh user, and no
+   * keystroke ever hits the API. Neighborhoods live INSIDE the free-text
+   * address column — there is no dedicated district column — so the address
+   * is passed to a deterministic prefix extractor:
+   *   "Olaya District, Prince Mohammed Bin Abdulaziz Rd, Riyadh 12241"
+   *     → neighborhood "Olaya"
+   *   "King Saud University Campus, King Abdullah Rd, Riyadh 11451"
+   *     → neighborhood "King Saud University"
+   * "Most important/popular" ordering = per-pair venue count DESC, then name.
+   */
+  async findSuggestions(): Promise<VenueSuggestionRow[]> {
+    const rows = await this.db.execute(sql`
+      SELECT
+        v.city,
+        v.address,
+        COUNT(*)::int AS venue_count
+      FROM venues v
+      WHERE v.is_approved = true
+      GROUP BY v.city, v.address
+      ORDER BY venue_count DESC, v.city ASC, v.address ASC
+      LIMIT 200
+    `);
+
+    const pairs = new Map<string, VenueSuggestionRow>();
+    for (const raw of rows as unknown as Array<{
+      city: string;
+      address: string;
+      venue_count: number;
+    }>) {
+      const neighborhood = extractNeighborhood(raw.address);
+      if (!neighborhood) continue;
+      const key = `${raw.city}||${neighborhood.toLowerCase()}`;
+      const existing = pairs.get(key);
+      if (existing) {
+        existing.venue_count += raw.venue_count;
+      } else {
+        pairs.set(key, {
+          city: raw.city,
+          neighborhood,
+          venue_count: raw.venue_count,
+        });
+      }
+    }
+
+    return [...pairs.values()]
+      .sort(
+        (a, b) =>
+          b.venue_count - a.venue_count ||
+          a.city.localeCompare(b.city) ||
+          a.neighborhood.localeCompare(b.neighborhood),
+      )
+      .slice(0, SUGGESTIONS_LIMIT);
   }
 
   /**

@@ -86,6 +86,8 @@ export function useMatches(filters?: {
   gender?: string | null;
   time?: string | null;
   venue_id?: string | null;
+  /** Free-text venue-address filter (search-suggestions feature). */
+  neighborhood?: string | null;
 }): UseMatchesResult {
   const query = useInfiniteQuery({
     queryKey: ['matches', filters],
@@ -104,6 +106,7 @@ export function useMatches(filters?: {
         if (filters.time) params.time = filters.time;
         if (filters.maxPrice != null) params.max_price = String(filters.maxPrice);
         if (filters.venue_id) params.venue_id = filters.venue_id;
+        if (filters.neighborhood) params.neighborhood = filters.neighborhood;
       }
       params.limit = String(PAGE_SIZE);
       if (pageParam > 0) params.offset = String(pageParam);

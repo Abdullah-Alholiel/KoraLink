@@ -1105,6 +1105,7 @@ export class MatchesService {
       gender,
       max_price,
       venue_id,
+      neighborhood,
       time,
       limit,
       offset,
@@ -1161,6 +1162,14 @@ export class MatchesService {
     // ── Venue filter (for club detail screen) ────────────────────────────
     const venueClause = venue_id
       ? sql`AND v.id = ${venue_id}::text`
+      : sql``;
+
+    // ── Neighborhood filter (search-suggestions feature): ILIKE against the
+    // venue's address — the same free-text the suggestions endpoint extracts
+    // neighborhoods from. Additive AND, never short-circuits other filters.
+    const neighborhoodTerm = neighborhood?.trim();
+    const neighborhoodClause = neighborhoodTerm
+      ? sql`AND v.address ILIKE ${'%' + neighborhoodTerm + '%'}`
       : sql``;
 
     // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
@@ -1248,6 +1257,7 @@ export class MatchesService {
         ${genderClause}
         ${priceClause}
         ${venueClause}
+        ${neighborhoodClause}
       GROUP BY m.id, u.id, p.id, v.id
       ORDER BY
         ${
