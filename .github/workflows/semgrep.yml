@@ -1,0 +1,38 @@
+# Deterministic security scan (pr-review-automation spec, slice S2).
+# Never hallucinates: findings come only from the .semgrep/ rules.
+# Advisory: findings do NOT fail CI (no --error); the JSON artifact is agent-consumable.
+
+name: Semgrep (deterministic security)
+
+on:
+  pull_request:
+    branches: [staging]
+  push:
+    branches: [staging]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan with KoraLink custom rules
+        run: |
+          semgrep scan --config .semgrep/koralink-rules.yml \
+            --metrics=off --json --output semgrep-report.json
+          echo "== findings =="
+          jq -r '.results[] | "\(.check_id): \(.path):\(.start.line) — \(.extra.message)"' \
+            semgrep-report.json || true
+          echo "total: $(jq '.results | length' semgrep-report.json)"
+
+      - name: Upload machine-readable report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
