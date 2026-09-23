@@ -70,7 +70,36 @@ describe('MatchesService chat access control (P0-1)', () => {
           findFirst: async () => matchRow ?? null,
         },
         match_messages: {
-          findMany: async () => rows.messages,
+          // Honors orderBy/limit so the F1 regression test below proves the
+          // real contract: DB fetch is created_at DESC + limit 50 (newest
+          // window); the service then reverses to chronological.
+          findMany: async (opts?: {
+            orderBy?: (msg: unknown, dir: Record<string, (col: unknown) => unknown>) => unknown;
+            limit?: number;
+          }) => {
+            const msgRows = [
+              ...(rows.messages as Array<Record<string, unknown>>),
+            ];
+            if (opts?.orderBy && msgRows.length > 0) {
+              let descUsed = false;
+              const dir = {
+                asc: (col: unknown) => ({ dir: 'asc', col }),
+                desc: (col: unknown) => {
+                  descUsed = true;
+                  return { dir: 'desc', col };
+                },
+              };
+              void opts.orderBy(msgRows[0], dir as never);
+              msgRows.sort((a, b) => {
+                const av = String(a.created_at);
+                const bv = String(b.created_at);
+                return descUsed ? (av < bv ? 1 : -1) : av < bv ? -1 : 1;
+              });
+            }
+            return typeof opts?.limit === 'number'
+              ? msgRows.slice(0, opts.limit)
+              : msgRows;
+          },
         },
       },
       select: () => ({
@@ -226,6 +255,31 @@ describe('MatchesService chat access control (P0-1)', () => {
       });
       const msgs = await svc.getMessages(MATCH_ID);
       expect(msgs).toHaveLength(1);
+    });
+
+    it('returns the NEWEST window in chronological order (DESC fetch + reverse — F1)', async () => {
+      // Chat with history past the 50-message window: the mock sorts by the
+      // orderBy callback the service provides. If the service ever regresses
+      // to ASC + limit (oldest-50 bug) or drops the reverse, this fails.
+      const seeded = Array.from({ length: 60 }, (_, i) => ({
+        id: `msg-${i + 1}`,
+        created_at: new Date(Date.UTC(2026, 8, 1, 10, i)).toISOString(),
+      }));
+      const svc = makeService({
+        match: baseMatch,
+        memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+        messages: seeded,
+      });
+      const msgs = (await svc.getMessages(MATCH_ID, MEMBER)) as Array<{
+        id: string;
+      }>;
+      expect(msgs).toHaveLength(50);
+      // Newest 50 = msg-11..msg-60; wire order must be CHRONOLOGICAL.
+      expect(msgs[0].id).toBe('msg-11');
+      expect(msgs[49].id).toBe('msg-60');
+      for (let i = 1; i < msgs.length; i++) {
+        expect(msgs[i - 1].id < msgs[i].id).toBe(true);
+      }
     });
   });
 });

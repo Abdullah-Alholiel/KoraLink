@@ -2199,9 +2199,14 @@ export class MatchesService {
       }
     }
 
-    const messages = await this.db.query.match_messages.findMany({
+    // Newest window of the chat, chronological on the wire (F1 fix,
+    // 2026-09-22): ASC + limit returned the OLDEST 50 messages ever sent —
+    // once a chat passed 50, a freshly opened ChatSheet showed ancient
+    // chatter and none of the newest. Mirror conversations.service
+    // listMessages: fetch DESC, then reverse for display order.
+    const rows = await this.db.query.match_messages.findMany({
       where: eq(match_messages.match_id, matchId),
-      orderBy: (msg, { asc }) => [asc(msg.created_at)],
+      orderBy: (msg, { desc }) => [desc(msg.created_at)],
       limit: 50,
       with: {
         user: {
@@ -2215,7 +2220,7 @@ export class MatchesService {
       },
     });
 
-    return messages;
+    return rows.reverse();
   }
 
   /**
