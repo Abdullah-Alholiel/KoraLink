@@ -398,6 +398,9 @@
     "reopen": "إعادة الفتح",
     "reopenConfirmTitle": "إعادة فتح هذا البلاغ؟",
     "reopenConfirmMsg": "سيعود البلاغ إلى القائمة المفتوحة مع الاحتفاظ بنص الإجراء السابق.",
+    "banConfirmTitle": "حظر هذا المستخدم؟",
+    "banConfirmSubject": "أنت على وشك حظر {subject}. سيتم تسجيل خروجه من كل الجلسات ومنعه من الحجز والدردشة والانضمام إلى المباريات.",
+    "banConfirmAction": "حظر المستخدم",
     "editOutcome": "تعديل الإجراء",
     "saved": "تم الحفظ",
     "failed": "فشل الإجراء",
@@ -648,8 +651,17 @@
     "roleNote": "يبدأ تغيير الدور مفعولًا عند تسجيل المستخدم الدخول التالي (رمز JWT يحمل صلاحية الدور).",
     "ban": "حظر",
     "unban": "رفع الحظر",
-    "suspend7d": "إيقاف 7 أيام",
     "liftSuspension": "رفع الإيقاف",
+    "actionFailed": "فشل الإجراء",
+    "banConfirmTitle": "حظر هذا المستخدم؟",
+    "banConfirmUser": "أنت على وشك حظر {user}. سيتم تسجيل خروجه من كل الجلسات ومنعه من الحجز والدردشة والانضمام إلى المباريات.",
+    "suspendBtn": "إيقاف",
+    "extendSuspension": "تمديد",
+    "suspendMenuTitle": "إيقاف {user} لمدة:",
+    "suspendPreset24h": "24 ساعة",
+    "suspendPreset168h": "7 أيام",
+    "suspendPreset720h": "30 يومًا",
+    "suspendCancel": "إلغاء",
     "na": "—"
   }
 }

@@ -48,6 +48,20 @@ export function riyadhHour(now: Date = new Date()): number {
 }
 
 /**
+ * Riyadh wall clock as "HH:MM" (24h, hourCycle h23 per P2-35). Use for
+ * slot start/end comparisons (host SlotPicker past-slot filtering).
+ */
+export function riyadhTimeNow(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+    timeZone: RIYADH_TIME_ZONE,
+  }).format(now);
+}
+
+/**
  * Is the venue open at `now`? A closed weekday ⇒ false; otherwise
  * open_hour <= h < close_hour (close exclusive; close 24 = midnight covers
  * the 23:xx hour).

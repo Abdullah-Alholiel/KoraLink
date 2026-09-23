@@ -14,6 +14,7 @@ export type PublishErrorKind =
   | 'insufficient_balance'
   | 'hosting_terms'
   | 'slot_taken'
+  | 'slot_started'
   | 'network'
   | 'validation'
   | 'generic';
@@ -63,6 +64,7 @@ export const PUBLISH_ERROR_KEYS: Record<PublishErrorKind, string> = {
   insufficient_balance: 'host.errorInsufficientBalance',
   hosting_terms: 'host.hostingConsentRequired',
   slot_taken: 'host.errorSlotTaken',
+  slot_started: 'host.errorSlotStarted',
   network: 'host.errorNetwork',
   validation: 'host.errorValidation',
   generic: 'host.createError',
@@ -86,6 +88,12 @@ export function classifyPublishError(err: unknown): PublishErrorKind {
   }
   if (/slot.*booked|already been booked/i.test(message)) {
     return 'slot_taken';
+  }
+  // Publish-time past-slot guard (2026-09-18): "This slot has already
+  // started. Pick an upcoming slot (…)". Checked AFTER slot_taken — a
+  // message can only carry one business cause.
+  if (/slot has already started/i.test(message)) {
+    return 'slot_started';
   }
 
   const kind = classifyError(err);

@@ -1,16 +1,65 @@
 'use client';
 
 // Offline fallback screen (SW navigation fallback). P2-70 (run #56): the copy
-// routes through the shared locale dicts (common.noInternet /
-// noInternetDescription / retryConnection) instead of a hardcoded ar/en map —
-// translators own the strings, and the i18n parity check covers them. Dates
-// are not used here; the Retry control's accessible name is its visible
-// localized label (aria = text, the simplest a11y-correct form).
+// routes through the locale dicts — translators own the strings, and the i18n
+// parity check covers them.
+//
+// P2-73 (run #64): when the SW redirects here from a failed navigation it
+// saves the original URL (cache KV `koralink-offline-restore`, see
+// src/lib/sw-offline-restore.ts). This page reads it and offers a localized
+// "back to the page" CTA that re-attempts the original target — turning the
+// offline dead-end into a pause, not a loss. If the network is still down on
+// CTA press (or right after a fresh redirect while still offline), the user
+// gets the localized still-offline toast instead of a silent no-op.
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useAppStore } from '@/store/useAppStore';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+import {
+  FRESH_SAVE_MS,
+  readRestoreEntry,
+  type RestoreEntry,
+} from '@/lib/sw-offline-restore';
 
 export default function Offline() {
+  // Existing copy lives in `common` (P2-70 contract, pinned by test/offline
+  // .test.tsx); the P2-73 restore strings are namespaced under `offline`.
   const t = useTranslations('common');
+  const tOffline = useTranslations('offline');
+  const showToast = useAppStore((s) => s.showToast);
+
+  // undefined = still reading the KV; null = nothing saved (pure P2-70 screen);
+  // entry = offer the restore CTA.
+  const [entry, setEntry] = useState<RestoreEntry | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const restored = await readRestoreEntry();
+      if (cancelled) return;
+      setEntry(restored);
+      // A fresh save + still-offline = we were JUST redirected here by the
+      // SW catch. Say so once (never on stale revisits — those stay silent).
+      if (restored && !navigator.onLine && Date.now() - restored.savedAt <= FRESH_SAVE_MS) {
+        showToast(tOffline('backUnavailable'), 'error', { detail: tOffline('backUnavailableHint') });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleBack = () => {
+    const stillOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    trackEvent('offline_restore_attempted', { stillOffline });
+    if (stillOffline) {
+      showToast(tOffline('backUnavailable'), 'error', { detail: tOffline('backUnavailableHint') });
+      return;
+    }
+    if (entry) window.location.assign(entry.url);
+  };
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-brand-bg p-8 text-center">
@@ -36,6 +85,14 @@ export default function Offline() {
         <h1 className="text-2xl font-bold text-brand-black">{t('noInternet')}</h1>
         <p className="text-sm text-gray-500">{t('noInternetDescription')}</p>
       </div>
+      {entry ? (
+        <button
+          onClick={handleBack}
+          className="rounded-lg bg-brand-green px-8 py-3 font-medium text-white transition-opacity hover:opacity-90 active:opacity-75"
+        >
+          {tOffline('backToPage')}
+        </button>
+      ) : null}
       <button
         onClick={() => window.location.reload()}
         className="rounded-lg bg-brand-green px-8 py-3 font-medium text-white transition-opacity hover:opacity-90 active:opacity-75"

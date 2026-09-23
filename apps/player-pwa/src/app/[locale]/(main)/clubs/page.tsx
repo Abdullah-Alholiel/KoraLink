@@ -15,12 +15,14 @@ import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 
-const FILTER_KEYS = ['Nearby', 'Top Rated', 'Indoor', 'Available Now'] as const;
+// Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — the product
+// has no ratings pipeline (venues.rating is all-zero, no write path), so the
+// pill filtered nothing. Nearby is now a real distance sort (see below).
+const FILTER_KEYS = ['Nearby', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL_MAP: Record<FilterKey, string> = {
     Nearby: 'clubs.filters.nearby',
-    'Top Rated': 'clubs.filters.topRated',
     Indoor: 'clubs.filters.indoor',
     'Available Now': 'clubs.filters.availableNow',
 };
@@ -67,14 +69,16 @@ export default function ClubsPage() {
         search: debouncedSearch || undefined,
     });
 
-    // Pills filter the (already server-searched) fetched set client-side.
+    // Pills filter the (already server-searched) fetched set client-side, then
+    // Nearby applies a stable ascending distance sort — null/missing distance
+    // (location denied / non-geo rows) always sorts LAST, ties keep API order.
+    // (Run #68, P2-13 residual: Nearby was previously a no-op pill.)
     const filteredVenues = (venues ?? []).filter((v) => {
         // A tapped suggestion pins the list to its neighborhood (server search
         // already matched city/address; this narrows to the exact district).
         if (suggestedFilter && !v.address.toLowerCase().includes(suggestedFilter.toLowerCase())) {
             return false;
         }
-        if (activeFilter === 'Top Rated') return true; // rating removed — show all
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
             return amenities.includes('indoors') || amenities.includes('indoor');
@@ -83,6 +87,16 @@ export default function ClubsPage() {
         if (activeFilter === 'Available Now') return isVenueOpenNow(v);
         return true;
     });
+    if (activeFilter === 'Nearby') {
+        filteredVenues.sort((a, b) => {
+            const da = a.distance_m;
+            const db = b.distance_m;
+            if (da == null && db == null) return 0;
+            if (da == null) return 1;
+            if (db == null) return -1;
+            return da - db;
+        });
+    }
 
     const visibleSuggestions = filterSuggestions(suggestions, searchQuery);
 
@@ -227,7 +241,14 @@ export default function ClubsPage() {
                     <h3 className="text-lg font-bold text-brand-black mb-1">
                         {venues && venues.length > 0 ? t('common.noResults') : t('clubs.noClubs')}
                     </h3>
-                    <p className="text-sm text-gray-400 text-center mb-6">{t('clubs.noClubsDescription')}</p>
+                    {/* Run #68: split the advice line — "adjust your filters" is
+                        only true when venues exist but none match the filter;
+                        a truly empty table needs the no-clubs copy instead. */}
+                    <p className="text-sm text-gray-400 text-center mb-6">
+                        {venues && venues.length > 0
+                            ? t('clubs.noClubsDescription')
+                            : t('clubs.noClubsEmpty')}
+                    </p>
                 </div>
             )}
 

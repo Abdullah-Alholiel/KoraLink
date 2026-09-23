@@ -10,7 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { eq, sql, and, inArray, isNull } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
@@ -140,6 +140,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { WalletService } from '../wallet/wallet.service';
 import { chargeMatchFeeTx, creditWalletTx } from './match-fees';
 import { REFUND_WINDOW_HOURS } from '../../common/constants';
+import { riyadhDateKey, riyadhTimeNow } from '../../common/utils/riyadh';
 
 // Slice 2/4 money primitives live in ./match-fees (shared with the waitlist
 // promotion fee path). Re-exported for backwards compatibility with specs.
@@ -530,7 +531,12 @@ export class MatchesService {
             {
               key: 'match_starting_soon', // P2-8: text localized per subscriber
               vars: { title: match.title, kickoffISO: kickoff.toISOString() },
-              data: { type: 'match-chat', matchId: match.id },
+              // Run #70 (Reviewer B): own semantic type — reusing
+              // 'match-chat' made the reminder share the chat tag
+              // (`match-chat:<id>`), so a starting-soon push could
+              // renotify-replace an unread chat notification (and vice
+              // versa). Deep-link target is unchanged (the match page).
+              data: { type: 'match_starting_soon', matchId: match.id },
             },
           );
           // P1-41 (run #35): email mirror of the reminder (E2). Best-effort
@@ -646,7 +652,9 @@ export class MatchesService {
         await this.notificationsService.sendPushToUsers([row.host_id], {
           key: 'players_needed', // P2-8: text localized per subscriber
           vars: { title: row.title, needed },
-          data: { type: 'match-chat', matchId: row.id },
+          // Run #70: own semantic type — was 'match-chat' (tag collision with
+          // real chat pushes for the same match, renotify-replaced them).
+          data: { type: 'players_needed', matchId: row.id },
         });
         await this.db.execute(sql`
           UPDATE ${matches} SET last_nudge_at = NOW(), updated_at = NOW()
@@ -1887,7 +1895,8 @@ export class MatchesService {
         await this.notificationsService.sendPushToUsers([renudge.hostId], {
           key: 'players_needed_renudge', // P2-8: text localized per subscriber
           vars: { title: hostMatch?.title ?? 'Match', needed: renudge.needed },
-          data: { type: 'match-chat', matchId },
+          // Run #70: own semantic type (was borrowed 'match-chat' — tag collision).
+          data: { type: 'players_needed_renudge', matchId },
         });
       } catch (err) {
         this.logger.error(`Underfill re-nudge failed for ${matchId}: ${(err as Error).message}`);
@@ -2003,10 +2012,10 @@ export class MatchesService {
         }
 
         const [slot] = await tx.execute(sql`
-          SELECT id, is_booked FROM pitch_slots
+          SELECT id, is_booked, slot_date, start_time FROM pitch_slots
           WHERE id = ${dto.booking_slot_id}::text
           FOR UPDATE
-        `) as unknown as [{ id: string; is_booked: boolean }];
+        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string }];
 
         if (!slot) {
           throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
@@ -2014,6 +2023,23 @@ export class MatchesService {
 
         if (slot.is_booked) {
           throw new ConflictException('This slot has already been booked by another host');
+        }
+
+        // Publish-time past-slot guard (owner directive 2026-09-18): a slot
+        // whose start has passed must never be bookable, even from a stale
+        // client that rendered it minutes ago. Strictly-future starts only —
+        // the EXACT mirror of the getPitchSlots today filter (start_time >
+        // now), so everything the picker lists is bookable and everything it
+        // hides is rejected here.
+        const todayKey = riyadhDateKey();
+        const slotStartMin = String(slot.start_time).slice(0, 5); // "HH:MM" from "HH:MM:SS"
+        const started =
+          slot.slot_date < todayKey ||
+          (slot.slot_date === todayKey && slotStartMin <= riyadhTimeNow());
+        if (started) {
+          throw new ConflictException(
+            `This slot has already started. Pick an upcoming slot (slot_date=${slot.slot_date}, start=${slotStartMin}, now=${riyadhTimeNow()} Riyadh).`,
+          );
         }
       }
 
@@ -2156,6 +2182,23 @@ export class MatchesService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async getPitchSlots(pitchId: string, date: string) {
+    // Past-slot filter (owner directive 2026-09-18): a pitch's bookable
+    // availability must depend on the CURRENT TIME. Riyadh is the product's
+    // canonical timezone (mirrors the PWA's lib/venue-hours.ts):
+    //  - past days (date < today) → nothing is bookable → [];
+    //  - today → drop slots whose START has passed. A match must occupy a
+    //    full future slot (duration locks to the slot window), so an
+    //    in-progress slot is dead too — this mirrors the createMatch
+    //    slot-started guard exactly: everything listed is bookable
+    //    (Abdullah's 19:00 report: "16:00–17:00 and 17:00–18:00 must not show").
+    //  - future dates → unfiltered.
+    // Handled in SQL so paginated/limited consumers can never resurface them.
+    const todayKey = riyadhDateKey();
+    const isToday = date === todayKey;
+    if (date < todayKey) {
+      return [];
+    }
+
     const rows = await this.db
       .select({
         id: pitch_slots.id,
@@ -2170,7 +2213,11 @@ export class MatchesService {
       })
       .from(pitch_slots)
       .where(
-        sql`${pitch_slots.pitch_id} = ${pitchId}::text AND ${pitch_slots.slot_date} = ${date}::date`,
+        isToday
+          ? sql`${pitch_slots.pitch_id} = ${pitchId}::text
+                AND ${pitch_slots.slot_date} = ${date}::date
+                AND ${pitch_slots.start_time} > ${riyadhTimeNow()}::time`
+          : sql`${pitch_slots.pitch_id} = ${pitchId}::text AND ${pitch_slots.slot_date} = ${date}::date`,
       )
       .orderBy(pitch_slots.start_time);
 
@@ -2185,8 +2232,26 @@ export class MatchesService {
    * Returns recent chat messages for a match, newest last.
    * Complements the gateway's real-time `new-message` events with history
    * for initial render and offline caching.
+   *
+   * P1-3 (run #65): optional keyset pagination. The response stays a BARE
+   * array (zero contract change for existing clients); `opts.before` is a
+   * message id cursor — the window returns messages strictly OLDER than it
+   * in (created_at, id) order (stable tie-break: ids are random, but the
+   * order is deterministic, so pages never skip/dup). Callers probe with
+   * limit+1 and treat a full page as hasMore. Uses the keyset index
+   * match_messages_match_created_idx (migration 0014).
+   *
+   * Window fix (same P1-3 bug): the no-cursor default is now the LATEST
+   * page (probed DESC, reversed to ascending for the response). The old
+   * `ASC LIMIT 50` returned the EARLIEST 50 messages ever — any match with
+   * 50+ messages rendered a stale window whose new messages vanished on
+   * reload. The WS path keeps live traffic fresh in between.
    */
-  async getMessages(matchId: string, viewerId?: string) {
+  async getMessages(
+    matchId: string,
+    viewerId?: string,
+    opts: { before?: string; limit?: number } = {},
+  ) {
     // Access control (P0-1): chat history is members-only, mirroring the WS
     // gateway's join-lobby/send-message membership enforcement. Internal
     // callers (none today) may omit the viewer.
@@ -2199,15 +2264,56 @@ export class MatchesService {
       }
     }
 
-    // Newest window of the chat, chronological on the wire (F1 fix,
-    // 2026-09-22): ASC + limit returned the OLDEST 50 messages ever sent —
-    // once a chat passed 50, a freshly opened ChatSheet showed ancient
-    // chatter and none of the newest. Mirror conversations.service
-    // listMessages: fetch DESC, then reverse for display order.
-    const rows = await this.db.query.match_messages.findMany({
+    // Clamp: hard bounds keep arbitrary limit values from dumping the table.
+    const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50) || 50, 1), 100);
+    const before = opts.before?.trim() || undefined;
+
+    if (before) {
+      // The cursor is a PK read; validating it (existence + same-match)
+      // turns a forged cursor into a clean 404 instead of a silent
+      // cross-match leak or an empty page.
+      const anchor = await this.db.query.match_messages.findFirst({
+        where: eq(match_messages.id, before),
+        columns: { id: true, match_id: true, created_at: true },
+      });
+      if (!anchor || anchor.match_id !== matchId) {
+        throw new NotFoundException('Unknown message cursor.');
+      }
+
+      return this.db.query.match_messages.findMany({
+        where: and(
+          eq(match_messages.match_id, matchId),
+          // Composite keyset: strictly before the anchor in (created_at, id).
+          or(
+            lt(match_messages.created_at, anchor.created_at),
+            and(
+              eq(match_messages.created_at, anchor.created_at),
+              lt(match_messages.id, anchor.id),
+            ),
+          ),
+        ),
+        orderBy: (msg, { asc }) => [asc(msg.created_at), asc(msg.id)],
+        limit,
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              handle: true,
+              avatar_url: true,
+            },
+          },
+        },
+      });
+    }
+
+    const messages = await this.db.query.match_messages.findMany({
       where: eq(match_messages.match_id, matchId),
-      orderBy: (msg, { desc }) => [desc(msg.created_at)],
-      limit: 50,
+      // Latest page: probe DESC then reverse to ascending (newest last) —
+      // the response contract stays "chronological array" while the window
+      // becomes the most recent `limit` messages (P1-3 window fix).
+      orderBy: (msg, { desc }) => [desc(msg.created_at), desc(msg.id)],
+      limit,
       with: {
         user: {
           columns: {
@@ -2220,7 +2326,7 @@ export class MatchesService {
       },
     });
 
-    return rows.reverse();
+    return messages.reverse();
   }
 
   /**

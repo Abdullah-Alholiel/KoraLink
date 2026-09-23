@@ -156,7 +156,7 @@ describe('ConversationPage — DM chat rendering (ChatSheet parity)', () => {
   });
 
   it('shows date dividers and per-message time like ChatSheet', () => {
-    const { container } = renderPage();
+    renderPage();
     expect(screen.getByText('Today')).toBeInTheDocument();
     expect(screen.getAllByText(/\d{1,2}:\d{2}\s?(AM|PM)?/).length).toBeGreaterThan(0);
   });

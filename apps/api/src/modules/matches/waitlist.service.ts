@@ -5,6 +5,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 import { chargeMatchFeeTx } from './match-fees';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -36,6 +37,7 @@ export class MatchWaitlistService {
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly activities: ActivitiesService,
     private readonly appGateway: AppGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────────────────────
@@ -329,8 +331,20 @@ export class MatchWaitlistService {
     }
   }
 
-  /** Post-commit fan-out: activity record (bell + WS) for the promoted player. */
+  /**
+   * Post-commit fan-out for the promoted player: activity record (bell + WS)
+   * AND a web push (P2-95, run #70). Before this slice the push never fired —
+   * the push-text catalog key existed with no caller — so a promoted player
+   * who wasn't online at that moment never learned they were in, and the
+   * spot they never claimed kept the match one player short until the host
+   * intervened.
+   *
+   * Fire-and-forget, exactly like the activities leg: a push failure must
+   * never surface to the caller that just committed the promotion.
+   */
   async notifyPromotion(promotion: WaitlistPromotion, matchId: string): Promise<void> {
+    // Leg 1 — bell + realtime. Log-only failure: it must not suppress the
+    // push leg below (the user-facing-critical one).
     try {
       await this.activities.record({
         actorId: promotion.userId,
@@ -343,7 +357,21 @@ export class MatchWaitlistService {
       this.appGateway.broadcastRosterUpdate(matchId, { promoted: promotion.userId });
     } catch (err) {
       this.logger.error(
-        `waitlist promotion notify failed (match ${matchId}): ${(err as Error).message}`,
+        `waitlist promotion activity fan-out failed (match ${matchId}): ${(err as Error).message}`,
+      );
+    }
+    // Leg 2 — the web push (P2-95). Semantic-key catalog (per-subscription
+    // locale); category 'match' so a user who muted match pushes stays muted.
+    try {
+      await this.notifications.sendPushToUsers([promotion.userId], {
+        key: 'waitlist_promoted',
+        vars: { title: promotion.matchTitle },
+        data: { type: 'waitlist-promoted', matchId },
+        category: 'match',
+      });
+    } catch (err) {
+      this.logger.error(
+        `waitlist promotion push failed (match ${matchId}): ${(err as Error).message}`,
       );
     }
   }

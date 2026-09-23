@@ -30,6 +30,11 @@
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
     "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
   },
+  "offline": {
+    "backToPage": "Back to the page",
+    "backUnavailable": "You're still offline",
+    "backUnavailableHint": "Reconnect to the internet, then try again."
+  },
   "blocked": {
     "title": "Account restricted",
     "bannedTitle": "Your account has been banned",
@@ -45,6 +50,8 @@
     "loading": "Loading…",
     "error": "Something went wrong",
     "errorDescription": "Couldn't load data. Check your connection.",
+    "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
+    "pushSubscribeFailed": "We couldn't turn notifications on. Nothing was changed — check your connection and try again.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",
@@ -70,6 +77,7 @@
     "offline": "Offline",
     "dismiss": "Dismiss",
     "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "permissionDenied": "Notifications are blocked in your browser settings. Re-enable notifications for KoraLink there, then try again.",
     "or": "or"
   },
   "nav": {
@@ -408,11 +416,12 @@
     "yourselfDescription": "You handle everything — we connect the players.",
     "selectSlot": "Select a Time Slot",
     "noSlotsAvailable": "No slots available for this date",
+    "slotTimeAria": "Book slot from {start} to {end}",
+    "slotTimeAriaBooked": "Slot from {start} to {end} is already booked",
     "slotAvailable": "Available",
     "slotBooked": "Booked",
     "slotDate": "Date",
     "slotTime": "Time",
-    "pickDateFirst": "Pick a date to see available slots",
     "warningTitle": "Before You Publish",
     "warningSelfBody": "You are responsible for booking the pitch, preparing it, and controlling match tempo. If the venue is unavailable at kick-off, your account will be held liable to refund all paying players.",
     "warningViaUsBody": "KoraLink guarantees this pitch at the time you selected. You are responsible for showing up and managing the match.",
@@ -443,7 +452,11 @@
     "pitchSelected": "Selected pitch",
     "changePitch": "Change",
     "slotSelected": "Selected slot",
-    "changeSlot": "Change"
+    "changeSlot": "Change",
+    "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
+    "slotsLoading": "Loading available slots…",
+    "slotsError": "Couldn't load available slots. Check your connection.",
+    "slotsRetry": "Try Again"
   },
   "hostOnboarding": {
     "skip": "Skip",
@@ -718,6 +731,7 @@
     },
     "noClubs": "No clubs found",
     "noClubsDescription": "Try adjusting your filters.",
+    "noClubsEmpty": "No clubs have been added yet — check back soon.",
     "book": "Book",
     "rating": "Rating",
     "surface": "Surface",
@@ -891,7 +905,8 @@
     "emptyDescription": "Start the conversation!",
     "sendPlaceholder": "Type a message...",
     "sendError": "Failed to send. Tap to retry.",
-    "comingSoon": "Chat coming soon"
+    "comingSoon": "Chat coming soon",
+    "loadOlder": "Load earlier messages"
   },
   "pom": {
     "title": "Player of the Match",

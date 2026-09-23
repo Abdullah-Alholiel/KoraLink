@@ -173,9 +173,16 @@ export class MatchesController {
   getMessages(
     @Param('id') id: string,
     @CurrentUser() user: { sub: string },
+    @Query('before') before?: string,
+    @Query('limit') limit?: string,
   ) {
     // P0-1: members-only, mirroring the WS gateway's join-lobby check.
-    return this.matchesService.getMessages(id, user.sub);
+    // P1-3 (run #65): optional keyset pagination — bare-array contract kept.
+    const limitNum = limit !== undefined ? Number(limit) : undefined;
+    return this.matchesService.getMessages(id, user.sub, {
+      before,
+      limit: Number.isFinite(limitNum) ? limitNum : undefined,
+    });
   }
 
   // ── POST /matches/:id/messages — Send match chat (REST fallback) ─────────

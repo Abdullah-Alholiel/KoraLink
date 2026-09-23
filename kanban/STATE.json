@@ -1,20 +1,34 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 58,
-  "last_run_at": "2026-09-18T01:18:48Z",
+  "last_run": 70,
+  "last_run_at": "2026-09-23T15:52Z",
   "last_run_commits": [
-    "16dd5f9",
-    "081bb27",
-    "cc76eb4"
+    "e721823 (adopted — OOM-killed 01:15Z session: P2-82 512-cap follow-up)",
+    "72fc2f0 (adopted — P2-94 push-rotation API-origin re-point)",
+    "c767696 (adopted — P2-93 notificationclick soft-nav)",
+    "80ce0a3 (P2-95 waitlist promotion push + P2-96 subscribe rollback)",
+    "c02fae7 (P2-97 lint gate unblock)"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-18T01-18Z-run58.md",
+  "last_run_report": "kanban/RUNS/2026-09-23T15-21Z-run70.md",
   "in_review_items": [
     {
-      "id": "run58-wallet-pay-removal",
-      "claim": "16dd5f9: POST /wallet/pay REMOVED from WalletController — it accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT with no server-side pricing (reviewer-B P1 run #58). Dead surface: zero PWA consumers (usePayWallet hook deleted with it), zero tests; the authoritative fee path is joinMatch's in-tx chargeMatchFeeTx at the server-derived price_per_player; refund/forfeit sweeps key off fee_paid_sar so client-minted MATCH_FEE rows were invisible to the money cycle. Removal pin added: wallet.controller.spec asserts prototype.pay undefined AND PATH_METADATA route list lacks 'pay'. Gates: jest wallet 17/17, api tsc 0, pwa tsc 0, turbo 3/3 exit 0, vitest 82f/578t. Topup flag behavior untouched (WALLET_TOPUP_ENABLED pins green). LIVE-VERIFIED same run: staging deployed on cc76eb4 (deploy-staging.sh 6/6 health ok) → POST /api/v1/wallet/pay returns 404 Not Found; /wallet/topup still 401-guarded; 0 journal errors post-deploy.",
-      "verify": "(1) cd apps/api && npx jest src/modules/wallet — 3 suites, pin case 'POST /wallet/pay stays REMOVED' green; (2) grep -rn 'wallet/pay' apps/api/src apps/player-pwa/src → only REMOVED-comment hits; (3) after the post-build API restart: POST /api/v1/wallet/pay → 404; (4) root npm run build green.",
-      "built_in": "run #58"
+      "id": "run70-p2-95-waitlist-push",
+      "built_in": "run #70 (80ce0a3 — slice written by the OOM-killed 01:15Z session; adopted + ALL gates re-run by the 15:15Z resume session)",
+      "claim": "P2-95 CLOSED: notifyPromotion sends the waitlist_promoted web push (category match, data.type waitlist-promoted) fire-and-forget beside the activity leg; match_starting_soon/players_needed(_renudge) renames kill the 'match-chat' tag collisions; worker routes all new types to the match deep-link.",
+      "verify": "grep -c \"waitlist_promoted\" apps/api/src/modules/matches/waitlist.service.ts (>=1); grep -c \"type: 'match-chat'\" apps/api/src/modules/matches/matches.service.ts (0); cd apps/api && npx jest --silent src/modules/matches/waitlist-push.spec.ts (4/4); npx vitest run test/structure/push-notification-click.test.ts (route-map cases green); optionally live-probe: promote a staging waitlist row with a subscribed seed user and check the push arrives."
+    },
+    {
+      "id": "run70-p2-96-subscribe-rollback",
+      "built_in": "run #70 (80ce0a3)",
+      "claim": "P2-96 CLOSED: subscribe() server-POST failure unsubscribes the fresh browser subscription + resets state (toggle truthful); console.error stripped; locale default 'ar' end-to-end on subscribe.",
+      "verify": "grep -n \"rolls the browser subscription back\" apps/player-pwa/src/hooks/usePushNotifications.ts (or grep 'unsubscribe()' context in subscribe); npx vitest run test/hooks/usePushNotifications.test.tsx (rollback case green); grep -c \"'ar'\" apps/api/src/modules/notifications/notifications.controller.ts (locale default line)."
+    },
+    {
+      "id": "run70-p2-93-94-adopted-commits",
+      "built_in": "01:15Z session (c767696 + 72fc2f0), gates re-run by run #70 resume",
+      "claim": "P2-93 notificationclick soft-nav (focus/postMessage/PushNavHandler) and P2-94 pushsubscriptionchange absolute API origin both hold on the final gated tree.",
+      "verify": "npx vitest run test/structure/push-notification-click.test.ts test/structure/push-subscription-change.test.ts (all green); grep -c \"kl-push-nav\" apps/player-pwa/worker/index.js (>=1); grep -c \"api/v1/notifications/subscribe\" apps/player-pwa/worker/index.js — must appear with an absolute-origin construction, not a bare relative const."
     }
   ],
   "open_blockers": [
@@ -36,25 +50,29 @@
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin→HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
-    "zai delegation-path 401 history — run #58: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE/401); reviewers clean 272s+289s — 8th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path history — run #68: probe 200 in ~3s via ZAI_API_KEY (GLM_API_KEY line stays stale-401), reviewers clean 150s+132s — 12th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
     "KILL-PATTERN (8 dead sessions through run #57, root cause unknown — cron/scheduler/host side, not repo): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog shipped in koralink-factory-prestate.py (LOCK pid liveness + age; young-dead-lock directive: ps -p <pid> -> dead -> rm lock -> continue -> adopt coherent half-done work). If kills continue, correlate kill times with systemd-oom / gateway restarts.",
     "OPS (run #54): adoption of a dead session in-flight work REQUIRES running the gates yourself — run #54 found a real bug in the adopted slice (structure test pinned my-games/page.tsx; page lives under (main)/ -> existsSync failed); never trust the dead session docs, verify key contracts (i18n keys, paths) directly.",
     "P1-49 ban appeal CHANNEL — owner call (queued run #56, reconfirmed decisions queue run #57): reports/disputes channel vs support mailto on BlockedCard.",
     "P1-51 post-match rating/MVP flow (NEW run #57, Reviewer B) — needs Abdullah decision on shape before API work: extend the existing POTM vote vs. per-player ratings; my-games rate UI depends on it.",
-    "ADMIN HOLD (continuing): Abdullah's uncommitted edits in apps/admin/src/components/ (ConfirmDialog/DataTable/Drawer) — P2-69/P2-68 held until the tree is clean."
+    "PROJECTS-DIR MERGE CONFLICT (run #63 finding): /home/ubuntu/projects/koralink (feature lane feat/search-neighborhood-suggestions) sits mid-merge — 4 unmerged paths (api users.service.ts, pwa profile/page.tsx, ServiceWorkerUpdater.tsx, PromoBillboard.tsx) + kanban/BOARD.md, plus staged admin/pwa Dockerfile/package.json changes, and NO .git/MERGE_HEAD — a foreign session's merge attempt during run #62 (20:03Z). Needs Abdullah or an explicitly directed session to finish/abort. Staging worktree unaffected; factory never touches foreign conflicts.",
+    "KILL-PATTERN #12 (run #62 died ~2026-09-19T20:03Z post-commit, no OOM, no gateway errors) + run #63's own background build process died 01:40Z mid-pipeline (also no OOM line) — next runs: correlate kill times with systemd-oom, gateway restarts, cron scheduler logs before assuming host health.",
+    "P2-76(2) critical-event non-push channel — folds into P1-41 email decision (run #65 reconfirmed).",
+    "RUN #66 RECOVERY (2026-09-21): the 01:17Z scheduled session was KILLED after committing 3 review fixes but before Phase 5 (no RUNS report, lock left with pid 'BATCH'). Recovery session per run-#51-manual recipe: lock cleared, gates re-run on final tree (turbo 3/3, vitest 90f/633t, notifications+matches jest 197/197), orphaned commits d9d1a8f..80d7f0d PUSHED. P2-79 residual built this session (SlotPicker loading/empty role=status). ADMIN HOLD continues: projects-dir merge conflict (UU users.service.ts, UU profile/page.tsx, UU ServiceWorkerUpdater, UU PromoBillboard, UU BOARD.md + Abdullah staged Dockerfile/package/users-page edits) still unresolved -> P2-12 held. zai probe: first attempt timed out (20s), retry 200 in 7.6s — treat single-timeout as transient, retry once before failing over. Deploy-target fork unchanged: units serve /home/ubuntu/projects/koralink; staging commits reach live only via Abdullah's merge go.",
+    "RUN #67 (2026-09-21T16:00Z): built P2-87 (d4b5ef1, push-unsubscribe failure feedback). New board rows: P2-88 drizzle meta snapshot gap 0026->0029 (DB-lane TODO), P2-89 audit run-2 confirmed LOW ban-before-transition (ADMIN HOLD). Owner checklist (needs_validation, audit run-1): verify trust-proxy so OTP per-IP cap keys on real client IP behind Traefik/Tailscale. Pruned dead backlog lines (JWT_SECRET fallback fixed, seed header fixed). Mirror cards t_a6730a4e/t_df7b26f0/t_8cd67ba6 created+gated."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
-    "Run #57: API lane (57%4=1). P1-48 built+probed live (381186f) — see in_review_items for the verify recipe. P1-47+P2-70 verified DONE by Reviewer B (all throw sites, code-first classify, BlockedCard, 960/960 parity). New rows: P1-50 (force-disconnect carve-out), P1-51 (rating flow, owner call), P2-72 (push locale ar default), P2-73 (offline URL preservation); P2-71 (wallet empty state) REFUTED — (main)/wallet/page.tsx:263-276 already renders it. OS research: none. Sentry 24h: zero new signatures.",
-    "run54 (01:17Z cron slot, lock 01:20Z): 6th DEAD-RUN RECOVERY — the 15:18Z Sep-15 \"run54-recovery\" session (lock pid 2178257) died leaving a coherent admin slice + Gate 0-3 docs, gates unrun, BOARD/STATE untouched. Adopted per the run-#52 recipe, verified DIRECTLY (never trust dead-session docs): caught a real bug in it (structure test pinned my-games/page.tsx; page lives under (main)/ -> vitest failed existsSync; fixed to (main)/my-games/page.tsx; page itself verified wired :37/:71). Built bb1143e P2-67 (users/[id] detail fully localized, userDetail ns 21 keys x2, Sidebar closeMenu aria, role-select aria, RTL back arrow, StatusBadge verification; parity 593/593; admin tsc 0, vitest 80f/551t, jest 65/527, turbo 3/3 exit 0; Reviewer A APPROVE 0 C/I; pushed 14227c0->bb1143e, remote verified). Reviewer B CONFIRMED all 4 run-#53 commits (1bdf0fc/95200e7/a4adca6/ed5b7f5) -> DONE. Stale mirror-todo lane DRAINED: t_a8904eed (POTM locale — P2-8/10f94ce already sends semantic key, notifications.service.ts:429-445), t_f6666278 (settlement races — built run #4/3377567, verified #5), t_546c5bc1 (unban verb — run #4) verified-STALE with mirror comments; t_222e530a (WS ban/suspend) stale since run #6 (live app.gateway.ts:118-150). INFRA SHIPPED: dead-run watchdog in koralink-factory-prestate.py (LOCK pid liveness via os.kill 0-signal + age from started_at; YOUNG DEAD LOCK (<270min) emits the recovery directive instead of a silently skipped slot; tested live on this run own dead pid at age 30m; copies in profiles/koralink/scripts/ + ~/.hermes/scripts/ md5-synced 266706f1; cron 03ed02bc8d04 verified pointing at it, next fire 10:15Z). Sentry 24h: ZERO new signatures; WEB-D frozen n=7 lastSeen Sep 14 (zombie-tab class), WEB-2 quiet since Sep 13, WEB-8 since Sep 12 — run-#50 SW fixes holding. Journal clean, services active, API /health 200. Reviewer-B admin leads: refund-ops folded into P0-2 family (owner-gated, not boarded separately); P2-68 NEW (financial CSV export), P2-69 NE...",
-    "zai delegation-path 401 history — run #55: probe 200 via ZAI_API_KEY (GLM_API_KEY .env line STALE, 401); reviewers clean 175s combined — 5th consecutive clean zai run; policy unchanged: try zai first, failover on first child error.",
+    "Run #70 (2026-09-23T15:5xZ): DEAD-RUN ADOPTION #2 — 01:15Z fire OOM-killed (kill-pattern #14). Adopted 3 commits + P2-95/96 slice; ALL gates re-run parent-side before adoption (turbo 3/3 sequential, jest 53/53, tsc 0, vitest 671/671). Reviewer A SHIP. LINT GATE WAS BROKEN since the login-revamp era (c02fae7 fixes; run #69's 'lint 0' claim inaccurate — dashboard dark Sep 19-23 meant the gate never ran on staging). Run #64's waitlist-push 'REFUTED' note OVERTURNED by P2-95 evidence (dedupe grep matched the activity leg, not the push). ADMIN HOLD continues (projects-dir merge conflict). Strix not due (Sep 23). zai probe 200 (ZAI_API_KEY; GLM_API_KEY line stale), weekly 1%.",
+    "Run #69 (2026-09-22T15:15Z): DEAD-RUN ADOPTION — the 10:15Z fire was OOM-killed at 10:35Z; KILL-PATTERN #13 ROOT CAUSE CONFIRMED via kernel log (memcg OOM inside hermes-worker-cron cgroup, node pid killed, total-vm 12.2GB). Owner input requested: raise the cron-worker cgroup limit or pin turbo --concurrency=1 for cron fires. Adopted 7ea1cdb (P2-82, gates re-run: notifications jest 47/47, api tsc 0, Reviewer A CLEAN); built 6159f83 (P2-91 subscribe outcome contract) + 2b4f080 (P2-92 pushsubscriptionchange + worker locale KV). Gates: vitest 92f/653t, tsc 0, lint 0, turbo 3/3 x2. Reviewer B verified run-#68 P2-13 claims 5/5 -> DONE. zai probe 200 in 2.4s (13th consecutive clean run). NOTEPAD STALE AGAIN: P2-37/P2-20 candidates were already DONE (runs #21/#53) — always re-check BOARD rows. Reviewer-B residual leads (report-only, not boarded): notificationclick unconditional navigate(), push verb-map two-sources-of-truth, locale-presence spec assertion. ADMIN HOLD continues.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
-    "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design)."
+    "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design).",
+    "Run #65 (16:45Z cron): 3-item build — 8b510fb (P2-76 POST unsubscribe + DTO), 7e364a8 (P2-76b push locale re-sync), 3d1840d (P1-3 chat cursor pagination + latest-window fix). Run #64 P2-73 VERIFIED (targeted vitest + full 619/619 + funnel 200). Stale candidates caught: P1-50 (DONE run #57) and P2-77 (DONE run #61) were still in the cron notepad as buildable — always re-check BOARD rows before trusting notepad candidates (Reviewer A independently found the ban disconnect already implemented: app.gateway.ts:584-587, users.service.ts:258). New rows P2-82 (subscribe DTO needs expirationTime allowlist decision) + P2-83 (locale sync client-side DONE; API endpoint optional). zai probe 200 (ZAI_API_KEY only), reviewers 131s+131s clean — 11th consecutive clean zai run. vitest 90f/630t, jest matches 159 + notifications 36, turbo 3/3 exit 0 (x2 builds). strix_scan=not-due-2026-09-20. Lessons: class-validator @IsUrl(require_tld) ACCEPTS IP-literal hosts (SSRF defense = service send-path allowlist); Nest v10 route metadata lives on descriptor.value, not (proto, method); cron notepad build candidates go stale — verify against BOARD.md first."
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-18T01:18:48Z",
-  "last_run_started_at": "2026-09-17T15:18:00Z"
+  "last_run_id": "run70-resume-1518",
+  "last_run_started_at": "2026-09-23T15:21:14Z"
 }

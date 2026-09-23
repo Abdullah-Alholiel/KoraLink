@@ -27,6 +27,9 @@ export default function ReportDetailPage() {
   const [outcome, setOutcome] = useState<'resolved' | 'dismissed'>('resolved');
   const [resolution, setResolution] = useState('');
   const [banSubject, setBanSubject] = useState(false);
+  // P1-52 (run #61): a ban fired from the report flow is high blast-radius —
+  // it goes through a ConfirmDialog naming the subject before it happens.
+  const [confirmBan, setConfirmBan] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -36,6 +39,9 @@ export default function ReportDetailPage() {
   const [confirmReopen, setConfirmReopen] = useState(false);
 
   async function resolve() {
+    // Re-entry guard: the confirm dialog doesn't disable its button during
+    // save — a fast double-confirm could POST /resolve twice (Reviewer A).
+    if (saving) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -226,7 +232,13 @@ export default function ReportDetailPage() {
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setOutcome('resolved')}
+                    onClick={() => {
+                      setOutcome('resolved');
+                      // Reset the ban toggle with the outcome: a stale
+                      // banSubject=true survives the checkbox unmounting on
+                      // `dismissed` (the API then 400s the resolve POST).
+                      setBanSubject(false);
+                    }}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${
                       outcome === 'resolved' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'
                     }`}
@@ -234,7 +246,10 @@ export default function ReportDetailPage() {
                     {t('resolveBtn')}
                   </button>
                   <button
-                    onClick={() => setOutcome('dismissed')}
+                    onClick={() => {
+                      setOutcome('dismissed');
+                      setBanSubject(false);
+                    }}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${
                       outcome === 'dismissed' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'
                     }`}
@@ -262,7 +277,7 @@ export default function ReportDetailPage() {
                 )}
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
                 <button
-                  onClick={resolve}
+                  onClick={() => (banSubject ? setConfirmBan(true) : resolve())}
                   disabled={saving}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
                 >
@@ -283,6 +298,20 @@ export default function ReportDetailPage() {
         danger
         onConfirm={reopen}
         onClose={() => setConfirmReopen(false)}
+      />
+
+      {/* P1-52 (run #61): ban-from-report names the target before it happens. */}
+      <ConfirmDialog
+        open={confirmBan}
+        title={t('banConfirmTitle')}
+        message={t('banConfirmSubject', { subject: d.subject.label })}
+        confirmLabel={t('banConfirmAction')}
+        danger
+        onConfirm={() => {
+          setConfirmBan(false);
+          resolve();
+        }}
+        onClose={() => setConfirmBan(false)}
       />
     </div>
   );

@@ -91,7 +91,7 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
   it('MW-1: fresh sheet open marks read via REST (socket not yet connected)', async () => {
     stubSocket.connected = false;
     mockFetcher.mockImplementation((url: string) => {
-      if (url === '/matches/m1/messages') return Promise.resolve([]);
+      if (url === '/matches/m1/messages?limit=51') return Promise.resolve([]);
       return Promise.resolve({ ok: true }); // the read fallback POST
     });
 
@@ -112,7 +112,7 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
   it('MW-2: unseen messages after connect mark read via the WS emit', async () => {
     stubSocket.connected = true; // connected session (socketRef set on connect)
     mockFetcher.mockImplementation((url: string) => {
-      if (url === '/matches/m1/messages') {
+      if (url === '/matches/m1/messages?limit=51') {
         return Promise.resolve([
           {
             id: 'srv-1',
@@ -156,7 +156,7 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
   it('MW-4: a late socket connect does not duplicate the open-mark write', async () => {
     stubSocket.connected = false;
     mockFetcher.mockImplementation((url: string) => {
-      if (url === '/matches/m1/messages') return Promise.resolve([]);
+      if (url === '/matches/m1/messages?limit=51') return Promise.resolve([]);
       return Promise.resolve({ ok: true });
     });
 
@@ -194,7 +194,7 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
       },
     ];
     mockFetcher.mockImplementation((url: string) => {
-      if (url === '/matches/m1/messages') return Promise.resolve([...others, ...mine]);
+      if (url === '/matches/m1/messages?limit=51') return Promise.resolve([...others, ...mine]);
       return Promise.resolve({ ok: true });
     });
 
@@ -225,8 +225,8 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
       created_at: new Date().toISOString(),
     });
     mockFetcher.mockImplementation((url: string) => {
-      if (url === '/matches/m1/messages') return Promise.resolve([msg('srv-1', 'm1')]);
-      if (url === '/matches/m2/messages') return Promise.resolve([msg('srv-2', 'm2')]);
+      if (url === '/matches/m1/messages?limit=51') return Promise.resolve([msg('srv-1', 'm1')]);
+      if (url === '/matches/m2/messages?limit=51') return Promise.resolve([msg('srv-2', 'm2')]);
       return Promise.resolve({ ok: true });
     });
 

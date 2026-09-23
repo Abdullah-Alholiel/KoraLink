@@ -95,8 +95,6 @@ export class AdminReportsService {
       if (dto.outcome !== 'resolved') {
         throw new BadRequestException('banSubject requires outcome "resolved".');
       }
-      // Reuse the full ban path (self-ban + last-admin guards, audit, realtime).
-      await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
     }
 
     // P2-49 (run #34): status-predicated guard — a concurrent resolve/reopen
@@ -118,6 +116,14 @@ export class AdminReportsService {
     if (updated.length === 0) {
       // Race loser: another admin decided this report between findOne and now.
       throw new ConflictException('Report was concurrently decided — re-check its status.');
+    }
+
+    if (dto.banSubject) {
+      // Run-2 audit fix (api.admin.reports.resolve.ban-before-status-transition):
+      // the ban is ordered AFTER the winning transition so a concurrent
+      // resolve/reopen loser exits at the 409 above with NO moderation side
+      // effect (previously the ban committed first and survived the 409).
+      await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
     }
 
     const after = await this.findOne(id);

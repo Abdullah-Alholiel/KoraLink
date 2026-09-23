@@ -165,7 +165,7 @@ describe('useMessages hooks', () => {
     expect(result.current.data).toEqual(mockMatches);
   });
 
-  it('useMatchChat fetches history from /matches/:id/messages', async () => {
+  it('useMatchChat fetches history from /matches/:id/messages (P1-3 probe: limit=51)', async () => {
     const mockMessages = [
       { id: 'msg1', match_id: 'm1', content: 'Hello', user: { full_name: 'Ahmed' } },
     ];
@@ -176,8 +176,12 @@ describe('useMessages hooks', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockFetcher).toHaveBeenCalledWith('/matches/m1/messages');
+    expect(mockFetcher).toHaveBeenCalledWith('/matches/m1/messages?limit=51', {
+      method: 'GET',
+    });
     expect(result.current.messages).toEqual(mockMessages);
+    // 1 < PAGE ⇒ finite history, no load-older affordance
+    expect(result.current.hasMore).toBe(false);
   });
 
   it('useMatchChat does not fetch when matchId is null', () => {

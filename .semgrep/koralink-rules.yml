@@ -1,0 +1,28 @@
+# KoraLink standing bug classes as deterministic rules (pr-review-automation spec, D2).
+# Learned in factory runs: P1-1 scheduler zero-rows (eq null), varchar(36) ids (::uuid),
+# per-user caching (stale cross-user data class).
+
+rules:
+  - id: koralink-drizzle-eq-null
+    message: >-
+      Drizzle eq(col, null) compiles to SQL `= NULL` and never matches any row.
+      Use isNull(col) / isNotNull(col) from drizzle-orm. (Factory P1-1 bug class.)
+    severity: ERROR
+    languages: [ts]
+    pattern: eq($COL, null)
+
+  - id: koralink-uuid-cast
+    message: >-
+      All KoraLink id columns are varchar(36) — a SQL ::uuid cast mismatches or 500s.
+      Cast with ::text instead. (Factory standing rule.)
+    severity: WARNING
+    languages: [generic]
+    pattern-regex: '::uuid'
+
+  - id: koralink-cache-interceptor
+    message: >-
+      CacheInterceptor on a per-user endpoint risks stale cross-user data leaking
+      between sessions. Do not cache per-user responses.
+    severity: WARNING
+    languages: [ts]
+    pattern-regex: 'UseInterceptors\([^)]*CacheInterceptor[^)]*\)'

@@ -30,7 +30,10 @@ import {
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
 import { useWalletBalance } from '@/hooks/useWallet';
-import { usePushNotifications } from '@/hooks/usePushNotifications';
+import {
+    usePushNotifications,
+    type PushSubscribeOutcome,
+} from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
 import { classifyError, errorKey } from '@/lib/error-classify';
 import LanguageToggle from '@/components/common/LanguageToggle';
@@ -115,7 +118,12 @@ export default function ProfilePage() {
     // P0.5 (run #28): show a one-line hint when the user taps "subscribe"
     // but the PWA isn't installed (iOS contract — push only works in
     // installed mode). Cleared when the next attempt is made.
-    const [installHintShown, setInstallHintShown] = useState(false);
+    // P2-91 (run #69): WHY the last subscribe attempt failed — the hint line
+    // under the toggle renders per-reason recovery copy (install vs browser
+    // settings vs transient error toast).
+    const [subscribeHint, setSubscribeHint] = useState<
+        PushSubscribeOutcome | null
+    >(null);
 
     // P0-6 (run #29): PDPL sheet state. Both sheets sit idle until the
     // user taps the corresponding MenuItem. signOutPending and
@@ -144,6 +152,10 @@ export default function ProfilePage() {
     const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
     const logout = useAppStore((s) => s.logout);
+    // P2-87 (run #67): localized toast for unsubscribe failures (errors.*
+    // namespace; the root `t` above stays for common.* keys).
+    const showToast = useAppStore((s) => s.showToast);
+    const te = useTranslations('errors');
 
     // ── Real data from API (fills gaps when store is stale after dev-login) ──
     // P2-26: userStatsError drives the error state (profile still renders with
@@ -164,7 +176,7 @@ export default function ProfilePage() {
         : null;
     const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
     const {
-        isSubscribed, isSubscribing, isSupported,
+        isSubscribed, isSubscribing, isUnsubscribing, isSupported,
         subscribe, unsubscribe,
     } = usePushNotifications(useLocale());
 
@@ -415,7 +427,7 @@ export default function ProfilePage() {
                         <div className="h-px bg-gray-100 ms-[60px]" />
                         <MenuItem
                             icon={
-                                isSubscribing ? (
+                                isSubscribing || isUnsubscribing ? (
                                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
                                 ) : (
                                     <BellRing className="h-5 w-5" strokeWidth={1.5} />
@@ -425,26 +437,55 @@ export default function ProfilePage() {
                             endText={isSubscribed ? t('profile.notificationsOn') : t('profile.notificationsOff')}
                             onClick={() => {
                                 if (isSubscribed) {
-                                    unsubscribe();
+                                    // P2-87 (run #67): double-tap guard —
+                                    // ignore taps while the OFF call runs.
+                                    if (isUnsubscribing) return;
+                                    unsubscribe().then((ok) => {
+                                        if (!ok) {
+                                            // Error-message standard: what
+                                            // happened + why + what next —
+                                            // already localized in errors.*.
+                                            showToast(
+                                                te('pushUnsubscribeFailed'),
+                                                'error',
+                                            );
+                                        }
+                                    });
                                     return;
                                 }
-                                // P0.5 (run #28): wire the install-gate
-                                // feedback. `subscribe()` returns false when
-                                // the PWA isn't installed (iOS contract) —
-                                // surface a one-line hint so the user knows
-                                // why nothing happened.
-                                setInstallHintShown(false);
-                                subscribe().then((ok) => {
-                                    if (!ok && !isSubscribed) setInstallHintShown(true);
+                                // P0.5 (run #28) install gate + P2-91 (run
+                                // #69): `subscribe()` now reports WHY it did
+                                // not subscribe. Each reason gets its own
+                                // recovery copy: not-installed → install
+                                // hint; permission-denied → browser-settings
+                                // hint (the old code showed the install hint
+                                // for BOTH — a dead end for blocked
+                                // permissions); error → transient toast.
+                                setSubscribeHint(null);
+                                subscribe().then((outcome) => {
+                                    if (
+                                        (outcome === 'not-installed' ||
+                                            outcome === 'permission-denied') &&
+                                        !isSubscribed
+                                    ) {
+                                        setSubscribeHint(outcome);
+                                    } else if (outcome === 'error') {
+                                        showToast(
+                                            te('pushSubscribeFailed'),
+                                            'error',
+                                        );
+                                    }
                                 });
                             }}
                         />
-                        {mounted && installHintShown && !isSubscribed && (
+                        {mounted && subscribeHint && !isSubscribed && (
                             <p
                                 role="status"
                                 className="px-6 pt-1 pb-1 text-xs text-amber-600"
                             >
-                                {t('common.installRequired')}
+                                {subscribeHint === 'permission-denied'
+                                    ? t('common.permissionDenied')
+                                    : t('common.installRequired')}
                             </p>
                         )}
                         {mounted && isSubscribed && (

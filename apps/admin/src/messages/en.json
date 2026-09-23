@@ -398,6 +398,9 @@
     "reopen": "Reopen",
     "reopenConfirmTitle": "Reopen this report?",
     "reopenConfirmMsg": "It returns to the open queue with the resolution text kept as history.",
+    "banConfirmTitle": "Ban this user?",
+    "banConfirmSubject": "You are about to ban {subject}. They will be signed out everywhere and blocked from booking, chatting, and joining matches.",
+    "banConfirmAction": "Ban user",
     "editOutcome": "Edit resolution",
     "saved": "Saved",
     "failed": "Action failed",
@@ -648,8 +651,17 @@
     "roleNote": "Changing the role takes effect on the user's next sign-in (the JWT carries the role claim).",
     "ban": "Ban",
     "unban": "Unban",
-    "suspend7d": "Suspend 7d",
     "liftSuspension": "Lift suspension",
+    "actionFailed": "Action failed",
+    "banConfirmTitle": "Ban this user?",
+    "banConfirmUser": "You are about to ban {user}. They will be signed out everywhere and blocked from booking, chatting, and joining matches.",
+    "suspendBtn": "Suspend",
+    "extendSuspension": "Extend",
+    "suspendMenuTitle": "Suspend {user} for:",
+    "suspendPreset24h": "24 hours",
+    "suspendPreset168h": "7 days",
+    "suspendPreset720h": "30 days",
+    "suspendCancel": "Cancel",
     "na": "—"
   }
 }

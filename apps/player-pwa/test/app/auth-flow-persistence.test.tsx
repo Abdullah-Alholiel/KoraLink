@@ -66,7 +66,7 @@ describe('login flow state survives remount', () => {
         fireEvent.change(input, { target: { value: 'wrong@typo.com' } });
 
         // "Reload": full unmount + fresh mount.
-        view = remount(view);
+        remount(view);
 
         // Email segment still active + the typed address restored.
         expect(screen.getByRole('button', { name: 'Email' })).toHaveAttribute('aria-pressed', 'true');

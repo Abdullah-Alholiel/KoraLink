@@ -15,17 +15,12 @@ import {
 import { Request } from 'express';
 
 import { NotificationsService } from './notifications.service';
+import {
+  SubscribeDto,
+  UnsubscribeDto,
+} from './dto/notifications.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-
-interface SubscribeBody {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-  locale?: string;
-}
 
 @ApiTags('notifications')
 @ApiCookieAuth('access_token')
@@ -34,28 +29,57 @@ interface SubscribeBody {
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  /**
+   * P2-82 (run #69): subscribe is now a strict class DTO — the global
+   * ValidationPipe (whitelist + forbidNonWhitelisted) validates endpoint/
+   * keys/locale at the boundary instead of garbage surfacing later as
+   * web-push send failures. The Chrome `expirationTime: null` allowlist
+   * decision lives on SubscribeDto. Locale defaults to 'ar' (run #70 —
+   * aligned with the worker's Arabic-first fallback, P2-72; was 'en') and
+   * the DTO never reaches the DB with non-ar/en values.
+   */
   @Post('subscribe')
   @ApiOperation({ summary: 'Subscribe to push notifications' })
   @ApiOkResponse({ description: 'Subscription stored.' })
   subscribe(
     @CurrentUser() user: { sub: string },
-    @Body() body: SubscribeBody,
+    @Body() body: SubscribeDto,
     @Req() req: Request,
   ) {
     return this.notificationsService.subscribe(
       user.sub,
       body,
       req.headers['user-agent'],
-      body.locale ?? 'en',
+      body.locale ?? 'ar', // run #70: Arabic-first default (P2-72 alignment)
     );
   }
 
-  @Delete('unsubscribe')
-  @ApiOperation({ summary: 'Unsubscribe from push notifications' })
+  /**
+   * P2-76 (run #65): POST variant — the canonical unsubscribe. Some
+   * proxies/clients legitimately drop DELETE request bodies, which silently
+   * broke unsubscription (scoped delete matched nothing → user keeps
+   * receiving pushes). POST bodies are never body-stripped. Class-DTO
+   * validated (see dto/notifications.dto.ts).
+   */
+  @Post('unsubscribe')
+  @ApiOperation({ summary: 'Unsubscribe from push notifications (canonical)' })
   @ApiOkResponse({ description: 'Subscription removed.' })
-  unsubscribe(
+  unsubscribe(@CurrentUser() user: { sub: string }, @Body() body: UnsubscribeDto) {
+    return this.notificationsService.unsubscribe(user.sub, body.endpoint);
+  }
+
+  /**
+   * DEPRECATED (P2-76, run #65): kept ONLY for already-deployed PWA bundles
+   * that still send DELETE-with-body. Same DTO + same `{unsubscribed:true}`
+   * response as the POST route. Sunset once no client traffic remains
+   * (check push_subscriptions updated_at churn after a few releases).
+   */
+  @Delete('unsubscribe')
+  @ApiOperation({ summary: '[DEPRECATED] Unsubscribe — use POST /notifications/unsubscribe' })
+  @ApiOkResponse({ description: 'Subscription removed.' })
+  unsubscribeLegacy(
     @CurrentUser() user: { sub: string },
-    @Body() body: { endpoint: string },
+    @Body() body: UnsubscribeDto,
   ) {
     return this.notificationsService.unsubscribe(user.sub, body.endpoint);
   }

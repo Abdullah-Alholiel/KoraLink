@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetcher } from '@/lib/fetcher';
+import { env } from '@/env.mjs';
 import { captureError } from '@/providers/ObservabilityProvider';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -19,10 +20,67 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 const VAPID_PUBLIC_KEY =
   'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
 
+/**
+ * P2-91 (run #69): WHY a subscribe attempt did not produce a subscription.
+ * `false` collapsed three fixable-but-different failures into one, and the
+ * only consumer told every failure "install the PWA" — a dead end for a user
+ * whose real problem is a denied browser permission (they must re-enable it
+ * in browser settings, not install anything).
+ */
+export type PushSubscribeOutcome =
+  | 'ok'
+  | 'not-installed'
+  | 'permission-denied'
+  | 'error';
+
+/**
+ * P2-92 (run #69): mirror the last server-synced push locale into a
+ * Cache-API KV the SERVICE WORKER can read (localStorage does not exist in a
+ * worker context). The worker's `pushsubscriptionchange` handler reads this
+ * to re-upsert a rotated subscription with the right locale. Same cache
+ * names as worker/index.js (koralink-push-meta // /__kl/push-locale).
+ *
+ * Run #70: the same KV now also carries the API base (the fetcher's
+ * NEXT_PUBLIC_API_URL, path included) and the public VAPID key the page
+ * actually used — on Vercel prod the PWA and API are cross-origin and the
+ * worker's old hardcoded relative subscribe URL resolved against the PWA
+ * origin and 404'd silently. Rotation re-points WHERE THE PAGE talks.
+ */
+async function writePushMetaKv(locale: string): Promise<void> {
+  try {
+    const cache = await caches.open('koralink-push-meta');
+    await cache.put(
+      '/__kl/push-locale',
+      new Response(JSON.stringify({ l: locale }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await cache.put(
+      '/__kl/push-api-base',
+      new Response(JSON.stringify({ b: env.NEXT_PUBLIC_API_URL }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await cache.put(
+      '/__kl/push-vapid',
+      new Response(JSON.stringify({ k: VAPID_PUBLIC_KEY }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  } catch {
+    // Cache-API unavailable (private mode, old browser) — rotation falls
+    // back to the worker's Arabic-first default and same-origin base.
+  }
+}
+
 export function usePushNotifications(locale: string = 'en') {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  // P2-87 (run #67): pending state for the OFF switch — the profile toggle
+  // previously had no way to disable itself while the unsubscribe POST was in
+  // flight (double-tap guard) and no error contract to react to.
+  const [isUnsubscribing, setIsUnsubscribing] = useState(false);
 
   // Check current permission and subscription on mount
   useEffect(() => {
@@ -32,10 +90,66 @@ export function usePushNotifications(locale: string = 'en') {
 
     setPermission(Notification.permission);
 
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then(setSubscription);
-    });
-  }, []);
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        reg.pushManager.getSubscription().then((sub) => {
+          setSubscription(sub);
+          // P2-92: keep the worker-readable locale KV warm even when the
+          // server row already matches — a rotation minutes later must not
+          // fall back to the wrong locale.
+          if (sub) void writePushMetaKv(locale);
+        });
+      })
+      .catch(() => {
+        // P2-91 (run #69): a rejecting serviceWorker.ready (SW registration
+        // torn down mid-boot, browser quirks) must not surface as an
+        // unhandled rejection from the mount effect — subscribe() already
+        // reports 'error' through its own try/catch.
+      });
+    // P2-92: `locale` is a dependency — a language switch re-primes the
+    // worker-readable KV so a later rotation re-upserts with the CURRENT
+    // locale (idempotent; re-running is safe).
+  }, [locale]);
+
+  // P2-76b (run #65): keep the server-side push locale in sync with the UI
+  // locale. push_subscriptions.locale is set at subscribe time only, so a
+  // user who switches ar/en would keep receiving pushes in the OLD language.
+  // Locale switches are URL-driven (/ar/... <-> /en/...) and remount this
+  // hook, so a prev-value ref would never observe the change — persist a
+  // last-synced marker in localStorage instead and re-upsert when it drifts.
+  // The subscribe endpoint is an idempotent upsert on endpoint, so this is
+  // a cheap metadata refresh, never a duplicate row. POST bodies always
+  // reach the server (unlike the old DELETE unsubscribe — P2-76a).
+  useEffect(() => {
+    if (!subscription) return;
+    if (typeof window === 'undefined') return;
+    const markerKey = 'kl.push.syncedLocale';
+    let marker: string | null = null;
+    try {
+      marker = window.localStorage.getItem(markerKey);
+    } catch {
+      // storage unavailable (private mode) — treat as never-synced
+    }
+    if (marker === locale) return;
+    (async () => {
+      try {
+        const sub = subscription.toJSON();
+        await fetcher('/notifications/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ ...sub, locale }),
+        });
+        try {
+          window.localStorage.setItem(markerKey, locale);
+        } catch {
+          // non-fatal — worst case we re-upsert next mount
+        }
+      } catch (err) {
+        // P2-16: ship to Sentry; a missed locale sync must not look like a
+        // failed subscription (the push sub itself is still valid).
+        captureError(err, { scope: 'pushLocaleSync' });
+      }
+    })();
+  }, [subscription, locale]);
 
   const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) {
@@ -47,8 +161,16 @@ export function usePushNotifications(locale: string = 'en') {
     return result === 'granted';
   }, []);
 
-  const subscribe = useCallback(async () => {
-    if (!('serviceWorker' in navigator)) return false;
+  /**
+   * P2-91 (run #69): returns WHY the attempt did not end subscribed —
+   * 'not-installed' (iOS standalone contract), 'permission-denied'
+   * (browser permission refused or revoked since), or 'error' (SW/push
+   * manager/POST failure — already shipped to Sentry). Previously a bare
+   * `false` for all three; the caller could not tell a user what to do
+   * next and showed "install the app" for every failure.
+   */
+  const subscribe = useCallback(async (): Promise<PushSubscribeOutcome> => {
+    if (!('serviceWorker' in navigator)) return 'not-installed';
 
     setIsSubscribing(true);
     try {
@@ -59,7 +181,7 @@ export function usePushNotifications(locale: string = 'en') {
       // and creates a poor first impression. Surface a localized hint and
       // return false; the profile UI can pick it up and show the install
       // prompt. `mounted` guards the SSR window.
-      if (typeof window === 'undefined') return false;
+      if (typeof window === 'undefined') return 'not-installed';
       const isStandalone =
         (typeof window.matchMedia === 'function' &&
           window.matchMedia('(display-mode: standalone)').matches) ||
@@ -70,11 +192,14 @@ export function usePushNotifications(locale: string = 'en') {
         // No exception — the user is just not in the installed surface yet.
         // The profile UI surfaces `common.installRequired` if the consumer
         // wants to show a hint.
-        return false;
+        return 'not-installed';
       }
 
       const granted = await requestPermission();
-      if (!granted) return false;
+      // P2-91: distinguish a REFUSED permission prompt (user tapped "Block",
+      // or the stored permission was already 'denied') from the other
+      // failure modes — recovery is browser settings, not an install.
+      if (!granted) return 'permission-denied';
 
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
@@ -83,39 +208,85 @@ export function usePushNotifications(locale: string = 'en') {
       });
 
       setSubscription(sub);
+      // P2-92 (run #69): mirror the synced locale into the worker-readable
+      // KV so pushsubscriptionchange re-upserts with the RIGHT locale.
+      void writePushMetaKv(locale);
 
       // Send to backend, including the active locale so push deep-links
       // preserve ar/en (P1-5).
-      await fetcher('/notifications/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({ ...sub.toJSON(), locale }),
-      });
+      try {
+        await fetcher('/notifications/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ ...sub.toJSON(), locale }),
+        });
+      } catch (postErr) {
+        // Run #70 (P2-96, Reviewer A): the browser subscription EXISTS but the
+        // server has no row. Rolling back keeps the profile toggle truthful —
+        // showing "subscribed" with zero server rows meant the user silently
+        // received no pushes at all.
+        await sub.unsubscribe().catch(() => {
+          /* best-effort rollback — the 90-day stale sweep cleans strays */
+        });
+        setSubscription(null);
+        throw postErr;
+      }
+      // P2-76b: remember the synced locale so the locale-sync effect doesn't
+      // immediately re-upsert the identical payload.
+      try {
+        window.localStorage.setItem('kl.push.syncedLocale', locale);
+      } catch {
+        // non-fatal
+      }
 
-      return true;
+      return 'ok';
     } catch (err) {
-      // P2-16: ship to Sentry (console kept for local dev visibility).
+      // P2-16: ship to Sentry (run #70: console.error stripped — captureError
+      // is the shipped visibility path).
       captureError(err, { scope: 'pushSubscribe' });
-      console.error('[Push] Failed to subscribe:', err);
-      return false;
+      return 'error';
     } finally {
       setIsSubscribing(false);
     }
   }, [requestPermission, locale]);
 
-  const unsubscribe = useCallback(async () => {
+  // P2-87 (run #67): resolves TRUE on success, FALSE on failure. Failure
+  // already ships to Sentry (captureError below) — the boolean return lets
+  // the caller surface localized feedback without re-implementing the try/
+  // catch (was: silent void promise; user believed pushes were off while
+  // the server kept the subscription).
+  const unsubscribe = useCallback(async (): Promise<boolean> => {
+    setIsUnsubscribing(true);
     try {
       if (subscription) {
+        // P2-76 (run #65): POST, not DELETE — some proxies/clients drop
+        // DELETE request bodies, which silently no-op'd the unsubscribe
+        // (scoped delete matched nothing → user keeps receiving pushes).
+        // The server keeps a deprecated DELETE dual-route for old bundles.
         await fetcher('/notifications/unsubscribe', {
-          method: 'DELETE',
+          method: 'POST',
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
         await subscription.unsubscribe();
         setSubscription(null);
+        // P2-76b: the server row is gone — drop the locale-sync marker so a
+        // future re-subscribe re-seeds it cleanly.
+        try {
+          window.localStorage.removeItem('kl.push.syncedLocale');
+        } catch {
+          // non-fatal
+        }
       }
+      // No active subscription = nothing to unsubscribe; still a success.
+      return true;
     } catch (err) {
-      // P2-16: ship to Sentry (console kept for local dev visibility).
+      // P2-16: ship to Sentry (run #70: console.error stripped — captureError
+      // is the shipped visibility path).
       captureError(err, { scope: 'pushUnsubscribe' });
-      console.error('[Push] Failed to unsubscribe:', err);
+      // P2-87 (run #67): the caller decides how to tell the user — the hook
+      // only owns the outcome contract (see 01-program-design.md Gate 3).
+      return false;
+    } finally {
+      setIsUnsubscribing(false);
     }
   }, [subscription]);
 
@@ -123,6 +294,7 @@ export function usePushNotifications(locale: string = 'en') {
     permission,
     isSubscribed: !!subscription,
     isSubscribing,
+    isUnsubscribing,
     subscribe,
     unsubscribe,
     isSupported:

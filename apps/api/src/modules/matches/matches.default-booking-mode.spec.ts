@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { MatchesService } from './matches.service';
 import {
   matches,
@@ -8,6 +8,7 @@ import {
   transactions,
   users,
 } from '../../database/schema';
+import { riyadhDateKey, riyadhTimeNow } from '../../common/utils/riyadh';
 
 /**
  * Product default for booking_mode (2026-09-04): hosting a match defaults to
@@ -43,7 +44,10 @@ describe('MatchesService.createMatch — default booking mode', () => {
     valuesArg?: Record<string, unknown>;
   }
 
-  function makeTx() {
+  function makeTx(opts?: {
+    /** Row returned for the FOR UPDATE slot SELECT (default: future slot). */
+    slot?: Record<string, unknown> | null;
+  }) {
     const calls: CapturedCall[] = [];
 
     const update = (table: unknown) => ({
@@ -82,9 +86,20 @@ describe('MatchesService.createMatch — default booking mode', () => {
     const execute = async (query: unknown) => {
       const { PgDialect } = await import('drizzle-orm/pg-core');
       const text = new PgDialect().sqlToQuery(query as never).sql;
-      if (text.includes('SELECT id, is_booked FROM pitch_slots')) {
+      if (text.includes('SELECT id, is_booked, slot_date, start_time FROM pitch_slots')) {
         calls.push({ op: 'slot-lock' });
-        return [{ id: SLOT_A, is_booked: false }];
+        return [
+          opts?.slot === undefined
+            ? {
+                id: SLOT_A,
+                is_booked: false,
+                // Default: a clearly FUTURE slot (tomorrow, 23:00) so the
+                // started-guard never fires for the pre-existing cases.
+                slot_date: riyadhDateKey(new Date(Date.now() + 86_400_000)),
+                start_time: '23:00:00',
+              }
+            : opts.slot,
+        ];
       }
       return [];
     };
@@ -214,5 +229,55 @@ describe('MatchesService.createMatch — default booking mode', () => {
       BadRequestException,
     );
     expect(calls.find((c) => c.op === 'match')).toBeUndefined();
+  });
+
+  // ── Publish-time past-slot guard (owner directive 2026-09-18) ──────────
+  // A slot whose start has passed must never be bookable, even from a stale
+  // client that rendered it minutes before. Riyadh clock (common/utils/riyadh).
+
+  it('rejects a TODAY slot whose start has passed (409 slot started)', async () => {
+    const now = riyadhTimeNow();
+    const { tx, calls } = makeTx({
+      slot: { id: SLOT_A, is_booked: false, slot_date: riyadhDateKey(), start_time: '00:00:00' },
+    });
+    const svc = makeService(makeDb(tx));
+
+    await expect(
+      svc.createMatch(HOST_ID, { ...baseDto, booking_slot_id: SLOT_A }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(calls.find((c) => c.op === 'match')).toBeUndefined();
+    expect(calls.find((c) => c.op === 'deduct')).toBeUndefined();
+    expect(now).toMatch(/^\d{2}:\d{2}$/); // helper shape sanity
+  });
+
+  it('rejects a YESTERDAY-dated slot regardless of time (409 slot started)', async () => {
+    const yesterday = riyadhDateKey(new Date(Date.now() - 86_400_000));
+    const { tx, calls } = makeTx({
+      slot: { id: SLOT_A, is_booked: false, slot_date: yesterday, start_time: '23:00:00' },
+    });
+    const svc = makeService(makeDb(tx));
+
+    await expect(
+      svc.createMatch(HOST_ID, { ...baseDto, booking_slot_id: SLOT_A }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(calls.find((c) => c.op === 'match')).toBeUndefined();
+  });
+
+  it('rejects a slot starting EXACTLY at the current minute (boundary mirrors the list filter)', async () => {
+    // start = test-time wall clock. The service clock can only be >= this
+    // minute, so `start <= service-now` holds deterministically → reject.
+    // The picker never lists start == now either (strict > filter), so a
+    // legitimate UI flow can never submit one.
+    const nowHM = riyadhTimeNow();
+    const { tx, calls } = makeTx({
+      slot: { id: SLOT_A, is_booked: false, slot_date: riyadhDateKey(), start_time: `${nowHM}:00` },
+    });
+    const svc = makeService(makeDb(tx));
+
+    await expect(
+      svc.createMatch(HOST_ID, { ...baseDto, booking_slot_id: SLOT_A }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(calls.find((c) => c.op === 'match')).toBeUndefined();
+    expect(calls.find((c) => c.op === 'deduct')).toBeUndefined();
   });
 });

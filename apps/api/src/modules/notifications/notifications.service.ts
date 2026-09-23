@@ -15,6 +15,7 @@ import {
   assertSafePushEndpoint,
   DEFAULT_PUSH_HOST_ALLOWLIST,
 } from '../../common/security/push-endpoint.validator';
+import { SubscribeDto } from './dto/notifications.dto';
 import * as schema from '../../database/schema';
 import { push_subscriptions, match_players, users, user_notification_prefs, type NotificationCategory } from '../../database/schema';
 
@@ -40,13 +41,9 @@ const CATEGORY_BY_KEY: Partial<Record<PushKey, NotificationCategory>> = {
 
 type DB = PostgresJsDatabase<typeof schema>;
 
-export interface PushSubscriptionDto {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-}
+// P2-82 (run #69): the service consumes the validated SubscribeDto from the
+// controller boundary (class DTO — visible to the global ValidationPipe).
+// The old locally-declared interface is gone so the two shapes cannot drift.
 
 @Injectable()
 export class NotificationsService {
@@ -100,7 +97,12 @@ export class NotificationsService {
    * the entry point. A bad subscription is rejected with 400 BEFORE the DB
    * write — the table is always clean of SSRF endpoints.
    */
-  async subscribe(userId: string, sub: PushSubscriptionDto, userAgent?: string, locale = 'en') {
+  async subscribe(
+    userId: string,
+    sub: SubscribeDto,
+    userAgent?: string,
+    locale = 'ar', // run #70: Arabic-first default (P2-72 alignment; was 'en')
+  ) {
     assertSafePushEndpoint(sub.endpoint, this.hostAllowlist);
 
     await this.db
