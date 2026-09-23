@@ -129,11 +129,31 @@ export class ConversationsService {
     }
   }
 
-  async listForUser(userId: string): Promise<{
+  /**
+   * Paginated conversation list for the authenticated user (most recent
+   * activity first). Page 1 is the only page the current consumers need
+   * (unread badge, thread header) — later pages exist so the list is never
+   * hard-capped: conversation #51 is reachable via ?page=2.
+   *
+   * Pagination is OFFSET-based on purpose: this is a bounded per-user list
+   * (tens of rows), and the sort key is a COALESCE of last-message time and
+   * conversation creation — a keyset cursor over that is fragile for zero
+   * gain at this scale. `id` breaks ties so rows can never straddle a page
+   * boundary and vanish/duplicate between fetches.
+   */
+  async listForUser(
+    userId: string,
+    page = 1,
+    perPage = 50,
+  ): Promise<{
     conversations: ConversationSummary[];
     total: number;
     hasMore: boolean;
   }> {
+    const limit = Math.min(100, Math.max(1, perPage));
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * limit;
+
     const rows = (await this.db.execute(sql`
       SELECT
         c.id,
@@ -149,7 +169,8 @@ export class ConversationsService {
           WHERE pm2.conversation_id = c.id
             AND pm2.sender_id != ${userId}::text
             AND pm2.created_at > COALESCE(cp.last_read_at, 'epoch'::timestamptz)
-        ) AS unread_count
+        ) AS unread_count,
+        COUNT(*) OVER()::int AS total_count
       FROM ${conversations} c
       INNER JOIN ${conversation_participants} cp
         ON cp.conversation_id = c.id AND cp.user_id = ${userId}::text
@@ -163,8 +184,8 @@ export class ConversationsService {
         ORDER BY pm.created_at DESC
         LIMIT 1
       ) last_pm ON true
-      ORDER BY COALESCE(last_pm.created_at, c.updated_at) DESC
-      LIMIT 50
+      ORDER BY COALESCE(last_pm.created_at, c.updated_at) DESC, c.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `)) as unknown as RawConversationRow[];
 
     const list = rows.map((r) => ({
@@ -181,7 +202,12 @@ export class ConversationsService {
       unreadCount: r.unread_count,
     }));
 
-    return { conversations: list, total: list.length, hasMore: list.length >= 50 };
+    // Authoritative total from the window function — exact hasMore even on
+    // the last page (the old length>=cap heuristic reported hasMore=true on
+    // a page that was exactly full and also the last).
+    const total = rows[0]?.total_count ?? 0;
+
+    return { conversations: list, total, hasMore: offset + list.length < total };
   }
 
   async listMessages(
@@ -449,6 +475,7 @@ interface RawConversationRow {
   last_message_at: Date | null;
   last_message_sender_id: string | null;
   unread_count: number;
+  total_count: number;
 }
 
 interface RawMessageRow {

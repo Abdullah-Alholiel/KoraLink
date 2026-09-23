@@ -34,7 +34,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/useConversations', () => ({
   useConversations: () => ({
-    data: [
+    conversations: [
       {
         id: 'conv-1',
         otherParticipant: {
@@ -49,6 +49,10 @@ vi.mock('@/hooks/useConversations', () => ({
         unreadCount: 0,
       },
     ],
+    total: 1,
+    hasMore: false,
+    fetchNextPage: vi.fn(),
+    isFetchingNextPage: false,
   }),
   useConversationMessages: () => ({
     messages: [

@@ -287,10 +287,28 @@ export class UsersService {
    * Get unified discussions list — match group chats AND personal 1:1
    * conversations in ONE recency-sorted list, with last message preview
    * and unread counts. Single source for the Messages screen.
+   *
+   * Paginated (page/perPage, default 30/50): every joined match creates a
+   * discussion row, so active players outgrow one page quickly — the old
+   * hard LIMIT 30 made discussion #31 permanently unreachable. OFFSET for
+   * the same reasons as listForUser (bounded per-user union list, COALESCE
+   * sort key); `type,id` breaks ties deterministically across pages.
    */
-  async getMyDiscussions(userId: string) {
+  async getMyDiscussions(
+    userId: string,
+    page = 1,
+    perPage = 30,
+  ) {
+    const limit = Math.min(100, Math.max(1, perPage));
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * limit;
+
     const rows = await this.db.execute(sql`
       SELECT * FROM (
+        SELECT
+          COUNT(*) OVER()::int AS total_count,
+          unified_discussions.*
+        FROM (
         SELECT
           m.id,
           'match'::text AS type,
@@ -361,10 +379,14 @@ export class UsersService {
         ) last_pm ON true
         LEFT JOIN users sender_u ON sender_u.id = last_pm.sender_id
         WHERE cp.user_id = ${userId}
+      ) unified_discussions
       ) unified
-      ORDER BY unified.last_activity DESC
-      LIMIT 30
+      ORDER BY unified.last_activity DESC, unified.type ASC, unified.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const totalRows = rows as unknown as Array<{ total_count: number }>;
+    const total = Number(totalRows[0]?.total_count ?? 0);
 
     return {
       discussions: (rows as unknown as Array<{
@@ -396,8 +418,8 @@ export class UsersService {
         lastMessageSenderName: r.last_message_sender_name,
         unreadCount: r.unread_count ?? 0,
       })),
-      total: rows.length,
-      hasMore: rows.length >= 30,
+      total,
+      hasMore: offset + rows.length < total,
     };
   }
 

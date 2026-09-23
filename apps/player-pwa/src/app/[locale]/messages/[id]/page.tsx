@@ -65,7 +65,7 @@ export default function ConversationPage({
   const locale = useLocale();
   const storeUser = useAppStore(selectUser);
 
-  const { data: conversations } = useConversations();
+  const { conversations } = useConversations();
   const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
 
   const [draft, setDraft] = useState('');

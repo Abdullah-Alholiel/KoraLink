@@ -784,7 +784,8 @@
     "noDiscussions": "لا توجد مناقشات بعد",
     "noDiscussionsDescription": "انضم أو استضف مباراة لبدء الدردشة مع اللاعبين!",
     "older": "أقدم",
-    "noConversations": "لا توجد محادثات بعد"
+    "noConversations": "لا توجد محادثات بعد",
+    "loadMore": "تحميل المزيد"
   },
   "feed": {
     "title": "آخر الأخبار",

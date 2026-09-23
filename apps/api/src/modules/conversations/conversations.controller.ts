@@ -21,6 +21,7 @@ import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { ListConversationsQueryDto } from './dto/list-conversations-query.dto';
 
 @ApiTags('conversations')
 @ApiCookieAuth('access_token')
@@ -41,10 +42,17 @@ export class ConversationsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List the authenticated user\'s conversations' })
+  @ApiOperation({ summary: "List the authenticated user's conversations" })
   @ApiOkResponse({ description: 'Conversations with last message + unread.' })
-  list(@CurrentUser() user: { sub: string }) {
-    return this.conversationsService.listForUser(user.sub);
+  list(
+    @CurrentUser() user: { sub: string },
+    @Query() query: ListConversationsQueryDto,
+  ) {
+    return this.conversationsService.listForUser(
+      user.sub,
+      query.page ?? 1,
+      query.perPage ?? 50,
+    );
   }
 
   @Get(':id/messages')

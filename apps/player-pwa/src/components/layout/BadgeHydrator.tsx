@@ -18,7 +18,7 @@ export default function BadgeHydrator() {
   const setMessagesBadge = useAppStore((s) => s.setMessagesBadge);
 
   const { data } = useUnreadNotificationCount(isAuthenticated);
-  const { data: conversations } = useConversations();
+  const { conversations } = useConversations();
 
   useEffect(() => {
     if (data && data.unreadCount !== useAppStore.getState().notificationBadge) {

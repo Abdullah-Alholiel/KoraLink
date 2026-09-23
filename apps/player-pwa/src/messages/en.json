@@ -784,7 +784,8 @@
     "noDiscussions": "No discussions yet",
     "noDiscussionsDescription": "Join or host a match to start chatting with players!",
     "older": "Older",
-    "noConversations": "No conversations yet"
+    "noConversations": "No conversations yet",
+    "loadMore": "Load more"
   },
   "feed": {
     "title": "Community Feed",
