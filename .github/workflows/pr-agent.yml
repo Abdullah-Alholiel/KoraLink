@@ -29,7 +29,8 @@ jobs:
         run: |
           docker run --rm \
             -e PR_AGENT__CONFIG__MODEL=openai/glm-5.3-flash \
-            -e PR_AGENT__CONFIG__FALLBACK_MODELS="" \
+            -e PR_AGENT__CONFIG__FALLBACK_MODELS="[]" \
+            -e PR_AGENT__CONFIG__CUSTOM_MODEL_MAX_TOKENS=32000 \
             -e PR_AGENT__OPENAI__KEY="$ZAI_KEY" \
             -e PR_AGENT__OPENAI__API_BASE="$ZAI_BASE" \
             -e OPENAI.KEY="$ZAI_KEY" \
