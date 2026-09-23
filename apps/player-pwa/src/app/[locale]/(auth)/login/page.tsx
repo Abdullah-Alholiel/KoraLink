@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Globe } from 'lucide-react';
+import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import DevLoginBar from '@/components/auth/DevLoginBar';
+import LanguageToggle from '@/components/common/LanguageToggle';
 import { useRestoreAccount } from '@/hooks/useUser';
-import { navigatePreservingLocale } from '@/lib/locale-routing';
+import { classifyError } from '@/lib/error-classify';
 import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, getAuthPhoneDraft, setAuthPhoneDraft, type AuthChannel } from '@/lib/auth-flow';
+
 
 export default function LoginPage() {
     const router = useRouter();
@@ -47,18 +49,6 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-    // Login header (2026-09-11): the old back arrow was redundant — login is
-    // the entry screen of the auth flow, so there is nothing to go back to.
-    // Replaced with a language toggle. A bare path swap is NOT enough: the
-    // NEXT_LOCALE cookie (which the middleware uses on every unprefixed
-    // navigation — PWA relaunch, 401 bounce) stays at the old locale and
-    // snaps the UI back. navigatePreservingLocale persists the choice first,
-    // then full-reloads so the server re-renders with fresh i18n messages.
-    const toggleLocale = () => {
-        const target = locale === 'ar' ? '/en/login' : '/ar/login';
-        navigatePreservingLocale(target);
-    };
 
     // P0-6 (run #30): when the user soft-deletes on profile, the restore
     // token persists to localStorage. Surface a one-tap "Restore" affordance
@@ -112,7 +102,17 @@ export default function LoginPage() {
                 {
                     onSuccess: () =>
                         router.push(`/${locale}/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`),
-                    onError: () => setError(tErrors('otpSendFailed')),
+                    // P1-47: moderation blocks get their localized copy
+                    // (banned/suspended/deleted) instead of a generic send
+                    // failure — the user must know WHY they cannot log in.
+                    onError: (err) => {
+                        const kind = classifyError(err);
+                        setError(
+                            kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                                ? tErrors(kind)
+                                : tErrors('otpSendFailed'),
+                        );
+                    },
                     onSettled: () => setSubmitting(false),
                 },
             );
@@ -124,7 +124,14 @@ export default function LoginPage() {
             { phone },
             {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
-                onError: () => setError(tErrors('otpSendFailed')),
+                onError: (err) => {
+                    const kind = classifyError(err);
+                    setError(
+                        kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                            ? tErrors(kind)
+                            : tErrors('otpSendFailed'),
+                    );
+                },
                 onSettled: () => setSubmitting(false),
             },
         );
@@ -134,13 +141,10 @@ export default function LoginPage() {
         <div className="flex flex-col min-h-full px-6">
             {/* ── Header ────────────────────────────── */}
             <div className="flex items-center gap-3 pt-[var(--top-safe-inset)] pb-4">
-                <button
-                    onClick={toggleLocale}
-                    aria-label={t('changeLanguage')}
-                    className="w-10 h-10 flex items-center justify-center active:scale-95 transition-transform"
-                >
-                    <Globe className="w-5 h-5 text-brand-black" strokeWidth={2} />
-                </button>
+                {/* Language toggle (2026-09-17): segmented ع/EN pill replaces the
+                    bare globe icon — the choice is visible and pressed-state,
+                    not a hidden icon that flips the language on one tap. */}
+                <LanguageToggle size="sm" ariaLabel={t('changeLanguage')} />
                 <div className="flex items-center gap-2 flex-1 justify-center pe-10">
                     <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
                         <Trophy className="w-3.5 h-3.5 text-brand-green" strokeWidth={2.5} />
@@ -194,9 +198,11 @@ export default function LoginPage() {
                 )}
 
                 <h1 className="text-2xl font-bold text-brand-black text-center leading-tight">
-                    {t('titleLine1')}
-                    <br />
-                    {t('titleLine2')}
+                    {mode === 'email' ? (
+                        t('titleEmail')
+                    ) : (
+                        t('title')
+                    )}
                 </h1>
                 <p className="text-sm text-gray-400 mt-3 text-center">
                     {t('subtitleLine1')}
@@ -204,9 +210,46 @@ export default function LoginPage() {
                     {t('subtitleLine2')}
                 </p>
 
+                {/* Channel selector (design A — Abdullah's pick, 2026-09-17):
+                    segmented Phone/Email pills directly under the title. The
+                    alternative-login affordance used to be muted fine-print at
+                    the very bottom (Gate 0 F3) — invisible on small phones.
+                    Both channels still share the ONE verify screen. */}
+                <div
+                    role="group"
+                    aria-label={t('channelSelector')}
+                    data-testid="channel-selector"
+                    className="w-full mt-6 flex rounded-full border border-gray-200 bg-white p-1 gap-1"
+                >
+                    {(['phone', 'email'] as const).map((ch) => {
+                        const SegIcon = ch === 'phone' ? Smartphone : Mail;
+                        const active = mode === ch;
+                        return (
+                            <button
+                                key={ch}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => {
+                                    setError(null);
+                                    setMode(ch);
+                                    setAuthChannel(ch); // survives reloads + verify round-trips
+                                }}
+                                className={`flex-1 h-11 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                                    active
+                                        ? 'bg-brand-green text-white shadow-[0_2px_8px_rgba(37,65,50,0.35)]'
+                                        : 'text-gray-500'
+                                }`}
+                            >
+                                <SegIcon className="w-4 h-4" strokeWidth={2} />
+                                {ch === 'phone' ? t('channelPhone') : t('channelEmail')}
+                            </button>
+                        );
+                    })}
+                </div>
+
                 {/* Phone Input (default channel) */}
                 {mode === 'phone' ? (
-                <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
+                <div className="w-full mt-4 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className="text-lg">🇸🇦</span>
                         <span className="text-sm font-medium text-brand-black">+966</span>
@@ -228,7 +271,7 @@ export default function LoginPage() {
                 </div>
                 ) : (
                 /* Email Input (email-otp-login run #46) */
-                <div className="w-full mt-8 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
+                <div className="w-full mt-4 flex items-center gap-2 border-2 border-brand-green/30 rounded-2xl px-4 py-3.5 focus-within:border-brand-green transition-colors">
                     <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
                     <input
                         type="email"
@@ -285,22 +328,6 @@ export default function LoginPage() {
                     <a href={`/${locale}/terms`} className="text-brand-green font-medium underline">{t('termsOfService')}</a> {t('and')}{' '}
                     <a href={`/${locale}/privacy`} className="text-brand-green font-medium underline">{t('privacyPolicy')}</a>
                 </p>
-
-                {/* email-otp-login (run #46): subtle secondary-channel toggle —
-                    small, muted, below the legal row; never competes with the
-                    primary phone CTA. */}
-                <button
-                    type="button"
-                    onClick={() => {
-                        setError(null);
-                        const next: AuthChannel = mode === 'phone' ? 'email' : 'phone';
-                        setMode(next);
-                        setAuthChannel(next); // survives reloads + verify round-trips
-                    }}
-                    className="mt-4 w-full text-center text-xs text-gray-400 underline underline-offset-2 hover:text-brand-green transition-colors"
-                >
-                    {mode === 'phone' ? t('emailToggle') : t('phoneToggle')}
-                </button>
 
                 <DevLoginBar />
             </div>

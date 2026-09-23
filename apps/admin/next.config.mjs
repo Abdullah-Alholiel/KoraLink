@@ -30,6 +30,8 @@ const nextConfig = {
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
+      // doop design-sync: POSTs DOM captures to the internal design canvas
+      'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
 
     return [
@@ -43,7 +45,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://aa.tail2948f9.ts.net:9460",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               `connect-src ${connectSrc}`,

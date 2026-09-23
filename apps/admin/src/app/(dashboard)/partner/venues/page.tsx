@@ -5,6 +5,7 @@ import { Loader2, MapPin, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import EmptyState from '@/components/EmptyState';
 import type { PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -89,7 +90,7 @@ export default function PartnerVenuesPage() {
                 </div>
               </div>
             ))}
-            {!data?.length && <div className="text-sm text-gray-400">{t('empty')}</div>}
+            {!data?.length && <EmptyState message={t('empty')} className="py-4" />}
           </div>
         )}
       </div>

@@ -173,9 +173,16 @@ export class MatchesController {
   getMessages(
     @Param('id') id: string,
     @CurrentUser() user: { sub: string },
+    @Query('before') before?: string,
+    @Query('limit') limit?: string,
   ) {
     // P0-1: members-only, mirroring the WS gateway's join-lobby check.
-    return this.matchesService.getMessages(id, user.sub);
+    // P1-3 (run #65): optional keyset pagination — bare-array contract kept.
+    const limitNum = limit !== undefined ? Number(limit) : undefined;
+    return this.matchesService.getMessages(id, user.sub, {
+      before,
+      limit: Number.isFinite(limitNum) ? limitNum : undefined,
+    });
   }
 
   // ── POST /matches/:id/messages — Send match chat (REST fallback) ─────────
@@ -189,6 +196,20 @@ export class MatchesController {
     @Body() dto: CreateMatchMessageDto,
   ) {
     return this.matchesService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);
+  }
+
+  // ── POST /matches/:id/messages/read — advance match-chat read watermark (P2-58) ──
+  // Advances the CALLER's roster-row watermark (membership-gated); every
+  // member marks their own row when they read the chat.
+  @Post(':id/messages/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark the match chat as read (advances the read watermark)' })
+  @ApiOkResponse({ description: 'Watermark advanced.' })
+  markChatRead(
+    @CurrentUser() user: { sub: string },
+    @Param('id') id: string,
+  ) {
+    return this.matchesService.markChatRead(user.sub, id);
   }
 
   // ── POST /matches/:id/start — Start a match (host only) ────────────────

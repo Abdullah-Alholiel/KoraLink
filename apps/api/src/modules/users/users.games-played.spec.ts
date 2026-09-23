@@ -99,12 +99,20 @@ describe('UsersService games_played completed-only rule', () => {
     const { db, captured } = makeDb([
       [{ karma_score: 10, no_show_count: 0 }], // query 1: the user row
       [{ count: 7 }], // query 2: the games_played COUNT
+      [{ count: 4 }], // query 3: the matches_hosted COUNT (2026-09-18)
     ]);
     const service = makeService(db);
     const stats = await service.getStats('u1');
     expect(stats.games_played).toBe(7);
-    expect(captured.length).toBe(2);
+    expect(stats.potm_count).toBe(0); // raw-SQL getPomCount → stubbed execute → 0
+    expect(stats.matches_hosted).toBe(4);
+    // query 1 = user row, 2 = completed-only games join, 3 = hosted count
+    expect(captured.length).toBe(3);
     expectCompletedOnly(captured[1]!);
+    // Hosted tripwire: plain matches.host_id = me filter (all statuses).
+    expect(captured[2]!.join).toBeNull();
+    expect(captured[2]!.where).toMatch(/"matches"\."host_id" = /);
+    expect(captured[2]!.params.includes('u1')).toBe(true);
   });
 
   it('getPublicProfile counts games ONLY from completed matches', async () => {

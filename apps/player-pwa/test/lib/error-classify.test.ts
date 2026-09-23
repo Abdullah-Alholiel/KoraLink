@@ -57,6 +57,51 @@ describe('classifyError', () => {
   });
 });
 
+/**
+ * P1-47 (run #56) — moderation error codes classify to dedicated kinds.
+ *
+ * The API sends `{ message, code: ACCOUNT_BANNED | ACCOUNT_SUSPENDED |
+ * ACCOUNT_DELETED }` on moderation 401/403s. A blocked account must never
+ * render as generic forbidden/unauthorized — the blocked screen keys off
+ * these kinds, and a stable code beats the HTTP status.
+ */
+describe('classifyError — moderation codes (P1-47)', () => {
+  it('maps FetchError code ACCOUNT_BANNED → "banned" (beats 403 status)', () => {
+    const err = new FetchError('Account banned.', 403, '/auth/verify-otp', 'ACCOUNT_BANNED');
+    expect(classifyError(err)).toBe('banned');
+  });
+
+  it('maps FetchError code ACCOUNT_BANNED → "banned" (beats 401 status)', () => {
+    const err = new FetchError('Account banned.', 401, '/matches', 'ACCOUNT_BANNED');
+    expect(classifyError(err)).toBe('banned');
+  });
+
+  it('maps FetchError code ACCOUNT_SUSPENDED → "suspended"', () => {
+    const err = new FetchError('Account suspended.', 403, '/auth/send-otp', 'ACCOUNT_SUSPENDED');
+    expect(classifyError(err)).toBe('suspended');
+  });
+
+  it('maps FetchError code ACCOUNT_DELETED → "deleted"', () => {
+    const err = new FetchError(
+      'Account scheduled for deletion.',
+      403,
+      '/users/me/phone',
+      'ACCOUNT_DELETED',
+    );
+    expect(classifyError(err)).toBe('deleted');
+  });
+
+  it('an unknown code falls through to status-based classification', () => {
+    const err = new FetchError('Nope.', 403, '/x', 'SOMETHING_ELSE');
+    expect(classifyError(err)).toBe('forbidden');
+  });
+
+  it('no code → legacy behavior unchanged (403 → forbidden)', () => {
+    const err = new FetchError('Account banned.', 403, '/x');
+    expect(classifyError(err)).toBe('forbidden');
+  });
+});
+
 describe('errorKey / ERROR_KEYS', () => {
   it('maps every kind to an errors.* key', () => {
     for (const kind of Object.keys(ERROR_KEYS) as ErrorKind[]) {

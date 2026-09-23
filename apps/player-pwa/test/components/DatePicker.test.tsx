@@ -90,7 +90,14 @@ describe('DatePicker — shared calendar-day strip', () => {
     // Run #38: chips are Riyadh-keyed (UTC-anchored), so the expected day
     // number must be computed the same way — the local getDate() disagreed
     // with the rendered chip for 3h daily (21:00–24:00 UTC).
-    const far = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    // Run #57b: the fixture must be mid-day UTC — a raw Date.now()+20d
+    // carries the run's local time (e.g. 21:14 UTC = next-day 00:14 AST),
+    // where the UTC-day and Riyadh-day derivations disagree and the keyed
+    // chip is +1 off. Noon UTC = 15:00 AST keeps both on the same calendar
+    // day, every day of the year (AST has no DST).
+    const far = new Date();
+    far.setUTCHours(12, 0, 0, 0);
+    far.setUTCDate(far.getUTCDate() + 20);
     render(
       <NextIntlClientProvider messages={enMessages} locale="en">
         <DatePicker fireOnMount={false} selectedDate={far} onDateSelect={onDateSelectSpy} />

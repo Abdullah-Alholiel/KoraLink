@@ -420,7 +420,7 @@ Use when diagnosing "blank page", "no matches/wallet/venues showing", "all API c
 
 - [ ] **`apps/api/.env` exists** (not just `.env.example`). `ConfigModule.forRoot()` loads `.env`; without it, `DATABASE_URL` is unset and `database.module.ts:16` `getOrThrow()` crashes the API on boot.
 - [ ] **Drizzle migrations generated and applied.** Check `apps/api/drizzle/meta/_journal.json` exists. If absent, `npm run db:generate` was never run — tables don't exist in Postgres, every query 500s. Run `npm run db:setup` from `apps/api/`.
-- [ ] **PostgreSQL + PostGIS running** (`docker compose up -d postgres redis`). API won't boot if DB unreachable; Redis needed for `CacheModule`.
+- [ ] **PostgreSQL + PostGIS running** (`docker compose up -d postgres`). API won't boot if DB unreachable. (No Redis: `CacheModule` runs the in-memory store — the `store: 'redis'` string in `app.module.ts` is a silent fallback, `REDIS_*` env vars are inert.)
 - [ ] **Seed applied.** Without seed data, all endpoints legitimately return `[]`.
 
 ### Chain links (verify each is intact)

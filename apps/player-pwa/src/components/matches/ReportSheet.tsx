@@ -29,6 +29,8 @@ export default function ReportSheet({
   title,
 }: ReportSheetProps) {
   const t = useTranslations('report');
+  // P2-87 rider (run #67): close-button aria-label lives under common.*.
+  const tCommon = useTranslations('common');
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const report = useReport();
@@ -62,7 +64,7 @@ export default function ReportSheet({
         <button
           onClick={onClose}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-          aria-label="Close"
+          aria-label={tCommon('close')}
         >
           <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
         </button>

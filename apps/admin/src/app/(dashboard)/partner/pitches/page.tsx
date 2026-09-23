@@ -5,6 +5,7 @@ import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -232,7 +233,7 @@ export default function MyPitchesPage() {
                 </div>
               );
             })}
-            {!data?.length && <div className="text-sm text-gray-400">{t('empty')}</div>}
+            {!data?.length && <EmptyState message={t('empty')} className="py-4" />}
           </div>
         )}
       </div>

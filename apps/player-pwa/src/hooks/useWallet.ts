@@ -98,24 +98,8 @@ export function useTopupWallet() {
   });
 }
 
-// ─── Pay from Wallet ──────────────────────────────
-
-export function usePayWallet() {
-  const queryClient = useQueryClient();
-
-  return useMutation<
-    { ledgerEntry: unknown; wallet_balance: string },
-    FetchError,
-    { amount: number; idempotencyKey: string; referenceId?: string }
-  >({
-    mutationFn: (data) =>
-      fetcher('/wallet/pay', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
-      queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
-    },
-  });
-}
+// ─── Pay from Wallet — REMOVED (run #58) ─────────────────────────
+// usePayWallet deleted: it called the removed POST /wallet/pay endpoint
+// (client-supplied amount for a MATCH_FEE debit — no server-side pricing).
+// Match fees are charged server-side inside joinMatch (in-tx, server price).
+// Had zero consumers. See docs/plans/run58-review-sweep/00-retro.md.

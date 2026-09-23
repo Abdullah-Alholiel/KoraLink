@@ -1,0 +1,19 @@
+# KoraLink PR-Agent output contract (pr-review-automation spec, Gate 3)
+# Backend: z.ai GLM-5.3-flash via LiteLLM openai-compatible routing
+# (OPENAI_API_KEY + OPENAI_API_BASE are injected by .github/workflows/pr-agent.yml)
+
+[config]
+model = "litellm/openai/glm-5.3-flash"
+response_language = "en"
+max_model_tokens = 16000
+
+[pr_reviewer]
+require_security_review = true
+require_estimate_effort_to_review = false
+num_max_findings = 5
+extra_instructions = """You are reviewing a KoraLink PR (NestJS+Drizzle API, Next.js PWA/Admin).
+Output AT MOST 5 findings, each exactly one line:
+SEVERITY(CRITICAL|IMPORTANT|MINOR): file:line — one-sentence issue.
+Order CRITICAL first. No praise, no summaries, no restating the diff.
+Check: tenant isolation, unguarded mutations, eq(col,null), ::uuid casts,
+hydration safety, i18n (ar/en) parity, missing auth guards."""

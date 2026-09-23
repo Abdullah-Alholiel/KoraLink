@@ -149,27 +149,36 @@ export class EmailOtpService {
   ): Promise<{ token: string; isNewUser: boolean }> {
     const key = OTP_KEY(email);
 
-    const failCount = await this.otpStore.getFailCount(key);
-    if (failCount >= OtpStoreService.FAIL_LIMIT) {
-      this.logger.warn(`email verify-otp blocked (lockout after ${failCount} fails) for ${email}`);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: 'Too many attempts. Try again later.',
-          error: 'Too Many Requests',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    // Run-#53: check + consume inside the per-key verify lock — a fresh code
+    // can satisfy exactly ONE verification even under concurrent requests
+    // (the old get→compare→delete let both reads win before either delete).
+    // Wrong codes still leave the OTP in place for a genuine retry. Signup,
+    // moderation gates, and the token mint stay OUTSIDE the lock.
+    await this.otpStore.withVerifyLock(key, async () => {
+      const failCount = await this.otpStore.getFailCount(key);
+      if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        this.logger.warn(
+          `email verify-otp blocked (lockout after ${failCount} fails) for ${email}`,
+        );
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Too many attempts. Try again later.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
 
-    const storedCode = await this.otpStore.getOtp(key);
-    if (!storedCode || !otpMatches(storedCode, code)) {
-      await this.otpStore.incrementFail(key);
-      throw new UnauthorizedException('Invalid or expired OTP.');
-    }
+      const storedCode = await this.otpStore.getOtp(key);
+      if (!storedCode || !otpMatches(storedCode, code)) {
+        await this.otpStore.incrementFail(key);
+        throw new UnauthorizedException('Invalid or expired OTP.');
+      }
 
-    await this.otpStore.deleteOtp(key);
-    await this.otpStore.resetFails(key);
+      await this.otpStore.deleteOtp(key);
+      await this.otpStore.resetFails(key);
+    });
 
     // lower() matches the partial unique index from migration 0033.
     let [user] = await this.db
@@ -217,15 +226,25 @@ export class EmailOtpService {
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
-    // Moderation gates — identical to the phone flow.
+    // Moderation gates — identical to the phone flow (P1-47 stable codes;
+    // suspension message carries the end instant for the PWA blocked card).
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
 
     assertSurfaceRole(surface, user.role);

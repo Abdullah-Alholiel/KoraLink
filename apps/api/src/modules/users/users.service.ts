@@ -25,6 +25,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
+import { otpMatches } from '../../common/security/otp-compare';
 import { UnifonicService } from '../auth/unifonic.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -174,8 +175,24 @@ export class UsersService {
       .innerJoin(matches, eq(matches.id, match_players.match_id))
       .where(and(eq(match_players.user_id, userId), eq(matches.status, 'Completed')));
 
+    // POTM wins + hosted count (My Games stats strip, 2026-09-18). Both are
+    // server-truth so the My Games strip and the profile hero can never drift:
+    // potm wins reuse the tie-aware getPomCount() used by /users/me; hosted =
+    // every match row with host_id = me, ALL statuses (the strip answers "how
+    // many games did I host", including cancelled ones).
+    const [potm_count, matches_hosted] = await Promise.all([
+      this.getPomCount(userId),
+      this.db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(matches)
+        .where(eq(matches.host_id, userId))
+        .then((r) => r[0]?.count ?? 0),
+    ]);
+
     return {
       games_played: count,
+      potm_count,
+      matches_hosted,
       karma_score: user.karma_score,
       no_show_count: user.no_show_count,
     };
@@ -286,7 +303,14 @@ export class UsersService {
           last_msg.content AS last_message,
           last_msg.created_at AS last_message_at,
           last_msg.sender_name AS last_message_sender_name,
-          0::int AS unread_count,
+          -- P2-58 (run #50): real unread count, mirroring the personal branch.
+          -- Watermark = caller's roster row (per episode); NULL = never read.
+          (SELECT COUNT(*)::int
+            FROM match_messages mm2
+            WHERE mm2.match_id = m.id
+              AND mm2.user_id != my.user_id
+              AND mm2.created_at > COALESCE(my.last_read_at, 'epoch'::timestamptz)
+          ) AS unread_count,
           COALESCE(last_msg.created_at, m.scheduled_at) AS last_activity
         FROM match_players my
         INNER JOIN matches m ON m.id = my.match_id
@@ -435,16 +459,29 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
+    // P1-47: stable machine codes on moderation blocks — the PWA classifies
+    // via err.code (error-classify.ts) and renders localized blocked screens.
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        // End instant rides in the message — PWA blocked card shows the
+        // exact date/time localized (same contract as the auth-flow throws).
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     // Mirror the login-side PDPL guard: a soft-deleted account cannot mint
     // or consume change-flow OTPs (restore is the only escape there).
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
     return user;
   }
@@ -591,9 +628,16 @@ export class UsersService {
     // Without this, a code for phone A could be spent moving the account to
     // phone B (possession of A must prove possession of exactly A).
     const otp = this.otp();
-    const storedCode = await otp.getChangeOtp(newPhone);
-    if (!storedCode) {
-      // Distinguish lockout from a plain wrong/expired code.
+    // Run-#53: atomic claim — inside the change lock the code is read AND
+    // deleted, so two concurrent verifies can never both see the fresh code
+    // (the old get→compare→delete double-spend: one code → two phone flips).
+    // A missed claim (code already consumed/expired) falls through to the
+    // lockout-aware 401 below; the constant-time compare kills the timing
+    // side-channel the plain `!==` comparison had.
+    const storedCode = await otp.claimChangeOtp(newPhone);
+    if (!storedCode || !otpMatches(storedCode, code)) {
+      // Distinguish lockout from a plain wrong/expired code (lockout throws
+      // 429 WITHOUT charging further — the counter got them there).
       const fails = await otp.getFailCount(newPhone);
       if (fails >= OtpStoreService.FAIL_LIMIT) {
         throw new HttpException(
@@ -605,18 +649,24 @@ export class UsersService {
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
-      throw new UnauthorizedException('Invalid or expired OTP.');
-    }
-    if (storedCode !== code) {
+      // Run-#53: charge EVERY failed attempt, including a missed claim (code
+      // expired / already consumed by a concurrent verify). The old
+      // `if (storedCode)` guard let replay races brute-force the 6-digit
+      // space with free attempts — the lockout never advanced. Mirrors the
+      // login + email-verify flows, which charge on any miss.
       await otp.incrementFail(newPhone);
       throw new UnauthorizedException('Invalid or expired OTP.');
     }
 
     try {
-      await this.db
-        .update(users)
-        .set(withTimestamp({ phone: newPhone }))
-        .where(and(eq(users.id, userId), isNull(users.deleted_at)));
+      // Consume under the same change lock: the verified flip + code deletion
+      // are atomic w.r.t. any concurrent verify for this number.
+      await otp.consumeChangeOtp(newPhone, async () => {
+        await this.db
+          .update(users)
+          .set(withTimestamp({ phone: newPhone }))
+          .where(and(eq(users.id, userId), isNull(users.deleted_at)));
+      });
     } catch (err) {
       // Race window: a signup took the number between request and verify
       // (PG 23505 on users.phone_unique) → same localized 409 shape as the
@@ -631,7 +681,6 @@ export class UsersService {
       throw err;
     }
 
-    await otp.deleteChangeOtp(newPhone);
     await otp.resetFails(newPhone);
 
     // Audit trail (verb added to ActivityVerb by migration 0037). No feed

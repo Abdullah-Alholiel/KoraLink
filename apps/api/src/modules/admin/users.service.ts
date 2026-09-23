@@ -15,6 +15,7 @@ import { UpdateUserAdminDto } from './dto/update-user.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { AppGateway } from '../gateway/app.gateway';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -44,6 +45,7 @@ export class AdminUsersService {
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
     private readonly activities: ActivitiesService,
+    private readonly gateway: AppGateway,
   ) {}
 
   private buildWhere(dto: ListUsersDto): SQL | undefined {
@@ -202,6 +204,15 @@ export class AdminUsersService {
     if (dto.role !== undefined) updates.role = dto.role;
     if (dto.banned !== undefined) updates.banned_at = dto.banned ? new Date() : null;
     if (dto.suspendedUntil !== undefined) {
+      // Run #62: a past date writes an already-expired suspension silently —
+      // the row reads "not suspended" immediately (stillModerated=false, no
+      // disconnect, no player notice). Reject instead of storing a no-op.
+      if (
+        dto.suspendedUntil !== null &&
+        new Date(dto.suspendedUntil).getTime() <= Date.now()
+      ) {
+        throw new BadRequestException('Suspension must be in the future.');
+      }
       updates.suspended_until = dto.suspendedUntil ? new Date(dto.suspendedUntil) : null;
     }
 
@@ -225,6 +236,30 @@ export class AdminUsersService {
       ip,
     });
     this.realtime.broadcastOps('users');
+
+    // ── P1-50 (run #57) + P2-77 (run #60): force-disconnect live sockets on
+    // ban/suspend — and on any post-write state that still forbids acting.
+    // The per-message gate (app.gateway requireActiveUser) already blocks the
+    // banned/suspended user's NEXT action, but the stale socket lingers
+    // connected. Kill it now: the PWA sees 'disconnect', its reconnect
+    // re-runs the handshake, and the handshake refuses.
+    // Keyed on the POST-WRITE row (`after`), not the request delta: an unban
+    // that leaves an active suspension (P2-77) or a lift that leaves the ban
+    // must still disconnect, while a pure unban/lift of a fully clean account
+    // (or an expired suspension) disconnects nothing.
+    const moderationTouched =
+      updates.banned_at !== undefined || updates.suspended_until !== undefined;
+    const stillModerated =
+      after.banned_at !== null ||
+      (after.suspended_until !== null &&
+        new Date(after.suspended_until).getTime() > Date.now());
+    if (moderationTouched && stillModerated) {
+      try {
+        this.gateway.disconnectUser(id);
+      } catch {
+        // best-effort — the moderation write itself has already committed
+      }
+    }
 
     // ── Player notification for moderation actions ──
     // A ban/suspension ends the player's session on their next request (guard

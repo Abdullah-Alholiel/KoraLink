@@ -62,8 +62,10 @@ describe('MatchDetailsForm — iOS-safe date/time inputs', () => {
     const dateInput = screen.getByLabelText('Date') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: '2026-09-02' } });
     expect(setDate).toHaveBeenCalledWith('2026-09-02');
-    // selected date renders in the display span (month short + day)
-    expect(screen.getByText(/Sep 1/i)).toBeInTheDocument();
+    // selected date renders in the display span — P2-64 (run #52) routes it
+    // through formatShortDate(riyadhDateFromYMD): Gregorian-pinned en-GB,
+    // day-first with year ("1 Sept 2026" on current CLDR).
+    expect(screen.getByText(/1 Sept 2026/i)).toBeInTheDocument();
   });
 
   it('wires time selection to setTime', () => {

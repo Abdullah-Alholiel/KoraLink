@@ -3,6 +3,8 @@
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield, MapPin } from 'lucide-react';
 import { todayInRiyadh } from '@/lib/api-adapter';
+import { formatShortDate, formatShortTime, riyadhDateFromYMD } from '@/lib/format';
+import type { AppLocale } from '@/lib/format';
 import DateTimeOverlayInput from '@/components/host/DateTimeOverlayInput';
 
 /* ── Format options ─────────────────────────────── */
@@ -75,7 +77,7 @@ export default function MatchDetailsForm({
     readOnlyDuration = false,
     lockedFormat,
 }: MatchDetailsFormProps) {
-    const locale = useLocale();
+    const locale = useLocale() as AppLocale;
     const t = useTranslations();
 
     return (
@@ -183,13 +185,9 @@ export default function MatchDetailsForm({
                         <Shield className="w-5 h-5 text-brand-green flex-shrink-0" strokeWidth={2} />
                         <div>
                             <p className="text-sm font-bold text-brand-black">
-                                {new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                    month: 'short', day: 'numeric',
-                                })}
+                                {formatShortDate(riyadhDateFromYMD(date), locale)}
                                 {' · '}
-                                {new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                    hour: 'numeric', minute: '2-digit', hour12: true,
-                                })}
+                                {formatShortTime(new Date(`2025-01-01T${time}`), locale)}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">
                                 {t('host.slotLocked')}
@@ -210,9 +208,7 @@ export default function MatchDetailsForm({
                                     <Calendar className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                     <span className="text-sm font-bold text-brand-black">
                                         {date
-                                            ? new Date(date + 'T00:00:00').toLocaleDateString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                                month: 'short', day: 'numeric',
-                                            })
+                                            ? formatShortDate(riyadhDateFromYMD(date), locale)
                                             : t('host.selectDate')}
                                     </span>
                                 </div>
@@ -230,9 +226,7 @@ export default function MatchDetailsForm({
                                     <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                                     <span className="text-sm font-bold text-brand-black">
                                         {time
-                                            ? new Date(`2025-01-01T${time}`).toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
-                                                hour: 'numeric', minute: '2-digit', hour12: true,
-                                            })
+                                            ? formatShortTime(new Date(`2025-01-01T${time}`), locale)
                                             : t('host.selectTime')}
                                     </span>
                                 </div>

@@ -14,10 +14,10 @@
 
 | # | Slice | Tier | Status |
 |---|---|---|---|
-| 0 | Delete Supabase stack | T1 | ⏸️ ready to start |
-| A | Close public funnels :10000 + :8443 | T1 | ⏸️ ready |
-| B | Rebind Coolify :8000 to 127.0.0.1 (iptables) | T1 | ⏸️ ready |
-| C | 8 GB swapfile + OOM-guard on koralink-api | T1 | ⏸️ ready |
+| 0 | Delete Supabase stack | T1 | ✅ DONE 2026-09-13 — verified: 0 supabase containers/images; leftover volumes + trivy-cache (2.9 GB) purged; grace-period config intact at `/home/ubuntu/supabase-project` |
+| A | Close public funnels :10000 + :8443 | T1 | 🌗 PARTIAL 2026-09-13 — :10000 CLOSED (HTTP-verified: check-http Broken pipe ×3 nodes; check-tcp false-OPENs on funnel ports — edge relays accept TCP). :8443 INTENTIONALLY KEPT = staging API funnel (devops-cycle §1); closes at Phase-2 cutover |
+| B | Rebind Coolify :8000 to 127.0.0.1 (iptables) | T1 | 🚫 BLOCKED — iptables needs root; sudo unavailable in Hermes shells (NoNewPrivileges). Owner runs it |
+| C | 8 GB swapfile + OOM-guard on koralink-api | T1 | 🚫 BLOCKED — needs sudo (NoNewPrivileges). Owner: fallocate/chmod/mkswap/swapon/fstab block from run summary |
 | D | Offsite backup to R2 + restore drill | T1 | ⏸️ needs `R2_*` tokens |
 | E | Coolify koralink-api service | T1 | ⏸️ needs `COOLIFY_TOKEN` |
 | F | Coolify managed PostGIS DB | T1 | ⏸️ after E |

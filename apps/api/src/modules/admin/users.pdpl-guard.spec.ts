@@ -6,6 +6,7 @@ import { AdminUsersService } from './users.service';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { AppGateway } from '../gateway/app.gateway';
 
 /**
  * Run #32 (Reviewer A findings 1+2) — admin users ops API vs PDPL ghosts:
@@ -66,6 +67,8 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
           provide: ActivitiesService,
           useValue: { record: jest.fn() },
         },
+        // P1-50 (run #57): admin moderation force-disconnects via the gateway.
+        { provide: AppGateway, useValue: { disconnectUser: jest.fn() } },
       ],
     }).compile();
 

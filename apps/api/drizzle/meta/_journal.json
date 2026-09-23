@@ -285,16 +285,37 @@
     {
       "idx": 40,
       "version": "7",
-      "when": 1789324800000,
+      "when": 1788963406692,
       "tag": "0039_conversation_pair_unique",
       "breakpoints": true
     },
     {
       "idx": 41,
       "version": "7",
-      "when": 1789324800001,
+      "when": 1788963406693,
       "tag": "0040_player_host_payout",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1789316793123,
+      "tag": "0041_match_chat_read_watermark",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789316793124,
+      "tag": "0042_hot_fk_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789846359444,
+      "tag": "0043_min_players_alignment",
+      "commit": null
     }
   ]
 }

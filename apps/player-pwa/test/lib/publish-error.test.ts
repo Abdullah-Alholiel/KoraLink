@@ -17,6 +17,17 @@ describe('classifyPublishError', () => {
     expect(classifyPublishError(new Error('Conflict: slot booked'))).toBe('slot_taken');
   });
 
+  it('classifies a slot-started rejection (past-slot publish guard, 2026-09-18)', () => {
+    // Real API message shape from createMatch's publish-time guard.
+    expect(
+      classifyPublishError(
+        new Error('This slot has already started. Pick an upcoming slot (slot_date=2026-09-18, start=16:00, now=19:00 Riyadh).'),
+      ),
+    ).toBe('slot_started');
+    expect(PUBLISH_ERROR_KEYS.slot_started).toBe('host.errorSlotStarted');
+    expect((enMessages as { host: Record<string, string> }).host.errorSlotStarted).toBeTruthy();
+  });
+
   it('classifies the hosting-terms consent rejection (stale bundle/session path)', () => {
     const err = new Error('Hosting terms must be accepted before booking.');
     expect(classifyPublishError(err)).toBe('hosting_terms');

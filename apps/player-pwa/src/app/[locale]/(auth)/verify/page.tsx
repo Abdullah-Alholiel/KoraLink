@@ -6,9 +6,12 @@ import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-reac
 import { useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/useAppStore';
-import { fetcher, setAuthToken } from '@/lib/fetcher';
+import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
-import { clearAuthFlow } from '@/lib/auth-flow';
+import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft, setAuthChannel, setAuthEmailDraft, setAuthPhoneDraft } from '@/lib/auth-flow';
+import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
+import type { BlockedReason } from '@/components/auth/BlockedCard';
+import type { AppLocale } from '@/lib/format';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -29,15 +32,46 @@ function VerifyContent() {
     const t = useTranslations('verify');
     const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
-    const phone = searchParams?.get('phone') || '';
     // email-otp-login (run #46): the login screen routes here with either
     // ?phone=… (default) or ?email=… — one shared code-entry screen.
-    const email = searchParams?.get('email') || '';
+    // 2026-09-17: the identifier SELF-HEALS from the auth-flow drafts when
+    // the query param is missing (iOS discards the backgrounded tab while
+    // the user reads the OTP → the restored URL can come back without
+    // params; back-navigation variants too) so the screen never blanks.
+    const [phone, setPhone] = useState(searchParams?.get('phone') || '');
+    const [email, setEmail] = useState(searchParams?.get('email') || '');
+    useEffect(() => {
+        if (phone || email) {
+            // Arrived with URL params (login push, deep link, reload): make
+            // the identifier DURABLE too — complete-profile's back-nav and a
+            // later self-heal both read storage, never the URL. This also
+            // freezes the channel exactly as the user chose it on login.
+            if (email) setAuthEmailDraft(email);
+            if (phone) setAuthPhoneDraft(phone);
+            setAuthChannel(email ? 'email' : 'phone');
+            return;
+        }
+        if (getAuthChannel() === 'email') {
+            const draft = getAuthEmailDraft();
+            if (draft) setEmail(draft);
+        } else {
+            const draft = getAuthPhoneDraft();
+            if (draft) setPhone(draft);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const channel: 'phone' | 'email' = email ? 'email' : 'phone';
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
     const [error, setError] = useState<string | null>(null);
     const [resendCountdown, setResendCountdown] = useState(0);
+    // P1-47: when the verify response carries a moderation block
+    // (banned/suspended/deleted), the OTP UI is replaced by the localized
+    // BlockedCard — retrying can never succeed.
+    const [blocked, setBlocked] = useState<{
+        reason: BlockedReason;
+        suspendedUntil: string | null;
+    } | null>(null);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     const verifyOtp = useVerifyOtp();
@@ -113,22 +147,20 @@ function VerifyContent() {
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
-            // The auth flow is DONE — clear the session-scoped channel + email
-            // draft so they never leak into a future login on this tab.
-            clearAuthFlow();
-            // P2-11 exception consumption (email channel): the email verify
-            // call opts into responseToken:true because the prod API (render)
-            // cannot deliver a working cross-origin cookie to the PWA
-            // (vercel). Persist it so the fetcher's existing Bearer path
-            // authenticates every subsequent call — the same mechanism
-            // dev-login already uses. Phone channel: cookie-only, untouched.
+            // P2-11 exception consumption (email channel): the verify call opts
+            // into responseToken:true because the prod API (render) cannot
+            // deliver a working cross-origin cookie to the PWA (vercel). Persist
+            // it so the fetcher's existing Bearer path authenticates every
+            // subsequent call — the same mechanism dev-login already uses.
             if (data.token) setAuthToken(data.token);
-            if (data.isNewUser) {
-                router.push(`/${locale}/complete-profile`);
-                return;
-            }
-            // Populate Zustand user for returning users — cascade-fixes
-            // join detection, host detection, isAuthenticated, and profile display.
+            // Populate Zustand for BOTH paths BEFORE any navigation. Returning
+            // users: cascade-fixes join/host detection + profile display. NEW
+            // users: this is what lets complete-profile (and every page after
+            // it) pass the (main) AuthGuard — the store user used to stay null
+            // here and updateUser() no-opped on null, so isAuthenticated stayed
+            // false and the fresh signup was bounced back to /login for a
+            // SECOND OTP (2026-09-17 report). The token is persisted above, so
+            // /users/me is authenticated on both channels.
             try {
                 const profile = await fetcher<UserProfileApi>('/users/me');
                 useAppStore.getState().login({
@@ -144,9 +176,22 @@ function VerifyContent() {
             } catch (profileErr) {
                 // Profile fetch failed — show error instead of silently navigating
                 // as guest. This usually means the auth cookie didn't set properly.
-                setError(t('verify.profileFetchError'));
+                // (Key lives at verify.profileFetchError — a `t('verify.…')` call
+                // here resolved to verify.verify.* and rendered the raw key.)
+                setError(t('profileFetchError'));
                 return;
             }
+            if (data.isNewUser) {
+                // Store user is populated ⇒ complete-profile's updateUser merge
+                // works, and the AuthGuard never treats this user as anonymous.
+                // Do NOT clear drafts here: complete-profile is not the finish
+                // line — its back-navigation must restore the channel + input
+                // (2026-09-17 report). complete-profile's Save success clears.
+                router.push(`/${locale}/complete-profile`);
+                return;
+            }
+            // Returning user — the flow is done the moment they're in.
+            clearAuthFlow();
             router.push(`/${locale}/play`);
         };
 
@@ -159,8 +204,21 @@ function VerifyContent() {
                         // 401 = wrong/expired code; 429 = fail-lockout (5 tries).
                         // Stale digits would fail again — clear for a fresh entry.
                         clearOtp();
+                        const kind = classifyError(err);
+                        // P1-47: moderation block — swap the whole OTP form for
+                        // the localized blocked state (retry can never succeed).
+                        if (kind === 'banned' || kind === 'suspended' || kind === 'deleted') {
+                            setBlocked({
+                                reason: kind,
+                                suspendedUntil: extractSuspendedUntil(
+                                    (err as { message?: unknown })?.message,
+                                ),
+                            });
+                            clearAuthFlow();
+                            return;
+                        }
                         setError(
-                            classifyError(err) === 'rateLimited'
+                            kind === 'rateLimited'
                                 ? tErrors('rateLimited')
                                 : tErrors('otpFailed'),
                         );
@@ -175,8 +233,19 @@ function VerifyContent() {
                 onSuccess,
                 onError: (err) => {
                     clearOtp();
+                    const kind = classifyError(err);
+                    if (kind === 'banned' || kind === 'suspended' || kind === 'deleted') {
+                        setBlocked({
+                            reason: kind,
+                            suspendedUntil: extractSuspendedUntil(
+                                (err as { message?: unknown })?.message,
+                            ),
+                        });
+                        clearAuthFlow();
+                        return;
+                    }
                     setError(
-                        classifyError(err) === 'rateLimited'
+                        kind === 'rateLimited'
                             ? tErrors('rateLimited')
                             : tErrors('otpFailed'),
                     );
@@ -194,17 +263,29 @@ function VerifyContent() {
         // overwrites it). Keeping the old digits in the boxes is exactly how
         // users ended up verifying a dead code → 401. Clear them.
         clearOtp();
+        // P1-47: a blocked account also blocks the send path — surface the
+        // localized moderation copy instead of a generic "send failed".
+        const onSendError = (err: unknown) => {
+            const kind = classifyError(err);
+            setError(
+                kind === 'rateLimited'
+                    ? tErrors('rateLimited')
+                    : kind === 'banned' || kind === 'suspended' || kind === 'deleted'
+                        ? tErrors(kind)
+                        : tErrors('otpSendFailed'),
+            );
+        };
         if (channel === 'email') {
             sendEmailOtp.mutate(
                 { email },
-                { onError: () => setError(tErrors('otpSendFailed')) },
+                { onError: onSendError },
             );
             return;
         }
         sendOtp.mutate(
             { phone },
             {
-                onError: () => setError(tErrors('otpSendFailed')),
+                onError: onSendError,
             },
         );
     };
@@ -221,6 +302,26 @@ function VerifyContent() {
             return `${head}${'*'.repeat(Math.max(2, local.length - 2))}@${domain}`;
         })()
         : '';
+
+    // P1-47: a moderation block replaces the whole OTP screen — the card is
+    // the screen (what happened + why + what next, localized).
+    if (blocked) {
+        return (
+            <div className="flex min-h-full flex-col items-center justify-center px-6">
+                <BlockedCard
+                    reason={blocked.reason}
+                    suspendedUntil={blocked.suspendedUntil}
+                    locale={(locale === 'ar' ? 'ar' : 'en') as AppLocale}
+                    onSignOut={() => {
+                        clearAuthFlow();
+                        clearAuthToken();
+                        useAppStore.getState().logout();
+                        router.push(`/${locale}/login`);
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-full px-6">

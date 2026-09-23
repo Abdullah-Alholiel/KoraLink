@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
 
@@ -63,5 +64,21 @@ describe('WalletController — topup feature flag (P0-7, run #26)', () => {
     // explicit true flag.
     const ctrl = await makeController('production');
     await expect(ctrl.topup(user, dto)).rejects.toThrow(ForbiddenException);
+  });
+
+  // Run #58 (reviewer-B P1): POST /wallet/pay was REMOVED — it accepted a
+  // CLIENT-SUPPLIED amount for a MATCH_FEE debit with no server-side pricing
+  // (dead surface: zero consumers; the authoritative fee path is joinMatch's
+  // in-tx server-priced charge). This pin makes a regression (re-adding a
+  // client-priced fee route) fail the suite.
+  it('POST /wallet/pay stays REMOVED — no client-priced MATCH_FEE surface (run #58 pin)', () => {
+    const proto = WalletController.prototype as unknown as Record<string, unknown>;
+    expect(proto.pay).toBeUndefined();
+    const routes: string[] = Reflect.getMetadata(
+      PATH_METADATA,
+      WalletController,
+    ) as string[];
+    const flattened = Array.isArray(routes) ? routes : [routes];
+    expect(flattened).not.toContain('pay');
   });
 });

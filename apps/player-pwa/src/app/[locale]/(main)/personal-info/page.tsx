@@ -20,6 +20,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, ChevronDown, Loader2, Pencil } from 'lucide-react';
 import { useUserProfile, useUserStats, useUpdateProfile } from '@/hooks/useUser';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import { useAppStore as useStore } from '@/store/useAppStore';
 import GlassStats from '@/components/profile/GlassStats';
@@ -31,6 +33,8 @@ const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'] as const;
 export default function PersonalInfoPage() {
   const router = useRouter();
   const t = useTranslations();
+  // P2-63 (run #51): offline signal here too (Reviewer B run #51 coverage gap).
+  const isOnline = useOnlineStatus();
 
   const storeUser = useAppStore(selectUser);
   const { data: apiUser, isLoading, error, refetch } = useUserProfile();
@@ -84,6 +88,8 @@ export default function PersonalInfoPage() {
 
   return (
     <div>
+      {/* P2-63: shared offline banner (Reviewer B run #51 coverage gap). */}
+      <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
       {/* Header — standard pinned white bar (Play-screen shadow language) */}
       <div className="sticky top-0 z-40 flex items-center bg-white px-4 pt-[var(--top-safe-inset)] pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100">
         <button

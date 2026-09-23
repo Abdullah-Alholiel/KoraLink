@@ -13,7 +13,8 @@ export class UpdateUserAdminDto {
   banned?: boolean;
 
   @ApiPropertyOptional({
-    description: 'ISO datetime to suspend until; null lifts suspension',
+    description:
+      'ISO datetime to suspend until; null lifts suspension. Must be in the future.',
     type: 'string',
     nullable: true,
   })

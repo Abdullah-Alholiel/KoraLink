@@ -19,11 +19,15 @@ import {
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
 import { useMatches } from '@/hooks/useMatches';
+import { useNow } from '@/hooks/useNow';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import MobileFrame from '@/components/layout/MobileFrame';
 import BottomNav from '@/components/layout/BottomNav';
 import DatePicker from '@/components/matches/DatePicker';
 import { dateInRiyadh } from '@/lib/api-adapter';
+import { classifyError, errorKey } from '@/lib/error-classify';
+import OfflineBanner from '@/components/layout/OfflineBanner';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -37,8 +41,17 @@ const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-function formatDateLabel(date: Date, t: (k: string) => string, locale: string): string {
-  const today = new Date();
+function formatDateLabel(
+  date: Date,
+  t: (k: string) => string,
+  locale: string,
+  nowMs: number,
+): string {
+  // Hydration-safe clock (run #50, P2-59): `now` passed in from the
+  // component's useNow(); pre-mount (0) never matches a real day, so the
+  // label falls through to the localized date instead of a Today/Tomorrow
+  // that could disagree between server and device. Previously new Date().
+  const today = new Date(nowMs);
   today.setHours(0, 0, 0, 0);
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -74,6 +87,11 @@ export default function ClubPage() {
   const locale = (pathname ?? '').split('/')[1] || 'en';
   const t = useTranslations();
 
+  // Hydration-safe wall clock (P2-59, run #50): null during SSR and the first
+  // client render; 0 never matches a real day, so the chip label falls through
+  // to the plain localized date until the clock effect lands.
+  const clubNowMs = useNow() ?? 0;
+
   const { data: venue, isLoading, error } = useVenue(id);
 
   // ── Date filter state — null = "all games" first-look (matches Play) ──
@@ -85,12 +103,18 @@ export default function ClubPage() {
 
   // ── Fetch matches for this venue ──────────────────────────
   // No date → ALL upcoming matches (grouped by day). A date → that day only.
-  const { matches, isLoading: matchesLoading } = useMatches({
+  // useMatches returns adapted Match[] already — do NOT re-adapt
+  // (P1-46, run #51: the hook's error/refetch are consumed — a failed
+  // match-list fetch must never masquerade as "no games scheduled").
+  const {
+    matches,
+    isLoading: matchesLoading,
+    error: matchesError,
+    refetch: refetchMatches,
+  } = useMatches({
     date: dateStr,
     venue_id: id,
   });
-
-  // useMatches returns adapted Match[] already — do NOT re-adapt
 
   const storeUser = useAppStore(selectUser);
   const currentUserId = storeUser?.id;
@@ -105,10 +129,16 @@ export default function ClubPage() {
     setShowCalendar(false);
   }, []);
 
+  // Staleness signal for the SW-cached club surface (run #52): the club page
+  // is the last main PWA surface without an offline affordance — a stale
+  // cached list must never read as live data.
+  const isOnline = useOnlineStatus();
+
   // ── Scroll parallax ─────────────────────────────────────
 
   return (
     <MobileFrame>
+      <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
       {/* ── Header ── */}
       <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-3">
         <button
@@ -195,16 +225,30 @@ export default function ClubPage() {
                     );
                   })()}
 
-                  {/* Address */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                  {/* Address — P2-map-pin (run #51): tappable maps deep-link.
+                      The venues table carries no coordinates (schema.ts venues:
+                      name/city/address only), so the link uses a free-form
+                      maps query (name + address + city) — Google/Apple Maps
+                      both resolve it; no coords = nothing to fake. The hero's
+                      MapPin stays decorative (image caption, not an affordance). */}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${venue.name} ${venue.address} ${venue.city}`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${venue.name} — ${t('clubs.openInMaps')}`}
+                    className="flex items-center gap-3 group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-active:bg-brand-green/20 transition-colors">
                       <MapPin className="w-4 h-4 text-brand-green" strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-400">{t('clubs.address')}</p>
                       <p className="text-sm font-semibold text-brand-black truncate">{venue.address}</p>
                     </div>
-                  </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 rtl:-scale-x-100 flex-shrink-0" strokeWidth={2} />
+                  </a>
 
                   {/* P1-32: operating hours row (Riyadh-local wall clock).
                       Rendered only when BOTH bounds exist — never invent
@@ -304,7 +348,8 @@ export default function ClubPage() {
                     </p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="text-sm font-bold text-brand-black">
-                        {selectedDate ? formatDateLabel(selectedDate, t, locale) : t('clubs.allMatches')}
+                        {/* P2-59 (run #50): hydration-stable now from useNow(); pre-mount falls through to the localized date */}
+                        {selectedDate ? formatDateLabel(selectedDate, t, locale, clubNowMs) : t('clubs.allMatches')}
                       </span>
                       {selectedDate && (
                         <button
@@ -331,6 +376,25 @@ export default function ClubPage() {
                 {matchesLoading ? (
                   <div className="flex justify-center py-12">
                     <Loader2 className="w-6 h-6 text-brand-green animate-spin" strokeWidth={2} />
+                  </div>
+                ) : matchesError ? (
+                  /* ── Error state (P1-46, run #51) — what/why/next + retry.
+                       Mirrors the venue-error block above; classified copy
+                       (errors.*) instead of a false "no games" empty state. ── */
+                  <div className="flex flex-col items-center justify-center py-12 px-8">
+                    <AlertTriangle
+                      className="w-8 h-8 text-brand-red mb-2"
+                      strokeWidth={1.5}
+                    />
+                    <p className="text-sm text-gray-400 text-center">
+                      {t(errorKey(classifyError(matchesError)))}
+                    </p>
+                    <button
+                      onClick={() => void refetchMatches()}
+                      className="mt-3 text-xs text-brand-green font-medium"
+                    >
+                      {t('common.retry')}
+                    </button>
                   </div>
                 ) : matches.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 px-8">

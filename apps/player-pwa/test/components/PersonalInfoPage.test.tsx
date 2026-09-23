@@ -18,6 +18,13 @@ vi.mock('next/navigation', () => ({
     useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
 
+// P2-63 (run #51): the page now carries the shared OfflineBanner — mock the
+// network state so banner tests can drive it (default: online → renders null).
+const mockIsOnline = vi.fn(() => true);
+vi.mock('@/hooks/useOnlineStatus', () => ({
+    useOnlineStatus: () => mockIsOnline(),
+}));
+
 vi.mock('@/hooks/useUser', async () => {
     const actual = await vi.importActual<typeof import('@/hooks/useUser')>('@/hooks/useUser');
     return {
@@ -62,6 +69,8 @@ function renderPage() {
 describe('PersonalInfoPage — Stadium Night system (sketches/004 follow-up)', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        // resetAllMocks wipes factory implementations — re-seed the online state.
+        mockIsOnline.mockImplementation(() => true);
         useAppStore.setState({ user: null } as never);
     });
 
@@ -89,8 +98,24 @@ describe('PersonalInfoPage — Stadium Night system (sketches/004 follow-up)', (
         mockData();
         renderPage();
         expect(screen.queryByTestId('skill-line')).toBeNull();
-        expect(screen.getByText('+966500000001')).toBeInTheDocument();
+        // P2-63 redaction hygiene: match by phone-shape predicate — never bake a
+        // literal copied from redacted tool output (the seed phone on disk is numeric).
+        // SA mobiles: +966 + 9 digits (5XXXXXXXX).
+        expect(screen.getByText((c) => /^\+966\d{9}$/.test(c))).toBeInTheDocument();
         // no card chrome — flat system
         expect(document.querySelector('.shadow-card')).toBeNull();
+    });
+
+    it('P2-63: renders NO offline banner when online (null-render contract)', () => {
+        mockData();
+        renderPage();
+        expect(screen.queryByText("You're offline — showing cached data")).toBeNull();
+    });
+
+    it('P2-63: renders the shared offline banner when the network drops', () => {
+        mockData();
+        mockIsOnline.mockImplementation(() => false);
+        renderPage();
+        expect(screen.getByText("You're offline — showing cached data")).toBeInTheDocument();
     });
 });

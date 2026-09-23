@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KoraLink — Auth Login Revamp: channel affordance variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green:#254132; --dark:#202124; --bg:#f7f8f7; --border:#E5E7EB;
+    --gray:#6B7280; --gray-l:#9CA3AF; --gray-xl:#D1D5DB; --red:#d4494c;
+    --green-tint:#EEF3F0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#eceff1;font-family:'Outfit',system-ui,sans-serif;padding:36px 28px 60px;}
+  h1{color:var(--dark);font-size:22px;margin-bottom:4px;}
+  .sub{color:var(--gray);font-size:13px;margin-bottom:28px;}
+  .variant{margin-bottom:44px;}
+  .variant h2{color:var(--green);font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;}
+  .variant p.note{color:var(--gray);font-size:12.5px;margin-bottom:14px;max-width:840px;line-height:1.5;}
+  .row{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start;}
+  .phone{width:390px;background:var(--bg);border-radius:34px;border:1px solid #d6dad8;
+    box-shadow:0 10px 30px rgba(32,33,36,.12);overflow:hidden;flex-shrink:0;}
+  .lang-tag{font-size:11px;font-weight:700;color:var(--gray);letter-spacing:.08em;margin:0 0 8px 4px;}
+  .frame-inner{height:760px;display:flex;flex-direction:column;padding:0 24px;position:relative;}
+  .ar .frame-inner{font-family:'Tajawal',system-ui,sans-serif;}
+  .ar{direction:rtl;}
+
+  /* header */
+  .hdr{display:flex;align-items:center;gap:12px;padding:18px 0 12px;}
+  .globe{width:40px;height:40px;display:flex;align-items:center;justify-content:center;}
+  .brand{display:flex;align-items:center;gap:8px;flex:1;justify-content:center;padding-inline-end:40px;}
+  .brand .disc{width:28px;height:28px;border-radius:50%;background:rgba(37,65,50,.1);
+    display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .brand span{font-weight:700;color:var(--dark);font-size:16px;}
+  .ar .brand span{font-weight:700;}
+
+  .content{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .content.push-up{transform:translateY(-14px);}
+  h3.title{color:var(--dark);font-size:24px;font-weight:700;text-align:center;line-height:1.25;}
+  p.subtt{color:var(--gray-l);font-size:13.5px;margin-top:10px;text-align:center;line-height:1.5;}
+
+  /* ── A: segmented control ── */
+  .seg{display:flex;width:100%;margin-top:22px;background:#fff;border:1px solid var(--border);
+    border-radius:999px;padding:4px;gap:4px;}
+  .seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;
+    height:42px;border-radius:999px;border:none;background:transparent;cursor:pointer;
+    font-family:inherit;font-size:13px;font-weight:600;color:var(--gray);}
+  .seg button.on{background:var(--green);color:#fff;box-shadow:0 2px 8px rgba(37,65,50,.35);}
+  .seg .ic{font-size:14px;line-height:1;}
+
+  /* ── B: method cards ── */
+  .methods{width:100%;display:flex;flex-direction:column;gap:10px;margin-top:22px;}
+  .mcard{display:flex;align-items:center;gap:12px;width:100%;background:#fff;
+    border:1.5px solid var(--border);border-radius:16px;padding:14px 16px;cursor:pointer;text-align:start;}
+  .mcard .mic{width:40px;height:40px;border-radius:12px;background:var(--green-tint);
+    display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+  .mcard .mtxt{flex:1;min-width:0;}
+  .mcard .mt1{font-size:14px;font-weight:700;color:var(--dark);}
+  .mcard .mt2{font-size:11.5px;color:var(--gray-l);margin-top:1px;}
+  .mcard .radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--gray-xl);flex-shrink:0;}
+  .mcard.sel{border-color:var(--green);background:var(--green-tint);}
+  .mcard.sel .radio{border-color:var(--green);background:var(--green);
+    box-shadow:inset 0 0 0 3.5px #fff;}
+  .mcard.sel .mic{background:var(--green);}
+  .mcard .mtitle-only{font-size:14px;font-weight:700;color:var(--dark);flex:1;}
+
+  /* input */
+  .input{display:flex;align-items:center;gap:8px;width:100%;margin-top:18px;background:#fff;
+    border:2px solid rgba(37,65,50,.3);border-radius:16px;padding:14px 16px;}
+  .input .flag{font-size:18px;}
+  .input .cc{font-size:14px;font-weight:500;color:var(--dark);}
+  .input .div{width:1px;height:20px;background:var(--gray-xl);margin:0 4px;}
+  .input .ph{flex:1;font-size:14px;color:var(--dark);direction:ltr;text-align:left;}
+  .input .ph.empty{color:var(--gray-xl);}
+  .input .mic{color:var(--gray-l);font-size:15px;}
+
+  /* C: inline switch chip */
+  .chip{display:inline-flex;align-items:center;gap:6px;margin-top:14px;height:40px;
+    padding:0 16px;border-radius:999px;border:1.5px solid rgba(37,65,50,.25);background:#fff;
+    color:var(--green);font-size:13px;font-weight:600;cursor:pointer;}
+  .chip .ic{font-size:14px;}
+
+  /* CTA */
+  .bottom{padding:0 0 26px;}
+  .cta{width:100%;height:56px;border-radius:16px;background:var(--green);color:#fff;border:none;
+    font-family:inherit;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .legal{margin-top:14px;font-size:11.5px;color:var(--gray-l);text-align:center;line-height:1.6;}
+  .legal a{color:var(--green);font-weight:500;text-decoration:underline;}
+  .fold{position:absolute;left:0;right:0;top:640px;border-top:1px dashed #b9c2be;font-size:10px;
+    color:#8aa097;text-align:center;padding-top:2px;direction:ltr;}
+  .ar .fold{direction:ltr;}
+  .badge{display:inline-block;background:var(--green);color:#fff;border-radius:999px;
+    font-size:10px;font-weight:700;padding:2px 10px;margin-inline-start:6px;vertical-align:middle;}
+</style>
+</head>
+<body>
+<h1>KoraLink — Login channel affordance <span class="badge">sketches/005</span></h1>
+<div class="sub">Problem: “Continue with email instead” is muted fine-print at the very bottom. Three stances, EN + AR, real copy. Dashed line = small-phone fold (640px).</div>
+
+<!-- ══════════ VARIANT A — segmented control ══════════ -->
+<div class="variant">
+  <h2>A — Segmented channel switch <span style="color:#8aa097;text-transform:none;letter-spacing:0">· recommended</span></h2>
+  <p class="note">Phone/Email pills directly under the title — the choice is visible before the input, one tap to flip, title + subtitle + input adapt to the selected channel. Both channels still share ONE code-entry verify screen.</p>
+  <div class="row">
+    <div><div class="lang-tag">EN — PHONE</div>
+    <div class="phone"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">Enter your phone<br>number</h3>
+        <p class="subtt">We'll send you a 6-digit code to<br>verify your account.</p>
+        <div class="seg">
+          <button class="on"><span class="ic">📱</span> Phone</button>
+          <button><span class="ic">✉️</span> Email</button>
+        </div>
+        <div class="input"><span class="flag">🇸🇦</span><span class="cc">+966</span><div class="div"></div>
+          <span class="ph">55 123 4567</span></div>
+      </div>
+      <div class="fold">↑ visible on small phones ↑</div>
+      <div class="bottom">
+        <button class="cta">Continue →</button>
+        <div class="legal">By continuing, you agree to our <a>Terms of Service</a> &amp; <a>Privacy Policy</a></div>
+      </div>
+    </div></div></div>
+    <div><div class="lang-tag">AR — EMAIL SELECTED</div>
+    <div class="phone ar"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">أدخل بريدك الإلكتروني</h3>
+        <p class="subtt">سنرسل لك رمزاً مكوّناً من 6 أرقام<br>للتحقق من حسابك.</p>
+        <div class="seg">
+          <button><span class="ic">📱</span> الجوال</button>
+          <button class="on"><span class="ic">✉️</span> البريد</button>
+        </div>
+        <div class="input"><span class="mic">✉️</span>
+          <span class="ph empty" style="flex:1;text-align:left;direction:ltr;">abdullah@gmail.com</span></div>
+      </div>
+      <div class="bottom">
+        <button class="cta">متابعة ←</button>
+        <div class="legal">بمتابعتك، فأنت توافق على <a>شروط الخدمة</a> و <a>سياسة الخصوصية</a></div>
+      </div>
+    </div></div></div>
+  </div>
+</div>
+
+<!-- ══════════ VARIANT B — method cards ══════════ -->
+<div class="variant">
+  <h2>B — Two equal method cards</h2>
+  <p class="note">Both methods shown as equal choices up top (clearest affordance). Selecting a card reveals its input below. Heavier screen — more taps to switch, but impossible to miss.</p>
+  <div class="row">
+    <div><div class="lang-tag">EN — PHONE SELECTED</div>
+    <div class="phone"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">Welcome to<br>KoraLink</h3>
+        <p class="subtt">Continue with phone or email —<br>we'll send you a 6-digit code.</p>
+        <div class="methods">
+          <div class="mcard sel"><div class="mic">📱</div><div class="mtxt">
+            <div class="mt1">Continue with Phone</div><div class="mt2">Most common in Saudi Arabia</div></div>
+            <div class="radio"></div></div>
+          <div class="mcard"><div class="mic">✉️</div><div class="mtxt">
+            <div class="mt1">Continue with Email</div><div class="mt2">No SMS needed</div></div>
+            <div class="radio"></div></div>
+        </div>
+        <div class="input"><span class="flag">🇸🇦</span><span class="cc">+966</span><div class="div"></div>
+          <span class="ph">55 123 4567</span></div>
+      </div>
+      <div class="fold">↑ visible on small phones ↑</div>
+      <div class="bottom">
+        <button class="cta">Continue →</button>
+        <div class="legal">By continuing, you agree to our <a>Terms of Service</a> &amp; <a>Privacy Policy</a></div>
+      </div>
+    </div></div></div>
+    <div><div class="lang-tag">AR — EMAIL SELECTED</div>
+    <div class="phone ar"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">مرحباً بك في<br>كورالينك</h3>
+        <p class="subtt">تابع برقم الجوال أو البريد الإلكتروني —<br>سنرسل لك رمزاً من 6 أرقام.</p>
+        <div class="methods">
+          <div class="mcard"><div class="mic">📱</div><div class="mtxt">
+            <div class="mt1">المتابعة بالجوال</div><div class="mt2">الطريقة الأكثر استخداماً</div></div>
+            <div class="radio"></div></div>
+          <div class="mcard sel"><div class="mic">✉️</div><div class="mtxt">
+            <div class="mt1">المتابعة بالبريد الإلكتروني</div><div class="mt2">بدون رسائل نصية</div></div>
+            <div class="radio"></div></div>
+        </div>
+        <div class="input"><span class="mic">✉️</span>
+          <span class="ph empty" style="flex:1;text-align:left;direction:ltr;">abdullah@gmail.com</span></div>
+      </div>
+      <div class="bottom">
+        <button class="cta">متابعة ←</button>
+        <div class="legal">بمتابعتك، فأنت توافق على <a>شروط الخدمة</a> و <a>سياسة الخصوصية</a></div>
+      </div>
+    </div></div></div>
+  </div>
+</div>
+
+<!-- ══════════ VARIANT C — inline switch chip ══════════ -->
+<div class="variant">
+  <h2>C — Inline switch chip (minimal change)</h2>
+  <p class="note">Same single-input screen, but the switch moves up to sit right under the input and becomes a real bordered chip — visible without scrolling, still one lightweight control.</p>
+  <div class="row">
+    <div><div class="lang-tag">EN — PHONE</div>
+    <div class="phone"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">Enter your phone<br>number</h3>
+        <p class="subtt">We'll send you a 6-digit code to<br>verify your account.</p>
+        <div class="input"><span class="flag">🇸🇦</span><span class="cc">+966</span><div class="div"></div>
+          <span class="ph">55 123 4567</span></div>
+        <button class="chip"><span class="ic">✉️</span> Use email instead</button>
+      </div>
+      <div class="fold">↑ visible on small phones ↑</div>
+      <div class="bottom">
+        <button class="cta">Continue →</button>
+        <div class="legal">By continuing, you agree to our <a>Terms of Service</a> &amp; <a>Privacy Policy</a></div>
+      </div>
+    </div></div></div>
+    <div><div class="lang-tag">AR — PHONE</div>
+    <div class="phone ar"><div class="frame-inner">
+      <div class="hdr"><div class="globe">🌐</div><div class="brand"><div class="disc">🏆</div><span>KoraLink</span></div></div>
+      <div class="content push-up">
+        <h3 class="title">أدخل رقم<br>هاتفك</h3>
+        <p class="subtt">سنرسل لك رمزاً مكوّناً من 6 أرقام<br>للتحقق من حسابك.</p>
+        <div class="input"><span class="flag">🇸🇦</span><span class="cc">+966</span><div class="div"></div>
+          <span class="ph">55 123 4567</span></div>
+        <button class="chip"><span class="ic">✉️</span> استخدم البريد بدلاً من ذلك</button>
+      </div>
+      <div class="bottom">
+        <button class="cta">متابعة ←</button>
+        <div class="legal">بمتابعتك، فأنت توافق على <a>شروط الخدمة</a> و <a>سياسة الخصوصية</a></div>
+      </div>
+    </div></div></div>
+  </div>
+</div>
+
+</body>
+</html>

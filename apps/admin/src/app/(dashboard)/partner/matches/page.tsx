@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import EmptyState from '@/components/EmptyState';
 import type { AdminVenue, PartnerMatchList, PartnerMatchRow } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -232,7 +233,7 @@ export default function PartnerMatchesPage() {
               rows={data?.matches ?? []}
               rowKey={(m) => m.id}
               onRowClick={(m) => router.push(`/partner/matches/${m.id}`)}
-              empty={<div className="py-4 text-sm text-gray-400">{t('empty')}</div>}
+              empty={<EmptyState message={t('empty')} className="py-4" />}
             />
 
             {/* P2-30: server-side pager (page size 20). */}

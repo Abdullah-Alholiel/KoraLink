@@ -92,7 +92,19 @@ export default function DataTable<T>({
               <tr
                 key={rowKey(row, i)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={cn(onRowClick && 'cursor-pointer', 'hover:bg-gray-50')}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key === 'Enter') onRowClick(row);
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
+                className={cn(
+                  onRowClick &&
+                    'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
+                  'hover:bg-gray-50',
+                )}
               >
                 {columns.map((c, i) => (
                   <td

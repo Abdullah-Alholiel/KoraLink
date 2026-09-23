@@ -25,12 +25,33 @@
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
     "otpSendFailed": "Couldn't send a new code just now. If you recently requested one, wait about a minute and try again.",
-    "genericRetry": "Try again"
+    "genericRetry": "Try again",
+    "banned": "Your account has been banned. If you think this is a mistake, contact support.",
+    "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
+    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
+  },
+  "offline": {
+    "backToPage": "Back to the page",
+    "backUnavailable": "You're still offline",
+    "backUnavailableHint": "Reconnect to the internet, then try again."
+  },
+  "blocked": {
+    "title": "Account restricted",
+    "bannedTitle": "Your account has been banned",
+    "bannedBody": "This account can no longer access KoraLink. If you think this is a mistake, contact support.",
+    "suspendedTitle": "Your account is temporarily suspended",
+    "suspendedBody": "You can sign in again after {date}. Hang tight — your matches and wallet are untouched.",
+    "suspendedBodyNoDate": "You can sign in again once the suspension ends. Your matches and wallet are untouched.",
+    "deletedTitle": "Account scheduled for deletion",
+    "deletedBody": "This account is within its 30-day grace period. Sign in and choose Restore to recover it.",
+    "signOut": "Back to login"
   },
   "common": {
     "loading": "Loading…",
     "error": "Something went wrong",
     "errorDescription": "Couldn't load data. Check your connection.",
+    "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
+    "pushSubscribeFailed": "We couldn't turn notifications on. Nothing was changed — check your connection and try again.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",
@@ -55,6 +76,7 @@
     "offline": "Offline",
     "dismiss": "Dismiss",
     "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "permissionDenied": "Notifications are blocked in your browser settings. Re-enable notifications for KoraLink there, then try again.",
     "or": "or"
   },
   "nav": {
@@ -67,8 +89,6 @@
   },
   "login": {
     "title": "Enter your phone number",
-    "titleLine1": "Enter your phone",
-    "titleLine2": "number",
     "subtitle": "We'll send you a 6-digit code to verify your account.",
     "subtitleLine1": "We'll send you a 6-digit code to",
     "subtitleLine2": "verify your account.",
@@ -87,6 +107,10 @@
     "emailToggle": "Continue with email instead",
     "phoneToggle": "Use phone number instead",
     "emailPlaceholder": "Email address",
+    "titleEmail": "Enter your email address",
+    "channelPhone": "Phone",
+    "channelEmail": "Email",
+    "channelSelector": "Login method",
     "invalidEmail": "Enter a valid email address",
     "changeLanguage": "Change language"
   },
@@ -391,11 +415,12 @@
     "yourselfDescription": "You handle everything — we connect the players.",
     "selectSlot": "Select a Time Slot",
     "noSlotsAvailable": "No slots available for this date",
+    "slotTimeAria": "Book slot from {start} to {end}",
+    "slotTimeAriaBooked": "Slot from {start} to {end} is already booked",
     "slotAvailable": "Available",
     "slotBooked": "Booked",
     "slotDate": "Date",
     "slotTime": "Time",
-    "pickDateFirst": "Pick a date to see available slots",
     "warningTitle": "Before You Publish",
     "warningSelfBody": "You are responsible for booking the pitch, preparing it, and controlling match tempo. If the venue is unavailable at kick-off, your account will be held liable to refund all paying players.",
     "warningViaUsBody": "KoraLink guarantees this pitch at the time you selected. You are responsible for showing up and managing the match.",
@@ -426,7 +451,11 @@
     "pitchSelected": "Selected pitch",
     "changePitch": "Change",
     "slotSelected": "Selected slot",
-    "changeSlot": "Change"
+    "changeSlot": "Change",
+    "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
+    "slotsLoading": "Loading available slots…",
+    "slotsError": "Couldn't load available slots. Check your connection.",
+    "slotsRetry": "Try Again"
   },
   "hostOnboarding": {
     "skip": "Skip",
@@ -604,8 +633,6 @@
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
     "footer": "KoraLink v2.1.0 • Made with 🇸🇦❤️ in KSA",
-    "languageEn": "English",
-    "languageAr": "العربية",
     "myReports": "My Reports",
     "push": {
       "categories": {
@@ -690,6 +717,7 @@
     },
     "noClubs": "No clubs found",
     "noClubsDescription": "Try adjusting your filters.",
+    "noClubsEmpty": "No clubs have been added yet — check back soon.",
     "book": "Book",
     "rating": "Rating",
     "surface": "Surface",
@@ -698,6 +726,7 @@
     "closed": "Closed",
     "pitches": "pitches",
     "address": "Address",
+    "openInMaps": "Open in Maps",
     "hours": "Hours",
     "perHour": "hour",
     "amenities": "Amenities",
@@ -850,7 +879,11 @@
     "emptyActive": "You have no active matches",
     "emptyHistory": "No match history yet",
     "emptyCta": "Find a match",
-    "loading": "Loading your matches..."
+    "loading": "Loading your matches...",
+    "statsPlayed": "Played",
+    "statsWins": "Wins",
+    "statsHosted": "Hosted",
+    "historyCancelled": "{count} cancelled"
   },
   "chatSheet": {
     "title": "Match Chat",
@@ -858,7 +891,8 @@
     "emptyDescription": "Start the conversation!",
     "sendPlaceholder": "Type a message...",
     "sendError": "Failed to send. Tap to retry.",
-    "comingSoon": "Chat coming soon"
+    "comingSoon": "Chat coming soon",
+    "loadOlder": "Load earlier messages"
   },
   "pom": {
     "title": "Player of the Match",
@@ -1003,6 +1037,7 @@
     "reportUser": "Report user",
     "reportMessage": "Report message",
     "subjectMessage": "Direct message",
+    "chatMessage": "Lobby message",
     "messageSheetTitle": "Report this message"
   },
   "pwa": {

@@ -39,7 +39,16 @@ if (!dbUrl) {
 }
 
 const sql = postgres(dbUrl, { max: 1, connect_timeout: 15 });
-const DUP_CODES = new Set(['42P07', '42710', '42701', '42P06', '23505']);
+// "Already exists" tolerance list — DDL-duplicate error classes ONLY.
+// NEVER add data-level codes here (e.g. 23505 unique_violation): a data error
+// inside a migration must FAIL LOUD, not be "tolerated" and half-applied
+// (run #59 / board P2-78; 23505 was removed — a genuine constraint violation
+// during a data backfill was silently journaled as applied).
+// P2-80 (run #63): the /already exists/ message fallback below is gated on the
+// error carrying NO SQLSTATE (wrapped/proxy error paths) — a bare message OR
+// would tolerate a custom data-level error whose text merely contains the
+// words "already exists".
+const DUP_CODES = new Set(['42P07', '42710', '42701', '42P06']);
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
@@ -100,7 +109,11 @@ try {
       try {
         await sql.unsafe(stmt);
       } catch (e) {
-        if (DUP_CODES.has(e.code) || /already exists/i.test(e.message ?? '')) {
+        // P2-80 (run #63): tolerate by message ONLY when the error carries no
+        // SQLSTATE (wrapped/proxy error paths). A coded data-level failure
+        // (23505 unique_violation etc.) must FAIL LOUD even when its message
+        // happens to contain "already exists" (custom trigger/RAISE wording).
+        if (DUP_CODES.has(e.code) || (!e.code && /already exists/i.test(e.message ?? ''))) {
           console.log(`    = ${f}: statement tolerated (already exists)`);
           continue;
         }

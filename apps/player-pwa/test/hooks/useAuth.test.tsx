@@ -26,13 +26,17 @@ const storeState: Record<string, unknown> = {
   isOnboarded: false,
   updateUser: vi.fn(),
   setOnboarded: vi.fn(),
+  login: vi.fn(),
 };
 
 vi.mock('@/store/useAppStore', () => ({
-  useAppStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    if (selector) return selector(storeState);
-    return storeState;
-  },
+  useAppStore: Object.assign(
+    (selector?: (state: Record<string, unknown>) => unknown) => {
+      if (selector) return selector(storeState);
+      return storeState;
+    },
+    { getState: () => storeState },
+  ),
 }));
 
 import { useSendOtp, useVerifyOtp, useCompleteProfile } from '@/hooks/useAuth';
@@ -133,6 +137,31 @@ describe('useAuth hooks', () => {
         }),
       });
       expect(mockSetOnboarded).toHaveBeenCalledWith(true);
+    });
+
+    it('promotes a NULL store user with login() (complete-profile after fresh verify)', async () => {
+      // storeState.user is null (fresh signup: the verify page normally
+      // guarantees login() first; this exercises the defense-in-depth path).
+      mockFetcher.mockResolvedValue({
+        id: 'u2',
+        phone: '+966****0001',
+        full_name: 'Fresh User',
+        handle: 'fresh_user',
+        avatar_url: null,
+        preferred_location: null,
+        preferred_position: null,
+        role: 'Player',
+      });
+      const { result } = renderHook(() => useCompleteProfile(), { wrapper: wrapper as never });
+
+      await act(async () => {
+        await result.current.mutateAsync({ fullName: 'Fresh User' });
+      });
+
+      const loginMock = storeState.login as ReturnType<typeof vi.fn>;
+      expect(loginMock).toHaveBeenCalledTimes(1);
+      expect(loginMock.mock.calls[0][0]).toMatchObject({ id: 'u2', fullName: 'Fresh User' });
+      expect(storeState.updateUser).not.toHaveBeenCalled();
     });
   });
 });

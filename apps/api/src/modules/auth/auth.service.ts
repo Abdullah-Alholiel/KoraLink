@@ -53,7 +53,7 @@ export class AuthService {
     private readonly unifonic: UnifonicService,
     private readonly otpStore: OtpStoreService,
   ) {
-    this.logger.log('OTP store backed by Redis (cache-manager).');
+    this.logger.log('OTP store backed by in-memory cache-manager.');
   }
 
   async sendOtp(phone: string, ip?: string): Promise<void> {
@@ -158,29 +158,38 @@ export class AuthService {
     code: string,
     surface?: 'player' | 'ops',
   ): Promise<{ token: string; isNewUser: boolean }> {
-    // ── Abuse protection: attempt lockout ──
-    const failCount = await this.otpStore.getFailCount(phone);
-    if (failCount >= OtpStoreService.FAIL_LIMIT) {
-      this.logger.warn(`verify-otp blocked (lockout after ${failCount} fails) for ${phone}`);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: 'Too many attempts. Try again later.',
-          error: 'Too Many Requests',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    // Run-#53: the ENTIRE check-and-consume sequence runs under the per-phone
+    // verify lock. Compare + delete are now atomic w.r.t. concurrent verifies
+    // (cache-manager get/set is not atomic — one code can never mint two
+    // sessions), while a WRONG code still leaves the stored OTP in place for
+    // a genuine retry. The token mint below stays OUTSIDE the lock.
+    await this.otpStore.withVerifyLock(phone, async () => {
+      // ── Abuse protection: attempt lockout ──
+      const failCount = await this.otpStore.getFailCount(phone);
+      if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        this.logger.warn(
+          `verify-otp blocked (lockout after ${failCount} fails) for ${phone}`,
+        );
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: 'Too many attempts. Try again later.',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
 
-    const storedCode = await this.otpStore.getOtp(phone);
+      const storedCode = await this.otpStore.getOtp(phone);
 
-    if (!storedCode || !otpMatches(storedCode, code)) {
-      await this.otpStore.incrementFail(phone);
-      throw new UnauthorizedException('Invalid or expired OTP.');
-    }
+      if (!storedCode || !otpMatches(storedCode, code)) {
+        await this.otpStore.incrementFail(phone);
+        throw new UnauthorizedException('Invalid or expired OTP.');
+      }
 
-    await this.otpStore.deleteOtp(phone);
-    await this.otpStore.resetFails(phone);
+      await this.otpStore.deleteOtp(phone);
+      await this.otpStore.resetFails(phone);
+    });
 
     const [user] = await this.db
       .select()
@@ -195,11 +204,20 @@ export class AuthService {
     // Moderation enforcement at login: a banned/suspended account must not be
     // able to mint a fresh 7-day JWT (the guard alone would just log them out,
     // which they could defeat by re-authenticating).
+    // P1-47: stable machine codes for PWA classification (error-classify.ts).
     if (user.banned_at) {
-      throw new ForbiddenException('Account banned.');
+      throw new ForbiddenException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new ForbiddenException('Account suspended.');
+      throw new ForbiddenException({
+        // End instant rides in the message — the PWA blocked card shows the
+        // exact date/time localized (what happened + when you're back).
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     // P0-6 (run #29): PDPL soft-delete. A deleted account must not be
     // able to mint a fresh 7-day JWT by re-authenticating — the only
@@ -207,7 +225,10 @@ export class AuthService {
     // mint at the source. (If the user has a still-valid JWT, the
     // jwt-cookie strategy already 401s on every guarded call.)
     if (user.deleted_at) {
-      throw new ForbiddenException('Account scheduled for deletion.');
+      throw new ForbiddenException({
+        message: 'Account scheduled for deletion.',
+        code: 'ACCOUNT_DELETED',
+      });
     }
 
     // Surface separation — the PWA never issues sessions for staff roles and
@@ -288,10 +309,18 @@ export class AuthService {
    }
 
    if (user.banned_at) {
-     throw new ForbiddenException('Account banned.');
+     throw new ForbiddenException({
+       message: 'Account banned.',
+       code: 'ACCOUNT_BANNED',
+     });
    }
    if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-     throw new ForbiddenException('Account suspended.');
+     throw new ForbiddenException({
+       // End instant rides in the message — PWA blocked card shows the
+       // exact date/time localized (see auth.service.ts:213 comment).
+       message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+       code: 'ACCOUNT_SUSPENDED',
+     });
    }
 
    assertSurfaceRole(surface, user.role);

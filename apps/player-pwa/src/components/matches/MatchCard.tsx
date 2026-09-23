@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2, ShieldAlert, UserCheck } from 'lucide-react';
+import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2, ShieldAlert, UserCheck, XCircle } from 'lucide-react';
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/api-adapter';
 import { useNow } from '@/hooks/useNow';
@@ -23,6 +23,8 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const spotsLeft = match.totalSpots - match.filledSpots;
     const isClosing = match.status === 'closing_soon' || (spotsLeft <= 2 && spotsLeft > 0);
     const isFull = match.status === 'full' || spotsLeft <= 0;
+    // Cancelled = terminal, never actionable (My Games tailored tags, 2026-09-18).
+    const isCancelled = match.status === 'cancelled';
 
     // ── State-aware button logic ──
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
@@ -79,12 +81,6 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     } else if (isHost) {
         buttonLabel = t('matchDetail.yourMatch');
         buttonStyle = 'bg-amber-100 text-amber-800 border border-amber-300';
-        badge = (
-            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <Crown className="w-3 h-3" strokeWidth={2} />
-                {t('matchDetail.yourMatch')}
-            </span>
-        );
     } else if (isJoined) {
         buttonLabel = t('matchDetail.view');
         buttonStyle = 'bg-brand-green/10 text-brand-green border border-brand-green';
@@ -119,7 +115,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     return (
         <Link
             href={`/${locale}/match/${match.id}`}
-            className="block bg-white rounded-2xl shadow-card mx-4 mb-3 p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+            className={`block bg-white rounded-2xl shadow-card mx-4 mb-3 p-4 transition-shadow hover:shadow-card-hover active:scale-[0.99] ${isCancelled ? 'opacity-60' : ''}`}
         >
             {/* ── Header Row: avatar + title + time ──── */}
             <div className="flex items-start justify-between mb-2">
@@ -128,7 +124,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         <Building2 className="w-5 h-5 text-brand-green" strokeWidth={2} aria-hidden />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-brand-black leading-tight truncate">
+                        <h3 className={`text-base font-bold leading-tight truncate ${isCancelled ? 'text-gray-400 line-through decoration-1' : 'text-brand-black'}`}>
                             {match.title}
                         </h3>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -160,6 +156,30 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     )}
                 </div>
             </div>
+
+            {/* ── My Games tailored tags (host + cancelled) ──────── */}
+            {(isHost || isCancelled) && (
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    {isHost && (
+                        <span
+                            data-testid="match-card-host-tag"
+                            className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        >
+                            <Crown className="w-3 h-3" strokeWidth={2} />
+                            {t('matchDetail.yourMatch')}
+                        </span>
+                    )}
+                    {isCancelled && (
+                        <span
+                            data-testid="match-card-cancelled-tag"
+                            className="inline-flex items-center gap-1 bg-brand-red/10 text-brand-red text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        >
+                            <XCircle className="w-3 h-3" strokeWidth={2} />
+                            {t('matchDetail.statusCancelled')}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* ── Info Pills Row ─────────────────── */}
             <div className="flex items-center gap-2 mb-3 flex-wrap">

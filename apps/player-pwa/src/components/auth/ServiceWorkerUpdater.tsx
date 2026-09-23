@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { captureError } from '@/providers/ObservabilityProvider';
 
 /**
  * Reloads the page when a NEW service worker takes control, so a redeploy
@@ -16,10 +17,19 @@ import { useEffect } from 'react';
  *
  * Both paths collapse into a single `reloadOnce`, so the page reloads at most
  * once per lifecycle.
+ *
+ * P2-60 (run #50): this component ALSO owns the `/sw.js` registration call —
+ * next-pwa's injected `register: true` script lets failures escape as
+ * UNHANDLED promise rejections (Sentry KORALINK-WEB-2: old browsers and
+ * enterprise CSPs blocking the worker). Here a failed registration is
+ * captured with scope `swRegister` and the page silently degrades to
+ * no-offline support instead of erroring.
  */
 export default function ServiceWorkerUpdater() {
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    // P2-60 (run #50): truthiness guard (not `in`) — also covers environments
+    // where the property exists but is undefined.
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
 
     let reloading = false;
     const reloadOnce = () => {
@@ -29,6 +39,13 @@ export default function ServiceWorkerUpdater() {
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', reloadOnce);
+
+    // Registration with an explicit failure path (P2-60). Update detection
+    // below still rides `navigator.serviceWorker.ready`, so this only needs
+    // the catch — never an unhandled rejection.
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .catch((err) => captureError(err, { scope: 'swRegister' }));
 
     navigator.serviceWorker.ready
       .then((reg) => {

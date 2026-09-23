@@ -2,6 +2,7 @@ import { WsException } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
 import { AppGateway } from './app.gateway';
 import { WsRateLimitService } from './rate-limit.service';
+import { users } from '../../database/schema';
 
 /** The gateway's augmented socket type is not exported — reconstruct it. */
 type AuthSocket = Socket & { userId?: string; role?: string };
@@ -21,14 +22,22 @@ function makeRateLimitService(): WsRateLimitService {
 
 function makeGatewayWithLimiter(rl: WsRateLimitService): AppGateway {
   return new AppGateway(
-    // db: membership select chain resolves [] → handler throws the real
-    // WsException('You are not a member of this match.'). The P1-42 guards
-    // run BEFORE this, so "reached membership" proves the guards passed.
+    // db: routed by table — `users` selects resolve a CLEAN account row
+    // (run #57 P1-48: every state-changing handler passes the moderation
+    // gate first, so these specs stub it open), `match_players` selects
+    // resolve [] → handler throws the real WsException('You are not a
+    // member of this match.'). The P1-42 guards run BEFORE the gate, so
+    // "reached membership" still proves the guards passed.
     {
       select: () => ({
-        from: () => ({
+        from: (table: unknown) => ({
           where: () => ({
-            limit: () => Promise.resolve([]),
+            limit: () =>
+              Promise.resolve(
+                table === users
+                  ? [{ banned_at: null, suspended_until: null, deleted_at: null }]
+                  : [],
+              ),
           }),
         }),
       }),

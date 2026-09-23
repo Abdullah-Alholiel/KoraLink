@@ -63,6 +63,8 @@ import AttendanceSheet from '@/components/matches/AttendanceSheet';
 import AttendanceBanner from '@/components/matches/AttendanceBanner';
 import AppealSheet from '@/components/matches/AppealSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
+import OfflineBanner from '@/components/layout/OfflineBanner';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 export default function MatchDetailPage({
     params,
@@ -88,6 +90,11 @@ export default function MatchDetailPage({
     const appeal = useAppeal(id);
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
+
+    // Staleness signal (run #53): match detail was the last main surface
+    // without an offline affordance — SW-cached join state must never read
+    // as live while offline. Same posture as club detail (run #52).
+    const isOnline = useOnlineStatus();
     const showToast = useAppStore((s) => s.showToast);
 
     const openSpots = match ? match.totalSpots - match.filledSpots : 0;
@@ -223,6 +230,7 @@ export default function MatchDetailPage({
 
     return (
         <MobileFrame>
+            <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
             <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto scroll-container bg-brand-bg relative"

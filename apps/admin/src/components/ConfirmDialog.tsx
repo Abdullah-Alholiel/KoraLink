@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 
 interface ConfirmDialogProps {
@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
 /**
  * Accessible confirmation dialog — replaces window.confirm/alert everywhere
  * in the console (RTL-aware, Esc/backdrop close, danger variant).
+ * Focus lands on the dialog on open (P2-69, run #54); the message is wired
+ * via aria-describedby.
  */
 export default function ConfirmDialog({
   open,
@@ -27,6 +29,12 @@ export default function ConfirmDialog({
   onClose,
 }: ConfirmDialogProps) {
   const t = useTranslations('confirm');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const messageId = useId();
+
+  useEffect(() => {
+    if (open) dialogRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,11 +48,23 @@ export default function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-label={title}>
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={title}
+      aria-describedby={message ? messageId : undefined}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+    >
       <div className="absolute inset-0 bg-black/40 animate-[fade-in_.15s_ease-out]" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl animate-[scale-in_.15s_ease-out]">
         <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-        {message && <p className="mt-1.5 text-sm text-gray-500">{message}</p>}
+        {message && (
+          <p id={messageId} className="mt-1.5 text-sm text-gray-500">
+            {message}
+          </p>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onClose}

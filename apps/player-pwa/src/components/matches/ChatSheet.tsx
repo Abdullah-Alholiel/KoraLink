@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import { useNow } from '@/hooks/useNow';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ReportSheet from '@/components/matches/ReportSheet';
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -34,9 +37,13 @@ function groupMessages(
   messages: MatchMessage[],
   t: (key: string) => string,
   locale: string,
+  nowMs: number,
 ) {
   const groups: { label: string; messages: MatchMessage[] }[] = [];
-  const now = new Date();
+  // Hydration-safe clock (run #50, P2-59): `now` passed in from the
+  // component's useNow() — null pre-mount buckets everything "older"
+  // identically on both sides. Previously a render-path new Date().
+  const now = new Date(nowMs);
 
   for (const msg of messages) {
     const group = getDateGroup(msg.created_at, now);
@@ -76,18 +83,31 @@ export default function ChatSheet({
     isConnected,
     sendMessage,
     retryMessage,
+    hasMore,
+    isLoadingOlder,
+    loadOlder,
   } = useMatchChat(isOpen ? matchId : null);
 
   const [input, setInput] = useState('');
+  // P1-31 parity (run #53): report an abusive RECEIVED lobby message — same
+  // pattern as the DM conversation surface (messages/[id]/page.tsx).
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Auto-scroll to bottom on new messages ──
+  // ── Auto-scroll to bottom on NEW messages ──
+  // P1-3 (run #65): keyed on the LAST message id, not the list length —
+  // prepending an older page (load-older) must NOT yank the user to the
+  // bottom; only a genuinely new latest message should scroll.
+  // (P2-87 rider, run #67: extracted the expression to a variable so the
+  // dep array is statically checkable — clears the --max-warnings 0 CI rule.)
+  const lastMessageId =
+    messages.length > 0 ? messages[messages.length - 1].id : '';
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.length]);
+  }, [lastMessageId]);
 
   // ── Focus input on open ──
   useEffect(() => {
@@ -96,9 +116,16 @@ export default function ChatSheet({
     }
   }, [isOpen]);
 
+  // Hydration-safe wall clock (P2-59, run #50): null pre-mount → 0 buckets
+  // all messages "older" on the first render, identical on both sides; the
+  // device clock takes over from the first effect onward.
+  // (Run #50 Reviewer A: the hook must run BEFORE any early return so hook
+  // order stays stable regardless of isOpen/mount behavior.)
+  const nowMs = useNow() ?? 0;
+
   if (!isOpen) return null;
 
-  const grouped = groupMessages(messages, t, locale);
+  const grouped = groupMessages(messages, t, locale, nowMs);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -150,7 +177,7 @@ export default function ChatSheet({
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
-            aria-label="Close chat"
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
           </button>
@@ -158,6 +185,22 @@ export default function ChatSheet({
 
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto scroll-container min-h-[200px] bg-gray-50/50">
+          {/* P1-3 (run #65): load-older affordance — scrollback past the
+              newest-50 window. Hidden while the initial history loads. */}
+          {!isLoading && hasMore && (
+            <div className="flex justify-center py-3">
+              <button
+                onClick={() => loadOlder()}
+                disabled={isLoadingOlder}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-green active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {isLoadingOlder && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} />
+                )}
+                {t('chatSheet.loadOlder')}
+              </button>
+            </div>
+          )}
           {/* Loading */}
           {isLoading && (
             <div className="flex items-center justify-center py-16">
@@ -172,7 +215,7 @@ export default function ChatSheet({
                 <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
               </div>
               <p className="text-sm text-gray-400 text-center mb-4">
-                {t('common.errorDescription')}
+                {t(errorKey(classifyError(error)))}
               </p>
               <button
                 onClick={() => refetch()}
@@ -270,6 +313,16 @@ export default function ChatSheet({
                           <AlertCircle className="w-4 h-4 text-brand-red" strokeWidth={2} />
                         </button>
                       )}
+                      {!isMine && (
+                        // P1-31 parity: report an abusive received lobby message.
+                        <button
+                          onClick={() => setReportTargetId(msg.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all"
+                          aria-label={t('report.chatMessage')}
+                        >
+                          <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                        </button>
+                      )}
                     </span>
                   </div>
                 );
@@ -312,6 +365,16 @@ export default function ChatSheet({
             <Send className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
+
+        {/* P1-31 parity: report sheet for a received lobby message. */}
+        <ReportSheet
+          open={reportTargetId !== null}
+          onClose={() => setReportTargetId(null)}
+          subjectType="message"
+          subjectId={reportTargetId ?? ''}
+          subjectLabel={t('report.chatMessage')}
+          title={t('report.messageSheetTitle')}
+        />
     </BottomSheet>
   );
 }

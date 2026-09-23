@@ -1,19 +1,24 @@
 /**
- * Regression tests — login header language toggle (2026-09-11 incident).
+ * Regression tests — language switching (2026-09-11 + 2026-09-17).
  *
- * Incident v1: header was a dead-end back arrow → replaced with a toggle.
- * Incident v2 (real-device report): the toggle changed the URL but the app
- * snapped back to Arabic — the NEXT_LOCALE cookie (read by the middleware on
- * every UNPREFIXED navigation: PWA relaunch to start_url, the fetcher 401
- * bounce, cold deep links) was never written by any code path, so it stayed
- * at the visitor's first-detected locale forever.
+ * v1: header was a dead-end back arrow → replaced with a toggle.
+ * v2: the toggle changed the URL but NEXT_LOCALE was never persisted → the
+ *     middleware snapped the UI back to the first-detected locale.
+ * v3 (2026-09-17): the bare globe icon (tap = instant flip) became a
+ *     segmented ع/EN pill — the current language is VISIBLE and pressed,
+ *     tapping the other segment switches. Same component now serves the
+ *     login header AND the profile language row.
  *
  * Guards here (integration-style — the REAL locale-routing module runs):
- *  1. Globe renders; no back arrow anywhere on the login header.
- *  2. /en/login click → navigates to /ar/login AND persists NEXT_LOCALE=ar.
- *  3. /ar/login click → navigates to /en/login AND persists NEXT_LOCALE=en
- *     (Arabic aria-label parity guard for ar.json).
- *  4. router.back() is never wired to the header button.
+ *  1. Segmented toggle renders on /en/login with EN pressed, ع inactive.
+ *  2. Clicking ع on /en/login → navigates to /ar/login AND persists
+ *     NEXT_LOCALE=ar.
+ *  3. Arabic leg: /ar/login shows ع pressed; clicking EN → /en/login +
+ *     NEXT_LOCALE=en (localized group aria-label parity guard).
+ *  4. Clicking the ALREADY-ACTIVE segment must NOT navigate (a toggle,
+ *     not a flip-flop reload).
+ *  5. The old globe icon is gone from the login header.
+ *  6. Content block stays click-transparent (dead-tap incident 2026-09-11).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -52,7 +57,7 @@ function renderPage(locale: 'en' | 'ar') {
     );
 }
 
-describe('login header language toggle', () => {
+describe('login header language toggle (segmented ع/EN)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockPathname = '/en/login';
@@ -64,28 +69,47 @@ describe('login header language toggle', () => {
         });
     });
 
-    it('renders a Globe toggle and no back arrow', () => {
-        const { container } = renderPage('en');
-        expect(screen.getByRole('button', { name: 'Change language' })).toBeInTheDocument();
-        expect(container.querySelector('.lucide-globe')).not.toBeNull();
-        expect(container.querySelector('.lucide-arrow-left')).toBeNull();
+    it('renders the segmented toggle with EN pressed on /en/login', () => {
+        renderPage('en');
+        const group = screen.getByRole('group', { name: 'Change language' });
+        expect(group).toHaveAttribute('data-testid', 'language-toggle');
+        // Segments carry endonym aria-labels ('English'/'العربية') — those ARE
+        // their accessible names; the visible 'ع'/'EN' glyphs are decorative.
+        expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'العربية' })).toHaveAttribute('aria-pressed', 'false');
     });
 
-    it('/en/login click → navigates to /ar/login AND persists NEXT_LOCALE=ar', () => {
+    it('clicking ع on /en/login → /ar/login AND persists NEXT_LOCALE=ar', () => {
         renderPage('en');
-        fireEvent.click(screen.getByRole('button', { name: 'Change language' }));
+        fireEvent.click(screen.getByRole('button', { name: 'العربية' }));
         expect(assignMock).toHaveBeenCalledTimes(1);
         expect(assignMock).toHaveBeenCalledWith('/ar/login');
         expect(document.cookie).toContain('NEXT_LOCALE=ar');
         expect(backMock).not.toHaveBeenCalled();
     });
 
-    it('/ar/login click → /en/login + NEXT_LOCALE=en (Arabic aria-label parity)', () => {
+    it('Arabic leg: ع pressed on /ar/login; clicking EN → /en/login + NEXT_LOCALE=en', () => {
         mockPathname = '/ar/login';
         renderPage('ar');
-        fireEvent.click(screen.getByRole('button', { name: 'تغيير اللغة' }));
+        expect(screen.getByRole('button', { name: 'العربية' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'false');
+        fireEvent.click(screen.getByRole('button', { name: 'English' }));
         expect(assignMock).toHaveBeenCalledWith('/en/login');
         expect(document.cookie).toContain('NEXT_LOCALE=en');
+        // Localized group aria-label parity (ar.json).
+        expect(screen.getByRole('group', { name: 'تغيير اللغة' })).toBeInTheDocument();
+    });
+
+    it('clicking the ALREADY-ACTIVE segment does not navigate (toggle, not flip-flop)', () => {
+        renderPage('en');
+        fireEvent.click(screen.getByRole('button', { name: 'English' }));
+        expect(assignMock).not.toHaveBeenCalled();
+    });
+
+    it('the old globe icon is gone from the login header', () => {
+        const { container } = renderPage('en');
+        expect(container.querySelector('.lucide-globe')).toBeNull();
+        expect(container.querySelector('.lucide-arrow-left')).toBeNull();
     });
 
     it('content block is click-transparent (its -mt-16 overlaps the header row)', () => {

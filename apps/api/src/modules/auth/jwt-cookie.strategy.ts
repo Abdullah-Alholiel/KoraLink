@@ -117,11 +117,21 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
     // A JWT can outlive an admin moderation action. Ban/suspend must take
     // effect immediately (not at token expiry) — reject the session here so
     // every guarded endpoint 401s and the client logs the user out.
+    // P1-47: stable machine codes survive the 401 self-heal redirect and let
+    // the login/verify surfaces classify the block (error-classify.ts).
     if (user.banned_at) {
-      throw new UnauthorizedException('Account banned.');
+      throw new UnauthorizedException({
+        message: 'Account banned.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     if (user.suspended_until && user.suspended_until.getTime() > Date.now()) {
-      throw new UnauthorizedException('Account suspended.');
+      throw new UnauthorizedException({
+        // End instant rides in the message (PWA blocked card shows it
+        // localized) — the `Z` keeps the instant unambiguous.
+        message: `Account suspended until ${user.suspended_until.toISOString()}.`,
+        code: 'ACCOUNT_SUSPENDED',
+      });
     }
     // P0-6 (run #29): deleted users cannot use a still-valid JWT — UNLESS
     // the JWT's `purpose` claim is `restore` (set by UsersService.softDelete
@@ -141,7 +151,10 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt-cookie') 
     // an ACTIVE user (deleted_at NULL) is entirely unaffected by this block.
     if (user.deleted_at) {
       if (payload.purpose !== 'restore') {
-        throw new UnauthorizedException('Account scheduled for deletion.');
+        throw new UnauthorizedException({
+          message: 'Account scheduled for deletion.',
+          code: 'ACCOUNT_DELETED',
+        });
       }
       // Route-strict (P1-36, run #31): the restore token may ONLY call the
       // restore route itself — wallet, export, chat AND the /admin/* ops
