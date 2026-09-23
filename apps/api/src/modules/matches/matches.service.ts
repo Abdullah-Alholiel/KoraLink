@@ -531,7 +531,12 @@ export class MatchesService {
             {
               key: 'match_starting_soon', // P2-8: text localized per subscriber
               vars: { title: match.title, kickoffISO: kickoff.toISOString() },
-              data: { type: 'match-chat', matchId: match.id },
+              // Run #70 (Reviewer B): own semantic type — reusing
+              // 'match-chat' made the reminder share the chat tag
+              // (`match-chat:<id>`), so a starting-soon push could
+              // renotify-replace an unread chat notification (and vice
+              // versa). Deep-link target is unchanged (the match page).
+              data: { type: 'match_starting_soon', matchId: match.id },
             },
           );
           // P1-41 (run #35): email mirror of the reminder (E2). Best-effort
@@ -647,7 +652,9 @@ export class MatchesService {
         await this.notificationsService.sendPushToUsers([row.host_id], {
           key: 'players_needed', // P2-8: text localized per subscriber
           vars: { title: row.title, needed },
-          data: { type: 'match-chat', matchId: row.id },
+          // Run #70: own semantic type — was 'match-chat' (tag collision with
+          // real chat pushes for the same match, renotify-replaced them).
+          data: { type: 'players_needed', matchId: row.id },
         });
         await this.db.execute(sql`
           UPDATE ${matches} SET last_nudge_at = NOW(), updated_at = NOW()
@@ -1878,7 +1885,8 @@ export class MatchesService {
         await this.notificationsService.sendPushToUsers([renudge.hostId], {
           key: 'players_needed_renudge', // P2-8: text localized per subscriber
           vars: { title: hostMatch?.title ?? 'Match', needed: renudge.needed },
-          data: { type: 'match-chat', matchId },
+          // Run #70: own semantic type (was borrowed 'match-chat' — tag collision).
+          data: { type: 'players_needed_renudge', matchId },
         });
       } catch (err) {
         this.logger.error(`Underfill re-nudge failed for ${matchId}: ${(err as Error).message}`);

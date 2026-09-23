@@ -111,3 +111,47 @@ describe('notificationclick guarded navigation (P2-93, run #70) — source tripw
     expect(layout).toContain('PushNavHandler');
   });
 });
+
+describe('worker push route map (run #70) — cross-layer type contract', () => {
+  it('routes every semantic type the API sends (no fall-through to "/")', () => {
+    // API senders (grep-verified run #70): matches.service.ts + app.gateway.ts
+    // + waitlist.service.ts. The worker must route each one — an unhandled
+    // type deep-links to '/' and the tap loses all context (the run-#24 bug
+    // class, re-introduced one type at a time).
+    for (const type of [
+      'match-chat',
+      'dm',
+      'pom-decided',
+      'match-cancelled',
+      'player-removed',
+      'match-rescheduled',
+      'report-resolved',
+      'waitlist-promoted', // P2-95, run #70
+      'match_starting_soon', // run #70: renamed off 'match-chat' (tag collision)
+      'players_needed', // run #70: renamed off 'match-chat' (tag collision)
+      'players_needed_renudge', // run #70: renamed off 'match-chat' (tag collision)
+    ]) {
+      expect(
+        WORKER_SRC.includes(`data.type === '${type}'`),
+      ).toBe(true);
+    }
+  });
+
+  it('keeps real chat as the only "match-chat" sender (no more tag borrowing)', () => {
+    // The API must not send reminder/nudge pushes under the chat type —
+    // a shared tag with renotify:true let a starting-soon push REPLACE an
+    // unread chat notification (and vice versa).
+    const matchesService = readFileSync(
+      join(
+        __dirname,
+        '../../../..',
+        'apps/api/src/modules/matches/matches.service.ts',
+      ),
+      'utf-8',
+    );
+    const chatTypeSends = matchesService.match(/type: 'match-chat'/g) ?? [];
+    // Only the legitimate chat-adjacent sender(s) may remain (today: the
+    // underfilled-nudge path is gone; zero sends in matches.service.ts).
+    expect(chatTypeSends.length).toBe(0);
+  });
+});

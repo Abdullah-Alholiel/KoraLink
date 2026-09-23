@@ -372,4 +372,42 @@ describe('usePushNotifications — P2-91 subscribe outcome contract (run #69)', 
       'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc',
     );
   });
+
+  it('P2-96: a failed server POST rolls the browser subscription back (toggle never lies)', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+    // Own the subscription object so the rollback can be asserted.
+    const unsub = vi.fn(async () => undefined);
+    const ownedSub = {
+      endpoint: ENDPOINT,
+      toJSON: () => ({ endpoint: ENDPOINT, keys: { p256dh: 'k', auth: 'a' } }),
+      unsubscribe: unsub,
+    } as unknown as PushSubscription;
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        ready: Promise.resolve({
+          pushManager: {
+            getSubscription: async () => null,
+            subscribe: vi.fn(async () => ownedSub),
+          },
+        }),
+      },
+    });
+    // The server leg fails AFTER the browser subscription was created.
+    mockFetcher.mockRejectedValue(new Error('subscribe POST 503'));
+
+    const outcome = await subscribeOutcome();
+
+    expect(outcome).toBe('error');
+    // The rollback ran: browser-side subscription torn down...
+    expect(unsub).toHaveBeenCalledTimes(1);
+    // ...state reset (subscription stays null)...
+    expect(mockCapture.mock.calls.some(
+      (c) => c[1] && (c[1] as { scope?: string }).scope === 'pushSubscribe',
+    )).toBe(true);
+    // ...and the POST was actually attempted (failure was on the server leg).
+    expect(
+      mockFetcher.mock.calls.some((c) => c[0] === '/notifications/subscribe'),
+    ).toBe(true);
+  });
 });

@@ -233,7 +233,7 @@ describe('SubscribeDto validation (P2-82, run #69)', () => {
 });
 
 describe('NotificationsController P2-82 subscribe delegation (run #69)', () => {
-  it('delegates to service.subscribe(userId, dto, userAgent, locale) with en default', async () => {
+  it('delegates to service.subscribe(userId, dto, userAgent, locale) with ar default (run #70 Arabic-first)', async () => {
     const svc = { subscribe: jest.fn(async () => ({ subscribed: true })) };
     const ctrl = new NotificationsController(svc as never);
     const user = { sub: 'user-1' };
@@ -242,7 +242,7 @@ describe('NotificationsController P2-82 subscribe delegation (run #69)', () => {
 
     await ctrl.subscribe(user, body, req);
 
-    expect(svc.subscribe).toHaveBeenCalledWith('user-1', body, 'vitest', 'en');
+    expect(svc.subscribe).toHaveBeenCalledWith('user-1', body, 'vitest', 'ar');
   });
 
   it('passes the payload locale through when present', async () => {

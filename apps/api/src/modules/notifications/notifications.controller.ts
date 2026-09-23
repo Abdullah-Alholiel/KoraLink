@@ -34,9 +34,9 @@ export class NotificationsController {
    * ValidationPipe (whitelist + forbidNonWhitelisted) validates endpoint/
    * keys/locale at the boundary instead of garbage surfacing later as
    * web-push send failures. The Chrome `expirationTime: null` allowlist
-   * decision lives on SubscribeDto. Locale defaults to 'en' here (was the
-   * service's trailing-arg default) and the DTO never reaches the DB with
-   * non-ar/en values.
+   * decision lives on SubscribeDto. Locale defaults to 'ar' (run #70 —
+   * aligned with the worker's Arabic-first fallback, P2-72; was 'en') and
+   * the DTO never reaches the DB with non-ar/en values.
    */
   @Post('subscribe')
   @ApiOperation({ summary: 'Subscribe to push notifications' })
@@ -50,7 +50,7 @@ export class NotificationsController {
       user.sub,
       body,
       req.headers['user-agent'],
-      body.locale ?? 'en',
+      body.locale ?? 'ar', // run #70: Arabic-first default (P2-72 alignment)
     );
   }
 

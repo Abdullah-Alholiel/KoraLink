@@ -214,10 +214,22 @@ export function usePushNotifications(locale: string = 'en') {
 
       // Send to backend, including the active locale so push deep-links
       // preserve ar/en (P1-5).
-      await fetcher('/notifications/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({ ...sub.toJSON(), locale }),
-      });
+      try {
+        await fetcher('/notifications/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ ...sub.toJSON(), locale }),
+        });
+      } catch (postErr) {
+        // Run #70 (P2-96, Reviewer A): the browser subscription EXISTS but the
+        // server has no row. Rolling back keeps the profile toggle truthful —
+        // showing "subscribed" with zero server rows meant the user silently
+        // received no pushes at all.
+        await sub.unsubscribe().catch(() => {
+          /* best-effort rollback — the 90-day stale sweep cleans strays */
+        });
+        setSubscription(null);
+        throw postErr;
+      }
       // P2-76b: remember the synced locale so the locale-sync effect doesn't
       // immediately re-upsert the identical payload.
       try {
@@ -228,9 +240,9 @@ export function usePushNotifications(locale: string = 'en') {
 
       return 'ok';
     } catch (err) {
-      // P2-16: ship to Sentry (console kept for local dev visibility).
+      // P2-16: ship to Sentry (run #70: console.error stripped — captureError
+      // is the shipped visibility path).
       captureError(err, { scope: 'pushSubscribe' });
-      console.error('[Push] Failed to subscribe:', err);
       return 'error';
     } finally {
       setIsSubscribing(false);
@@ -267,9 +279,9 @@ export function usePushNotifications(locale: string = 'en') {
       // No active subscription = nothing to unsubscribe; still a success.
       return true;
     } catch (err) {
-      // P2-16: ship to Sentry (console kept for local dev visibility).
+      // P2-16: ship to Sentry (run #70: console.error stripped — captureError
+      // is the shipped visibility path).
       captureError(err, { scope: 'pushUnsubscribe' });
-      console.error('[Push] Failed to unsubscribe:', err);
       // P2-87 (run #67): the caller decides how to tell the user — the hook
       // only owns the outcome contract (see 01-program-design.md Gate 3).
       return false;

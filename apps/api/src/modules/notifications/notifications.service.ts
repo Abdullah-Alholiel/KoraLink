@@ -101,7 +101,7 @@ export class NotificationsService {
     userId: string,
     sub: SubscribeDto,
     userAgent?: string,
-    locale = 'en',
+    locale = 'ar', // run #70: Arabic-first default (P2-72 alignment; was 'en')
   ) {
     assertSafePushEndpoint(sub.endpoint, this.hostAllowlist);
 

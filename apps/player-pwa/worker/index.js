@@ -232,6 +232,22 @@ self.addEventListener('push', (event) => {
   else if (data.type === 'player-removed' && data.matchId) url = `/${locale}/match/${data.matchId}`;
   else if (data.type === 'match-rescheduled' && data.matchId) url = `/${locale}/match/${data.matchId}`;
   else if (data.type === 'report-resolved') url = `/${locale}/reports`;
+  // Run #70 (P2-95): waitlist promotions deep-link to the match; an unhandled
+  // type fell through to '/' and the tap lost all context.
+  else if (data.type === 'waitlist-promoted' && data.matchId)
+    url = `/${locale}/match/${data.matchId}`;
+  // Run #70 (Reviewer B): the starting-soon reminder stopped borrowing the
+  // 'match-chat' type (tag collision renotify-replaced unread chat pushes);
+  // same deep-link target as before.
+  else if (data.type === 'match_starting_soon' && data.matchId)
+    url = `/${locale}/match/${data.matchId}`;
+  // Run #70: host nudges (players_needed / renudge) also stopped borrowing
+  // 'match-chat' — they deep-link to the match they need players for.
+  else if (
+    (data.type === 'players_needed' || data.type === 'players_needed_renudge') &&
+    data.matchId
+  )
+    url = `/${locale}/match/${data.matchId}`;
 
   event.waitUntil(
     self.registration.showNotification(title, {
