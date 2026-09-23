@@ -1,32 +1,34 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 69,
-  "last_run_at": "2026-09-22T16:10Z",
+  "last_run": 70,
+  "last_run_at": "2026-09-23T15:52Z",
   "last_run_commits": [
-    "7ea1cdb (adopted from OOM-killed 10:15Z session)",
-    "6159f83",
-    "2b4f080"
+    "e721823 (adopted — OOM-killed 01:15Z session: P2-82 512-cap follow-up)",
+    "72fc2f0 (adopted — P2-94 push-rotation API-origin re-point)",
+    "c767696 (adopted — P2-93 notificationclick soft-nav)",
+    "80ce0a3 (P2-95 waitlist promotion push + P2-96 subscribe rollback)",
+    "c02fae7 (P2-97 lint gate unblock)"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-22T15-15Z-run69.md",
+  "last_run_report": "kanban/RUNS/2026-09-23T15-21Z-run70.md",
   "in_review_items": [
     {
-      "id": "run69-p2-82-subscribe-dto",
-      "built_in": "run #69 (7ea1cdb, built by OOM-killed 10:15Z session; adopted + gated by 15:15Z session)",
-      "claim": "P2-82 CLOSED: subscribe endpoint validated by class DTO (PushKeysDto caps 256/64, endpoint https+require_tld, expirationTime @IsOptional @IsNumber for Chrome-null, locale @IsIn ar/en); old plain interfaces deleted; response {subscribed:true} unchanged.",
-      "verify": "grep -c \"class SubscribeDto\" apps/api/src/modules/notifications/dto/notifications.dto.ts (1); cd apps/api && npx jest --silent src/modules/notifications (5 suites 47/47 incl. SubscribeDto cases); npx tsc --noEmit -p tsconfig.json (0)."
+      "id": "run70-p2-95-waitlist-push",
+      "built_in": "run #70 (80ce0a3 — slice written by the OOM-killed 01:15Z session; adopted + ALL gates re-run by the 15:15Z resume session)",
+      "claim": "P2-95 CLOSED: notifyPromotion sends the waitlist_promoted web push (category match, data.type waitlist-promoted) fire-and-forget beside the activity leg; match_starting_soon/players_needed(_renudge) renames kill the 'match-chat' tag collisions; worker routes all new types to the match deep-link.",
+      "verify": "grep -c \"waitlist_promoted\" apps/api/src/modules/matches/waitlist.service.ts (>=1); grep -c \"type: 'match-chat'\" apps/api/src/modules/matches/matches.service.ts (0); cd apps/api && npx jest --silent src/modules/matches/waitlist-push.spec.ts (4/4); npx vitest run test/structure/push-notification-click.test.ts (route-map cases green); optionally live-probe: promote a staging waitlist row with a subscribed seed user and check the push arrives."
     },
     {
-      "id": "run69-p2-91-subscribe-outcome",
-      "built_in": "run #69 (6159f83)",
-      "claim": "P2-91 DONE: subscribe() returns PushSubscribeOutcome (ok|not-installed|permission-denied|error); profile renders common.permissionDenied for denied permissions (was: install hint for everything) + errors.pushSubscribeFailed toast on error; EN+AR parity +2 leaves; serviceWorker.ready mount rejection guard.",
-      "verify": "grep -n \"PushSubscribeOutcome\" apps/player-pwa/src/hooks/usePushNotifications.ts; grep -c \"permissionDenied\" apps/player-pwa/src/messages/en.json apps/player-pwa/src/messages/ar.json (1 each); npx vitest run test/hooks/usePushNotifications.test.tsx (12/12)."
+      "id": "run70-p2-96-subscribe-rollback",
+      "built_in": "run #70 (80ce0a3)",
+      "claim": "P2-96 CLOSED: subscribe() server-POST failure unsubscribes the fresh browser subscription + resets state (toggle truthful); console.error stripped; locale default 'ar' end-to-end on subscribe.",
+      "verify": "grep -n \"rolls the browser subscription back\" apps/player-pwa/src/hooks/usePushNotifications.ts (or grep 'unsubscribe()' context in subscribe); npx vitest run test/hooks/usePushNotifications.test.tsx (rollback case green); grep -c \"'ar'\" apps/api/src/modules/notifications/notifications.controller.ts (locale default line)."
     },
     {
-      "id": "run69-p2-92-pushsubscriptionchange",
-      "built_in": "run #69 (2b4f080)",
-      "claim": "P2-92 DONE: worker handles pushsubscriptionchange — re-subscribes with the same VAPID key, re-upserts POST /notifications/subscribe (credentials:include) with the hook-synced locale from Cache-API KV koralink-push-meta//__kl/push-locale (ar fallback); all failure paths swallowed; handler verified present in the BUILT worker file.",
-      "verify": "grep -c \"pushsubscriptionchange\" apps/player-pwa/worker/index.js (>=1); npx vitest run test/structure/push-subscription-change.test.ts (5/5); after a build: grep -c pushsubscriptionchange in the built public/worker-*.js."
+      "id": "run70-p2-93-94-adopted-commits",
+      "built_in": "01:15Z session (c767696 + 72fc2f0), gates re-run by run #70 resume",
+      "claim": "P2-93 notificationclick soft-nav (focus/postMessage/PushNavHandler) and P2-94 pushsubscriptionchange absolute API origin both hold on the final gated tree.",
+      "verify": "npx vitest run test/structure/push-notification-click.test.ts test/structure/push-subscription-change.test.ts (all green); grep -c \"kl-push-nav\" apps/player-pwa/worker/index.js (>=1); grep -c \"api/v1/notifications/subscribe\" apps/player-pwa/worker/index.js — must appear with an absolute-origin construction, not a bare relative const."
     }
   ],
   "open_blockers": [
@@ -62,6 +64,7 @@
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
   "notes": [
+    "Run #70 (2026-09-23T15:5xZ): DEAD-RUN ADOPTION #2 — 01:15Z fire OOM-killed (kill-pattern #14). Adopted 3 commits + P2-95/96 slice; ALL gates re-run parent-side before adoption (turbo 3/3 sequential, jest 53/53, tsc 0, vitest 671/671). Reviewer A SHIP. LINT GATE WAS BROKEN since the login-revamp era (c02fae7 fixes; run #69's 'lint 0' claim inaccurate — dashboard dark Sep 19-23 meant the gate never ran on staging). Run #64's waitlist-push 'REFUTED' note OVERTURNED by P2-95 evidence (dedupe grep matched the activity leg, not the push). ADMIN HOLD continues (projects-dir merge conflict). Strix not due (Sep 23). zai probe 200 (ZAI_API_KEY; GLM_API_KEY line stale), weekly 1%.",
     "Run #69 (2026-09-22T15:15Z): DEAD-RUN ADOPTION — the 10:15Z fire was OOM-killed at 10:35Z; KILL-PATTERN #13 ROOT CAUSE CONFIRMED via kernel log (memcg OOM inside hermes-worker-cron cgroup, node pid killed, total-vm 12.2GB). Owner input requested: raise the cron-worker cgroup limit or pin turbo --concurrency=1 for cron fires. Adopted 7ea1cdb (P2-82, gates re-run: notifications jest 47/47, api tsc 0, Reviewer A CLEAN); built 6159f83 (P2-91 subscribe outcome contract) + 2b4f080 (P2-92 pushsubscriptionchange + worker locale KV). Gates: vitest 92f/653t, tsc 0, lint 0, turbo 3/3 x2. Reviewer B verified run-#68 P2-13 claims 5/5 -> DONE. zai probe 200 in 2.4s (13th consecutive clean run). NOTEPAD STALE AGAIN: P2-37/P2-20 candidates were already DONE (runs #21/#53) — always re-check BOARD rows. Reviewer-B residual leads (report-only, not boarded): notificationclick unconditional navigate(), push verb-map two-sources-of-truth, locale-presence spec assertion. ADMIN HOLD continues.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "strix_scan=not-due-2026-09 (day 17; window 1st-3rd; next due Oct 1)",
@@ -70,6 +73,6 @@
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "run69-resume-151744",
-  "last_run_started_at": "2026-09-22T15:17:44Z"
+  "last_run_id": "run70-resume-1518",
+  "last_run_started_at": "2026-09-23T15:21:14Z"
 }
