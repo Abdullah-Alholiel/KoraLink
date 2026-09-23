@@ -117,6 +117,15 @@ describe('UnsubscribeDto validation (P2-76, run #65)', () => {
       (await errorsOf({ endpoint: 'https://fcm.googleapis.com/fcm/send/abc', evil: 1 })).length,
     ).toBeGreaterThan(0);
   });
+
+  it('run #70: endpoint is length-capped (512 ok, 513 rejected)', async () => {
+    const ok512 = `https://fcm.googleapis.com/fcm/send/${'a'.repeat(476)}`;
+    expect(ok512.length).toBe(512);
+    expect(await errorsOf({ endpoint: ok512 })).toHaveLength(0);
+    const over513 = `https://fcm.googleapis.com/fcm/send/${'a'.repeat(477)}`;
+    expect(over513.length).toBe(513);
+    expect((await errorsOf({ endpoint: over513 })).length).toBeGreaterThan(0);
+  });
 });
 
 /**
@@ -207,6 +216,19 @@ describe('SubscribeDto validation (P2-82, run #69)', () => {
   it('endpoint follows the SAME https+require_tld rules as UnsubscribeDto', async () => {
     expect((await errorsOf({ ...GOOD, endpoint: 'http://fcm.googleapis.com/x' })).length).toBeGreaterThan(0);
     expect((await errorsOf({ ...GOOD, endpoint: 'https://localhost:3000/x' })).length).toBeGreaterThan(0);
+  });
+
+  it('run #70: endpoint is length-capped (512 ok, 513 rejected) — abuse guard', async () => {
+    // Real FCM/Mozilla endpoints are ~120-180 chars; 512 passes, garbage
+    // blobs bounce before they ever reach the service/DB.
+    const ok512 = `https://fcm.googleapis.com/fcm/send/${'a'.repeat(476)}`;
+    expect(ok512.length).toBe(512);
+    expect(await errorsOf({ ...GOOD, endpoint: ok512 })).toHaveLength(0);
+    const over513 = `https://fcm.googleapis.com/fcm/send/${'a'.repeat(477)}`;
+    expect(over513.length).toBe(513);
+    expect(
+      (await errorsOf({ ...GOOD, endpoint: over513 })).length,
+    ).toBeGreaterThan(0);
   });
 });
 

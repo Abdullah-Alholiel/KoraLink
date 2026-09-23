@@ -25,6 +25,7 @@ import {
  */
 export class UnsubscribeDto {
   @IsUrl({ protocols: ['https'], require_tld: true })
+  @Length(1, 512)
   @IsNotEmpty()
   endpoint!: string;
 }
@@ -58,8 +59,12 @@ export class PushKeysDto {
 }
 
 export class SubscribeDto {
-  /** Identical rules to UnsubscribeDto.endpoint — https + real TLD only. */
+  /** Identical rules to UnsubscribeDto.endpoint — https + real TLD only.
+   * Run #70 (Reviewer A): @Length(1, 512) — real FCM/Mozilla endpoints are
+   * ~120-180 chars; 512 still passes every real endpoint while bounding the
+   * request surface (the DB column is text, so this is pure abuse guard). */
   @IsUrl({ protocols: ['https'], require_tld: true })
+  @Length(1, 512)
   @IsNotEmpty()
   endpoint!: string;
 
