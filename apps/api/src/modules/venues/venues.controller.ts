@@ -17,6 +17,24 @@ import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 export class VenuesController {
   constructor(private readonly venuesService: VenuesService) {}
 
+  // ── GET /venues/suggestions — city + neighborhood suggestion chips ────
+  // MUST stay ABOVE /venues/suggestions or "suggestions" is captured as :id.
+  // Parameterless + NATIONWIDE (2026-09-18 chips redesign): the client
+  // fetches once, caches 5min, and filters per keystroke locally — no
+  // per-keystroke API load, and chips for ANY city regardless of the
+  // user's location.
+  @Get('suggestions')
+  @ApiOperation({
+    summary:
+      'Popular city + neighborhood suggestions from approved venues (search bar chips)',
+  })
+  @ApiOkResponse({
+    description: 'Ranked { city, neighborhood, venue_count } rows (max 50).',
+  })
+  suggestions() {
+    return this.venuesService.findSuggestions();
+  }
+
   // ── GET /venues — Nearby venues (PostGIS geo-filter) ──────────────────
   // NOTE: No cache interceptor — query params (lat, lng, city) vary per user.
   @Get()

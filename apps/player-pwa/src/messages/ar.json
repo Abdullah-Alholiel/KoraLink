@@ -70,6 +70,7 @@
     "done": "تم",
     "seeAll": "عرض الكل",
     "search": "بحث",
+    "clear": "مسح",
     "filter": "تصفية",
     "noResults": "لم يتم العثور على نتائج",
     "offlineBanner": "أنت غير متصل بالإنترنت — عرض البيانات المخزنة مؤقتاً",
@@ -701,6 +702,19 @@
     "invalidAmount": "يرجى إدخال مبلغ صحيح",
     "comingSoon": "قريباً"
   },
+  "searchSuggestions": {
+    "title": "ابحث حسب المنطقة",
+    "cities": {
+      "riyadh": "الرياض",
+      "jeddah": "جدة"
+    },
+    "neighborhoods": {
+      "alMalqa": "الملقا",
+      "olaya": "العليا",
+      "ksu": "حرم الملك سعود الجامعي",
+      "alNakheel": "النخيل"
+    }
+  },
   "clubs": {
     "title": "الأندية",
     "searchPlaceholder": "البحث عن أندية",
@@ -784,7 +798,8 @@
     "noDiscussions": "لا توجد مناقشات بعد",
     "noDiscussionsDescription": "انضم أو استضف مباراة لبدء الدردشة مع اللاعبين!",
     "older": "أقدم",
-    "noConversations": "لا توجد محادثات بعد"
+    "noConversations": "لا توجد محادثات بعد",
+    "loadMore": "تحميل المزيد"
   },
   "feed": {
     "title": "آخر الأخبار",
@@ -881,7 +896,6 @@
     "emptyCta": "ابحث عن مباراة",
     "loading": "جارٍ تحميل مبارياتك...",
     "statsPlayed": "لُعبت",
-    "statsWins": "فوز",
     "statsHosted": "استضافتها",
     "historyCancelled": "{count} ملغاة"
   },

@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, Plus, Trophy, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Trophy, AlertTriangle, X } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
+import SuggestionChips from '@/components/search/SuggestionChips';
+import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
+import { filterSuggestions } from '@/lib/search-suggestions';
 import { useMatches } from '@/hooks/useMatches';
 import { useLocation } from '@/providers/LocationProvider';
 import { dateInRiyadh } from '@/lib/api-adapter';
@@ -21,13 +24,34 @@ export default function PlayPage() {
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    // Search suggestions (2026-09-18): a tapped city/neighborhood chip pins
+    // `suggestedNeighborhood`, which the useMatches fetch sends as the
+    // server-side `neighborhood` filter (venue address ILIKE). Free text
+    // never fights the pin — typing clears it, X/Esc dismisses the dropdown.
+    const [suggestedNeighborhood, setSuggestedNeighborhood] = useState<string | null>(null);
+    // Debounce so a chip tap triggers ONE refetch, not one per render.
+    const [debouncedNeighborhood, setDebouncedNeighborhood] = useState<string | null>(null);
     const [filters, setFilters] = useState<PlayFilters>({
         format: null,
         gender: null,
         maxPrice: null,
         time: null,
     });
+    const {
+        suggestions,
+        open,
+        listRef,
+        handleFocus,
+        handleBlur,
+        dismiss,
+        isLoading: suggestionsLoading,
+    } = useSearchSuggestions();
     const { coords } = useLocation();
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedNeighborhood(suggestedNeighborhood), 200);
+        return () => clearTimeout(timer);
+    }, [suggestedNeighborhood]);
 
     // ── Data fetching via React Query ──
     const {
@@ -46,6 +70,7 @@ export default function PlayPage() {
         gender: filters.gender,
         maxPrice: filters.maxPrice,
         time: filters.time,
+        neighborhood: debouncedNeighborhood,
     });
 
     const storeUser = useAppStore(selectUser);
@@ -90,15 +115,40 @@ export default function PlayPage() {
                     row past the screen edge (mobile-first hard rule:
                     nothing surpasses the frame). */}
                 <div className="flex items-center gap-2 px-4 pb-2.5 pt-1">
-                    <div className="min-w-0 flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
-                        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder={t('play.searchPlaceholder')}
-                            className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
-                        />
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green transition-colors">
+                            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setSuggestedNeighborhood(null); // free text unpins a chip
+                                }}
+                                onFocus={handleFocus}
+                                onBlur={handleBlur}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Escape') dismiss();
+                                }}
+                                placeholder={t('play.searchPlaceholder')}
+                                className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                                aria-label={t('play.searchPlaceholder')}
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSuggestedNeighborhood(null);
+                                        dismiss();
+                                    }}
+                                    aria-label={t('common.clear')}
+                                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 active:scale-95 transition-transform flex-shrink-0"
+                                >
+                                    <X className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <Link
                         href={`/${locale}/host`}
@@ -114,6 +164,34 @@ export default function PlayPage() {
                         </span>
                     </Link>
                 </div>
+
+                {/* ── Suggestion chips — dynamic location filters UNDER the
+                    search bar (2026-09-18 redesign, replaces the desktop-style
+                    overlay dropdown). Popular city/neighborhood tags that
+                    change with the typed text ("Jeddah" → Jeddah hoods); a tap
+                    pins the matches list to that neighborhood server-side.
+                    Render only while the bar is focused; empty = renders
+                    nothing (never an empty-state panel). ── */}
+                {open && (
+                    <SuggestionChips
+                        id="play-search-suggestions"
+                        suggestions={filterSuggestions(suggestions, searchQuery)}
+                        onSelect={(s) => {
+                            // Toggle-pin: tapping the active chip unpins it
+                            // (the matches list returns to the unfiltered
+                            // date/feed) without blurring the input.
+                            setSearchQuery((prev) =>
+                                prev === s.neighborhood ? '' : s.neighborhood,
+                            );
+                            setSuggestedNeighborhood((prev) =>
+                                prev === s.filterValue ? null : s.filterValue,
+                            );
+                        }}
+                        selectedValue={suggestedNeighborhood}
+                        listRef={listRef}
+                        isLoading={suggestionsLoading}
+                    />
+                )}
 
                 {/* ── Date Picker (all games by default; tap to filter, tap again to clear) ── */}
                 <DatePicker

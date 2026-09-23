@@ -616,14 +616,14 @@ async function seed() {
       {
         host_id: users.nawaf_s!,
         pitch_id: pitches['Pitch B – Training Ground']!,
-        title: 'Rained-Out 8v8',
+        title: 'Rained-Out 7v7',
         match_type: 'Casual',
         gender_rule: 'Mixed',
         status: 'Cancelled',
         scheduled_at: fmtDate(days(1), '18:00'),
         duration_mins: 60,
         price_per_player: '28.00',
-        max_players: 16,
+        max_players: 14,
         location: ksuLoc,
       },
       // ── Later this week ──
@@ -645,28 +645,28 @@ async function seed() {
       {
         host_id: users.reem_q!,
         pitch_id: pitches['Pitch F – Ladies Court']!,
-        title: 'Women Wednesday 5v5',
+        title: 'Women Wednesday 7v7',
         match_type: 'Casual',
         gender_rule: 'Women Only',
         status: 'Open',
         scheduled_at: fmtDate(days(2), '20:30'),
         duration_mins: 50,
         price_per_player: '25.00',
-        max_players: 10,
+        max_players: 14,
         min_players: 4,
         location: malqaLoc,
       },
       {
         host_id: users.sara_m!,
         pitch_id: pitches['Pitch F – Ladies Court']!,
-        title: 'Ladies Sunrise 6v6',
+        title: 'Ladies Sunrise 7v7',
         match_type: 'Casual',
         gender_rule: 'Women Only',
         status: 'Open',
         scheduled_at: fmtDate(days(2), '09:00'),
         duration_mins: 60,
         price_per_player: '20.00',
-        max_players: 12,
+        max_players: 14,
         min_players: 4,
         location: malqaLoc,
       },
@@ -697,6 +697,21 @@ async function seed() {
         max_players: 14,
         min_players: 6,
         location: ksuLoc,
+      },
+      // Jeddah — keeps the Al-Nakheel suggestion chip demo-able end to end.
+      {
+        host_id: users.mansour_g!,
+        pitch_id: pitches['Pitch E – Championship Field']!,
+        title: 'Jeddah Beach 11v11',
+        match_type: 'Casual',
+        gender_rule: 'Mixed',
+        status: 'Open',
+        scheduled_at: fmtDate(days(3), '17:30'),
+        duration_mins: 90,
+        price_per_player: '35.00',
+        max_players: 22,
+        min_players: 10,
+        location: point(39.1728, 21.5433),
       },
       // ── Completed matches (POTM history + live voting window) ──
       {
@@ -824,13 +839,14 @@ async function seed() {
   fillRoster('Rooftop 7v7 — LIVE NOW', 'yousef_q', mixed, 12);    // 12/14 live
   // Tomorrow
   fillRoster('Indoor 5v5 Tournament', 'khalid_o', mixed, 6);      // 6/10
-  fillRoster('Rained-Out 8v8', 'nawaf_s', mixed, 5);              // 5/16 cancelled
+  fillRoster('Rained-Out 7v7', 'nawaf_s', mixed, 5);              // 5/16 cancelled
   // This week
   fillRoster('Sunset 7v7 Rooftop', 'omar_s', men, 14);            // 14/14 FULL
-  fillRoster('Women Wednesday 5v5', 'reem_q', women, 5);          // 5/10
-  fillRoster('Ladies Sunrise 6v6', 'sara_m', women, 7);           // 7/12
+  fillRoster('Women Wednesday 7v7', 'reem_q', women, 5);          // 5/10
+  fillRoster('Ladies Sunrise 7v7', 'sara_m', women, 7);           // 7/12
   fillRoster('Weekend Warriors 11v11', 'sultan_d', men, 12);      // 12/22
   fillRoster('Mixed 7v7 Friday', 'mansour_g', mixed, 8);          // 8/14
+  fillRoster('Jeddah Beach 11v11', 'mansour_g', mixed, 11);       // 11/22 Jeddah (Al-Nakheel chip demo)
   // Completed
   fillRoster('Last Week 11v11 Classic', 'ahmed_r', men, 14);      // 14/22
   fillRoster('Last Week Indoor 5v5', 'yousef_q', mixed, 8);       // 8/10
@@ -841,7 +857,7 @@ async function seed() {
   addPlayer(matchMap['Voting Live: Rooftop 7v7']!, users['waleed_o']!, 'Away');
   addPlayer(matchMap['Last Week Indoor 5v5']!, users['majed_a']!, 'Home');
   addPlayer(matchMap['Last Week Indoor 5v5']!, users['sara_m']!, 'Away');
-  addPlayer(matchMap['Rained-Out 8v8']!, users['rakan_f']!, 'Away');
+  addPlayer(matchMap['Rained-Out 7v7']!, users['rakan_f']!, 'Away');
   addPlayer(matchMap['Rooftop 7v7 — LIVE NOW']!, users['dana_s']!, 'Away');
   addPlayer(matchMap['Indoor 5v5 Tournament']!, users['noura_a']!, 'Away');
   addPlayer(matchMap['Mixed 7v7 Friday']!, users['lina_h']!, 'Away');
@@ -971,7 +987,7 @@ async function seed() {
   activityRows.push({
     actor_id: users['koralink_admin']!,
     verb: 'wallet_refunded',
-    match_id: matchMap['Rained-Out 8v8']!,
+    match_id: matchMap['Rained-Out 7v7']!,
     subject_id: users['nawaf_s']!,
     created_at: days(-1),
   });
@@ -1007,8 +1023,8 @@ async function seed() {
     // POTM prize
     { user_id: users.yousef_q!, type: 'CREDIT' as const, amount: '50.00', reference_type: 'PRIZE' as const, reference_id: matchMap['Last Week 11v11 Classic'], idempotency_key: 'seed-prize-yousef-m11', status: 'Completed' as const, created_at: days(-2) },
     // Refunds — rained-out match
-    { user_id: users.nawaf_s!, type: 'CREDIT' as const, amount: '28.00', reference_type: 'REFUND' as const, reference_id: matchMap['Rained-Out 8v8'], idempotency_key: 'seed-refund-nawaf-m5', status: 'Completed' as const, created_at: days(-1) },
-    { user_id: users.rakan_f!, type: 'CREDIT' as const, amount: '28.00', reference_type: 'REFUND' as const, reference_id: matchMap['Rained-Out 8v8'], idempotency_key: 'seed-refund-rakan-m5', status: 'Completed' as const, created_at: days(-1) },
+    { user_id: users.nawaf_s!, type: 'CREDIT' as const, amount: '28.00', reference_type: 'REFUND' as const, reference_id: matchMap['Rained-Out 7v7'], idempotency_key: 'seed-refund-nawaf-m5', status: 'Completed' as const, created_at: days(-1) },
+    { user_id: users.rakan_f!, type: 'CREDIT' as const, amount: '28.00', reference_type: 'REFUND' as const, reference_id: matchMap['Rained-Out 7v7'], idempotency_key: 'seed-refund-rakan-m5', status: 'Completed' as const, created_at: days(-1) },
     // Historical refund (kept anchor from previous seed)
     { user_id: users.yousef_q!, type: 'CREDIT' as const, amount: '25.00', reference_type: 'REFUND' as const, reference_id: matchMap['Indoor 5v5 Tournament'], idempotency_key: 'seed-refund-yousef-001', status: 'Completed' as const, created_at: days(-2) },
   ]);

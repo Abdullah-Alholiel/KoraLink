@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { createLobbySocket } from '@/lib/socket';
@@ -60,15 +60,60 @@ export function useMyMatches() {
 
 // ─── Unified Discussions (Messages screen) ────────────
 
+/** Canonical envelope of GET /users/me/discussions. */
+export interface DiscussionsResponse {
+  discussions: DiscussionsApiResponse['discussions'];
+  total: number;
+  hasMore: boolean;
+}
+
+const DISCUSSIONS_PAGE_SIZE = 30;
+
+/**
+ * Unified discussions, paged (30 per page). The API is paginated
+ * (?page=&perPage=) — every joined match creates a discussion row, so the
+ * list outgrows one page for active players. Consumers get a flat array via
+ * `discussions` (all loaded pages concatenated); `hasMore`/`fetchNextPage`
+ * drive the "Load more" affordance.
+ */
 export function useDiscussions() {
-  return useQuery<Discussion[], FetchError>({
+  const query = useInfiniteQuery({
     queryKey: ['user', 'me', 'discussions'],
-    queryFn: async () => {
-      const data = await fetcher<DiscussionsApiResponse>('/users/me/discussions');
-      return adaptDiscussionList(data);
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }): Promise<DiscussionsResponse> => {
+      const data = await fetcher<DiscussionsResponse>(
+        `/users/me/discussions?page=${pageParam}&perPage=${DISCUSSIONS_PAGE_SIZE}`,
+      );
+      return data;
     },
-    staleTime: 30_000,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      return allPages.length + 1;
+    },
+    maxPages: 10,
   });
+
+  const discussions = useMemo(
+    () =>
+      (query.data?.pages.flatMap((page) => adaptDiscussionList(page)) ??
+        []) as Discussion[],
+    [query.data],
+  );
+
+  return {
+    discussions,
+    total: query.data?.pages[0]?.total,
+    hasMore: Boolean(query.hasNextPage),
+    fetchNextPage: () => {
+      void query.fetchNextPage();
+    },
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    error: (query.error as FetchError | null) ?? null,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
 }
 
 // ─── Match Chat: REST history + WebSocket real-time ───

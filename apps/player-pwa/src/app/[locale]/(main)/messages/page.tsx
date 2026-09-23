@@ -66,7 +66,16 @@ export default function MessagesPage() {
   const pathname = usePathname();
   const locale = (pathname ?? '').split('/')[1] || 'en';
 
-  const { data: discussions, isLoading, error, refetch } = useDiscussions();
+  const {
+    discussions,
+    total: discussionsTotal,
+    hasMore,
+    fetchNextPage,
+    isFetchingNextPage,
+    isLoading,
+    error,
+    refetch,
+  } = useDiscussions();
   // Hydration-safe clock (run #49): null during SSR and the FIRST client
   // render — both sides then bucket "no lastMessageAt → Older", identical
   // output, no divider can diverge. Post-mount the real clock buckets by the
@@ -99,7 +108,8 @@ export default function MessagesPage() {
     [filtered, t, nowMs],
   );
 
-  const totalCount = discussions?.length ?? 0;
+  // Header count shows the server-side total (all pages), not just loaded rows.
+  const totalCount = discussionsTotal ?? discussions.length;
 
   return (
     <div className="pb-4">
@@ -249,6 +259,19 @@ export default function MessagesPage() {
           </div>
         </div>
       ))}
+
+      {/* ── Load more (pagination) ── */}
+      {!isLoading && !error && hasMore && (
+        <div className="flex justify-center py-3">
+          <button
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="bg-white text-brand-green border border-gray-100 px-5 py-2 rounded-full text-sm font-bold active:scale-95 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isFetchingNextPage ? t('common.loading') : t('messages.loadMore')}
+          </button>
+        </div>
+      )}
 
       {/* If data loaded, show bottom padding for scroll comfort */}
       {!isLoading && !error && filtered.length > 0 && (

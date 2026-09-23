@@ -104,7 +104,9 @@ describe('UsersService games_played completed-only rule', () => {
     const service = makeService(db);
     const stats = await service.getStats('u1');
     expect(stats.games_played).toBe(7);
-    expect(stats.potm_count).toBe(0); // raw-SQL getPomCount → stubbed execute → 0
+    // No wins/POTM metric in /users/me/stats (removed 2026-09-18 — POTM is
+    // voted AFTER a match, not collected at finish).
+    expect('potm_count' in stats).toBe(false);
     expect(stats.matches_hosted).toBe(4);
     // query 1 = user row, 2 = completed-only games join, 3 = hosted count
     expect(captured.length).toBe(3);

@@ -30,8 +30,6 @@ export interface UserProfileApi {
 
 interface UserStatsApi {
   games_played: number;
-  /** POTM awards won (same tie-aware count as the public profile). */
-  potm_count: number;
   /** Matches hosted by the user — ALL statuses (active, completed, cancelled). */
   matches_hosted: number;
   karma_score: number;
