@@ -339,4 +339,37 @@ describe('usePushNotifications — P2-91 subscribe outcome contract (run #69)', 
     const body = await (response as Response).json();
     expect(body).toEqual({ l: 'ar' });
   });
+
+  it('run #70: the same KV also carries the API base + VAPID key for rotation', async () => {
+    const cachePut = vi.fn(async () => undefined);
+    const cacheOpen = vi.fn(async () => ({ put: cachePut }));
+    Object.defineProperty(window, 'caches', {
+      configurable: true,
+      value: { open: cacheOpen },
+    });
+    installBrowserStubs(null);
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+
+    const { result } = renderHook(() => usePushNotifications('en'));
+    await result.current.subscribe();
+
+    await waitFor(() => expect(cachePut).toHaveBeenCalled());
+    const calls = cachePut.mock.calls as unknown as [string, Response][];
+    expect(calls.length).toBe(3);
+    const keys = calls.map(([k]) => k);
+    expect(keys).toEqual([
+      '/__kl/push-locale',
+      '/__kl/push-api-base',
+      '/__kl/push-vapid',
+    ]);
+    const apiBaseBody = (await calls[1][1].json()) as { b: string };
+    expect(typeof apiBaseBody.b).toBe('string');
+    expect(apiBaseBody.b.length).toBeGreaterThan(0);
+    const vapidBody = (await calls[2][1].json()) as { k: string };
+    // Must be the SAME public key the page subscribes with (the rotation
+    // must re-subscribe against the key the server actually has).
+    expect(vapidBody.k).toBe(
+      'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc',
+    );
+  });
 });

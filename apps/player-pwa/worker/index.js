@@ -33,13 +33,23 @@ const RESTORE_KEY = '/__kl/restore-url';
 // established pattern here, cf. RESTORE_CACHE).
 const PUSH_META_CACHE = 'koralink-push-meta';
 const PUSH_LOCALE_KEY = '/__kl/push-locale';
-// Public VAPID key — same value the hook uses (public by design).
+// Run #70 (P2-93 follow-up): the page hook also mirrors its API base (the
+// fetcher's NEXT_PUBLIC_API_URL, path included) and the public VAPID key it
+// used, so rotation re-points the new subscription WHERE THE PAGE talks to
+// the API — not wherever this worker happens to be scoped. On Vercel prod
+// the PWA and API are CROSS-ORIGIN (no rewrite proxies /api/*), so the old
+// hardcoded relative path resolved against the PWA origin and 404'd
+// silently — exactly the failure rotation handling exists to prevent.
+const PUSH_API_BASE_KEY = '/__kl/push-api-base';
+const PUSH_VAPID_KEY = '/__kl/push-vapid';
+// Public VAPID key — same value the hook uses (public by design). Kept as
+// the fallback: a rotation that fires before ANY page subscribe still has
+// the deployed key.
 const VAPID_PUBLIC_KEY =
   'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
-// API base for the subscribe re-upsert. Same-origin paths work as-is; the
-// deploy tops expose the API on the same host (:8443/:3001 behind the TLS
-// proxy), so a relative /api/v1 route is correct everywhere the app runs.
-const API_SUBSCRIBE_URL = '/api/v1/notifications/subscribe';
+// Same-origin fallback used only when the hook has never written the KV
+// (no subscribe has happened yet → nothing to re-point anyway).
+const DEFAULT_API_BASE = '/api/v1';
 
 function pushVapidKeyToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -132,29 +142,46 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
       let locale = 'ar';
+      let apiBase = DEFAULT_API_BASE;
+      let vapidKey = VAPID_PUBLIC_KEY;
       try {
         const cache = await caches.open(PUSH_META_CACHE);
-        const cached = await cache.match(PUSH_LOCALE_KEY);
-        if (cached) {
-          const body = await cached.json();
+        const cachedLocale = await cache.match(PUSH_LOCALE_KEY);
+        if (cachedLocale) {
+          const body = await cachedLocale.json();
           if (body && (body.l === 'en' || body.l === 'ar')) locale = body.l;
         }
+        const cachedApiBase = await cache.match(PUSH_API_BASE_KEY);
+        if (cachedApiBase) {
+          const body = await cachedApiBase.json();
+          if (body && typeof body.b === 'string' && body.b.length > 0) {
+            apiBase = body.b;
+          }
+        }
+        const cachedVapid = await cache.match(PUSH_VAPID_KEY);
+        if (cachedVapid) {
+          const body = await cachedVapid.json();
+          if (body && typeof body.k === 'string' && body.k.length > 0) {
+            vapidKey = body.k;
+          }
+        }
       } catch (_) {
-        // missing/unreadable KV → Arabic-first default (P2-72 convention)
+        // missing/unreadable KV → Arabic-first default (P2-72 convention),
+        // deployed VAPID key, same-origin API base.
       }
 
       let newSub = null;
       try {
         newSub = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: pushVapidKeyToUint8Array(VAPID_PUBLIC_KEY),
+          applicationServerKey: pushVapidKeyToUint8Array(vapidKey),
         });
       } catch (_) {
         return; // permission lost or push unavailable — nothing to re-point
       }
 
       try {
-        const res = await fetch(API_SUBSCRIBE_URL, {
+        const res = await fetch(`${apiBase}/notifications/subscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

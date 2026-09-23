@@ -44,12 +44,16 @@ describe('worker pushsubscriptionchange (P2-92, run #69) — source tripwire', (
   });
 
   it('re-upserts the canonical POST subscribe endpoint with credentials', () => {
-    expect(WORKER_SRC).toContain('/api/v1/notifications/subscribe');
+    // Run #70: the URL is composed from the KV-carried API base (absolute on
+    // cross-origin deploys) + the subscribe path; the relative fallback is
+    // the same-origin '/api/v1'.
+    expect(WORKER_SRC).toContain("/notifications/subscribe`");
+    expect(WORKER_SRC).toContain("DEFAULT_API_BASE = '/api/v1'");
     // The fetch must be POST + credentialed (JwtCookieAuthGuard reads the
     // HttpOnly cookie — an uncredentialed re-upsert would 401).
     expect(
       WORKER_SRC.match(
-        /fetch\(API_SUBSCRIBE_URL[\s\S]{0,400}?credentials:\s*'include'/,
+        /fetch\(`\$\{apiBase\}\/notifications\/subscribe`[\s\S]{0,400}?credentials:\s*'include'/,
       ),
     ).not.toBeNull();
   });
@@ -59,6 +63,26 @@ describe('worker pushsubscriptionchange (P2-92, run #69) — source tripwire', (
     expect(WORKER_SRC).toContain('/__kl/push-locale');
     // Arabic-first default (P2-72 convention) when the KV is missing.
     expect(WORKER_SRC).toMatch(/let locale\s*=\s*'ar'/);
+  });
+
+  it('run #70: re-points the new subscription at the KV-carried API base (cross-origin prod)', () => {
+    // The worker must read /__kl/push-api-base ({b}) and compose the
+    // subscribe URL from it — the old hardcoded relative path resolved
+    // against the PWA origin on Vercel prod and 404'd silently.
+    expect(WORKER_SRC).toContain("PUSH_API_BASE_KEY = '/__kl/push-api-base'");
+    expect(WORKER_SRC).toContain('typeof body.b === ' + "'string'");
+    expect(WORKER_SRC).toContain('`${apiBase}/notifications/subscribe`');
+  });
+
+  it('run #70: re-subscribes with the KV-carried VAPID key, deployed key as fallback', () => {
+    expect(WORKER_SRC).toContain("PUSH_VAPID_KEY = '/__kl/push-vapid'");
+    expect(WORKER_SRC).toContain('typeof body.k === ' + "'string'");
+    expect(WORKER_SRC).toMatch(
+      /let vapidKey\s*=\s*VAPID_PUBLIC_KEY/,
+    );
+    expect(WORKER_SRC).toContain(
+      'pushVapidKeyToUint8Array(vapidKey)',
+    );
   });
 
   it('every failure path is swallowed (no unhandled rejections in the SW)', () => {

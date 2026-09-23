@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetcher } from '@/lib/fetcher';
+import { env } from '@/env.mjs';
 import { captureError } from '@/providers/ObservabilityProvider';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -38,8 +39,14 @@ export type PushSubscribeOutcome =
  * worker context). The worker's `pushsubscriptionchange` handler reads this
  * to re-upsert a rotated subscription with the right locale. Same cache
  * names as worker/index.js (koralink-push-meta // /__kl/push-locale).
+ *
+ * Run #70: the same KV now also carries the API base (the fetcher's
+ * NEXT_PUBLIC_API_URL, path included) and the public VAPID key the page
+ * actually used — on Vercel prod the PWA and API are cross-origin and the
+ * worker's old hardcoded relative subscribe URL resolved against the PWA
+ * origin and 404'd silently. Rotation re-points WHERE THE PAGE talks.
  */
-async function writePushLocaleKv(locale: string): Promise<void> {
+async function writePushMetaKv(locale: string): Promise<void> {
   try {
     const cache = await caches.open('koralink-push-meta');
     await cache.put(
@@ -48,9 +55,21 @@ async function writePushLocaleKv(locale: string): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
+    await cache.put(
+      '/__kl/push-api-base',
+      new Response(JSON.stringify({ b: env.NEXT_PUBLIC_API_URL }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await cache.put(
+      '/__kl/push-vapid',
+      new Response(JSON.stringify({ k: VAPID_PUBLIC_KEY }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
   } catch {
     // Cache-API unavailable (private mode, old browser) — rotation falls
-    // back to the worker's Arabic-first default.
+    // back to the worker's Arabic-first default and same-origin base.
   }
 }
 
@@ -78,7 +97,7 @@ export function usePushNotifications(locale: string = 'en') {
           // P2-92: keep the worker-readable locale KV warm even when the
           // server row already matches — a rotation minutes later must not
           // fall back to the wrong locale.
-          if (sub) void writePushLocaleKv(locale);
+          if (sub) void writePushMetaKv(locale);
         });
       })
       .catch(() => {
@@ -191,7 +210,7 @@ export function usePushNotifications(locale: string = 'en') {
       setSubscription(sub);
       // P2-92 (run #69): mirror the synced locale into the worker-readable
       // KV so pushsubscriptionchange re-upserts with the RIGHT locale.
-      void writePushLocaleKv(locale);
+      void writePushMetaKv(locale);
 
       // Send to backend, including the active locale so push deep-links
       // preserve ar/en (P1-5).
