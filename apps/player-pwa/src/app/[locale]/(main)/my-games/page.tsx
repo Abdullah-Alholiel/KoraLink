@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play, Trophy } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
