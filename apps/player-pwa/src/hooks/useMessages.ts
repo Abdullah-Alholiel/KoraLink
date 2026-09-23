@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
+import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
@@ -159,12 +158,12 @@ const CHAT_PAGE_SIZE = 50;
 export function useMatchChat(matchId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
+  const rt = getRealtime();
   const [localMessages, setLocalMessages] = useState<MatchMessage[]>([]);
   const [olderMessages, setOlderMessages] = useState<MatchMessage[]>([]);
   const [olderExhausted, setOlderExhausted] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // REST history query — probes PAGE+1 to detect hasMore in one request.
@@ -256,33 +255,42 @@ export function useMatchChat(matchId: string | null) {
     [queryClient, matchId],
   );
 
-  // Socket.IO subscription (real-time)
+  // Socket.IO subscription (real-time) — shared client (Slice 2).
   useEffect(() => {
     if (!matchId) return;
     const ackTimers = ackTimersRef.current;
 
-    const socket: Socket = createLobbySocket(5);
+    rt.connect();
+    rt.joinRoom('match', matchId);
 
-    socket.on('connect', () => {
+    const onConnect = () => {
       setIsConnected(true);
-      socketRef.current = socket;
-      socket.emit('join-lobby', { matchId });
-    });
+    };
+    const onDisconnect = () => setIsConnected(false);
+    const onNewMessage = (payload: unknown) => {
+      reconcile(payload as MatchMessage);
+    };
 
-    socket.on('disconnect', () => setIsConnected(false));
+    const offs = [
+      rt.on('connect', onConnect),
+      rt.on('disconnect', onDisconnect),
+      rt.on('new-message', onNewMessage),
+    ];
 
-    socket.on('new-message', (message: MatchMessage) => {
-      reconcile(message);
-    });
+    // The room may already be joined-and-connected (another consumer, or a
+    // remount over a live singleton): surface the connected state now — the
+    // 'connect' event has already fired for this generation.
+    if (rt.isConnected()) setIsConnected(true);
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      offs.forEach((off) => off());
+      rt.leaveRoom('match', matchId);
+      rt.disconnect();
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
     };
-  }, [matchId, reconcile]);
+  }, [matchId, reconcile, rt]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark
@@ -291,8 +299,8 @@ export function useMatchChat(matchId: string | null) {
   const markChatRead = useCallback(
     () => {
       if (!matchId) return;
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('mark-chat-read', { matchId });
+      if (rt.isConnected()) {
+        rt.emit('mark-chat-read', { matchId });
         return;
       }
       // Socket down → REST fallback (same guard chain server-side).
@@ -303,7 +311,7 @@ export function useMatchChat(matchId: string | null) {
         // Best-effort: a missed watermark only leaves a stale badge.
       });
     },
-    [matchId],
+    [matchId, rt],
   );
 
   useEffect(() => {
@@ -342,8 +350,8 @@ export function useMatchChat(matchId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('send-message', { matchId, content, clientMessageId });
+      if (rt.isConnected()) {
+        rt.emit('send-message', { matchId, content, clientMessageId });
         // Authoritative message arrives via the `new-message` echo.
         return undefined;
       }

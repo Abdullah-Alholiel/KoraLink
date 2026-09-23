@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
+import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 import type { MessageStatus } from '@/hooks/useMessages';
@@ -255,11 +254,11 @@ function zeroCachedUnread(queryClient: QueryClient, conversationId: string | nul
 export function useConversationMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
+  const rt = getRealtime();
   const [localMessages, setLocalMessages] = useState<PersonalMessage[]>([]);
   // Messages from the OTHER user that arrived while this thread is open —
   // cleared by emitting mark-read once the socket confirms delivery.
   const [unreadIncomingIds, setUnreadIncomingIds] = useState<Set<string>>(new Set());
-  const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const historyQuery = useQuery<PersonalMessage[], FetchError>({
@@ -316,13 +315,12 @@ export function useConversationMessages(conversationId: string | null) {
   useEffect(() => {
     if (!conversationId) return;
     if (unreadIncomingIds.size === 0) return;
-    const socket = socketRef.current;
-    if (!socket?.connected) return;
-    socket.emit('mark-read', { conversationId });
+    if (!rt.isConnected()) return;
+    rt.emit('mark-read', { conversationId });
     setUnreadIncomingIds(new Set());
     zeroCachedUnread(queryClient, conversationId);
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
-  }, [conversationId, unreadIncomingIds, queryClient]);
+  }, [conversationId, unreadIncomingIds, queryClient, rt]);
 
   // The user is leaving the thread — persist the final read cursor AND zero
   // the cached unread badge so the list doesn't show a stale dot for messages
@@ -332,37 +330,40 @@ export function useConversationMessages(conversationId: string | null) {
   useEffect(
     () => () => {
       const id = conversationIdRef.current;
-      if (socketRef.current?.connected && id) {
-        socketRef.current.emit('mark-read', { conversationId: id });
+      if (rt.isConnected() && id) {
+        rt.emit('mark-read', { conversationId: id });
       }
       zeroCachedUnread(queryClient, id);
     },
-    [queryClient],
+    [queryClient, rt],
   );
 
   useEffect(() => {
     if (!conversationId) return;
     const ackTimers = ackTimersRef.current;
 
-    const socket: Socket = createLobbySocket(5);
+    rt.connect();
+    rt.joinRoom('conversation', conversationId);
 
-    socket.on('connect', () => {
-      socketRef.current = socket;
-      socket.emit('join-conversation', { conversationId });
-    });
+    const onNewDm = (payload: unknown) => {
+      reconcile(mapMessage(payload as MessageApi));
+    };
+    const offNewDm = rt.on('new-dm', onNewDm);
 
-    socket.on('new-dm', (message: MessageApi) => {
-      reconcile(mapMessage(message));
-    });
+    // Already-connected (live singleton shared with other consumers, or a
+    // remount): join-conversation has been emitted via joinRoom above; the
+    // server marks the conversation read on that join.
+    if (rt.isConnected()) rt.emit('join-conversation', { conversationId });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      offNewDm();
+      rt.leaveRoom('conversation', conversationId);
+      rt.disconnect();
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
     };
-  }, [conversationId, reconcile]);
+  }, [conversationId, reconcile, rt]);
 
   const sendMessage = useMutation<
     PersonalMessage | undefined,
@@ -370,8 +371,8 @@ export function useConversationMessages(conversationId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('send-dm', { conversationId, content, clientMessageId });
+      if (rt.isConnected()) {
+        rt.emit('send-dm', { conversationId, content, clientMessageId });
         // Authoritative message arrives via the `new-dm` echo.
         return undefined;
       }

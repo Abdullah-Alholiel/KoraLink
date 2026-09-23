@@ -286,6 +286,23 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     client.to(`match:${data.matchId}`).emit('user-joined', { userId: client.userId });
   }
 
+  // ── Leave a match lobby ──────────────────────────────────────────────────
+  // Room membership is "currently viewing" for the chat-notify fan-out in
+  // handleMessage (absent roster members get the bell + web push). The PWA's
+  // shared realtime client (lib/realtime.ts, Slice 2) leaves explicitly when
+  // the LAST viewer of a match unmounts; a stale room member would silently
+  // stop receiving those notifications. Leave is deliberately NOT
+  // membership-gated (same rationale as P2-6 leave-conversation): it only
+  // shrinks the caller's own event surface.
+  @SubscribeMessage('leave-lobby')
+  async handleLeaveLobby(
+    @MessageBody() data: { matchId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+    await client.leave(`match:${data.matchId}`);
+  }
+
   // ── Chat message ─────────────────────────────────────────────────────────
 
   @SubscribeMessage('send-message')

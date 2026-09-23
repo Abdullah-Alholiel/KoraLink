@@ -32,7 +32,7 @@ export function socketBaseUrl(): string {
 }
 
 /** localStorage key holding the dev-login/OTP-verify Bearer token. */
-const TOKEN_STORAGE_KEY = 'koralink_token';
+export const TOKEN_STORAGE_KEY = 'koralink_token';
 
 /**
  * Shared connection options for every /lobby socket. One source of truth for

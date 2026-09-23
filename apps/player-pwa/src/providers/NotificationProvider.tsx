@@ -3,9 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
 import { useTranslations } from 'next-intl';
-import { createLobbySocket } from '@/lib/socket';
+import { getRealtime } from '@/lib/realtime';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -35,7 +34,6 @@ interface BadgeSyncEvent {
 export default function NotificationProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  const socketRef = useRef<Socket | null>(null);
 
   const user = useAppStore((s) => s.user);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
@@ -57,10 +55,13 @@ export default function NotificationProvider({ children }: { children: React.Rea
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
-    const socket: Socket = createLobbySocket(10);
-    socketRef.current = socket;
+    // Shared realtime client (Slice 2): the user's personal room is joined
+    // server-side on every authenticated connection (gateway handleConnection),
+    // so the provider only needs to LISTEN — no room join here.
+    const rt = getRealtime();
+    rt.connect();
 
-    socket.on('notification', (payload: NotificationEvent) => {
+    const onNotification = (payload: NotificationEvent) => {
       trackEvent('notification_delivered', { verb: payload.verb });
 
       // Absolute count from the server — multi-tab safe.
@@ -106,15 +107,16 @@ export default function NotificationProvider({ children }: { children: React.Rea
           : '/messages';
 
       useAppStore.getState().showToast(message, 'notification', { href, avatarUrl: payload.actor?.avatarUrl });
-    });
+    };
+    const offNotification = rt.on('notification', onNotification);
 
-    socket.on('badge-sync', (payload: BadgeSyncEvent) => {
+    const offBadgeSync = rt.on('badge-sync', (payload: BadgeSyncEvent) => {
       setNotificationBadge(payload.unreadCount);
     });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      offNotification();
+      offBadgeSync();
     };
   }, [isAuthenticated, user?.id, queryClient, setNotificationBadge, t]);
 
