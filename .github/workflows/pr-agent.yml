@@ -37,7 +37,8 @@ jobs:
             -e OPENAI_API_KEY="$ZAI_KEY" \
             -e OPENAI_API_BASE="$ZAI_BASE" \
             -e CONFIG__MODEL=openai/glm-5.3-flash \
-            -e GITHUB_TOKEN="$GH_PAT" \
+            -e PR_AGENT__GITHUB__USER_TOKEN="$GH_PAT" \
+            -e GITHUB.USER_TOKEN="$GH_PAT" \
             codiumai/pr-agent:latest \
             --pr_url="$PR_URL" review
         env:
