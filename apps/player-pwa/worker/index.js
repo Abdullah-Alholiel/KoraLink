@@ -222,20 +222,52 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? '/';
+  const rawUrl = event.notification.data?.url ?? '/';
 
   event.waitUntil(
     (async () => {
+      // P2-93 (run #70): same-origin guard — a tampered/push-injected
+      // notification payload must never send the user off-origin. Resolve
+      // against the SW origin and require the result to stay on it.
+      let url = '/';
+      try {
+        const resolved = new URL(rawUrl, self.location.origin);
+        if (resolved.origin !== self.location.origin) return;
+        url = resolved.pathname + resolved.search + resolved.hash;
+      } catch (_) {
+        return; // unparseable URL — nothing safe to open
+      }
+
       const clientList = await self.clients.matchAll({
         type: 'window',
         includeUncontrolled: true,
       });
-      // Focus an existing PWA window and navigate it to the deep link.
+      // P2-93 (run #70): a hard `client.navigate()` wipes the app's in-memory
+      // state (Zustand store, React Query cache, chat drafts, scroll) — even
+      // when the window was ALREADY on the target route. Instead:
+      //   already there → focus only;
+      //   elsewhere      → postMessage + focus, the page-side handler
+      //                    (PushNavHandler) does a soft router.push();
+      //   no window      → open the deep link fresh.
       for (const client of clientList) {
-        if ('focus' in client) {
-          client.navigate(url).catch(() => undefined);
-          return client.focus();
+        if (!('focus' in client)) continue;
+        let alreadyThere = false;
+        try {
+          const cur = new URL(client.url, self.location.origin);
+          const target = new URL(url, self.location.origin);
+          alreadyThere =
+            cur.pathname === target.pathname &&
+            cur.search === target.search;
+        } catch (_) {
+          alreadyThere = false;
         }
+        if (alreadyThere) return client.focus();
+        try {
+          client.postMessage({ type: 'kl-push-nav', url });
+        } catch (_) {
+          // closed between matchAll and postMessage — fall through to focus
+        }
+        return client.focus();
       }
       return self.clients.openWindow(url);
     })(),
