@@ -18,9 +18,9 @@ vi.mock('@/providers/ObservabilityProvider', () => ({
 
 const wrapper =
   (queryClient: QueryClient) =>
-  ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  };
 
 describe('useStartConversation — profile → DM entry (POST /conversations)', () => {
   beforeEach(() => {

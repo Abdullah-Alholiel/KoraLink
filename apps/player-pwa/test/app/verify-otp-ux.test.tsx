@@ -13,7 +13,7 @@
  *  5. Resend clears the boxes (the previous code is dead once resent).
  *  6. Resend countdown starts at 60s on mount (matches server OTP_COOLDOWN_MS).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';

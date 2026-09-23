@@ -85,8 +85,6 @@ function msg(i: number, matchId = 'm1'): {
   };
 }
 
-const PAGE = 50;
-
 function page(a: number, b: number) {
   return Array.from({ length: b - a + 1 }, (_, k) => msg(a + k));
 }

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useConversationMessages } from '@/hooks/useConversations';
 import { useAppStore } from '@/store/useAppStore';
-import { fetcher, FetchError } from '@/lib/fetcher';
+import { fetcher } from '@/lib/fetcher';
 import { createLobbySocket } from '@/lib/socket';
 
 vi.mock('@/lib/fetcher', () => ({

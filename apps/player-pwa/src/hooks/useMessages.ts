@@ -171,7 +171,7 @@ export function useMatchChat(matchId: string | null) {
     } finally {
       setIsLoadingOlder(false);
     }
-  }, [matchId, isLoadingOlder, hasMore, olderExhausted, olderMessages, history, localMessages]);
+  }, [matchId, isLoadingOlder, hasMore, olderMessages, history, localMessages]);
 
   // Reset paged history when the sheet moves to another match (the local
   // message buffer below resets the same way).
