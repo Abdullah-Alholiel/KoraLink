@@ -3,15 +3,20 @@ import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
-// socket.io-client must be mocked so we can assert the URL the client dials.
+// The shared realtime client (Slice 2) builds its transport through
+// socket.io-client — mocked here with the full surface RealtimeClient
+// wires. The URL regression below still holds: realtime.ts composes the
+// dialed URL via socketBaseUrl() exactly as createLobbySocket did.
 const ioMock = vi.fn();
 vi.mock('socket.io-client', () => ({
   io: (...args: unknown[]) => {
     ioMock(...args);
     return {
       on: vi.fn(),
+      onAny: vi.fn(),
       emit: vi.fn(),
       disconnect: vi.fn(),
+      connected: true,
     };
   },
 }));

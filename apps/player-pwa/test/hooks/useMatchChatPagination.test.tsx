@@ -21,18 +21,26 @@ vi.mock('@/lib/fetcher', () => ({
 const mockHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
 const mockEmit = vi.fn();
 const mockDisconnect = vi.fn();
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => ({
-    connected: false,
-    on: (event: string, handler: (...args: unknown[]) => void) => {
-      const list = mockHandlers.get(event) ?? [];
-      list.push(handler);
-      mockHandlers.set(event, list);
-    },
-    emit: (...args: unknown[]) => mockEmit(...args),
-    disconnect: () => mockDisconnect(),
-  })),
-}));
+
+/**
+ * Controllable transport stub injected through the RealtimeClient seam
+ * (Slice 2). These tests never fire `connect` — the socket stays
+ * disconnected, exactly the old per-hook `connected: false` behavior the
+ * pagination logic was written against.
+ */
+const stubSocket = {
+  connected: false,
+  on: (event: string, handler: (...args: unknown[]) => void) => {
+    const list = mockHandlers.get(event) ?? [];
+    list.push(handler);
+    mockHandlers.set(event, list);
+  },
+  onAny: () => {
+    // Server-event bridge — unused here (no connect in these tests).
+  },
+  emit: (...args: unknown[]) => mockEmit(...args),
+  disconnect: () => mockDisconnect(),
+};
 
 vi.mock('@/store/useAppStore', () => {
   const selectUser = (s: { user?: { id: string } }) => s.user;
@@ -45,6 +53,7 @@ vi.mock('@/store/useAppStore', () => {
 });
 
 import { useMatchChat } from '@/hooks/useMessages';
+import { getRealtime } from '@/lib/realtime';
 
 /**
  * P1-3 (run #65): chat history cursor pagination in useMatchChat.
@@ -94,6 +103,10 @@ describe('useMatchChat — P1-3 history pagination (run #65)', () => {
     vi.clearAllMocks();
     mockHandlers.clear();
     mockFetcher.mockResolvedValue([]);
+    // Fresh singleton per test; inject the controllable stub transport.
+    const rt = getRealtime();
+    rt.teardown();
+    rt.setSocketFactory(() => stubSocket as never);
   });
 
   it('probes limit=51 and flags hasMore only when the probe is full', async () => {
