@@ -4,7 +4,7 @@
   "last_run": 72,
   "last_run_at": "2026-09-24T10:17Z",
   "last_run_commits": [
-    "(pending push — see kanban/RUNS/2026-09-24T15-18Z-run72.md: P2-42 partial CSP hardening + board/state docs)"
+    "dcea9fc"
   ],
   "last_run_report": "kanban/RUNS/2026-09-24T15-18Z-run72.md",
   "in_review_items": [
