@@ -186,6 +186,33 @@ const nextConfig = {
   ],
 
 
+  // P2-42 (run #72): CSP script-src hardened for PROD — drops
+  // 'unsafe-eval' (verified safe: zero `eval(` / `new Function(` in ALL
+  // production client chunks — grep 2026-09-24, run-#72 report) and the
+  // DEAD mapbox/moyasar script entries (zero mapbox/moyasar code or deps
+  // in the PWA; evidence in docs/plans/run72-csp-hardening/).
+  //
+  // 'unsafe-inline' STAYS in prod script-src — hard evidence (live HTML,
+  // 2026-09-24): the Next.js App Router response ships 17 inline <script>
+  // tags (hydration/flight bootstrap `self.__next_f.push`), zero src, zero
+  // nonce attributes. Removing the inline allowance without a working
+  // per-request nonce pipeline blocks EVERY page's hydration (blank app).
+  // That nonce pipeline was ATTEMPTED in run #72 and BLOCKED with evidence
+  // — docs/plans/run72-csp-hardening/00-retro.md (edge-runtime node:crypto
+  // 500s; render-path wedges under both documented Next 15 patterns;
+  // agent-spawned standalone servers wedge renders even with the PRISTINE
+  // middleware — environmental). Retry needs a dedicated cycle with an
+  // upgrade-first plan. Tripwire: test/lib/csp-config.test.ts pins these
+  // shapes — regenerate the test when you touch this block.
+  //
+  // Dev keeps the legacy permissive script-src: react-refresh/HMR evals.
+  // Kept in prod script-src: https://*.posthog.com — posthog-js injects its
+  // reverse-proxy bundle (exception-autocapture, surveys) as a <script>
+  // from the -assets host; connect-src alone does NOT cover script loading
+  // (blocked live in prod 2026-09-09:
+  // us-assets.i.posthog.com/static/exception-autocapture.js). doop
+  // design-sync loads the capture snippet from the internal design canvas
+  // (owner tooling, deliberate addition a550815).
   async headers() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
     let apiOrigin = 'http://localhost:3001';
@@ -194,6 +221,26 @@ const nextConfig = {
     } catch {
       // keep the localhost fallback
     }
+    const scriptSrc = isDev
+      ? [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          'https://api.mapbox.com',
+          'https://cdn.moyasar.com',
+          'https://*.posthog.com',
+          // doop design-sync: loads the capture snippet from the internal design canvas
+          'https://aa.tail2948f9.ts.net:9460',
+        ].join(' ')
+      : [
+          "'self'",
+          // see block comment above: inline scripts are REQUIRED until the
+          // nonce pipeline lands; eval is BANNED in prod (verified unused).
+          "'unsafe-inline'",
+          'https://*.posthog.com',
+          // doop design-sync: loads the capture snippet from the internal design canvas
+          'https://aa.tail2948f9.ts.net:9460',
+        ].join(' ');
     const connectSrc = [
       "'self'",
       'https://api.mapbox.com',
@@ -206,20 +253,6 @@ const nextConfig = {
       'ws:',
       'wss:',
       // doop design-sync: POSTs DOM captures to the internal design canvas
-      'https://aa.tail2948f9.ts.net:9460',
-    ].join(' ');
-    // PostHog injects its reverse-proxy bundle (exception-autocapture, surveys)
-    // as a <script> from the -assets reverse-proxy host, so script-src needs it
-    // too — connect-src alone does NOT cover script loading (blocked live in
-    // prod 2026-09-09: us-assets.i.posthog.com/static/exception-autocapture.js).
-    const scriptSrc = [
-      "'self'",
-      "'unsafe-inline'",
-      "'unsafe-eval'",
-      'https://api.mapbox.com',
-      'https://cdn.moyasar.com',
-      'https://*.posthog.com',
-      // doop design-sync: loads the capture snippet from the internal design canvas
       'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
 
