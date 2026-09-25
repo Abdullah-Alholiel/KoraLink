@@ -117,6 +117,11 @@ export default function NotificationProvider({ children }: { children: React.Rea
     return () => {
       offNotification();
       offBadgeSync();
+      // Slice 2 review fix (CRITICAL): release the singleton consumer ref.
+      // Without this the socket survives logout — an unauthenticated tab
+      // keeps its authenticated /lobby connection and personal-room
+      // delivery, and the fresh-token-on-recreate contract never fires.
+      rt.disconnect();
     };
   }, [isAuthenticated, user?.id, queryClient, setNotificationBadge, t]);
 

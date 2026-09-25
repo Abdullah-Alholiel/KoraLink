@@ -350,10 +350,9 @@ export function useConversationMessages(conversationId: string | null) {
     };
     const offNewDm = rt.on('new-dm', onNewDm);
 
-    // Already-connected (live singleton shared with other consumers, or a
-    // remount): join-conversation has been emitted via joinRoom above; the
-    // server marks the conversation read on that join.
-    if (rt.isConnected()) rt.emit('join-conversation', { conversationId });
+    // NOTE: no manual 'join-conversation' emit here — joinRoom() above already
+    // emits it (first ref) and socket.io buffers it until the socket connects.
+    // A second emit double-fires the server's markRead-on-join (Slice 2 review).
 
     return () => {
       offNewDm();

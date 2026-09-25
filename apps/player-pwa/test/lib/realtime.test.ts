@@ -183,4 +183,20 @@ describe('RealtimeClient (Slice 2 singleton)', () => {
     singleton.disconnect();
     expect(singleton.isConnected()).toBe(false);
   });
+
+  it('teardown clears roomRefs — a later connect() does not re-emit stale joins', () => {
+    // Slice 2 review regression: teardown (logout / hard reset) must drop
+    // every room ref, or the next session resurrects joins for rooms the
+    // user no longer holds.
+    singleton.connect();
+    singleton.joinRoom('match', 'm1');
+    singleton.joinRoom('conversation', 'c1');
+    singleton.teardown();
+
+    singleton.connect(); // fresh session, same client instance
+    socket.__emitted.length = 0;
+    socket.__lifecycle('connect');
+    expect(socket.__emitted.filter((e) => e.event === 'join-lobby')).toHaveLength(0);
+    expect(socket.__emitted.filter((e) => e.event === 'join-conversation')).toHaveLength(0);
+  });
 });
