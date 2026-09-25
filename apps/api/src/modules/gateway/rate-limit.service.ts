@@ -63,6 +63,8 @@ export class WsRateLimitService implements OnModuleDestroy {
   release(socketId: string): void {
     this.hits.delete(`msg:${socketId}`);
     this.hits.delete(`dm:${socketId}`);
+    // P2-99 (run #74): typing indicator bucket — same lifecycle as msg/dm.
+    this.hits.delete(`typing:${socketId}`);
   }
 
   onModuleDestroy(): void {

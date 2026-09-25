@@ -167,6 +167,15 @@ export function useMatchChat(matchId: string | null) {
   const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  // ── Typing indicator (P2-99, run #74) ─────────────────────────────────────
+  // userIds currently typing in this lobby; 4s TTL per signal (server relays
+  // the typer's userId only — names resolve from the merged message view).
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastTypingSentRef = useRef(0);
+  const TYPING_EMIT_INTERVAL_MS = 3_000;
+  const TYPING_EXPIRE_MS = 4_000;
+
   // REST history query — probes PAGE+1 to detect hasMore in one request.
   const historyQuery = useQuery<MatchMessage[], FetchError>({
     queryKey: ['match', matchId, 'messages'],
@@ -275,12 +284,43 @@ export function useMatchChat(matchId: string | null) {
       reconcile(message);
     });
 
+    // P2-99: a peer's typing signal — (re)arm their 4s expiry timer.
+    socket.on('typing', (payload: { userId?: string }) => {
+      const userId = payload?.userId;
+      if (!userId || userId === currentUser?.id) return;
+      setTypingUserIds((prev) => {
+        if (prev.has(userId)) return prev;
+        const next = new Set(prev);
+        next.add(userId);
+        return next;
+      });
+      const timers = typingTimersRef.current;
+      const existing = timers.get(userId);
+      if (existing) clearTimeout(existing);
+      timers.set(
+        userId,
+        setTimeout(() => {
+          timers.delete(userId);
+          setTypingUserIds((prev) => {
+            if (!prev.has(userId)) return prev;
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }, TYPING_EXPIRE_MS),
+      );
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
+      // P2-99: clear all typing expiry timers + state on unmount/switch.
+      for (const t of typingTimersRef.current.values()) clearTimeout(t);
+      typingTimersRef.current.clear();
+      setTypingUserIds(new Set());
     };
   }, [matchId, reconcile]);
 
@@ -421,6 +461,20 @@ export function useMatchChat(matchId: string | null) {
     [sendMessage],
   );
 
+  // ── Typing emitter (P2-99) ────────────────────────────────────────────────
+  // Throttled: at most one WS emit per TYPING_EMIT_INTERVAL_MS while the user
+  // keeps typing. The server relays to everyone except the typer; receivers
+  // expire the signal after TYPING_EXPIRE_MS of silence. WS-only: typing is
+  // ephemeral presence — no REST fallback, silently dropped when offline.
+  const emitTyping = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected || !matchId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_EMIT_INTERVAL_MS) return;
+    lastTypingSentRef.current = now;
+    socket.emit('typing', { matchId });
+  }, [matchId]);
+
   // P1-3: merged view = paged older history + authoritative newest window +
   // locally-appended (optimistic/real-time) messages.
   const messages = mergeMessages([...olderMessages, ...history], localMessages);
@@ -452,5 +506,8 @@ export function useMatchChat(matchId: string | null) {
     hasMore,
     isLoadingOlder,
     loadOlder,
+    // P2-99 typing surface
+    typingUserIds,
+    emitTyping,
   };
 }

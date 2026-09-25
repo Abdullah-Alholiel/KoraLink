@@ -437,6 +437,53 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     }
   }
 
+  // ── Match chat typing indicator (P2-99, run #74) ──────────────────────────
+
+  /**
+   * Relays "user is typing" to the match lobby. Deliberately stateless: no
+   * DB write, no persistence — the client re-emits every ~3s while typing and
+   * receivers expire the signal after ~4s of silence.
+   *
+   * Guard chain (proportionate to mark-chat-read, per the P2-74 tripwire):
+   * moderation gate FIRST, then a typing rate-limit bucket, then a membership
+   * proof. The membership read is required even though `.to(room)` skips the
+   * sender: a socket that never joined `match:<id>` (never passed join-lobby's
+   * membership check) could otherwise target any room it can name.
+   */
+  @SubscribeMessage('typing')
+  async handleTyping(
+    @MessageBody() data: { matchId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
+
+    // Independent bucket — typing bursts must never consume the msg/dm budgets.
+    const rl = this.rateLimit.consume(`typing:${client.id}`);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
+
+    const [membership] = await this.db
+      .select({ id: match_players.id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, data.matchId),
+          eq(match_players.user_id, client.userId),
+        ),
+      )
+      .limit(1);
+
+    if (!membership) throw new WsException('You are not a member of this match.');
+
+    // Everyone in the lobby EXCEPT the typer (client.to semantics).
+    client
+      .to(`match:${data.matchId}`)
+      .emit('typing', { matchId: data.matchId, userId: client.userId });
+  }
+
   // ── Join a conversation (DM room) ────────────────────────────────────────
 
   @SubscribeMessage('join-conversation')

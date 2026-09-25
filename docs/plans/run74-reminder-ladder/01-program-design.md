@@ -68,3 +68,37 @@ at apply time (ABOVE live newest 1789846359444 → applies exactly once) → ver
 `__drizzle_migrations` + `information_schema.columns` → API restart AFTER build dist exists.
 No API restart needed for correctness of staging deploys beyond the fork (services serve the
 projects dir; deploy fork unchanged — flagged in report).
+
+---
+
+# Item 2 — P2-99 match-chat typing indicator (compact gates, run #74)
+
+## Problem / user story
+As a match-chat participant, I see when another member is typing, so I wait
+for their message instead of sending an overlapping one. (Board P2-99,
+Reviewer B backlog: "lobby chat feels one-way".)
+
+## Scope
+IN: gateway `typing` relay (member-gated, rate-limited, room-scoped, sender-excluded);
+`useMatchChat` typing state (4s TTL per typer) + throttled emitter (3s);
+ChatSheet strip (1/2/many copy, role=status, EN+AR).
+OUT: DM/conversation typing (separate surface); mobile push anything; persistence.
+
+## Contracts (Gate 3)
+- WS event `typing` in `{ matchId }` → relay `{ matchId, userId }` to `match:<id>`
+  via `client.to()` (sender excluded at the transport layer).
+- Handler chain: auth → requireActiveUser (P1-48 gate, FIRST await per the
+  P2-74 tripwire) → `rateLimit.consume('typing:<socketId>')` (independent bucket)
+  → membership SELECT (same shape as join-lobby) → relay. Stateless — no DB write.
+- `WsRateLimitService.release()` clears `typing:<socketId>` (memory lifecycle).
+- Hook: `typingUserIds: Set<string>`, `emitTyping(): void` (WS-only, 3s throttle);
+  expiry timer per typer (4s), re-armed by repeat signals, cleared on unmount.
+- i18n: `chatSheet.typingOne/typingTwo/typingMany/typingPlayer` (en + ar, 988/988
+  leaf parity preserved).
+
+## Gate 3 checklist
+- [x] Server relays only to room members who joined via join-lobby (membership enforced).
+- [x] Sender never receives own echo (client.to) + client-side own-id guard.
+- [x] Rate-limit bucket released on disconnect (no Map growth).
+- [x] i18n keys exist in BOTH locales (parity 988/988).
+- [x] No new REST endpoint; no schema change (ephemeral by design).
