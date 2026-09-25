@@ -19,12 +19,15 @@ vi.mock('@/lib/fetcher', () => ({
   },
 }));
 
-// Mock socket.io-client for useMessages
+// The shared realtime client (Slice 2) needs a transport with the full
+// surface RealtimeClient wires — a per-hook `io` mock no longer exists.
 vi.mock('socket.io-client', () => ({
   io: vi.fn(() => ({
     on: vi.fn(),
+    onAny: vi.fn(),
     emit: vi.fn(),
     disconnect: vi.fn(),
+    connected: true,
   })),
 }));
 

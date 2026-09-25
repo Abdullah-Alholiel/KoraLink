@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
+import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
@@ -159,6 +158,7 @@ const CHAT_PAGE_SIZE = 50;
 export function useMatchChat(matchId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
+  const rt = getRealtime();
   // P2-99 (run #75 lint fix): the typing own-echo filter and the socket
   // effect's deps array both need the raw id — it must live in COMPONENT
   // scope because the deps array is an argument to useEffect(), evaluated
@@ -169,7 +169,6 @@ export function useMatchChat(matchId: string | null) {
   const [olderExhausted, setOlderExhausted] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // ── Typing indicator (P2-99, run #74) ─────────────────────────────────────
@@ -270,7 +269,7 @@ export function useMatchChat(matchId: string | null) {
     [queryClient, matchId],
   );
 
-  // Socket.IO subscription (real-time)
+  // Socket.IO subscription (real-time) — shared client (Slice 2).
   useEffect(() => {
     if (!matchId) return;
     const ackTimers = ackTimersRef.current;
@@ -282,22 +281,30 @@ export function useMatchChat(matchId: string | null) {
     // (react-hooks/exhaustive-deps).
     const typingTimers = typingTimersRef.current;
 
-    const socket: Socket = createLobbySocket(5);
+    rt.connect();
+    rt.joinRoom('match', matchId);
 
-    socket.on('connect', () => {
+    const onConnect = () => {
       setIsConnected(true);
-      socketRef.current = socket;
-      socket.emit('join-lobby', { matchId });
-    });
+    };
+    const onDisconnect = () => setIsConnected(false);
+    const onNewMessage = (payload: unknown) => {
+      reconcile(payload as MatchMessage);
+    };
 
-    socket.on('disconnect', () => setIsConnected(false));
+    const offs = [
+      rt.on('connect', onConnect),
+      rt.on('disconnect', onDisconnect),
+      rt.on('new-message', onNewMessage),
+    ];
 
-    socket.on('new-message', (message: MatchMessage) => {
-      reconcile(message);
-    });
+    // The room may already be joined-and-connected (another consumer, or a
+    // remount over a live singleton): surface the connected state now — the
+    // 'connect' event has already fired for this generation.
+    if (rt.isConnected()) setIsConnected(true);
 
     // P2-99: a peer's typing signal — (re)arm their 4s expiry timer.
-    socket.on('typing', (payload: { userId?: string }) => {
+    const onTyping = (payload: { userId?: string }) => {
       const userId = payload?.userId;
       if (!userId || userId === currentUserId) return;
       setTypingUserIds((prev) => {
@@ -320,11 +327,13 @@ export function useMatchChat(matchId: string | null) {
           });
         }, TYPING_EXPIRE_MS),
       );
-    });
+    };
+    offs.push(rt.on('typing', onTyping));
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      offs.forEach((off) => off());
+      rt.leaveRoom('match', matchId);
+      rt.disconnect();
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
@@ -336,7 +345,7 @@ export function useMatchChat(matchId: string | null) {
       typingTimers.clear();
       setTypingUserIds(new Set());
     };
-  }, [matchId, reconcile, currentUserId]);
+  }, [matchId, reconcile, rt, currentUserId]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark
@@ -345,8 +354,8 @@ export function useMatchChat(matchId: string | null) {
   const markChatRead = useCallback(
     () => {
       if (!matchId) return;
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('mark-chat-read', { matchId });
+      if (rt.isConnected()) {
+        rt.emit('mark-chat-read', { matchId });
         return;
       }
       // Socket down → REST fallback (same guard chain server-side).
@@ -357,7 +366,7 @@ export function useMatchChat(matchId: string | null) {
         // Best-effort: a missed watermark only leaves a stale badge.
       });
     },
-    [matchId],
+    [matchId, rt],
   );
 
   useEffect(() => {
@@ -396,8 +405,8 @@ export function useMatchChat(matchId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('send-message', { matchId, content, clientMessageId });
+      if (rt.isConnected()) {
+        rt.emit('send-message', { matchId, content, clientMessageId });
         // Authoritative message arrives via the `new-message` echo.
         return undefined;
       }
@@ -481,13 +490,12 @@ export function useMatchChat(matchId: string | null) {
   // expire the signal after TYPING_EXPIRE_MS of silence. WS-only: typing is
   // ephemeral presence — no REST fallback, silently dropped when offline.
   const emitTyping = useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket?.connected || !matchId) return;
+    if (!rt.isConnected() || !matchId) return;
     const now = Date.now();
     if (now - lastTypingSentRef.current < TYPING_EMIT_INTERVAL_MS) return;
     lastTypingSentRef.current = now;
-    socket.emit('typing', { matchId });
-  }, [matchId]);
+    rt.emit('typing', { matchId });
+  }, [matchId, rt]);
 
   // P1-3: merged view = paged older history + authoritative newest window +
   // locally-appended (optimistic/real-time) messages.

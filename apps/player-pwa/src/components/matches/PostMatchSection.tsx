@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Trophy, Crown, Check, Loader2, Clock, ChevronRight, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { createLobbySocket } from '@/lib/socket';
+import { getRealtime } from '@/lib/realtime';
 import { useAppStore } from '@/store/useAppStore';
 import { usePomResult, useVote } from '@/hooks/usePom';
 import { formatTimeLeft, type AppLocale } from '@/lib/format';
@@ -62,18 +62,22 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
       : null;
 
   // Real-time: listen for the POTM winner being decided while viewing.
+  // Shared realtime client (Slice 2) — join/leave is ref-counted.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const socket = createLobbySocket();
-    socket.on('connect', () => socket.emit('join-lobby', { matchId }));
-    socket.on('pom-decided', (payload: { winner: { fullName: string } }) => {
+    const rt = getRealtime();
+    rt.connect();
+    rt.joinRoom('match', matchId);
+    const offPom = rt.on<{ winner: { fullName: string } }>('pom-decided', (payload) => {
       addBreadcrumb('POTM decided via WebSocket', 'potm', 'info', { matchId });
       trackEvent('potm_decided_received', { match_id: matchId });
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
       showToast(`🏆 ${payload.winner.fullName} — ${t('pomDecided')}`, 'success');
     });
     return () => {
-      socket.disconnect();
+      offPom();
+      rt.leaveRoom('match', matchId);
+      rt.disconnect();
     };
   }, [matchId, queryClient, showToast, t]);
 
