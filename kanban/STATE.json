@@ -4,15 +4,22 @@
   "last_run": 74,
   "last_run_at": "2026-09-25T10:17Z",
   "last_run_commits": [
-    "3d4cb7f"
+    "3d4cb7f",
+    "a3d454c",
+    "e8f16c2",
+    "582dcb3"
   ],
   "last_run_report": "kanban/RUNS/2026-09-25T10-17Z-run74.md",
   "in_review_items": [
     {
-      "id": "run74-p2-100-reminder-ladder",
-      "built_in": "run #74 (parent-built; full gates on final tree)",
-      "claim": "P2-100 match-start reminder LADDER: T-24h leg ([23h45m,24h15m] window, own reminders_24h_sent_at stamp) + T-45m leg preserved; match_starting_24h push key (Riyadh-local DATE+time, en/ar), match_reminder_24h mail template, worker deep-link route + cross-layer test; migration 0044 applied + live-verified; stamp written only after successful fan-out. BONUS: push-text formatters hardened to total render (pre-existing --:-- fallback was unreachable — new Date('--:--') RangeError escaped renderPushText).",
-      "verify": "(1) cd apps/api && npx jest src/modules/matches/matches.reminder-ladder.spec.ts → 8/8; full jest → 643/643. (2) cd apps/player-pwa && npx vitest run → 721/721 incl. push-notification-click type-contract (match_starting_24h listed). (3) grep reminders_24h_sent_at apps/api/src/database/schema.ts → present; grep 'match_starting_24h' apps/api/src/modules/notifications/push-text.ts apps/player-pwa/worker/index.js → present. (4) live DB: column matches.reminders_24h_sent_at exists (information_schema), journal has 47 rows."
+      "id": "P2-100",
+      "verify": "matches.reminder-ladder.spec.ts jest 8/8; push-text+mailer 29/29; api jest 643+/643+; grep schema.ts reminders_24h_sent_at; grep push-text.ts match_starting_24h; grep worker/index.js match_starting_24h; migration 0044 APPLIED via scripts/migrate-vps.mjs (1 applied, 45 skipped); commit 3d4cb7f",
+      "commit": "3d4cb7f"
+    },
+    {
+      "id": "P2-99-rung1-typing",
+      "verify": "ws-gate-coverage pin incl. typing (gate-first await); gateway jest 57/57; useMatchChatTyping vitest 5/5; ChatSheet 13/13; tsc 0; lint 0; full turbo 3/3; api jest 644/644; commit 582dcb3",
+      "commit": "582dcb3"
     }
   ],
   "open_blockers": [
@@ -62,5 +69,6 @@
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
   "last_run_id": "2026-09-25T01:17Z-run73",
-  "last_run_started_at": "2026-09-24T10:17:00Z"
+  "last_run_started_at": "2026-09-24T10:17:00Z",
+  "last_run_finished_at": "2026-09-25T11:41Z"
 }
