@@ -341,12 +341,12 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
   const durationMins = row.duration_mins ?? 60;
   const startMs = scheduled.getTime();
   const endMs = startMs + durationMins * 60_000;
-  const nowMs = Date.now();
 
-  let status = mapMatchStatus(row.status);
-  if ((status === 'open' || status === 'full') && nowMs >= startMs && nowMs < endMs) {
-    status = 'in_progress';
-  }
+  // Status is DB-truth: the server's underfill nets own the lifecycle, and
+  // InProgress is written ONLY by the host's gated Start action. Never derive
+  // status from the wall clock — the clock override made any below-minimum
+  // match display "Live Now" + "Join Ongoing Match" (2026-09-18).
+  const status = mapMatchStatus(row.status);
 
   return {
     id: row.id,
@@ -407,15 +407,16 @@ export function adaptMatchDetail(
   const duration = detail.duration_mins ?? 60;
   const startMs = scheduled.getTime();
   const endMs = startMs + duration * 60_000;
-  const nowMs = Date.now();
   const venue = detail.pitch?.venue;
   const players = detail.players ?? [];
   const messages = detail.messages ?? [];
 
-  let status = mapMatchStatus(detail.status);
-  if ((status === 'open' || status === 'full') && nowMs >= startMs && nowMs < endMs) {
-    status = 'in_progress';
-  }
+  // Status is DB-truth: findOne() already applies the server-side effective
+  // status (underfill rule reads underfilled past-end rows as Cancelled), and
+  // InProgress is written ONLY by the host's gated Start action. Never derive
+  // lifecycle state from the wall clock here — the clock override made any
+  // below-minimum match display "Live Now" + "Join Ongoing Match" (2026-09-18).
+  const status = mapMatchStatus(detail.status);
 
   return {
     id: detail.id,

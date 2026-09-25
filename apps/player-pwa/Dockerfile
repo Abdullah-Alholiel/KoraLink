@@ -15,7 +15,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build-time env vars (non-secret placeholders; real values supplied at runtime via OCI secrets)
+# Build-time env vars — NEXT_PUBLIC_* values are baked into the client bundle
+# AT BUILD TIME. Supply real values via build args (Coolify build options),
+# NOT runtime env: runtime env cannot reach the already-compiled client bundle
+# (run #32 Reviewer B — a runtime-only NEXT_PUBLIC_API_URL ships a bundle with
+# an undefined API URL = blank PWA).
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_MAPBOX_TOKEN
 ARG NEXT_PUBLIC_MOYASAR_KEY
