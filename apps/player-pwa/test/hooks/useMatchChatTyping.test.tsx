@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
@@ -20,23 +20,37 @@ vi.mock('@/lib/fetcher', () => ({
 
 const mockHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
 const mockEmit = vi.fn();
-const mockDisconnect = vi.fn();
 // Controllable connected flag — typing is WS-only.
 let mockConnected = true;
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => ({
-    get connected() {
-      return mockConnected;
-    },
-    on: (event: string, handler: (...args: unknown[]) => void) => {
-      const list = mockHandlers.get(event) ?? [];
-      list.push(handler);
-      mockHandlers.set(event, list);
-    },
-    emit: (...args: unknown[]) => mockEmit(...args),
-    disconnect: () => mockDisconnect(),
-  })),
-}));
+// Captured onAny bridge — production routes ALL server events through it
+// (realtime.ts: socket.onAny → fanout). fire() replays that path exactly.
+let onAnyBridge: ((event: string, ...args: unknown[]) => void) | null = null;
+
+/**
+ * Controllable transport stub injected through the RealtimeClient seam
+ * (Slice 2) — same pattern as the pagination/read-receipt suites. Handlers
+ * registered via rt.on() land in mockHandlers, so tests fire events with
+ * fire(); emits surface through mockEmit regardless of connection state
+ * (RealtimeClient.emit is a no-op while disconnected).
+ */
+const stubSocket = {
+  get connected() {
+    return mockConnected;
+  },
+  on: (event: string, handler: (...args: unknown[]) => void) => {
+    const list = mockHandlers.get(event) ?? [];
+    list.push(handler);
+    mockHandlers.set(event, list);
+  },
+  onAny: (cb: (event: string, ...args: unknown[]) => void) => {
+    // RealtimeClient registers its fan-out bridge here at socket creation.
+    onAnyBridge = cb;
+  },
+  emit: (...args: unknown[]) => mockEmit(...args),
+  disconnect: () => {
+    // Singleton teardown path — ref-counted destroy calls this at zero.
+  },
+};
 
 vi.mock('@/store/useAppStore', () => {
   const selectUser = (s: { user?: { id: string } }) => s.user;
@@ -49,6 +63,10 @@ vi.mock('@/store/useAppStore', () => {
 });
 
 import { useMatchChat } from '@/hooks/useMessages';
+import { getRealtime } from '@/lib/realtime';
+
+// Route the singleton's transport through the stub for this suite.
+getRealtime().setSocketFactory(() => stubSocket as never);
 
 /**
  * P2-99 (run #74): match-chat typing indicator.
@@ -75,11 +93,17 @@ function createWrapper() {
 }
 
 function fire(event: string, payload?: unknown) {
+  // Server-pushed events ride the onAny → fanout bridge (production path);
+  // lifecycle events (connect/disconnect) are explicit socket.on handlers.
+  if (onAnyBridge) onAnyBridge(event, payload);
   for (const h of mockHandlers.get(event) ?? []) h(payload);
 }
 
 describe('useMatchChat typing indicator (P2-99, run #74)', () => {
   beforeEach(() => {
+    // Fresh singleton state per case: destroy socket, clear rt handlers,
+    // zero the consumer/room refcounts (setSocketFactory persists).
+    getRealtime().teardown();
     mockHandlers.clear();
     mockEmit.mockClear();
     mockConnected = true;
@@ -93,8 +117,7 @@ describe('useMatchChat typing indicator (P2-99, run #74)', () => {
   it('emits typing at most once per 3s while the socket is connected', async () => {
     const { result } = renderHook(() => useMatchChat('m1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => fire('connect'));
-    mockEmit.mockClear(); // connect emits join-lobby — not under test here
+    mockEmit.mockClear(); // mount emitted join-lobby — not under test here
     vi.useFakeTimers();
 
     act(() => result.current.emitTyping());
@@ -113,9 +136,11 @@ describe('useMatchChat typing indicator (P2-99, run #74)', () => {
   });
 
   it('does not emit before the socket connects (WS-only, silent)', async () => {
+    mockConnected = false;
     const { result } = renderHook(() => useMatchChat('m1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    // No 'connect' fired → socketRef null → typing silently dropped.
+    mockEmit.mockClear(); // mount emitted join-lobby — isolate this assertion
+    // Socket stub reports disconnected → typing silently dropped.
     act(() => result.current.emitTyping());
     expect(mockEmit).not.toHaveBeenCalled();
   });
@@ -123,7 +148,6 @@ describe('useMatchChat typing indicator (P2-99, run #74)', () => {
   it('adds a peer typer, expires after 4s, and re-arms on repeat signals', async () => {
     const { result } = renderHook(() => useMatchChat('m1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => fire('connect'));
     vi.useFakeTimers();
 
     act(() => fire('typing', { userId: 'peer-a', matchId: 'm1' }));
@@ -143,7 +167,6 @@ describe('useMatchChat typing indicator (P2-99, run #74)', () => {
   it('ignores the own-user echo and unknown payloads', async () => {
     const { result } = renderHook(() => useMatchChat('m1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => fire('connect'));
 
     act(() => fire('typing', { userId: 'user-me', matchId: 'm1' }));
     act(() => fire('typing', {}));
@@ -155,7 +178,6 @@ describe('useMatchChat typing indicator (P2-99, run #74)', () => {
       wrapper: createWrapper(),
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => fire('connect'));
 
     act(() => fire('typing', { userId: 'peer-a', matchId: 'm1' }));
     expect(result.current.typingUserIds.size).toBe(1);

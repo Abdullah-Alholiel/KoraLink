@@ -300,6 +300,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // P1-48 gate parity (merged from realtime-singleton lane): leave is a
+    // mutating membership op — same moderation gate as join-lobby.
+    await this.requireActiveUser(client.userId);
     await client.leave(`match:${data.matchId}`);
   }
 
