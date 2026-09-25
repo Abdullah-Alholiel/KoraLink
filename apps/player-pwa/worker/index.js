@@ -241,6 +241,10 @@ self.addEventListener('push', (event) => {
   // same deep-link target as before.
   else if (data.type === 'match_starting_soon' && data.matchId)
     url = `/${locale}/match/${data.matchId}`;
+  // P2-100 (run #74): day-ahead reminder leg — same deep-link target, own
+  // tag (type:matchId) so it never replaces the T-45m push (or vice versa).
+  else if (data.type === 'match_starting_24h' && data.matchId)
+    url = `/${locale}/match/${data.matchId}`;
   // Run #70: host nudges (players_needed / renudge) also stopped borrowing
   // 'match-chat' — they deep-link to the match they need players for.
   else if (

@@ -16,6 +16,7 @@ export type PushLocale = 'en' | 'ar';
 
 export type PushKey =
   | 'match_starting_soon'
+  | 'match_starting_24h'
   | 'players_needed'
   | 'players_needed_renudge'
   | 'match_cancelled'
@@ -39,32 +40,56 @@ export type PushVars = {
   needed?: number;
   /** POTM winner display name. */
   winnerName?: string;
-  /** ISO timestamp of kickoff (match_starting_soon only). */
+  /** ISO timestamp of kickoff (match_starting_soon / match_starting_24h). */
   kickoffISO?: string;
+  /** ISO timestamp of kickoff (match_starting_24h only) — rendered as the
+   *  Riyadh-local DATE (day-ahead reminders lead with the date, not the time). */
+  kickoffDateISO?: string;
   /** New queue position (waitlist_promoted only). */
   position?: number;
 };
 
 type Entry = { title: string; body: (v: PushVars) => string };
 
-function kickoffTime(iso: string, locale: 'en-GB' | 'ar-SA'): string {
+function parseIso(iso: string | undefined): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Run #74 (P2-100) hardening: the kickoff formatters are TOTAL — a missing or
+ * unparseable timestamp renders the visibly-broken marker instead of throwing
+ * from Intl.format (a `new Date('--:--')` RangeError used to escape
+ * renderPushText, violating its "never throws" contract — the marker it was
+ * meant to show was unreachable). Kick-off is ALWAYS known on the reminder
+ * paths (matches.service.ts builds it from scheduled_at), so a missing value
+ * can only mean a data bug — show the broken marker, never "now".
+ */
+function kickoffTime(iso: string | undefined, locale: 'en-GB' | 'ar-SA'): string {
+  const d = parseIso(iso);
+  if (!d) return '--:--';
   return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Asia/Riyadh',
     hour12: false,
-  }).format(new Date(iso));
+  }).format(d);
 }
 
 /**
- * Run #24 Reviewer-A fix: a missing kickoffISO used to fabricate "now" —
- * subscribers saw "kicks off at <current time>". Kick-off is ALWAYS known on
- * the reminder path (matches.service.ts builds it from scheduled_at), so a
- * missing value can only mean a data bug. Return a visibly broken marker
- * (and capture it) instead of lying with the current time.
+ * Riyadh-local long date (e.g. "Saturday 26 September 2026" / the ar-SA
+ * equivalent with Arabic month names + Arabic-Indic numerals) for the
+ * day-ahead reminder (P2-100). Total: missing/unparseable input renders the
+ * marker, never fabricates today's date.
  */
-function kickoffFallback(): string {
-  return '--:--';
+function kickoffDate(iso: string | undefined, locale: 'en-GB' | 'ar-SA'): string {
+  const d = parseIso(iso);
+  if (!d) return '--';
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'long',
+    timeZone: 'Asia/Riyadh',
+  }).format(d);
 }
 
 const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
@@ -72,18 +97,27 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
     en: {
       title: '⏰ Match starting soon',
       body: (v) =>
-        `"${v.title ?? ''}" kicks off at ${kickoffTime(
-          v.kickoffISO ?? kickoffFallback(),
-          'en-GB',
-        )} — see you there!`,
+        `"${v.title ?? ''}" kicks off at ${kickoffTime(v.kickoffISO, 'en-GB')} — see you there!`,
     },
     ar: {
       title: '⏰ المباراة تبدأ قريبًا',
       body: (v) =>
-        `"${v.title ?? ''}" تبدأ الساعة ${kickoffTime(
-          v.kickoffISO ?? kickoffFallback(),
-          'ar-SA',
-        )} — نراك هناك!`,
+        `"${v.title ?? ''}" تبدأ الساعة ${kickoffTime(v.kickoffISO, 'ar-SA')} — نراك هناك!`,
+    },
+  },
+  // P2-100 (run #74): day-ahead leg of the reminder ladder. Leads with the
+  // Riyadh-local DATE; the time rides along so the user sees both. Distinct
+  // tag (type:matchId) from match_starting_soon — neither replaces the other.
+  match_starting_24h: {
+    en: {
+      title: '📅 Match tomorrow',
+      body: (v) =>
+        `"${v.title ?? ''}" kicks off tomorrow, ${kickoffDate(v.kickoffDateISO, 'en-GB')} at ${kickoffTime(v.kickoffISO, 'en-GB')}.`,
+    },
+    ar: {
+      title: '📅 مباراتك غدًا',
+      body: (v) =>
+        `"${v.title ?? ''}" تنطلق غدًا ${kickoffDate(v.kickoffDateISO, 'ar-SA')} الساعة ${kickoffTime(v.kickoffISO, 'ar-SA')}.`,
     },
   },
   players_needed: {

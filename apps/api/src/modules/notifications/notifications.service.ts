@@ -27,6 +27,7 @@ import { push_subscriptions, match_players, users, user_notification_prefs, type
  */
 const CATEGORY_BY_KEY: Partial<Record<PushKey, NotificationCategory>> = {
   match_starting_soon: 'match',
+  match_starting_24h: 'match',
   players_needed: 'match',
   players_needed_renudge: 'match',
   match_cancelled: 'match',

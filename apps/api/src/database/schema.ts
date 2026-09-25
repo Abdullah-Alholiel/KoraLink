@@ -450,6 +450,9 @@ export const matches = pgTable(
     // P1-1 scheduler: set once when the "match starting soon" reminder fires,
     // so each match is reminded exactly once (NULL = not yet reminded).
     reminders_sent_at: timestamp('reminders_sent_at', { withTimezone: true }),
+    // P2-100 (run #74): stamp-once guard for the T-24h reminder leg of the
+    // ladder. NULL = not yet sent; the 45-minute leg keeps its own stamp.
+    reminders_24h_sent_at: timestamp('reminders_24h_sent_at', { withTimezone: true }),
     booking_mode: bookingModeEnum('booking_mode').notNull().default('koralink'),
     booking_slot_id: varchar('booking_slot_id', { length: 36 })
       .references(() => pitch_slots.id, { onDelete: 'set null' }),

@@ -39,7 +39,8 @@ export type MailTemplateKey =
   | 'venue_ownership_removed'
   | 'host_underfilled_nudge'
   // ── direct call sites (no activity row exists) ──
-  | 'match_reminder' // scheduler, sendMatchStartReminders
+  | 'match_reminder' // scheduler, sendMatchStartReminders (T-45m leg)
+  | 'match_reminder_24h' // scheduler, sendMatchStartReminders (P2-100 T-24h leg)
   | 'welcome_verify' // setEmail → verification + welcome in one
   | 'email_verify' // re-verification after an address change
   | 'account_deletion'; // PDPL soft-delete confirmation
@@ -84,6 +85,21 @@ export const MAIL_TEMPLATES: Record<MailTemplateKey, { en: MailCopy; ar: MailCop
       subject: 'الانطلاق قريباً: {{title}}',
       heading: 'مباراتك تبدأ قريباً',
       body: 'الانطلاق بعد قليل. جهّز أدواتك.',
+      cta: 'عرض المباراة',
+    },
+  },
+  // P2-100 (run #74): day-ahead leg of the reminder ladder.
+  match_reminder_24h: {
+    en: {
+      subject: 'Tomorrow: {{title}}',
+      heading: 'Your match is tomorrow',
+      body: 'Kick-off is about 24 hours away. Lock in your plans now.',
+      cta: 'View match',
+    },
+    ar: {
+      subject: 'غدًا: {{title}}',
+      heading: 'مباراتك غدًا',
+      body: 'الانطلاق بعد حوالي ٢٤ ساعة. جهّز خططك من الآن.',
       cta: 'عرض المباراة',
     },
   },

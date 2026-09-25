@@ -27,11 +27,13 @@ const DRIZZLE_DIR = join(__dirname, '..', '..', 'drizzle');
 const META_DIR = join(DRIZZLE_DIR, 'meta');
 
 /** Migrations shipped deliberately without snapshot json (runbook convention for
- * hand-written files; 0027/0028 are the torn-chain gap run #67 flagged). */
+ * hand-written files; 0027/0028 are the torn-chain gap run #67 flagged).
+ * 0044 (run #74, P2-100 reminder ladder): hand-written per VPS convention —
+ * pin consciously extended in the same commit as the migration. */
 const SNAPSHOT_MISSING = [
   '0027', '0028',
   '0030', '0031', '0032', '0033', '0034', '0035', '0036', '0037',
-  '0038', '0039', '0040', '0041', '0042', '0043',
+  '0038', '0039', '0040', '0041', '0042', '0043', '0044',
 ];
 
 describe('drizzle snapshot chain — P2-88 guard (run #71)', () => {
