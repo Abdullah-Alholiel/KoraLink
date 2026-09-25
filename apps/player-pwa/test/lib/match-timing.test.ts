@@ -52,25 +52,13 @@ describe('match-timing', () => {
     expect(canEndMatch(empty)).toBe(false);
   });
 
-  it('matchHasStarted flips at kick-off', () => {
-    expect(
-      matchHasStarted(
-        { status: 'open', scheduledAt },
-        new Date(scheduledAt).getTime() - 1,
-      ),
-    ).toBe(false);
-    expect(
-      matchHasStarted(
-        { status: 'open', scheduledAt },
-        new Date(scheduledAt).getTime() + 1,
-      ),
-    ).toBe(true);
-    expect(
-      matchHasStarted(
-        { status: 'in_progress', scheduledAt },
-        new Date(scheduledAt).getTime() - 1,
-      ),
-    ).toBe(true);
+  it('matchHasStarted follows DB status only (no clock fabrication)', () => {
+    // 2026-09-18 "Ladies Night" regression: the former clock clause made an
+    // 'open' match past kick-off read as started. Status is DB-truth — only
+    // the host's Start action writes in_progress.
+    expect(matchHasStarted({ status: 'open' })).toBe(false);
+    expect(matchHasStarted({ status: 'full' })).toBe(false);
+    expect(matchHasStarted({ status: 'in_progress' })).toBe(true);
   });
 
   it('matchHasEnded flips at scheduled end', () => {
