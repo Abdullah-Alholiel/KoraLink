@@ -1,25 +1,17 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 74,
-  "last_run_at": "2026-09-25T10:17Z",
+  "last_run": 75,
+  "last_run_at": "2026-09-25T15:16Z",
   "last_run_commits": [
-    "3d4cb7f",
-    "a3d454c",
-    "e8f16c2",
-    "582dcb3"
+    "58f89fa"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-25T10-17Z-run74.md",
+  "last_run_report": "kanban/RUNS/2026-09-25T15-16Z-run75.md",
   "in_review_items": [
     {
-      "id": "P2-100",
-      "verify": "matches.reminder-ladder.spec.ts jest 8/8; push-text+mailer 29/29; api jest 643+/643+; grep schema.ts reminders_24h_sent_at; grep push-text.ts match_starting_24h; grep worker/index.js match_starting_24h; migration 0044 APPLIED via scripts/migrate-vps.mjs (1 applied, 45 skipped); commit 3d4cb7f",
-      "commit": "3d4cb7f"
-    },
-    {
-      "id": "P2-99-rung1-typing",
-      "verify": "ws-gate-coverage pin incl. typing (gate-first await); gateway jest 57/57; useMatchChatTyping vitest 5/5; ChatSheet 13/13; tsc 0; lint 0; full turbo 3/3; api jest 644/644; commit 582dcb3",
-      "commit": "582dcb3"
+      "id": "P2-102-sw-conversations-cache",
+      "verify": "grep 'conversations-list-cache' apps/player-pwa/next.config.mjs (recipe + statuses [200]); vitest test/lib/sw-config.test.ts 15/15 (list URL routes to cache, threads match nothing); full gates on final tree: turbo 3/3 --concurrency=1, vitest 729/729, tsc 0, eslint 0, api jest 644/644; commit 58f89fa",
+      "commit": "58f89fa"
     }
   ],
   "open_blockers": [
@@ -64,11 +56,12 @@
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design).",
     "Run #65 (16:45Z cron): 3-item build — 8b510fb (P2-76 POST unsubscribe + DTO), 7e364a8 (P2-76b push locale re-sync), 3d1840d (P1-3 chat cursor pagination + latest-window fix). Run #64 P2-73 VERIFIED. Lessons: class-validator @IsUrl(require_tld) ACCEPTS IP-literal hosts (SSRF defense = service send-path allowlist); Nest v10 route metadata lives on descriptor.value; cron notepad build candidates go stale — verify against BOARD.md first.",
-    "Run #74 (2026-09-25T10:17Z): P2-100 ladder built (3d4cb7f, migration 0044 applied+verified live); run-#73 items BOTH verified → P2-42 fully DONE. P1-52 STILL BURNING (1C n=6 lastSeen 09-25T10:00Z + NEW 1F) — prod auth hard-down, owner billing. ADMIN HOLD continues (projects-dir dirty): 4 new admin findings boarded P2-104..107 BLOCKED (deletePitch TOCTOU CONFIRMED parent-side). Reviewer hydration claim refuted again (client-only fetch). zai probe 200 ~2s, weekly ~0-5%."
+    "Run #74 (2026-09-25T10:17Z): P2-100 ladder built (3d4cb7f, migration 0044 applied+verified live); run-#73 items BOTH verified → P2-42 fully DONE. P1-52 STILL BURNING (1C n=6 lastSeen 09-25T10:00Z + NEW 1F) — prod auth hard-down, owner billing. ADMIN HOLD continues (projects-dir dirty): 4 new admin findings boarded P2-104..107 BLOCKED (deletePitch TOCTOU CONFIRMED parent-side). Reviewer hydration claim refuted again (client-only fetch). zai probe 200 ~2s, weekly ~0-5%.",
+    "Run #75 (2026-09-25T15:16Z, staging worktree): DB & Infra lane (75%4=3). Verified BOTH run-#74 in_review claims → P2-100 (ladder: greps + live-DB column + suites 8/8 & 6/6) and P2-99 rung-1 typing (Reviewer B independent code-read + parent suites 57/57, 5/5, 13/13) → DONE. P2-102 RE-SCOPED with live evidence (my-games ALREADY cached via users/me/matches; wallet deliberately NetworkOnly) and BUILT: conversations-list NetworkFirst SW recipe + 3 reality pins, commit 58f89fa. FOUND+FIXED lint-gate debt from 582dcb3 (run #74 'lint 0' claim inaccurate — 1 error + 2 warnings: exhaustive-deps ×2, display-name ×1) — 2nd occurrence of the broken-gate class (cf. run #69/#70); fix rode the same commit. Reviewers A+B clean zai glm-5.3-flash (deleg_bf806456, 77s+94s — 15th consecutive clean run; zero CRITICAL/IMPORTANT; sweep ALL CLEAN). P1-52 STILL BURNING: 1C n=7 lastSeen 2026-09-25T15:00Z (40 min before check) — prod auth+signup hard-down ~29h, owner/infra. ADMIN HOLD continues (projects-dir dirty, untouched). Strix not due (Oct 1-3). zai probe 200 4.9s (ZAI_API_KEY). Gates: turbo 3/3 --concurrency=1, vitest 729/729, tsc 0, eslint 0, api jest 644/644. No migration, no API restart (SW config is build-time; live PWA serves projects dir per deploy fork)."
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
-  "last_run_id": "2026-09-25T01:17Z-run73",
-  "last_run_started_at": "2026-09-24T10:17:00Z",
-  "last_run_finished_at": "2026-09-25T11:41Z"
+  "last_run_id": "2026-09-25T15:16Z-run75",
+  "last_run_started_at": "2026-09-25T15:16:34Z",
+  "last_run_finished_at": "2026-09-25T15:53Z"
 }
