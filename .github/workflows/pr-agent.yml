@@ -13,8 +13,8 @@ name: PR Agent (z.ai GLM review)
 
 on:
   pull_request:
-    branches: [staging]
-    types: [opened, synchronize]
+    branches: [staging, main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -40,6 +40,7 @@ jobs:
             --config.model='openai/glm-5.3-flash' \
             --config.fallback_models='["openai/glm-5.3-flash"]' \
             --config.custom_model_max_tokens=32000 \
+            --config.ai_timeout=600 \
             --config.response_language='en' \
             --pr_reviewer.num_max_findings=5 \
             --pr_reviewer.extra_instructions='You are reviewing a KoraLink PR (NestJS+Drizzle API, Next.js PWA/Admin). Output AT MOST 5 findings, each exactly one line: SEVERITY(CRITICAL|IMPORTANT|MINOR): file:line - one-sentence issue. Order CRITICAL first. No praise, no summaries, no restating the diff. Check: tenant isolation, unguarded mutations, eq(col,null), ::uuid casts, hydration safety, i18n (ar/en) parity, missing auth guards.'
