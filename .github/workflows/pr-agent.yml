@@ -13,8 +13,8 @@ name: PR Agent (z.ai GLM review)
 
 on:
   pull_request:
-    branches: [staging]
-    types: [opened, synchronize]
+    branches: [staging, main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
