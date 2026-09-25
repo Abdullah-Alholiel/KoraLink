@@ -73,6 +73,9 @@ function mockReturn(value: Partial<Record<string, unknown>>) {
     isConnected: false,
     sendMessage: { mutate: vi.fn(), isPending: false, isError: false },
     retryMessage: vi.fn(),
+    // P2-99 (run #74): typing surface consumed by ChatSheet.
+    typingUserIds: new Set<string>(),
+    emitTyping: vi.fn(),
     ...value,
   });
 }

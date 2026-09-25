@@ -31,12 +31,14 @@ const EXEMPT_EVENTS = new Set(['leave-conversation']);
 /** Full expected handler set — update this pin when handlers change. */
 const EXPECTED_EVENTS = [
   'join-lobby',
+  'leave-lobby',
   'send-message',
   'join-conversation',
   'mark-read',
   'mark-chat-read',
   'send-dm',
   'leave-conversation',
+  'typing',
 ];
 
 interface HandlerChunk {

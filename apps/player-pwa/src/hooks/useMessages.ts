@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
+import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
-import { createLobbySocket } from '@/lib/socket';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
@@ -159,13 +158,27 @@ const CHAT_PAGE_SIZE = 50;
 export function useMatchChat(matchId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
+  const rt = getRealtime();
+  // P2-99 (run #75 lint fix): the typing own-echo filter and the socket
+  // effect's deps array both need the raw id — it must live in COMPONENT
+  // scope because the deps array is an argument to useEffect(), evaluated
+  // in the component body, not inside the effect closure.
+  const currentUserId = currentUser?.id;
   const [localMessages, setLocalMessages] = useState<MatchMessage[]>([]);
   const [olderMessages, setOlderMessages] = useState<MatchMessage[]>([]);
   const [olderExhausted, setOlderExhausted] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Typing indicator (P2-99, run #74) ─────────────────────────────────────
+  // userIds currently typing in this lobby; 4s TTL per signal (server relays
+  // the typer's userId only — names resolve from the merged message view).
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastTypingSentRef = useRef(0);
+  const TYPING_EMIT_INTERVAL_MS = 3_000;
+  const TYPING_EXPIRE_MS = 4_000;
 
   // REST history query — probes PAGE+1 to detect hasMore in one request.
   const historyQuery = useQuery<MatchMessage[], FetchError>({
@@ -256,33 +269,83 @@ export function useMatchChat(matchId: string | null) {
     [queryClient, matchId],
   );
 
-  // Socket.IO subscription (real-time)
+  // Socket.IO subscription (real-time) — shared client (Slice 2).
   useEffect(() => {
     if (!matchId) return;
     const ackTimers = ackTimersRef.current;
+    // P2-99 (run #75 lint fix): captured per-effect-run so the cleanup and the
+    // deps array can reference them — `typingTimers` is the SAME Map instance
+    // as typingTimersRef.current (ref identity never changes). currentUserId
+    // lives in component scope; including it re-subscribes the socket on
+    // identity change, keeping the own-echo filter correct
+    // (react-hooks/exhaustive-deps).
+    const typingTimers = typingTimersRef.current;
 
-    const socket: Socket = createLobbySocket(5);
+    rt.connect();
+    rt.joinRoom('match', matchId);
 
-    socket.on('connect', () => {
+    const onConnect = () => {
       setIsConnected(true);
-      socketRef.current = socket;
-      socket.emit('join-lobby', { matchId });
-    });
+    };
+    const onDisconnect = () => setIsConnected(false);
+    const onNewMessage = (payload: unknown) => {
+      reconcile(payload as MatchMessage);
+    };
 
-    socket.on('disconnect', () => setIsConnected(false));
+    const offs = [
+      rt.on('connect', onConnect),
+      rt.on('disconnect', onDisconnect),
+      rt.on('new-message', onNewMessage),
+    ];
 
-    socket.on('new-message', (message: MatchMessage) => {
-      reconcile(message);
-    });
+    // The room may already be joined-and-connected (another consumer, or a
+    // remount over a live singleton): surface the connected state now — the
+    // 'connect' event has already fired for this generation.
+    if (rt.isConnected()) setIsConnected(true);
+
+    // P2-99: a peer's typing signal — (re)arm their 4s expiry timer.
+    const onTyping = (payload: { userId?: string }) => {
+      const userId = payload?.userId;
+      if (!userId || userId === currentUserId) return;
+      setTypingUserIds((prev) => {
+        if (prev.has(userId)) return prev;
+        const next = new Set(prev);
+        next.add(userId);
+        return next;
+      });
+      const existing = typingTimers.get(userId);
+      if (existing) clearTimeout(existing);
+      typingTimers.set(
+        userId,
+        setTimeout(() => {
+          typingTimers.delete(userId);
+          setTypingUserIds((prev) => {
+            if (!prev.has(userId)) return prev;
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }, TYPING_EXPIRE_MS),
+      );
+    };
+    offs.push(rt.on('typing', onTyping));
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      offs.forEach((off) => off());
+      rt.leaveRoom('match', matchId);
+      rt.disconnect();
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
+      // P2-99: clear all typing expiry timers + state on unmount/switch.
+      // `typingTimers` is the SAME Map instance as typingTimersRef.current —
+      // the captured alias satisfies react-hooks/exhaustive-deps (run #75)
+      // with identical behavior.
+      for (const t of typingTimers.values()) clearTimeout(t);
+      typingTimers.clear();
+      setTypingUserIds(new Set());
     };
-  }, [matchId, reconcile]);
+  }, [matchId, reconcile, rt, currentUserId]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark
@@ -291,8 +354,8 @@ export function useMatchChat(matchId: string | null) {
   const markChatRead = useCallback(
     () => {
       if (!matchId) return;
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('mark-chat-read', { matchId });
+      if (rt.isConnected()) {
+        rt.emit('mark-chat-read', { matchId });
         return;
       }
       // Socket down → REST fallback (same guard chain server-side).
@@ -303,7 +366,7 @@ export function useMatchChat(matchId: string | null) {
         // Best-effort: a missed watermark only leaves a stale badge.
       });
     },
-    [matchId],
+    [matchId, rt],
   );
 
   useEffect(() => {
@@ -342,8 +405,8 @@ export function useMatchChat(matchId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('send-message', { matchId, content, clientMessageId });
+      if (rt.isConnected()) {
+        rt.emit('send-message', { matchId, content, clientMessageId });
         // Authoritative message arrives via the `new-message` echo.
         return undefined;
       }
@@ -421,6 +484,19 @@ export function useMatchChat(matchId: string | null) {
     [sendMessage],
   );
 
+  // ── Typing emitter (P2-99) ────────────────────────────────────────────────
+  // Throttled: at most one WS emit per TYPING_EMIT_INTERVAL_MS while the user
+  // keeps typing. The server relays to everyone except the typer; receivers
+  // expire the signal after TYPING_EXPIRE_MS of silence. WS-only: typing is
+  // ephemeral presence — no REST fallback, silently dropped when offline.
+  const emitTyping = useCallback(() => {
+    if (!rt.isConnected() || !matchId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_EMIT_INTERVAL_MS) return;
+    lastTypingSentRef.current = now;
+    rt.emit('typing', { matchId });
+  }, [matchId, rt]);
+
   // P1-3: merged view = paged older history + authoritative newest window +
   // locally-appended (optimistic/real-time) messages.
   const messages = mergeMessages([...olderMessages, ...history], localMessages);
@@ -452,5 +528,8 @@ export function useMatchChat(matchId: string | null) {
     hasMore,
     isLoadingOlder,
     loadOlder,
+    // P2-99 typing surface
+    typingUserIds,
+    emitTyping,
   };
 }

@@ -906,7 +906,11 @@
     "sendPlaceholder": "Type a message...",
     "sendError": "Failed to send. Tap to retry.",
     "comingSoon": "Chat coming soon",
-    "loadOlder": "Load earlier messages"
+    "loadOlder": "Load earlier messages",
+    "typingOne": "{} is typing…",
+    "typingTwo": "{} and {} are typing…",
+    "typingMany": "Several players are typing…",
+    "typingPlayer": "Player"
   },
   "pom": {
     "title": "Player of the Match",

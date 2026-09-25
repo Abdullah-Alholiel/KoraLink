@@ -7,8 +7,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client';
-import { createLobbySocket } from '@/lib/socket';
+import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import type { Match } from '@/types';
 import {
@@ -175,23 +174,31 @@ export function useMatch(id: string, currentUserId?: string) {
   useEffect(() => {
     if (!id) return;
 
-    const socket: Socket = createLobbySocket(5);
-
-    socket.on('connect', () => {
-      socket.emit('join-lobby', { matchId: id });
-    });
+    // Shared realtime client (Slice 2): ONE app-wide socket, ref-counted
+    // rooms. Join while mounted, leave on unmount so the server's
+    // "currently viewing" semantics for chat-notify stay exact.
+    const rt = getRealtime();
+    rt.connect();
+    rt.joinRoom('match', id);
 
     const refreshMatchData = () => {
       queryClient.invalidateQueries({ queryKey: ['match', id] });
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      // F4: mark the paged discovery feed stale WITHOUT refetching it here —
+      // one roster join used to refetch every loaded page (up to 10×50) even
+      // though the user is on the detail screen. Play refetches on mount.
+      queryClient.invalidateQueries({ queryKey: ['matches'], refetchType: 'none' });
     };
 
-    socket.on('status-update', refreshMatchData);
-    socket.on('roster-update', refreshMatchData);
-    socket.on('pom-decided', refreshMatchData);
+    const offs = [
+      rt.on('status-update', refreshMatchData),
+      rt.on('roster-update', refreshMatchData),
+      rt.on('pom-decided', refreshMatchData),
+    ];
 
     return () => {
-      socket.disconnect();
+      offs.forEach((off) => off());
+      rt.leaveRoom('match', id);
+      rt.disconnect();
     };
   }, [id, queryClient]);
 

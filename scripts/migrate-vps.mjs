@@ -4,6 +4,10 @@
 // - Reads DATABASE_URL from apps/api/.env itself (never sourced into the shell).
 // - Applies apps/api/drizzle/<NNNN_*.sql> in lexicographic order, skipping anything whose
 //   sha256 is already journaled in drizzle.__drizzle_migrations (runbook convention).
+// - ATOMIC PER FILE (P2-98, run #71): statements + the journal insert share ONE transaction
+//   (sql.begin) — a mid-file failure rolls back EVERYTHING and journals nothing, so a re-run
+//   never re-applies a partially-applied file's DML. Duplicate-DDL tolerance (P2-80) is
+//   SAVEPOINT-scoped so a tolerated error leaves the transaction usable.
 // - SAFETY: a pending file that sorts BEFORE the highest journaled 4-digit index is a
 //   journal GAP (the 0018-trap class) — it is NOT applied; the script exits 5 for a human.
 // - Idempotent: a second run with no new files performs zero writes.
@@ -90,6 +94,7 @@ try {
   }
 
   let applied = 0;
+  let failed = null;
   for (const f of pending) {
     const content = fs.readFileSync(path.join(DRIZZLE_DIR, f), 'utf8');
     const hash = sha256(content);
@@ -104,26 +109,46 @@ try {
     });
     const statements = codeLines.join('\n')
       .split('--> statement-breakpoint').map((s) => s.trim()).filter(Boolean);
-    let ok = true;
-    for (const stmt of statements) {
-      try {
-        await sql.unsafe(stmt);
-      } catch (e) {
-        // P2-80 (run #63): tolerate by message ONLY when the error carries no
-        // SQLSTATE (wrapped/proxy error paths). A coded data-level failure
-        // (23505 unique_violation etc.) must FAIL LOUD even when its message
-        // happens to contain "already exists" (custom trigger/RAISE wording).
-        if (DUP_CODES.has(e.code) || (!e.code && /already exists/i.test(e.message ?? ''))) {
-          console.log(`    = ${f}: statement tolerated (already exists)`);
-          continue;
+    // P2-98 (run #71, Reviewer A): each migration file is ONE transaction —
+    // statements + the journal insert commit or roll back TOGETHER. A mid-file
+    // failure previously left earlier statements applied with NO journal row,
+    // so a re-run re-executed them (harmless for DDL via the tolerance list,
+    // but a non-idempotent DML file was re-applied). sql.begin + per-statement
+    // SAVEPOINTs: a tolerated duplicate-DDL error (P2-80 semantics) rolls back
+    // only its savepoint, so the tx stays usable and the loop can continue.
+    try {
+      await sql.begin(async (tx) => {
+        for (const stmt of statements) {
+          try {
+            await tx.savepoint(async (sp) => {
+              await sp.unsafe(stmt);
+            });
+          } catch (e) {
+            // P2-80 (run #63): tolerate by message ONLY when the error carries no
+            // SQLSTATE (wrapped/proxy error paths). A coded data-level failure
+            // (23505 unique_violation etc.) must FAIL LOUD even when its message
+            // happens to contain "already exists" (custom trigger/RAISE wording).
+            if (DUP_CODES.has(e.code) || (!e.code && /already exists/i.test(e.message ?? ''))) {
+              console.log(`    = ${f}: statement tolerated (already exists)`);
+              continue;
+            }
+            console.error(`migrate-vps: FAILED in ${f} (transaction rolled back, nothing journaled):\n---\n${stmt.slice(0, 400)}\n---\n${e.message}`);
+            failed = f;
+            throw new Error('migrate-vps: rollback sentinel');
+          }
         }
-        console.error(`migrate-vps: FAILED in ${f}:\n---\n${stmt.slice(0, 400)}\n---\n${e.message}`);
-        ok = false;
-        break;
+        // Journal insert INSIDE the tx: apply+journal is atomic.
+        await tx.unsafe(`INSERT INTO ${t.fq} (hash, created_at) VALUES ($1, $2)`, [hash, Date.now()]);
+      });
+    } catch (e) {
+      if (failed === f) {
+        // Our own sentinel — the file rolled back cleanly; stop before applying
+        // anything newer out of order.
+        process.exit(5);
       }
+      // Not ours (connection loss, etc.) — rethrow for the outer handler.
+      throw e;
     }
-    if (!ok) process.exit(5);
-    await sql.unsafe(`INSERT INTO ${t.fq} (hash, created_at) VALUES ($1, $2)`, [hash, Date.now()]);
     applied += 1;
     console.log(`  applied ${f}`);
   }

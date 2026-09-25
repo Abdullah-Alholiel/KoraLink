@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import NotificationProvider from '@/providers/NotificationProvider';
-import { createLobbySocket } from '@/lib/socket';
+import { getRealtime } from '@/lib/realtime';
 import { useAppStore } from '@/store/useAppStore';
 
 /**
@@ -11,16 +11,13 @@ import { useAppStore } from '@/store/useAppStore';
  * session singleton. The old effect listed `pathname` in its deps, so EVERY
  * route change disconnected + re-handshaked (JWT verify + users-row SELECT)
  * and dropped notification events mid-navigation.
+ *
+ * Slice 2: the provider now attaches to the shared RealtimeClient, so the
+ * regression asserts on TRANSPORT CREATIONS (socket factory invocations) —
+ * navigation must never create a new one.
  */
 vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/en/play'),
-}));
-
-vi.mock('@/lib/socket', () => ({
-  createLobbySocket: vi.fn(() => ({
-    on: vi.fn(),
-    disconnect: vi.fn(),
-  })),
 }));
 
 vi.mock('next-intl', () => ({
@@ -44,8 +41,22 @@ const wrapper = (queryClient: QueryClient) => {
 };
 
 describe('NotificationProvider — socket lifetime (F3)', () => {
+  let creations: number;
+
   beforeEach(() => {
-    vi.mocked(createLobbySocket).mockClear();
+    creations = 0;
+    const rt = getRealtime();
+    rt.teardown();
+    rt.setSocketFactory(() => {
+      creations += 1;
+      return {
+        on: vi.fn(),
+        onAny: vi.fn(),
+        emit: vi.fn(),
+        disconnect: vi.fn(),
+        connected: true,
+      } as never;
+    });
     pathMock.mockReturnValue('/en/play');
     useAppStore.setState({
       isAuthenticated: true,
@@ -54,23 +65,23 @@ describe('NotificationProvider — socket lifetime (F3)', () => {
         fullName: 'Me',
         handle: 'me',
         avatarUrl: '',
-        phone: '+966****0001',
+        phone: '+9665' + '0'.repeat(7) + '1',
       } as never,
     });
   });
 
-  it('creates exactly ONE socket across navigation (pathname never re-subscribes)', () => {
+  it('creates exactly ONE transport across navigation (pathname never re-subscribes)', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
 
-    const { rerender } = render(
+    const { rerender, unmount } = render(
       <NotificationProvider>
         <div />
       </NotificationProvider>,
       { wrapper: wrapper(queryClient) },
     );
-    expect(createLobbySocket).toHaveBeenCalledTimes(1);
+    expect(creations).toBe(1);
 
     // Simulate navigating: feed → messages thread → match detail.
     pathMock.mockReturnValue('/en/messages/conv-1');
@@ -87,6 +98,7 @@ describe('NotificationProvider — socket lifetime (F3)', () => {
     );
 
     // The regression would see 3. One connection is the contract.
-    expect(createLobbySocket).toHaveBeenCalledTimes(1);
+    expect(creations).toBe(1);
+    unmount();
   });
 });

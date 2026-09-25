@@ -6,7 +6,13 @@ import type { PomResult } from '@/hooks/usePom';
 
 // The component opens a lobby socket on mount — never dial for real.
 vi.mock('socket.io-client', () => ({
-  io: () => ({ on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() }),
+  io: () => ({
+    on: vi.fn(),
+    onAny: vi.fn(),
+    emit: vi.fn(),
+    disconnect: vi.fn(),
+    connected: true,
+  }),
 }));
 
 vi.mock('@/env.mjs', () => ({

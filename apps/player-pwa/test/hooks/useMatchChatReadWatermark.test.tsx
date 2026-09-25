@@ -21,15 +21,17 @@ vi.mock('@/lib/fetcher', () => ({
 }));
 
 /**
- * Controllable lobby-socket stub: the test fires the `connect` handler and
- * asserts on emits — mirroring how useMatchChat drives the real socket.
- * `connected` mirrors the real Socket property the hook consults when
- * choosing WS vs REST.
+ * Controllable lobby-socket stub: injected through the RealtimeClient
+ * `setSocketFactory` seam (Slice 2). The test fires the `connect` handler
+ * and asserts on emits — mirroring how useMatchChat drives the shared
+ * realtime client. `connected` mirrors the real Socket property the hook
+ * consults when choosing WS vs REST.
  */
 type Handler = (...args: unknown[]) => void;
 type StubSocket = {
   connected: boolean;
   on: (event: string, handler: Handler) => void;
+  onAny: (handler: Handler) => void;
   emit: (...args: unknown[]) => void;
   disconnect: () => void;
 };
@@ -40,6 +42,10 @@ const stubSocket: StubSocket = {
     list.push(handler);
     mockHandlers.set(event, list);
   },
+  onAny() {
+    // RealtimeClient routes server events through onAny; the tests here
+    // only exercise emits + the connect lifecycle, so nothing to record.
+  },
   emit: (...args) => mockEmit(...args),
   disconnect: () => mockDisconnect(),
 };
@@ -47,9 +53,7 @@ const mockHandlers = new Map<string, Handler[]>();
 const mockEmit = vi.fn();
 const mockDisconnect = vi.fn();
 
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => stubSocket),
-}));
+import { getRealtime } from '@/lib/realtime';
 
 vi.mock('@/store/useAppStore', () => {
   const selectUser = (s: { user?: { id: string } }) => s.user;
@@ -86,6 +90,11 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
     vi.clearAllMocks();
     mockHandlers.clear();
     mockFetcher.mockResolvedValue([]);
+    // Fresh singleton per test; inject the controllable stub transport.
+    const rt = getRealtime();
+    rt.teardown();
+    rt.setSocketFactory(() => stubSocket as never);
+    (stubSocket as { connected: boolean }).connected = false;
   });
 
   it('MW-1: fresh sheet open marks read via REST (socket not yet connected)', async () => {
@@ -109,8 +118,13 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
     expect(mockEmit).not.toHaveBeenCalledWith('mark-chat-read', expect.anything());
   });
 
-  it('MW-2: unseen messages after connect mark read via the WS emit', async () => {
-    stubSocket.connected = true; // connected session (socketRef set on connect)
+  it('MW-2: open (socket already connected) marks read via the WS emit, not REST', async () => {
+    // Slice 2: the shared client can genuinely be CONNECTED when the sheet
+    // opens (another consumer kept it alive) — impossible with the old
+    // per-hook socket, whose handshake was always pending at open. The
+    // contract is the watermark write happens once, via the available
+    // channel: WS here, REST only when the socket is down (MW-1).
+    stubSocket.connected = true;
     mockFetcher.mockImplementation((url: string) => {
       if (url === '/matches/m1/messages?limit=51') {
         return Promise.resolve([
@@ -134,10 +148,8 @@ describe('useMatchChat read watermark (P2-58, run #50)', () => {
     await waitFor(() => {
       expect(mockEmit).toHaveBeenCalledWith('mark-chat-read', { matchId: 'm1' });
     });
-    // Contract: open-mark fires via REST immediately (the socket cannot be
-    // connected yet at open time), and the unseen batch marks via WS once
-    // connected — both writes happen, both are idempotent watermark writes.
-    expect(mockFetcher).toHaveBeenCalledWith(
+    // WS was available at open — the REST read path must not be used.
+    expect(mockFetcher).not.toHaveBeenCalledWith(
       '/matches/m1/messages/read',
       expect.objectContaining({ method: 'POST' }),
     );

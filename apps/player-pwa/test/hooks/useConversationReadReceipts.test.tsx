@@ -4,16 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useConversationMessages } from '@/hooks/useConversations';
 import { useAppStore } from '@/store/useAppStore';
-import { fetcher } from '@/lib/fetcher';
-import { createLobbySocket } from '@/lib/socket';
+import { fetcher, FetchError } from '@/lib/fetcher';
+import { getRealtime } from '@/lib/realtime';
 
 vi.mock('@/lib/fetcher', () => ({
   fetcher: vi.fn(),
   FetchError: class FetchError extends Error {},
-}));
-
-vi.mock('@/lib/socket', () => ({
-  createLobbySocket: vi.fn(),
 }));
 
 vi.mock('@/providers/ObservabilityProvider', () => ({
@@ -22,16 +18,17 @@ vi.mock('@/providers/ObservabilityProvider', () => ({
   addBreadcrumb: vi.fn(),
 }));
 
-// Minimal socket double: records emissions, replays registered handlers.
+// Minimal transport double injected through the RealtimeClient seam
+// (Slice 2). Server events are fired through the onAny bridge — the same
+// path the real socket.io-client transport uses.
 function makeSocketStub() {
-  const handlers = new Map<string, (payload: unknown) => void>();
   const emitted: { event: string; payload: unknown }[] = [];
+  let onAnyCb: ((event: string, ...args: unknown[]) => void) | null = null;
   const socket = {
     connected: true,
-    on: vi.fn((event: string, cb: (payload: unknown) => void) => {
-      handlers.set(event, cb);
-      // Simulate an already-open connection: 'connect' fires on registration.
-      if (event === 'connect') cb(undefined);
+    on: vi.fn(),
+    onAny: vi.fn((cb: (event: string, ...args: unknown[]) => void) => {
+      onAnyCb = cb;
     }),
     emit: vi.fn((event: string, payload?: unknown) => {
       emitted.push({ event, payload });
@@ -39,10 +36,14 @@ function makeSocketStub() {
     disconnect: vi.fn(() => {
       socket.connected = false;
     }),
-    __emitToSelf: (event: string, payload: unknown) => handlers.get(event)?.(payload),
+    __fireServerEvent: (event: string, payload: unknown) =>
+      onAnyCb?.(event, payload),
   };
-  return { socket, emitted, handlers };
+  return { socket, emitted };
 }
+
+type SocketStub = ReturnType<typeof makeSocketStub>;
+let sock: SocketStub;
 
 const OTHER_MESSAGE = {
   id: 'msg-from-other',
@@ -93,13 +94,13 @@ function seedCaches(queryClient: QueryClient) {
 }
 
 describe('useConversationMessages — read receipts (seen state)', () => {
-  let sock: ReturnType<typeof makeSocketStub>;
-
   beforeEach(() => {
     vi.mocked(fetcher).mockReset();
-    vi.mocked(createLobbySocket).mockReset();
+    // Fresh singleton per test; inject the controllable stub transport.
+    const rt = getRealtime();
+    rt.teardown();
     sock = makeSocketStub();
-    vi.mocked(createLobbySocket).mockReturnValue(sock.socket as never);
+    rt.setSocketFactory(() => sock.socket as never);
     // The read-receipt guard keys off the current user's id.
     useAppStore.setState({
       user: {
@@ -127,7 +128,7 @@ describe('useConversationMessages — read receipts (seen state)', () => {
 
     // The other user sends a message while the thread is open.
     act(() => {
-      sock.handlers.get('new-dm')?.(OTHER_MESSAGE);
+      sock.socket.__fireServerEvent('new-dm', OTHER_MESSAGE);
     });
 
     await waitFor(() => {
@@ -160,7 +161,7 @@ describe('useConversationMessages — read receipts (seen state)', () => {
     const { unmount } = renderHook(() => useConversationMessages('conv-1'), {
       wrapper: wrapper(queryClient),
     });
-    await waitFor(() => expect(createLobbySocket).toHaveBeenCalled());
+    await waitFor(() => expect(getRealtime().isConnected()).toBe(true));
 
     unmount();
 
@@ -190,11 +191,11 @@ describe('useConversationMessages — read receipts (seen state)', () => {
       () => useConversationMessages('conv-1'),
       { wrapper: wrapper(queryClient) },
     );
-    await waitFor(() => expect(createLobbySocket).toHaveBeenCalled());
+    await waitFor(() => expect(getRealtime().isConnected()).toBe(true));
 
     // My OWN message echoing back must not trigger read marking.
     act(() => {
-      sock.handlers.get('new-dm')?.({
+      sock.socket.__fireServerEvent('new-dm', {
         ...OTHER_MESSAGE,
         id: 'mine-1',
         sender: { id: 'user-me', fullName: 'Me', handle: 'me', avatarUrl: '' },
