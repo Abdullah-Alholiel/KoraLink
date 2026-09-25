@@ -80,7 +80,33 @@ describe('CSP script-src shape (P2-42 tripwire, pins next.config.mjs)', () => {
   });
 
   it('style-src still allows inline styles (deliberate, unchanged)', () => {
-    expect(source).toContain("\"style-src 'self' 'unsafe-inline' https://api.mapbox.com\"");
+    // P2-42 final (run #73): mapbox dropped; inline styles stay.
+    expect(source).toContain("\"style-src 'self' 'unsafe-inline'\"");
+    expect(source).not.toContain("\"style-src 'self' 'unsafe-inline' https://api.mapbox.com\"");
+  });
+
+  it('style-src and img-src drop the dead mapbox entries (run #73)', () => {
+    expect(source).toContain("\"img-src 'self' data: blob:\"");
+    expect(source).not.toContain('*.mapbox.com');
+  });
+
+  it('connect-src drops the dead mapbox hosts (run #73)', () => {
+    const connectStart = source.indexOf('const connectSrc = [');
+    const connectEnd = source.indexOf("].join(' ');", connectStart + 20);
+    const connectBlock = source.slice(connectStart, connectEnd);
+    expect(connectBlock).not.toContain('api.mapbox.com');
+    expect(connectBlock).not.toContain('events.mapbox.com');
+  });
+
+  it('connect-src allows cleartext ws: in DEV only — prod is wss:-only (run #73)', () => {
+    const connectStart = source.indexOf('const connectSrc = [');
+    const connectEnd = source.indexOf("].join(' ');", connectStart + 20);
+    const connectBlock = source.slice(connectStart, connectEnd);
+    expect(connectBlock).toContain("'wss:'");
+    // The only ws: occurrence must be the isDev-conditional spread.
+    const wsMatches = connectBlock.match(/'ws:'/g) ?? [];
+    expect(wsMatches.length).toBe(1);
+    expect(connectBlock).toContain("...(isDev ? ['ws:'] : []),");
   });
 
   it('CSP header stays wired into headers() with the strict script-src', () => {

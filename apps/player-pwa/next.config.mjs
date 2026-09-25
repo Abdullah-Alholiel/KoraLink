@@ -243,14 +243,17 @@ const nextConfig = {
         ].join(' ');
     const connectSrc = [
       "'self'",
-      'https://api.mapbox.com',
-      'https://events.mapbox.com',
+      // P2-42 final (run #73): mapbox connect/style/img entries DROPPED — the
+      // script-src cleanup (run #72) proved zero mapbox/moyasar code or deps
+      // ship in the PWA, so no request these allowances enabled can occur.
       'https://*.ingest.sentry.io',
       'https://*.ingest.de.sentry.io',
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
-      'ws:',
+      // WS: prod allows ONLY wss: (cleartext ws: is dev-only — the API origin
+      // is https in every deployed environment, so wss: covers it).
+      ...(isDev ? ['ws:'] : []),
       'wss:',
       // doop design-sync: POSTs DOM captures to the internal design canvas
       'https://aa.tail2948f9.ts.net:9460',
@@ -281,8 +284,11 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               `script-src ${scriptSrc}`,
-              "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
-              "img-src 'self' data: blob: https://*.mapbox.com",
+              // P2-42 final (run #73): style-src/img-src mapbox entries DROPPED
+              // (dead — zero mapbox code/deps; evidence in the connectSrc block
+              // comment above). inline styles stay (Tailwind runtime styles).
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
               `connect-src ${connectSrc}`,
               "worker-src 'self' blob:",
               "font-src 'self' data:",
