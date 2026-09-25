@@ -1,28 +1,20 @@
 # PR review first-pass (pr-review-automation spec, slice S1).
 # LLM review is advisory; deterministic security lives in semgrep.yml.
 #
-# Proven-working configuration (PR #28 run 2026-09-23 19:18Z posted a real GLM review;
-# 19:35Z run proved full-length inference 2m51s — a pydantic YAML flake, not config):
-#   - Docker CLI (qodo-ai/pr-agent@main action drifted; docker CLI is stable)
-#   - secrets via -e argv — env-file variants FAILED twice (token binding lost twice);
-#     argv on ephemeral GH runners is an accepted tradeoff, flagged by the bot's own review
-#   - model/fallback/max-tokens/instructions via --config.* CLI args
-#     (PR_AGENT__CONFIG__* env overrides are NOT honored by the docker CLI)
-#   - image pinned by digest; bump digest intentionally when upgrading
-#   - workflow_dispatch(pr_url) available for manual re-review; webhook delivery
-#     proved flaky twice on this repo (missing runs for pushed SHAs)
+# Design notes (S3 demo iterations, 2026-09-23):
+#   - qodo-ai/pr-agent@main drifted (ran /describe; action.yml lost `commands`) → Docker CLI instead.
+#   - Repo .pr_agent.toml is read from the DEFAULT branch (main = release-only, no toml) and the
+#     container can't see the workspace anyway → all config passed as CLI --section.key args.
+#   - PR_AGENT__CONFIG__* env overrides are NOT honored by the docker CLI (verified in run logs).
+#   - Secrets go through --env-file, never argv (bot's own review finding #3 on PR #28).
+#   - Image pinned by digest (bot's finding #1). Bump digest intentionally when upgrading.
 
 name: PR Agent (z.ai GLM review)
 
 on:
   pull_request:
-    branches: [staging]
+    branches: [staging, main]
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
-    inputs:
-      pr_url:
-        description: 'Full PR URL to review (e.g. https://github.com/OWNER/REPO/pull/28)'
-        required: true
 
 permissions:
   contents: read
@@ -34,28 +26,27 @@ jobs:
     if: ${{ github.event.sender.type != 'Bot' }}
     runs-on: ubuntu-latest
     steps:
-      - name: PR-Agent /review (Docker CLI, pinned image)
+      - name: PR-Agent /review (Docker CLI, pinned image, env-file secrets)
         run: |
-          docker run --rm \
-            -e PR_AGENT__OPENAI__KEY="$ZAI_KEY" \
-            -e PR_AGENT__OPENAI__API_BASE="$ZAI_BASE" \
-            -e PR_AGENT__GITHUB__USER_TOKEN="$GH_PAT" \
-            -e GITHUB.USER_TOKEN="$GH_PAT" \
+          set -euo pipefail
+          printf 'PR_AGENT__OPENAI__KEY=%s\nPR_AGENT__OPENAI__API_BASE=%s\nPR_AGENT__GITHUB__USER_TOKEN=%s\nGITHUB.USER_TOKEN=%s\nOPENAI.KEY=%s\nOPENAI.API_BASE=%s\nOPENAI_API_KEY=%s\nOPENAI_API_BASE=%s\n' \
+            "$ZAI_KEY" "$ZAI_BASE" "$GH_PAT" "$GH_PAT" "$ZAI_KEY" "$ZAI_BASE" "$ZAI_KEY" "$ZAI_BASE" > /tmp/pa.env
+          grep -q '^PR_AGENT__OPENAI__KEY=.' /tmp/pa.env || { echo 'env-file incomplete' >&2; exit 1; }
+          grep -q '^PR_AGENT__GITHUB__USER_TOKEN=.' /tmp/pa.env || { echo 'env-file missing token' >&2; exit 1; }
+          docker run --rm --env-file /tmp/pa.env \
             -e GITHUB_TOKEN="$GH_PAT" \
-            -e OPENAI.KEY="$ZAI_KEY" \
-            -e OPENAI.API_BASE="$ZAI_BASE" \
-            -e OPENAI_API_KEY="$ZAI_KEY" \
-            -e OPENAI_API_BASE="$ZAI_BASE" \
             codiumai/pr-agent@sha256:a5741a479f21d20a9bbeca7847a720f92ac6f427e8dc0920fefa039ecafd5e6f \
             --pr_url="$PR_URL" review \
             --config.model='openai/glm-5.3-flash' \
             --config.fallback_models='["openai/glm-5.3-flash"]' \
             --config.custom_model_max_tokens=32000 \
+            --config.ai_timeout=600 \
             --config.response_language='en' \
             --pr_reviewer.num_max_findings=5 \
             --pr_reviewer.extra_instructions='You are reviewing a KoraLink PR (NestJS+Drizzle API, Next.js PWA/Admin). Output AT MOST 5 findings, each exactly one line: SEVERITY(CRITICAL|IMPORTANT|MINOR): file:line - one-sentence issue. Order CRITICAL first. No praise, no summaries, no restating the diff. Check: tenant isolation, unguarded mutations, eq(col,null), ::uuid casts, hydration safety, i18n (ar/en) parity, missing auth guards.'
+          rm -f /tmp/pa.env
         env:
           ZAI_KEY: ${{ secrets.ZAI_PR_REVIEW_KEY }}
           ZAI_BASE: https://api.z.ai/api/coding/paas/v4
           GH_PAT: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url || github.event.inputs.pr_url }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
