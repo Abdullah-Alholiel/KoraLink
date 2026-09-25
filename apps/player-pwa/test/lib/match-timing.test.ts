@@ -56,9 +56,9 @@ describe('match-timing', () => {
     // 2026-09-18 "Ladies Night" regression: the former clock clause made an
     // 'open' match past kick-off read as started. Status is DB-truth — only
     // the host's Start action writes in_progress.
-    expect(matchHasStarted({ status: 'open', scheduledAt })).toBe(false);
-    expect(matchHasStarted({ status: 'full', scheduledAt })).toBe(false);
-    expect(matchHasStarted({ status: 'in_progress', scheduledAt })).toBe(true);
+    expect(matchHasStarted({ status: 'open' })).toBe(false);
+    expect(matchHasStarted({ status: 'full' })).toBe(false);
+    expect(matchHasStarted({ status: 'in_progress' })).toBe(true);
   });
 
   it('matchHasEnded flips at scheduled end', () => {

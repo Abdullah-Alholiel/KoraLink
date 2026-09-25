@@ -10,25 +10,16 @@
 import { describe, expect, it } from 'vitest';
 import { matchHasStarted, matchHasEnded } from './match-timing';
 
-const TEN_MIN_AGO = new Date(Date.now() - 10 * 60_000).toISOString();
-const IN_TEN_MIN = new Date(Date.now() + 10 * 60_000).toISOString();
-
 describe('matchHasStarted — status-only truth', () => {
-  it('is false for an Open match whose kick-off has passed (the bug)', () => {
-    expect(matchHasStarted({ status: 'open', scheduledAt: TEN_MIN_AGO })).toBe(false);
-  });
-
-  it('is false for a Full match whose kick-off has passed (host never pressed Start)', () => {
-    expect(matchHasStarted({ status: 'full', scheduledAt: TEN_MIN_AGO })).toBe(false);
+  it('is false when the host never pressed Start — even past kick-off (the bug)', () => {
+    // Timestamps are intentionally absent: kick-off time is no longer part
+    // of the contract at all (PR-Agent finding, PR #31).
+    expect(matchHasStarted({ status: 'open' })).toBe(false);
+    expect(matchHasStarted({ status: 'full' })).toBe(false);
   });
 
   it('is true exactly when the DB status is in_progress', () => {
-    expect(matchHasStarted({ status: 'in_progress', scheduledAt: IN_TEN_MIN })).toBe(true);
-    expect(matchHasStarted({ status: 'in_progress', scheduledAt: TEN_MIN_AGO })).toBe(true);
-  });
-
-  it('is false for future, non-started matches', () => {
-    expect(matchHasStarted({ status: 'open', scheduledAt: IN_TEN_MIN })).toBe(false);
+    expect(matchHasStarted({ status: 'in_progress' })).toBe(true);
   });
 });
 
