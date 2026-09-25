@@ -159,6 +159,11 @@ const CHAT_PAGE_SIZE = 50;
 export function useMatchChat(matchId: string | null) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
+  // P2-99 (run #75 lint fix): the typing own-echo filter and the socket
+  // effect's deps array both need the raw id — it must live in COMPONENT
+  // scope because the deps array is an argument to useEffect(), evaluated
+  // in the component body, not inside the effect closure.
+  const currentUserId = currentUser?.id;
   const [localMessages, setLocalMessages] = useState<MatchMessage[]>([]);
   const [olderMessages, setOlderMessages] = useState<MatchMessage[]>([]);
   const [olderExhausted, setOlderExhausted] = useState(false);
@@ -269,6 +274,13 @@ export function useMatchChat(matchId: string | null) {
   useEffect(() => {
     if (!matchId) return;
     const ackTimers = ackTimersRef.current;
+    // P2-99 (run #75 lint fix): captured per-effect-run so the cleanup and the
+    // deps array can reference them — `typingTimers` is the SAME Map instance
+    // as typingTimersRef.current (ref identity never changes). currentUserId
+    // lives in component scope; including it re-subscribes the socket on
+    // identity change, keeping the own-echo filter correct
+    // (react-hooks/exhaustive-deps).
+    const typingTimers = typingTimersRef.current;
 
     const socket: Socket = createLobbySocket(5);
 
@@ -287,20 +299,19 @@ export function useMatchChat(matchId: string | null) {
     // P2-99: a peer's typing signal — (re)arm their 4s expiry timer.
     socket.on('typing', (payload: { userId?: string }) => {
       const userId = payload?.userId;
-      if (!userId || userId === currentUser?.id) return;
+      if (!userId || userId === currentUserId) return;
       setTypingUserIds((prev) => {
         if (prev.has(userId)) return prev;
         const next = new Set(prev);
         next.add(userId);
         return next;
       });
-      const timers = typingTimersRef.current;
-      const existing = timers.get(userId);
+      const existing = typingTimers.get(userId);
       if (existing) clearTimeout(existing);
-      timers.set(
+      typingTimers.set(
         userId,
         setTimeout(() => {
-          timers.delete(userId);
+          typingTimers.delete(userId);
           setTypingUserIds((prev) => {
             if (!prev.has(userId)) return prev;
             const next = new Set(prev);
@@ -318,11 +329,14 @@ export function useMatchChat(matchId: string | null) {
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
       // P2-99: clear all typing expiry timers + state on unmount/switch.
-      for (const t of typingTimersRef.current.values()) clearTimeout(t);
-      typingTimersRef.current.clear();
+      // `typingTimers` is the SAME Map instance as typingTimersRef.current —
+      // the captured alias satisfies react-hooks/exhaustive-deps (run #75)
+      // with identical behavior.
+      for (const t of typingTimers.values()) clearTimeout(t);
+      typingTimers.clear();
       setTypingUserIds(new Set());
     };
-  }, [matchId, reconcile]);
+  }, [matchId, reconcile, currentUserId]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark

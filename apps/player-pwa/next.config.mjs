@@ -148,6 +148,29 @@ const withPWA = withPWAInit({
         },
       },
       {
+        // P2-102 (run #75): conversations LIST — NetworkFirst so the Messages
+        // screen has an offline fallback (last-seen list) instead of an empty
+        // state. Thread reads (`/conversations/:id/messages`) deliberately
+        // match NOTHING (end-anchored collection pattern) — chat freshness is
+        // React Query's job, same policy as match-chat sub-resources.
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations(?:\?.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'conversations-list-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxAgeSeconds: 60 * 60, // 1 hour — bounds offline-list staleness
+            maxEntries: 10,
+          },
+          cacheableResponse: {
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry. [200] only.
+            statuses: [200],
+          },
+        },
+      },
+      {
         // User profile API (/users/me and its sub-resources — own data only):
         // NetworkFirst with a short 5-minute cache fallback.
         urlPattern: /^https?:\/\/[^/]+\/api\/v1\/users\/me(?:\/.*)?$/,
