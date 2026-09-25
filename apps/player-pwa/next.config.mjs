@@ -148,6 +148,29 @@ const withPWA = withPWAInit({
         },
       },
       {
+        // P2-102 (run #75): conversations LIST — NetworkFirst so the Messages
+        // screen has an offline fallback (last-seen list) instead of an empty
+        // state. Thread reads (`/conversations/:id/messages`) deliberately
+        // match NOTHING (end-anchored collection pattern) — chat freshness is
+        // React Query's job, same policy as match-chat sub-resources.
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations(?:\?.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'conversations-list-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxAgeSeconds: 60 * 60, // 1 hour — bounds offline-list staleness
+            maxEntries: 10,
+          },
+          cacheableResponse: {
+            // Run #43: status 0 = opaque response — same-origin routes never
+            // legitimately produce one, and caching it poisons the entry until
+            // maxAge expiry. [200] only.
+            statuses: [200],
+          },
+        },
+      },
+      {
         // User profile API (/users/me and its sub-resources — own data only):
         // NetworkFirst with a short 5-minute cache fallback.
         urlPattern: /^https?:\/\/[^/]+\/api\/v1\/users\/me(?:\/.*)?$/,
@@ -186,6 +209,33 @@ const nextConfig = {
   ],
 
 
+  // P2-42 (run #72): CSP script-src hardened for PROD — drops
+  // 'unsafe-eval' (verified safe: zero `eval(` / `new Function(` in ALL
+  // production client chunks — grep 2026-09-24, run-#72 report) and the
+  // DEAD mapbox/moyasar script entries (zero mapbox/moyasar code or deps
+  // in the PWA; evidence in docs/plans/run72-csp-hardening/).
+  //
+  // 'unsafe-inline' STAYS in prod script-src — hard evidence (live HTML,
+  // 2026-09-24): the Next.js App Router response ships 17 inline <script>
+  // tags (hydration/flight bootstrap `self.__next_f.push`), zero src, zero
+  // nonce attributes. Removing the inline allowance without a working
+  // per-request nonce pipeline blocks EVERY page's hydration (blank app).
+  // That nonce pipeline was ATTEMPTED in run #72 and BLOCKED with evidence
+  // — docs/plans/run72-csp-hardening/00-retro.md (edge-runtime node:crypto
+  // 500s; render-path wedges under both documented Next 15 patterns;
+  // agent-spawned standalone servers wedge renders even with the PRISTINE
+  // middleware — environmental). Retry needs a dedicated cycle with an
+  // upgrade-first plan. Tripwire: test/lib/csp-config.test.ts pins these
+  // shapes — regenerate the test when you touch this block.
+  //
+  // Dev keeps the legacy permissive script-src: react-refresh/HMR evals.
+  // Kept in prod script-src: https://*.posthog.com — posthog-js injects its
+  // reverse-proxy bundle (exception-autocapture, surveys) as a <script>
+  // from the -assets host; connect-src alone does NOT cover script loading
+  // (blocked live in prod 2026-09-09:
+  // us-assets.i.posthog.com/static/exception-autocapture.js). doop
+  // design-sync loads the capture snippet from the internal design canvas
+  // (owner tooling, deliberate addition a550815).
   async headers() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
     let apiOrigin = 'http://localhost:3001';
@@ -194,32 +244,41 @@ const nextConfig = {
     } catch {
       // keep the localhost fallback
     }
+    const scriptSrc = isDev
+      ? [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          'https://api.mapbox.com',
+          'https://cdn.moyasar.com',
+          'https://*.posthog.com',
+          // doop design-sync: loads the capture snippet from the internal design canvas
+          'https://aa.tail2948f9.ts.net:9460',
+        ].join(' ')
+      : [
+          "'self'",
+          // see block comment above: inline scripts are REQUIRED until the
+          // nonce pipeline lands; eval is BANNED in prod (verified unused).
+          "'unsafe-inline'",
+          'https://*.posthog.com',
+          // doop design-sync: loads the capture snippet from the internal design canvas
+          'https://aa.tail2948f9.ts.net:9460',
+        ].join(' ');
     const connectSrc = [
       "'self'",
-      'https://api.mapbox.com',
-      'https://events.mapbox.com',
+      // P2-42 final (run #73): mapbox connect/style/img entries DROPPED — the
+      // script-src cleanup (run #72) proved zero mapbox/moyasar code or deps
+      // ship in the PWA, so no request these allowances enabled can occur.
       'https://*.ingest.sentry.io',
       'https://*.ingest.de.sentry.io',
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
-      'ws:',
+      // WS: prod allows ONLY wss: (cleartext ws: is dev-only — the API origin
+      // is https in every deployed environment, so wss: covers it).
+      ...(isDev ? ['ws:'] : []),
       'wss:',
       // doop design-sync: POSTs DOM captures to the internal design canvas
-      'https://aa.tail2948f9.ts.net:9460',
-    ].join(' ');
-    // PostHog injects its reverse-proxy bundle (exception-autocapture, surveys)
-    // as a <script> from the -assets reverse-proxy host, so script-src needs it
-    // too — connect-src alone does NOT cover script loading (blocked live in
-    // prod 2026-09-09: us-assets.i.posthog.com/static/exception-autocapture.js).
-    const scriptSrc = [
-      "'self'",
-      "'unsafe-inline'",
-      "'unsafe-eval'",
-      'https://api.mapbox.com',
-      'https://cdn.moyasar.com',
-      'https://*.posthog.com',
-      // doop design-sync: loads the capture snippet from the internal design canvas
       'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
 
@@ -248,8 +307,11 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               `script-src ${scriptSrc}`,
-              "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
-              "img-src 'self' data: blob: https://*.mapbox.com",
+              // P2-42 final (run #73): style-src/img-src mapbox entries DROPPED
+              // (dead — zero mapbox code/deps; evidence in the connectSrc block
+              // comment above). inline styles stay (Tailwind runtime styles).
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
               `connect-src ${connectSrc}`,
               "worker-src 'self' blob:",
               "font-src 'self' data:",

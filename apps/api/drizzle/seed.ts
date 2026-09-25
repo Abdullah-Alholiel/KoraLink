@@ -567,7 +567,7 @@ async function seed() {
         price_per_player: '45.00',
         pitch_cost_sar: '525.00',
         max_players: 22,
-        min_players: 12,
+        min_players: 20,  // 22 max -> min 20 (product rule: max-2)
         location: ksuLoc,
       },
       {
@@ -581,7 +581,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '30.00',
         max_players: 14,
-        min_players: 6,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: malqaLoc,
       },
       {
@@ -595,7 +595,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '30.00',
         max_players: 14,
-        min_players: 6,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: olayaLoc,
       },
       // ── Tomorrow ──
@@ -610,7 +610,7 @@ async function seed() {
         duration_mins: 50,
         price_per_player: '30.00',
         max_players: 10,
-        min_players: 4,
+        min_players: 8,  // 10 max -> min 8 (product rule: max-2)
         location: olayaLoc,
       },
       {
@@ -624,6 +624,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '28.00',
         max_players: 14,
+        min_players: 12, // 14 max -> min 12 (product rule: max-2; trigger enforces)
         location: ksuLoc,
       },
       // ── Later this week ──
@@ -639,7 +640,7 @@ async function seed() {
         price_per_player: '35.00',
         pitch_cost_sar: '250.00',
         max_players: 14,
-        min_players: 6,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: olayaLoc,
       },
       {
@@ -653,7 +654,7 @@ async function seed() {
         duration_mins: 50,
         price_per_player: '25.00',
         max_players: 14,
-        min_players: 4,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: malqaLoc,
       },
       {
@@ -667,7 +668,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '20.00',
         max_players: 14,
-        min_players: 4,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: malqaLoc,
       },
       {
@@ -681,7 +682,7 @@ async function seed() {
         duration_mins: 90,
         price_per_player: '40.00',
         max_players: 22,
-        min_players: 12,
+        min_players: 20,  // 22 max -> min 20 (product rule: max-2)
         location: ksuLoc,
       },
       {
@@ -695,7 +696,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '20.00',
         max_players: 14,
-        min_players: 6,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: ksuLoc,
       },
       // Jeddah — keeps the Al-Nakheel suggestion chip demo-able end to end.
@@ -710,7 +711,7 @@ async function seed() {
         duration_mins: 90,
         price_per_player: '35.00',
         max_players: 22,
-        min_players: 10,
+        min_players: 20,  // 22 max -> min 20 (product rule: max-2)
         location: point(39.1728, 21.5433),
       },
       // ── Completed matches (POTM history + live voting window) ──
@@ -726,7 +727,7 @@ async function seed() {
         price_per_player: '45.00',
         pitch_cost_sar: '525.00',
         max_players: 22,
-        min_players: 12,
+        min_players: 20,  // 22 max -> min 20 (product rule: max-2)
         location: ksuLoc,
         completed_at: new Date(fmtDate(days(-3), '20:00').getTime() + 90 * 60 * 1000),
         pom_winner_id: users.yousef_q!,
@@ -744,7 +745,7 @@ async function seed() {
         price_per_player: '30.00',
         pitch_cost_sar: '125.00',
         max_players: 10,
-        min_players: 4,
+        min_players: 8,  // 10 max -> min 8 (product rule: max-2)
         location: olayaLoc,
         completed_at: new Date(fmtDate(days(-2), '19:00').getTime() + 50 * 60 * 1000),
         pom_winner_id: users.majed_a!,
@@ -761,7 +762,7 @@ async function seed() {
         duration_mins: 60,
         price_per_player: '35.00',
         max_players: 14,
-        min_players: 6,
+        min_players: 12,  // 14 max -> min 12 (product rule: max-2)
         location: olayaLoc,
         completed_at: votingLiveCompleted,
       },

@@ -487,96 +487,141 @@ export class MatchesService {
   }
 
   /**
-   * P1-1 scheduler: push a "match starting soon" reminder to confirmed players
-   * of matches starting within [15m, 45m). Each match is reminded exactly once
-   * (reminders_sent_at guard).
+   * P1-1 scheduler + P2-100 (run #74): "match starting soon" reminder LADDER
+   * pushed to confirmed players of upcoming matches:
+   * - T-24h leg: day-ahead touch, window [24h−15m, 24h+15m) before kickoff —
+   *   effective accuracy ±15m at the 15-min tick cadence (documented).
+   * - T-45m leg: window [15m, 45m) before kickoff (unchanged).
+   * Each match is reminded AT MOST ONCE per leg (reminders_sent_at /
+   * reminders_24h_sent_at stamp guards). A late joiner now always gets the
+   * T-45m reminder regardless of which side of the old single window they
+   * joined in, plus the day-ahead anchor.
    *
-   * @returns number of matches reminded this tick.
+   * @returns per-leg match counts for the scheduler log.
    */
-  async sendMatchStartReminders(): Promise<number> {
-    const soon = await this.db
-      .select({
-        id: matches.id,
-        title: matches.title,
-        scheduled_at: matches.scheduled_at,
-      })
-      .from(matches)
-      .where(
-        and(
-          isNull(matches.reminders_sent_at),
-          inArray(matches.status, ['Open', 'Full']),
-          sql`${matches.scheduled_at} > NOW() + INTERVAL '15 minutes'`,
-          sql`${matches.scheduled_at} <= NOW() + INTERVAL '45 minutes'`,
-        ),
-      )
-      .limit(50);
+  async sendMatchStartReminders(): Promise<{ sent45: number; sent24: number }> {
+    // P2-100: ladder legs. The interval strings are compile-time constants
+    // (no user input — sql.raw is safe here) so the SQL text stays in the
+    // same readable form as the original single-window implementation.
+    const LEGS = [
+      {
+        name: 'T-24h',
+        dayAhead: true,
+        pushKey: 'match_starting_24h',
+        mailTemplate: 'match_reminder_24h',
+        lower: "INTERVAL '23 hours 45 minutes'",
+        upper: "INTERVAL '24 hours 15 minutes'",
+      },
+      {
+        name: 'T-45m',
+        dayAhead: false,
+        pushKey: 'match_starting_soon',
+        mailTemplate: 'match_reminder',
+        lower: "INTERVAL '15 minutes'",
+        upper: "INTERVAL '45 minutes'",
+      },
+    ] as const;
 
-    let reminded = 0;
-    for (const match of soon) {
-      try {
-        const players = await this.db
-          .select({ user_id: match_players.user_id })
-          .from(match_players)
-          .where(
-            and(
-              eq(match_players.match_id, match.id),
-              eq(match_players.no_show, false),
+    let sent45 = 0;
+    let sent24 = 0;
+    for (const leg of LEGS) {
+      const soon = await this.db
+        .select({
+          id: matches.id,
+          title: matches.title,
+          scheduled_at: matches.scheduled_at,
+        })
+        .from(matches)
+        .where(
+          and(
+            // Stamp-once per leg: NULL = this leg has not fired yet.
+            isNull(
+              leg.dayAhead ? matches.reminders_24h_sent_at : matches.reminders_sent_at,
             ),
-          );
+            inArray(matches.status, ['Open', 'Full']),
+            sql`${matches.scheduled_at} > NOW() + ${sql.raw(leg.lower)}`,
+            sql`${matches.scheduled_at} <= NOW() + ${sql.raw(leg.upper)}`,
+          ),
+        )
+        .limit(50);
 
-        if (players.length > 0) {
-          const kickoff = new Date(match.scheduled_at);
-          await this.notificationsService.sendPushToUsers(
-            players.map((p) => p.user_id),
-            {
-              key: 'match_starting_soon', // P2-8: text localized per subscriber
-              vars: { title: match.title, kickoffISO: kickoff.toISOString() },
-              // Run #70 (Reviewer B): own semantic type — reusing
-              // 'match-chat' made the reminder share the chat tag
-              // (`match-chat:<id>`), so a starting-soon push could
-              // renotify-replace an unread chat notification (and vice
-              // versa). Deep-link target is unchanged (the match page).
-              data: { type: 'match_starting_soon', matchId: match.id },
-            },
-          );
-          // P1-41 (run #35): email mirror of the reminder (E2). Best-effort
-          // — the mailer never throws; recipients w/o verified email are
-          // skipped inside. Riyadh-local kickoff string for the details box.
-          if (this.mailer) {
-            this.mailer
-              .sendToUsers(
-                players.map((p) => p.user_id),
-                'match_reminder',
-                { title: match.title },
-                {
-                  matchId: match.id,
-                  matchTitle: match.title,
-                  when: riyadhLocal(kickoff),
-                },
-              )
-              .catch(() => undefined);
+      for (const match of soon) {
+        try {
+          const players = await this.db
+            .select({ user_id: match_players.user_id })
+            .from(match_players)
+            .where(
+              and(
+                eq(match_players.match_id, match.id),
+                eq(match_players.no_show, false),
+              ),
+            );
+
+          if (players.length > 0) {
+            const kickoff = new Date(match.scheduled_at);
+            await this.notificationsService.sendPushToUsers(
+              players.map((p) => p.user_id),
+              {
+                key: leg.pushKey, // P2-8: text localized per subscriber
+                vars:
+                  leg.dayAhead
+                    ? {
+                        title: match.title,
+                        kickoffISO: kickoff.toISOString(),
+                        // Day-ahead copy leads with the Riyadh-local DATE.
+                        kickoffDateISO: kickoff.toISOString(),
+                      }
+                    : { title: match.title, kickoffISO: kickoff.toISOString() },
+                // Distinct type per leg → distinct notification tag
+                // (type:matchId), so the 24h and 45m pushes never
+                // renotify-replace each other (run-#70 collision class).
+                data: { type: leg.pushKey, matchId: match.id },
+              },
+            );
+            // P1-41 (run #35): email mirror of the reminder (E2). Best-effort
+            // — the mailer never throws; recipients w/o verified email are
+            // skipped inside. Riyadh-local kickoff string for the details box.
+            if (this.mailer) {
+              this.mailer
+                .sendToUsers(
+                  players.map((p) => p.user_id),
+                  leg.mailTemplate,
+                  { title: match.title },
+                  {
+                    matchId: match.id,
+                    matchTitle: match.title,
+                    when: riyadhLocal(kickoff),
+                  },
+                )
+                .catch(() => undefined);
+            }
           }
-        }
 
-        await this.db
-          .update(matches)
-          .set(
-            withTimestamp({
-              reminders_sent_at: new Date(),
-            }),
-          )
-          .where(eq(matches.id, match.id));
-        reminded += 1;
-      } catch (err) {
-        this.logger.error(
-          `Reminder failed for match ${match.id}: ${(err as Error).message}`,
-        );
+          await this.db
+            .update(matches)
+            .set(
+              withTimestamp(
+                leg.dayAhead
+                  ? { reminders_24h_sent_at: new Date() }
+                  : { reminders_sent_at: new Date() },
+              ),
+            )
+            .where(eq(matches.id, match.id));
+          if (leg.dayAhead) sent24 += 1;
+          else sent45 += 1;
+        } catch (err) {
+          this.logger.error(
+            `Reminder (${leg.name}) failed for match ${match.id}: ${(err as Error).message}`,
+          );
+        }
       }
     }
-    if (reminded > 0) {
-      this.logger.log(`Reminder scheduler: reminded ${reminded} match(es).`);
+    if (sent45 + sent24 > 0) {
+      this.logger.log(
+        `Reminder scheduler: reminded ${sent45} T-45m + ${sent24} T-24h match(es).`,
+      );
     }
-    return reminded;
+    return { sent45, sent24 };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -86,6 +86,8 @@ export default function ChatSheet({
     hasMore,
     isLoadingOlder,
     loadOlder,
+    typingUserIds,
+    emitTyping,
   } = useMatchChat(isOpen ? matchId : null);
 
   const [input, setInput] = useState('');
@@ -94,6 +96,13 @@ export default function ChatSheet({
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // P2-99: resolve a typer's display name from the merged message view;
+  // falls back to a localized "player" word when the user hasn't spoken yet
+  // (or their profile name is null).
+  const resolveTypingName = (userId: string): string =>
+    messages.find((msg) => msg.user_id === userId)?.user.full_name ||
+    t('chatSheet.typingPlayer');
 
   // ── Auto-scroll to bottom on NEW messages ──
   // P1-3 (run #65): keyed on the LAST message id, not the list length —
@@ -334,6 +343,25 @@ export default function ChatSheet({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* P2-99: typing indicator strip (above the input row) */}
+        {typingUserIds.size > 0 && (
+          <div
+            role="status"
+            className="px-4 pt-2 pb-1 text-xs text-gray-500 flex-shrink-0 bg-white"
+          >
+            {typingUserIds.size === 1
+              ? t('chatSheet.typingOne', {
+                  name: resolveTypingName([...typingUserIds][0]),
+                })
+              : typingUserIds.size === 2
+                ? t('chatSheet.typingTwo', {
+                    name1: resolveTypingName([...typingUserIds][0]),
+                    name2: resolveTypingName([...typingUserIds][1]),
+                  })
+                : t('chatSheet.typingMany')}
+          </div>
+        )}
+
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
@@ -342,7 +370,11 @@ export default function ChatSheet({
               ref={inputRef}
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                // P2-99: typing ping — throttled to 1 emit / 3s inside the hook.
+                if (e.target.value) emitTyping();
+              }}
               onKeyDown={handleKeyDown}
               placeholder={t('chatSheet.sendPlaceholder')}
               maxLength={500}

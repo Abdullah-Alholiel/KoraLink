@@ -51,15 +51,19 @@ export function canEndMatch(
   return at !== null && now >= at.getTime();
 }
 
-/** True once the match is live (status in_progress or kick-off has passed). */
+/**
+ * True once the match is live — IFF the DB status is in_progress (the host
+ * pressed Start; the API writes InProgress only through that gated action).
+ * The former clock clause (`scheduledAt <= now`) fabricated "started" for
+ * every non-started match past kick-off, routing Join into the Ongoing Game
+ * sheet for matches that never began (2026-09-18 Ladies Night bug). The wall
+ * clock must not fabricate lifecycle state — and kick-off time is no longer
+ * part of the contract at all.
+ */
 export function matchHasStarted(
-  match: Pick<Match, 'status' | 'scheduledAt'>,
-  now: number = Date.now(),
+  match: Pick<Match, 'status'>,
 ): boolean {
-  return (
-    match.status === 'in_progress' ||
-    (!!match.scheduledAt && new Date(match.scheduledAt).getTime() <= now)
-  );
+  return match.status === 'in_progress';
 }
 
 /** True once the match is finished (completed/cancelled or scheduled end passed). */

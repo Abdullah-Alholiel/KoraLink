@@ -37,6 +37,7 @@ const EXPECTED_EVENTS = [
   'mark-chat-read',
   'send-dm',
   'leave-conversation',
+  'typing',
 ];
 
 interface HandlerChunk {

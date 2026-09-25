@@ -148,6 +148,29 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
       expect(matchingRecipe(`${API}/users/someone-else-id`)).toBeUndefined();
     });
 
+    it('conversations LIST (with or without query) hits conversations-list-cache (P2-102, run #75)', () => {
+      // The exact URL the Messages screen fetches (useConversations.ts).
+      expect(
+        matchingRecipe(`${API}/conversations?page=1&perPage=30`)?.options?.cacheName,
+      ).toBe('conversations-list-cache');
+      expect(matchingRecipe(`${API}/conversations`)?.options?.cacheName).toBe(
+        'conversations-list-cache',
+      );
+    });
+
+    it('conversation THREADS (/:id/messages) match NO cache recipe — chat freshness is React Query policy (P2-102, run #75)', () => {
+      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages`)).toBeUndefined();
+      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages?after=123`)).toBeUndefined();
+    });
+
+    it('recipe: conversations list is NetworkFirst with a 1h offline window (P2-102, run #75)', () => {
+      const convos = byCache('conversations-list-cache');
+      expect(convos?.handler).toBe('NetworkFirst');
+      expect(convos?.options?.expiration?.maxAgeSeconds).toBe(60 * 60);
+      expect(convos?.options?.networkTimeoutSeconds).toBe(3);
+      expect(convos?.options?.cacheableResponse?.statuses).toEqual([200]);
+    });
+
     it('money + auth URLs are NetworkOnly (never cached) — behavior-level', () => {
       const moneyAuth = [
         `${API}/auth/dev-login`,

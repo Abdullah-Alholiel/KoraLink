@@ -41,7 +41,11 @@ function userStatus(u: AdminUser): string {
 function purgeInfo(u: AdminUser): { purged: boolean; daysRemaining?: number } {
   if (!u.deleted_at) return { purged: false };
   if (u.phone.startsWith('purged-')) return { purged: true };
-  const purgeAt = new Date(u.deleted_at).getTime() + 30 * 86_400_000;
+  // PDPL grace window — keep in sync with the API's PDPL_GRACE_DAYS
+  // (apps/api/src/common/constants/pdpl.ts); cross-app constant, cannot be
+  // imported (run #32 drift-trap cleanup).
+  const PDPL_GRACE_DAYS_ADMIN = 30;
+  const purgeAt = new Date(u.deleted_at).getTime() + PDPL_GRACE_DAYS_ADMIN * 86_400_000;
   return { purged: false, daysRemaining: Math.max(0, Math.ceil((purgeAt - Date.now()) / 86_400_000)) };
 }
 

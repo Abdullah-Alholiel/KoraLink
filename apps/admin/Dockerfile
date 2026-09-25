@@ -14,6 +14,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Admin ships no public/ directory today (static assets are bundled into
+# .next/standalone by sync-standalone.mjs, which tolerates a missing public/).
+# The runner stage still COPYs public/ — create an empty one so the COPY can
+# never break the image build (run #32 Reviewer B P1: "COPY not found").
+RUN mkdir -p public
+
 # NEXT_PUBLIC_* values are baked into the client bundle at build time.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
