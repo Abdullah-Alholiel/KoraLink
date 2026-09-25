@@ -1,26 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 73,
-  "last_run_at": "2026-09-24T10:17Z",
+  "last_run": 74,
+  "last_run_at": "2026-09-25T10:17Z",
   "last_run_commits": [
-    "35cb2d6",
-    "0638b06",
-    "c63c843"
+    "3d4cb7f"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-25T01-17Z-run73.md",
+  "last_run_report": "kanban/RUNS/2026-09-25T10-17Z-run74.md",
   "in_review_items": [
     {
-      "id": "run73-csp-other-directives",
-      "built_in": "run #73 (parent-built; full gates on final tree)",
-      "claim": "P2-42 FINAL (other-directive cleanup): prod CSP drops the dead mapbox allowances from connect-src/style-src/img-src (zero mapbox/moyasar code/deps — re-grepped) and allows cleartext ws: in DEV only (prod = wss:; apiOrigin is https everywhere deployed). Wire behavior unchanged for real clients.",
-      "verify": "(1) cd apps/player-pwa && npx vitest run test/lib/csp-config.test.ts → 11/11; (2) grep next.config.mjs: connectSrc block must NOT contain api.mapbox.com/events.mapbox.com; must contain \"...(isDev ? ['ws:'] : [])\"; header value must contain \"style-src 'self' 'unsafe-inline'\" WITHOUT api.mapbox.com and \"img-src 'self' data: blob:\" WITHOUT *.mapbox.com."
-    },
-    {
-      "id": "run73-dto-caps",
-      "built_in": "run #73 (parent-built; full gates on final tree)",
-      "claim": "VenueDecisionDto.note @MaxLength(1000) (audit-log bloat closed) + CastVoteDto.candidateId UUID-shape @Matches + @MaxLength(36) (varchar(36) house style, NOT @IsUUID). 9-case dto-caps.spec.ts (validateSync behavioral + source tripwires). No wire-shape change; PWA senders already send roster UUIDs.",
-      "verify": "(1) cd apps/api && npx jest src/modules/matches/dto-caps.spec.ts → 9/9; (2) full jest 635/635; (3) grep venue-decision.dto.ts contains @MaxLength(1000); cast-vote.dto.ts contains @MaxLength(36) + @Matches and NOT @IsUUID."
+      "id": "run74-p2-100-reminder-ladder",
+      "built_in": "run #74 (parent-built; full gates on final tree)",
+      "claim": "P2-100 match-start reminder LADDER: T-24h leg ([23h45m,24h15m] window, own reminders_24h_sent_at stamp) + T-45m leg preserved; match_starting_24h push key (Riyadh-local DATE+time, en/ar), match_reminder_24h mail template, worker deep-link route + cross-layer test; migration 0044 applied + live-verified; stamp written only after successful fan-out. BONUS: push-text formatters hardened to total render (pre-existing --:-- fallback was unreachable — new Date('--:--') RangeError escaped renderPushText).",
+      "verify": "(1) cd apps/api && npx jest src/modules/matches/matches.reminder-ladder.spec.ts → 8/8; full jest → 643/643. (2) cd apps/player-pwa && npx vitest run → 721/721 incl. push-notification-click type-contract (match_starting_24h listed). (3) grep reminders_24h_sent_at apps/api/src/database/schema.ts → present; grep 'match_starting_24h' apps/api/src/modules/notifications/push-text.ts apps/player-pwa/worker/index.js → present. (4) live DB: column matches.reminders_24h_sent_at exists (information_schema), journal has 47 rows."
     }
   ],
   "open_blockers": [
@@ -64,7 +56,8 @@
     "Run #70 (2026-09-23T15:5xZ): DEAD-RUN ADOPTION #2 — 01:15Z fire OOM-killed mid-cycle (kill-pattern #14). Adopted 3 commits + P2-95/96 slice; ALL gates re-run parent-side before adoption (turbo 3/3 sequential, jest 53/53, tsc 0, vitest 671/671). Reviewer A SHIP. LINT GATE WAS BROKEN since the login-revamp era (c02fae7 fixes; run #69's 'lint 0' claim inaccurate — dashboard dark Sep 19-23 meant the gate never ran on staging). Run #64's waitlist-push 'REFUTED' note OVERTURNED by P2-95 evidence (dedupe grep matched the activity leg, not the push). ADMIN HOLD continues (projects-dir merge conflict). Strix not due (Sep 23). zai probe 200 (ZAI_API_KEY; GLM_API_KEY line stale), weekly 1%.",
     "zai key hygiene: GLM_API_KEY line in koralink profile .env is DEAD (401) — owner should rotate/remove; probe with ZAI_API_KEY until then.",
     "Run #56: dead-run adoption #7 (01:17Z fire, pid 2395394) — P1-47+P2-70 adopted, contracts verified directly, all gates re-run by adopting session. Reviewer-B leads queued: P1-48 (WS mid-session ban), P1-49 (appeal path, owner call on channel). Parity script (verify-pwa-parity.mjs) 9/11: 2 desktop showPicker FAILs target the DEPLOYED host form (env/stale-deploy, unrelated to run-#56 diff — deployed tree is behind staging by design).",
-    "Run #65 (16:45Z cron): 3-item build — 8b510fb (P2-76 POST unsubscribe + DTO), 7e364a8 (P2-76b push locale re-sync), 3d1840d (P1-3 chat cursor pagination + latest-window fix). Run #64 P2-73 VERIFIED. Lessons: class-validator @IsUrl(require_tld) ACCEPTS IP-literal hosts (SSRF defense = service send-path allowlist); Nest v10 route metadata lives on descriptor.value; cron notepad build candidates go stale — verify against BOARD.md first."
+    "Run #65 (16:45Z cron): 3-item build — 8b510fb (P2-76 POST unsubscribe + DTO), 7e364a8 (P2-76b push locale re-sync), 3d1840d (P1-3 chat cursor pagination + latest-window fix). Run #64 P2-73 VERIFIED. Lessons: class-validator @IsUrl(require_tld) ACCEPTS IP-literal hosts (SSRF defense = service send-path allowlist); Nest v10 route metadata lives on descriptor.value; cron notepad build candidates go stale — verify against BOARD.md first.",
+    "Run #74 (2026-09-25T10:17Z): P2-100 ladder built (3d4cb7f, migration 0044 applied+verified live); run-#73 items BOTH verified → P2-42 fully DONE. P1-52 STILL BURNING (1C n=6 lastSeen 09-25T10:00Z + NEW 1F) — prod auth hard-down, owner billing. ADMIN HOLD continues (projects-dir dirty): 4 new admin findings boarded P2-104..107 BLOCKED (deletePitch TOCTOU CONFIRMED parent-side). Reviewer hydration claim refuted again (client-only fetch). zai probe 200 ~2s, weekly ~0-5%."
   ],
   "default_branch": "staging",
   "branch_model": "staging=working (VPS deploys), main=release-only (Render+Vercel auto) — set 2026-09-08 environment-segregation cycle",
