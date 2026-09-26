@@ -34,6 +34,22 @@ const WS_CLIENT_MESSAGE_ID_MAX_LENGTH = 36;
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * Normalize the optional clientMessageId socket field: absent/null → null,
+ * string → trimmed (empty → null), anything else → WsException. A hostile
+ * payload can carry a number/object here; without the typeof guard the
+ * `.trim()` call would throw a raw TypeError at the handler instead of a
+ * clean validation error (PR-Agent minor, run #78).
+ */
+function normalizeClientMessageId(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') {
+    throw new WsException('clientMessageId must be a string.');
+  }
+  const trimmed = v.trim();
+  return trimmed || null;
+}
+
+/**
  * Room ids arrive as raw socket payloads and become room names (`match:<id>`,
  * `conv:<id>`) and query params. WS handlers get no class-validator pass, so
  * reject anything that is not UUID-shaped before it reaches a room or the DB.
@@ -337,7 +353,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
-    const clientMessageId = data.clientMessageId?.trim() || null;
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
     // Cap before the DB: an oversized id would surface a raw Postgres
     // 'value too long' error, leaking column internals to the client.
     if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
@@ -626,7 +642,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     const content = data.content.trim();
     // Same cap as send-message (REST send-message.dto.ts parity) — the service
     // trims again itself, so only the length check lives here.
-    const clientMessageId = data.clientMessageId?.trim() || null;
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
     if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
       throw new WsException(
         `clientMessageId must be at most ${WS_CLIENT_MESSAGE_ID_MAX_LENGTH} characters.`,

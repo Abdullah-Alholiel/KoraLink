@@ -536,6 +536,28 @@ describe('AppGateway WS input hardening (run #78)', () => {
       expect(sendMessage).not.toHaveBeenCalled();
     });
 
+    it('send-dm: rejects a non-string clientMessageId (wrong-typed payload) with a clean WsException, not a TypeError', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: 12345 as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('send-message: rejects a non-string clientMessageId the same way (pre-existing pattern also normalized)', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: { x: 1 } as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(consume).not.toHaveBeenCalled();
+    });
+
     it('accepts a 36-char (UUID) clientMessageId, and trims surrounding whitespace before measuring', async () => {
       const { gateway, sendMessage } = makeGw();
       await expect(
