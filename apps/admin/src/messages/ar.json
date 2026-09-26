@@ -26,7 +26,8 @@
     "loadErrorHint": "تحقق من اتصالك ثم أعد المحاولة. التفاصيل التقنية معروضة أعلاه لأجل الدعم.",
     "offlineBanner": "أنت غير متصل بالإنترنت — توقفت التحديثات المباشرة، وتُعرض آخر بيانات مُحمَّلة.",
     "dataLive": "مباشر",
-    "dataStale": "قديمة — جارٍ إعادة الاتصال"
+    "dataStale": "قديمة — جارٍ إعادة الاتصال",
+    "saveFailed": "فشل الحفظ: {error}"
   },
   "nav": {
     "dashboard": "لوحة التحكم",
@@ -598,7 +599,14 @@
     "suspendAction": "إيقاف 7 أيام",
     "payAction": "صرف الدفعة",
     "generatePayouts": "توليد الدفعات",
-    "thSubjectType": "نوع العنصر"
+    "thSubjectType": "نوع العنصر",
+    "labelPlatformMargin": "هامش المنصة (ر.س)",
+    "labelGracePeriod": "مهلة عدم الحضور (بالدقائق)",
+    "labelPayoutCadence": "دورية التحويلات (بالأيام)",
+    "labelRefundPolicy": "نص سياسة الاسترداد",
+    "save": "حفظ",
+    "saveFailed": "فشل الحفظ: {error}",
+    "actionFailed": "فشل الإجراء: {error}"
   },
   "list": {
     "sortLabel": "الترتيب",

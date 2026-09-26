@@ -26,7 +26,8 @@
     "loadErrorHint": "Check your connection, then try again. The technical detail is shown above for support.",
     "offlineBanner": "You're offline — live updates paused, showing last loaded data.",
     "dataLive": "Live",
-    "dataStale": "Stale — reconnecting"
+    "dataStale": "Stale — reconnecting",
+    "saveFailed": "Save failed: {error}"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -598,7 +599,14 @@
     "suspendAction": "Suspend 7d",
     "payAction": "Pay out",
     "generatePayouts": "Generate payouts",
-    "thSubjectType": "Subject type"
+    "thSubjectType": "Subject type",
+    "labelPlatformMargin": "Platform margin (SAR)",
+    "labelGracePeriod": "No-show grace period (minutes)",
+    "labelPayoutCadence": "Payout cadence (days)",
+    "labelRefundPolicy": "Refund policy text",
+    "save": "Save",
+    "saveFailed": "Save failed: {error}",
+    "actionFailed": "Action failed: {error}"
   },
   "list": {
     "sortLabel": "Sort",
