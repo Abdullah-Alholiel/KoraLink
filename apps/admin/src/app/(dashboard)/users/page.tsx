@@ -88,7 +88,7 @@ export default function UsersPage() {
       // What + why + next: surface the API reason (e.g. last-admin guard)
       // instead of silently swallowing the rejection — the banner stays until
       // the next attempt.
-      setActionError(e instanceof Error ? e.message : t('failed'));
+      setActionError(e instanceof Error ? e.message : ts('failed'));
     } finally {
       setBusyId(null);
     }
