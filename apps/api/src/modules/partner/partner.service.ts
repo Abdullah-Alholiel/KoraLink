@@ -463,18 +463,34 @@ export class PartnerService {
   async deletePitch(actorId: string, actorRole: string, pitchId: string) {
     await this.assertPitchAccess(actorId, actorRole, pitchId);
 
-    const [{ count }] = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.matches)
-      .where(eq(schema.matches.pitch_id, pitchId));
+    // One tx + FOR UPDATE on the pitch row: matches.pitch_id is ON DELETE
+    // CASCADE, so without the lock a match inserted between the history count
+    // and the DELETE would be silently cascade-erased. The row lock makes any
+    // concurrent FK-referencing insert block until this tx commits.
+    await this.db.transaction(async (tx) => {
+      const [pitch] = await tx
+        .select({ id: pitches.id })
+        .from(pitches)
+        .where(eq(pitches.id, pitchId))
+        .limit(1)
+        .for('update');
 
-    if (count > 0) {
-      throw new BadRequestException(
-        `This pitch has ${count} match(es) in its history and cannot be deleted — set it unavailable instead.`,
-      );
-    }
+      if (!pitch) throw new NotFoundException('Pitch not found.');
 
-    await this.db.delete(pitches).where(eq(pitches.id, pitchId));
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.matches)
+        .where(eq(schema.matches.pitch_id, pitchId));
+
+      if (count > 0) {
+        throw new BadRequestException(
+          `This pitch has ${count} match(es) in its history and cannot be deleted — set it unavailable instead.`,
+        );
+      }
+
+      await tx.delete(pitches).where(eq(pitches.id, pitchId));
+    });
+
     this.realtime.broadcastOps('venues');
 
     return { deleted: true };
