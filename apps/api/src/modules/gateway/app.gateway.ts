@@ -27,6 +27,37 @@ import { WsRateLimitService } from './rate-limit.service';
 /** Parity with the REST message DTOs (@MaxLength(2000)). */
 const WS_MESSAGE_MAX_LENGTH = 2000;
 
+/** Parity with the REST DTO cap (@MaxLength(36)) and the varchar(36) client_message_id column. */
+const WS_CLIENT_MESSAGE_ID_MAX_LENGTH = 36;
+
+/** Same UUID-shape regex the REST DTOs use (@Matches — see reports/dto/create-report.dto.ts). */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Normalize the optional clientMessageId socket field: absent/null → null,
+ * string → trimmed (empty → null), anything else → WsException. A hostile
+ * payload can carry a number/object here; without the typeof guard the
+ * `.trim()` call would throw a raw TypeError at the handler instead of a
+ * clean validation error (PR-Agent minor, run #78).
+ */
+function normalizeClientMessageId(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') {
+    throw new WsException('clientMessageId must be a string.');
+  }
+  const trimmed = v.trim();
+  return trimmed || null;
+}
+
+/**
+ * Room ids arrive as raw socket payloads and become room names (`match:<id>`,
+ * `conv:<id>`) and query params. WS handlers get no class-validator pass, so
+ * reject anything that is not UUID-shaped before it reaches a room or the DB.
+ */
+function isUuidShape(v: unknown): boolean {
+  return typeof v === 'string' && UUID_SHAPE.test(v);
+}
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   role?: string;
@@ -266,6 +297,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -300,6 +332,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 gate parity (merged from realtime-singleton lane): leave is a
     // mutating membership op — same moderation gate as join-lobby.
     await this.requireActiveUser(client.userId);
@@ -314,22 +347,29 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
-    const clientMessageId = data.clientMessageId?.trim() || null;
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
+    // Cap before the DB: an oversized id would surface a raw Postgres
+    // 'value too long' error, leaking column internals to the client.
+    if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
+      throw new WsException(
+        `clientMessageId must be at most ${WS_CLIENT_MESSAGE_ID_MAX_LENGTH} characters.`,
+      );
+    }
 
     // Parity with the REST DTO: reject oversized payloads before any DB work.
     if (content.length > WS_MESSAGE_MAX_LENGTH) {
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
-    // P1-42 (run #36): per-socket flood control. Keyed per connection — each
-    // connection paid a full authenticated handshake, and reconnect-to-refill
-    // costs an expensive, logged handshake per round.
-    const rl = this.rateLimit.consume(`msg:${client.id}`);
+    // P1-42 (run #36) + run #78: per-socket bucket AND a per-user cross-socket
+    // bucket — reconnecting no longer refills the budget.
+    const rl = this.rateLimit.consume(`msg:${client.id}`, client.userId);
     if (!rl.allowed) {
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
@@ -476,11 +516,12 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
     // Independent bucket — typing bursts must never consume the msg/dm budgets.
-    const rl = this.rateLimit.consume(`typing:${client.id}`);
+    const rl = this.rateLimit.consume(`typing:${client.id}`, client.userId);
     if (!rl.allowed) {
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
@@ -512,6 +553,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -536,6 +578,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -562,6 +605,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -590,19 +634,29 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
+    // Same cap as send-message (REST send-message.dto.ts parity) — the service
+    // trims again itself, so only the length check lives here.
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
+    if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
+      throw new WsException(
+        `clientMessageId must be at most ${WS_CLIENT_MESSAGE_ID_MAX_LENGTH} characters.`,
+      );
+    }
 
     // REST DTO parity: same 2000-char cap the conversations REST endpoint enforces.
     if (content.length > WS_MESSAGE_MAX_LENGTH) {
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
-    // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM budget.
-    const rl = this.rateLimit.consume(`dm:${client.id}`);
+    // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM
+    // budget. Run #78: plus the per-user cross-socket DM bucket.
+    const rl = this.rateLimit.consume(`dm:${client.id}`, client.userId);
     if (!rl.allowed) {
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }

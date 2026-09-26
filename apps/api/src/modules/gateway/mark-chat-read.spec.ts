@@ -2,6 +2,9 @@ import { WsException } from '@nestjs/websockets';
 import { AppGateway } from './app.gateway';
 import { users } from '../../database/schema';
 
+/** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
+const MATCH_ID = '11111111-1111-4111-8111-111111111111';
+
 /**
  * P2-58 (run #50): the `mark-chat-read` WS handler must advance the caller's
  * roster-row read watermark, refuse unauthenticated sockets, and refuse
@@ -86,7 +89,7 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     const client = makeClient('u1');
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never),
     ).resolves.toBeUndefined();
 
     // The set payload must carry last_read_at and NOTHING else — in
@@ -103,7 +106,7 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     const client = makeClient(undefined);
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never),
     ).rejects.toThrow(WsException);
   });
 
@@ -113,7 +116,7 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     const client = makeClient('u1');
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never),
     ).rejects.toThrow('You are not a member of this match.');
   });
 
@@ -128,7 +131,7 @@ describe('AppGateway mark-chat-read (P2-58)', () => {
     const client = makeClient('u1');
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, client as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never),
     ).rejects.toThrow('Your account can no longer perform this action.');
     expect(setArgCapture.value).toBeUndefined(); // no write attempted
   });

@@ -1,6 +1,10 @@
 import { AppGateway } from './app.gateway';
 import { users } from '../../database/schema';
 
+/** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
+const MATCH_ID = '11111111-1111-4111-8111-111111111111';
+const CONV_ID = '22222222-2222-4222-8222-222222222222';
+
 /**
  * Unit tests for `handleConnection` moderation enforcement (run #6).
  *
@@ -305,7 +309,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: 'msg-1', match_id: 'm1', user_id: 'u1', content: 'hi' }],
+            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
           }),
         }),
       }),
@@ -357,7 +361,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const client = makeClient();
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'still here' }, client as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'still here' }, client as never),
     ).rejects.toThrow(MSG);
     expect(consume).not.toHaveBeenCalled();
   });
@@ -366,7 +370,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(SUSPENDED));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -374,7 +378,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(DELETED));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -382,7 +386,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(null));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -390,7 +394,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(active));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'glhf' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'glhf' }, makeClient() as never),
     ).resolves.toBeUndefined();
   });
 
@@ -398,7 +402,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleDm({ conversationId: 'c1', content: 'hi' }, makeClient() as never),
+      gateway.handleDm({ conversationId: CONV_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -406,7 +410,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleJoinLobby({ matchId: 'm1' }, makeClient() as never),
+      gateway.handleJoinLobby({ matchId: MATCH_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -414,7 +418,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway, isParticipant } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleJoinConversation({ conversationId: 'c1' }, makeClient() as never),
+      gateway.handleJoinConversation({ conversationId: CONV_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
     expect(isParticipant).not.toHaveBeenCalled();
   });
@@ -423,7 +427,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleMarkRead({ conversationId: 'c1' }, makeClient() as never),
+      gateway.handleMarkRead({ conversationId: CONV_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -431,7 +435,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, makeClient() as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -440,8 +444,222 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const client = makeClient();
 
     await expect(
-      gateway.handleLeaveConversation({ conversationId: 'c1' }, client as never),
+      gateway.handleLeaveConversation({ conversationId: CONV_ID }, client as never),
     ).resolves.toBeUndefined();
   });
 });
 
+
+// ── run #78: WS input hardening — room-id shape + clientMessageId cap ───────
+// WS payloads get no class-validator pass, so the gateway enforces the same
+// shape rules as the REST DTOs: UUID-shaped room ids (they become room names
+// and query params) and a 36-char clientMessageId (varchar(36) column — an
+// oversized value would otherwise leak a raw Postgres 'value too long' error).
+
+describe('AppGateway WS input hardening (run #78)', () => {
+  const clean = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null };
+
+  function makeGw() {
+    const db = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => (table === users ? [clean] : [{ id: 'mp-1' }]),
+          }),
+        }),
+      }),
+      query: { match_messages: { findFirst: async () => undefined } },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+    const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
+    const sendMessage = jest.fn(async () => ({ id: 'dm-1' }));
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true, markRead: async () => undefined, sendMessage } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { consume, release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return { gateway, consume, sendMessage };
+  }
+
+  function makeClient() {
+    return {
+      id: 'sock-1',
+      userId: 'u1',
+      to: () => ({ emit: () => undefined }),
+      join: jest.fn(async () => undefined),
+      leave: jest.fn(async () => undefined),
+    };
+  }
+
+  const LONG_ID = 'x'.repeat(37);
+  const BAD_ID = 'not-a-uuid';
+  const ID_MSG = 'Invalid id format.';
+  const CMID_MSG = 'clientMessageId must be at most 36 characters.';
+
+  describe('clientMessageId length cap', () => {
+    it('send-message: rejects a clientMessageId longer than 36 chars before any budget/DB work', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: LONG_ID },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(CMID_MSG);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('send-dm: rejects a clientMessageId longer than 36 chars before the service call', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: LONG_ID },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(CMID_MSG);
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('send-dm: rejects a non-string clientMessageId (wrong-typed payload) with a clean WsException, not a TypeError', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: 12345 as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('send-message: rejects a non-string clientMessageId the same way (pre-existing pattern also normalized)', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: { x: 1 } as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('accepts a 36-char (UUID) clientMessageId, and trims surrounding whitespace before measuring', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: ` ${CONV_ID} ` },
+          makeClient() as never,
+        ),
+      ).resolves.toBeUndefined();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: MATCH_ID },
+          makeClient() as never,
+        ),
+      ).resolves.toBeUndefined();
+      expect(sendMessage).toHaveBeenCalledWith('u1', CONV_ID, 'hi', MATCH_ID);
+    });
+  });
+
+  describe('room-id shape validation', () => {
+    it('join-lobby rejects a non-UUID matchId (never joins a room)', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleJoinLobby({ matchId: BAD_ID }, client as never)).rejects.toThrow(ID_MSG);
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('leave-lobby rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleLeaveLobby({ matchId: 'match:*' }, client as never)).rejects.toThrow(ID_MSG);
+      expect(client.leave).not.toHaveBeenCalled();
+    });
+
+    it('typing rejects a non-UUID matchId before consuming budget', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(gateway.handleTyping({ matchId: BAD_ID }, makeClient() as never)).rejects.toThrow(ID_MSG);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('mark-chat-read rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMarkChatRead({ matchId: '' }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('join-conversation rejects a non-UUID conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleJoinConversation({ conversationId: BAD_ID }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('mark-read rejects a non-UUID conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMarkRead({ conversationId: `${CONV_ID}x` }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('send-message rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMessage({ matchId: BAD_ID, content: 'hi' }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('send-dm rejects a non-string conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: 42 as unknown as string, content: 'hi' },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('happy path: valid UUID ids pass (join-lobby, leave-lobby, typing, join-conversation, mark-read, mark-chat-read)', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleJoinLobby({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      expect(client.join).toHaveBeenCalledWith(`match:${MATCH_ID}`);
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      await expect(gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      await expect(
+        gateway.handleJoinConversation({ conversationId: CONV_ID }, client as never),
+      ).resolves.toBeUndefined();
+      await expect(gateway.handleMarkRead({ conversationId: CONV_ID }, client as never)).resolves.toBeUndefined();
+      await expect(gateway.handleLeaveLobby({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+    });
+  });
+
+  it('rate-limit call sites pass the user id for the cross-socket bucket', async () => {
+    const { gateway, consume } = makeGw();
+    const client = makeClient();
+    await gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never);
+    await gateway.handleDm({ conversationId: CONV_ID, content: 'hi' }, client as never);
+    await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+    expect(consume.mock.calls).toEqual([
+      ['msg:sock-1', 'u1'],
+      ['dm:sock-1', 'u1'],
+      ['typing:sock-1', 'u1'],
+    ]);
+  });
+});

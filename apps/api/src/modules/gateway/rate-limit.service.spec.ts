@@ -4,6 +4,10 @@ import { AppGateway } from './app.gateway';
 import { WsRateLimitService } from './rate-limit.service';
 import { users } from '../../database/schema';
 
+/** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
+const MATCH_ID = '11111111-1111-4111-8111-111111111111';
+const CONV_ID = '22222222-2222-4222-8222-222222222222';
+
 /** The gateway's augmented socket type is not exported — reconstruct it. */
 type AuthSocket = Socket & { userId?: string; role?: string };
 
@@ -142,7 +146,7 @@ describe('WsRateLimitService (sliding window)', () => {
     const gw = makeGatewayWithLimiter(rl);
     const client = makeClient('s12');
     for (let i = 0; i < 10; i++) {
-      await expect(gw.handleMessage({ matchId: 'm1', content: 'hello' }, client)).rejects.toThrow(/not a member/i);
+      await expect(gw.handleMessage({ matchId: MATCH_ID, content: 'hello' }, client)).rejects.toThrow(/not a member/i);
     }
     expect(rl.consume('msg:s12').allowed).toBe(false);
     gw.handleDisconnect(client);
@@ -150,8 +154,85 @@ describe('WsRateLimitService (sliding window)', () => {
   });
 });
 
+// ── run #78: per-user cross-socket budget (reconnect loophole closed) ──────
+
+describe('WsRateLimitService dual-bucket consume (run #78)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('allows when both the socket and the user bucket are fresh', () => {
+    const rl = makeRateLimitService();
+    expect(rl.consume('msg:s20', 'u20')).toEqual({ allowed: true, retryAfterSec: 0 });
+  });
+
+  it('blocks when the per-socket bucket is full', () => {
+    const rl = makeRateLimitService();
+    // Fill the socket bucket WITHOUT touching u21's user bucket.
+    for (let i = 0; i < 10; i++) expect(rl.consume('msg:s21').allowed).toBe(true);
+    const denied = rl.consume('msg:s21', 'u21');
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterSec).toBeGreaterThanOrEqual(1);
+  });
+
+  it('blocks when the per-user bucket is full, even on a FRESH socket id', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) expect(rl.consume(`msg:old-${i}`, 'u22').allowed).toBe(true);
+    // Brand-new socket (reconnect) — its own bucket is empty, the user's is not.
+    const denied = rl.consume('msg:brand-new', 'u22');
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterSec).toBeGreaterThanOrEqual(1);
+    expect(denied.retryAfterSec).toBeLessThanOrEqual(10);
+  });
+
+  it('shares the user budget across two sockets; other users and channels are unaffected', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 5; i++) {
+      expect(rl.consume('msg:sA', 'u23').allowed).toBe(true);
+      expect(rl.consume('msg:sB', 'u23').allowed).toBe(true);
+    }
+    expect(rl.consume('msg:sA', 'u23').allowed).toBe(false);
+    expect(rl.consume('msg:sB', 'u23').allowed).toBe(false);
+    // Another user, and the same user's DM channel, keep their own budgets.
+    expect(rl.consume('msg:sC', 'u24').allowed).toBe(true);
+    expect(rl.consume('dm:sA', 'u23').allowed).toBe(true);
+  });
+
+  it('release() does not refill the user bucket (disconnect is not a loophole)', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) expect(rl.consume('msg:s25', 'u25').allowed).toBe(true);
+    rl.release('s25');
+    expect(rl.consume('msg:s26', 'u25').allowed).toBe(false);
+  });
+
+  it('a rejected attempt stamps neither bucket', () => {
+    const rl = makeRateLimitService();
+    for (let i = 0; i < 10; i++) rl.consume('msg:full');
+    expect(rl.consume('msg:full', 'u27').allowed).toBe(false);
+    // u27's user bucket was not charged for the denied attempt: 10 fresh sends still fit.
+    for (let i = 0; i < 10; i++) expect(rl.consume(`msg:f${i}`, 'u27').allowed).toBe(true);
+  });
+
+  it('sweeps expired buckets — the Map does not grow unboundedly as windows slide', () => {
+    const rl = makeRateLimitService();
+    let now = 1_000_000;
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+
+    for (let i = 0; i < 100; i++) rl.consume(`msg:s${i}`, `u${i}`);
+    expect(rl.size).toBe(200); // 100 socket + 100 user buckets
+
+    // Every socket goes away WITHOUT a disconnect release, windows slide past.
+    now += 10_001;
+    rl.consume('msg:late', 'late-user');
+    expect(rl.size).toBe(2); // only the live pair survives
+
+    // A bucket that slides empty on its own key is reclaimed too.
+    now += 10_001;
+    rl.consume('msg:late'); // re-touches msg:late; user bucket swept
+    expect(rl.size).toBe(1);
+  });
+});
+
 describe('AppGateway send guards (P1-42)', () => {
-  const base = { matchId: 'm1', conversationId: 'c1', content: 'hello', clientMessageId: undefined };
+  const base = { matchId: MATCH_ID, conversationId: CONV_ID, content: 'hello', clientMessageId: undefined };
 
   it('rejects an oversized match message with "too long" before any DB work', async () => {
     const gw = makeGatewayWithLimiter(makeRateLimitService());
@@ -218,7 +299,7 @@ describe('AppGateway send guards (P1-42)', () => {
 /** Calls handleMessage tolerantly — membership failure surfaces as a rejection we swallow. */
 async function gw_safe(gw: AppGateway, client: AuthSocket): Promise<void> {
   try {
-    await gw.handleMessage({ matchId: 'm1', content: 'hello' }, client);
+    await gw.handleMessage({ matchId: MATCH_ID, content: 'hello' }, client);
   } catch {
     // expected — membership lookup on an empty db stub rejects
   }
