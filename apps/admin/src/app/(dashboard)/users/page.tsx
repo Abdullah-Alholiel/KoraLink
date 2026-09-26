@@ -61,6 +61,7 @@ export default function UsersPage() {
   const [sort, setSort] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminUser | null>(null);
 
   const sortParts = sort ? sort.split(':') : null;
@@ -78,10 +79,16 @@ export default function UsersPage() {
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusyId(id);
+    setActionError(null);
     try {
       await api.patch(`/admin/users/${id}`, body);
       reload();
       setSelected(null);
+    } catch (e) {
+      // What + why + next: surface the API reason (e.g. last-admin guard)
+      // instead of silently swallowing the rejection — the banner stays until
+      // the next attempt.
+      setActionError(e instanceof Error ? e.message : ts('failed'));
     } finally {
       setBusyId(null);
     }
@@ -249,6 +256,11 @@ export default function UsersPage() {
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
+          {actionError && (
+            <p role="alert" className="mx-8 mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {t('actionFailed', { error: actionError })}
+            </p>
+          )}
           <div className="px-8">
             <DataTable
               columns={columns}
