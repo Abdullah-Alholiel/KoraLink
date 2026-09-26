@@ -36,6 +36,29 @@ function windowCapacity(startMins: number, endMins: number, dur: number): number
   return endMins > startMins ? Math.floor((endMins - startMins) / dur) : 0;
 }
 
+/** Asia/Riyadh is a fixed UTC+03:00 offset (no DST). */
+const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** P2-109: Riyadh calendar date (YYYY-MM-DD) for an instant — never server-local. */
+export function riyadhDateString(nowMs: number = Date.now()): string {
+  return new Date(nowMs + RIYADH_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** P2-109: shift a YYYY-MM-DD date string by whole days (pure UTC-midnight arithmetic). */
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** P2-109: the 7 Riyadh calendar days ending today, oldest first. */
+export function riyadhTrendDays(nowMs: number = Date.now()): string[] {
+  const today = riyadhDateString(nowMs);
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i--) days.push(addDaysToDateString(today, -i));
+  return days;
+}
+
 @Injectable()
 export class PartnerService {
   constructor(
@@ -315,6 +338,12 @@ export class PartnerService {
       .orderBy(matches.scheduled_at)
       .limit(5);
 
+    // P2-109: one Riyadh-calendar axis drives both the SQL windows and the
+    // JS buckets, so they can never disagree about which day is "today".
+    const trendDays = riyadhTrendDays();
+    const trendStart = trendDays[0];
+    const trendEnd = trendDays[trendDays.length - 1];
+
     const weekSlots = await this.db
       .select({
         date: pitch_slots.slot_date,
@@ -324,8 +353,8 @@ export class PartnerService {
       .where(
         and(
           inArray(pitch_slots.pitch_id, pitchIds),
-          gte(pitch_slots.slot_date, sql`CURRENT_DATE - INTERVAL '6 days'`),
-          lte(pitch_slots.slot_date, sql`CURRENT_DATE`),
+          gte(pitch_slots.slot_date, sql`${trendStart}::date`),
+          lte(pitch_slots.slot_date, sql`${trendEnd}::date`),
         ),
       )
       .groupBy(pitch_slots.slot_date);
@@ -336,8 +365,8 @@ export class PartnerService {
         COALESCE(SUM(${matches.pitch_cost_sar}), 0)::text AS revenue
       FROM ${matches}
       WHERE ${inArray(matches.pitch_id, pitchIds)}
-        AND ${matches.scheduled_at} >= (CURRENT_DATE - INTERVAL '6 days')
-        AND ${matches.scheduled_at} < (CURRENT_DATE + INTERVAL '1 day')
+        AND ${matches.scheduled_at} >= (${trendStart}::date::timestamp AT TIME ZONE 'Asia/Riyadh')
+        AND ${matches.scheduled_at} < ((${trendEnd}::date + 1)::timestamp AT TIME ZONE 'Asia/Riyadh')
       GROUP BY 1
     `)) as unknown as Array<{ date: string; revenue: string }>;
 
@@ -345,10 +374,7 @@ export class PartnerService {
     const slotByDay = new Map<string, number>(weekSlots.map((r) => [String(r.date), Number(r.booked)]));
     const revByDay = new Map<string, number>(weekRevenue.map((r) => [r.date, Number(r.revenue)]));
     const weeklyTrend: { date: string; bookedSlots: number; revenue: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const day = new Date();
-      day.setUTCDate(day.getUTCDate() - i);
-      const key = day.toISOString().slice(0, 10);
+    for (const key of trendDays) {
       weeklyTrend.push({
         date: key,
         bookedSlots: slotByDay.get(key) ?? 0,
@@ -698,16 +724,17 @@ export class PartnerService {
     const closedDay = (dow: number) =>
       Boolean(venueRow?.[`closed_day_${dow}` as keyof typeof venueRow]);
 
-    const today = new Date();
+    // P2-109: "today" and weekdays are Riyadh-local via the UTC-midnight
+    // convention (same as createSlot) — never server-local getDay/setDate.
+    const today = riyadhDateString();
+    const todayDow = new Date(`${today}T00:00:00Z`).getUTCDay();
     for (let w = 0; w < pattern.weeks_ahead; w++) {
       for (const dow of pattern.days_of_week) {
         // P1-25: whole-day closure → nothing bookable on this weekday.
         if (closedDay(dow)) continue;
 
-        const date = new Date(today);
-        const dayDiff = (dow - date.getDay() + 7) % 7;
-        date.setDate(date.getDate() + dayDiff + w * 7);
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const dayDiff = (dow - todayDow + 7) % 7;
+        const dateStr = addDaysToDateString(today, dayDiff + w * 7);
 
         // P1-25: intersect the requested window with the venue's hours for
         // that day — slots never spill outside opening time.
