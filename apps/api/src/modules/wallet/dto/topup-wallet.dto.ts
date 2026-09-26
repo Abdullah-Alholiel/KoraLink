@@ -3,6 +3,7 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  Matches,
   Min,
   Max,
   MaxLength,
@@ -37,7 +38,12 @@ export class TopupWalletDto {
     maxLength: 255,
     example: 'topup_abc123',
   })
+  // P2-113 (run #77, Reviewer A): ledger keys are free-form but must stay
+  // printable ASCII (no blob abuse); DB-unique backstop unchanged.
   @IsString()
+  @Matches(/^[A-Za-z0-9._:\/-]{1,255}$/, {
+    message: 'idempotencyKey must be 1-255 printable ASCII characters (letters, digits, dot, underscore, colon, slash, hyphen)',
+  })
   @MaxLength(255)
   idempotencyKey: string;
 }
