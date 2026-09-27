@@ -32,6 +32,7 @@ describe('MatchesService.markNoShow roster guard', () => {
       const chain: any = {
         where: () => chain,
         limit: () => chain,
+        for: () => chain, // P2-118: matches row is locked FOR UPDATE
       };
       chain.then = (resolve: (v: unknown) => void) => resolve(rows);
       return chain;
@@ -109,7 +110,7 @@ describe('MatchesService.markNoShow roster guard', () => {
     const tx = {
       select: () => ({
         from: (table: unknown) => {
-          const chain: any = { where: () => chain, limit: () => chain };
+          const chain: any = { where: () => chain, limit: () => chain, for: () => chain };
           chain.then = (resolve: (v: unknown) => void) => {
             if (table === matches) resolve([baseMatch]);
             else if (table === match_players) resolve([{ id: 'mp-1', no_show: true }]);

@@ -37,6 +37,7 @@ describe('MatchesService.markNoShow notification accuracy', () => {
       const chain: any = {
         where: () => chain,
         limit: () => chain,
+        for: () => chain, // P2-118: matches row is locked FOR UPDATE
       };
       chain.then = (resolve: (v: unknown) => void) => resolve(rows);
       return chain;

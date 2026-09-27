@@ -3178,7 +3178,10 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        // P2-118: lock the match row so a concurrent status flip
+        // (completeMatch / cancel) can't interleave with the attendance write.
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
@@ -3679,86 +3682,100 @@ export class MatchesService {
       throw new BadRequestException('You cannot vote for yourself.');
     }
 
-    const [match] = await this.db
-      .select({
-        id: matches.id,
-        status: matches.status,
-        scheduled_at: matches.scheduled_at,
-        duration_mins: matches.duration_mins,
-        completed_at: matches.completed_at,
-      })
-      .from(matches)
-      .where(eq(matches.id, matchId))
-      .limit(1);
+    // P2-118: the match read, state/window checks, roster checks and the
+    // upsert run in one transaction against a FOR UPDATE-locked match row, so
+    // a concurrent completeMatch / markNoShow can't admit a stale-state vote.
+    await this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({
+          id: matches.id,
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+          duration_mins: matches.duration_mins,
+          completed_at: matches.completed_at,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1)
+        .for('update');
 
-    if (!match) {
-      throw new NotFoundException(`Match ${matchId} not found.`);
-    }
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
 
-    if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
-      throw new BadRequestException(
-        `Voting is only available for completed matches. Current status: "${match.status}".`,
-      );
-    }
+      const assertVotingOpen = () => {
+        if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
+          throw new BadRequestException(
+            `Voting is only available for completed matches. Current status: "${match.status}".`,
+          );
+        }
 
-    // Check voting window (based on effective completion time — handles a
-    // past-due match whose completed_at has not yet been persisted).
-    const votingClosesAt = new Date(
-      MatchesService.effectiveCompletedAt(match).getTime() +
-        MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
-    );
-    if (new Date() > votingClosesAt) {
-      throw new BadRequestException('The voting window has closed.');
-    }
+        // Check voting window (based on effective completion time — handles a
+        // past-due match whose completed_at has not yet been persisted).
+        const votingClosesAt = new Date(
+          MatchesService.effectiveCompletedAt(match).getTime() +
+            MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
+        );
+        if (new Date() > votingClosesAt) {
+          throw new BadRequestException('The voting window has closed.');
+        }
+      };
 
-    // Verify voter attended the match (is in roster and not a no-show)
-    const [voterPlayer] = await this.db
-      .select({ id: match_players.id, no_show: match_players.no_show })
-      .from(match_players)
-      .where(
-        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${voterId}`,
-      )
-      .limit(1);
+      assertVotingOpen();
 
-    if (!voterPlayer) {
-      throw new BadRequestException(
-        'You did not attend this match, so you cannot vote.',
-      );
-    }
+      // Verify voter attended the match (is in roster and not a no-show)
+      const [voterPlayer] = await tx
+        .select({ id: match_players.id, no_show: match_players.no_show })
+        .from(match_players)
+        .where(
+          sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${voterId}`,
+        )
+        .limit(1);
 
-    if (voterPlayer.no_show) {
-      throw new BadRequestException(
-        'Players who did not show up cannot vote.',
-      );
-    }
+      if (!voterPlayer) {
+        throw new BadRequestException(
+          'You did not attend this match, so you cannot vote.',
+        );
+      }
 
-    // Verify candidate also attended (is in roster, not no-show)
-    const [candidatePlayer] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${candidateId} AND ${match_players.no_show} = false`,
-      )
-      .limit(1);
+      if (voterPlayer.no_show) {
+        throw new BadRequestException(
+          'Players who did not show up cannot vote.',
+        );
+      }
 
-    if (!candidatePlayer) {
-      throw new BadRequestException(
-        'The selected player did not attend this match.',
-      );
-    }
+      // Verify candidate also attended (is in roster, not no-show)
+      const [candidatePlayer] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${candidateId} AND ${match_players.no_show} = false`,
+        )
+        .limit(1);
 
-    // Upsert the vote (unique constraint on match_id + voter_id)
-    await this.db
-      .insert(match_votes)
-      .values({
-        match_id: matchId,
-        voter_id: voterId,
-        candidate_id: candidateId,
-      })
-      .onConflictDoUpdate({
-        target: [match_votes.match_id, match_votes.voter_id],
-        set: { candidate_id: candidateId, created_at: new Date() },
-      });
+      if (!candidatePlayer) {
+        throw new BadRequestException(
+          'The selected player did not attend this match.',
+        );
+      }
+
+      // Re-assert state + window immediately before the write (the window
+      // can close while the roster checks run).
+      assertVotingOpen();
+
+      // Upsert the vote (unique constraint on match_id + voter_id)
+      await tx
+        .insert(match_votes)
+        .values({
+          match_id: matchId,
+          voter_id: voterId,
+          candidate_id: candidateId,
+        })
+        .onConflictDoUpdate({
+          target: [match_votes.match_id, match_votes.voter_id],
+          set: { candidate_id: candidateId, created_at: new Date() },
+        });
+    });
 
     // P2-5 (run #38): populated match contract (API Contract Rule §2) — every
     // mutation returns the fully populated match. `votedFor` + `message` are
