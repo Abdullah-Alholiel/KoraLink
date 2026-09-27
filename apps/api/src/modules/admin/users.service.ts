@@ -166,35 +166,17 @@ export class AdminUsersService {
       }
     }
 
-    // ── Last-admin protection ──
+    // ── Last-admin protection + the write, ONE transaction (P2-116) ──
     // Demoting or banning the final Admin would lock everyone out of the HQ
-    // console — block both mutations.
-    if (
-      before.role === 'Admin' &&
-      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true)
-    ) {
-      const [{ count }] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(users)
-        .where(
-          and(
-            eq(users.role, 'Admin'),
-            // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
-            // are NOT living admins — counting them let the last LIVING admin
-            // be demoted/banned while only ghosts remained (run #34, found by
-            // Reviewer A). Same rationale as the status=active fix in f40acd9.
-            sql`${users.deleted_at} IS NULL`,
-            sql`${users.banned_at} IS NULL`,
-            sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
-          ),
-        );
-      if (count <= 1) {
-        throw new BadRequestException(
-          'Cannot demote or ban the last active admin account.',
-        );
-      }
-    }
-
+    // console — block both mutations. Race discipline: when the mutation
+    // targets an Admin row, the guard AND the write run inside one tx that
+    // first locks ALL living-admin rows FOR UPDATE, so two concurrent demotes
+    // of the last two admins serialize end-to-end: the loser re-counts against
+    // post-winner committed state and sees count 1 → 400. (First attempt
+    // released the locks at guard-commit and wrote on the outer db after —
+    // PR-Agent run #79 CRITICAL: the second demote could still re-count
+    // pre-write state. The write MUST share the tx that holds the locks.)
+    // Non-admin targets keep the plain single-statement update.
     const updates: {
       role?: 'Player' | 'VenueOwner' | 'Admin';
       banned_at?: Date | null;
@@ -220,10 +202,68 @@ export class AdminUsersService {
       throw new BadRequestException('No changes provided.');
     }
 
-    await this.db
-      .update(users)
-      .set(withTimestamp(updates))
-      .where(eq(users.id, id));
+    const adminTargeted =
+      before.role === 'Admin' &&
+      ((dto.role !== undefined && dto.role !== 'Admin') ||
+        dto.banned === true ||
+        // PR-Agent run #79 v2 residual: a NEW suspension also converts a
+        // living admin into a non-living row (guard predicate:
+        // suspended_until <= now()), so suspend-vs-demote can race to the
+        // same zero-living-admins lockout. Lifting/shortening a suspension
+        // only ADDS living admins — safe on the plain path.
+        (dto.suspendedUntil !== undefined && dto.suspendedUntil !== null));
+
+    if (adminTargeted) {
+      await this.db.transaction(async (tx) => {
+        // Lock order: every LIVING admin row, deterministic by id (mirrors
+        // rescheduleMatch's ORDER BY id slot locks — same order in every tx,
+        // no lock-cycle). PDPL ghosts (deleted/banned/expired-suspended) hold
+        // role='Admin' but are not living admins; locking them is harmless and
+        // keeps the lock shape identical to the guarded count below.
+        await tx.execute(
+          sql`SELECT id FROM ${users} WHERE ${users.role} = 'Admin'
+              AND ${users.deleted_at} IS NULL
+              AND ${users.banned_at} IS NULL
+              AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())
+              ORDER BY id
+              FOR UPDATE`,
+        );
+
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(users)
+          .where(
+            and(
+              eq(users.role, 'Admin'),
+              // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
+              // are NOT living admins — counting them let the last LIVING admin
+              // be demoted/banned while only ghosts remained (run #34, found by
+              // Reviewer A). Same rationale as the status=active fix in f40acd9.
+              sql`${users.deleted_at} IS NULL`,
+              sql`${users.banned_at} IS NULL`,
+              sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
+            ),
+          );
+        if (count <= 1) {
+          // Thrown INSIDE the tx → drizzle rolls back (nothing written) and
+          // the 400 propagates to the controller unchanged.
+          throw new BadRequestException(
+            'Cannot demote or ban the last active admin account.',
+          );
+        }
+
+        // The write lives INSIDE the lock-holding tx — the actual race fix.
+        await tx
+          .update(users)
+          .set(withTimestamp(updates))
+          .where(eq(users.id, id));
+      });
+    } else {
+      await this.db
+        .update(users)
+        .set(withTimestamp(updates))
+        .where(eq(users.id, id));
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
