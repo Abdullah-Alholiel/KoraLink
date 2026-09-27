@@ -21,6 +21,9 @@ const RULES = [
 
 export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProps) {
   const t = useTranslations();
+  // a11y (run #80, P2-101): explicit common-namespace translator for the close
+  // label — mirrors Attendance/Appeal sheets and makes the scope unambiguous.
+  const tCommon = useTranslations('common');
   // Admin-configurable refund policy (Settings → refund_policy). Falls back
   // to the default i18n text when the admin hasn't set one.
   const { data: publicSettings } = usePublicSettings();
@@ -43,8 +46,8 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
         <button
           onClick={onClose}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-transform"
- aria-label={t('common.close')}
- >
+          aria-label={tCommon('close')}
+        >
           <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
         </button>
       </div>
