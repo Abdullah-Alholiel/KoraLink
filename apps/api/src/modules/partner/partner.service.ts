@@ -187,10 +187,19 @@ export class PartnerService {
     }
 
     if (Object.keys(updates).length) {
-      await this.db
+      // P2-118: scope the write itself to the owner (Admins edit any venue)
+      // so an ownership change after the pre-check can't land a cross-tenant write.
+      const updatedRows = await this.db
         .update(venues)
         .set(withTimestamp(updates) as never)
-        .where(eq(venues.id, venueId));
+        .where(
+          actorRole === 'Admin'
+            ? eq(venues.id, venueId)
+            : and(eq(venues.id, venueId), eq(venues.owner_id, actorId)),
+        )
+        .returning({ id: venues.id });
+      // Ownership lost mid-flight reads as a clean 404, not a silent no-op.
+      if (!updatedRows.length) throw new NotFoundException('Venue not found.');
     }
 
     const [updated] = await this.db
@@ -215,6 +224,8 @@ export class PartnerService {
       .from(venues)
       .where(eq(venues.id, venueId))
       .limit(1);
+    // Venue deleted (or moved out from under the actor) mid-flight.
+    if (!updated) throw new NotFoundException('Venue not found.');
 
     this.realtime.broadcastOps('venues');
 
@@ -469,10 +480,21 @@ export class PartnerService {
     if (dto.is_active !== undefined) updates.is_active = dto.is_active;
 
     if (Object.keys(updates).length) {
-      await this.db
+      // P2-118: scope the write to pitches on the actor's venues (Admins
+      // edit any pitch); ownership lost mid-flight reads as a clean 404.
+      const updated = await this.db
         .update(pitches)
         .set(withTimestamp(updates) as never)
-        .where(eq(pitches.id, pitchId));
+        .where(
+          actorRole === 'Admin'
+            ? eq(pitches.id, pitchId)
+            : and(
+                eq(pitches.id, pitchId),
+                sql`${pitches.venue_id} IN (SELECT id FROM venues WHERE owner_id = ${actorId})`,
+              ),
+        )
+        .returning({ id: pitches.id });
+      if (!updated.length) throw new NotFoundException('Pitch not found.');
     }
 
     this.realtime.broadcastOps('venues');

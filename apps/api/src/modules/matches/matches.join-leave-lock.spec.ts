@@ -263,4 +263,31 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     const svc = makeService(tx);
     await expect(svc.completeMatch(HOST, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
   });
+  // ── markNoShow (P2-118) ───────────────────────────────────────────────────
+  // The attendance write read the matches row without a lock, so a
+  // concurrent status flip could interleave with the no-show mark.
+
+  it('markNoShow locks the matches row FOR UPDATE as its first statement', async () => {
+    const { tx, selects } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'InProgress', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+      // Unchanged flag (false → false) keeps the stub off the dispute branch.
+      player: { id: 'mp-1', no_show: false },
+    });
+    const svc = makeService(tx);
+    await svc.markNoShow(HOST, MATCH_ID, USER, false);
+    const first = selects[0];
+    expect(first).toBeDefined();
+    expect(first.lock).toBe('update');
+    expect(first.table).toBe(matches);
+  });
+
+  it('markNoShow still rejects an Open match with BadRequest after taking the lock', async () => {
+    const { tx, selects } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Open', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+      player: { id: 'mp-1', no_show: false },
+    });
+    const svc = makeService(tx);
+    await expect(svc.markNoShow(HOST, MATCH_ID, USER, true)).rejects.toBeInstanceOf(BadRequestException);
+    expect(selects[0].lock).toBe('update');
+  });
 });
