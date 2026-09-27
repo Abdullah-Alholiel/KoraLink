@@ -137,6 +137,7 @@ import {
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from './chat-status.predicate';
 import { WalletService } from '../wallet/wallet.service';
 import { chargeMatchFeeTx, creditWalletTx } from './match-fees';
 import { REFUND_WINDOW_HOURS } from '../../common/constants';
@@ -2432,6 +2433,25 @@ export class MatchesService {
       .limit(1);
     if (!membership) {
       throw new ForbiddenException('You are not a member of this match.');
+    }
+
+    // P2-111 (run #81): a terminal (or expired non-in-progress) match no
+    // longer accepts lobby messages. Stable machine code → PWA localized
+    // copy (P1-47 pattern). Shared predicate with the WS send-message path.
+    const [chatMatch] = await this.db
+      .select({
+        status: matches.status,
+        scheduled_at: matches.scheduled_at,
+        duration_mins: matches.duration_mins,
+      })
+      .from(matches)
+      .where(eq(matches.id, matchId))
+      .limit(1);
+    if (chatMatch && isChatClosed(chatMatch)) {
+      throw new ForbiddenException({
+        message: 'This match has ended — the lobby chat is closed.',
+        code: CHAT_CLOSED_ERROR_CODE,
+      });
     }
 
     const clientMessageIdValue = clientMessageId?.trim() || null;

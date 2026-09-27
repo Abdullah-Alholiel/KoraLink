@@ -8,7 +8,7 @@ import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
-import { classifyError, errorKey } from '@/lib/error-classify';
+import { classifyError, errorKey, type ErrorKind } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
 
@@ -88,9 +88,18 @@ export default function ChatSheet({
     loadOlder,
     typingUserIds,
     emitTyping,
-  } = useMatchChat(isOpen ? matchId : null);
+  } = useMatchChat(isOpen ? matchId : null, (err) =>
+    setChatNoticeKind(classifyError(err)),
+  );
 
   const [input, setInput] = useState('');
+  // P2-111 (run #81): why the last send failed — the classified ErrorKind,
+  // rendered via errors.* (what happened + why + what to do next). A
+  // transient failure clears when the user types again; a chat-closed
+  // failure is permanent for this match, so the notice stays and the
+  // composer locks (an ended match does not reopen).
+  const [chatNoticeKind, setChatNoticeKind] = useState<ErrorKind | null>(null);
+  const chatClosedLocked = chatNoticeKind === 'chatClosed';
   // P1-31 parity (run #53): report an abusive RECEIVED lobby message — same
   // pattern as the DM conversation surface (messages/[id]/page.tsx).
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
@@ -362,6 +371,18 @@ export default function ChatSheet({
           </div>
         )}
 
+        {/* P2-111 (run #81): send-failure notice — what happened + what to do
+            next, localized from the API's stable code. role=status so assistive
+            tech announces it without stealing focus. */}
+        {chatNoticeKind && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-brand-red/10 text-brand-red flex-shrink-0"
+          >
+            {t(errorKey(chatNoticeKind))}
+          </div>
+        )}
+
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
@@ -370,8 +391,12 @@ export default function ChatSheet({
               ref={inputRef}
               type="text"
               value={input}
+              disabled={chatClosedLocked}
               onChange={(e) => {
                 setInput(e.target.value);
+                // P2-111: a new attempt clears a transient failure notice
+                // (a chat-closed notice is permanent — see chatClosedLocked).
+                setChatNoticeKind((prev) => (prev === 'chatClosed' ? prev : null));
                 // P2-99: typing ping — throttled to 1 emit / 3s inside the hook.
                 if (e.target.value) emitTyping();
               }}
@@ -386,7 +411,7 @@ export default function ChatSheet({
           </div>
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || chatClosedLocked}
             className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
               input.trim()
                 ? 'bg-brand-green text-white shadow-[0_4px_12px_rgba(37,65,50,0.3)]'

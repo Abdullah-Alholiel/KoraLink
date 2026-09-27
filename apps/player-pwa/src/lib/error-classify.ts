@@ -22,7 +22,9 @@ export type ErrorKind =
   // blocked states instead of the generic forbidden/unauthorized copy.
   | 'banned'
   | 'suspended'
-  | 'deleted';
+  | 'deleted'
+  /** P2-111: the match lobby chat is closed (match terminal / expired). */
+  | 'chatClosed';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -38,6 +40,7 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   banned: 'errors.banned',
   suspended: 'errors.suspended',
   deleted: 'errors.deleted',
+  chatClosed: 'errors.chatClosed',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -45,6 +48,8 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   ACCOUNT_BANNED: 'banned',
   ACCOUNT_SUSPENDED: 'suspended',
   ACCOUNT_DELETED: 'deleted',
+  // P2-111: match lobby chat closed (REST sendMessage 403 body).
+  MATCH_CHAT_CLOSED: 'chatClosed',
 };
 
 /** i18n key for a classified error. */
