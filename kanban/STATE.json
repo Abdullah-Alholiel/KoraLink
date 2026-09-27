@@ -1,14 +1,20 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 79,
-  "last_run_at": "2026-09-26T15:18Z",
+  "last_run": 80,
+  "last_run_at": "2026-09-27T11:10Z",
   "last_run_commits": [
-    "6c3a7aa (P2-116 squash, PR #40)",
-    "docs+board commit (this phase)"
+    "878951a (P2-101 labels batch, PR #41 squash)",
+    "docs commit (this phase)"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-27T01-18Z-run79.md",
-  "in_review_items": [],
+  "last_run_report": "kanban/RUNS/2026-09-27T11-20Z-run80.md",
+  "in_review_items": [
+    {
+      "id": "P2-101-labels-batch",
+      "claim": "PR #41 squash 878951a: localized aria-labels (feed scroll-to-top/retry, wallet.closeModal NEW EN+AR, Toast common.dismiss, Attendance/MatchRules/Appeal common.close), my-games errorDescription line, TopAppBar deleted, PostMatchSection null-seeded ticking clock + socket t-dep ref fix (double-dial), structure spec pwa-a11y-labels.test.ts 7 cases",
+      "verify": "api jest 692 + vitest 759 + grep structure spec + confirm TopAppBar absent; PR-Agent re-review clean on 3e1ae3b"
+    }
+  ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
     "P2-51 (NEW run #36): Render demo deploy-before-migrate drift — demo auto-deploys main but has NO migration step; EVERY future migration re-breaks demo until fixed. Needs owner call: Render deploy hook (db:migrate) vs manual runbook in deploy-demo/. Demo DB creds: profile .deploy-tokens (KL_API_DATABASE_URL via Render env-vars API is the EXTERNAL neon URL).",
