@@ -29,6 +29,8 @@ export default function AttendanceSheet({
     onToggle,
 }: AttendanceSheetProps) {
     const t = useTranslations('attendance');
+    // a11y (run #80, P2-101): localized close label (was hardcoded "Close").
+    const tCommon = useTranslations('common');
 
     if (!isOpen) return null;
 
@@ -44,7 +46,7 @@ export default function AttendanceSheet({
                 <button
                     onClick={onClose}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    aria-label="Close"
+                    aria-label={tCommon('close')}
                 >
                     <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
                 </button>

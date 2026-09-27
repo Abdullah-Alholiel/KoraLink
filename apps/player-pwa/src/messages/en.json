@@ -673,6 +673,7 @@
     "balance": "Balance",
     "availableBalance": "Available Balance",
     "topUp": "Top Up",
+    "closeModal": "Close dialog",
     "withdraw": "Withdraw",
     "transactions": "Transactions",
     "noTransactions": "No transactions yet",

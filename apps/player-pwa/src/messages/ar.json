@@ -673,6 +673,7 @@
     "balance": "الرصيد",
     "availableBalance": "الرصيد المتاح",
     "topUp": "شحن",
+    "closeModal": "إغلاق النافذة",
     "withdraw": "سحب",
     "transactions": "المعاملات",
     "noTransactions": "لا توجد معاملات بعد",

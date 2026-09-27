@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Trophy, Crown, Check, Loader2, Clock, ChevronRight, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,11 +12,33 @@ import { trackEvent, addBreadcrumb } from '@/providers/ObservabilityProvider';
 import PomVotingSheet from './PomVotingSheet';
 import PomResultsSheet from './PomResultsSheet';
 
-/** Re-renders the caller every `intervalMs` with a fresh `Date` (live countdowns). */
-function useNow(intervalMs = 30_000): Date {
-  const [now, setNow] = useState(() => new Date());
+/**
+ * Ticking, hydration-safe wall clock (run #80, P2-101). `null` during SSR AND
+ * the first client render — identical on both sides, so hydration can never
+ * mismatch (same contract as the shared hooks/useNow) — then refreshed every
+ * `intervalMs` from the first effect onward so the "Ends in" badge ticks and
+ * the voting window flips to closed on real wall-clock time.
+ *
+ * Replaces the old `useState` seed that initialized a fresh Date during SSR
+ * (Reviewer A, run #80): masked today only because
+ * `pom` is never server-populated, but any future prefetch of votingClosesAt
+ * would hydrate-mismatch. Consumers decide the pre-mount posture: treat
+ * `null` as optimistic-open here (the API re-validates on submit).
+ *
+ * NOTE (run #80): the naive fix for the SSR seed — dropping the synchronous
+ * setNow — would delay the first clock value to the 30s tick and blank the
+ * countdown on mount. The real hazard the first cut exposed was elsewhere:
+ * next-intl's `t` gets a fresh identity every render, so any state update
+ * re-ran the socket effect (double lobby dial). `t` is now read through a
+ * ref (below), keeping the instant clock AND a dial-once socket effect.
+ */
+function useNow(intervalMs = 30_000): number | null {
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), intervalMs);
+    // Synchronous first value (instant countdown); the interval keeps it
+    // ticking so the badge flips to closed on real wall-clock time.
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
     return () => window.clearInterval(id);
   }, [intervalMs]);
   return now;
@@ -51,18 +73,27 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
 
   // Live per-match countdown: re-render every 30s so the "Ends in" badge
   // ticks down and flips to the ended state the moment the window closes.
-  const now = useNow(30_000);
+  // `nowMs` is null pre-mount (SSR + first client render agree) → timeLeft
+  // stays null → optimistic-open (see useNow doc above).
+  const nowMs = useNow(30_000);
   const timeLeft =
-    pom?.status === 'voting_open'
+    pom?.status === 'voting_open' && nowMs !== null
       ? formatTimeLeft(
           pom.votingClosesAt,
           (locale === 'ar' ? 'ar' : 'en') as AppLocale,
-          now,
+          new Date(nowMs),
         )
       : null;
 
   // Real-time: listen for the POTM winner being decided while viewing.
   // Shared realtime client (Slice 2) — join/leave is ref-counted.
+  // `t` is read through a ref (run #80): next-intl hands back a new function
+  // identity on EVERY render, so listing it as a dep re-ran this effect on
+  // each clock tick / query resolution and re-dialed the lobby socket.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const rt = getRealtime();
@@ -72,14 +103,14 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
       addBreadcrumb('POTM decided via WebSocket', 'potm', 'info', { matchId });
       trackEvent('potm_decided_received', { match_id: matchId });
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
-      showToast(`🏆 ${payload.winner.fullName} — ${t('pomDecided')}`, 'success');
+      showToast(`🏆 ${payload.winner.fullName} — ${tRef.current('pomDecided')}`, 'success');
     });
     return () => {
       offPom();
       rt.leaveRoom('match', matchId);
       rt.disconnect();
     };
-  }, [matchId, queryClient, showToast, t]);
+  }, [matchId, queryClient, showToast]);
 
   if (isLoading) {
     return (
@@ -203,8 +234,12 @@ export default function PostMatchSection({ matchId, currentUserId, format = '7v7
   }
 
   // ── Voting window has just ended (deadline passed before the API flipped
-  // status) — same visual as the API's votingClosed state ──
-  if (pom.status === 'voting_open' && timeLeft === null) {
+  // status) — same visual as the API's votingClosed state. Gated on the clock
+  // having spoken (nowMs !== null): pre-mount timeLeft is null because the
+  // clock is not ready, not because the window closed — render the open card
+  // so server HTML and first client paint agree and the badge never flashes
+  // "voting closed" for a frame.
+  if (pom.status === 'voting_open' && nowMs !== null && timeLeft === null) {
     return (
       <div className="mx-5 mt-4 bg-white rounded-2xl shadow-card p-5 flex items-start gap-3">
         <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">

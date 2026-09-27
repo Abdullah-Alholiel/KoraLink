@@ -43,8 +43,8 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
         <button
           onClick={onClose}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-transform"
-          aria-label="Close"
-        >
+ aria-label={t('common.close')}
+ >
           <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
         </button>
       </div>
