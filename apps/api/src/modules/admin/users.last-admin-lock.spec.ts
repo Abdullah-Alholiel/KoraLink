@@ -166,4 +166,27 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
     expect(db._outerUpdates).toHaveLength(1);
     expect(db._txUpdates).toHaveLength(0);
   });
+
+  it('NEW suspension of an Admin takes the tx path (v3: suspend-vs-demote residual)', async () => {
+    const db = makeDb(2);
+    const svc = await makeService(db);
+    await svc.update(
+      'admin-2',
+      { suspendedUntil: '2026-10-01T00:00:00.000Z' } as never,
+      'admin-1',
+    );
+    // Serialized through the lock-holding tx like demote/ban.
+    expect(db._statements.some((s) => s.kind === 'raw')).toBe(true);
+    expect(db._txUpdates).toHaveLength(1);
+    expect(db._outerUpdates).toHaveLength(0);
+  });
+
+  it('suspension LIFT of an Admin stays on the plain path (only adds living admins)', async () => {
+    const db = makeDb(2);
+    const svc = await makeService(db);
+    await svc.update('admin-2', { suspendedUntil: null } as never, 'admin-1');
+    expect(db._statements.some((s) => s.kind === 'raw')).toBe(false);
+    expect(db._outerUpdates).toHaveLength(1);
+    expect(db._txUpdates).toHaveLength(0);
+  });
 });

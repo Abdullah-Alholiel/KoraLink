@@ -204,7 +204,14 @@ export class AdminUsersService {
 
     const adminTargeted =
       before.role === 'Admin' &&
-      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true);
+      ((dto.role !== undefined && dto.role !== 'Admin') ||
+        dto.banned === true ||
+        // PR-Agent run #79 v2 residual: a NEW suspension also converts a
+        // living admin into a non-living row (guard predicate:
+        // suspended_until <= now()), so suspend-vs-demote can race to the
+        // same zero-living-admins lockout. Lifting/shortening a suspension
+        // only ADDS living admins — safe on the plain path.
+        (dto.suspendedUntil !== undefined && dto.suspendedUntil !== null));
 
     if (adminTargeted) {
       await this.db.transaction(async (tx) => {
