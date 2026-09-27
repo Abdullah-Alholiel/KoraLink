@@ -14,25 +14,39 @@ import { AppGateway } from '../gateway/app.gateway';
  * both observe count 2 and both succeed, leaving ZERO living admins and
  * locking everyone out of the HQ console.
  *
- * The guard now runs INSIDE a transaction that first locks ALL living-admin
- * rows FOR UPDATE (deterministic ORDER BY id), so the pair of concurrent
- * demotes serializes: the loser re-counts against post-winner state, sees
- * count 1, and 400s. These specs pin, at the mock-DB level:
+ * Architecture pinned here (v2, after the PR-Agent review caught v1):
+ * the guard AND THE WRITE share ONE transaction that first locks ALL
+ * living-admin rows FOR UPDATE. v1 released the locks at guard-commit and
+ * wrote on the outer db afterwards — the race window survived. These specs
+ * fail if the write ever leaves the lock-holding tx again:
  *
- *  1. the guard tx exists at all (a demote of an Admin opens a transaction);
- *  2. the FIRST statement in that tx is the living-admin FOR UPDATE lock
- *     (both the FOR UPDATE keyword and the ghost-excluding predicates —
- *     regression tripwire for run #34's living-admin semantics);
+ *  1. an admin-targeted demote runs the guard tx AND writes INSIDE it
+ *     (tx.update carries the payload; the outer db issues nothing);
+ *  2. the FIRST statement in the tx is the living-admin FOR UPDATE lock
+ *     (deterministic ORDER BY id, ghost-excluding predicates — run #34
+ *     semantics hold in the lock scope);
  *  3. the in-tx count predicate still excludes PDPL ghosts;
- *  4. count<=1 still refuses BEFORE any write.
+ *  4. count<=1 throws INSIDE the tx → 400 with zero writes anywhere;
+ *  5. non-admin targets keep the plain single-statement path (no tx).
  */
 describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
   function makeDb(initialCount = 2) {
-    const statements: Array<{ kind: 'raw' | 'count'; sql?: string; where?: unknown }> =
-      [];
-    const updateCalls: Array<Record<string, unknown>> = [];
+    const statements: Array<{ kind: 'raw' | 'count'; sql?: string; where?: unknown }> = [];
+    const txUpdates: Array<Record<string, unknown>> = [];
+    const outerUpdates: Array<Record<string, unknown>> = [];
 
-    const countChain = () => {
+    const makeUpdater = (sink: Array<Record<string, unknown>>) => (
+      _table: unknown,
+    ) => ({
+      set: (payload: Record<string, unknown>) => ({
+        where: (_where: unknown) => {
+          sink.push(payload);
+          return Promise.resolve();
+        },
+      }),
+    });
+
+    const txCountChain = () => {
       const c: Record<string, unknown> = {};
       c.from = (_table: unknown) => ({
         where: (where: unknown) => {
@@ -50,35 +64,24 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
         statements.push({ kind: 'raw', sql: rendered.sql });
         return Promise.resolve({ rows: [], rowCount: 0 });
       },
-      select: () => countChain(),
-      update: (_table: unknown) => ({
-        set: (payload: Record<string, unknown>) => ({
-          where: (_where: unknown) => {
-            updateCalls.push(payload);
-            return Promise.resolve();
-          },
-        }),
-      }),
+      select: () => txCountChain(),
+      update: makeUpdater(txUpdates),
     };
 
     const db = {
       transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
-      select: () => countChain(),
-      update: (_table: unknown) => ({
-        set: (payload: Record<string, unknown>) => ({
-          where: (_where: unknown) => {
-            updateCalls.push(payload);
-            return Promise.resolve();
-          },
-        }),
-      }),
+      update: makeUpdater(outerUpdates),
       _statements: statements,
-      _updateCalls: updateCalls,
+      _txUpdates: txUpdates,
+      _outerUpdates: outerUpdates,
     };
     return db;
   }
 
-  async function makeService(db: ReturnType<typeof makeDb>) {
+  async function makeService(
+    db: ReturnType<typeof makeDb>,
+    targetRole: 'Admin' | 'Player' = 'Admin',
+  ) {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AdminUsersService,
@@ -93,25 +96,28 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
     jest.spyOn(svc, 'findOne').mockResolvedValue({
       id: 'admin-2',
       deleted_at: null,
-      role: 'Admin',
+      role: targetRole,
       banned_at: null,
       suspended_until: null,
     } as never);
     return svc;
   }
 
-  it('demoting an Admin runs the guard INSIDE a transaction (tx path exists)', async () => {
+  it('admin demote: guard tx runs AND the write is tx-internal (v2 race fix)', async () => {
     const db = makeDb(2);
     const svc = await makeService(db);
     await svc.update('admin-2', { role: 'Player' } as never, 'admin-1');
-    // Exactly one tx-count ran (the guard); the post-write findOne is a spy.
-    const counts = db._statements.filter((s) => s.kind === 'count');
-    expect(counts).toHaveLength(1);
-    // The write happened AFTER the guard tx (db.update, not tx-only).
-    expect(db._updateCalls).toHaveLength(1);
+    // The lock statement ran (guard tx opened).
+    expect(db._statements.some((s) => s.kind === 'raw')).toBe(true);
+    // THE PIN: the write went through tx.update — the outer db issued none.
+    // (v1 wrote on the outer db after the tx committed; PR-Agent run #79
+    // flagged the surviving race window.)
+    expect(db._txUpdates).toHaveLength(1);
+    expect(db._txUpdates[0]).toHaveProperty('role', 'Player');
+    expect(db._outerUpdates).toHaveLength(0);
   });
 
-  it('FIRST guard statement is the living-admin FOR UPDATE lock (ORDER BY id)', async () => {
+  it('FIRST tx statement is the living-admin FOR UPDATE lock (ORDER BY id)', async () => {
     const db = makeDb(2);
     const svc = await makeService(db);
     await svc.update('admin-2', { role: 'Player' } as never, 'admin-1');
@@ -141,12 +147,23 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
     expect(rendered).toContain('now()');
   });
 
-  it('count<=1 refuses with 400 BEFORE any write (single remaining admin)', async () => {
+  it('count<=1 throws INSIDE the tx: 400 with zero writes anywhere', async () => {
     const db = makeDb(1);
     const svc = await makeService(db);
     await expect(
       svc.update('admin-2', { role: 'Player' } as never, 'admin-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(db._updateCalls).toHaveLength(0);
+    expect(db._txUpdates).toHaveLength(0);
+    expect(db._outerUpdates).toHaveLength(0);
+  });
+
+  it('non-admin targets keep the plain path: no tx, outer update only', async () => {
+    const db = makeDb(2);
+    const svc = await makeService(db, 'Player');
+    await svc.update('admin-2', { banned: true } as never, 'admin-1');
+    expect(db._statements.some((s) => s.kind === 'raw')).toBe(false);
+    expect(db._statements.some((s) => s.kind === 'count')).toBe(false);
+    expect(db._outerUpdates).toHaveLength(1);
+    expect(db._txUpdates).toHaveLength(0);
   });
 });

@@ -166,20 +166,48 @@ export class AdminUsersService {
       }
     }
 
-    // ── Last-admin protection (P2-116) ──
+    // ── Last-admin protection + the write, ONE transaction (P2-116) ──
     // Demoting or banning the final Admin would lock everyone out of the HQ
-    // console — block both mutations. Race discipline: when this mutation
-    // actually targets an Admin row, the guard re-count runs INSIDE a
-    // transaction that first locks ALL living-admin rows FOR UPDATE, so two
-    // concurrent demotes of the last two admins serialize: the loser re-counts
-    // against post-winner state and sees count 1 → 400 (plain count-then-write
-    // let both pass). Non-admin targets skip the tx entirely (no lock cost on
-    // the common path).
-    if (
+    // console — block both mutations. Race discipline: when the mutation
+    // targets an Admin row, the guard AND the write run inside one tx that
+    // first locks ALL living-admin rows FOR UPDATE, so two concurrent demotes
+    // of the last two admins serialize end-to-end: the loser re-counts against
+    // post-winner committed state and sees count 1 → 400. (First attempt
+    // released the locks at guard-commit and wrote on the outer db after —
+    // PR-Agent run #79 CRITICAL: the second demote could still re-count
+    // pre-write state. The write MUST share the tx that holds the locks.)
+    // Non-admin targets keep the plain single-statement update.
+    const updates: {
+      role?: 'Player' | 'VenueOwner' | 'Admin';
+      banned_at?: Date | null;
+      suspended_until?: Date | null;
+    } = {};
+
+    if (dto.role !== undefined) updates.role = dto.role;
+    if (dto.banned !== undefined) updates.banned_at = dto.banned ? new Date() : null;
+    if (dto.suspendedUntil !== undefined) {
+      // Run #62: a past date writes an already-expired suspension silently —
+      // the row reads "not suspended" immediately (stillModerated=false, no
+      // disconnect, no player notice). Reject instead of storing a no-op.
+      if (
+        dto.suspendedUntil !== null &&
+        new Date(dto.suspendedUntil).getTime() <= Date.now()
+      ) {
+        throw new BadRequestException('Suspension must be in the future.');
+      }
+      updates.suspended_until = dto.suspendedUntil ? new Date(dto.suspendedUntil) : null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestException('No changes provided.');
+    }
+
+    const adminTargeted =
       before.role === 'Admin' &&
-      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true)
-    ) {
-      const lastAdminViolation = await this.db.transaction(async (tx) => {
+      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true);
+
+    if (adminTargeted) {
+      await this.db.transaction(async (tx) => {
         // Lock order: every LIVING admin row, deterministic by id (mirrors
         // rescheduleMatch's ORDER BY id slot locks — same order in every tx,
         // no lock-cycle). PDPL ghosts (deleted/banned/expired-suspended) hold
@@ -209,45 +237,26 @@ export class AdminUsersService {
               sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
             ),
           );
-        return count <= 1;
+        if (count <= 1) {
+          // Thrown INSIDE the tx → drizzle rolls back (nothing written) and
+          // the 400 propagates to the controller unchanged.
+          throw new BadRequestException(
+            'Cannot demote or ban the last active admin account.',
+          );
+        }
+
+        // The write lives INSIDE the lock-holding tx — the actual race fix.
+        await tx
+          .update(users)
+          .set(withTimestamp(updates))
+          .where(eq(users.id, id));
       });
-
-      if (lastAdminViolation) {
-        throw new BadRequestException(
-          'Cannot demote or ban the last active admin account.',
-        );
-      }
+    } else {
+      await this.db
+        .update(users)
+        .set(withTimestamp(updates))
+        .where(eq(users.id, id));
     }
-
-    const updates: {
-      role?: 'Player' | 'VenueOwner' | 'Admin';
-      banned_at?: Date | null;
-      suspended_until?: Date | null;
-    } = {};
-
-    if (dto.role !== undefined) updates.role = dto.role;
-    if (dto.banned !== undefined) updates.banned_at = dto.banned ? new Date() : null;
-    if (dto.suspendedUntil !== undefined) {
-      // Run #62: a past date writes an already-expired suspension silently —
-      // the row reads "not suspended" immediately (stillModerated=false, no
-      // disconnect, no player notice). Reject instead of storing a no-op.
-      if (
-        dto.suspendedUntil !== null &&
-        new Date(dto.suspendedUntil).getTime() <= Date.now()
-      ) {
-        throw new BadRequestException('Suspension must be in the future.');
-      }
-      updates.suspended_until = dto.suspendedUntil ? new Date(dto.suspendedUntil) : null;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      throw new BadRequestException('No changes provided.');
-    }
-
-    await this.db
-      .update(users)
-      .set(withTimestamp(updates))
-      .where(eq(users.id, id));
 
     const after = await this.findOne(id);
     await this.audit.log({

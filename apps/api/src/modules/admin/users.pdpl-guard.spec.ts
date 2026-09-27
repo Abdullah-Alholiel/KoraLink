@@ -128,10 +128,29 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
 
   it('last-admin protection counts only LIVING admins (deleted_at IS NULL — run #34)', async () => {
     const db = makeDb();
-    // Let the post-guard UPDATE resolve so the guard path runs to completion.
-    (db as { update?: unknown }).update = () => ({
-      set: () => ({ where: () => Promise.resolve() }),
-    });
+    // P2-116 (run #79): the demote targets an Admin, so guard + write now run
+    // inside ONE transaction — provide a tx that resolves the guard count and
+    // swallows the tx-internal write.
+    (db as { transaction?: unknown }).transaction = async (
+      fn: (tx: unknown) => Promise<unknown>,
+    ) => {
+      const calls = (db as unknown as { _selectCalls: Array<{ table: unknown; where: unknown }> })
+        ._selectCalls;
+      return fn({
+        execute: () => Promise.resolve({ rows: [], rowCount: 0 }),
+        select: () => ({
+          from: (table: unknown) => ({
+            where: (where: unknown) => {
+              calls.push({ table, where });
+              return Promise.resolve([{ count: 2 }]);
+            },
+          }),
+        }),
+        update: () => ({
+          set: () => ({ where: () => Promise.resolve() }),
+        }),
+      });
+    };
     const svc = await makeService(db);
     // Target is a LIVING admin (ghost 409 must NOT fire) being demoted.
     jest.spyOn(svc, 'findOne').mockResolvedValue({
