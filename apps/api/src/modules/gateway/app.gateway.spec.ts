@@ -1,5 +1,5 @@
 import { AppGateway } from './app.gateway';
-import { users } from '../../database/schema';
+import { users, match_players, matches } from '../../database/schema';
 
 /** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
 const MATCH_ID = '11111111-1111-4111-8111-111111111111';
@@ -294,14 +294,40 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
 
   const active: Row = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null };
 
+  /** P2-111 (run #81): matches row served to the send-message predicate.
+   * Default = a live future match (chat open) so every pre-existing case
+   * behaves exactly as before. Null = match row missing entirely. */
+  type MatchRow = { status: string; scheduled_at: Date; duration_mins: number };
+  const FUTURE_MATCH: MatchRow = {
+    status: 'Open',
+    scheduled_at: new Date(Date.now() + 3_600_000),
+    duration_mins: 90,
+  };
+
   /** DB stub routed by table: `users` selects return userRow (null = missing row),
-   * `match_players` selects return the membership row; insert → returning. */
-  function makeRoutedDb(userRow: Row | null, membership: Array<{ id: string }> = [{ id: 'mp-1' }]) {
+   * `match_players` selects return the membership row, `matches` returns matchRow
+   * (P2-111 chat predicate); insert → returning. */
+  function makeRoutedDb(
+    userRow: Row | null,
+    membership: Array<{ id: string }> = [{ id: 'mp-1' }],
+    matchRow: MatchRow | null = FUTURE_MATCH,
+  ) {
     return {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            limit: async () => (table === users ? (userRow ? [userRow] : []) : membership),
+            limit: async () =>
+              table === users
+                ? userRow
+                  ? [userRow]
+                  : []
+                : table === match_players
+                  ? membership
+                  : table === matches
+                    ? matchRow
+                      ? [matchRow]
+                      : []
+                    : [],
           }),
         }),
       }),
@@ -464,7 +490,20 @@ describe('AppGateway WS input hardening (run #78)', () => {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            limit: async () => (table === users ? [clean] : [{ id: 'mp-1' }]),
+            // P2-111: the send-message path also reads the matches row for
+            // the chat predicate — serve a live future match (chat open).
+            limit: async () =>
+              table === users
+                ? [clean]
+                : table === matches
+                  ? [
+                      {
+                        status: 'Open',
+                        scheduled_at: new Date(Date.now() + 3_600_000),
+                        duration_mins: 90,
+                      },
+                    ]
+                  : [{ id: 'mp-1' }],
           }),
         }),
       }),
@@ -662,4 +701,86 @@ describe('AppGateway WS input hardening (run #78)', () => {
       ['typing:sock-1', 'u1'],
     ]);
   });
+
+  // ── P2-111 (run #81): terminal-status chat predicate on the WS surface ────
+  describe('send-message chat predicate (P2-111)', () => {
+    /** Stub serving a matches row with the given status/clock for the predicate. */
+    function makeGwWithMatch(matchRow: unknown) {
+      const db = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: async () =>
+                table === users
+                  ? [clean]
+                  : table === matches
+                    ? matchRow
+                      ? [matchRow]
+                      : []
+                    : [{ id: 'mp-1' }],
+            }),
+          }),
+        }),
+      query: { match_messages: { findFirst: async () => undefined } },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+    const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { consume, release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return { gateway };
+  }
+
+  const future = { status: 'Open', scheduled_at: new Date(Date.now() + 3_600_000), duration_mins: 90 };
+  const longPast = { status: 'Open', scheduled_at: new Date(Date.now() - 6 * 3_600_000), duration_mins: 90 };
+
+  it('accepts a message for a live future match', async () => {
+    const { gateway } = makeGwWithMatch(future);
+    const client = makeClient();
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+    ).resolves.toBeUndefined();
+  });
+
+  it('accepts an InProgress match past its end (overtime stays open)', async () => {
+    const { gateway } = makeGwWithMatch({ ...longPast, status: 'InProgress' });
+    const client = makeClient();
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a message for a Completed match', async () => {
+    const { gateway } = makeGwWithMatch({ ...future, status: 'Completed' });
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow('lobby chat is closed');
+  });
+
+  it('rejects a message for an Open match long past its end', async () => {
+    const { gateway } = makeGwWithMatch(longPast);
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow('lobby chat is closed');
+  });
+});
 });

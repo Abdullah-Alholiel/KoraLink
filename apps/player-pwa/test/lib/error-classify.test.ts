@@ -91,6 +91,17 @@ describe('classifyError — moderation codes (P1-47)', () => {
     expect(classifyError(err)).toBe('deleted');
   });
 
+  it('maps FetchError code MATCH_CHAT_CLOSED → "chatClosed" (P2-111)', () => {
+    const err = new FetchError(
+      'This match has ended — the lobby chat is closed.',
+      403,
+      '/matches/m1/messages',
+      'MATCH_CHAT_CLOSED',
+    );
+    expect(classifyError(err)).toBe('chatClosed');
+    expect(errorKey('chatClosed')).toBe('errors.chatClosed');
+  });
+
   it('an unknown code falls through to status-based classification', () => {
     const err = new FetchError('Nope.', 403, '/x', 'SOMETHING_ELSE');
     expect(classifyError(err)).toBe('forbidden');

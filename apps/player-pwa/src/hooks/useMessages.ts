@@ -155,7 +155,14 @@ function mergeMessages(
  */
 const CHAT_PAGE_SIZE = 50;
 
-export function useMatchChat(matchId: string | null) {
+export function useMatchChat(
+  matchId: string | null,
+  // P2-111 (run #81): the WS-echo send path has no error channel (the emit
+  // just never resolves), so the REST fallback's FetchError is the only
+  // carrier of WHY a send failed — e.g. the chat-closed code on a finished
+  // match. The sheet turns it into authored, localized copy (P1-47 pattern).
+  onSendError?: (err: FetchError) => void,
+) {
   const queryClient = useQueryClient();
   const currentUser = useAppStore(selectUser);
   const rt = getRealtime();
@@ -463,7 +470,7 @@ export function useMatchChat(matchId: string | null) {
         reconcile(data);
       }
     },
-    onError: (_err, { clientMessageId }) => {
+    onError: (err, { clientMessageId }) => {
       setLocalMessages((prev) =>
         prev.map((m) =>
           m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m,
@@ -474,6 +481,9 @@ export function useMatchChat(matchId: string | null) {
         clearTimeout(timer);
         ackTimersRef.current.delete(clientMessageId);
       }
+      // P2-111: surface the failure reason (what happened + why) — authored
+      // and localized by the sheet from the stable API code.
+      if (onSendError && err instanceof FetchError) onSendError(err);
     },
   });
 

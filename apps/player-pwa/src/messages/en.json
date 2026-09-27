@@ -28,7 +28,8 @@
     "genericRetry": "Try again",
     "banned": "Your account has been banned. If you think this is a mistake, contact support.",
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
-    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
+    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue.",
+    "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going."
   },
   "offline": {
     "backToPage": "Back to the page",

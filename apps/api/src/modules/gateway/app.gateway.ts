@@ -18,6 +18,7 @@ import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { match_players, match_messages, users } from '../../database/schema';
+import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from '../matches/chat-status.predicate';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -387,6 +388,25 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .limit(1);
 
     if (!membership) throw new WsException('You are not a member of this match.');
+
+    // P2-111 (run #81): terminal/expired matches stop accepting lobby
+    // messages — same shared predicate as the REST sendMessage path.
+    const [chatMatch] = await this.db
+      .select({
+        status: schema.matches.status,
+        scheduled_at: schema.matches.scheduled_at,
+        duration_mins: schema.matches.duration_mins,
+      })
+      .from(schema.matches)
+      .where(eq(schema.matches.id, data.matchId))
+      .limit(1);
+    if (chatMatch && isChatClosed(chatMatch)) {
+      const err = new WsException(
+        'This match has ended — the lobby chat is closed.',
+      ) as WsException & { code?: string };
+      err.code = CHAT_CLOSED_ERROR_CODE;
+      throw err;
+    }
 
     // Idempotency — a retried send with the same clientMessageId returns the
     // already-persisted message instead of inserting a duplicate.
