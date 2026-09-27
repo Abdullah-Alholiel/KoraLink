@@ -166,29 +166,53 @@ export class AdminUsersService {
       }
     }
 
-    // ── Last-admin protection ──
+    // ── Last-admin protection (P2-116) ──
     // Demoting or banning the final Admin would lock everyone out of the HQ
-    // console — block both mutations.
+    // console — block both mutations. Race discipline: when this mutation
+    // actually targets an Admin row, the guard re-count runs INSIDE a
+    // transaction that first locks ALL living-admin rows FOR UPDATE, so two
+    // concurrent demotes of the last two admins serialize: the loser re-counts
+    // against post-winner state and sees count 1 → 400 (plain count-then-write
+    // let both pass). Non-admin targets skip the tx entirely (no lock cost on
+    // the common path).
     if (
       before.role === 'Admin' &&
       ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true)
     ) {
-      const [{ count }] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(users)
-        .where(
-          and(
-            eq(users.role, 'Admin'),
-            // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
-            // are NOT living admins — counting them let the last LIVING admin
-            // be demoted/banned while only ghosts remained (run #34, found by
-            // Reviewer A). Same rationale as the status=active fix in f40acd9.
-            sql`${users.deleted_at} IS NULL`,
-            sql`${users.banned_at} IS NULL`,
-            sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
-          ),
+      const lastAdminViolation = await this.db.transaction(async (tx) => {
+        // Lock order: every LIVING admin row, deterministic by id (mirrors
+        // rescheduleMatch's ORDER BY id slot locks — same order in every tx,
+        // no lock-cycle). PDPL ghosts (deleted/banned/expired-suspended) hold
+        // role='Admin' but are not living admins; locking them is harmless and
+        // keeps the lock shape identical to the guarded count below.
+        await tx.execute(
+          sql`SELECT id FROM ${users} WHERE ${users.role} = 'Admin'
+              AND ${users.deleted_at} IS NULL
+              AND ${users.banned_at} IS NULL
+              AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())
+              ORDER BY id
+              FOR UPDATE`,
         );
-      if (count <= 1) {
+
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(users)
+          .where(
+            and(
+              eq(users.role, 'Admin'),
+              // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
+              // are NOT living admins — counting them let the last LIVING admin
+              // be demoted/banned while only ghosts remained (run #34, found by
+              // Reviewer A). Same rationale as the status=active fix in f40acd9.
+              sql`${users.deleted_at} IS NULL`,
+              sql`${users.banned_at} IS NULL`,
+              sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
+            ),
+          );
+        return count <= 1;
+      });
+
+      if (lastAdminViolation) {
         throw new BadRequestException(
           'Cannot demote or ban the last active admin account.',
         );
