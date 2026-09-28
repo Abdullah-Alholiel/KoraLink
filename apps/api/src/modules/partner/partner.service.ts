@@ -548,7 +548,15 @@ export class PartnerService {
         );
       }
 
-      await tx.delete(pitches).where(scope);
+      // Belt-and-braces (PR-Agent MINOR, run #83): under READ COMMITTED the
+      // DELETE gets its own snapshot, so an ownership transfer committing
+      // between the locked SELECT and this DELETE would match 0 rows —
+      // observe the affected-row count instead of claiming {deleted: true}.
+      const deleted = await tx
+        .delete(pitches)
+        .where(scope)
+        .returning({ id: pitches.id });
+      if (!deleted.length) throw new NotFoundException('Pitch not found.');
     });
 
     this.realtime.broadcastOps('venues');

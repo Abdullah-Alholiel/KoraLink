@@ -31,9 +31,13 @@ function makeService(opts: {
   matchCount: number;
   /** Venue owner as committed in the DB when the tx runs. */
   currentOwner?: string;
+  /** Rows the tx DELETE should "return" (defaults to the pitch when present). */
+  deleteRows?: unknown[];
 }) {
   const calls: string[] = [];
   const wheres: { select?: unknown; delete?: unknown } = {};
+  /** Rows the tx DELETE "returns" — empty simulates a mid-flight scope miss. */
+  const deleteRows: unknown[] = opts.deleteRows ?? (opts.pitchRow ? [{ id: 'pitch-1' }] : []);
   const visible = (where: unknown) => {
     if (!opts.pitchRow) return false;
     const q = render(where);
@@ -67,7 +71,7 @@ function makeService(opts: {
       where: (where: unknown) => {
         if (table === pitches) wheres.delete = where;
         calls.push(table === pitches ? 'tx-delete-pitch' : 'tx-delete-other');
-        return thenable([]);
+        return thenable(deleteRows);
       },
     }),
   };
@@ -211,6 +215,22 @@ describe('PartnerService.deletePitch TOCTOU guard', () => {
         'This pitch has 2 match(es) in its history and cannot be deleted — set it unavailable instead.',
       );
       expect(calls).not.toContain('tx-delete-pitch');
+    });
+
+    it('P2-120 hardening: DELETE matching 0 rows (mid-flight transfer) 404s instead of {deleted:true}', async () => {
+      // SELECT (old-owner snapshot) succeeds, but the DELETE statement's fresh
+      // READ COMMITTED snapshot misses the row — affected-row guard must fire.
+      const { svc, calls, broadcastOps } = makeService({
+        pitchRow: PITCH,
+        matchCount: 0,
+        currentOwner: OWNER,
+        deleteRows: [],
+      });
+      await expect(svc.deletePitch(OWNER, 'VenueOwner', 'pitch-1')).rejects.toThrow(
+        new NotFoundException('Pitch not found.'),
+      );
+      expect(calls).toContain('tx-delete-pitch');
+      expect(broadcastOps).not.toHaveBeenCalled();
     });
   });
 });
