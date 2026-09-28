@@ -507,9 +507,21 @@ export class PartnerService {
    * the FK cascades pitch → matches, which would erase match history,
    * rosters, and wallet ledger references. Pitches with history must be
    * deactivated (is_active=false) instead.
+   *
+   * P2-120: the tx lock + DELETE re-apply the venue-owner scope for
+   * non-Admins, so ownership transferred after the pre-check reads as a
+   * clean 404 instead of deleting on a stale authorization.
    */
   async deletePitch(actorId: string, actorRole: string, pitchId: string) {
     await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    const scope =
+      actorRole === 'Admin'
+        ? eq(pitches.id, pitchId)
+        : and(
+            eq(pitches.id, pitchId),
+            sql`${pitches.venue_id} IN (SELECT id FROM venues WHERE owner_id = ${actorId})`,
+          );
 
     // One tx + FOR UPDATE on the pitch row: matches.pitch_id is ON DELETE
     // CASCADE, so without the lock a match inserted between the history count
@@ -519,7 +531,7 @@ export class PartnerService {
       const [pitch] = await tx
         .select({ id: pitches.id })
         .from(pitches)
-        .where(eq(pitches.id, pitchId))
+        .where(scope)
         .limit(1)
         .for('update');
 
@@ -536,7 +548,15 @@ export class PartnerService {
         );
       }
 
-      await tx.delete(pitches).where(eq(pitches.id, pitchId));
+      // Belt-and-braces (PR-Agent MINOR, run #83): under READ COMMITTED the
+      // DELETE gets its own snapshot, so an ownership transfer committing
+      // between the locked SELECT and this DELETE would match 0 rows —
+      // observe the affected-row count instead of claiming {deleted: true}.
+      const deleted = await tx
+        .delete(pitches)
+        .where(scope)
+        .returning({ id: pitches.id });
+      if (!deleted.length) throw new NotFoundException('Pitch not found.');
     });
 
     this.realtime.broadcastOps('venues');
