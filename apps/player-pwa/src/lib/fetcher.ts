@@ -1,5 +1,6 @@
 import { env } from '@/env.mjs';
 import { addBreadcrumb } from '@/providers/ObservabilityProvider';
+import { clearUserRuntimeCaches } from '@/lib/sw-cache-hygiene';
 // Direct store access for the 401 self-heal — the store imports nothing from
 // this module, so no cycle (AuthBootstrap composes both, which is fine).
 import { useAppStore } from '@/store/useAppStore';
@@ -35,6 +36,12 @@ export function setAuthToken(token: string): void {
 export function clearAuthToken(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(TOKEN_KEY);
+    // P2-121 (run #83): EVERY session-ending path goes through here (profile
+    // sheet, 401 auto-logout, verify-page reset, account deletion, auth
+    // bootstrap healing) — so the SW runtime caches holding THIS user's
+    // chat/match/profile responses are wiped on sign-out regardless of which
+    // door was used (shared-device privacy; fire-and-forget by design).
+    void clearUserRuntimeCaches();
   }
 }
 

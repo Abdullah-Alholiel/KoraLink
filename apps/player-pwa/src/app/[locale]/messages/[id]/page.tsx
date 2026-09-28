@@ -6,6 +6,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { ArrowLeft, Send, AlertCircle, Loader2, MoreVertical, MessageSquare } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import type { PersonalMessage } from '@/hooks/useConversations';
 import PlayerProfileSheet from '@/components/matches/PlayerProfileSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
@@ -67,6 +68,7 @@ export default function ConversationPage({
 
   const { conversations } = useConversations();
   const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
+  const isOnline = useOnlineStatus();
 
   const [draft, setDraft] = useState('');
   // Hydration-safe clock (run #49): `now` is null during SSR AND the first
@@ -162,6 +164,16 @@ export default function ConversationPage({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto scroll-container py-4">
+          {!isOnline && !isLoading && !error && (
+            <div
+              className="mx-4 mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2"
+              role="status"
+            >
+              <p className="text-[11px] text-amber-700 text-center">
+                {t('messages.offlineCachedHistory')}
+              </p>
+            </div>
+          )}
           {isLoading && (
             <div className="flex justify-center py-8">
               <span className="text-xs text-gray-400">{t('common.loading')}</span>

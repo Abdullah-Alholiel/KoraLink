@@ -770,6 +770,7 @@
     "noMessagesDescription": "Join a match to start chatting with players.",
     "noMessagesYet": "No messages yet",
     "typeMessage": "Type a message…",
+    "offlineCachedHistory": "You're offline — showing your recent messages. Reconnect to load new ones.",
     "startFailed": "Couldn't start the chat. Check your connection and try again.",
     "send": "Send",
     "sending": "Sending…",

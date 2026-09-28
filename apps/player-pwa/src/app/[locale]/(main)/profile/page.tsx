@@ -708,7 +708,7 @@ export default function ProfilePage() {
                 onConfirm={async () => {
                     setSignOutPending(true);
                     // Brief delay so the spinner is visible; the action
-                    // itself is local (Zustand clear + cookie clear + 
+                    // itself is local (Zustand clear + cookie clear +
                     // navigate). A future run could add a tracking call.
                     await new Promise((r) => setTimeout(r, 200));
                     logout();
