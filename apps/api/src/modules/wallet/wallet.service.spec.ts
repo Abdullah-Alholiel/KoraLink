@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { WalletService, isUniqueViolation } from './wallet.service';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { transactions, users } from '../../database/schema';
 
 /**
@@ -186,6 +187,118 @@ describe('isUniqueViolation', () => {
     ).toBe(false);
     expect(isUniqueViolation(null, 'x')).toBe(false);
     expect(isUniqueViolation('23505', 'x')).toBe(false);
+  });
+});
+
+/**
+ * P2-119 specs: getHistory optional ISO date range. The range bounds are
+ * ANDed onto the user_id predicate (never replacing it) and the count query
+ * shares the same predicate so total/hasMore stay truthful.
+ */
+describe('WalletService getHistory — date range (P2-119)', () => {
+  const dialect = new PgDialect();
+
+  /** db stub recording every where() predicate as rendered SQL + params. */
+  function makeHistoryDb(rows: unknown[] = [], total = 0) {
+    const wheres: { sql: string; params: unknown[] }[] = [];
+    const record = (cond: unknown) => {
+      const q = dialect.sqlToQuery(cond as never);
+      wheres.push({ sql: q.sql, params: q.params });
+    };
+    const db = {
+      select: (fields?: unknown) => ({
+        from: (_table: unknown) => ({
+          where: (cond: unknown) => {
+            record(cond);
+            if (fields) return Promise.resolve([{ total }]);
+            return {
+              orderBy: () => ({
+                offset: () => ({
+                  limit: async () => rows,
+                }),
+              }),
+            };
+          },
+        }),
+      }),
+    };
+    return { db, wheres };
+  }
+
+  const FROM = '2026-09-01T00:00:00.000Z';
+  const TO = '2026-09-30T23:59:59.999Z';
+
+  it('no range: only the user_id predicate is applied', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1');
+    expect(wheres).toHaveLength(2);
+    for (const w of wheres) {
+      expect(w.sql).toContain('"user_id" = $1');
+      expect(w.sql).not.toContain('>=');
+      expect(w.sql).not.toContain('<=');
+      expect(w.params).toEqual(['user-1']);
+    }
+  });
+
+  it('from-only: adds created_at >= from to both queries', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 1, 20, FROM);
+    expect(wheres).toHaveLength(2);
+    for (const w of wheres) {
+      expect(w.sql).toContain('"created_at" >=');
+      expect(w.sql).not.toContain('<=');
+      expect(w.params).toContain('user-1');
+      expect(w.params).toContainEqual(expect.stringContaining('2026-09-01'));
+    }
+  });
+
+  it('to-only: adds created_at <= to to both queries', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 1, 20, undefined, TO);
+    for (const w of wheres) {
+      expect(w.sql).toContain('"created_at" <=');
+      expect(w.sql).not.toContain('>=');
+      expect(w.params).toContain('user-1');
+      expect(w.params).toContainEqual(expect.stringContaining('2026-09-30'));
+    }
+  });
+
+  it('both ordered: applies both bounds and reports filtered total/hasMore', async () => {
+    const row = { id: 'tx-1', user_id: 'user-1' };
+    const { db, wheres } = makeHistoryDb([row], 25);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20, FROM, TO);
+    expect(res).toEqual({ transactions: [row], total: 25, hasMore: true });
+    for (const w of wheres) {
+      expect(w.sql).toContain('"created_at" >=');
+      expect(w.sql).toContain('"created_at" <=');
+    }
+  });
+
+  it('both inverted: throws BadRequestException without querying', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await expect(svc.getHistory('user-1', 1, 20, TO, FROM)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(wheres).toHaveLength(0);
+  });
+
+  it('predicate additivity: user_id is still ANDed when a range is present', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 2, 10, FROM, TO);
+    expect(wheres).toHaveLength(2);
+    for (const w of wheres) {
+      expect(w.sql).toMatch(/"user_id" = \$1 and .*"created_at" >= .* and .*"created_at" <= /);
+      expect(w.params[0]).toBe('user-1');
+      expect(w.sql).not.toMatch(/\bor\b/);
+    }
+    // list and count share the identical predicate
+    expect(wheres[0]).toEqual(wheres[1]);
   });
 });
 
