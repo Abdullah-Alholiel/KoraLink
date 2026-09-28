@@ -23,6 +23,7 @@ const ENTITY_TYPES = [
   'pitch',
   'report',
   'settlement',
+  'setting',
   'slot',
   'transaction',
   'user',
