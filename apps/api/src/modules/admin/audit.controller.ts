@@ -20,6 +20,11 @@ export class AdminAuditController {
     const conds: SQL[] = [];
     if (dto.adminId) conds.push(sql`a.admin_id = ${dto.adminId}`);
     if (dto.entityType) conds.push(sql`a.entity_type = ${dto.entityType}`);
+    // Escape LIKE wildcards so a literal search term (e.g. "50%") matches itself.
+    if (dto.action) {
+      const pattern = '%' + dto.action.replace(/[\\%_]/g, (m) => '\\' + m) + '%';
+      conds.push(sql`a.action ILIKE ${pattern} ESCAPE '\\'`);
+    }
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
     const rows = (await this.db.execute(sql`
