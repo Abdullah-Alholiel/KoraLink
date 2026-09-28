@@ -83,7 +83,7 @@ export function useWalletHistory(params?: WalletHistoryParams) {
   });
 }
 
-/** Safety cap on pages fetched for a single export (100 × 20 = 2,000 rows). */
+/** Safety cap on pages fetched for a single export (20 pages x 100 rows = 2,000; the page reports truncation so the caller can cancel). */
 export const WALLET_EXPORT_MAX_PAGES = 20;
 
 /**
