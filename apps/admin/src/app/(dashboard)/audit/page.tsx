@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -36,11 +36,18 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const [entityType, setEntityType] = useState('');
   const [action, setAction] = useState('');
+  // Debounce the free-text action search so typing doesn't fire a request
+  // per keystroke; committed value is what the query string uses.
+  const [actionQuery, setActionQuery] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setActionQuery(action), 300);
+    return () => clearTimeout(id);
+  }, [action]);
   const [selected, setSelected] = useState<AuditLog | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
   if (entityType) qs.set('entityType', entityType);
-  if (action) qs.set('action', action);
+  if (actionQuery) qs.set('action', actionQuery);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
