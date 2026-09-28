@@ -13,6 +13,11 @@ export class ListAuditDto {
   @IsString()
   entityType?: string;
 
+  @ApiPropertyOptional({ description: 'Case-insensitive substring match on the action name.' })
+  @IsOptional()
+  @IsString()
+  action?: string;
+
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
   @IsInt()

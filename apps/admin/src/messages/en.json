@@ -12,6 +12,7 @@
     "filterByStatus": "Filter by status",
     "filterByRole": "Filter by role",
     "filterByType": "Filter by type",
+    "filterByAction": "Filter by action",
     "filterBySubject": "Filter by subject type",
     "prev": "Prev",
     "next": "Next",

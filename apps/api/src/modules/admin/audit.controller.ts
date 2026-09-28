@@ -20,6 +20,7 @@ export class AdminAuditController {
     const conds: SQL[] = [];
     if (dto.adminId) conds.push(sql`a.admin_id = ${dto.adminId}`);
     if (dto.entityType) conds.push(sql`a.entity_type = ${dto.entityType}`);
+    if (dto.action) conds.push(sql`a.action ILIKE ${'%' + dto.action + '%'}`);
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
     const rows = (await this.db.execute(sql`

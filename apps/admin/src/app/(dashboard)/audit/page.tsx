@@ -16,13 +16,30 @@ import RecordDrawer from '@/components/RecordDrawer';
 
 type AuditResponse = ListResponse<AuditLog> & { logs: AuditLog[] };
 
+/** Discrete entity types written by admin services (matches audit_logs.entity_type). */
+const ENTITY_TYPES = [
+  'dispute',
+  'match',
+  'pitch',
+  'report',
+  'settlement',
+  'slot',
+  'transaction',
+  'user',
+  'venue',
+] as const;
+
 export default function AuditPage() {
   const t = useTranslations('hq');
   const tc = useTranslations('common');
   const [page, setPage] = useState(1);
+  const [entityType, setEntityType] = useState('');
+  const [action, setAction] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
+  if (entityType) qs.set('entityType', entityType);
+  if (action) qs.set('action', action);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
@@ -73,6 +90,36 @@ export default function AuditPage() {
   return (
     <div>
       <PageHeader title={t('auditTitle')} subtitle={t('auditSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
+
+      <div className="flex items-center gap-3 px-8 py-4">
+        <select
+          aria-label={tc('filterByType')}
+          value={entityType}
+          onChange={(e) => {
+            setEntityType(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{tc('allTypes')}</option>
+          {ENTITY_TYPES.map((et) => (
+            <option key={et} value={et}>
+              {et}
+            </option>
+          ))}
+        </select>
+        <input
+          type="search"
+          aria-label={tc('filterByAction')}
+          value={action}
+          onChange={(e) => {
+            setAction(e.target.value);
+            setPage(1);
+          }}
+          placeholder={tc('filterByAction')}
+          className="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+      </div>
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingAudit')}</div>
