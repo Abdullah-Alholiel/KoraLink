@@ -188,8 +188,9 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
     // stay in lockstep with the USER-SCOPED recipes — a rename in
     // next.config.mjs without updating sw-cache-hygiene.ts would make
     // caches.delete() silently no-op and leak per-user data across sign-out.
-    // (matches-feed / clubs-venues / static-assets are shared, non-user data —
-    // deliberately NOT purged on logout.)
+    // (run #84: matches-feed-cache IS user-scoped — the authed /matches feed
+    // is per-user — and IS purged; only clubs-venues + static assets stay
+    // deliberately unpurged as genuinely shared data.)
     it('logout purge list covers exactly the user-scoped runtime caches (drift guard)', async () => {
       const { USER_RUNTIME_CACHES } = await import('@/lib/sw-cache-hygiene');
       // The hygiene list is exactly these five — explicit, reviewed contract.
