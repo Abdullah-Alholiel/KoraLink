@@ -35,6 +35,7 @@ import {
     type PushSubscribeOutcome,
 } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
+import { clearUserRuntimeCaches } from '@/lib/sw-cache-hygiene';
 import { classifyError, errorKey } from '@/lib/error-classify';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
@@ -708,9 +709,13 @@ export default function ProfilePage() {
                 onConfirm={async () => {
                     setSignOutPending(true);
                     // Brief delay so the spinner is visible; the action
-                    // itself is local (Zustand clear + cookie clear + 
+                    // itself is local (Zustand clear + cookie clear +
                     // navigate). A future run could add a tracking call.
                     await new Promise((r) => setTimeout(r, 200));
+                    // P2-121: clear SW runtime caches holding THIS user's
+                    // chat/match/profile responses before navigation —
+                    // shared-device privacy (fire-and-forget by design).
+                    void clearUserRuntimeCaches();
                     logout();
                     clearAuthToken();
                     setSignOutSheetOpen(false);
