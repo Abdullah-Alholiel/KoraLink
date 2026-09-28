@@ -192,13 +192,16 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
     // deliberately NOT purged on logout.)
     it('logout purge list covers exactly the user-scoped runtime caches (drift guard)', async () => {
       const { USER_RUNTIME_CACHES } = await import('@/lib/sw-cache-hygiene');
-      // The hygiene list is exactly these four — explicit, reviewed contract.
+      // The hygiene list is exactly these five — explicit, reviewed contract.
+      // run #84 added matches-feed-cache (Reviewer A: the authed /matches feed
+      // is per-user data and must not outlive logout on a shared device).
       expect([...USER_RUNTIME_CACHES].sort()).toEqual(
         [
           'conversation-messages-cache',
           'conversations-list-cache',
           'match-detail-cache',
           'user-profile-cache',
+          'matches-feed-cache',
         ].sort(),
       );
       // AND every purged name is a real recipe in next.config.mjs — a recipe

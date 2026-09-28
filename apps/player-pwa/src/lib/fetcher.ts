@@ -1,6 +1,6 @@
 import { env } from '@/env.mjs';
 import { addBreadcrumb } from '@/providers/ObservabilityProvider';
-import { clearUserRuntimeCaches } from '@/lib/sw-cache-hygiene';
+import { clearUserRuntimeCaches, getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 // Direct store access for the 401 self-heal — the store imports nothing from
 // this module, so no cycle (AuthBootstrap composes both, which is fine).
 import { useAppStore } from '@/store/useAppStore';
@@ -171,6 +171,9 @@ export async function fetcher<T>(
           // snap an /en user back to Arabic (language-toggle incident).
           const seg = (p.split('/')[1] || '').toLowerCase();
           const localePrefix = seg === 'en' || seg === 'ar' ? `/${seg}` : '';
+          // RUN-#84 (Reviewer A IMPORTANT): await the fire-and-forget cache
+          // purge before the hard redirect so it cannot be aborted mid-flight.
+          await getLastRuntimeCachePurge();
           window.location.assign(`${localePrefix}/login`);
         }
       }
