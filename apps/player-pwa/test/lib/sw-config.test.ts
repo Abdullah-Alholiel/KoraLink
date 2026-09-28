@@ -185,17 +185,31 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
     });
 
     // P2-121 (run #83, PR-Agent MINOR drift guard): the logout purge list must
-    // stay in lockstep with the user-data recipes above — a recipe rename (or
-    // a new user-scoped cache) without updating sw-cache-hygiene.ts would make
+    // stay in lockstep with the USER-SCOPED recipes — a rename in
+    // next.config.mjs without updating sw-cache-hygiene.ts would make
     // caches.delete() silently no-op and leak per-user data across sign-out.
-    it('logout purge list covers EXACTLY the user-data runtime caches (drift guard)', async () => {
+    // (matches-feed / clubs-venues / static-assets are shared, non-user data —
+    // deliberately NOT purged on logout.)
+    it('logout purge list covers exactly the user-scoped runtime caches (drift guard)', async () => {
       const { USER_RUNTIME_CACHES } = await import('@/lib/sw-cache-hygiene');
-      const userDataRecipes = opts.runtimeCaching
-        .map((r) => r.options?.cacheName)
-        .filter((n): n is string => typeof n === 'string');
-      expect([...USER_RUNTIME_CACHES].sort()).toEqual([...userDataRecipes].sort());
-      // Money/auth NetworkOnly recipes carry no cacheName by design — the
-      // purge list can never be padded with unrelated names.
+      // The hygiene list is exactly these four — explicit, reviewed contract.
+      expect([...USER_RUNTIME_CACHES].sort()).toEqual(
+        [
+          'conversation-messages-cache',
+          'conversations-list-cache',
+          'match-detail-cache',
+          'user-profile-cache',
+        ].sort(),
+      );
+      // AND every purged name is a real recipe in next.config.mjs — a recipe
+      // rename without the hygiene update fails right here.
+      const named = new Set(
+        opts.runtimeCaching
+          .map((r) => r.options?.cacheName)
+          .filter((n): n is string => typeof n === 'string'),
+      );
+      for (const cache of USER_RUNTIME_CACHES) expect(named.has(cache)).toBe(true);
+      // Money/auth NetworkOnly recipes carry no cacheName by design.
       expect(opts.runtimeCaching.filter((r) => !r.options?.cacheName).length).toBe(3);
     });
 
