@@ -71,7 +71,13 @@ function makeService(opts: {
       where: (where: unknown) => {
         if (table === pitches) wheres.delete = where;
         calls.push(table === pitches ? 'tx-delete-pitch' : 'tx-delete-other');
-        return thenable(deleteRows);
+        // deletePitch chains .returning({id}) after .where(); keep the bare
+        // thenable too in case another path awaits the plain query.
+        const result = thenable(deleteRows);
+        return {
+          returning: () => result,
+          then: (resolve: (v: unknown) => void) => result.then(resolve),
+        };
       },
     }),
   };
