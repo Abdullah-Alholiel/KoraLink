@@ -10,18 +10,21 @@ import { AuditService } from './audit.service';
 type DB = PostgresJsDatabase<typeof schema>;
 
 type SettingSpec =
-  | { type: 'number'; min: number; max: number }
+  | { type: 'number'; min: number; max: number; integer?: boolean }
   | { type: 'text'; maxLength: number };
 
 /**
  * The complete platform-settings key universe. Server consumers
  * (PlatformSettingsService) and the admin UI agree on exactly these keys —
  * anything else is rejected rather than silently persisted.
+ *
+ * platform_margin_sar is money → decimals allowed; grace/cadence are
+ * counts → integer-only.
  */
 export const KNOWN_SETTINGS = {
   platform_margin_sar: { type: 'number', min: 0, max: 1000 },
-  grace_period_mins: { type: 'number', min: 0, max: 1440 },
-  payout_cadence_days: { type: 'number', min: 1, max: 90 },
+  grace_period_mins: { type: 'number', min: 0, max: 1440, integer: true },
+  payout_cadence_days: { type: 'number', min: 1, max: 90, integer: true },
   refund_policy: { type: 'text', maxLength: 10000 },
 } as const satisfies Record<string, SettingSpec>;
 
@@ -118,6 +121,9 @@ export class AdminSettingsService {
         throw new BadRequestException(
           `Setting "${key}" must be between ${spec.min} and ${spec.max}.`,
         );
+      }
+      if (spec.integer && !Number.isInteger(value)) {
+        throw new BadRequestException(`Setting "${key}" must be a whole number.`);
       }
       return value;
     }
