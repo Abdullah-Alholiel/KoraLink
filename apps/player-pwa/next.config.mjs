@@ -150,9 +150,11 @@ const withPWA = withPWAInit({
       {
         // P2-102 (run #75): conversations LIST — NetworkFirst so the Messages
         // screen has an offline fallback (last-seen list) instead of an empty
-        // state. Thread reads (`/conversations/:id/messages`) deliberately
-        // match NOTHING (end-anchored collection pattern) — chat freshness is
-        // React Query's job, same policy as match-chat sub-resources.
+        // state. Thread reads (/:id/messages) get their OWN recipe (P2-121,
+        // run #83 — mirrors the match-detail recipe): offline chat-open serves
+        // the last-fetched thread instead of a raw error. Chat freshness while
+        // ONLINE stays React Query's job (staleTime < cache window); the cache
+        // is only ever read as a fallback.
         urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations(?:\?.*)?$/,
         handler: 'NetworkFirst',
         options: {
@@ -166,6 +168,26 @@ const withPWA = withPWAInit({
             // Run #43: status 0 = opaque response — same-origin routes never
             // legitimately produce one, and caching it poisons the entry until
             // maxAge expiry. [200] only.
+            statuses: [200],
+          },
+        },
+      },
+      {
+        // P2-121 (run #83): conversation THREAD reads (/:id/messages) —
+        // NetworkFirst with a 1h window, mirroring match-detail. Registered
+        // AFTER the list recipe; workbox matches first-registered-first, and
+        // the list pattern is end-anchored so threads fall through to here.
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations\/[^/?#]+\/messages(?:\?.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'conversation-messages-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxAgeSeconds: 60 * 60, // 1 hour — same offline window as match detail
+            maxEntries: 30,
+          },
+          cacheableResponse: {
+            // [200] only — see the run #43 opaque-response note above.
             statuses: [200],
           },
         },

@@ -158,9 +158,22 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
       );
     });
 
-    it('conversation THREADS (/:id/messages) match NO cache recipe — chat freshness is React Query policy (P2-102, run #75)', () => {
-      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages`)).toBeUndefined();
-      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages?after=123`)).toBeUndefined();
+    it('conversation THREADS (/:id/messages) get their own NetworkFirst recipe (P2-121, run #83 — mirrors match-detail)', () => {
+      const threads = byCache('conversation-messages-cache');
+      expect(threads?.handler).toBe('NetworkFirst');
+      expect(threads?.options?.expiration?.maxAgeSeconds).toBe(3600);
+      expect(threads?.options?.networkTimeoutSeconds).toBe(3);
+      expect(threads?.options?.cacheableResponse?.statuses).toEqual([200]);
+      // Real thread URLs route into the thread cache…
+      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages`)).toBe(threads);
+      expect(matchingRecipe(`${API}/conversations/9f3c2a1e/messages?after=123`)).toBe(threads);
+      // …while the LIST URL still routes into the list cache (end-anchored).
+      expect(matchingRecipe(`${API}/conversations`)).toBe(byCache('conversations-list-cache'));
+      expect(matchingRecipe(`${API}/conversations?page=2`)).toBe(
+        byCache('conversations-list-cache'),
+      );
+      // Auth/money NetworkOnly recipes keep priority (registered first).
+      expect(matchingRecipe(`${API}/wallet`)?.handler).toBe('NetworkOnly');
     });
 
     it('recipe: conversations list is NetworkFirst with a 1h offline window (P2-102, run #75)', () => {

@@ -54,33 +54,6 @@ vi.mock('@/hooks/useConversations', () => ({
     fetchNextPage: vi.fn(),
     isFetchingNextPage: false,
   }),
-  useConversationMessages: () => ({
-    messages: [
-      {
-        id: 'pm-1',
-        conversationId: 'conv-1',
-        sender: { id: 'user-me', fullName: 'Me', handle: 'me', avatarUrl: '' },
-        content: 'hey test test',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'pm-2',
-        conversationId: 'conv-1',
-        sender: {
-          id: 'user-sultan',
-          fullName: 'Sultan Al-Dossari',
-          handle: 'sultan',
-          avatarUrl: '',
-        },
-        content: 'welcome 👋',
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    isLoading: false,
-    error: null,
-    sendMessage: { mutate: vi.fn() },
-    retryMessage: vi.fn(),
-  }),
   useStartConversation: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -88,6 +61,38 @@ vi.mock('@/hooks/useConversations', () => ({
     data: undefined,
     reset: vi.fn(),
   }),
+  useConversationMessages: vi.fn(
+    (() => {
+      if (messagesHookState.impl) return messagesHookState.impl();
+      return {
+        messages: [
+          {
+            id: 'pm-1',
+            conversationId: 'conv-1',
+            sender: { id: 'user-me', fullName: 'Me', handle: 'me', avatarUrl: '' },
+            content: 'hey test test',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'pm-2',
+            conversationId: 'conv-1',
+            sender: {
+              id: 'user-sultan',
+              fullName: 'Sultan Al-Dossari',
+              handle: 'sultan',
+              avatarUrl: '',
+            },
+            content: 'welcome 👋',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        isLoading: false,
+        error: null,
+        sendMessage: { mutate: vi.fn() },
+        retryMessage: vi.fn(),
+      };
+    }) as unknown as typeof import('@/hooks/useConversations').useConversationMessages,
+  ),
 }));
 
 const ME = {
@@ -100,6 +105,15 @@ const ME = {
   preferredPosition: '',
   locale: 'en' as const,
 };
+
+/**
+ * P2-121 (run #83): per-test override for useConversationMessages. The factory
+ * mock above is hoisted (cannot reference these), so tests re-point the shared
+ * mock HERE before renderPage(). Default: the full happy-path messages state.
+ */
+const messagesHookState = vi.hoisted(() => ({
+  impl: null as null | (() => unknown),
+}));
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -128,6 +142,7 @@ describe('ConversationPage — DM chat rendering (ChatSheet parity)', () => {
         followingCount: 0,
       })) as unknown as typeof fetcher);
     useAppStore.setState({ user: ME });
+    messagesHookState.impl = null;
   });
 
   it('renders every bubble inside a full-width row (definite width — no letter stacking)', async () => {
@@ -185,5 +200,46 @@ describe('ConversationPage — DM chat rendering (ChatSheet parity)', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Sultan Al-Dossari').length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  // ── P2-121 (run #83): offline cached-history notice ──
+  // Uses the REAL useOnlineStatus hook (defaults online in SSR/jsdom) and
+  // drives it through the browser's own `offline` event — no hook mock.
+  it('shows the offline cached-history notice when the browser goes offline (P2-121)', async () => {
+    renderPage();
+    // Online: no notice.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent(
+      "You're offline — showing your recent messages. Reconnect to load new ones.",
+    );
+    // Back online: notice disappears.
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides the offline notice while loading or on error (P2-121)', async () => {
+    // Re-point the shared hook mock into the loading state.
+    messagesHookState.impl = () => ({
+      messages: [],
+      isLoading: true,
+      error: null,
+      sendMessage: { mutate: vi.fn() },
+      retryMessage: vi.fn(),
+    });
+    renderPage();
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    // isLoading gates the notice — the loading indicator is what shows.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 });
