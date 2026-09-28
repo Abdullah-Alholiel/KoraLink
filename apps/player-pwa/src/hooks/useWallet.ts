@@ -28,28 +28,93 @@ export function useWalletBalance(params?: { enabled?: boolean }) {
 
 // ─── Fetch Wallet History ───────────────────────────
 
-export function useWalletHistory(params?: { page?: number; perPage?: number }) {
-  const { page = 1, perPage = 20 } = params ?? {};
-  return useQuery<{ transactions: Transaction[]; total?: number }, FetchError>({
-    // P2-15: the key MUST carry page/perPage — a bare ['wallet','history']
-    // cached page 1 forever and changing the page never refetched.
-    queryKey: ['wallet', 'history', { page, perPage }],
-    queryFn: async () => {
-      const raw = await fetcher<{
-        transactions: TransactionApi[];
-        total: number;
-        hasMore: boolean;
-      }>('/wallet/history', {
-        params: { page: String(page), perPage: String(perPage) },
-      });
-      return {
-        transactions: adaptTransactionList(raw.transactions),
-        total: raw.total,
-      };
-    },
+export type WalletHistoryParams = {
+  page?: number;
+  perPage?: number;
+  /** Inclusive ISO-8601 lower bound on created_at (P2-119). */
+  from?: string;
+  /** Inclusive ISO-8601 upper bound on created_at (P2-119). */
+  to?: string;
+};
+
+export type WalletHistoryPage = {
+  transactions: Transaction[];
+  total?: number;
+  hasMore?: boolean;
+};
+
+type WalletHistoryArgs = Required<Pick<WalletHistoryParams, 'page' | 'perPage'>> &
+  WalletHistoryParams;
+
+function walletHistoryKey({ page, perPage, from, to }: WalletHistoryArgs) {
+  // P2-15: the key MUST carry every filter (page/perPage/from/to) — a bare
+  // ['wallet','history'] cached page 1 forever and changing it never refetched.
+  return ['wallet', 'history', { page, perPage, from, to }] as const;
+}
+
+async function fetchWalletHistoryPage({
+  page,
+  perPage,
+  from,
+  to,
+}: WalletHistoryArgs): Promise<WalletHistoryPage> {
+  const params: Record<string, string> = { page: String(page), perPage: String(perPage) };
+  if (from) params.from = from;
+  if (to) params.to = to;
+  const raw = await fetcher<{
+    transactions: TransactionApi[];
+    total: number;
+    hasMore: boolean;
+  }>('/wallet/history', { params });
+  return {
+    transactions: adaptTransactionList(raw.transactions),
+    total: raw.total,
+    hasMore: raw.hasMore,
+  };
+}
+
+export function useWalletHistory(params?: WalletHistoryParams) {
+  const { page = 1, perPage = 20, from, to } = params ?? {};
+  return useQuery<WalletHistoryPage, FetchError>({
+    queryKey: walletHistoryKey({ page, perPage, from, to }),
+    queryFn: () => fetchWalletHistoryPage({ page, perPage, from, to }),
     staleTime: 60_000,
     retry: false,
   });
+}
+
+/** Safety cap on pages fetched for a single export (20 pages x 100 rows = 2,000; the page reports truncation so the caller can cancel). */
+export const WALLET_EXPORT_MAX_PAGES = 20;
+
+/**
+* P2-119: imperatively collects every history page (perPage 100) for an
+* optional range until hasMore=false. Pages go through the same query key
+* as useWalletHistory so they share the React Query cache.
+*/
+export function useFetchAllWalletHistory() {
+  const queryClient = useQueryClient();
+  return async (
+    range: { from?: string; to?: string },
+  ): Promise<{ rows: Transaction[]; truncated: boolean }> => {
+    const perPage = 100;
+    const all: Transaction[] = [];
+    let truncated = false;
+    for (let page = 1; page <= WALLET_EXPORT_MAX_PAGES; page++) {
+      const args = { page, perPage, from: range.from, to: range.to };
+      const data = await queryClient.fetchQuery<WalletHistoryPage, FetchError>({
+        queryKey: walletHistoryKey(args),
+        queryFn: () => fetchWalletHistoryPage(args),
+        staleTime: 60_000,
+      });
+      all.push(...data.transactions);
+      if (!data.hasMore) break;
+      // PR-Agent IMPORTANT (run #84): the cap exists, but hitting it used to
+      // end in a SILENTLY partial financial CSV + success toast. Flag it —
+      // the caller cancels the export and tells the user to narrow the range.
+      if (page === WALLET_EXPORT_MAX_PAGES) truncated = true;
+    }
+    return { rows: all, truncated };
+  };
 }
 
 // ─── Top Up Wallet ──────────────────────────────

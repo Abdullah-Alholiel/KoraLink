@@ -4,7 +4,7 @@ import {
   Inject,
   NotFoundException,
 } from '@nestjs/common';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, gte, lte } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -169,20 +169,49 @@ export class WalletService {
     return user.wallet_balance;
   }
 
-  async getHistory(userId: string, page = 1, perPage = 20) {
+  /**
+   * P2-119: optional ISO-8601 `from`/`to` bounds (inclusive) are ANDed onto
+   * the user_id predicate — never replacing it — and the count query shares
+   * the same predicate so total/hasMore describe the filtered set.
+   */
+  async getHistory(
+    userId: string,
+    page = 1,
+    perPage = 20,
+    from?: string,
+    to?: string,
+  ) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    if (
+      (fromDate && Number.isNaN(fromDate.getTime())) ||
+      (toDate && Number.isNaN(toDate.getTime()))
+    ) {
+      throw new BadRequestException('Invalid date range');
+    }
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('`from` must be before or equal to `to`');
+    }
+
+    const predicate = and(
+      eq(transactions.user_id, userId),
+      fromDate ? gte(transactions.created_at, fromDate) : undefined,
+      toDate ? lte(transactions.created_at, toDate) : undefined,
+    );
+
     const skip = (page - 1) * perPage;
     const [transactionsData, totalResult] = await Promise.all([
       this.db
         .select()
         .from(transactions)
-        .where(eq(transactions.user_id, userId))
+        .where(predicate)
         .orderBy(desc(transactions.created_at))
         .offset(skip)
         .limit(perPage),
       this.db
         .select({ total: count() })
         .from(transactions)
-        .where(eq(transactions.user_id, userId)),
+        .where(predicate),
     ]);
 
     const total = totalResult[0]?.total ?? 0;

@@ -45,13 +45,21 @@ export class WalletController {
 
   // ── GET /wallet/history ──────────────────────────────────────
   @Get('history')
-  @ApiOperation({ summary: 'Get paginated transaction history' })
+  @ApiOperation({
+    summary: 'Get paginated transaction history (optional from/to date range)',
+  })
   @ApiOkResponse({ description: 'Paginated list of transactions.' })
   async getHistory(
     @CurrentUser() user: { sub: string },
     @Query() dto: WalletHistoryDto,
   ) {
-    return this.walletService.getHistory(user.sub, dto.page, dto.perPage);
+    return this.walletService.getHistory(
+      user.sub,
+      dto.page,
+      dto.perPage,
+      dto.from,
+      dto.to,
+    );
   }
 
   // ── POST /wallet/topup ──────────────────────────────────────

@@ -15,13 +15,21 @@ import {
     FileText,
     AlertTriangle,
     X,
+    Download,
 } from 'lucide-react';
-import { useWalletBalance, useWalletHistory, useTopupWallet } from '@/hooks/useWallet';
+import {
+    useWalletBalance,
+    useWalletHistory,
+    useTopupWallet,
+    useFetchAllWalletHistory,
+} from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
+import { downloadTextAsFile } from '@/lib/download';
 import type { Transaction } from '@/types';
 
 function getTransactionIcon(icon: string) {
@@ -81,6 +89,13 @@ export default function WalletPage() {
     const [topUpAmount, setTopUpAmount] = useState('');
     const [topUpError, setTopUpError] = useState('');
 
+    // ── Export sheet state (P2-119) ──
+    const [showExportSheet, setShowExportSheet] = useState(false);
+    const [exportFrom, setExportFrom] = useState('');
+    const [exportTo, setExportTo] = useState('');
+    const [exportError, setExportError] = useState('');
+    const [exporting, setExporting] = useState(false);
+
     // ── Data fetching via React Query ──
     const {
         data: balanceData,
@@ -96,6 +111,52 @@ export default function WalletPage() {
     } = useWalletHistory();
 
     const topup = useTopupWallet();
+    const fetchAllHistory = useFetchAllWalletHistory();
+
+    const closeExportSheet = () => {
+        setShowExportSheet(false);
+        setExportError('');
+    };
+
+    const handleExport = async () => {
+        setExportError('');
+        const range = toIsoDateRange(exportFrom, exportTo);
+        if (range.inverted) {
+            setExportError(t('wallet.exportInvalidRange'));
+            return;
+        }
+        setExporting(true);
+        try {
+            const { rows, truncated } = await fetchAllHistory({
+                from: range.from,
+                to: range.to,
+            });
+            // PR-Agent IMPORTANT (run #84): never hand the user a silently
+            // partial financial CSV — cancel and tell them to narrow the
+            // range instead.
+            if (truncated) {
+                showToast(t('wallet.exportTooMany'), 'info');
+                return;
+            }
+            if (rows.length === 0) {
+                showToast(t('wallet.exportEmpty'), 'info');
+                return;
+            }
+            // BOM so spreadsheet apps read the file as UTF-8.
+            downloadTextAsFile(
+                '\uFEFF' + buildWalletCsv(rows),
+                walletCsvFilename(new Date()),
+                'text/csv;charset=utf-8',
+            );
+            showToast(t('wallet.exportSuccess'), 'success');
+            closeExportSheet();
+        } catch {
+            // error-message standard: what happened + what to do next.
+            showToast(`${t('errors.exportFailed')} ${t('errors.exportFailedDetail')}`, 'error');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const handleTopUpSubmit = () => {
         setTopUpError('');
@@ -189,15 +250,17 @@ export default function WalletPage() {
             </div>
 
             {/* ── Action Buttons ───────────────────── */}
-            <div className="flex justify-center gap-8 mt-6 px-4">
+            <div className="flex justify-center gap-6 mt-6 px-4">
                 {[
                     { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopUpModal(true) },
                     { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
+                    { icon: Download, label: t('wallet.export'), active: false, onClick: () => setShowExportSheet(true) },
                 ].map((action) => (
                     <button
                         key={action.label}
                         onClick={action.onClick}
+                        aria-label={action.label}
                         className="flex flex-col items-center gap-2"
                     >
                         <div
@@ -372,6 +435,68 @@ export default function WalletPage() {
                             disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
                     >
                         {topup.isPending ? t('payment.processing') : t('wallet.topUp')}
+                    </button>
+                </div>
+            </BottomSheet>
+
+            {/* ══════════════════════════════════════
+                EXPORT SHEET (P2-119)
+            ═══════════════════════════════════ */}
+            <BottomSheet open={showExportSheet} onClose={closeExportSheet} widthClass="max-w-xl">
+                <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-gray-300" />
+                </div>
+
+                <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-5 pb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-bold text-brand-black">{t('wallet.exportTitle')}</h2>
+                        <button
+                            onClick={closeExportSheet}
+                            aria-label={t('wallet.closeModal')}
+                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                        >
+                            <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-xs text-gray-400">{t('wallet.exportFrom')}</span>
+                            <input
+                                type="date"
+                                value={exportFrom}
+                                max={exportTo || undefined}
+                                onChange={(e) => { setExportFrom(e.target.value); setExportError(''); }}
+                                className="bg-gray-50 rounded-xl border border-gray-100 px-3 py-3 text-sm text-brand-black outline-none focus:border-brand-green transition-colors"
+                                dir="ltr"
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-xs text-gray-400">{t('wallet.exportTo')}</span>
+                            <input
+                                type="date"
+                                value={exportTo}
+                                min={exportFrom || undefined}
+                                onChange={(e) => { setExportTo(e.target.value); setExportError(''); }}
+                                className="bg-gray-50 rounded-xl border border-gray-100 px-3 py-3 text-sm text-brand-black outline-none focus:border-brand-green transition-colors"
+                                dir="ltr"
+                            />
+                        </label>
+                    </div>
+
+                    {exportError && (
+                        <p role="alert" className="text-sm text-brand-red mb-3 text-center">{exportError}</p>
+                    )}
+
+                    <button
+                        onClick={handleExport}
+                        disabled={exporting}
+                        className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
+                            shadow-[0_4px_20px_rgba(37,65,50,0.4)]
+                            active:scale-[0.98] transition-transform
+                            disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
+                    >
+                        {exporting ? t('payment.processing') : t('wallet.exportCsv')}
                     </button>
                 </div>
             </BottomSheet>
