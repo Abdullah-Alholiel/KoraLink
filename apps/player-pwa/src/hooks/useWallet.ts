@@ -93,9 +93,12 @@ export const WALLET_EXPORT_MAX_PAGES = 20;
 */
 export function useFetchAllWalletHistory() {
   const queryClient = useQueryClient();
-  return async (range: { from?: string; to?: string }): Promise<Transaction[]> => {
+  return async (
+    range: { from?: string; to?: string },
+  ): Promise<{ rows: Transaction[]; truncated: boolean }> => {
     const perPage = 100;
     const all: Transaction[] = [];
+    let truncated = false;
     for (let page = 1; page <= WALLET_EXPORT_MAX_PAGES; page++) {
       const args = { page, perPage, from: range.from, to: range.to };
       const data = await queryClient.fetchQuery<WalletHistoryPage, FetchError>({
@@ -105,8 +108,12 @@ export function useFetchAllWalletHistory() {
       });
       all.push(...data.transactions);
       if (!data.hasMore) break;
+      // PR-Agent IMPORTANT (run #84): the cap exists, but hitting it used to
+      // end in a SILENTLY partial financial CSV + success toast. Flag it —
+      // the caller cancels the export and tells the user to narrow the range.
+      if (page === WALLET_EXPORT_MAX_PAGES) truncated = true;
     }
-    return all;
+    return { rows: all, truncated };
   };
 }
 

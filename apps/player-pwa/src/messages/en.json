@@ -712,6 +712,7 @@
     "exportCsv": "Export CSV",
     "exportEmpty": "No transactions in this date range — nothing to export.",
     "exportSuccess": "Your transactions file has been downloaded.",
+    "exportTooMany": "Your history has more than 2,000 transactions in this range — pick a shorter date range and export again.",
     "exportInvalidRange": "The start date must be on or before the end date."
   },
   "searchSuggestions": {

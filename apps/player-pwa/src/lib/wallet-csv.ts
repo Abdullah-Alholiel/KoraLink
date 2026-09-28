@@ -14,8 +14,12 @@ export const WALLET_CSV_HEADER = [
   'Currency',
 ] as const;
 
-/** RFC 4180 field escaping: quote when needed, double embedded quotes. */
+/** RFC 4180 field escaping + OWASP CSV-formula-injection guard. */
 export function escapeCsvField(value: string): string {
+  // A leading =/+/-/@ would execute as a spreadsheet formula in Excel or
+  // Sheets; neutralize with a leading apostrophe (PR-Agent MINOR, run #84).
+  const guarded = /^[=+@-]/.test(value) ? `'${value}` : value;
+  if (guarded !== value) return `"${guarded}"`;
   if (/[",\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
   }

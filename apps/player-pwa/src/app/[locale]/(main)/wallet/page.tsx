@@ -127,7 +127,17 @@ export default function WalletPage() {
         }
         setExporting(true);
         try {
-            const rows = await fetchAllHistory({ from: range.from, to: range.to });
+            const { rows, truncated } = await fetchAllHistory({
+                from: range.from,
+                to: range.to,
+            });
+            // PR-Agent IMPORTANT (run #84): never hand the user a silently
+            // partial financial CSV — cancel and tell them to narrow the
+            // range instead.
+            if (truncated) {
+                showToast(t('wallet.exportTooMany'), 'info');
+                return;
+            }
             if (rows.length === 0) {
                 showToast(t('wallet.exportEmpty'), 'info');
                 return;

@@ -105,6 +105,16 @@ describe('wallet CSV builder (P2-119)', () => {
     expect(escapeCsvField('a\r\nb')).toBe('"a\r\nb"');
   });
 
+  it('neutralizes leading spreadsheet-formula characters (OWASP CSV injection)', () => {
+    // guarded fields always carry the apostrophe, always quoted
+    expect(escapeCsvField('=1+1')).toBe('"\'=1+1"');
+    expect(escapeCsvField('+1+1')).toBe('"\'=1+1"'.replace('=1+1', '+1+1'));
+    expect(escapeCsvField('-5')).toBe('"\'-5"');
+    expect(escapeCsvField('@cmd')).toBe('"\'@cmd"');
+    // formula char AND comma: guard applies, still RFC4180-quoted
+    expect(escapeCsvField('=a,b')).toBe('"\'=a,b"');
+  });
+
   it('filename follows koralink-wallet-YYYYMMDD-HHmm.csv', () => {
     expect(walletCsvFilename(new Date(2026, 8, 5, 7, 3))).toBe(
       'koralink-wallet-20260905-0703.csv',
@@ -159,6 +169,23 @@ describe('WalletPage — export sheet (P2-119)', () => {
     await waitFor(() =>
       expect(useAppStore.getState().toast?.message).toBe(enMessages.wallet.exportEmpty),
     );
+    expect(downloadTextAsFile).not.toHaveBeenCalled();
+  });
+
+  it('a range exceeding the 2,000-row cap cancels with exportTooMany instead of a partial file (PR-Agent run #84)', async () => {
+    mockFetcher.mockImplementation(async (path: string, opts?: { params?: Record<string, string> }) => {
+      if (path === '/wallet/balance') return { balance: '100.00' };
+      if (opts?.params?.perPage !== '100') return { transactions: [], total: 0, hasMore: false };
+      // every page reports hasMore=true → the loop exhausts its 20-page cap
+      return { transactions: [apiRow(`p${opts?.params?.page}`)], total: 9999, hasMore: true };
+    });
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: enMessages.wallet.export }));
+    fireEvent.click(await screen.findByText(enMessages.wallet.exportCsv));
+    await waitFor(() =>
+      expect(useAppStore.getState().toast?.message).toBe(enMessages.wallet.exportTooMany),
+    );
+    expect(useAppStore.getState().toast?.type).toBe('info');
     expect(downloadTextAsFile).not.toHaveBeenCalled();
   });
 
