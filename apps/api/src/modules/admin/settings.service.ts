@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -29,6 +29,8 @@ export type SettingKey = keyof typeof KNOWN_SETTINGS;
 
 @Injectable()
 export class AdminSettingsService {
+  private readonly logger = new Logger(AdminSettingsService.name);
+
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly platformSettings: PlatformSettingsService,
@@ -72,15 +74,24 @@ export class AdminSettingsService {
       return existing?.value;
     });
 
-    await this.audit.log({
-      adminId,
-      action: 'settings.update',
-      entityType: 'setting',
-      entityId: settingKey,
-      before: oldValue ?? null,
-      after: newValue,
-      ip,
-    });
+    // Audit AFTER commit (house pattern). An audit insert failure must not
+    // mask a successful save: the setting IS persisted, so still invalidate
+    // the cache and broadcast; the missed row is logged for observability.
+    try {
+      await this.audit.log({
+        adminId,
+        action: 'settings.update',
+        entityType: 'setting',
+        entityId: settingKey,
+        before: oldValue ?? null,
+        after: newValue,
+        ip,
+      });
+    } catch (err) {
+      this.logger.error(
+        `settings.update audit write failed for key=${settingKey} admin=${adminId}: ${(err as Error).message}`,
+      );
+    }
     // Instant propagation — pricing/policy consumers read the new value on
     // their very next request instead of after the 30s TTL.
     this.platformSettings.invalidate();
