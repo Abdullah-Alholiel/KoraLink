@@ -184,6 +184,21 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
       expect(convos?.options?.cacheableResponse?.statuses).toEqual([200]);
     });
 
+    // P2-121 (run #83, PR-Agent MINOR drift guard): the logout purge list must
+    // stay in lockstep with the user-data recipes above — a recipe rename (or
+    // a new user-scoped cache) without updating sw-cache-hygiene.ts would make
+    // caches.delete() silently no-op and leak per-user data across sign-out.
+    it('logout purge list covers EXACTLY the user-data runtime caches (drift guard)', async () => {
+      const { USER_RUNTIME_CACHES } = await import('@/lib/sw-cache-hygiene');
+      const userDataRecipes = opts.runtimeCaching
+        .map((r) => r.options?.cacheName)
+        .filter((n): n is string => typeof n === 'string');
+      expect([...USER_RUNTIME_CACHES].sort()).toEqual([...userDataRecipes].sort());
+      // Money/auth NetworkOnly recipes carry no cacheName by design — the
+      // purge list can never be padded with unrelated names.
+      expect(opts.runtimeCaching.filter((r) => !r.options?.cacheName).length).toBe(3);
+    });
+
     it('money + auth URLs are NetworkOnly (never cached) — behavior-level', () => {
       const moneyAuth = [
         `${API}/auth/dev-login`,

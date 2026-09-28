@@ -11,7 +11,13 @@
  *
  * Fire-and-forget: logout must never hang or fail on cache cleanup.
  */
-const USER_RUNTIME_CACHES = [
+/**
+ * Exported for the drift-guard test (test/lib/sw-config.test.ts): the list
+ * must stay in lockstep with the user-data runtimeCaching recipes in
+ * next.config.mjs — a rename there without this list silently no-ops the
+ * purge (PR-Agent MINOR, run #83).
+ */
+export const USER_RUNTIME_CACHES = [
   'conversation-messages-cache',
   'conversations-list-cache',
   'match-detail-cache',
