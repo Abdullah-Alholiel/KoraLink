@@ -35,6 +35,7 @@ import {
     type PushSubscribeOutcome,
 } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
+import { getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 import { classifyError, errorKey } from '@/lib/error-classify';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
@@ -115,6 +116,15 @@ export default function ProfilePage() {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
 
+    // RUN-#84 (Reviewer A hydration minor): seed the scheduled-purge date
+    // post-mount — a render-path `new Date()` diverges server/client across a
+    // day boundary (same class as the run-#40/#49/#50 useNow() fixes).
+    useEffect(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        setPurgeDate(d.toISOString());
+    }, []);
+
     // P0.5 (run #28): show a one-line hint when the user taps "subscribe"
     // but the PWA isn't installed (iOS contract — push only works in
     // installed mode). Cleared when the next attempt is made.
@@ -133,6 +143,9 @@ export default function ProfilePage() {
     const [signOutPending, setSignOutPending] = useState(false);
     const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    // Scheduled-purge date (now + 30d) — null-seeded, set in an effect below
+    // (hydration-safe; render-path `new Date()` diverges server/client).
+    const [purgeDate, setPurgeDate] = useState<string | null>(null);
     const [exportPending, setExportPending] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
 
@@ -713,6 +726,12 @@ export default function ProfilePage() {
                     await new Promise((r) => setTimeout(r, 200));
                     logout();
                     clearAuthToken();
+                    // RUN-#84 (Reviewer A IMPORTANT): the cache purge inside
+                    // clearAuthToken is fire-and-forget — await it BEFORE the
+                    // hard navigation, or the redirect can abort in-flight
+                    // caches.delete() microtasks and leave this user's caches
+                    // readable on a shared device.
+                    await getLastRuntimeCachePurge();
                     setSignOutSheetOpen(false);
                     window.location.href = `/${locale}/login`;
                 }}
@@ -725,14 +744,11 @@ export default function ProfilePage() {
                 }}
                 isPending={softDelete.isPending}
                 errorMessage={deleteError ?? (softDelete.error ? t(errorKey(classifyError(softDelete.error))) : null)}
-                // Scheduled-purge date: now() + 30 days. We compute it
-                // here so the warning shows the EXACT date the user is
-                // agreeing to, before the API call lands.
-                purgeDate={(() => {
-                    const d = new Date();
-                    d.setDate(d.getDate() + 30);
-                    return d.toISOString();
-                })()}
+                // Scheduled-purge date: now() + 30 days. RUN-#84 (Reviewer A
+                // MINOR→fixed): seeded null + set in an effect (useNow house
+                // pattern) — a render-path `new Date()` is a hydration
+                // hazard across a day boundary on an SSR'd client component.
+                purgeDate={purgeDate ?? undefined}
                 onConfirm={async () => {
                     setDeleteError(null);
                     try {
@@ -745,6 +761,9 @@ export default function ProfilePage() {
                         // explicit clear avoids a 401 flash.
                         logout();
                         clearAuthToken();
+                        // RUN-#84: await the SW cache purge before the hard
+                        // redirect (race fix, same class as sign-out above).
+                        await getLastRuntimeCachePurge();
                         window.location.href = `/${locale}/login`;
                     } catch {
                         setDeleteError(t('errors.unknown'));

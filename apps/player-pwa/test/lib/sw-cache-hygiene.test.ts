@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { clearUserRuntimeCaches } from '@/lib/sw-cache-hygiene';
+import { clearUserRuntimeCaches, getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 
 /**
  * P2-121 (run #83): logout-time SW runtime-cache hygiene (PR-Agent security
@@ -31,9 +31,10 @@ describe('clearUserRuntimeCaches (P2-121 logout cache hygiene)', () => {
         'conversations-list-cache',
         'match-detail-cache',
         'user-profile-cache',
+        'matches-feed-cache',
       ]),
     );
-    expect(deleted).toHaveLength(4);
+    expect(deleted).toHaveLength(5);
   });
 
   it('resolves (never throws) when CacheStorage is unavailable', async () => {
@@ -44,6 +45,31 @@ describe('clearUserRuntimeCaches (P2-121 logout cache hygiene)', () => {
   it('swallows cache.delete rejections (logout must not hang or fail)', async () => {
     deleteMock.mockRejectedValueOnce(new Error('quota'));
     await expect(clearUserRuntimeCaches()).resolves.toBeUndefined();
-    expect(deleteMock).toHaveBeenCalledTimes(4);
+    expect(deleteMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('getLastRuntimeCachePurge resolves only after an in-flight purge settles (run #84 race fix)', async () => {
+    // Gate the FIRST delete on a deferred promise — the purge cannot finish
+    // until we release it, so awaiting getLastRuntimeCachePurge() must block.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    deleteMock.mockImplementationOnce(async (name) => {
+      if (name === 'conversation-messages-cache') await gate;
+      return true;
+    });
+
+    const purge = clearUserRuntimeCaches();
+    let settled = false;
+    purge.then(() => (settled = true));
+
+    // A microtask+timer round-trip: the gated delete has been REACHED but the
+    // purge has NOT settled — getLastRuntimeCachePurge() must be the same
+    // pending promise, not a stale resolved one.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(settled).toBe(false);
+
+    release();
+    await expect(getLastRuntimeCachePurge()).resolves.toBeUndefined();
+    expect(settled).toBe(true);
   });
 });
