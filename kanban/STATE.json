@@ -1,25 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 81,
-  "last_run_at": "2026-09-27T11:10Z",
+  "last_run": 82,
+  "last_run_at": "2026-09-28T02:45Z",
   "last_run_commits": [
-    "a0775f4 fix(api): lock-discipline batch — markNoShow FOR UPDATE, castVote tx predicate, partner scoped UPDATEs (P2-118, PR #42)",
-    "93563a6 fix(api,pwa): close lobby chat on terminal/expired matches (P2-111, PR #43)",
-    "5579574 docs(kanban): run #81 review — P2-101 verified DONE, P2-118 boarded+built via PR #42, gates 0-3 compact",
-    "bcc7a79 fix(deps): restore socket.io-client workspace entry to package-lock (bin-link repair side-effect)"
+    "5c041fd feat(api): settings PUT validation + audit trail (P2-115, PR #44)",
+    "356bb25 docs(plans): run #82 gates 0-3 compact — P2-115 settings validation+audit"
   ],
-  "last_run_report": "kanban/RUNS/2026-09-27T17-07Z-run81.md",
+  "last_run_report": "kanban/RUNS/2026-09-28T02-45Z-run82.md",
   "in_review_items": [
     {
-      "item": "P2-118 lock-discipline batch",
-      "squash": "a0775f4",
-      "verify": "grep assertVotingOpen apps/api/src/modules/matches/matches.service.ts + .for(\"update\") in markNoShow; api jest matches+partner suites green; serving dist carries marker"
-    },
-    {
-      "item": "P2-111 terminal-chat predicate",
-      "squash": "93563a6",
-      "verify": "chat-status.predicate.ts present; MATCH_CHAT_CLOSED in matches.service.js + app.gateway.js (dist); api jest 711/711, vitest 760/760 re-run fresh"
+      "item": "P2-115 settings validation + audit (PR #44 squash 5c041fd)",
+      "squash": "5c041fd",
+      "verify": "grep KNOWN_SETTINGS apps/api/src/modules/admin/settings.service.ts AND serving dist settings.service.js; grep \"settings.update\" in the same; grep ESCAPE in audit.controller(.js); admin audit page has entityType select + debounced action input; re-run npx jest src/modules/admin --silent (expect 9 suites / 59 tests) + api tsc 0"
     }
   ],
   "open_blockers": [
