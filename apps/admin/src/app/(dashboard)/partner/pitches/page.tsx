@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { weekEnd, weekStart } from '@/lib/week';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import PitchFormDrawer, { type PitchFormResult } from '@/components/PitchFormDrawer';
@@ -18,17 +19,6 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 /** Enriched slot bundle fetched per pitch when its schedule drawer opens. */
 interface SlotsResponse {
   slots: PartnerSlot[];
-}
-
-// P2-124 (run #86): week-window helpers hoisted to module scope (pure, take
-// `now`) — the drawer's range lives in state, not a per-render new Date().
-function weekStart(now = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-  return d.toISOString().slice(0, 10);
-}
-function weekEnd(now = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-  return d.toISOString().slice(0, 10);
 }
 
 export default function MyPitchesPage() {
@@ -41,16 +31,17 @@ export default function MyPitchesPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
   // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
-  // drawer opens (PR-Agent MINOR on PR #51 — a tab open across the Sunday
-  // rollover must not keep polling last week's slot range until reload).
+  // drawer opens — synchronously in openSchedule (PR-Agent MINOR on #51: the
+  // effect variant still fired the first fetch with the stale range). The
+  // deep-link effect below routes through openSchedule too.
   const [weekFrom, setWeekFrom] = useState(() => weekStart());
   const [weekTo, setWeekTo] = useState(() => weekEnd());
   const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!schedulePitchId) return;
+  function openSchedule(id: string) {
     setWeekFrom(weekStart());
     setWeekTo(weekEnd());
-  }, [schedulePitchId]);
+    setSchedulePitchId(id);
+  }
   const [deleting, setDeleting] = useState<PartnerPitch | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -58,7 +49,7 @@ export default function MyPitchesPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const id = q.get('schedule');
-    if (id) setSchedulePitchId(id);
+    if (id) openSchedule(id);
   }, []);
 
   const scheduleState = useLiveAdminData<SlotsResponse>(
@@ -209,7 +200,7 @@ export default function MyPitchesPage() {
 
                   <div className="mt-auto space-y-2 pt-4">
                     <button
-                      onClick={() => setSchedulePitchId(p.id)}
+                      onClick={() => openSchedule(p.id)}
                       className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
                     >
                       <Zap className="h-4 w-4" /> {t('manageSchedule')}

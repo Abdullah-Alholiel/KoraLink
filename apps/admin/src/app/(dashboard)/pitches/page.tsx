@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { weekEnd, weekStart } from '@/lib/week';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
@@ -20,18 +21,6 @@ import type { PitchFormResult } from '@/components/PitchFormDrawer';
 
 interface SlotsResponse {
   slots: PartnerSlot[];
-}
-
-// P2-124 (run #86): week-window helpers hoisted to module scope (pure, take
-// `now`), so the drawer's range is derived in state — not computed on every
-// render (the old inline weekStart()/weekEnd() ran a fresh new Date() per pass).
-function weekStart(now = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-  return d.toISOString().slice(0, 10);
-}
-function weekEnd(now = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -71,15 +60,17 @@ export default function AdminPitchesPage() {
   const venues = useLiveAdminData<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100', ['venues']);
 
   // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
-  // drawer opens (PR-Agent MINOR on PR #51 — a tab open across the Sunday
-  // rollover must not keep polling last week's slot range until reload).
+  // drawer opens — synchronously in the open handler (PR-Agent MINOR on #51:
+  // an effect-after-render still fires the first fetch with the stale range;
+  // openSchedule writes the fresh window BEFORE the URL derives, so the very
+  // first slots fetch already carries the current week).
   const [weekFrom, setWeekFrom] = useState(() => weekStart());
   const [weekTo, setWeekTo] = useState(() => weekEnd());
-  useEffect(() => {
-    if (!schedulePitchId) return;
+  function openSchedule(id: string) {
     setWeekFrom(weekStart());
     setWeekTo(weekEnd());
-  }, [schedulePitchId]);
+    setSchedulePitchId(id);
+  }
   const scheduleState = useLiveAdminData<SlotsResponse>(
     schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/admin/pitches',
     [],
@@ -249,7 +240,7 @@ export default function AdminPitchesPage() {
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setSchedulePitchId(selected.id)}
+                  onClick={() => openSchedule(selected.id)}
                   className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}

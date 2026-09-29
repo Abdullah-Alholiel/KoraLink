@@ -5,14 +5,12 @@ import { CalendarDays, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import type { PartnerSlot } from '@/lib/types';
+// P2-124 (run #86): shared TZ-correct week helpers (PR-Agent finding on #51 —
+// toISOString() shifted a Riyadh Sunday-midnight to Saturday UTC, seeding the
+// grid one day early; lib/week.ts serializes back in local calendar fields).
+import { addDays, weekStart as currentWeekStart } from '@/lib/week';
 
 const fmtTime = (t: string) => t.slice(0, 5);
-
-function addDays(base: string, days: number): string {
-  const d = new Date(`${base}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 interface SlotManagerProps {
   pitchId: string;
@@ -40,10 +38,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
   const [weekStart, setWeekStart] = useState<string | null>(null);
 
   useEffect(() => {
-    const now = new Date();
-    setWeekStart(
-      new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString().slice(0, 10),
-    );
+    setWeekStart(currentWeekStart());
   }, []);
 
   const [showGenerator, setShowGenerator] = useState(false);
