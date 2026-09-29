@@ -28,7 +28,8 @@
     "offlineBanner": "You're offline — live updates paused, showing last loaded data.",
     "dataLive": "Live",
     "dataStale": "Stale — reconnecting",
-    "saveFailed": "Save failed: {error}"
+    "saveFailed": "Save failed: {error}",
+    "exportCsv": "Export CSV"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -607,7 +608,10 @@
     "labelRefundPolicy": "Refund policy text",
     "save": "Save",
     "saveFailed": "Save failed: {error}",
-    "actionFailed": "Action failed: {error}"
+    "actionFailed": "Action failed: {error}",
+    "exportTransactions": "Export transactions",
+    "exportSettlements": "Export settlements",
+    "exportAudit": "Export audit log"
   },
   "list": {
     "sortLabel": "Sort",
