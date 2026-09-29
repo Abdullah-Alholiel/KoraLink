@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -13,6 +14,8 @@ import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvDate, exportCsv } from '@/lib/csv-export';
 
 type AuditResponse = ListResponse<AuditLog> & { logs: AuditLog[] };
 
@@ -95,6 +98,26 @@ export default function AuditPage() {
     },
   ];
 
+  const rows = data?.logs ?? [];
+  const exportDisabled = loading || !!error || rows.length === 0;
+
+  function onExport() {
+    exportCsv({
+      columns: [
+        { key: 'admin', header: t('roleAdmin'), value: (l: AuditLog) => l.admin_name ?? '' },
+        { key: 'action', header: t('thAction') },
+        { key: 'entity', header: t('thEntity'), value: (l: AuditLog) => l.entity_type },
+        { key: 'time', header: t('thTime'), value: (l: AuditLog) => csvDate(l.created_at) },
+        { key: 'entityId', header: t('thEntityId'), value: (l: AuditLog) => l.entity_id ?? '' },
+        { key: 'ip', header: t('thIp'), value: (l: AuditLog) => l.ip ?? '' },
+      ],
+      rows,
+      filePrefix: 'koralink-audit',
+      timestamp: new Date(),
+    });
+    trackEvent('admin_csv_export', { page: 'admin.audit', rows: rows.length });
+  }
+
   return (
     <div>
       <PageHeader title={t('auditTitle')} subtitle={t('auditSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
@@ -127,6 +150,16 @@ export default function AuditPage() {
           placeholder={tc('filterByAction')}
           className="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportAudit')}
+        </button>
       </div>
 
       {loading ? (
@@ -138,7 +171,7 @@ export default function AuditPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.logs ?? []}
+              rows={rows}
               rowKey={(l) => l.id}
               onRowClick={(l) => setSelected(l)}
               empty={<EmptyState message={tc('noData')} />}

@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
-import { Loader2, Send } from 'lucide-react';
+import { Download, Loader2, Send } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -18,6 +18,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvAmount, csvDate, exportCsv } from '@/lib/csv-export';
 
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
@@ -118,6 +119,30 @@ export default function SettlementsPage() {
     { value: 'amount:asc', label: tl('sortAmountLow') },
   ];
 
+  const rows = data?.settlements ?? [];
+  const exportDisabled = loading || !!error || rows.length === 0;
+
+  function onExport() {
+    exportCsv({
+      columns: [
+        { key: 'venue', header: t('thVenue'), value: (s: Settlement) => s.venue_name ?? '' },
+        { key: 'amount', header: t('thAmount'), value: (s: Settlement) => csvAmount(s.amount) },
+        { key: 'status', header: t('thStatus') },
+        {
+          key: 'period',
+          header: t('thPeriod'),
+          value: (s: Settlement) => `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
+        },
+        { key: 'payoutRef', header: t('thPayoutRef'), value: (s: Settlement) => s.payout_ref ?? '' },
+        { key: 'id', header: t('thId') },
+      ],
+      rows,
+      filePrefix: 'koralink-settlements',
+      timestamp: new Date(),
+    });
+    trackEvent('admin_csv_export', { page: 'admin.settlements', rows: rows.length });
+  }
+
   function onSortChange(v: string) {
     setSort(v);
     setPage(1);
@@ -140,6 +165,16 @@ export default function SettlementsPage() {
         </select>
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
         <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportSettlements')}
+        </button>
+        <button
           onClick={generate}
           disabled={generating}
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
@@ -158,7 +193,7 @@ export default function SettlementsPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.settlements ?? []}
+              rows={rows}
               rowKey={(s) => s.id}
               onRowClick={(s) => setSelected(s)}
               empty={<EmptyState message={tc('noData')} />}

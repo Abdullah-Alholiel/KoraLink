@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { Download, Loader2, RotateCcw } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -18,6 +18,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvAmount, csvDate, exportCsv } from '@/lib/csv-export';
 
 type TxResponse = ListResponse<AdminTransaction> & { transactions: AdminTransaction[] };
 
@@ -114,6 +115,27 @@ export default function TransactionsPage() {
     },
   ];
 
+  const rows = data?.transactions ?? [];
+  const exportDisabled = loading || !!error || rows.length === 0;
+
+  function onExport() {
+    exportCsv({
+      columns: [
+        { key: 'user', header: hq('thUser'), value: (t: AdminTransaction) => t.user_name ?? '' },
+        { key: 'type', header: hq('thType') },
+        { key: 'status', header: hq('thStatus') },
+        { key: 'date', header: hq('thDate'), value: (t: AdminTransaction) => csvDate(t.created_at) },
+        { key: 'amount', header: hq('thAmount'), value: (t: AdminTransaction) => csvAmount(t.amount) },
+        { key: 'reference', header: hq('thReference'), value: (t: AdminTransaction) => t.reference_type.replace(/_/g, ' ') },
+        { key: 'id', header: hq('thId') },
+      ],
+      rows,
+      filePrefix: 'koralink-transactions',
+      timestamp: new Date(),
+    });
+    trackEvent('admin_csv_export', { page: 'admin.transactions', rows: rows.length });
+  }
+
   const sortOptions = [
     { value: '', label: tl('sortNewest') },
     { value: 'created_at:asc', label: tl('sortOldest') },
@@ -150,6 +172,16 @@ export default function TransactionsPage() {
             }
           }}
         />
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {hq('exportTransactions')}
+        </button>
       </div>
 
       {loading ? (
@@ -161,7 +193,7 @@ export default function TransactionsPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.transactions ?? []}
+              rows={rows}
               rowKey={(t) => t.id}
               onRowClick={(t) => setSelected(t)}
               empty={<EmptyState message={tc('noData')} />}

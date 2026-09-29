@@ -28,7 +28,8 @@
     "offlineBanner": "أنت غير متصل بالإنترنت — توقفت التحديثات المباشرة، وتُعرض آخر بيانات مُحمَّلة.",
     "dataLive": "مباشر",
     "dataStale": "قديمة — جارٍ إعادة الاتصال",
-    "saveFailed": "فشل الحفظ: {error}"
+    "saveFailed": "فشل الحفظ: {error}",
+    "exportCsv": "تصدير CSV"
   },
   "nav": {
     "dashboard": "لوحة التحكم",
@@ -607,7 +608,10 @@
     "labelRefundPolicy": "نص سياسة الاسترداد",
     "save": "حفظ",
     "saveFailed": "فشل الحفظ: {error}",
-    "actionFailed": "فشل الإجراء: {error}"
+    "actionFailed": "فشل الإجراء: {error}",
+    "exportTransactions": "تصدير المعاملات",
+    "exportSettlements": "تصدير التسويات",
+    "exportAudit": "تصدير سجل التدقيق"
   },
   "list": {
     "sortLabel": "الترتيب",
