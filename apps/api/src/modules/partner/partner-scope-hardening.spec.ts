@@ -396,10 +396,10 @@ describe('PartnerService.submitVerification ownership in tx (P2-12/run-85)', () 
     expect(calls).not.toContain('upsert-verification');
   });
 
-  it('venue gone: 404, no upsert', async () => {
+  it('venue gone: 403 same as non-owner (no id probing), no upsert', async () => {
     const { svc, calls } = makeService({ venue: null });
     await expect(svc.submitVerification(OWNER, DTO as never)).rejects.toThrow(
-      new NotFoundException('Venue not found.'),
+      new ForbiddenException('You can only verify your own venues.'),
     );
     expect(calls).not.toContain('upsert-verification');
   });

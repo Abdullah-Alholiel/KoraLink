@@ -437,6 +437,19 @@ export class PartnerService {
     ) as SQL;
   }
 
+  /**
+   * P2-12/run-85: the single slot write-scope predicate (deleteSlot). Same
+   * contract as pitchOwnerScope: Admins address any slot; everyone else only
+   * slots whose pitch sits on a venue they own RIGHT NOW.
+   */
+  private slotOwnerScope(actorId: string, actorRole: string, slotId: string): SQL {
+    if (actorRole === 'Admin') return eq(pitch_slots.id, slotId);
+    return and(
+      eq(pitch_slots.id, slotId),
+      sql`${pitch_slots.pitch_id} IN (SELECT p.id FROM pitches p JOIN venues v ON v.id = p.venue_id WHERE v.owner_id = ${actorId})`,
+    ) as SQL;
+  }
+
   async getPitches(ownerId: string, actorRole?: string) {
     return this.db
       .select(this.pitchColumns)
@@ -630,7 +643,13 @@ export class PartnerService {
         .where(eq(venues.id, dto.venue_id))
         .limit(1)
         .for('update');
-      if (!venue) throw new NotFoundException('Venue not found.');
+      if (!venue) {
+        // Deliberate contract (independent review, run #85): a MISSING venue
+        // reads as non-owned — 403 with the same message, so venue ids cannot
+        // be probed through this endpoint. (The 404 convention applies to
+        // pitch/slot writes where a scoped SELECT already hides the row.)
+        throw new ForbiddenException('You can only verify your own venues.');
+      }
       if (venue.owner_id !== ownerId) {
         throw new ForbiddenException('You can only verify your own venues.');
       }
@@ -954,13 +973,7 @@ export class PartnerService {
       );
     }
 
-    const scope =
-      actorRole === 'Admin'
-        ? eq(pitch_slots.id, slotId)
-        : and(
-            eq(pitch_slots.id, slotId),
-            sql`${pitch_slots.pitch_id} IN (SELECT p.id FROM pitches p JOIN venues v ON v.id = p.venue_id WHERE v.owner_id = ${actorId})`,
-          );
+    const scope = this.slotOwnerScope(actorId, actorRole, slotId);
 
     await this.db.transaction(async (tx) => {
       // FOR UPDATE on the slot row: a booking flips is_booked via UPDATE, so it
