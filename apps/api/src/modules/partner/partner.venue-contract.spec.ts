@@ -84,9 +84,16 @@ describe('PartnerService.createVenue contract (P2-5, run #39)', () => {
       closed_day_6: false,
     };
     const db = {
+      // P2-12/run-85: createSlot runs in one tx; the stub tx is the db itself.
+      transaction: async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(db),
       select: () => ({
         from: (table: unknown) => {
-          const chain: any = { where: () => chain, limit: () => chain, innerJoin: () => chain };
+          const chain: any = {
+            where: () => chain,
+            limit: () => chain,
+            innerJoin: () => chain,
+            for: () => chain,
+          };
           chain.then = (resolve: (v: unknown) => void) => {
             if (table === pitches) resolve([accessRow]);
             else resolve([hoursRow]);
