@@ -418,7 +418,7 @@ export class NotificationsService {
       if (r.status === 'rejected') {
         rejectedCount += 1;
         if (rejectedCount === 1) firstRejection = r.reason;
-        this.logger.warn(`Push fan-out task failed: ${(r.reason as Error)?.message}`);
+        this.logger.warn(`Push fan-out task failed: ${(r.reason as Error)?.message ?? String(r.reason)}`);
       }
     }
     if (rejectedCount > 0) {
