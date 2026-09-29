@@ -69,8 +69,12 @@ export default function AdminPitchesPage() {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
     return d.toISOString().slice(0, 10);
   }
+  // P2-124 (run #86): the two helpers above ran on every render (impure render
+  // — a new Date() each pass); memoized per-mount instead. Matches SlotManager's
+  // per-mount week state (local-midnight → UTC string, same semantics).
+  const [weekFrom, weekTo] = useState(() => [weekStart(), weekEnd()] as const);
   const scheduleState = useLiveAdminData<SlotsResponse>(
-    schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekStart()}&to=${weekEnd()}` : '/admin/pitches',
+    schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/admin/pitches',
     [],
     { pollMs: 60_000 },
   );

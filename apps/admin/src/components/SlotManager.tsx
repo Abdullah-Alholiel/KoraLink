@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
@@ -32,10 +32,20 @@ interface SlotManagerProps {
 export default function SlotManager({ pitchId, pitchName, slots, loading, onChanged, endpointBase = '/partner' }: SlotManagerProps) {
   const t = useTranslations('slotManager');
   const tc = useTranslations('common');
-  const [weekStart, setWeekStart] = useState(() => {
+  // P2-124 (run #86): the initializer used to run new Date() during SSR, where
+  // the container clock (UTC) can disagree with the client's Asia/Riyadh
+  // weekday — an SSR/client divergence in the slot-week grid (hydration
+  // mismatch / wrong-day grid). Null-seeded + synced on mount instead; until
+  // synced the component keeps its existing loading state.
+  const [weekStart, setWeekStart] = useState<string | null>(null);
+
+  useEffect(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString().slice(0, 10);
-  });
+    setWeekStart(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString().slice(0, 10),
+    );
+  }, []);
+
   const [showGenerator, setShowGenerator] = useState(false);
   const [showAddSlot, setShowAddSlot] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -56,7 +66,10 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
     [t],
   );
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const days = useMemo(
+    () => (weekStart ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : []),
+    [weekStart],
+  );
   const byDay = useMemo(() => {
     const map = new Map<string, PartnerSlot[]>();
     for (const s of slots) {
@@ -118,6 +131,16 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
     } finally {
       setBusyId(null);
     }
+  }
+
+  // P2-124 (run #86): week not synced yet → render the loading state (same
+  // treatment as !slots) instead of computing a grid from a null week.
+  if (!weekStart) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="py-8 text-center text-sm text-gray-400">{t('loadingSchedule')}</div>
+      </div>
+    );
   }
 
   return (

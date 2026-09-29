@@ -29,6 +29,15 @@ export default function MyPitchesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
+  // P2-124 (run #86): weekStart()/weekEnd() previously ran on every render
+  // (impure render — a fresh new Date() each pass). Resolved once per mount
+  // via lazy state, same local-midnight → UTC-string semantics as SlotManager.
+  const [weekFrom, weekTo] = useState(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)] as const;
+  });
   const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<PartnerPitch | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -41,7 +50,7 @@ export default function MyPitchesPage() {
   }, []);
 
   const scheduleState = useLiveAdminData<SlotsResponse>(
-    schedulePitchId ? `/partner/pitches/${schedulePitchId}/slots?from=${weekStart()}&to=${weekEnd()}` : '/partner/pitches',
+    schedulePitchId ? `/partner/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/partner/pitches',
     [],
     { pollMs: 60_000 },
   );
@@ -49,17 +58,6 @@ export default function MyPitchesPage() {
   const schedule = schedulePitchId ? scheduleState : { ...scheduleState, data: undefined, loading: false };
 
   const schedulePitch = (data ?? []).find((p) => p.id === schedulePitchId) ?? null;
-
-  function weekStart(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    return d.toISOString().slice(0, 10);
-  }
-  function weekEnd(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-    return d.toISOString().slice(0, 10);
-  }
 
   async function toggleActive(p: PartnerPitch) {
     setBusyId(p.id);

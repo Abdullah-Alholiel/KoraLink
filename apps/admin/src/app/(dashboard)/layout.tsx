@@ -27,6 +27,12 @@ export default function DashboardLayout({
   // overlay (2026-09-07 table-restructure — the fixed pl-64 crushed 390px
   // viewports and forced every page into horizontal scroll).
   const [navOpen, setNavOpen] = useState(false);
+  // P2-124 (run #86): the guard used to read localStorage (getRole) and
+  // window.location.pathname DURING RENDER — an SSR/CSR mismatch hazard and a
+  // 'null' flash on every hard navigation. The role is now resolved ONCE in
+  // the mount effect and held in state; render stays a pure function of it
+  // (null = still deciding → placeholder, exactly the old UX).
+  const [guardRole, setGuardRole] = useState<string | null>(null);
 
   useEffect(() => {
     const role = getRole();
@@ -41,7 +47,9 @@ export default function DashboardLayout({
     }
     if (!canAccessPath(role, path)) {
       router.replace(homeForRole(role));
+      return;
     }
+    setGuardRole(role);
   }, [router]);
 
   // Esc closes the mobile nav overlay.
@@ -54,9 +62,8 @@ export default function DashboardLayout({
     return () => document.removeEventListener('keydown', onKey);
   }, [navOpen]);
 
-  const role = getRole();
-  const path = typeof window !== 'undefined' ? window.location.pathname : '';
-  if (!role || !canAccessPath(role, path)) {
+  // Render is a pure function of state — no window/localStorage reads here.
+  if (!guardRole) {
     // Avoid rendering protected content during the redirect tick.
     return <div className="min-h-screen bg-gray-50" />;
   }
