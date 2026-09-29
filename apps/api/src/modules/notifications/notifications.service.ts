@@ -409,10 +409,23 @@ export class NotificationsService {
     );
 
     // Never let an unexpected (non-send) failure crash a caller mid-fan-out.
+    // P2-125: rejected tasks were debug-only (invisible). warn per task, but
+    // ONE aggregated Sentry capture per call (first rejection reason) so a
+    // systemic failure doesn't flood Sentry with one event per subscription.
+    let firstRejection: unknown;
+    let rejectedCount = 0;
     for (const r of results) {
       if (r.status === 'rejected') {
-        this.logger.debug(`Push fan-out task failed: ${(r.reason as Error)?.message}`);
+        rejectedCount += 1;
+        if (rejectedCount === 1) firstRejection = r.reason;
+        this.logger.warn(`Push fan-out task failed: ${(r.reason as Error)?.message}`);
       }
+    }
+    if (rejectedCount > 0) {
+      Sentry.captureException(firstRejection, {
+        tags: { scope: 'notifications.push-fanout' },
+        extra: { rejected_count: rejectedCount, total: results.length },
+      });
     }
     return sent;
   }
