@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Activity, Menu, X } from 'lucide-react';
 import { getRole, canAccessPath, homeForRole } from '@/lib/rbac';
+import type { Role } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import OfflineBanner from '@/components/OfflineBanner';
 
@@ -23,6 +24,12 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  // PR-Agent security note (PR #51 round 3): freezing the path check at mount
+  // let in-app navigations to a disallowed route render the page shell until
+  // the API 403s. usePathname() is SSR-safe (no hydration hazard) and makes
+  // the check per-navigation again, while render stays a pure function of
+  // hook state (P2-124's original fix stands — no window/localStorage reads).
+  const pathname = usePathname();
   // Phone/tablet navigation: the sidebar collapses below md and opens as an
   // overlay (2026-09-07 table-restructure — the fixed pl-64 crushed 390px
   // viewports and forced every page into horizontal scroll).
@@ -32,7 +39,7 @@ export default function DashboardLayout({
   // 'null' flash on every hard navigation. The role is now resolved ONCE in
   // the mount effect and held in state; render stays a pure function of it
   // (null = still deciding → placeholder, exactly the old UX).
-  const [guardRole, setGuardRole] = useState<string | null>(null);
+  const [guardRole, setGuardRole] = useState<Role | null>(null);
 
   useEffect(() => {
     const role = getRole();
@@ -40,17 +47,19 @@ export default function DashboardLayout({
       router.replace('/login');
       return;
     }
-    const path = window.location.pathname;
     if (role === 'Player') {
       router.replace('/login?error=player');
       return;
     }
-    if (!canAccessPath(role, path)) {
-      router.replace(homeForRole(role));
-      return;
-    }
     setGuardRole(role);
-  }, [router]);
+    // Path-based redirect on every navigation (deep-link / back-button safety
+    // net, restored per PR-Agent round 3) — canAccessPath reads `pathname`.
+    if (!canAccessPath(role, pathname)) {
+      router.replace(homeForRole(role));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pathname is the
+    // navigation trigger; role re-derives from storage each pass.
+  }, [router, pathname]);
 
   // Esc closes the mobile nav overlay.
   useEffect(() => {
@@ -62,8 +71,10 @@ export default function DashboardLayout({
     return () => document.removeEventListener('keydown', onKey);
   }, [navOpen]);
 
-  // Render is a pure function of state — no window/localStorage reads here.
-  if (!guardRole) {
+  // Render is a pure function of hook state — no window/localStorage reads.
+  // Path-based access is re-checked on EVERY navigation (guardRole + pathname
+  // both feed the decision), so a cross-role in-app link redirects instantly.
+  if (!guardRole || !canAccessPath(guardRole, pathname)) {
     // Avoid rendering protected content during the redirect tick.
     return <div className="min-h-screen bg-gray-50" />;
   }
