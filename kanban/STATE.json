@@ -11,8 +11,8 @@
   "last_run_report": "kanban/RUNS/2026-09-29T15-15Z-run87.md",
   "in_review_items": [
     {
-      "item": "P2-125 scheduler failure observability (lane 01a0edc9, PR pending)",
-      "verify": "PR squash SHA in git log; grep -c 'Sentry.captureException' apps/api/src/modules/matches/matches.scheduler.ts == 4 with scope tags matches.scheduler.{auto-complete,pom-finalize,reminders,min-players}; notifications.service.ts fan-out loop warn+aggregated capture scope notifications.push-fanout; users.scheduler.ts scope tag PRESERVED as 'users.purgeExpired' (do not rename); new spec matches.scheduler-observability.spec.ts green; turbo 3/3 + api jest + vitest green on merged tree",
+      "item": "P2-125 scheduler failure observability (PR #52 squash 4819250, lane 01a0edc9)",
+      "verify": "grep -c 'captureException' apps/api/dist/src/modules/matches/matches.scheduler.js == 4 with the 4 scope strings; grep -c 'push-fanout' apps/api/dist/src/modules/notifications/notifications.service.js >= 1; users.scheduler.ts tag == 'users.purgeExpired' (not renamed); jest matches.scheduler-observability 4/4; PR #52 state MERGED",
       "claimed_by": "run #87"
     }
   ],
@@ -54,5 +54,6 @@
   "last_run_id": "2026-09-29T10-16Z-r86",
   "last_run_started_at": "2026-09-29T10:16Z",
   "last_run_finished_at": "2026-09-29T12:25Z",
-  "last_run_ts": "2026-09-29T15:15Z"
+  "last_run_ts": "2026-09-29T15:15Z",
+  "last_run_commit": null
 }
