@@ -44,10 +44,14 @@ export default function DashboardLayout({
   useEffect(() => {
     const role = getRole();
     if (!role) {
+      // PR-Agent round 4: clear any cached role so protected children stop
+      // rendering the moment the token is gone (e.g. logout in a second tab).
+      setGuardRole(null);
       router.replace('/login');
       return;
     }
     if (role === 'Player') {
+      setGuardRole(null);
       router.replace('/login?error=player');
       return;
     }
