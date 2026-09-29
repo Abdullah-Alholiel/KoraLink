@@ -415,6 +415,7 @@ export class NotificationsService {
     // ONE aggregated Sentry capture below carries rejected_count/total.
     let firstRejection: unknown;
     let rejectedCount = 0;
+    const reasonSamples = new Set<string>();
     for (const r of results) {
       if (r.status === 'rejected') {
         rejectedCount += 1;
@@ -428,12 +429,19 @@ export class NotificationsService {
             `Push fan-out task failed: ${(r.reason as Error)?.message ?? String(r.reason)}`,
           );
         }
+        if (reasonSamples.size < 3) {
+          reasonSamples.add((r.reason as Error)?.message ?? String(r.reason));
+        }
       }
     }
     if (rejectedCount > 0) {
       Sentry.captureException(firstRejection, {
         tags: { scope: 'notifications.push-fanout' },
-        extra: { rejected_count: rejectedCount, total: results.length },
+        extra: {
+          rejected_count: rejectedCount,
+          total: results.length,
+          rejection_samples: [...reasonSamples],
+        },
       });
     }
     return sent;
