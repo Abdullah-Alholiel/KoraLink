@@ -6,7 +6,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -423,6 +423,33 @@ export class PartnerService {
     venue_name: venues.name,
   };
 
+  /**
+   * P2-12/run-85: the single pitch write-scope predicate. Admins address any
+   * pitch by id; everyone else only pitches on venues they own RIGHT NOW, so
+   * a scoped write re-checks ownership at statement time instead of trusting
+   * the assertPitchAccess pre-check.
+   */
+  private pitchOwnerScope(actorId: string, actorRole: string, pitchId: string): SQL {
+    if (actorRole === 'Admin') return eq(pitches.id, pitchId);
+    return and(
+      eq(pitches.id, pitchId),
+      sql`${pitches.venue_id} IN (SELECT id FROM venues WHERE owner_id = ${actorId})`,
+    ) as SQL;
+  }
+
+  /**
+   * P2-12/run-85: the single slot write-scope predicate (deleteSlot). Same
+   * contract as pitchOwnerScope: Admins address any slot; everyone else only
+   * slots whose pitch sits on a venue they own RIGHT NOW.
+   */
+  private slotOwnerScope(actorId: string, actorRole: string, slotId: string): SQL {
+    if (actorRole === 'Admin') return eq(pitch_slots.id, slotId);
+    return and(
+      eq(pitch_slots.id, slotId),
+      sql`${pitch_slots.pitch_id} IN (SELECT p.id FROM pitches p JOIN venues v ON v.id = p.venue_id WHERE v.owner_id = ${actorId})`,
+    ) as SQL;
+  }
+
   async getPitches(ownerId: string, actorRole?: string) {
     return this.db
       .select(this.pitchColumns)
@@ -485,14 +512,7 @@ export class PartnerService {
       const updated = await this.db
         .update(pitches)
         .set(withTimestamp(updates) as never)
-        .where(
-          actorRole === 'Admin'
-            ? eq(pitches.id, pitchId)
-            : and(
-                eq(pitches.id, pitchId),
-                sql`${pitches.venue_id} IN (SELECT id FROM venues WHERE owner_id = ${actorId})`,
-              ),
-        )
+        .where(this.pitchOwnerScope(actorId, actorRole, pitchId))
         .returning({ id: pitches.id });
       if (!updated.length) throw new NotFoundException('Pitch not found.');
     }
@@ -515,13 +535,7 @@ export class PartnerService {
   async deletePitch(actorId: string, actorRole: string, pitchId: string) {
     await this.assertPitchAccess(actorId, actorRole, pitchId);
 
-    const scope =
-      actorRole === 'Admin'
-        ? eq(pitches.id, pitchId)
-        : and(
-            eq(pitches.id, pitchId),
-            sql`${pitches.venue_id} IN (SELECT id FROM venues WHERE owner_id = ${actorId})`,
-          );
+    const scope = this.pitchOwnerScope(actorId, actorRole, pitchId);
 
     // One tx + FOR UPDATE on the pitch row: matches.pitch_id is ON DELETE
     // CASCADE, so without the lock a match inserted between the history count
@@ -615,29 +629,35 @@ export class PartnerService {
     return rows.map((r) => ({ venue_id: r.venue_id, venue_name: r.venue_name, verification: r.verification }));
   }
 
+  /**
+   * P2-12/run-85: the ownership check and the upsert share one tx, and the
+   * venue row is locked FOR UPDATE — ownership cannot transfer between the
+   * check and the write, so a stale authorization can never upsert payout
+   * details (IBAN) onto someone else's venue.
+   */
   async submitVerification(ownerId: string, dto: SubmitVerificationDto) {
-    const [venue] = await this.db
-      .select({ id: venues.id })
-      .from(venues)
-      .where(and(eq(venues.id, dto.venue_id), eq(venues.owner_id, ownerId)))
-      .limit(1);
-    if (!venue) throw new ForbiddenException('You can only verify your own venues.');
+    await this.db.transaction(async (tx) => {
+      const [venue] = await tx
+        .select({ id: venues.id, owner_id: venues.owner_id })
+        .from(venues)
+        .where(eq(venues.id, dto.venue_id))
+        .limit(1)
+        .for('update');
+      if (!venue) {
+        // Deliberate contract (independent review, run #85): a MISSING venue
+        // reads as non-owned — 403 with the same message, so venue ids cannot
+        // be probed through this endpoint. (The 404 convention applies to
+        // pitch/slot writes where a scoped SELECT already hides the row.)
+        throw new ForbiddenException('You can only verify your own venues.');
+      }
+      if (venue.owner_id !== ownerId) {
+        throw new ForbiddenException('You can only verify your own venues.');
+      }
 
-    await this.db
-      .insert(venue_verifications)
-      .values({
-        venue_id: dto.venue_id,
-        legal_entity_name: dto.legal_entity_name,
-        commercial_reg: dto.commercial_reg ?? null,
-        tax_id: dto.tax_id ?? null,
-        iban: dto.iban ?? null,
-        manager_name: dto.manager_name ?? null,
-        manager_phone: dto.manager_phone ?? null,
-        status: 'pending',
-      })
-      .onConflictDoUpdate({
-        target: venue_verifications.venue_id,
-        set: {
+      await tx
+        .insert(venue_verifications)
+        .values({
+          venue_id: dto.venue_id,
           legal_entity_name: dto.legal_entity_name,
           commercial_reg: dto.commercial_reg ?? null,
           tax_id: dto.tax_id ?? null,
@@ -645,9 +665,21 @@ export class PartnerService {
           manager_name: dto.manager_name ?? null,
           manager_phone: dto.manager_phone ?? null,
           status: 'pending',
-          submitted_at: new Date(),
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: venue_verifications.venue_id,
+          set: {
+            legal_entity_name: dto.legal_entity_name,
+            commercial_reg: dto.commercial_reg ?? null,
+            tax_id: dto.tax_id ?? null,
+            iban: dto.iban ?? null,
+            manager_name: dto.manager_name ?? null,
+            manager_phone: dto.manager_phone ?? null,
+            status: 'pending',
+            submitted_at: new Date(),
+          },
+        });
+    });
 
     return this.getVerification(ownerId);
   }
@@ -718,103 +750,120 @@ export class PartnerService {
   ) {
     await this.assertPitchAccess(actorId, actorRole, pitchId);
 
-    // P1-25: clamp slot generation to the venue's operating hours. Riyadh-local
-    // by product convention (slots are wall-clock strings on slot_date).
-    const [venueRow] = await this.db
-      .select({
-        open_hour: venues.open_hour,
-        close_hour: venues.close_hour,
-        closed_day_0: venues.closed_day_0,
-        closed_day_1: venues.closed_day_1,
-        closed_day_2: venues.closed_day_2,
-        closed_day_3: venues.closed_day_3,
-        closed_day_4: venues.closed_day_4,
-        closed_day_5: venues.closed_day_5,
-        closed_day_6: venues.closed_day_6,
-      })
-      .from(pitches)
-      .innerJoin(venues, eq(pitches.venue_id, venues.id))
-      .where(eq(pitches.id, pitchId))
-      .limit(1);
-    const openMins = Number(venueRow?.open_hour ?? 0) * 60;
-    const closeMins = Number(venueRow?.close_hour ?? 24) * 60;
+    const { created, skipped } = await this.db.transaction(async (tx) => {
+      // P2-12/run-85: re-check ownership inside the tx. FOR UPDATE over the
+      // pitch ⋈ venue join locks BOTH rows, so neither the pitch's venue nor
+      // the venue's owner can change until the INSERT commits; a transfer
+      // that committed after the pre-check reads as a clean 404.
+      const [locked] = await tx
+        .select({ id: pitches.id })
+        .from(pitches)
+        .innerJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(this.pitchOwnerScope(actorId, actorRole, pitchId))
+        .limit(1)
+        .for('update');
+      if (!locked) throw new NotFoundException('Pitch not found.');
 
-    const rows: Array<{
-      pitch_id: string;
-      slot_date: string;
-      start_time: string;
-      end_time: string;
-    }> = [];
+      // P1-25: clamp slot generation to the venue's operating hours. Riyadh-local
+      // by product convention (slots are wall-clock strings on slot_date).
+      const [venueRow] = await tx
+        .select({
+          open_hour: venues.open_hour,
+          close_hour: venues.close_hour,
+          closed_day_0: venues.closed_day_0,
+          closed_day_1: venues.closed_day_1,
+          closed_day_2: venues.closed_day_2,
+          closed_day_3: venues.closed_day_3,
+          closed_day_4: venues.closed_day_4,
+          closed_day_5: venues.closed_day_5,
+          closed_day_6: venues.closed_day_6,
+        })
+        .from(pitches)
+        .innerJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(eq(pitches.id, pitchId))
+        .limit(1);
+      const openMins = Number(venueRow?.open_hour ?? 0) * 60;
+      const closeMins = Number(venueRow?.close_hour ?? 24) * 60;
 
-    const [sh, sm] = pattern.start_time.split(':').map(Number);
-    const [eh, em] = pattern.end_time.split(':').map(Number);
-    const startMins = sh * 60 + sm;
-    const endMins = eh * 60 + em;
-    if (endMins <= startMins) {
-      throw new BadRequestException('end_time must be after start_time.');
-    }
-    const dur = pattern.slot_duration_mins;
+      const rows: Array<{
+        pitch_id: string;
+        slot_date: string;
+        start_time: string;
+        end_time: string;
+      }> = [];
 
-    // P1-25: requested capacity before hours-clamping (for skipped accounting).
-    const totalCapacity =
-      pattern.weeks_ahead *
-      pattern.days_of_week.reduce(
-        (sum, dow) => sum + windowCapacity(startMins, endMins, dur),
-        0,
-      );
+      const [sh, sm] = pattern.start_time.split(':').map(Number);
+      const [eh, em] = pattern.end_time.split(':').map(Number);
+      const startMins = sh * 60 + sm;
+      const endMins = eh * 60 + em;
+      if (endMins <= startMins) {
+        throw new BadRequestException('end_time must be after start_time.');
+      }
+      const dur = pattern.slot_duration_mins;
 
-    const closedDay = (dow: number) =>
-      Boolean(venueRow?.[`closed_day_${dow}` as keyof typeof venueRow]);
+      // P1-25: requested capacity before hours-clamping (for skipped accounting).
+      const totalCapacity =
+        pattern.weeks_ahead *
+        pattern.days_of_week.reduce(
+          (sum, dow) => sum + windowCapacity(startMins, endMins, dur),
+          0,
+        );
 
-    // P2-109: "today" and weekdays are Riyadh-local via the UTC-midnight
-    // convention (same as createSlot) — never server-local getDay/setDate.
-    const today = riyadhDateString();
-    const todayDow = new Date(`${today}T00:00:00Z`).getUTCDay();
-    for (let w = 0; w < pattern.weeks_ahead; w++) {
-      for (const dow of pattern.days_of_week) {
-        // P1-25: whole-day closure → nothing bookable on this weekday.
-        if (closedDay(dow)) continue;
+      const closedDay = (dow: number) =>
+        Boolean(venueRow?.[`closed_day_${dow}` as keyof typeof venueRow]);
 
-        const dayDiff = (dow - todayDow + 7) % 7;
-        const dateStr = addDaysToDateString(today, dayDiff + w * 7);
+      // P2-109: "today" and weekdays are Riyadh-local via the UTC-midnight
+      // convention (same as createSlot) — never server-local getDay/setDate.
+      const today = riyadhDateString();
+      const todayDow = new Date(`${today}T00:00:00Z`).getUTCDay();
+      for (let w = 0; w < pattern.weeks_ahead; w++) {
+        for (const dow of pattern.days_of_week) {
+          // P1-25: whole-day closure → nothing bookable on this weekday.
+          if (closedDay(dow)) continue;
 
-        // P1-25: intersect the requested window with the venue's hours for
-        // that day — slots never spill outside opening time.
-        const from = Math.max(startMins, openMins);
-        const to = Math.min(endMins, closeMins);
+          const dayDiff = (dow - todayDow + 7) % 7;
+          const dateStr = addDaysToDateString(today, dayDiff + w * 7);
 
-        for (let m = from; m + dur <= to; m += dur) {
-          const hh = String(Math.floor(m / 60)).padStart(2, '0');
-          const mm = String(m % 60).padStart(2, '0');
-          const ehh = String(Math.floor((m + dur) / 60)).padStart(2, '0');
-          const emm = String((m + dur) % 60).padStart(2, '0');
-          rows.push({
-            pitch_id: pitchId,
-            slot_date: dateStr,
-            start_time: `${hh}:${mm}:00`,
-            end_time: `${ehh}:${emm}:00`,
-          });
+          // P1-25: intersect the requested window with the venue's hours for
+          // that day — slots never spill outside opening time.
+          const from = Math.max(startMins, openMins);
+          const to = Math.min(endMins, closeMins);
+
+          for (let m = from; m + dur <= to; m += dur) {
+            const hh = String(Math.floor(m / 60)).padStart(2, '0');
+            const mm = String(m % 60).padStart(2, '0');
+            const ehh = String(Math.floor((m + dur) / 60)).padStart(2, '0');
+            const emm = String((m + dur) % 60).padStart(2, '0');
+            rows.push({
+              pitch_id: pitchId,
+              slot_date: dateStr,
+              start_time: `${hh}:${mm}:00`,
+              end_time: `${ehh}:${emm}:00`,
+            });
+          }
         }
       }
-    }
 
-    // Set-based upsert: one round-trip, conflicts skipped atomically.
-    let created = 0;
-    let skipped = 0;
-    if (rows.length) {
-      const inserted = await this.db
-        .insert(pitch_slots)
-        .values(rows)
-        .onConflictDoNothing({
-          target: [pitch_slots.pitch_id, pitch_slots.slot_date, pitch_slots.start_time],
-        })
-        .returning({ id: pitch_slots.id });
-      created = inserted.length;
-      skipped = rows.length - created;
-    }
-    // P1-25: report hour-clamped / closed-day slots as skipped so the partner
-    // sees why fewer slots appeared than the pattern requested.
-    skipped += totalCapacity - rows.length;
+      // Set-based upsert: one round-trip, conflicts skipped atomically.
+      let created = 0;
+      let skipped = 0;
+      if (rows.length) {
+        const inserted = await tx
+          .insert(pitch_slots)
+          .values(rows)
+          .onConflictDoNothing({
+            target: [pitch_slots.pitch_id, pitch_slots.slot_date, pitch_slots.start_time],
+          })
+          .returning({ id: pitch_slots.id });
+        created = inserted.length;
+        skipped = rows.length - created;
+      }
+      // P1-25: report hour-clamped / closed-day slots as skipped so the partner
+      // sees why fewer slots appeared than the pattern requested.
+      skipped += totalCapacity - rows.length;
+
+      return { created, skipped };
+    });
 
     this.realtime.broadcastOps('venues');
 
@@ -829,61 +878,85 @@ export class PartnerService {
       throw new BadRequestException('end_time must be after start_time.');
     }
 
-    // P1-25: one-off slots must sit inside the venue's operating hours on an
-    // open day (slot dates/times are Riyadh-local wall clock by convention;
-    // the calendar weekday of the date string is exact via UTC midnight).
-    const [venueHours] = await this.db
-      .select({
-        open_hour: venues.open_hour,
-        close_hour: venues.close_hour,
-        closed_day_0: venues.closed_day_0,
-        closed_day_1: venues.closed_day_1,
-        closed_day_2: venues.closed_day_2,
-        closed_day_3: venues.closed_day_3,
-        closed_day_4: venues.closed_day_4,
-        closed_day_5: venues.closed_day_5,
-        closed_day_6: venues.closed_day_6,
-      })
-      .from(pitches)
-      .innerJoin(venues, eq(pitches.venue_id, venues.id))
-      .where(eq(pitches.id, pitchId))
-      .limit(1);
-    if (venueHours) {
-      const dow = new Date(`${dto.slot_date}T00:00:00Z`).getUTCDay();
-      if (venueHours[`closed_day_${dow}` as keyof typeof venueHours]) {
-        throw new BadRequestException('The venue is closed on that day.');
-      }
-      const toMins = (t: string) => {
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + m;
-      };
-      const openMins = Number(venueHours.open_hour) * 60;
-      const closeMins = Number(venueHours.close_hour) * 60;
-      if (toMins(dto.start_time) < openMins || toMins(dto.end_time) > closeMins) {
-        throw new BadRequestException(
-          `Slot must sit inside venue opening hours (${venueHours.open_hour}:00–${venueHours.close_hour}:00).`,
-        );
-      }
-    }
+    const slot = await this.db.transaction(async (tx) => {
+      // P2-12/run-85: re-check ownership inside the tx. FOR UPDATE over the
+      // pitch ⋈ venue join locks BOTH rows, so neither the pitch's venue nor
+      // the venue's owner can change until the INSERT commits; a transfer
+      // that committed after the pre-check reads as a clean 404.
+      const [locked] = await tx
+        .select({ id: pitches.id })
+        .from(pitches)
+        .innerJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(this.pitchOwnerScope(actorId, actorRole, pitchId))
+        .limit(1)
+        .for('update');
+      if (!locked) throw new NotFoundException('Pitch not found.');
 
-    try {
-      const [slot] = await this.db
-        .insert(pitch_slots)
-        .values({
-          pitch_id: pitchId,
-          slot_date: dto.slot_date,
-          start_time: `${dto.start_time}:00`,
-          end_time: `${dto.end_time}:00`,
+      // P1-25: one-off slots must sit inside the venue's operating hours on an
+      // open day (slot dates/times are Riyadh-local wall clock by convention;
+      // the calendar weekday of the date string is exact via UTC midnight).
+      const [venueHours] = await tx
+        .select({
+          open_hour: venues.open_hour,
+          close_hour: venues.close_hour,
+          closed_day_0: venues.closed_day_0,
+          closed_day_1: venues.closed_day_1,
+          closed_day_2: venues.closed_day_2,
+          closed_day_3: venues.closed_day_3,
+          closed_day_4: venues.closed_day_4,
+          closed_day_5: venues.closed_day_5,
+          closed_day_6: venues.closed_day_6,
         })
-        .returning();
-      this.realtime.broadcastOps('venues');
-      return slot;
-    } catch {
-      throw new ConflictException('A slot already exists at that date and time.');
-    }
+        .from(pitches)
+        .innerJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(eq(pitches.id, pitchId))
+        .limit(1);
+      if (venueHours) {
+        const dow = new Date(`${dto.slot_date}T00:00:00Z`).getUTCDay();
+        if (venueHours[`closed_day_${dow}` as keyof typeof venueHours]) {
+          throw new BadRequestException('The venue is closed on that day.');
+        }
+        const toMins = (t: string) => {
+          const [h, m] = t.split(':').map(Number);
+          return h * 60 + m;
+        };
+        const openMins = Number(venueHours.open_hour) * 60;
+        const closeMins = Number(venueHours.close_hour) * 60;
+        if (toMins(dto.start_time) < openMins || toMins(dto.end_time) > closeMins) {
+          throw new BadRequestException(
+            `Slot must sit inside venue opening hours (${venueHours.open_hour}:00–${venueHours.close_hour}:00).`,
+          );
+        }
+      }
+
+      try {
+        const [slot] = await tx
+          .insert(pitch_slots)
+          .values({
+            pitch_id: pitchId,
+            slot_date: dto.slot_date,
+            start_time: `${dto.start_time}:00`,
+            end_time: `${dto.end_time}:00`,
+          })
+          .returning();
+        return slot;
+      } catch {
+        throw new ConflictException('A slot already exists at that date and time.');
+      }
+    });
+
+    this.realtime.broadcastOps('venues');
+    return slot;
   }
 
-  /** Delete an unbooked slot. Booked slots must be cancelled via the match. */
+  /**
+   * Delete an unbooked slot. Booked slots must be cancelled via the match.
+   *
+   * P2-12/run-85: the locked select + DELETE re-apply the venue-owner scope
+   * for non-Admins (mirrors deletePitch), so ownership transferred after the
+   * assertPitchAccess pre-check reads as a clean 404 instead of deleting on a
+   * stale authorization.
+   */
   async deleteSlot(actorId: string, actorRole: string, slotId: string) {
     const [slot] = await this.db
       .select({ id: pitch_slots.id, pitch_id: pitch_slots.pitch_id, is_booked: pitch_slots.is_booked })
@@ -900,20 +973,50 @@ export class PartnerService {
       );
     }
 
-    // Conditional DELETE closes the TOCTOU between the is_booked SELECT above
-    // and the DELETE: a match that books the slot in between makes the
-    // predicate match zero rows, so a booked slot can never be deleted here
-    // (booked slots are released via match cancellation only).
-    const deleted = await this.db
-      .delete(pitch_slots)
-      .where(and(eq(pitch_slots.id, slotId), eq(pitch_slots.is_booked, false)))
-      .returning({ id: pitch_slots.id });
+    const scope = this.slotOwnerScope(actorId, actorRole, slotId);
 
-    if (deleted.length === 0) {
-      throw new ConflictException(
-        'This slot was just booked by a match — cancel the match first to release it.',
-      );
-    }
+    await this.db.transaction(async (tx) => {
+      // FOR UPDATE on the slot row: a booking flips is_booked via UPDATE, so it
+      // blocks until this tx commits instead of racing the DELETE.
+      const [locked] = await tx
+        .select({ id: pitch_slots.id, is_booked: pitch_slots.is_booked })
+        .from(pitch_slots)
+        .where(scope)
+        .limit(1)
+        .for('update');
+      if (!locked) throw new NotFoundException('Slot not found.');
+      if (locked.is_booked) {
+        throw new ConflictException(
+          'This slot was just booked by a match — cancel the match first to release it.',
+        );
+      }
+
+      // Conditional DELETE (P1-18): `is_booked = false` stays in the predicate
+      // so a booked slot can never be deleted here (booked slots are released
+      // via match cancellation only). Under READ COMMITTED the DELETE takes a
+      // fresh snapshot, so observe the affected-row count rather than assume.
+      const deleted = await tx
+        .delete(pitch_slots)
+        .where(and(scope, eq(pitch_slots.is_booked, false)))
+        .returning({ id: pitch_slots.id });
+
+      if (deleted.length === 0) {
+        // Distinguish the two ways to match zero rows: still visible in scope
+        // and booked → 409; otherwise ownership moved mid-flight → 404.
+        const [current] = await tx
+          .select({ is_booked: pitch_slots.is_booked })
+          .from(pitch_slots)
+          .where(scope)
+          .limit(1);
+        if (current?.is_booked) {
+          throw new ConflictException(
+            'This slot was just booked by a match — cancel the match first to release it.',
+          );
+        }
+        throw new NotFoundException('Slot not found.');
+      }
+    });
+
     this.realtime.broadcastOps('venues');
 
     return { deleted: true };

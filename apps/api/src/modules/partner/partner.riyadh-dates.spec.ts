@@ -15,10 +15,18 @@ type SlotRow = { pitch_id: string; slot_date: string; start_time: string; end_ti
 function makeService(venueRow: unknown | undefined) {
   const inserted: SlotRow[] = [];
   const db = {
+    // P2-12/run-85: generateSlots runs in one tx; the stub tx is the db itself.
+    transaction: async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(db),
     select: () => ({
       from: () => ({
         innerJoin: () => ({
-          where: () => ({ limit: async () => (venueRow ? [venueRow] : []) }),
+          where: () => ({
+            limit: () =>
+              Object.assign(Promise.resolve(venueRow ? [venueRow] : []), {
+                // Owner-scoped pitch lock (FOR UPDATE) — the pitch is visible.
+                for: async () => [{ id: 'p1' }],
+              }),
+          }),
         }),
       }),
     }),

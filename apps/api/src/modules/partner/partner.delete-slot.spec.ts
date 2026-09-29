@@ -11,20 +11,30 @@ import { pitch_slots } from '../../database/schema';
  * conditional and zero affected rows → ConflictException.
  */
 
-function thenable(rows: unknown[] = []) {
-  return { then: (resolve: (v: unknown) => void) => resolve(rows) };
-}
-
 function makeService(opts: {
   slotRow: unknown | null;
   deletedRows: unknown[];
   access: 'ok' | 'deny';
+  /** Slot row the post-miss re-read sees (P2-12/run-85 404-vs-409 split). */
+  rereadRow?: unknown;
 }) {
+  let plainReads = 0;
   const db = {
+    // P2-12/run-85: the locked select + DELETE run in one tx (stub tx = db).
+    transaction: async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(db),
     select: () => ({
       from: (table: unknown) => ({
         where: () => ({
-          limit: async () => (table === pitch_slots && opts.slotRow ? [opts.slotRow] : []),
+          limit: () => {
+            const rows = table === pitch_slots && opts.slotRow ? [opts.slotRow] : [];
+            // The pre-check is the first awaited .limit(); the tx lock chains
+            // .for(); any later bare .limit() is the post-miss re-read.
+            const awaited = plainReads++ === 0 || !opts.rereadRow ? rows : [opts.rereadRow];
+            return {
+              then: (resolve: (v: unknown) => void) => resolve(awaited),
+              for: async () => rows,
+            };
+          },
         }),
       }),
     }),
@@ -63,7 +73,12 @@ describe('PartnerService.deleteSlot TOCTOU guard', () => {
   it('rejects with Conflict (not silent delete) when the slot got booked mid-flight', async () => {
     // SELECT saw is_booked=false, but the conditional DELETE matched zero rows
     // because a booking flipped it in between — the row must survive.
-    const svc = makeService({ slotRow: SLOT, deletedRows: [], access: 'ok' });
+    const svc = makeService({
+      slotRow: SLOT,
+      deletedRows: [],
+      access: 'ok',
+      rereadRow: { ...SLOT, is_booked: true },
+    });
     await expect(svc.deleteSlot('actor', 'VenueOwner', 'slot-1')).rejects.toBeInstanceOf(
       ConflictException,
     );
