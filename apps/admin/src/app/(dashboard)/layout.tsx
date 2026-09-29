@@ -44,8 +44,11 @@ export default function DashboardLayout({
   useEffect(() => {
     const role = getRole();
     if (!role) {
-      // PR-Agent round 4: clear any cached role so protected children stop
-      // rendering the moment the token is gone (e.g. logout in a second tab).
+      // Clear any cached role so protected children stop rendering on the
+      // redirect (checked per navigation; an idle tab with a revoked token
+      // keeps the old shell until its next navigation — same window as the
+      // old render-time read, no regression; cross-tab reactivity = future
+      // `storage`-listener work, out of P2-124 scope).
       setGuardRole(null);
       router.replace('/login');
       return;
