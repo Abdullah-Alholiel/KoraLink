@@ -22,6 +22,18 @@ interface SlotsResponse {
   slots: PartnerSlot[];
 }
 
+// P2-124 (run #86): week-window helpers hoisted to module scope (pure, take
+// `now`), so the drawer's range is derived in state — not computed on every
+// render (the old inline weekStart()/weekEnd() ran a fresh new Date() per pass).
+function weekStart(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+  return d.toISOString().slice(0, 10);
+}
+function weekEnd(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * HQ pitch management (admin-ux-overhaul slice 2; restructured 2026-09-07):
  * every pitch across all venues with owner resolution, search, and admin edit
@@ -58,21 +70,16 @@ export default function AdminPitchesPage() {
   // Venue options for the edit drawer (cross-venue move / ownership hand-off).
   const venues = useLiveAdminData<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100', ['venues']);
 
-  // Slots for the schedule drawer (admin slot endpoints).
-  function weekStart(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    return d.toISOString().slice(0, 10);
-  }
-  function weekEnd(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-    return d.toISOString().slice(0, 10);
-  }
-  // P2-124 (run #86): the two helpers above ran on every render (impure render
-  // — a new Date() each pass); memoized per-mount instead. Matches SlotManager's
-  // per-mount week state (local-midnight → UTC string, same semantics).
-  const [weekFrom, weekTo] = useState(() => [weekStart(), weekEnd()] as const);
+  // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
+  // drawer opens (PR-Agent MINOR on PR #51 — a tab open across the Sunday
+  // rollover must not keep polling last week's slot range until reload).
+  const [weekFrom, setWeekFrom] = useState(() => weekStart());
+  const [weekTo, setWeekTo] = useState(() => weekEnd());
+  useEffect(() => {
+    if (!schedulePitchId) return;
+    setWeekFrom(weekStart());
+    setWeekTo(weekEnd());
+  }, [schedulePitchId]);
   const scheduleState = useLiveAdminData<SlotsResponse>(
     schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/admin/pitches',
     [],

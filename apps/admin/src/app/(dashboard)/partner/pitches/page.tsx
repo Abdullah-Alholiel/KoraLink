@@ -20,6 +20,17 @@ interface SlotsResponse {
   slots: PartnerSlot[];
 }
 
+// P2-124 (run #86): week-window helpers hoisted to module scope (pure, take
+// `now`) — the drawer's range lives in state, not a per-render new Date().
+function weekStart(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+  return d.toISOString().slice(0, 10);
+}
+function weekEnd(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function MyPitchesPage() {
   const t = useTranslations('partner.pitches');
   const tc = useTranslations('common');
@@ -29,16 +40,17 @@ export default function MyPitchesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
-  // P2-124 (run #86): weekStart()/weekEnd() previously ran on every render
-  // (impure render — a fresh new Date() each pass). Resolved once per mount
-  // via lazy state, same local-midnight → UTC-string semantics as SlotManager.
-  const [weekFrom, weekTo] = useState(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)] as const;
-  });
+  // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
+  // drawer opens (PR-Agent MINOR on PR #51 — a tab open across the Sunday
+  // rollover must not keep polling last week's slot range until reload).
+  const [weekFrom, setWeekFrom] = useState(() => weekStart());
+  const [weekTo, setWeekTo] = useState(() => weekEnd());
   const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!schedulePitchId) return;
+    setWeekFrom(weekStart());
+    setWeekTo(weekEnd());
+  }, [schedulePitchId]);
   const [deleting, setDeleting] = useState<PartnerPitch | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
