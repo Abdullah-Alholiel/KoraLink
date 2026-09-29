@@ -24,8 +24,9 @@ export interface CsvExportFile {
   content: string;
 }
 
-/** Leading characters a spreadsheet would interpret as a formula (OWASP). */
-const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+/** Leading characters a spreadsheet would interpret as a formula (OWASP).
+ * A plain negative number ("-12.34") is data, not a formula, and stays numeric. */
+const FORMULA_PREFIX = /^[=+@\t\r]|^-(?!\d)/;
 
 /** RFC 4180 field escaping + OWASP CSV-formula-injection guard. */
 export function escapeCsvField(value: string): string {
@@ -90,8 +91,10 @@ export function csvDate(value: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
 
-/** Fixed two-decimal amount for CSV cells (Latin digits, no currency label). */
+/** Fixed two-decimal amount for CSV cells (Latin digits, no currency label).
+ * null/undefined/empty → empty cell (a missing value must not read as zero). */
 export function csvAmount(value: number | string | null | undefined): string {
-  const n = typeof value === 'string' ? Number(value) : value ?? 0;
+  if (value === null || value === undefined || value === '') return '';
+  const n = typeof value === 'string' ? Number(value) : value;
   return Number.isNaN(n) ? '' : n.toFixed(2);
 }
