@@ -185,7 +185,7 @@ export default function ProfilePage() {
     const walletErrorMsg = walletError
         ? (walletError.status === 0
             ? t('common.offline')
-            : t('common.error'))
+            : t(errorKey(classifyError(walletError))))
         : null;
     const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
     const {
@@ -332,7 +332,7 @@ export default function ProfilePage() {
                                 </>
                             ) : statsError ? (
                                 <div className="flex-1 py-2 text-center">
-                                    <p className="text-sm text-white/70">{t('common.error')}</p>
+                                    <p className="text-sm text-white/70">{t(errorKey(classifyError(statsError)))}</p>
                                     <button
                                         type="button"
                                         onClick={() => refetchStats()}

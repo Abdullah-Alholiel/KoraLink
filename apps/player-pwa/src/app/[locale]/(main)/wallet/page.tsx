@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import {
     ArrowLeft,
     Plus,
@@ -233,7 +234,7 @@ export default function WalletPage() {
                         <div className="h-10 w-32 bg-gray-200 rounded-full mx-auto mt-3 animate-pulse" />
                     </>
                 ) : balanceError ? (
-                    <p className="text-sm text-gray-400">{t('common.error')}</p>
+                    <p className="text-sm text-gray-400">{t(errorKey(classifyError(balanceError)))}</p>
                 ) : (
                     <>
                         <p className="text-xs text-brand-green font-semibold uppercase tracking-widest">
@@ -311,7 +312,7 @@ export default function WalletPage() {
                             <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
                         </div>
                         <p className="text-sm text-gray-400 text-center mb-4">
-                            {t('common.errorDescription')}
+                            {t(errorKey(classifyError(historyError)))}
                         </p>
                         <button
                             onClick={() => refetch()}
