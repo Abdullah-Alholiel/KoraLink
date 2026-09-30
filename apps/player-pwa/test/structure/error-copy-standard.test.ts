@@ -46,7 +46,7 @@ describe('error copy standard (P2-127)', () => {
     const offenders = walk(join(PWA_ROOT, 'src/app'))
       .map((f) => ({ f, s: readFileSync(f, 'utf8') }))
       .filter(({ s }) =>
-        /t\(['"]common\.error['"]\)/.test(s) ||
+        /t\(['"]common\.error['"]/.test(s) ||
         /common\.errorDescription/.test(s))
       .map(({ f }) => relative(PWA_ROOT, f));
     expect(offenders).toEqual([]);

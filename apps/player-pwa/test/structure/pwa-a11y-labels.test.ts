@@ -16,7 +16,8 @@
  *  2. No hardcoded English `aria-label="Close"|"Dismiss"` anywhere in src/.
  *  3. The dead TopAppBar stays deleted; the feed page never re-references it.
  *  4. PostMatchSection's clock is null-seeded (hydration-safe) and ticking.
- *  5. my-games error state renders classified copy (P2-127 copy standard).
+ *  5. my-games error copy standard is pinned by
+ *     test/structure/error-copy-standard.test.ts (P2-127) — not duplicated here.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, statSync } from 'node:fs';
@@ -96,6 +97,5 @@ describe('PWA a11y labels + clock hygiene (run #80, P2-101)', () => {
   it('my-games error state renders classified copy (copy standard, P2-127)', () => {
     const page = src('src/app/[locale]/(main)/my-games/page.tsx');
     expect(page).toContain('errorKey(classifyError(');
-    expect(page).not.toContain("t('common.error')");
   });
 });
