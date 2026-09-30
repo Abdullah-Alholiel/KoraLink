@@ -39,10 +39,16 @@ const MIGRATED = [
 ];
 
 describe('error copy standard (P2-127)', () => {
-  it("no src/app file renders the generic t('common.error')", () => {
+  it("no src/app file renders generic error copy (common.error / errorDescription)", () => {
+    // Ban BOTH generic keys and BOTH quote styles: t("common.error") evades a
+    // single-quote-only check, and common.errorDescription is the same flat-
+    // copy smell in a different key (P2-127 PR-Agent round-1 note).
     const offenders = walk(join(PWA_ROOT, 'src/app'))
-      .filter((f) => readFileSync(f, 'utf8').includes("t('common.error')"))
-      .map((f) => relative(PWA_ROOT, f));
+      .map((f) => ({ f, s: readFileSync(f, 'utf8') }))
+      .filter(({ s }) =>
+        /t\(['"]common\.error['"]\)/.test(s) ||
+        /common\.errorDescription/.test(s))
+      .map(({ f }) => relative(PWA_ROOT, f));
     expect(offenders).toEqual([]);
   });
 
