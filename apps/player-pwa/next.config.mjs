@@ -25,7 +25,12 @@ const withPWA = withPWAInit({
     document: '/ar/offline',
   },
   workboxOptions: {
-    skipWaiting: true,
+    // P2-126 (run #89): activation is CONSENT-GATED — a new worker waits until
+    // ServiceWorkerUpdater posts SKIP_WAITING (user tapped "Reload now", or a
+    // first install with no controller). Never auto-reload the app mid-session.
+    // clientsClaim stays on: claiming on activation is fine.
+    skipWaiting: false,
+    clientsClaim: true,
     runtimeCaching: [
       // NetworkOnly money/auth recipes are registered FIRST on purpose: workbox
       // matches routes in registration order, and the static-assets CacheFirst
