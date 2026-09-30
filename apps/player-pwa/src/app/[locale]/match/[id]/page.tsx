@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import Image from 'next/image';
 import {
     ArrowLeft,
@@ -252,12 +253,9 @@ export default function MatchDetailPage({
                         <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                             <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
                         </div>
-                        <h3 className="text-lg font-bold text-brand-black mb-1">
-                            {t('common.error')}
+                        <h3 className="text-lg font-bold text-brand-black mb-6">
+                            {t(errorKey(classifyError(error)))}
                         </h3>
-                        <p className="text-sm text-gray-400 text-center mb-6">
-                            {t('common.errorDescription')}
-                        </p>
                         <button
                             onClick={() => refetch()}
                             className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"

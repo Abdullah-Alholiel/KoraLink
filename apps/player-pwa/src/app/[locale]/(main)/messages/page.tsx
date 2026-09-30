@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import {
   Search,
   MessageSquare,
@@ -182,7 +183,7 @@ export default function MessagesPage() {
           <div className="w-14 h-14 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
             <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
           </div>
-          <p className="text-sm text-gray-400 text-center mb-4">{t('common.errorDescription')}</p>
+          <p className="text-sm text-gray-400 text-center mb-4">{t(errorKey(classifyError(error)))}</p>
           <button
             onClick={() => refetch()}
             className="bg-brand-green text-white px-5 py-2 rounded-full text-sm font-bold active:scale-95 transition-transform"

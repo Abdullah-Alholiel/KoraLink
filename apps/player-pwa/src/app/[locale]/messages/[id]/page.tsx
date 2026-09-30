@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { ArrowLeft, Send, AlertCircle, Loader2, MoreVertical, MessageSquare } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
@@ -182,7 +183,7 @@ export default function ConversationPage({
 
           {error && (
             <div className="text-center py-8">
-              <p className="text-xs text-gray-400">{t('common.errorDescription')}</p>
+              <p className="text-xs text-gray-400">{t(errorKey(classifyError(error)))}</p>
             </div>
           )}
 

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
 import OfflineBanner from '@/components/layout/OfflineBanner';
@@ -93,8 +94,7 @@ export default function MyGamesPage() {
         {error && !isLoading && (
           <div className="flex flex-col items-center py-20 px-8">
             <AlertTriangle className="w-10 h-10 text-brand-red" strokeWidth={1.5} />
-            <p className="text-sm text-gray-400 mt-3">{t('common.error')}</p>
-            <p className="text-xs text-gray-400 mt-1 text-center">{t('common.errorDescription')}</p>
+            <p className="text-sm text-gray-400 mt-3 text-center">{t(errorKey(classifyError(error)))}</p>
             <button
               onClick={() => refetch()}
               className="mt-4 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold active:scale-95 transition-transform"

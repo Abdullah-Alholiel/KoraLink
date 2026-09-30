@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { Search, MapPin, Users, X } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
@@ -221,8 +222,7 @@ export default function ClubsPage() {
                     <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                         <span className="text-brand-red text-2xl">!</span>
                     </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-1">{t('common.error')}</h3>
-                    <p className="text-sm text-gray-400 text-center mb-6">{t('common.errorDescription')}</p>
+                    <h3 className="text-lg font-bold text-brand-black mb-6 text-center">{t(errorKey(classifyError(error)))}</h3>
                     <button
                         onClick={() => refetch()}
                         className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
