@@ -2,12 +2,13 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import PageHeader from '@/components/PageHeader';
 
 interface SettingsResponse {
@@ -29,6 +30,15 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // RBAC (P2-106): resolve the role once on mount (getRole() reads browser
+  // storage — never during render). null = not permitted: inputs stay
+  // browsable, only the write affordance is hidden.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canEdit = can(role, 'settings.edit');
 
   function initialize(settings: Record<string, unknown>) {
     const next: Record<string, string> = {};
@@ -99,14 +109,16 @@ export default function SettingsPage() {
                         className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                       />
                     )}
-                    <button
-                      onClick={() => save(s.key, current)}
-                      disabled={saving}
-                      className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                      {t('save')}
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => save(s.key, current)}
+                        disabled={saving}
+                        className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {t('save')}
+                      </button>
+                    )}
                   </div>
                 </div>
               );

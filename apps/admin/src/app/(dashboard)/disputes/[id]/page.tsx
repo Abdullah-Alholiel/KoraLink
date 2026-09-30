@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -43,6 +44,16 @@ export default function DisputeDetailPage() {
   const id = params?.id ?? '';
 
   const { data, loading, error, reload } = useLiveAdminData<DisputeDetail>(`/admin/disputes/${id}`, ['disputes']);
+
+  // RBAC (P2-106): getRole() reads browser storage, so resolve it once on
+  // mount (layout.tsx pattern). null (SSR / pre-mount) = not permitted, so
+  // privileged actions never flash and server/client markup never diverges.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canResolve = can(role, 'dispute.resolve');
+  const canReopen = can(role, 'dispute.reopen');
 
   const [outcome, setOutcome] = useState<'resolved' | 'rejected'>('resolved');
   const [decision, setDecision] = useState('');
@@ -334,13 +345,15 @@ export default function DisputeDetailPage() {
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">{t('closedAs', { status: statusLabel })}</p>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setConfirmReopen(true)}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-                  >
-                    <RotateCcw className="h-4 w-4" /> {t('reopen')}
-                  </button>
+                  {canReopen && (
+                    <button
+                      onClick={() => setConfirmReopen(true)}
+                      disabled={saving}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4" /> {t('reopen')}
+                    </button>
+                  )}
                   <button
                     onClick={startEdit}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -350,7 +363,7 @@ export default function DisputeDetailPage() {
                 </div>
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
               </div>
-            ) : (
+            ) : canResolve ? (
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <button
@@ -394,7 +407,7 @@ export default function DisputeDetailPage() {
                   {t('submit')}
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
