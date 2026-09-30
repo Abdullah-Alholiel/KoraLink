@@ -23,6 +23,15 @@
 // 24h TTL applied on read).
 
 /* eslint-disable no-undef */
+
+// Consent-gated activation (P2-126, run #89): workbox is built with
+// skipWaiting:false, so a new worker stays WAITING until the page posts
+// SKIP_WAITING (ServiceWorkerUpdater — user tapped "Reload now", or first
+// install with no controller). Never skip waiting unconditionally here.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 const OFFLINE_PAGES = { en: '/en/offline', ar: '/ar/offline' };
 const RESTORE_CACHE = 'koralink-offline-restore';
 const RESTORE_KEY = '/__kl/restore-url';

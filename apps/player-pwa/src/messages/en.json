@@ -1073,6 +1073,10 @@
     "messageSheetTitle": "Report this message"
   },
   "pwa": {
+    "updateReadyTitle": "Update ready",
+    "updateReadyBody": "A new version is installed in the background. Reload to use it.",
+    "updateReload": "Reload now",
+    "updateLater": "Later",
     "install": {
       "title": "Install KoraLink",
       "bodyDesktop": "Get the full-screen app experience — installs in seconds.",
