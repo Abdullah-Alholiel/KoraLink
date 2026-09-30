@@ -34,7 +34,10 @@ function isDismissed(): boolean {
  *     freshly-installed worker via `updatefound`) → show the "Update ready"
  *     banner. Nothing is posted automatically.
  *   - "Reload now" → post SKIP_WAITING to the waiting worker, mark explicit
- *     consent; the resulting `controllerchange` reloads once.
+ *     consent; the resulting `controllerchange` reloads once — with a 1.2s
+ *     fallback timer, because in a multi-tab session another tab may have
+ *     already activated the worker (then no controllerchange fires HERE;
+ *     PR-Agent MINOR, run #89).
  *   - "Later" → hide + `sessionStorage[swUpdateDismissed]`; not re-shown this
  *     session (checked on mount).
  *   - No controller (first install / uncontrolled page) → post SKIP_WAITING
@@ -57,6 +60,15 @@ export default function ServiceWorkerUpdater() {
   const [updateReady, setUpdateReady] = useState(false);
   const waitingRef = useRef<SkipWaitingTarget | null>(null);
   const consentRef = useRef(false);
+  const reloadDoneRef = useRef(false);
+
+  /** Consented reload, exactly once (controllerchange fast path OR the
+   * multi-tab fallback timer — whichever fires first). */
+  const consentedReload = () => {
+    if (reloadDoneRef.current) return;
+    reloadDoneRef.current = true;
+    window.location.reload();
+  };
 
   useEffect(() => {
     // P2-60 (run #50): truthiness guard (not `in`) — also covers environments
@@ -73,7 +85,11 @@ export default function ServiceWorkerUpdater() {
     };
 
     const onControllerChange = () => {
-      if (consentRef.current || (pendingAdopt && priorControllerWasNull)) reloadOnce();
+      if (consentRef.current) {
+        consentedReload();
+        return;
+      }
+      if (pendingAdopt && priorControllerWasNull) reloadOnce();
     };
 
     const offerUpdate = (worker: SkipWaitingTarget) => {
@@ -95,6 +111,12 @@ export default function ServiceWorkerUpdater() {
         if (reg?.waiting) {
           if (navigator.serviceWorker.controller) offerUpdate(reg.waiting);
           // First install / uncontrolled page: activate silently, no reload.
+          // Note (PR-Agent MINOR, run #89 — ACCEPTED): this branch doesn't set
+          // pendingAdopt. The trigger it would guard (a fresh-worker
+          // activation adopted by a page that loaded pre-registration) is
+          // narrow; a forced reload here would regress the no-surprise-reload
+          // guarantee this component exists for. The updatefound path keeps
+          // full protection for the common mid-session update case.
           else reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
 
@@ -128,8 +150,17 @@ export default function ServiceWorkerUpdater() {
     consentRef.current = true;
     trackEvent('pwa_update_reload_clicked');
     setUpdateReady(false);
-    if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
-    else window.location.reload();
+    if (worker) {
+      worker.postMessage({ type: 'SKIP_WAITING' });
+      // Multi-tab safety net (PR-Agent MINOR, run #89): if another tab already
+      // activated this worker, no controllerchange will fire HERE — its
+      // listener no-ops on an active worker. Consent still means reload, so
+      // guarantee it via a short fallback timer (the normal path beats it by
+      // milliseconds; reload is idempotent-through reloadDoneRef).
+      window.setTimeout(consentedReload, 1200);
+    } else {
+      window.location.reload();
+    }
   };
 
   const handleLater = () => {

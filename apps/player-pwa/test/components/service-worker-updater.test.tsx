@@ -184,4 +184,25 @@ describe('ServiceWorkerUpdater — consent-gated activation (P2-126)', () => {
     expect(reloadMock).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
+
+  it('(i) multi-tab fallback: consent + no controllerchange still reloads via the 1.2s timer', async () => {
+    installServiceWorker({ controller: true });
+    await renderAndSettle();
+
+    // Fake timers AFTER settle — waitFor inside renderAndSettle needs real ones.
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByText('pwa.updateReload'));
+      expect(reg.waiting!.postMessage).toHaveBeenCalledTimes(1);
+      // No controllerchange fires (another tab activated the worker).
+      expect(reloadMock).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(1300); });
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+      // The normal path shares the once-guard: a late controllerchange no-ops.
+      fireControllerChange();
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
