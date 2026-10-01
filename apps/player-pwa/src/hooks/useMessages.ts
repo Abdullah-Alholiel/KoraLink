@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
@@ -90,6 +91,12 @@ export function useDiscussions() {
       return allPages.length + 1;
     },
     maxPages: 10,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const discussions = useMemo(
