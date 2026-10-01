@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import type { Match } from '@/types';
 import {
   type NearbyMatchApi,
@@ -140,6 +141,12 @@ export function useMatches(filters?: {
     },
     // Keep prior page data visible while the next page loads.
     maxPages: 10,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const matches = useMemo(

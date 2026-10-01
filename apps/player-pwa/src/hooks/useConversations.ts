@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient, type InfiniteData } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 import type { MessageStatus } from '@/hooks/useMessages';
@@ -140,6 +141,12 @@ export function useConversations() {
       lastPage.hasMore ? allPages.length + 1 : undefined,
     maxPages: 10,
     staleTime: 30_000,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const conversations = useMemo(

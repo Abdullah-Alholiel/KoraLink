@@ -15,6 +15,7 @@ import SuggestionChips from '@/components/search/SuggestionChips';
 import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
 import { filterSuggestions } from '@/lib/search-suggestions';
 import { useMatches } from '@/hooks/useMatches';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useLocation } from '@/providers/LocationProvider';
 import { dateInRiyadh } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
@@ -22,6 +23,7 @@ import { selectUser, useAppStore } from '@/store/useAppStore';
 export default function PlayPage() {
     const pathname = usePathname();
     const t = useTranslations();
+    const isOnline = useOnlineStatus();
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -235,8 +237,9 @@ export default function PlayPage() {
                 </div>
             )}
 
-            {/* 2. Error State */}
-            {error && !isLoading && (
+            {/* 2. Error State — online fetch failures only; offline is the
+                banner below (a failed fetch is not proof of being offline). */}
+            {error && !isLoading && isOnline && (
                 <div className="flex flex-col items-center justify-center py-20 px-8">
                     <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                         <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
@@ -297,10 +300,8 @@ export default function PlayPage() {
                 </div>
             )}
 
-            {/* 5. Edge Case — offline/connection error indicator */}
-            {error && !isLoading && (
-                <OfflineBanner isOffline variant="plain" className="mx-4 mb-3" />
-            )}
+            {/* 5. Edge Case — offline indicator, gated on real network state */}
+            <OfflineBanner isOffline={!isOnline} variant="plain" className="mx-4 mb-3" />
         </div>
     );
 }
