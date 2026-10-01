@@ -153,9 +153,12 @@ export class AdminPitchesService {
   // Delegates to PartnerService with actorRole='Admin' — the same slot
   // logic the partner uses, admin-bypassed ownership, plus the audit trail.
 
-  async listSlots(id: string, from: string, to: string) {
+  async listSlots(id: string, from: string, to: string, adminId: string) {
     await this.findOne(id); // 404 guard
-    return this.partner.listSlots('', 'Admin', id, from, to);
+    // Forward the real admin id, not a '' sentinel: today the Admin branch
+    // makes ownerId moot, but a future non-Admin path with '' would query
+    // owner_id = '' and read as an empty schedule.
+    return this.partner.listSlots(adminId, 'Admin', id, from, to);
   }
 
   async generateSlots(id: string, dto: GenerateSlotsDto, adminId: string, ip?: string) {

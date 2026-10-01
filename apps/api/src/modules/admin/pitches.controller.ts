@@ -34,8 +34,10 @@ export class AdminPitchesController {
     @Param('id') id: string,
     @Query('from') from: string,
     @Query('to') to: string,
+    @Req() req: Request,
   ) {
-    return this.pitches.listSlots(id, from, to);
+    const adminId = (req as unknown as { user: { sub: string } }).user.sub;
+    return this.pitches.listSlots(id, from, to, adminId);
   }
 
   @Post(':id/slots/generate')
