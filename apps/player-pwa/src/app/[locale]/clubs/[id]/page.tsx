@@ -29,17 +29,11 @@ import { classifyError, errorKey } from '@/lib/error-classify';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { isVenueOpenNow } from '@/lib/venue-hours';
+import { formatMoney } from '@/lib/format';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 // ── Helpers ────────────────────────────────────────────────
-
-/** Hourly pitch rate display (numeric column arrives as string from Drizzle). */
-const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'SAR',
-  maximumFractionDigits: 2,
-});
 
 function formatDateLabel(
   date: Date,
@@ -328,7 +322,7 @@ export default function ClubPage() {
                           </p>
                         </div>
                         <span className="text-sm font-bold text-brand-green flex-shrink-0" dir="ltr">
-                          {hourlyRateFormatter.format(Number(pitch.hourly_rate))}
+                          {formatMoney(Number(pitch.hourly_rate), locale === 'ar' ? 'ar' : 'en')}
                           <span className="block text-[10px] font-medium text-gray-400 text-end">
                             / {t('clubs.perHour')}
                           </span>
