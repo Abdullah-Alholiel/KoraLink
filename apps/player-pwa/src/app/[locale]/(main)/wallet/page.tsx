@@ -255,7 +255,7 @@ export default function WalletPage() {
                             </span>
                             <span className="text-2xl font-bold text-gray-400">{t('wallet.currency')}</span>
                         </div>
-                        {!isOnline && (
+                        {!isOnline && balanceData !== undefined && (
                             <p className="text-[11px] text-gray-400 mt-2" role="status">
                                 {t('wallet.offlineBalanceNote')}
                             </p>
