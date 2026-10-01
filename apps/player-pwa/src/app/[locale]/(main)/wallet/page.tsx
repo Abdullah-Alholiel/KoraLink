@@ -29,6 +29,7 @@ import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
 import { downloadTextAsFile } from '@/lib/download';
 import type { Transaction } from '@/types';
@@ -202,6 +203,10 @@ export default function WalletPage() {
     // Use API data only; show skeleton while loading
     const balance = balanceData?.balance ?? 0;
     const transactions: Transaction[] = historyData?.transactions ?? [];
+    // P2-129 (run #92): real network state — a fetch ERROR is not proof of
+    // being offline (run #92 play-feed fix, same class). The wallet is a
+    // money surface: offline must never read as live.
+    const isOnline = useOnlineStatus();
     // Hydration-safe wall clock (P2-59, run #50): null during SSR and the
     // first client render; 0 buckets all transactions as "Earlier" on that
     // one render, then the real clock buckets by the device's day boundary.
@@ -226,6 +231,10 @@ export default function WalletPage() {
                 </div>
             </div>
 
+            {/* P2-129 (run #92): real-network offline banner — money surface
+                must never read as live (mirrors clubs/profile pattern). */}
+            <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
+
             {/* ── Balance Card with loading/error states ── */}
             <div className="bg-white mx-4 mt-4 rounded-2xl p-6 text-center">
                 {balanceLoading ? (
@@ -246,6 +255,11 @@ export default function WalletPage() {
                             </span>
                             <span className="text-2xl font-bold text-gray-400">{t('wallet.currency')}</span>
                         </div>
+                        {!isOnline && (
+                            <p className="text-[11px] text-gray-400 mt-2" role="status">
+                                {t('wallet.offlineBalanceNote')}
+                            </p>
+                        )}
                     </>
                 )}
             </div>
@@ -380,10 +394,6 @@ export default function WalletPage() {
                             </div>
                         ))}
 
-                        {/* Offline fallback indicator (shared OfflineBanner, run #40) */}
-                        {historyError && historyData === undefined && (
-                            <OfflineBanner isOffline variant="plain" className="mt-4" />
-                        )}
                     </>
                 )}
             </div>
