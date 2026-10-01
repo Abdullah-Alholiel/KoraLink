@@ -713,7 +713,8 @@
     "exportEmpty": "No transactions in this date range — nothing to export.",
     "exportSuccess": "Your transactions file has been downloaded.",
     "exportTooMany": "Your history has more than 2,000 transactions in this range — pick a shorter date range and export again.",
-    "exportInvalidRange": "The start date must be on or before the end date."
+    "exportInvalidRange": "The start date must be on or before the end date.",
+    "offlineBalanceNote": "Balance shown from cache — reconnect for the live number."
   },
   "searchSuggestions": {
     "title": "Search by area",
