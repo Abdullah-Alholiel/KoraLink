@@ -172,7 +172,7 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
     const svc = await makeService(db);
     await svc.update(
       'admin-2',
-      { suspendedUntil: '2026-10-01T00:00:00.000Z' } as never,
+      { suspendedUntil: '2030-01-01T00:00:00.000Z' } as never,
       'admin-1',
     );
     // Serialized through the lock-holding tx like demote/ban.
