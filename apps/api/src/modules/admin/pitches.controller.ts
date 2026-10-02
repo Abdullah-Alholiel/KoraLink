@@ -15,7 +15,7 @@ import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { ListPitchesDto } from './dto/list-pitches.dto';
 import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AdminPitchesService } from './pitches.service';
-import { CreateSlotDto, GenerateSlotsDto } from '../partner/dto/slots.dto';
+import { CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto } from '../partner/dto/slots.dto';
 
 @Controller('admin/pitches')
 @UseGuards(AdminAuthGuard)
@@ -32,12 +32,11 @@ export class AdminPitchesController {
   @Get(':id/slots')
   listSlots(
     @Param('id') id: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
+    @Query() window: SlotWindowQueryDto,
     @Req() req: Request,
   ) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
-    return this.pitches.listSlots(id, from, to, adminId);
+    return this.pitches.listSlots(id, window.from, window.to, adminId);
   }
 
   @Post(':id/slots/generate')

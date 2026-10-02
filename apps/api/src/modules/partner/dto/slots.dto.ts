@@ -10,6 +10,10 @@ import {
   Max,
   Min,
   MinLength,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 
 /** Days of week: 0=Sunday … 6=Saturday */
@@ -59,6 +63,44 @@ export class CreateSlotDto {
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'end_time must be HH:MM' })
   end_time: string;
+}
+
+/**
+ * Run #94 (Reviewer-A P2-137): validated slot-window query shared by BOTH
+ * schedule endpoints — `GET /admin/pitches/:id/slots` and
+ * `GET /partner/pitches/:id/slots`. Previously each controller passed the raw
+ * `@Query('from')/@Query('to')` strings straight into drizzle gte/lte on
+ * slot_date: a garbage value produced a PG comparison error (500) and a
+ * reversed range silently returned an empty schedule. `from`/`to` are
+ * inclusive YYYY-MM-DD (same regex the create/generate path enforces) and
+ * `from <= to` is enforced so a reversed range is a clear 400.
+ */
+@ValidatorConstraint({ name: 'slotWindowOrder', async: false })
+class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const o = args.object as { from?: string; to?: string };
+    if (!o.from || !o.to) return true; // per-field regex reports those
+    return o.from <= o.to;
+  }
+
+  defaultMessage(): string {
+    return 'from must be on or before to';
+  }
+}
+
+export class SlotWindowQueryDto {
+  @ApiProperty({ example: '2026-10-01', description: 'Window start (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'from must be YYYY-MM-DD' })
+  from: string;
+
+  @ApiProperty({ example: '2026-10-08', description: 'Window end (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD' })
+  to: string;
+
+  @Validate(SlotWindowOrderConstraint)
+  windowOrder: true;
 }
 
 export class UpdateVenuePartnerDto {

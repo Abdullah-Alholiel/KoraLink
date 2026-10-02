@@ -5,6 +5,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -46,5 +48,11 @@ export class UpdatePitchAdminDto {
   })
   @IsOptional()
   @IsString()
+  // Run #94 (P2-136): id columns are varchar(36) — shape-validate the
+  // cross-venue move target before it reaches any SQL bind.
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, {
+    message: 'venue_id must be a 36-char UUID-shaped id',
+  })
+  @MaxLength(36)
   venue_id?: string;
 }
