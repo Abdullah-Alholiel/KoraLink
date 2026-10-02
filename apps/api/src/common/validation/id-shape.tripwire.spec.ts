@@ -7,6 +7,7 @@ import {
   ID_SHAPE_DECL_PATTERN,
 } from './id-shape-scan';
 
+
 /**
  * Run #95 (PR #65): the KoraLink id shape must have EXACTLY one home —
  * common/validation/id-shape.ts. Run #96 (Reviewer A IMPORTANT follow-up):
@@ -49,11 +50,12 @@ describe('id-shape single source of truth', () => {
       );
     }
     // Invariant: id-shape.ts is the ONLY allowed home for a UUID_SHAPE
-    // declaration. Exemptions are PATH-based and limited to exactly two
-    // files: the canonical module itself, and THIS spec (its source text
-    // describes the pattern) plus the scanner module it imports. Spec files
-    // are scanned too (r2) — a private copy in a test helper diverges all
-    // the same.
+    // declaration. Exemptions are PATH-based and limited to exactly four
+    // files: the canonical module, THIS spec (its source text describes the
+    // pattern), the scanner module, and the scanner's fixture spec (its
+    // fixture strings are declaration-shaped by design). Spec files are
+    // scanned too (r2) — a private copy in any OTHER test helper diverges
+    // all the same.
     const canonical = path.join(srcRoot, 'common', 'validation', 'id-shape.ts');
     const self = path.resolve(__filename);
     const scanner = path.join(srcRoot, 'common', 'validation', 'id-shape-scan.ts');

@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-
 /**
  * Shared scanner behind the id-shape tripwire (run #96 — Reviewer A IMPORTANT
  * follow-up to run #95's PR #65).
@@ -23,14 +21,20 @@ export const ID_SHAPE_DECL_PATTERN =
 export const ID_SHAPE_TYPE_PATTERN = /(?:export\s+)?type\s+UUID_SHAPE(?:\s*<[^>]*>)?\s*=/;
 export const ID_SHAPE_ASSIGNMENT_PATTERN = /\bUUID_SHAPE\s*=(?!=)/;
 
-/** Strip `//` line comments conservatively (ignores block comments/strings —
- * acceptable: their only cost is a missed comment, never a missed declaration). */
+/** Strip `//` line comments conservatively — only `//` at line start or after
+ * whitespace counts, so URLs like `'https://x'` survive. Strings and block
+ * comments are NOT parsed: a declaration sharing a line with a quoted
+ * `//`-bearing string (or hidden behind a block comment) can still be missed,
+ * and block-comment text can still false-positive. Both residual classes are
+ * fail-loud-or-rare; the fixture suite pins the known cases. */
 export function stripLineComments(source: string): string {
   return source
     .split('\n')
     .map((line) => {
-      const idx = line.indexOf('//');
-      return idx === -1 ? line : line.slice(0, idx);
+      const idx = line.search(/(^|\s)\/\//);
+      if (idx === -1) return line;
+      // Keep the whitespace that preceded the marker so offsets stay honest.
+      return line.slice(0, idx === 0 ? 0 : idx + 1);
     })
     .join('\n');
 }

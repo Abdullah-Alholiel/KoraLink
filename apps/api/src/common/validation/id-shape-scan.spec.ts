@@ -67,6 +67,17 @@ describe('id-shape-scan fixtures', () => {
       expect(stripLineComments(src)).toBe("const a = 1; \nconst b = 2;");
     });
 
+    it('URL strings survive (// inside a quoted URL is not a comment)', () => {
+      const src = "const u = 'https://x';\nlet UUID_SHAPE = /y/;";
+      expect(stripLineComments(src)).toBe(src);
+      expect(offender(src)).toEqual(['x.ts']);
+    });
+
+    it('declaration AFTER a quoted // string on the SAME line still matches', () => {
+      const src = "const u = 'https://x'; let UUID_SHAPE = /y/;";
+      expect(offender(src)).toEqual(['x.ts']);
+    });
+
     it('leaves block comments untouched (documented limitation)', () => {
       const src = "/* const UUID_SHAPE = /x/; */";
       expect(stripLineComments(src)).toBe(src);
