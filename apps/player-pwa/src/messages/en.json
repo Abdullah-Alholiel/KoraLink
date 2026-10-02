@@ -1136,6 +1136,11 @@
       "dismissed": "Dismissed"
     }
   },
+  "routeError": {
+    "title": "Something went wrong",
+    "description": "This section couldn't load. The rest of the app still works.",
+    "details": "Error details"
+  },
   "promos": {
     "label": "Promotions",
     "goToSlide": "Go to slide {n}",

@@ -952,7 +952,7 @@ export default function MatchDetailPage({
                                     <div
                                         data-testid="waitlist-queued-state"
                                         className="
-                                            w-full py-3 pl-4 pr-2.5 rounded-2xl bg-[#E9ECEA] border border-brand-green
+                                            w-full py-3 pl-4 pr-2.5 rounded-2xl bg-brand-bg border border-brand-green
                                             flex items-center justify-between gap-3
                                         "
                                     >

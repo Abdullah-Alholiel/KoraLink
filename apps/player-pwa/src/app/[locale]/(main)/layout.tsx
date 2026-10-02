@@ -19,7 +19,18 @@ export default function MainLayout({
                 <AuthGuard>
                     <NotificationProvider>
                         <BadgeHydrator />
-                        <ScrollableMain>{children}</ScrollableMain>
+                        {/* Surface boundary: a crash in the routed content renders the
+                            fallback in the scroll slot; BottomNav/Toast/WelcomeCheckpoint
+                            stay mounted. The outer boundary remains the last resort for
+                            chrome crashes. */}
+                        <ErrorBoundary
+                            variant="surface"
+                            titleKey="title"
+                            descriptionKey="description"
+                            retryKey="retry"
+                        >
+                            <ScrollableMain>{children}</ScrollableMain>
+                        </ErrorBoundary>
                         <BottomNav />
                         <Toast />
                         <WelcomeCheckpoint />
