@@ -22,11 +22,16 @@ describe('id-shape single source of truth', () => {
 
   it('no private UUID_SHAPE regex copies exist outside id-shape.ts', () => {
     const srcRoot = path.resolve(__dirname, '..', '..');
-    // Path-based exemption (PR-Agent round-1 note): id-shape.ts itself is the
-    // ONLY allowed home — never exempt by 'export' keyword (any file could
-    // carry an exported copy) and the regex also matches type-annotated
-    // declarations (const UUID_SHAPE: RegExp = ...).
+    // Invariant (PR-Agent r1+r2): id-shape.ts is the ONLY allowed home for a
+    // UUID_SHAPE declaration. Exemptions are PATH-based and limited to
+    // exactly two files: the canonical module itself, and THIS spec (its
+    // source text necessarily describes the pattern). Both export-keyword
+    // copies and type-annotated declarations are matched. Spec files are
+    // scanned too (r2) — a private copy in a test helper diverges all the
+    // same.
     const canonical = path.join(srcRoot, 'common', 'validation', 'id-shape.ts');
+    const self = path.resolve(__filename);
+    const exempt = new Set([canonical, self]);
     const offenders: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -34,8 +39,8 @@ describe('id-shape single source of truth', () => {
         if (entry.isDirectory()) {
           if (entry.name === 'node_modules' || entry.name === 'dist') continue;
           walk(full);
-        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
-          if (full === canonical) continue;
+        } else if (entry.name.endsWith('.ts')) {
+          if (exempt.has(full)) continue;
           const src = fs.readFileSync(full, 'utf8');
           if (/(?:export\s+)?const\s+UUID_SHAPE(?:\s*:\s*RegExp)?\s*=/.test(src)) {
             offenders.push(path.relative(srcRoot, full));
