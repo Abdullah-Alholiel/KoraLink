@@ -1,17 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, Matches, MaxLength } from 'class-validator';
+import { UUID_SHAPE, UUID_SHAPE_MSG } from '../../../common/validation/id-shape';
 
 /**
- * Run #94 (Reviewer-A P2-136): admin mutation DTO caps.
- *
- * KoraLink id convention: ALL id columns are varchar(36) — never native
- * uuid. Id-shaped fields are shape-validated (UUID regex + @MaxLength(36))
- * per the MarkNoShowDto/CastVoteDto convention, NOT @IsUUID (documented
- * drift: @IsUUID is the wrong decorator for this schema).
+ * Run #94 (Reviewer-A P2-136): admin mutation DTO caps. Id-shaped fields are
+ * shape-validated per the varchar(36) house convention (see
+ * common/validation/id-shape.ts) — NOT @IsUUID (documented drift).
  */
-const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const UUID_SHAPE_MSG = 'must be a 36-char UUID-shaped id';
-
 export class TransferVenueDto {
   @ApiProperty({ description: 'New owner user id — must be an existing VenueOwner' })
   @IsString()
