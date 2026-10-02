@@ -56,4 +56,14 @@ describe('boundary copy i18n (P2-138)', () => {
     expect(Object.keys(re).sort()).toEqual(['description', 'details', 'pageDescription', 'title']);
     for (const v of Object.values(re)) expect(v.length).toBeGreaterThan(0);
   });
+
+  it.each(['en', 'ar'])('%s catalog has the common.loading/common.retry keys the boundaries consume', (locale) => {
+    // PR-Agent r2: skeletons read common.loading, every retry button reads
+    // common.retry — a missing key would render the raw key path to users.
+    const common = json(`src/messages/${locale}.json`).common;
+    expect(typeof common.loading).toBe('string');
+    expect(common.loading.length).toBeGreaterThan(0);
+    expect(typeof common.retry).toBe('string');
+    expect(common.retry.length).toBeGreaterThan(0);
+  });
 });
