@@ -33,6 +33,11 @@ describe('id-shape single source of truth', () => {
     for (let i = 0; i < 4 && !fs.existsSync(path.join(repoRoot, 'turbo.json')); i++) {
       repoRoot = path.dirname(repoRoot);
     }
+    if (!fs.existsSync(path.join(repoRoot, 'turbo.json'))) {
+      throw new Error(
+        'id-shape tripwire: monorepo root (turbo.json) not found within 4 levels of ' + apiRoot + ' — refusing to scan the wrong tree',
+      );
+    }
     // Invariant (PR-Agent r1+r2): id-shape.ts is the ONLY allowed home for a
     // UUID_SHAPE declaration. Exemptions are PATH-based and limited to
     // exactly two files: the canonical module itself, and THIS spec (its
@@ -60,7 +65,7 @@ describe('id-shape single source of truth', () => {
             continue;
           }
           walk(full);
-        } else if (entry.name.endsWith('.ts')) {
+        } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
           if (exempt.has(full)) continue;
           const src = fs.readFileSync(full, 'utf8');
           if (/(?:export\s+)?const\s+UUID_SHAPE(?:\s*:\s*RegExp)?\s*=/.test(src)) {
