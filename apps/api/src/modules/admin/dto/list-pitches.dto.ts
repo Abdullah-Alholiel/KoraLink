@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { UUID_SHAPE, UUID_SHAPE_MSG } from '../../../common/validation/id-shape';
 
 export class ListPitchesDto {
   @ApiPropertyOptional({ description: 'Search by pitch, venue, or owner name' })
@@ -22,10 +23,9 @@ export class ListPitchesDto {
   @IsString()
   // Run #94 (P2-136): reaches the raw-SQL WHERE as a bound param — bound, so
   // never injectable, but shape-validate anyway so garbage ids 400 instead of
-  // silently matching nothing.
-  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, {
-    message: 'venueId must be a 36-char UUID-shaped id',
-  })
+  // silently matching nothing (shared UUID_SHAPE from
+  // common/validation/id-shape.ts).
+  @Matches(UUID_SHAPE, { message: `venueId ${UUID_SHAPE_MSG}` })
   @MaxLength(36)
   venueId?: string;
 

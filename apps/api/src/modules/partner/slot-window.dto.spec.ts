@@ -63,17 +63,25 @@ describe('SlotWindowQueryDto (run #94 window contract)', () => {
     expect(validateSync(dto).some((e) => e.property === 'from')).toBe(true);
   });
 
-  it('rejects a reversed range — reported on `to`, no phantom field', () => {
+  it('rejects a reversed range — reported on `to`, and `to` carries ONLY the order error', () => {
     const dto = plainToInstance(SlotWindowQueryDto, { from: '2026-10-08', to: '2026-10-01' });
     const errs = validateSync(dto);
-    expect(errs.some((e) => e.property === 'to' && e.constraints?.['slotWindowOrder'])).toBe(true);
-    expect(errs.every((e) => e.property !== 'windowOrder')).toBe(true);
+    const toErr = errs.find((e) => e.property === 'to');
+    expect(toErr).toBeDefined();
+    // Exactly one error on `to`, and it is the order constraint — proves the
+    // report targets a real field AND that no calendar error stacks on the
+    // (valid) date. Non-`to` errors: none expected in this scenario.
+    expect(Object.keys(toErr?.constraints ?? {})).toEqual(['slotWindowOrder']);
+    expect(errs.filter((e) => e.property !== 'to')).toHaveLength(0);
   });
 
-  it('order check skips when a field is missing (missing-field error still fires)', () => {
+  it('order check skips when a field is missing — `to` carries only the presence error', () => {
     const dto = plainToInstance(SlotWindowQueryDto, { from: '2026-10-01' });
     const errs = validateSync(dto);
-    expect(errs.some((e) => e.property === 'to')).toBe(true);
-    expect(errs.every((e) => e.property !== 'windowOrder')).toBe(true);
+    const toErr = errs.find((e) => e.property === 'to');
+    expect(toErr).toBeDefined();
+    // Missing `to`: presence (isString) fires, order stays silent.
+    expect(Object.keys(toErr?.constraints ?? {})).toEqual(['isString']);
+    expect(errs.filter((e) => e.property !== 'to')).toHaveLength(0);
   });
 });

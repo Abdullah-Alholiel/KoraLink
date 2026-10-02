@@ -89,6 +89,9 @@ function isCalendarRealDate(value: unknown): value is string {
 @ValidatorConstraint({ name: 'slotCalendarDate', async: false })
 export class SlotCalendarDateConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
+    // Missing/null: presence is reported by @IsString — don't stack a
+    // calendar error on a field the client never sent.
+    if (value === undefined || value === null) return true;
     return isCalendarRealDate(value);
   }
 
