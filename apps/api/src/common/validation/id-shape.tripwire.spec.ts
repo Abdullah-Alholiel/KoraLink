@@ -1,14 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { UUID_SHAPE, UUID_SHAPE_MSG } from './id-shape';
+import {
+  findIdShapeCopies,
+  stripLineComments,
+  ID_SHAPE_DECL_PATTERN,
+} from './id-shape-scan';
+
 
 /**
- * Run #95 (Reviewer A follow-up to P2-136): the KoraLink id shape must have
- * EXACTLY one home — common/validation/id-shape.ts. Run #94 (PRs #63/#64)
- * removed the private `const UUID_SHAPE = ...` copies from the admin DTOs and
- * the realtime gateway imported the shared shape; this tripwire keeps it that
- * way. A private copy silently diverges the moment the house shape changes.
- * Scope is MONOREPO-WIDE (PR-Agent r3): the walk roots at the repo root
+ * Run #95 (PR #65): the KoraLink id shape must have EXACTLY one home —
+ * common/validation/id-shape.ts. Run #96 (Reviewer A IMPORTANT follow-up):
+ * the scan now catches `let`/`var`/`type` declarations and any non-bare
+ * annotation (`: Readonly<RegExp>`, unions), and strips `//` comments before
+ * matching so a documented example can no longer fail CI. Negative forms get
+ * real fixture tests in id-shape-scan.spec.ts; this spec runs the scan
+ * against the LIVE monorepo tree.
+ *
+ * Scope is MONOREPO-WIDE (run #95 r3): the walk roots at the repo root
  * (located via turbo.json), so copies in apps/admin or apps/player-pwa trip
  * the wire too, not just apps/api.
  */
@@ -35,19 +44,26 @@ describe('id-shape single source of truth', () => {
     }
     if (!fs.existsSync(path.join(repoRoot, 'turbo.json'))) {
       throw new Error(
-        'id-shape tripwire: monorepo root (turbo.json) not found within 4 levels of ' + apiRoot + ' — refusing to scan the wrong tree',
+        'id-shape tripwire: monorepo root (turbo.json) not found within 4 levels of ' +
+          apiRoot +
+          ' — refusing to scan the wrong tree',
       );
     }
-    // Invariant (PR-Agent r1+r2): id-shape.ts is the ONLY allowed home for a
-    // UUID_SHAPE declaration. Exemptions are PATH-based and limited to
-    // exactly two files: the canonical module itself, and THIS spec (its
-    // source text necessarily describes the pattern). Both export-keyword
-    // copies and type-annotated declarations are matched. Spec files are
-    // scanned too (r2) — a private copy in a test helper diverges all the
-    // same.
+    // Invariant: id-shape.ts is the ONLY allowed home for a UUID_SHAPE
+    // declaration. Exemptions are PATH-based and limited to exactly four
+    // files: the canonical module, THIS spec (its source text describes the
+    // pattern), the scanner module, and the scanner's fixture spec (its
+    // fixture strings are declaration-shaped by design). Spec files are
+    // scanned too (r2) — a private copy in any OTHER test helper diverges
+    // all the same.
     const canonical = path.join(srcRoot, 'common', 'validation', 'id-shape.ts');
     const self = path.resolve(__filename);
-    const exempt = new Set([canonical, self]);
+    const scanner = path.join(srcRoot, 'common', 'validation', 'id-shape-scan.ts');
+    const fixtureSpec = path.join(srcRoot, 'common', 'validation', 'id-shape-scan.spec.ts');
+    // Fixture strings in the scanner's own spec are declaration-shaped by
+    // design (they ARE the negative/positive fixtures) — same rationale as
+    // the tripwire spec's self-exemption.
+    const exempt = new Set([canonical, self, scanner, fixtureSpec]);
     const offenders: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -68,7 +84,7 @@ describe('id-shape single source of truth', () => {
         } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
           if (exempt.has(full)) continue;
           const src = fs.readFileSync(full, 'utf8');
-          if (/(?:export\s+)?const\s+UUID_SHAPE(?:\s*:\s*RegExp)?\s*=/.test(src)) {
+          if (findIdShapeCopies([{ relPath: path.relative(srcRoot, full), text: src }]).length > 0) {
             offenders.push(path.relative(srcRoot, full));
           }
         }
@@ -76,5 +92,15 @@ describe('id-shape single source of truth', () => {
     };
     walk(repoRoot);
     expect(offenders).toEqual([]);
+  });
+});
+
+// The pattern module itself is exercised directly in id-shape-scan.spec.ts
+// (fixture suite). This re-export guard just proves the pattern survived
+// refactoring: a doc example is NOT an offender, a real declaration IS.
+describe('id-shape scan pattern sanity', () => {
+  it('pattern ignores commented examples after stripping', () => {
+    const doc = '// const UUID_SHAPE = /^[0-9a-f-]+$/;';
+    expect(stripLineComments(doc)).not.toMatch(ID_SHAPE_DECL_PATTERN);
   });
 });
