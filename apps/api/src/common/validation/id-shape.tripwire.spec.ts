@@ -22,6 +22,11 @@ describe('id-shape single source of truth', () => {
 
   it('no private UUID_SHAPE regex copies exist outside id-shape.ts', () => {
     const srcRoot = path.resolve(__dirname, '..', '..');
+    // Path-based exemption (PR-Agent round-1 note): id-shape.ts itself is the
+    // ONLY allowed home — never exempt by 'export' keyword (any file could
+    // carry an exported copy) and the regex also matches type-annotated
+    // declarations (const UUID_SHAPE: RegExp = ...).
+    const canonical = path.join(srcRoot, 'common', 'validation', 'id-shape.ts');
     const offenders: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -30,8 +35,9 @@ describe('id-shape single source of truth', () => {
           if (entry.name === 'node_modules' || entry.name === 'dist') continue;
           walk(full);
         } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
+          if (full === canonical) continue;
           const src = fs.readFileSync(full, 'utf8');
-          if (/(?<!export\s)const\s+UUID_SHAPE\s*=/.test(src)) {
+          if (/(?:export\s+)?const\s+UUID_SHAPE(?:\s*:\s*RegExp)?\s*=/.test(src)) {
             offenders.push(path.relative(srcRoot, full));
           }
         }
