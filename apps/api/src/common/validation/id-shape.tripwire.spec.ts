@@ -8,6 +8,9 @@ import { UUID_SHAPE, UUID_SHAPE_MSG } from './id-shape';
  * removed the private `const UUID_SHAPE = ...` copies from the admin DTOs and
  * the realtime gateway imported the shared shape; this tripwire keeps it that
  * way. A private copy silently diverges the moment the house shape changes.
+ * Scope is MONOREPO-WIDE (PR-Agent r3): the walk roots at the repo root
+ * (located via turbo.json), so copies in apps/admin or apps/player-pwa trip
+ * the wire too, not just apps/api.
  */
 describe('id-shape single source of truth', () => {
   it('exports a working UUID_SHAPE regex + message', () => {
@@ -21,7 +24,15 @@ describe('id-shape single source of truth', () => {
   });
 
   it('no private UUID_SHAPE regex copies exist outside id-shape.ts', () => {
-    const srcRoot = path.resolve(__dirname, '..', '..');
+    // __dirname = <repo>/apps/api/src/common/validation → three levels up = <repo>/apps/api
+    const apiRoot = path.resolve(__dirname, '..', '..', '..');
+    const srcRoot = path.join(apiRoot, 'src');
+    // Monorepo root (r3): walk up to the dir containing turbo.json so the
+    // invariant covers every workspace, not just apps/api.
+    let repoRoot = apiRoot;
+    for (let i = 0; i < 4 && !fs.existsSync(path.join(repoRoot, 'turbo.json')); i++) {
+      repoRoot = path.dirname(repoRoot);
+    }
     // Invariant (PR-Agent r1+r2): id-shape.ts is the ONLY allowed home for a
     // UUID_SHAPE declaration. Exemptions are PATH-based and limited to
     // exactly two files: the canonical module itself, and THIS spec (its
@@ -37,7 +48,17 @@ describe('id-shape single source of truth', () => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-          if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+          if (
+            entry.name === 'node_modules' ||
+            entry.name === 'dist' ||
+            entry.name === '.next' ||
+            entry.name === '.turbo' ||
+            entry.name === '.git' ||
+            entry.name === 'coverage' ||
+            entry.name === 'graphify-out'
+          ) {
+            continue;
+          }
           walk(full);
         } else if (entry.name.endsWith('.ts')) {
           if (exempt.has(full)) continue;
@@ -48,7 +69,7 @@ describe('id-shape single source of truth', () => {
         }
       }
     };
-    walk(srcRoot);
+    walk(repoRoot);
     expect(offenders).toEqual([]);
   });
 });
