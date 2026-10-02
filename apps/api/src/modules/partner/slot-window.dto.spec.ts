@@ -46,6 +46,13 @@ describe('SlotWindowQueryDto (run #94 window contract)', () => {
     expect(errs.some((e) => e.constraints?.['slotWindowOrder'])).toBe(false);
   });
 
+  it('calendar-invalid from + earlier valid to: order error stays silent (round 2)', () => {
+    const dto = plainToInstance(SlotWindowQueryDto, { from: '2026-02-31', to: '2026-01-15' });
+    const errs = validateSync(dto);
+    expect(errs.some((e) => e.property === 'from')).toBe(true);
+    expect(errs.some((e) => e.constraints?.['slotWindowOrder'])).toBe(false);
+  });
+
   it('rejects a month-13 date', () => {
     const dto = plainToInstance(SlotWindowQueryDto, { from: '2026-13-01', to: '2026-10-08' });
     expect(validateSync(dto).some((e) => e.property === 'from')).toBe(true);

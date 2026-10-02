@@ -78,15 +78,18 @@ export class CreateSlotDto {
  */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Shape + calendar round-trip in one predicate (shared by both constraints). */
+function isCalendarRealDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 @ValidatorConstraint({ name: 'slotCalendarDate', async: false })
 export class SlotCalendarDateConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
-    if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
-    const [y, m, d] = value.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    return (
-      dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
-    );
+    return isCalendarRealDate(value);
   }
 
   defaultMessage(args: ValidationArguments): string {
@@ -98,11 +101,11 @@ export class SlotCalendarDateConstraint implements ValidatorConstraintInterface 
 class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
   validate(_value: unknown, args: ValidationArguments): boolean {
     const o = args.object as { from?: string; to?: string };
-    if (typeof o.from !== 'string' || typeof o.to !== 'string') return true;
     // Format/calendar errors are reported per-field — skip the cross-field
-    // check unless both sides are well-formed dates (PR-Agent run #94: the
-    // order error used to fire spuriously next to a format error).
-    if (!DATE_RE.test(o.from) || !DATE_RE.test(o.to)) return true;
+    // check unless both sides are REAL dates (PR-Agent round 2: comparing a
+    // calendar-invalid 'from' like 2026-02-31 against an earlier valid 'to'
+    // used to stack a spurious order error on top of the calendar error).
+    if (!isCalendarRealDate(o.from) || !isCalendarRealDate(o.to)) return true;
     return o.from <= o.to;
   }
 
