@@ -24,15 +24,13 @@ import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from './realtime.service';
 import { WsRateLimitService } from './rate-limit.service';
+import { UUID_SHAPE } from '../../common/validation/id-shape';
 
 /** Parity with the REST message DTOs (@MaxLength(2000)). */
 const WS_MESSAGE_MAX_LENGTH = 2000;
 
 /** Parity with the REST DTO cap (@MaxLength(36)) and the varchar(36) client_message_id column. */
 const WS_CLIENT_MESSAGE_ID_MAX_LENGTH = 36;
-
-/** Same UUID-shape regex the REST DTOs use (@Matches — see reports/dto/create-report.dto.ts). */
-const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Normalize the optional clientMessageId socket field: absent/null → null,
