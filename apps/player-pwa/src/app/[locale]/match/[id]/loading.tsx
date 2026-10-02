@@ -1,7 +1,12 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 // Route skeleton (P2-138): hero block + bottom sheet + CTA bar.
 export default function MatchLoading() {
+  const t = useTranslations('common');
   return (
-    <div role="status" aria-label="Loading" className="min-h-dvh animate-pulse bg-brand-bg">
+    <div role="status" aria-label={t('loading')} className="min-h-dvh animate-pulse bg-brand-bg">
       <div className="h-56 w-full bg-gray-200" />
       <div className="-mt-6 rounded-t-3xl bg-white p-5">
         <div className="mb-5 h-6 w-2/3 rounded bg-gray-200" />

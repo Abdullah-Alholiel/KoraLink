@@ -1139,7 +1139,8 @@
   "routeError": {
     "title": "Something went wrong",
     "description": "This section couldn't load. The rest of the app still works.",
-    "details": "Error details"
+    "details": "Error details",
+    "pageDescription": "An unexpected error occurred. Try refreshing the page."
   },
   "promos": {
     "label": "Promotions",

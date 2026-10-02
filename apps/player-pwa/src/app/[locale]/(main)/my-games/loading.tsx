@@ -1,7 +1,12 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 // Route skeleton (P2-138): tab pills + game cards.
 export default function MyGamesLoading() {
+  const t = useTranslations('common');
   return (
-    <div role="status" aria-label="Loading" className="animate-pulse pt-4">
+    <div role="status" aria-label={t('loading')} className="animate-pulse pt-4">
       <div className="mx-4 mb-3 flex gap-2">
         <div className="h-10 flex-1 rounded-full bg-gray-200" />
         <div className="h-10 flex-1 rounded-full bg-gray-100" />

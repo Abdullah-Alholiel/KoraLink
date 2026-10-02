@@ -30,12 +30,15 @@ const ERRORS = [
 const ROUTE_ERROR = 'src/components/layout/RouteError.tsx';
 
 describe('route boundaries (P2-138)', () => {
-  it.each(LOADING)('%s exists as a static status skeleton', (file) => {
+  it.each(LOADING)('%s exists as a status skeleton with localized label', (file) => {
     expect(existsSync(join(PWA_ROOT, file))).toBe(true);
     const s = src(file);
     expect(s).toContain('role="status"');
-    expect(s).not.toContain("'use client'");
-    expect(s).not.toContain('useTranslations');
+    // PR-Agent r1: aria-label must come from i18n (common.loading), never a
+    // hardcoded English string — Arabic screen-reader users hear Arabic.
+    expect(s).toContain("useTranslations('common')");
+    expect(s).toContain("aria-label={t('loading')}");
+    expect(s).not.toContain('aria-label="Loading"');
   });
 
   it.each(ERRORS)('%s is a client boundary wired to reset + RouteError', (file) => {

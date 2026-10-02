@@ -40,9 +40,20 @@ describe('boundary copy i18n (P2-138)', () => {
     expect(layout.indexOf('<BottomNav />')).toBeGreaterThan(layout.indexOf('</ScrollableMain>'));
   });
 
-  it.each(['en', 'ar'])('%s catalog has routeError.{title,description,details}', (locale) => {
+  it('the OUTER (main) boundary uses the neutral page copy, the surface one the scoped copy', () => {
+    const layout = src('src/app/[locale]/(main)/layout.tsx');
+    // PR-Agent r1: "the rest of the app still works" is false when the outer
+    // (page) boundary catches a chrome crash — neutral copy there, scoped
+    // copy on the surface boundary around the routed content.
+    expect(layout).toContain('descriptionKey="pageDescription"');
+    expect(layout.indexOf('descriptionKey="pageDescription"')).toBeLessThan(
+      layout.indexOf('descriptionKey="description"'),
+    );
+  });
+
+  it.each(['en', 'ar'])('%s catalog has routeError.{title,description,pageDescription,details}', (locale) => {
     const re = json(`src/messages/${locale}.json`).routeError;
-    expect(Object.keys(re).sort()).toEqual(['description', 'details', 'title']);
+    expect(Object.keys(re).sort()).toEqual(['description', 'details', 'pageDescription', 'title']);
     for (const v of Object.values(re)) expect(v.length).toBeGreaterThan(0);
   });
 });

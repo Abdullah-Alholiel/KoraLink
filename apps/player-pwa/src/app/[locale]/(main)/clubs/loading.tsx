@@ -1,7 +1,12 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 // Route skeleton (P2-138): search pill + venue cards.
 export default function ClubsLoading() {
+  const t = useTranslations('common');
   return (
-    <div role="status" aria-label="Loading" className="animate-pulse pt-4">
+    <div role="status" aria-label={t('loading')} className="animate-pulse pt-4">
       <div className="mx-4 mb-3 h-12 rounded-full bg-gray-200" />
       {Array.from({ length: 2 }).map((_, i) => (
         <div key={i} className="mx-4 mb-3 overflow-hidden rounded-2xl bg-white shadow-card">

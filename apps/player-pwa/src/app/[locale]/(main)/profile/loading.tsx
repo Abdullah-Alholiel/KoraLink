@@ -1,7 +1,12 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 // Route skeleton (P2-138): avatar + name lines + menu rows.
 export default function ProfileLoading() {
+  const t = useTranslations('common');
   return (
-    <div role="status" aria-label="Loading" className="animate-pulse pt-6">
+    <div role="status" aria-label={t('loading')} className="animate-pulse pt-6">
       <div className="mb-6 flex flex-col items-center gap-3">
         <div className="h-20 w-20 rounded-full bg-gray-200" />
         <div className="h-5 w-40 rounded bg-gray-200" />

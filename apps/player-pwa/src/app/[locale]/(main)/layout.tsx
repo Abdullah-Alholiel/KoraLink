@@ -14,7 +14,11 @@ export default function MainLayout({
     children: React.ReactNode;
 }) {
     return (
-        <ErrorBoundary>
+        <ErrorBoundary
+            titleKey="title"
+            descriptionKey="pageDescription"
+            retryKey="retry"
+        >
             <MobileFrame>
                 <AuthGuard>
                     <NotificationProvider>
