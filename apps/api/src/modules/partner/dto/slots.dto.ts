@@ -71,15 +71,38 @@ export class CreateSlotDto {
  * `GET /partner/pitches/:id/slots`. Previously each controller passed the raw
  * `@Query('from')/@Query('to')` strings straight into drizzle gte/lte on
  * slot_date: a garbage value produced a PG comparison error (500) and a
- * reversed range silently returned an empty schedule. `from`/`to` are
- * inclusive YYYY-MM-DD (same regex the create/generate path enforces) and
- * `from <= to` is enforced so a reversed range is a clear 400.
+ * reversed range silently returned an empty schedule. Both fields must be
+ * REAL YYYY-MM-DD calendar dates (format + month/day round-trip — PR-Agent
+ * run #94: `2026-02-31` passes a shape-only regex but still 500s in the PG
+ * date cast) and `from <= to` is enforced so a reversed range is a clear 400.
  */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+@ValidatorConstraint({ name: 'slotCalendarDate', async: false })
+export class SlotCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
+    const [y, m, d] = value.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return (
+      dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+    );
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} must be a real YYYY-MM-DD calendar date`;
+  }
+}
+
 @ValidatorConstraint({ name: 'slotWindowOrder', async: false })
 class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
   validate(_value: unknown, args: ValidationArguments): boolean {
     const o = args.object as { from?: string; to?: string };
-    if (!o.from || !o.to) return true; // per-field regex reports those
+    if (typeof o.from !== 'string' || typeof o.to !== 'string') return true;
+    // Format/calendar errors are reported per-field — skip the cross-field
+    // check unless both sides are well-formed dates (PR-Agent run #94: the
+    // order error used to fire spuriously next to a format error).
+    if (!DATE_RE.test(o.from) || !DATE_RE.test(o.to)) return true;
     return o.from <= o.to;
   }
 
@@ -91,16 +114,14 @@ class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
 export class SlotWindowQueryDto {
   @ApiProperty({ example: '2026-10-01', description: 'Window start (inclusive) YYYY-MM-DD' })
   @IsString()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'from must be YYYY-MM-DD' })
+  @Validate(SlotCalendarDateConstraint)
   from: string;
 
   @ApiProperty({ example: '2026-10-08', description: 'Window end (inclusive) YYYY-MM-DD' })
   @IsString()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD' })
-  to: string;
-
+  @Validate(SlotCalendarDateConstraint)
   @Validate(SlotWindowOrderConstraint)
-  windowOrder: true;
+  to: string;
 }
 
 export class UpdateVenuePartnerDto {
