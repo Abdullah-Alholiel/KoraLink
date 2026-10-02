@@ -78,6 +78,24 @@ describe('id-shape-scan fixtures', () => {
       expect(offender(src)).toEqual(['x.ts']);
     });
 
+    it('tight annotation (no spaces) matches', () => {
+      expect(offender('const UUID_SHAPE:RegExp=/x/;')).toEqual(['x.ts']);
+    });
+
+    it('annotation spanning a newline matches (r2)', () => {
+      const src = 'const UUID_SHAPE:\n  RegExp = /x/;';
+      expect(offender(src)).toEqual(['x.ts']);
+    });
+
+    it('KNOWN MISS (documented): space-preceded // inside a string hides a same-line declaration', () => {
+      // A real tokenizer would catch this; the tripwire deliberately stays a
+      // conservative text scan. Threat model = accidental private copies
+      // (normally formatted), not adversarial evasion. Fail-open is accepted
+      // and documented in stripLineComments' docstring.
+      const src = "const u = 'a //b'; let UUID_SHAPE = /x/;";
+      expect(offender(src)).toEqual([]);
+    });
+
     it('leaves block comments untouched (documented limitation)', () => {
       const src = "/* const UUID_SHAPE = /x/; */";
       expect(stripLineComments(src)).toBe(src);

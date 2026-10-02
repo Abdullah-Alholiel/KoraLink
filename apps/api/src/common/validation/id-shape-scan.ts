@@ -17,7 +17,7 @@
  */
 
 export const ID_SHAPE_DECL_PATTERN =
-  /(?:export\s+)?(?:const|let|var)\s+UUID_SHAPE\s*(?::[^=\n]+)?=\s*(?:\/|new\s+RegExp)/;
+  /(?:export\s+)?(?:const|let|var)\s+UUID_SHAPE\s*(?::[^=]+)?=\s*(?:\/|new\s+RegExp)/;
 export const ID_SHAPE_TYPE_PATTERN = /(?:export\s+)?type\s+UUID_SHAPE(?:\s*<[^>]*>)?\s*=/;
 export const ID_SHAPE_ASSIGNMENT_PATTERN = /\bUUID_SHAPE\s*=(?!=)/;
 
