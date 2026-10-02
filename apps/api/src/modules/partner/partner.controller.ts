@@ -19,7 +19,7 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
-import { CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
+import { CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
 
 @Controller('partner')
@@ -65,10 +65,9 @@ export class PartnerController {
   listSlots(
     @CurrentUser() user: { sub: string; role: string },
     @Param('id') id: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
+    @Query() window: SlotWindowQueryDto,
   ) {
-    return this.partner.listSlots(user.sub, user.role, id, from, to);
+    return this.partner.listSlots(user.sub, user.role, id, window.from, window.to);
   }
 
   @Post('pitches/:id/slots/generate')

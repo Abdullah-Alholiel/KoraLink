@@ -10,6 +10,10 @@ import {
   Max,
   Min,
   MinLength,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 
 /** Days of week: 0=Sunday … 6=Saturday */
@@ -59,6 +63,71 @@ export class CreateSlotDto {
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'end_time must be HH:MM' })
   end_time: string;
+}
+
+/**
+ * Run #94 (Reviewer-A P2-137): validated slot-window query shared by BOTH
+ * schedule endpoints — `GET /admin/pitches/:id/slots` and
+ * `GET /partner/pitches/:id/slots`. Previously each controller passed the raw
+ * `@Query('from')/@Query('to')` strings straight into drizzle gte/lte on
+ * slot_date: a garbage value produced a PG comparison error (500) and a
+ * reversed range silently returned an empty schedule. Both fields must be
+ * REAL YYYY-MM-DD calendar dates (format + month/day round-trip — PR-Agent
+ * run #94: `2026-02-31` passes a shape-only regex but still 500s in the PG
+ * date cast) and `from <= to` is enforced so a reversed range is a clear 400.
+ */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Shape + calendar round-trip in one predicate (shared by both constraints). */
+function isCalendarRealDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+@ValidatorConstraint({ name: 'slotCalendarDate', async: false })
+export class SlotCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    // Missing/null: presence is reported by @IsString — don't stack a
+    // calendar error on a field the client never sent.
+    if (value === undefined || value === null) return true;
+    return isCalendarRealDate(value);
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} must be a real YYYY-MM-DD calendar date`;
+  }
+}
+
+@ValidatorConstraint({ name: 'slotWindowOrder', async: false })
+class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const o = args.object as { from?: string; to?: string };
+    // Format/calendar errors are reported per-field — skip the cross-field
+    // check unless both sides are REAL dates (PR-Agent round 2: comparing a
+    // calendar-invalid 'from' like 2026-02-31 against an earlier valid 'to'
+    // used to stack a spurious order error on top of the calendar error).
+    if (!isCalendarRealDate(o.from) || !isCalendarRealDate(o.to)) return true;
+    return o.from <= o.to;
+  }
+
+  defaultMessage(): string {
+    return 'from must be on or before to';
+  }
+}
+
+export class SlotWindowQueryDto {
+  @ApiProperty({ example: '2026-10-01', description: 'Window start (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  from: string;
+
+  @ApiProperty({ example: '2026-10-08', description: 'Window end (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  @Validate(SlotWindowOrderConstraint)
+  to: string;
 }
 
 export class UpdateVenuePartnerDto {

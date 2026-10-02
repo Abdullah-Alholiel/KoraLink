@@ -5,8 +5,11 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   Min,
 } from 'class-validator';
+import { UUID_SHAPE, UUID_SHAPE_MSG } from '../../../common/validation/id-shape';
 
 /** Admin pitch edit — partner UpdatePitchDto fields + cross-venue move. */
 export class UpdatePitchAdminDto {
@@ -46,5 +49,10 @@ export class UpdatePitchAdminDto {
   })
   @IsOptional()
   @IsString()
+  // Run #94 (P2-136): id columns are varchar(36) — shape-validate the
+  // cross-venue move target before it reaches any SQL bind (shared
+  // UUID_SHAPE from common/validation/id-shape.ts).
+  @Matches(UUID_SHAPE, { message: `venue_id ${UUID_SHAPE_MSG}` })
+  @MaxLength(36)
   venue_id?: string;
 }
