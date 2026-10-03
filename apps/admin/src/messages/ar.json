@@ -539,6 +539,7 @@
     "loadingUsers": "جارٍ تحميل المستخدمين…",
     "thUser": "المستخدم",
     "thHandle": "المعرّف",
+    "thPitch": "الملعب",
     "thPhone": "الجوال",
     "thRole": "الدور",
     "thWallet": "المحفظة",
@@ -648,6 +649,7 @@
     "exportSettlements": "تصدير التسويات",
     "exportAudit": "تصدير سجل التدقيق",
     "exportDisputes": "تصدير النزاعات",
+    "exportMatches": "تصدير المباريات",
     "exportReports": "تصدير البلاغات",
     "exportUsers": "تصدير المستخدمين"
   },
