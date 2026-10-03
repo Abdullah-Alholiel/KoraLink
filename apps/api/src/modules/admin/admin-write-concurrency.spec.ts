@@ -122,6 +122,16 @@ describe('Admin write-path concurrency (P2-141)', () => {
     expect(audit.log).toHaveBeenCalledTimes(1);
   });
 
+  it('matches.update: metadata-only edits do NOT take the pitch advisory lock', async () => {
+    const { svc, db, tx } = makeMatches({
+      locked: [openRow],
+      updatedRows: [{ id: 'm1' }],
+    });
+    await svc.update('m1', { title: 'New title' } as never, 'admin1');
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(tx.execute).not.toHaveBeenCalled();
+  });
+
   // ── venues.transferOwnership ─────────────────────────────────────────
 
   function makeVenues(opts: { venue: unknown[]; target: unknown[] }) {
@@ -159,6 +169,19 @@ describe('Admin write-path concurrency (P2-141)', () => {
     }
     expect(tx.update).not.toHaveBeenCalled();
     expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('venues.transferOwnership: 400 when the LOCKED target user is banned', async () => {
+    const { svc, tx } = makeVenues({
+      venue: [{ id: 'v1', owner_id: 'old' }],
+      target: [{ id: 'u2', role: 'VenueOwner', banned_at: new Date().toISOString() }],
+    });
+    await expect(
+      svc.transferOwnership('v1', { newOwnerId: 'u2' } as never, 'admin1'),
+    ).rejects.toThrow(
+      new BadRequestException('Target user is banned and cannot receive venue ownership.'),
+    );
+    expect(tx.update).not.toHaveBeenCalled();
   });
 
   // ── reports.resolve ──────────────────────────────────────────────────

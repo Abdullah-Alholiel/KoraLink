@@ -235,7 +235,7 @@ export class AdminVenuesService {
       }
 
       const [target] = await tx
-        .select({ id: users.id, role: users.role })
+        .select({ id: users.id, role: users.role, banned_at: users.banned_at })
         .from(users)
         .where(eq(users.id, dto.newOwnerId))
         .limit(1)
@@ -245,6 +245,9 @@ export class AdminVenuesService {
       }
       if (target.role !== 'VenueOwner') {
         throw new BadRequestException('Target user is not a venue owner.');
+      }
+      if (target.banned_at) {
+        throw new BadRequestException('Target user is banned and cannot receive venue ownership.');
       }
 
       await tx
