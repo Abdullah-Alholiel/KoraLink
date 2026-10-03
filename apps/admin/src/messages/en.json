@@ -539,6 +539,7 @@
     "loadingUsers": "Loading users…",
     "thUser": "User",
     "thHandle": "Handle",
+    "thPitch": "Pitch",
     "thPhone": "Phone",
     "thRole": "Role",
     "thWallet": "Wallet",
@@ -648,6 +649,7 @@
     "exportSettlements": "Export settlements",
     "exportAudit": "Export audit log",
     "exportDisputes": "Export disputes",
+    "exportMatches": "Export matches",
     "exportReports": "Export reports",
     "exportUsers": "Export users"
   },
