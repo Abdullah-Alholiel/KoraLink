@@ -14,6 +14,9 @@ import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvDate, exportCsv } from '@/lib/csv-export';
+import { Download } from 'lucide-react';
 
 type ReportsResponse = ListResponse<AdminReportListItem> & { reports: AdminReportListItem[] };
 
@@ -35,6 +38,27 @@ export default function ReportsPage() {
     `/admin/reports?${qs.toString()}`,
     ['reports'],
   );
+
+  const rows = data?.reports ?? [];
+  const exportDisabled = loading || !!error || rows.length === 0;
+
+  function onExport() {
+    exportCsv({
+      columns: [
+        { key: 'subject', header: t('thSubject'), value: (r: AdminReportListItem) => r.subject_label ?? '' },
+        { key: 'subjectType', header: t('thSubjectType'), value: (r: AdminReportListItem) => r.subject_type },
+        { key: 'status', header: t('thStatus'), value: (r: AdminReportListItem) => r.status },
+        { key: 'reported', header: t('thReported'), value: (r: AdminReportListItem) => csvDate(r.created_at) },
+        { key: 'reporter', header: t('thReporter'), value: (r: AdminReportListItem) => r.reporter_name ?? r.reporter_handle ?? '' },
+        { key: 'reason', header: t('thReason'), value: (r: AdminReportListItem) => r.reason },
+        { key: 'id', header: t('thId') },
+      ],
+      rows,
+      filePrefix: 'koralink-reports',
+      timestamp: new Date(),
+    });
+    trackEvent('admin_csv_export', { page: 'admin.reports', rows: rows.length });
+  }
 
   const columns: ColumnDef<AdminReportListItem>[] = [
     {
@@ -106,6 +130,16 @@ export default function ReportsPage() {
           <option value="venue">{t('thVenue')}</option>
           <option value="message">{t('thMessage')}</option>
         </select>
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportReports')}
+        </button>
       </div>
 
       {loading ? (
@@ -117,7 +151,7 @@ export default function ReportsPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.reports ?? []}
+              rows={rows}
               rowKey={(r) => r.id}
               onRowClick={(r) => setSelected(r)}
               empty={<EmptyState message={tc('noData')} />}

@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
+import { Ban, CheckCircle2, Download, Loader2, Search, TimerOff } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -19,6 +19,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { exportCsv } from '@/lib/csv-export';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
 
@@ -76,6 +77,30 @@ export default function UsersPage() {
   if (sortDir) qs.set('dir', sortDir);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
+
+  const rows = data?.users ?? [];
+  const exportDisabled = loading || !!error || rows.length === 0;
+
+  function onExport() {
+    exportCsv({
+      columns: [
+        { key: 'user', header: t('thUser'), value: (u: AdminUser) => u.full_name ?? '' },
+        { key: 'handle', header: 'Handle', value: (u: AdminUser) => u.handle ?? '' },
+        { key: 'phone', header: t('thPhone'), value: (u: AdminUser) => u.phone },
+        { key: 'role', header: t('thRole'), value: (u: AdminUser) => u.role },
+        { key: 'status', header: t('thStatus'), value: (u: AdminUser) => userStatus(u) },
+        { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => String(u.wallet_balance) },
+        { key: 'karma', header: t('thKarma'), value: (u: AdminUser) => String(u.karma_score) },
+        { key: 'noShows', header: t('thNoShows'), value: (u: AdminUser) => String(u.no_show_count) },
+        { key: 'joined', header: t('thJoined'), value: (u: AdminUser) => u.created_at },
+        { key: 'id', header: t('thId') },
+      ],
+      rows,
+      filePrefix: 'koralink-users',
+      timestamp: new Date(),
+    });
+    trackEvent('admin_csv_export', { page: 'admin.users', rows: rows.length });
+  }
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusyId(id);
@@ -248,6 +273,16 @@ export default function UsersPage() {
         </select>
 
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportUsers')}
+        </button>
       </div>
 
       {loading ? (
@@ -264,7 +299,7 @@ export default function UsersPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.users ?? []}
+              rows={rows}
               rowKey={(u) => u.id}
               onRowClick={(u) => setSelected(u)}
               empty={<EmptyState message={tc('noData')} />}

@@ -618,7 +618,10 @@
     "actionFailed": "Action failed: {error}",
     "exportTransactions": "Export transactions",
     "exportSettlements": "Export settlements",
-    "exportAudit": "Export audit log"
+    "exportAudit": "Export audit log",
+    "exportDisputes": "Export disputes",
+    "exportReports": "Export reports",
+    "exportUsers": "Export users"
   },
   "list": {
     "sortLabel": "Sort",
