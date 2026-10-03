@@ -1,9 +1,16 @@
 // @ts-check
+import path from 'node:path';
 import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Pin the workspace root explicitly: npm workspaces + a worktree checkout
+  // (node_modules symlinked from the main tree) otherwise lets Next's
+  // multi-lockfile inference pick the wrong root mid-build and webpack fails
+  // resolving next/dist/pages internals. In the main tree this equals the
+  // inferred value (no behaviour change); in worktrees it pins semantics.
+  outputFileTracingRoot: path.join(import.meta.dirname, '..', '..'),
   serverExternalPackages: [
     '@sentry/nextjs',
     '@sentry/node',
