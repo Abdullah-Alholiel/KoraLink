@@ -10,8 +10,10 @@ import {
   Max,
   MinLength,
   MaxLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { UUID_SHAPE, UUID_SHAPE_MSG } from '../../../common/validation/id-shape';
 
 export class CreateMatchDto {
   @ApiProperty({ description: 'Pitch UUID' })
@@ -63,6 +65,10 @@ export class CreateMatchDto {
   @ApiPropertyOptional({ description: 'Slot ID — required when booking_mode = koralink' })
   @IsOptional()
   @IsString()
+  // P2-139 rider: reaches a SQL bind against varchar(36) pitch_slots.id —
+  // shape-validate via the shared id-shape (no UUID-scheme decorator), cap at 36.
+  @Matches(UUID_SHAPE, { message: `booking_slot_id ${UUID_SHAPE_MSG}` })
+  @MaxLength(36)
   booking_slot_id?: string;
 
   @ApiPropertyOptional({ enum: ['public', 'private'], default: 'public',

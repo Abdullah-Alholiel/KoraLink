@@ -215,24 +215,40 @@ export class AdminDisputesService {
     }
 
     const entry = { action: 'reopened', by: adminId, at: new Date().toISOString() };
-    const evidence = Array.isArray(before.evidence)
-      ? [...(before.evidence as unknown[]), entry]
-      : [entry];
 
+    // P2-139: the evidence append is built from a row LOCKED inside the tx
+    // (`SELECT … FOR UPDATE`), not from the `before` snapshot — a player
+    // appeal appended between findOne and the write is no longer dropped.
     // Status-predicated UPDATE (run #24 Reviewer-A CRITICAL #2): only a
     // dispute that is STILL decided may flip back to opened. A concurrent
     // resolve() that closed it between findOne and here makes this update
     // match zero rows → clean 400 instead of silently reopening a decided
     // dispute over the other admin's decision.
-    const reopened = await this.db
-      .update(disputes)
-      .set(withTimestamp({ status: 'opened', evidence: evidence as never }))
-      .where(and(eq(disputes.id, id), inArray(disputes.status, ['resolved', 'rejected'])))
-      .returning({ id: disputes.id });
+    await this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: disputes.id, evidence: disputes.evidence })
+        .from(disputes)
+        .where(eq(disputes.id, id))
+        .for('update');
 
-    if (reopened.length === 0) {
-      throw new BadRequestException('Only decided disputes can be reopened.');
-    }
+      if (!locked) {
+        throw new NotFoundException('Dispute not found.');
+      }
+
+      const evidence = Array.isArray(locked.evidence)
+        ? [...(locked.evidence as unknown[]), entry]
+        : [entry];
+
+      const reopened = await tx
+        .update(disputes)
+        .set(withTimestamp({ status: 'opened', evidence: evidence as never }))
+        .where(and(eq(disputes.id, id), inArray(disputes.status, ['resolved', 'rejected'])))
+        .returning({ id: disputes.id });
+
+      if (reopened.length === 0) {
+        throw new BadRequestException('Only decided disputes can be reopened.');
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({
