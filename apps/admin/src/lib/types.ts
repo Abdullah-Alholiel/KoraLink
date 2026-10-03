@@ -111,6 +111,8 @@ export interface DisputeListItem {
   respondent_name: string | null;
   match_id: string | null;
   match_title: string | null;
+  appeal_count: number;
+  has_appealed: boolean;
 }
 
 export interface AdminReportListItem {

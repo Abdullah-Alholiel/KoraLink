@@ -23,11 +23,13 @@ export default function DisputesPage() {
   const tl = useTranslations('list');
   const tc = useTranslations('common');
   const [status, setStatus] = useState('');
+  const [appeal, setAppeal] = useState<'' | 'true' | 'false'>('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<DisputeListItem | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
+  if (appeal) qs.set('appeal', appeal);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
 
@@ -43,6 +45,20 @@ export default function DisputesPage() {
       header: t('thStatus'),
       role: 'value',
       render: (d) => <StatusBadge status={d.status} />,
+    },
+    {
+      key: 'appeal',
+      header: t('thAppeal'),
+      role: 'value',
+      cardLabel: t('thAppeal'),
+      render: (d) =>
+        d.has_appealed ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+            {t('appealBadge', { count: d.appeal_count })}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        ),
     },
     {
       key: 'opened',
@@ -92,6 +108,19 @@ export default function DisputesPage() {
           <option value="resolved">{ts('resolved')}</option>
           <option value="rejected">{ts('rejected')}</option>
         </select>
+        <select
+          aria-label={t('filterByAppeal')}
+          value={appeal}
+          onChange={(e) => {
+            setAppeal(e.target.value as '' | 'true' | 'false');
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('allDisputes')}</option>
+          <option value="true">{t('withAppeal')}</option>
+          <option value="false">{t('withoutAppeal')}</option>
+        </select>
       </div>
 
       {loading ? (
@@ -126,6 +155,10 @@ export default function DisputesPage() {
                 { label: t('thReporter'), value: selected.reporter_name ?? '—' },
                 { label: t('thRespondent'), value: selected.respondent_name ?? '—' },
                 { label: t('thStatus'), value: <StatusBadge status={selected.status} /> },
+                {
+                  label: t('thAppeal'),
+                  value: selected.has_appealed ? t('appealBadge', { count: selected.appeal_count }) : '—',
+                },
                 { label: ts('opened'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
               ]
             : []

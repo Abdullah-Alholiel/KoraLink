@@ -25,30 +25,66 @@ export class AdminDisputesService {
   async list(dto: ListDisputesDto) {
     const page = dto.page ?? 1;
     const perPage = dto.perPage ?? 20;
-    const where: SQL | undefined = dto.status
-      ? sql`WHERE d.status = ${dto.status}`
+
+    // Same clause shape feeds both the page query and the count query — build
+    // once. Status is a code-controlled pgEnum value (validated in the DTO),
+    // so it binds as a parameter; appeal is an EXISTS probe over the evidence
+    // JSON (players attach appeals as evidence entries — matches.service
+    // `appendDisputeEvidenceAtomically`), not a column. drizzle `and()` does
+    // NOT emit the WHERE keyword (api-standards pitfall): when any clause
+    // exists, the keyword must live INSIDE the fragment via sql`WHERE …`,
+    // otherwise embedding the bare clause list 500s at runtime.
+    const clauses: SQL[] = [];
+    if (dto.status) {
+      clauses.push(sql`d.status = ${dto.status}`);
+    }
+    if (dto.appeal !== undefined) {
+      clauses.push(
+        dto.appeal === 'true'
+          ? sql`EXISTS (
+              SELECT 1 FROM json_array_elements(d.evidence) e
+              WHERE e->>'action' = 'appeal'
+            )`
+          : sql`NOT EXISTS (
+              SELECT 1 FROM json_array_elements(d.evidence) e
+              WHERE e->>'action' = 'appeal'
+            )`,
+      );
+    }
+    const where: SQL | undefined = clauses.length
+      ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
       : undefined;
 
     const rows = (await this.db.execute(sql`
       SELECT
         d.id, d.type, d.status, d.decision, d.policy_ref, d.created_at, d.updated_at,
         r.full_name AS reporter_name, resp.full_name AS respondent_name,
-        m.id AS match_id, m.title AS match_title
+        m.id AS match_id, m.title AS match_title,
+        (
+          SELECT COUNT(*)::int FROM json_array_elements(d.evidence) e
+          WHERE e->>'action' = 'appeal'
+        ) AS appeal_count
       FROM disputes d
       LEFT JOIN users r ON r.id = d.reporter_id
       LEFT JOIN users resp ON resp.id = d.respondent_id
       LEFT JOIN matches m ON m.id = d.match_id
       ${where}
-      ORDER BY d.created_at DESC
+      ORDER BY EXISTS (
+        SELECT 1 FROM json_array_elements(d.evidence) e
+        WHERE e->>'action' = 'appeal'
+      ) DESC, d.created_at DESC
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
+
+    // Boolean derived server-side (no client-side drift on the JSON shape).
+    const disputes = rows.map((r) => ({ ...r, has_appealed: Number(r.appeal_count ?? 0) > 0 }));
 
     const countRows = (await this.db.execute(sql`
       SELECT COUNT(*)::int AS c FROM disputes d
       ${where}
     `)) as unknown as Array<{ c: number }>;
 
-    return { disputes: rows, total: countRows[0]?.c ?? 0, page, perPage };
+    return { disputes, total: countRows[0]?.c ?? 0, page, perPage };
   }
 
   async findOne(id: string) {
