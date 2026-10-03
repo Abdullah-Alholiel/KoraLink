@@ -212,6 +212,14 @@ export class AdminVenuesService {
    *
    * Immediate hard transfer per Abdullah's approved semantics: audited,
    * both owners notified, no acceptance round-trip.
+   *
+   * P2-141 (Reviewer A run #98): the target role check was a plain read and
+   * the write an unconditional WHERE-id UPDATE — a concurrent demotion of
+   * the target between read and write still transferred the venue to a
+   * non-owner. The venue row and the TARGET USER row are now locked
+   * FOR UPDATE inside one tx and the role is re-checked from the locked
+   * row; the UPDATE is owner-predicated so a concurrent transfer of the
+   * same venue makes it match zero rows → 409.
    */
   async transferOwnership(id: string, dto: TransferVenueDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
@@ -221,22 +229,52 @@ export class AdminVenuesService {
       throw new BadRequestException('That user already owns this venue.');
     }
 
-    const [target] = await this.db
-      .select({ id: users.id, role: users.role, full_name: users.full_name, phone: users.phone })
-      .from(users)
-      .where(eq(users.id, dto.newOwnerId))
-      .limit(1);
-    if (!target) {
-      throw new NotFoundException('Target user not found.');
-    }
-    if (target.role !== 'VenueOwner') {
-      throw new BadRequestException('Target user is not a venue owner.');
-    }
+    await this.db.transaction(async (tx) => {
+      // Lock the venue first (deterministic order: venue row → user row —
+      // every transfer takes venue-then-user, so concurrent transfers of
+      // overlapping venue/user sets serialize without lock cycles).
+      const [venue] = await tx
+        .select({ id: venues.id, owner_id: venues.owner_id })
+        .from(venues)
+        .where(eq(venues.id, id))
+        .for('update');
 
-    await this.db
-      .update(venues)
-      .set(withTimestamp({ owner_id: dto.newOwnerId }))
-      .where(eq(venues.id, id));
+      if (!venue) {
+        throw new NotFoundException('Venue not found.');
+      }
+      // Re-check the preconditions the audit snapshot was built from — a
+      // concurrent transfer may have moved the venue between findOne and
+      // the lock grant.
+      if (venue.owner_id === dto.newOwnerId) {
+        throw new BadRequestException('That user already owns this venue.');
+      }
+
+      // Lock the target USER row and re-check the role from the LOCKED row:
+      // a concurrent demote serializes behind this tx and the re-check
+      // catches it (plain-read role check was the P2-141 finding).
+      const [target] = await tx
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.id, dto.newOwnerId))
+        .for('update');
+
+      if (!target) {
+        throw new NotFoundException('Target user not found.');
+      }
+      if (target.role !== 'VenueOwner') {
+        throw new BadRequestException('Target user is not a venue owner.');
+      }
+
+      // Owner-predicated write: zero rows = concurrently transferred → 409.
+      const written = await tx
+        .update(venues)
+        .set(withTimestamp({ owner_id: dto.newOwnerId }))
+        .where(and(eq(venues.id, id), eq(venues.owner_id, venue.owner_id)))
+        .returning({ id: venues.id });
+      if (written.length === 0) {
+        throw new ConflictException('Venue was concurrently transferred — re-check its owner.');
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({

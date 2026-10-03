@@ -31,7 +31,7 @@ import { AppGateway } from '../gateway/app.gateway';
  */
 describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
   function makeDb(initialCount = 2) {
-    const statements: Array<{ kind: 'raw' | 'count'; sql?: string; where?: unknown }> = [];
+    const statements: Array<{ kind: 'raw' | 'count' | 'select'; sql?: string; where?: unknown }> = [];
     const txUpdates: Array<Record<string, unknown>> = [];
     const outerUpdates: Array<Record<string, unknown>> = [];
 
@@ -68,9 +68,36 @@ describe('AdminUsersService — last-admin guard transaction (P2-116)', () => {
       update: makeUpdater(txUpdates),
     };
 
+    // P2-141: update() post-write re-read uses findOneOn(id, this.db), so
+    // the outer db needs a query-builder surface matching the public findOne.
+    const selectChain = () => {
+      const c: Record<string, unknown> = {};
+      c.from = () => ({
+        where: () => ({
+          limit: () => {
+            statements.push({ kind: 'select' });
+            return Promise.resolve([
+              {
+                id: 'admin-2',
+                role: 'Player',
+                deleted_at: null,
+                banned_at: null,
+                suspended_until: null,
+              },
+            ]);
+          },
+        }),
+      });
+      return c;
+    };
+
     const db = {
       transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
       update: makeUpdater(outerUpdates),
+      select: () => selectChain(),
+      execute: async () =>
+        // matchesPlayed + totalSpent for findOneOn's post-write stats.
+        [{ matchesPlayed: 0, totalSpent: '0' }] as unknown,
       _statements: statements,
       _txUpdates: txUpdates,
       _outerUpdates: outerUpdates,

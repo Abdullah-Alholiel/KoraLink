@@ -1,5 +1,5 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { matches } from '../../database/schema';
@@ -144,9 +144,6 @@ export class AdminMatchesService {
     if (!row) {
       throw new NotFoundException('Match not found.');
     }
-    if (row.status !== 'Open' && row.status !== 'InProgress') {
-      throw new BadRequestException('Only Open or InProgress matches can be edited.');
-    }
 
     const scheduleChange = dto.scheduled_at !== undefined || dto.duration_mins !== undefined;
     if (scheduleChange && row.booking_mode !== 'self') {
@@ -172,34 +169,75 @@ export class AdminMatchesService {
       throw new BadRequestException('No changes provided.');
     }
 
-    // ── Same-pitch overlap guard (self-mode schedule changes only) ──────
-    if (scheduleChange) {
-      const newStart =
-        (updates.scheduled_at as Date | undefined) ??
-        (row.scheduled_at ? new Date(row.scheduled_at) : new Date());
-      const newDur = (updates.duration_mins as number | undefined) ?? row.duration_mins ?? 60;
-      const newEnd = new Date(newStart.getTime() + newDur * 60_000);
-      const overlaps = (await this.db.execute(sql`
-        SELECT COUNT(*)::int AS c
-        FROM matches m2
-        WHERE m2.pitch_id::text = ${row.pitch_id}
-          AND m2.id::text <> ${id}
-          AND m2.status IN ('Open', 'Full', 'InProgress')
-          AND m2.scheduled_at < ${newEnd.toISOString()}
-          AND (m2.scheduled_at + (m2.duration_mins * interval '1 minute')) > ${newStart.toISOString()}
-      `)) as unknown as Array<{ c: number }>;
-      if ((overlaps[0]?.c ?? 0) > 0) {
-        throw new BadRequestException(
-          'Another match is already scheduled in this window on the same pitch.',
+    // P2-141 (Reviewer A run #98, 2×IMPORTANT): the pre-write validation and
+    // the UPDATE were two independent auto-commit statements — a host cancel
+    // or a competing booking committing between them either overwrote the
+    // terminal row (cancellation overwritten by a title edit) or raced the
+    // overlap COUNT (double-booking window). The row is now locked
+    // (`SELECT … FOR UPDATE`) INSIDE the tx and every write is
+    // status-predicated: a concurrent terminal transition makes all UPDATEs
+    // match zero rows → clean 409 instead of a lost/overwritten write.
+    // (House pattern: P2-139 disputes reopen, P2-116 last-admin guard.)
+    const before = await this.findOne(id);
+    await this.db.transaction(async (tx) => {
+      // Re-read + lock the row the writes will target (the `before` findOne
+      // above is a plain read — relations for audit only).
+      const [locked] = await tx
+        .select({
+          id: matches.id,
+          status: matches.status,
+        })
+        .from(matches)
+        .where(eq(matches.id, id))
+        .for('update');
+
+      if (!locked) {
+        throw new NotFoundException('Match not found.');
+      }
+      if (locked.status !== 'Open' && locked.status !== 'InProgress') {
+        throw new BadRequestException('Only Open or InProgress matches can be edited.');
+      }
+
+      // ── Same-pitch overlap guard (self-mode schedule changes only) ────
+      // Runs while the row lock is held: a concurrent create/update on the
+      // same pitch serializes behind this tx, so the COUNT can no longer go
+      // stale before our INSERT/UPDATE commits.
+      if (scheduleChange) {
+        const newStart =
+          (updates.scheduled_at as Date | undefined) ??
+          (row.scheduled_at ? new Date(row.scheduled_at) : new Date());
+        const newDur = (updates.duration_mins as number | undefined) ?? row.duration_mins ?? 60;
+        const newEnd = new Date(newStart.getTime() + newDur * 60_000);
+        const overlaps = (await tx.execute(sql`
+          SELECT COUNT(*)::int AS c
+          FROM matches m2
+          WHERE m2.pitch_id::text = ${row.pitch_id}
+            AND m2.id::text <> ${id}
+            AND m2.status IN ('Open', 'Full', 'InProgress')
+            AND m2.scheduled_at < ${newEnd.toISOString()}
+            AND (m2.scheduled_at + (m2.duration_mins * interval '1 minute')) > ${newStart.toISOString()}
+        `)) as unknown as Array<{ c: number }>;
+        if ((overlaps[0]?.c ?? 0) > 0) {
+          throw new BadRequestException(
+            'Another match is already scheduled in this window on the same pitch.',
+          );
+        }
+      }
+
+      // Status-predicated write: if the row flipped terminal between the
+      // first read and the lock grant (or while we waited), the UPDATE
+      // matches zero rows → 409 race-loser instead of a silent overwrite.
+      const written = await tx
+        .update(matches)
+        .set(withTimestamp(updates) as never)
+        .where(and(eq(matches.id, id), inArray(matches.status, ['Open', 'InProgress'])))
+        .returning({ id: matches.id });
+      if (written.length === 0) {
+        throw new ConflictException(
+          'Match was concurrently cancelled or completed — re-check its status.',
         );
       }
-    }
-
-    const before = await this.findOne(id);
-    await this.db
-      .update(matches)
-      .set(withTimestamp(updates) as never)
-      .where(eq(matches.id, id));
+    });
     const after = await this.findOne(id);
 
     await this.audit.log({
