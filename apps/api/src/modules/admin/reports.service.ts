@@ -97,34 +97,47 @@ export class AdminReportsService {
       }
     }
 
-    // P2-49 (run #34): status-predicated guard — a concurrent resolve/reopen
-    // loses here (zero rows → 409) instead of double-writing over the other
-    // decision and leaving the audit trail stale (run #24 disputes pattern;
-    // zero-rows detection per the P2-41 pattern).
-    const updated = await this.db
-      .update(reports)
-      .set(
-        withTimestamp({
-          status: dto.outcome,
-          resolution: dto.resolution ?? null,
-          resolved_by: adminId,
-          resolved_at: new Date(),
-        }),
-      )
-      .where(and(eq(reports.id, id), inArray(reports.status, ['open', 'reviewing'])))
-      .returning({ id: reports.id });
-    if (updated.length === 0) {
-      // Race loser: another admin decided this report between findOne and now.
-      throw new ConflictException('Report was concurrently decided — re-check its status.');
-    }
+    // P2-141 (Reviewer A run #98): resolve and the banSubject ban were two
+    // independent auto-commit writes — a ban failure left the report
+    // resolved with its subject still unbanned. ONE tx now: the
+    // status-predicated UPDATE (P2-49 guard kept) and the ban (via
+    // adminUsers.update's inTx path) commit or roll back together. A ban
+    // failure rolls the resolution back → the report stays open; a
+    // concurrent decision makes the UPDATE match zero rows → 409 before
+    // any moderation side effect (run-2 ordering kept).
+    await this.db.transaction(async (tx) => {
+      // P2-49 (run #34): status-predicated guard — a concurrent resolve/reopen
+      // loses here (zero rows → 409) instead of double-writing over the other
+      // decision and leaving the audit trail stale (run #24 disputes pattern;
+      // zero-rows detection per the P2-41 pattern).
+      const updated = await tx
+        .update(reports)
+        .set(
+          withTimestamp({
+            status: dto.outcome,
+            resolution: dto.resolution ?? null,
+            resolved_by: adminId,
+            resolved_at: new Date(),
+          }),
+        )
+        .where(and(eq(reports.id, id), inArray(reports.status, ['open', 'reviewing'])))
+        .returning({ id: reports.id });
+      if (updated.length === 0) {
+        // Race loser: another admin decided this report between findOne and
+        // now — exit BEFORE any moderation side effect.
+        throw new ConflictException('Report was concurrently decided — re-check its status.');
+      }
 
-    if (dto.banSubject) {
-      // Run-2 audit fix (api.admin.reports.resolve.ban-before-status-transition):
-      // the ban is ordered AFTER the winning transition so a concurrent
-      // resolve/reopen loser exits at the 409 above with NO moderation side
-      // effect (previously the ban committed first and survived the 409).
-      await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
-    }
+      if (dto.banSubject) {
+        // Run-2 audit fix (api.admin.reports.resolve.ban-before-status-transition)
+        // kept: the ban is ordered AFTER the winning transition so a race
+        // loser exits at the 409 above with NO moderation side effect.
+        // P2-141: the ban now rides THIS tx via the inTx path — a ban
+        // failure rolls the resolution back instead of leaving the report
+        // resolved with the subject unbanned.
+        await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip, tx);
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({
@@ -181,21 +194,42 @@ export class AdminReportsService {
       throw new BadRequestException('Only decided reports can be reopened.');
     }
 
-    // P2-49 (run #34): status-predicated guard, same race rule as resolve().
-    const updated = await this.db
-      .update(reports)
-      .set(
-        withTimestamp({
-          status: 'open',
-          resolved_by: null,
-          resolved_at: null,
-        }),
-      )
-      .where(and(eq(reports.id, id), inArray(reports.status, ['resolved', 'dismissed'])))
-      .returning({ id: reports.id });
-    if (updated.length === 0) {
-      throw new ConflictException('Report was concurrently decided — re-check its status.');
-    }
+    // P2-141 (Reviewer A run #98): extend the P2-49 status-predicated guard
+    // inside a tx so the pre-write read and the UPDATE are one atomic unit;
+    // a concurrent resolve() that closed the report between findOne and the
+    // write serializes behind the row lock and the UPDATE matches zero rows
+    // → clean 409 race-loser.
+    await this.db.transaction(async (tx) => {
+      // Re-read + lock the row the write will target.
+      const [locked] = await tx
+        .select({ id: reports.id, status: reports.status })
+        .from(reports)
+        .where(eq(reports.id, id))
+        .for('update');
+
+      if (!locked) {
+        throw new NotFoundException('Report not found.');
+      }
+      if (locked.status !== 'resolved' && locked.status !== 'dismissed') {
+        throw new BadRequestException('Only decided reports can be reopened.');
+      }
+
+      // P2-49 (run #34): status-predicated guard, same race rule as resolve().
+      const updated = await tx
+        .update(reports)
+        .set(
+          withTimestamp({
+            status: 'open',
+            resolved_by: null,
+            resolved_at: null,
+          }),
+        )
+        .where(and(eq(reports.id, id), inArray(reports.status, ['resolved', 'dismissed'])))
+        .returning({ id: reports.id });
+      if (updated.length === 0) {
+        throw new ConflictException('Report was concurrently decided — re-check its status.');
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({

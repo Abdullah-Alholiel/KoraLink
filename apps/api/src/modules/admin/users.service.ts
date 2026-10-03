@@ -6,7 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SQL, and, asc, desc, eq, sql } from 'drizzle-orm';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
+import type { PgQueryResultHKT, PgTransaction } from 'drizzle-orm/pg-core';
+import type { PostgresJsDatabase, PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
@@ -18,6 +20,19 @@ import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
 
 type DB = PostgresJsDatabase<typeof schema>;
+
+/**
+ * A drizzle transaction — same query-builder surface as `db` (P2-141).
+ * Methods that must run INSIDE a caller-owned tx take this so every
+ * statement shares one connection and commits (or rolls back) together;
+ * opening `this.db.transaction` inside such a method would ride a DIFFERENT
+ * pool connection and escape the caller's rollback scope.
+ */
+export type TxExecutor = PgTransaction<
+  PostgresJsQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>;
 
 const userColumns = {
   id: users.id,
@@ -113,7 +128,17 @@ export class AdminUsersService {
   }
 
   async findOne(id: string) {
-    const [user] = await this.db
+    return this.findOneOn(id, this.db);
+  }
+
+  /**
+   * findOne against an explicit executor (db or tx) — P2-141: on the
+   * caller-owned-tx path the outer-db read would return PRE-commit state
+   * (moderation columns still null), so the post-write re-read must run
+   * THROUGH the same tx.
+   */
+  private async findOneOn(id: string, exec: DB | TxExecutor) {
+    const [user] = await exec
       .select(userColumns)
       .from(users)
       .where(eq(users.id, id))
@@ -123,14 +148,14 @@ export class AdminUsersService {
       throw new NotFoundException('User not found.');
     }
 
-    const [{ matchesPlayed }] = await this.db.execute(sql`
+    const [{ matchesPlayed }] = await exec.execute(sql`
       SELECT COUNT(*)::int AS "matchesPlayed"
       FROM match_players mp
       INNER JOIN matches m ON m.id = mp.match_id
       WHERE mp.user_id = ${id}::text AND m.status = 'Completed'
     `) as unknown as Array<{ matchesPlayed: number }>;
 
-    const [{ totalSpent }] = await this.db.execute(sql`
+    const [{ totalSpent }] = await exec.execute(sql`
       SELECT COALESCE(SUM(amount), 0)::text AS "totalSpent"
       FROM transactions
       WHERE user_id = ${id}::text AND type = 'DEBIT' AND status = 'Completed'
@@ -139,7 +164,14 @@ export class AdminUsersService {
     return { ...user, matchesPlayed: matchesPlayed ?? 0, totalSpent: totalSpent ?? 0 };
   }
 
-  async update(id: string, dto: UpdateUserAdminDto, adminId: string, ip?: string) {
+  async update(
+    id: string,
+    dto: UpdateUserAdminDto,
+    adminId: string,
+    ip?: string,
+    /** P2-141: run the moderation write INSIDE the caller's tx (reports.resolve ban path). */
+    inTx?: TxExecutor,
+  ) {
     const before = await this.findOne(id);
 
     // ── PDPL ghost guard (run #32) ──
@@ -213,7 +245,19 @@ export class AdminUsersService {
         // only ADDS living admins — safe on the plain path.
         (dto.suspendedUntil !== undefined && dto.suspendedUntil !== null));
 
-    if (adminTargeted) {
+    if (inTx) {
+      // P2-141: caller-owned tx (reports.resolve ban path). Every statement
+      // runs on the CALLER's transaction so the ban commits or rolls back
+      // together with the caller's write — opening this.db.transaction here
+      // would ride a DIFFERENT pool connection and escape the caller's
+      // rollback scope. Reports.resolve only reaches this path with
+      // { banned: true } on a player subject (banSubject is user-subject
+      // only), so the last-admin guard does not apply here.
+      await inTx
+        .update(users)
+        .set(withTimestamp(updates))
+        .where(eq(users.id, id));
+    } else if (adminTargeted) {
       await this.db.transaction(async (tx) => {
         // Lock order: every LIVING admin row, deterministic by id (mirrors
         // rescheduleMatch's ORDER BY id slot locks — same order in every tx,
@@ -265,16 +309,24 @@ export class AdminUsersService {
         .where(eq(users.id, id));
     }
 
-    const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'user.update',
-      entityType: 'user',
-      entityId: id,
-      before,
-      after,
-      ip,
-    });
+    // P2-141: on the caller-tx path the post-write re-read runs THROUGH the
+    // tx — an outer-db read would see pre-commit state (banned_at still
+    // null) and the force-disconnect gate below would skip the ban.
+    const after = await this.findOneOn(id, inTx ?? this.db);
+    // P2-141: when the write rode a caller's tx, the audit entry rides the
+    // SAME tx — "banned + audited" commit (or roll back) as one unit.
+    await this.audit.log(
+      {
+        adminId,
+        action: 'user.update',
+        entityType: 'user',
+        entityId: id,
+        before,
+        after,
+        ip,
+      },
+      inTx,
+    );
     this.realtime.broadcastOps('users');
 
     // ── P1-50 (run #57) + P2-77 (run #60): force-disconnect live sockets on

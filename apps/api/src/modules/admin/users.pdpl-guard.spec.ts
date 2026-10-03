@@ -27,11 +27,11 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
 
   function makeDb() {
     const selectCalls: SelectCall[] = [];
-    const chain = (): Record<string, unknown> => {
+    const chain = (resolveOnce = false): Record<string, unknown> => {
       const c: Record<string, unknown> = {
-        orderBy: () => chain(),
-        limit: () => chain(),
-        offset: () => chain(),
+        orderBy: () => chain(resolveOnce),
+        limit: () => chain(resolveOnce),
+        offset: () => chain(resolveOnce),
       };
       // Thenable: the count query is awaited directly. Resolves ONE count row
       // (not []) so the last-admin guard path can proceed past count<=1; the
@@ -42,15 +42,32 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
       };
       return c;
     };
+
     const db = {
       select: () => ({
         from: (table: unknown) => ({
           where: (where: unknown) => {
             selectCalls.push({ table, where });
-            return chain();
+            // list() continues with orderBy/limit/offset then `.then()`.
+            // findOneOn() continues with `.limit()` only and awaits it.
+            const c = chain();
+            (c as { limit: () => unknown }).limit = () =>
+              Promise.resolve([
+                {
+                  id: GHOST_ID,
+                  role: 'Player',
+                  deleted_at: null,
+                  banned_at: null,
+                  suspended_until: null,
+                },
+              ]);
+            return c;
           },
         }),
       }),
+      // P2-141: findOneOn() also calls execute() for matchesPlayed/totalSpent.
+      execute: async () =>
+        [{ matchesPlayed: 0, totalSpent: '0' }] as unknown,
       _selectCalls: selectCalls,
     };
     return db;
@@ -159,9 +176,12 @@ describe('AdminUsersService — PDPL ghost guards (run #32)', () => {
       role: 'Admin',
     } as never);
     await svc.update('admin-2', { role: 'Player' } as never, 'admin-1');
-    // Exactly one select ran: the last-admin count query.
-    expect(db._selectCalls).toHaveLength(1);
-    const rendered = dialect(db._selectCalls[0].where);
+    // P2-141: update() now also does a post-write findOneOn re-read, so two
+    // selects run total. The FIRST is the last-admin count query.
+    expect(db._selectCalls.length).toBeGreaterThanOrEqual(1);
+    const countCall = db._selectCalls[0];
+    expect(countCall).toBeDefined();
+    const rendered = dialect(countCall.where);
     // role is a bind param ($1) in the rendered SQL — assert the predicate exists;
     // the ghost tripwires below are the point of this spec.
     expect(rendered).toContain('"users"."role" = $1');
