@@ -108,9 +108,15 @@ describe('CreateMatchDto.booking_slot_id (P2-139 shape contract)', () => {
     );
 
   it('booking_slot_id is UUID-shaped + capped at 36 chars, no @IsUUID drift', () => {
-    expect(createMatchSrc).toContain('@MaxLength(36)');
-    expect(createMatchSrc).toContain('@Matches(');
-    expect(createMatchSrc).not.toContain('@IsUUID');
+    // Scope the source assertions to booking_slot_id's OWN decorator block —
+    // file-wide contains() would pass vacuously if another field carried the
+    // same decorators (PR-Agent r2 finding).
+    const idx = createMatchSrc.indexOf('booking_slot_id?:');
+    expect(idx).toBeGreaterThan(-1);
+    const block = createMatchSrc.slice(Math.max(0, idx - 500), idx);
+    expect(block).toContain('@MaxLength(36)');
+    expect(block).toContain('@Matches(');
+    expect(block).not.toContain('@IsUUID');
   });
 
   it('accepts a UUID-shaped booking_slot_id', () => {
