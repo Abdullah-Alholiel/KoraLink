@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { VenueDecisionDto } from '../admin/dto/venue-decision.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
+import { CreateMatchDto } from './dto/create-match.dto';
 
 /**
  * Run #73 (Reviewer A minors): DTO validation-cap contract.
@@ -26,6 +27,10 @@ const venueDecisionSrc = readFileSync(
 );
 const castVoteSrc = readFileSync(
   join(__dirname, 'dto', 'cast-vote.dto.ts'),
+  'utf8',
+);
+const createMatchSrc = readFileSync(
+  join(__dirname, 'dto', 'create-match.dto.ts'),
   'utf8',
 );
 
@@ -91,5 +96,36 @@ describe('CastVoteDto (run #73 shape contract)', () => {
     });
     const errs = validateSync(dto);
     expect(errs.some((e) => e.property === 'candidateId')).toBe(true);
+  });
+});
+
+describe('CreateMatchDto.booking_slot_id (P2-139 shape contract)', () => {
+  // Only booking_slot_id is under test — other CreateMatchDto fields are
+  // omitted, so assert on this property's errors alone.
+  const slotErrors = (booking_slot_id: unknown) =>
+    validateSync(plainToInstance(CreateMatchDto, { booking_slot_id })).filter(
+      (e) => e.property === 'booking_slot_id',
+    );
+
+  it('booking_slot_id is UUID-shaped + capped at 36 chars, no @IsUUID drift', () => {
+    expect(createMatchSrc).toContain('@MaxLength(36)');
+    expect(createMatchSrc).toContain('@Matches(');
+    expect(createMatchSrc).not.toContain('@IsUUID');
+  });
+
+  it('accepts a UUID-shaped booking_slot_id', () => {
+    expect(slotErrors('31e5650e-2a38-4781-9807-913b9c913c90')).toHaveLength(0);
+  });
+
+  it('accepts uppercase UUID shape (case-insensitive)', () => {
+    expect(slotErrors('31E5650E-2A38-4781-9807-913B9C913C90')).toHaveLength(0);
+  });
+
+  it('rejects an overlong value (37 chars)', () => {
+    expect(slotErrors('31e5650e-2a38-4781-9807-913b9c913c90a')).not.toHaveLength(0);
+  });
+
+  it('rejects a non-UUID string', () => {
+    expect(slotErrors('slot-1')).not.toHaveLength(0);
   });
 });

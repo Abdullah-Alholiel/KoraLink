@@ -3554,21 +3554,16 @@ export class MatchesService {
 
     // Attach the player's appeal as evidence on an existing open/reviewing
     // dispute (e.g. the host's mark already auto-opened it) rather than
-    // creating a duplicate row.
-    const attachAppeal = async (disputeId: string, existingEvidence: unknown) => {
-      const evidence = Array.isArray(existingEvidence) ? [...existingEvidence] : [];
-      evidence.push({
-        action: 'appeal',
-        reason: dto.reason ?? '(no reason provided)',
-        at: new Date().toISOString(),
-      });
-      const [updated] = await this.db
-        .update(disputes)
-        .set({ evidence: evidence as never })
-        .where(eq(disputes.id, disputeId))
-        .returning();
-      return toMyDispute(updated);
-    };
+    // creating a duplicate row. The append runs under a row lock (P2-139) so
+    // concurrent appeals / an admin close cannot drop either side's evidence.
+    const attachAppeal = async (disputeId: string) =>
+      toMyDispute(
+        await this.appendDisputeEvidenceAtomically(disputeId, {
+          action: 'appeal',
+          reason: dto.reason ?? '(no reason provided)',
+          at: new Date().toISOString(),
+        }),
+      );
 
     const [existing] = await this.db
       .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
@@ -3584,7 +3579,7 @@ export class MatchesService {
       .limit(1);
 
     if (existing) {
-      return attachAppeal(existing.id, existing.evidence);
+      return attachAppeal(existing.id);
     }
 
     // Insert guarded by the partial unique index `disputes_open_uidx` on
@@ -3621,7 +3616,7 @@ export class MatchesService {
         .limit(1);
 
       if (winner) {
-        return attachAppeal(winner.id, winner.evidence);
+        return attachAppeal(winner.id);
       }
       throw new ConflictException('Dispute conflicted; retry.');
     }
@@ -3633,6 +3628,48 @@ export class MatchesService {
     }
 
     return toMyDispute(created);
+  }
+
+  /**
+   * P2-139: append one evidence entry to an OPEN dispute without a lost
+   * update. The previous read → JS push → unguarded UPDATE let two concurrent
+   * appeals (or an appeal racing an admin close) silently drop one side's
+   * evidence. Now the read is `SELECT … FOR UPDATE` inside a tx, the array is
+   * built from the LOCKED row, and the UPDATE is status-predicated so a
+   * dispute closed under us is never written to.
+   */
+  private async appendDisputeEvidenceAtomically(
+    disputeId: string,
+    entry: { action: string; reason: string; at: string },
+  ): Promise<typeof disputes.$inferSelect> {
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
+        .from(disputes)
+        .where(eq(disputes.id, disputeId))
+        .for('update');
+
+      if (!locked) {
+        throw new NotFoundException('Dispute not found.');
+      }
+      if (locked.status !== 'opened' && locked.status !== 'under_review') {
+        throw new ConflictException('Dispute is no longer open.');
+      }
+
+      const evidence = Array.isArray(locked.evidence) ? [...locked.evidence] : [];
+      evidence.push(entry);
+
+      const [updated] = await tx
+        .update(disputes)
+        .set({ evidence: evidence as never })
+        .where(and(eq(disputes.id, disputeId), inArray(disputes.status, ['opened', 'under_review'])))
+        .returning();
+
+      if (!updated) {
+        throw new ConflictException('Dispute is no longer open.');
+      }
+      return updated;
+    });
   }
 
   /**

@@ -34,10 +34,11 @@ describe('MatchesService.createDispute contract (P2-5, run #39)', () => {
     insertedDispute?: unknown[];
     updatedDispute?: unknown[];
   }) {
-    return {
+    const db: any = {
       select: () => ({
         from: (table: unknown) => {
-          const chain: any = { where: () => chain, limit: () => chain };
+          // `for` = the P2-139 locked read inside appendDisputeEvidenceAtomically.
+          const chain: any = { where: () => chain, limit: () => chain, for: () => chain };
           chain.then = (resolve: (v: unknown) => void) => {
             if (table === matches) resolve(opts.matchRows ?? [matchRow]);
             else if (table === match_players) resolve(opts.playerRows ?? [markedPlayer]);
@@ -61,7 +62,11 @@ describe('MatchesService.createDispute contract (P2-5, run #39)', () => {
           }),
         }),
       }),
+      // P2-139: the evidence append runs in db.transaction — the tx IS the
+      // same chainable mock.
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(db),
     };
+    return db;
   }
 
   function makeService(db: ReturnType<typeof makeDb>) {
