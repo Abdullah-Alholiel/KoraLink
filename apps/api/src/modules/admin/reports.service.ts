@@ -127,11 +127,21 @@ export class AdminReportsService {
       // P2-141: the ban runs in its own tx (adminUsers.update owns its guards),
       // so a ban failure would otherwise leave the report resolved with the
       // subject unbanned. Revert the flip (status-predicated, so a concurrent
-      // reopen is not clobbered) and surface a 409 the admin can retry.
+      // reopen is not clobbered), audit the revert, and surface a 409 the admin
+      // can retry. Validation/guard errors from adminUsers.update are treated
+      // as real ban failures; infra errors bubble up without a revert.
       try {
         await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
-      } catch {
-        await this.db
+      } catch (err) {
+        const isBanFailure =
+          err instanceof BadRequestException ||
+          err instanceof ConflictException ||
+          err instanceof NotFoundException;
+        if (!isBanFailure) {
+          throw err;
+        }
+
+        const reverted = await this.db
           .update(reports)
           .set(
             withTimestamp({
@@ -141,7 +151,25 @@ export class AdminReportsService {
               resolved_at: null,
             }),
           )
-          .where(and(eq(reports.id, id), inArray(reports.status, [dto.outcome])));
+          .where(and(eq(reports.id, id), inArray(reports.status, [dto.outcome])))
+          .returning({ id: reports.id });
+
+        if (reverted.length === 0) {
+          throw new ConflictException(
+            'Report resolved but the ban failed, and the report was concurrently changed — re-check its status.',
+          );
+        }
+
+        await this.audit.log({
+          adminId,
+          action: 'report.resolve_ban_failed_revert',
+          entityType: 'report',
+          entityId: id,
+          before: { status: dto.outcome },
+          after: { status: before.status },
+          ip,
+        });
+
         throw new ConflictException('Report resolved but the ban failed — report reverted, retry.');
       }
     }

@@ -187,9 +187,16 @@ export class AdminMatchesService {
         throw new BadRequestException('No changes provided.');
       }
 
+      // P2-141 r1: serialize all admin edits to the same pitch inside this
+      // tx window so the overlap check below can't race another admin update
+      // on the same pitch (advisory lock is auto-released at tx end).
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(hashtextextended('admin:match:pitch:' || ${row.pitch_id}::text, 0))
+      `);
+
       // ── Same-pitch overlap guard (self-mode schedule changes only) ──────
-      // P2-141: runs after the row lock so the window is checked against the
-      // match's committed schedule, not a stale pre-read.
+      // P2-141: runs after the row lock + pitch advisory lock so the window
+      // is checked against the committed schedule and competing edits serialize.
       if (scheduleChange) {
         const newStart =
           (updates.scheduled_at as Date | undefined) ??

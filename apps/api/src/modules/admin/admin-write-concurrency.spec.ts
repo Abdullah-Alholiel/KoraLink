@@ -110,7 +110,9 @@ describe('Admin write-path concurrency (P2-141)', () => {
 
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(tx.select.mock.results[0].value.for).toHaveBeenCalledWith('update');
-    expect(tx.execute).toHaveBeenCalledTimes(1); // overlap COUNT runs in-tx
+    expect(tx.execute).toHaveBeenCalledTimes(2); // advisory lock + overlap COUNT run in-tx
+    const firstCall = (tx.execute as jest.Mock).mock.calls[0] as unknown[];
+    expect(render(firstCall[0] as SQL<unknown>).sql).toMatch(/pg_advisory_xact_lock/);
     expect(db.update).not.toHaveBeenCalled(); // no standalone write left
 
     expect(wheres).toHaveLength(1);
@@ -161,12 +163,13 @@ describe('Admin write-path concurrency (P2-141)', () => {
 
   // ── reports.resolve ──────────────────────────────────────────────────
 
-  function makeReports(opts: { flipRows: unknown[]; banFails: boolean }) {
+  function makeReports(opts: { flipRows: unknown[]; revertRows: unknown[]; banFails: 'validation' | 'infra' | false }) {
     const wheres: unknown[] = [];
     const sets: unknown[] = [];
     const db = {
       update: jest.fn(() => {
-        const chain = updateChain(wheres.length === 0 ? opts.flipRows : [], wheres);
+        const rows = wheres.length === 0 ? opts.flipRows : opts.revertRows;
+        const chain = updateChain(rows, wheres);
         chain.set = (v: unknown) => {
           sets.push(v);
           return chain;
@@ -177,7 +180,8 @@ describe('Admin write-path concurrency (P2-141)', () => {
     const audit = { log: jest.fn(async () => {}) };
     const adminUsers = {
       update: jest.fn(async () => {
-        if (opts.banFails) throw new Error('ban failed');
+        if (opts.banFails === 'validation') throw new ConflictException('ban failed');
+        if (opts.banFails === 'infra') throw new Error('DB timeout');
       }),
     };
     const svc = new AdminReportsService(
@@ -202,7 +206,8 @@ describe('Admin write-path concurrency (P2-141)', () => {
   it('reports.resolve: ban failure reverts the report (status-predicated) and throws 409', async () => {
     const { svc, db, audit, wheres, sets } = makeReports({
       flipRows: [{ id: 'r1' }],
-      banFails: true,
+      revertRows: [{ id: 'r1' }],
+      banFails: 'validation',
     });
     await expect(
       svc.resolve('r1', { outcome: 'resolved', banSubject: true } as never, 'admin1'),
@@ -213,13 +218,32 @@ describe('Admin write-path concurrency (P2-141)', () => {
     expect(db.update).toHaveBeenCalledTimes(2); // flip + revert
     expect(sets[1]).toMatchObject({ status: 'open', resolved_by: null, resolved_at: null });
     const q = render(wheres[1]);
-    expect(q.sql).toMatch(/"reports"\."status" in \(\$2\)/);
+    expect(q.sql).toMatch(/"reports"."status" in \(\$2\)/);
     expect(q.params).toEqual(['r1', 'resolved']);
-    expect(audit.log).not.toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'report.resolve_ban_failed_revert', entityId: 'r1' }),
+    );
+  });
+
+  it('reports.resolve: infra errors from the ban service bubble without a revert', async () => {
+    const { svc, db, audit } = makeReports({
+      flipRows: [{ id: 'r1' }],
+      revertRows: [{ id: 'r1' }],
+      banFails: 'infra',
+    });
+    await expect(
+      svc.resolve('r1', { outcome: 'resolved', banSubject: true } as never, 'admin1'),
+    ).rejects.toThrow('DB timeout');
+    expect(db.update).toHaveBeenCalledTimes(1); // only the flip
+    expect(audit.log).not.toHaveBeenCalled(); // resolve audit never runs; no revert audit
   });
 
   it('reports.resolve: keeps the zero-rows 409 on the status flip (no ban attempted)', async () => {
-    const { svc, db, adminUsers } = makeReports({ flipRows: [], banFails: false });
+    const { svc, db, adminUsers } = makeReports({
+      flipRows: [],
+      revertRows: [{ id: 'r1' }],
+      banFails: false,
+    });
     await expect(
       svc.resolve('r1', { outcome: 'resolved', banSubject: true } as never, 'admin1'),
     ).rejects.toThrow(
