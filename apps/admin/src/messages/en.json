@@ -511,6 +511,7 @@
     "roleAdmin": "Admin",
     "loadingUsers": "Loading users…",
     "thUser": "User",
+    "thHandle": "Handle",
     "thPhone": "Phone",
     "thRole": "Role",
     "thWallet": "Wallet",
