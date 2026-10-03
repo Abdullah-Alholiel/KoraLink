@@ -23,6 +23,7 @@ import { clearToken, getRole } from '@/lib/api';
 import { SECTION_BY_ROLE, type ConsoleSection } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
 import LanguageToggle from '@/components/LanguageToggle';
+import { BellButton } from '@/components/NotificationCenter';
 
 const SECTION_META: Record<ConsoleSection, { href: string; labelKey: string; icon: typeof Users }> = {
   dashboard: { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
@@ -120,6 +121,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
   const footer = (
     <div className="border-t border-white/10 p-3">
+      {/* Notification bell + unread badge (t_8cdabf05) — same store the feed
+          drawer in the layout reads; badge clears when the feed opens. */}
+      <BellButton />
       <LanguageToggle />
       <button
         onClick={logout}

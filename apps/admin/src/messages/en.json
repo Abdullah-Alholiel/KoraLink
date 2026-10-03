@@ -31,6 +31,33 @@
     "saveFailed": "Save failed: {error}",
     "exportCsv": "Export CSV"
   },
+  "notifications": {
+    "bell": "Notifications",
+    "bellAria": "Open notifications",
+    "title": "Live activity",
+    "subtitle": "Realtime updates from the system",
+    "clearAll": "Clear all",
+    "emptyTitle": "No activity yet",
+    "emptyHint": "Live updates about users, matches, disputes, reports, and payments will appear here as they happen.",
+    "timeNow": "Just now",
+    "time": {
+      "minutes": "{count, plural, =1 {1 minute ago} other {# minutes ago}}",
+      "hours": "{count, plural, =1 {1 hour ago} other {# hours ago}}",
+      "days": "{count, plural, =1 {1 day ago} other {# days ago}}"
+    },
+    "changes": "{count, plural, =1 {1 change} other {# changes}}",
+    "entity": {
+      "users": "Users updated",
+      "matches": "Matches updated",
+      "venues": "Venues updated",
+      "pitches": "Pitches updated",
+      "disputes": "Disputes updated",
+      "reports": "Reports updated",
+      "transactions": "Transactions updated",
+      "settlements": "Settlements updated",
+      "settings": "Settings updated"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",

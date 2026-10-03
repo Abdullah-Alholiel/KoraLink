@@ -7,6 +7,7 @@ import { getRole, canAccessPath, homeForRole } from '@/lib/rbac';
 import type { Role } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import OfflineBanner from '@/components/OfflineBanner';
+import NotificationCenter, { BellButton } from '@/components/NotificationCenter';
 
 /**
  * Console layout guard.
@@ -93,7 +94,7 @@ export default function DashboardLayout({
     <div className="min-h-screen">
       <Sidebar mobileOpen={navOpen} onMobileClose={() => setNavOpen(false)} />
 
-      {/* Mobile top bar (<md only): brand + menu button. */}
+      {/* Mobile top bar (<md only): brand + menu + notifications. */}
       <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-gray-900 px-4 md:hidden">
         <button
           onClick={() => setNavOpen(true)}
@@ -102,15 +103,22 @@ export default function DashboardLayout({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2">
           <Activity className="h-5 w-5 text-brand-500" />
           <span className="text-base font-semibold text-white">KoraLink</span>
         </div>
+        {/* Icon-only bell with the shared unread badge (t_8cdabf05). */}
+        <BellButton variant="bar" />
       </div>
 
       {/* Console-wide offline indicator (run #42) — one banner covers every
           HQ + partner route; renders nothing while online. */}
       <OfflineBanner />
+
+      {/* Console-wide notification surface (t_8cdabf05): ONE shared /lobby
+          socket for the whole session, records ops-data-changed pings, hosts
+          the feed drawer. The Sidebar footer bell reads the same store. */}
+      <NotificationCenter />
 
       <main className="md:pl-64">{children}</main>
     </div>

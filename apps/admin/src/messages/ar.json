@@ -31,6 +31,33 @@
     "saveFailed": "فشل الحفظ: {error}",
     "exportCsv": "تصدير CSV"
   },
+  "notifications": {
+    "bell": "الإشعارات",
+    "bellAria": "فتح الإشعارات",
+    "title": "النشاط المباشر",
+    "subtitle": "تحديثات فورية من النظام",
+    "clearAll": "مسح الكل",
+    "emptyTitle": "لا يوجد نشاط بعد",
+    "emptyHint": "ستظهر هنا التحديثات المباشرة عن المستخدمين والمباريات والنزاعات والبلاغات والمدفوعات فور حدوثها.",
+    "timeNow": "الآن",
+    "time": {
+      "minutes": "{count, plural, one {قبل دقيقة} two {قبل دقيقتين} few {قبل # دقائق} other {قبل # دقيقة}}",
+      "hours": "{count, plural, one {قبل ساعة} two {قبل ساعتين} few {قبل # ساعات} other {قبل # ساعة}}",
+      "days": "{count, plural, one {قبل يوم} two {قبل يومين} few {قبل # أيام} other {قبل # يوم}}"
+    },
+    "changes": "{count, plural, =1 {تغيير واحد} two {تغييران} few {# تغييرات} other {# تغيير}}",
+    "entity": {
+      "users": "تم تحديث المستخدمين",
+      "matches": "تم تحديث المباريات",
+      "venues": "تم تحديث المنشآت الرياضية",
+      "pitches": "تم تحديث الملاعب",
+      "disputes": "تم تحديث النزاعات",
+      "reports": "تم تحديث البلاغات",
+      "transactions": "تم تحديث المعاملات",
+      "settlements": "تم تحديث التسويات",
+      "settings": "تم تحديث الإعدادات"
+    }
+  },
   "nav": {
     "dashboard": "لوحة التحكم",
     "users": "المستخدمون",

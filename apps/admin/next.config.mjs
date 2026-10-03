@@ -1,9 +1,16 @@
 // @ts-check
+import path from 'node:path';
 import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Pin the workspace root explicitly: npm workspaces + a worktree checkout
+  // (node_modules symlinked from the main tree) otherwise lets Next's
+  // multi-lockfile inference pick the wrong root mid-build and webpack fails
+  // resolving next/dist/pages internals. In the main tree this equals the
+  // inferred value (no behaviour change); in worktrees it pins semantics.
+  outputFileTracingRoot: path.join(import.meta.dirname, '..', '..'),
   serverExternalPackages: [
     '@sentry/nextjs',
     '@sentry/node',
@@ -23,6 +30,11 @@ const nextConfig = {
     } catch {
       // keep the localhost fallback
     }
+    // CSP scheme matching has NO generic http→ws rule (only https→wss), so an
+    // http API origin must list its ws:// form explicitly or Chrome silently
+    // blocks the /lobby ops socket (t_8cdabf05 E2E: raw ws from the page was
+    // refused while https deployments worked by the https→wss special case).
+    const apiWsOrigin = apiOrigin.replace(/^http/, 'ws');
     const connectSrc = [
       "'self'",
       'https://*.ingest.sentry.io',
@@ -30,6 +42,7 @@ const nextConfig = {
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
+      apiWsOrigin,
       // doop design-sync: POSTs DOM captures to the internal design canvas
       'https://aa.tail2948f9.ts.net:9460',
     ].join(' ');
@@ -46,10 +59,12 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://aa.tail2948f9.ts.net:9460",
-              "style-src 'self' 'unsafe-inline'",
+              // The root layout loads Tajawal from Google Fonts (ar locale);
+              // without these the stylesheet + font files are CSP-blocked.
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' data: https://fonts.gstatic.com",
               "img-src 'self' data: blob:",
               `connect-src ${connectSrc}`,
-              "font-src 'self' data:",
               "frame-src 'none'",
               "object-src 'none'",
               "base-uri 'self'",
