@@ -3566,7 +3566,7 @@ export class MatchesService {
       );
 
     const [existing] = await this.db
-      .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
+      .select({ id: disputes.id, status: disputes.status })
       .from(disputes)
       .where(
         and(
@@ -3603,7 +3603,7 @@ export class MatchesService {
       // A concurrent appeal won the race — re-read the winner's row and attach
       // this appeal as evidence instead of duplicating the dispute.
       const [winner] = await this.db
-        .select({ id: disputes.id, evidence: disputes.evidence })
+        .select({ id: disputes.id })
         .from(disputes)
         .where(
           and(

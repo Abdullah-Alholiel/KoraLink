@@ -46,8 +46,8 @@ describe('MatchesService.createDispute idempotency', () => {
           if (table === matches) return rowChain([MATCH_ROW]);
           if (table === match_players) return rowChain([PLAYER_ROW]);
           if (table === disputes) {
-            // Two selects hit disputes: the fast-path (id,status,evidence) and
-            // the winner re-read (id,evidence) after an insert conflict.
+            // Two selects hit disputes: the fast-path (id,status) and the
+            // winner re-read (id only) after an insert conflict.
             if ('status' in (sel ?? {})) {
               return rowChain(opts.existing ? [opts.existing] : [], [
                 opts.existing ?? opts.winner ?? DISPUTE_ROW,
