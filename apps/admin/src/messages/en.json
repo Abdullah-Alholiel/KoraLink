@@ -511,6 +511,7 @@
     "roleAdmin": "Admin",
     "loadingUsers": "Loading users…",
     "thUser": "User",
+    "thHandle": "Handle",
     "thPhone": "Phone",
     "thRole": "Role",
     "thWallet": "Wallet",
@@ -618,7 +619,10 @@
     "actionFailed": "Action failed: {error}",
     "exportTransactions": "Export transactions",
     "exportSettlements": "Export settlements",
-    "exportAudit": "Export audit log"
+    "exportAudit": "Export audit log",
+    "exportDisputes": "Export disputes",
+    "exportReports": "Export reports",
+    "exportUsers": "Export users"
   },
   "list": {
     "sortLabel": "Sort",

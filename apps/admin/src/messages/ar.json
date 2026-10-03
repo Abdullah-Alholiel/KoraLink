@@ -511,6 +511,7 @@
     "roleAdmin": "مدير",
     "loadingUsers": "جارٍ تحميل المستخدمين…",
     "thUser": "المستخدم",
+    "thHandle": "المعرّف",
     "thPhone": "الجوال",
     "thRole": "الدور",
     "thWallet": "المحفظة",
@@ -618,7 +619,10 @@
     "actionFailed": "فشل الإجراء: {error}",
     "exportTransactions": "تصدير المعاملات",
     "exportSettlements": "تصدير التسويات",
-    "exportAudit": "تصدير سجل التدقيق"
+    "exportAudit": "تصدير سجل التدقيق",
+    "exportDisputes": "تصدير النزاعات",
+    "exportReports": "تصدير البلاغات",
+    "exportUsers": "تصدير المستخدمين"
   },
   "list": {
     "sortLabel": "الترتيب",
