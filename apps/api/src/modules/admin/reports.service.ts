@@ -123,7 +123,27 @@ export class AdminReportsService {
       // the ban is ordered AFTER the winning transition so a concurrent
       // resolve/reopen loser exits at the 409 above with NO moderation side
       // effect (previously the ban committed first and survived the 409).
-      await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
+      //
+      // P2-141: the ban runs in its own tx (adminUsers.update owns its guards),
+      // so a ban failure would otherwise leave the report resolved with the
+      // subject unbanned. Revert the flip (status-predicated, so a concurrent
+      // reopen is not clobbered) and surface a 409 the admin can retry.
+      try {
+        await this.adminUsers.update(before.subject_id, { banned: true }, adminId, ip);
+      } catch {
+        await this.db
+          .update(reports)
+          .set(
+            withTimestamp({
+              status: before.status,
+              resolution: before.resolution ?? null,
+              resolved_by: null,
+              resolved_at: null,
+            }),
+          )
+          .where(and(eq(reports.id, id), inArray(reports.status, [dto.outcome])));
+        throw new ConflictException('Report resolved but the ban failed — report reverted, retry.');
+      }
     }
 
     const after = await this.findOne(id);

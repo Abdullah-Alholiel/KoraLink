@@ -216,27 +216,43 @@ export class AdminVenuesService {
   async transferOwnership(id: string, dto: TransferVenueDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
 
-    const beforeOwnerId = before.owner_id as string | null;
-    if (beforeOwnerId === dto.newOwnerId) {
-      throw new BadRequestException('That user already owns this venue.');
-    }
+    // P2-141: venue + target user locked in ONE tx so a concurrent role
+    // demotion (or venue delete/transfer) cannot slip between the role check
+    // and the owner_id write. The locked owner_id (not the pre-read) is who
+    // gets the removal notice.
+    const beforeOwnerId = await this.db.transaction(async (tx) => {
+      const [venue] = await tx
+        .select({ id: venues.id, owner_id: venues.owner_id })
+        .from(venues)
+        .where(eq(venues.id, id))
+        .limit(1)
+        .for('update');
+      if (!venue) {
+        throw new NotFoundException('Venue not found.');
+      }
+      if (venue.owner_id === dto.newOwnerId) {
+        throw new BadRequestException('That user already owns this venue.');
+      }
 
-    const [target] = await this.db
-      .select({ id: users.id, role: users.role, full_name: users.full_name, phone: users.phone })
-      .from(users)
-      .where(eq(users.id, dto.newOwnerId))
-      .limit(1);
-    if (!target) {
-      throw new NotFoundException('Target user not found.');
-    }
-    if (target.role !== 'VenueOwner') {
-      throw new BadRequestException('Target user is not a venue owner.');
-    }
+      const [target] = await tx
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.id, dto.newOwnerId))
+        .limit(1)
+        .for('update');
+      if (!target) {
+        throw new NotFoundException('Target user not found.');
+      }
+      if (target.role !== 'VenueOwner') {
+        throw new BadRequestException('Target user is not a venue owner.');
+      }
 
-    await this.db
-      .update(venues)
-      .set(withTimestamp({ owner_id: dto.newOwnerId }))
-      .where(eq(venues.id, id));
+      await tx
+        .update(venues)
+        .set(withTimestamp({ owner_id: dto.newOwnerId }))
+        .where(eq(venues.id, id));
+      return venue.owner_id as string | null;
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({

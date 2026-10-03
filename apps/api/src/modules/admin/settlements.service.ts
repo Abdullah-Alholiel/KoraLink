@@ -132,6 +132,9 @@ export class AdminSettlementsService {
     const windowStart = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000);
     const windowStartIso = windowStart.toISOString();
 
+    // P2-141: aggregation is intentionally outside the insert tx — a match
+    // completing mid-read defers to the next cadence window;
+    // onConflictDoNothing below blocks double-insert.
     const rows = (await this.db.execute(sql`
       SELECT
         v.id AS venue_id,
