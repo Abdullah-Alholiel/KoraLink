@@ -22,6 +22,7 @@ import { getRole } from '@/lib/api';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import {
   clearOpsActivity,
+  isEntityInScope,
   recordOpsEvent,
   setFeedOpen,
   useOpsActivity,
@@ -132,7 +133,7 @@ export default function NotificationCenter() {
         payload && typeof payload === 'object' && 'entity' in payload
           ? String((payload as { entity: unknown }).entity)
           : '';
-      if (entity) recordOpsEvent(entity);
+      if (entity && isEntityInScope(getRole(), entity)) recordOpsEvent(entity);
     });
     return () => {
       off();
@@ -141,8 +142,12 @@ export default function NotificationCenter() {
   }, []);
 
   // Keep relative timestamps fresh while the feed is open (30s is plenty).
+  // Re-baseline the clock the moment the drawer opens — events that arrived
+  // while it was closed must not render as "Just now" against a stale
+  // mount-time `now` (PR-Agent finding, run #99).
   useEffect(() => {
     if (!feedOpen) return;
+    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, [feedOpen]);

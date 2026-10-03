@@ -49,6 +49,9 @@ const OPS_ENTITIES = new Set<string>([
   'reports',
 ]);
 
+/** Entities a VenueOwner console is itself a party to (partner surfaces only). */
+const PARTNER_SCOPED_ENTITIES = new Set<string>(['venues', 'pitches', 'matches']);
+
 export interface OpsActivityEntry {
   /** Stable React key: entity + first-seen timestamp of the burst. */
   key: string;
@@ -147,4 +150,16 @@ export function clearOpsActivity(): void {
   entries = [];
   unread = 0;
   emit();
+}
+
+/**
+ * Partner scope filter (PR-Agent finding, run #99): VenueOwner consoles are
+ * not parties to platform-wide dispute/report/user/transaction activity —
+ * recording those pings would disclose org-wide moderation volume through
+ * entry counts. Mirror of the API's ops-room contract (app.gateway.ts:213
+ * joins the ops room for Admin/VenueOwner alike, so the client filters).
+ */
+export function isEntityInScope(role: string | null, entity: string): boolean {
+  if (role === 'VenueOwner') return PARTNER_SCOPED_ENTITIES.has(entity);
+  return true;
 }
