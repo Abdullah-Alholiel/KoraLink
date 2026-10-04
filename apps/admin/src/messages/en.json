@@ -56,6 +56,13 @@
       "transactions": "Transactions updated",
       "settlements": "Settlements updated",
       "settings": "Settings updated"
+    },
+    "status": {
+      "connecting": "Connecting…",
+      "reconnecting": "Connection interrupted — retrying…",
+      "lost": "Live feed lost — events may be missing",
+      "offline": "You are offline — feed paused",
+      "retry": "Retry"
     }
   },
   "nav": {
