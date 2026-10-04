@@ -9,6 +9,7 @@ import {
   Flag,
   Goal,
   MapPin,
+  RefreshCw,
   ScrollText,
   Settings,
   ShieldAlert,
@@ -28,7 +29,7 @@ import {
   useOpsActivity,
   type OpsEntity,
 } from '@/lib/ops-activity-store';
-import { opsRealtime } from '@/lib/ops-realtime';
+import { opsRealtime, type OpsSocketStatus } from '@/lib/ops-realtime';
 
 /** Entity → lucide icon (same icon the sidebar uses for the section). */
 const ENTITY_ICON: Record<OpsEntity, typeof Users> = {
@@ -111,7 +112,10 @@ function ageParts(
  * (ref-counted singleton — exactly one /lobby connection per session) and
  * records `ops-data-changed` pings into the activity store. The feed is the
  * shared Drawer so it follows the console's drawer conventions (Esc,
- * backdrop, focus trap, left-anchored panel).
+ * backdrop, focus trap) — the feed renders inside the shared Drawer.
+ *
+ * A status strip above the list surfaces socket health (P2-143) so a stale
+ * feed is never mistaken for a quiet one.
  *
  * Ops pings are intentionally payload-free (`{ entity }` only — no row data
  * crosses the socket), so rows read "<Entity> updated — N changes" and click
@@ -121,7 +125,15 @@ export default function NotificationCenter() {
   const router = useRouter();
   const t = useTranslations('notifications');
   const { entries, feedOpen } = useOpsActivity();
-  const [now, setNow] = useState(() => Date.now());
+  // 0 until the feed opens (the feedOpen effect sets the real clock) — keeps
+  // the server and first client render identical.
+  const [now, setNow] = useState(0);
+  const [status, setStatus] = useState<OpsSocketStatus>('connecting');
+
+  useEffect(() => {
+    setStatus(opsRealtime.getStatus());
+    return opsRealtime.onStatus(setStatus);
+  }, []);
 
   // The socket lives exactly as long as this mounted component (the layout
   // keeps it alive for the whole console session; route changes unmount only
@@ -194,6 +206,46 @@ export default function NotificationCenter() {
         </button>
       }
     >
+      {/* Offline wins: getStatus() reports 'offline' over any socket state. */}
+      {status === 'connecting' && (
+        <p className="mb-3 px-1 text-xs text-gray-400" role="status">
+          {t('status.connecting')}
+        </p>
+      )}
+      {status === 'reconnecting' && (
+        <div
+          className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+          role="status"
+        >
+          {t('status.reconnecting')}
+        </div>
+      )}
+      {status === 'lost' && (
+        <div
+          className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="alert"
+        >
+          <span>{t('status.lost')}</span>
+          <button
+            onClick={() => {
+              trackEvent('admin_notifications_reconnect');
+              opsRealtime.reconnect();
+            }}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t('status.retry')}
+          </button>
+        </div>
+      )}
+      {status === 'offline' && (
+        <div
+          className="mb-3 rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-600"
+          role="status"
+        >
+          {t('status.offline')}
+        </div>
+      )}
       {rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
