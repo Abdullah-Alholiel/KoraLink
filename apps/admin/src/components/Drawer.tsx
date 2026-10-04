@@ -15,20 +15,11 @@ interface DrawerProps {
   footer?: React.ReactNode;
 }
 
-// Slide-in from the physical LEFT edge. Scoped to this component (globals.css
-// still carries the legacy `slide-in-end` keyframe); same 0.22s ease-out
-// timing as the shared motion tokens. Physical translateX, not dir-scoped, so
-// LTR and RTL behave identically.
-const SLIDE_IN_LEFT_KEYFRAMES = `@keyframes drawer-slide-in-left {
-  from { transform: translateX(-100%); opacity: 0.7; }
-  to { transform: translateX(0); opacity: 1; }
-}`;
-
 /**
- * Slide-over panel LEFT-anchored in both locales (physical left-0, Abdullah's
- * standing UI standard: drawers are left-anchored in LTR and RTL). Slides in
- * from the left edge with a physical transform. Esc, backdrop, and X all
- * close it. Focus is trapped inside while open.
+ * RTL-native slide-over panel: anchored to the inline end (right in LTR,
+ * left in RTL) via `end-0`, translated with an inline-direction-safe trick
+ * (translate-x with dir-scoped flips). Esc, backdrop, and X all close it.
+ * Focus is trapped inside while open.
  */
 export default function Drawer({ open, onClose, title, subtitle, size = 'md', children, footer }: DrawerProps) {
   const t = useTranslations('drawer');
@@ -86,17 +77,16 @@ export default function Drawer({ open, onClose, title, subtitle, size = 'md', ch
       aria-modal="true"
       aria-label={title}
     >
-      <style>{SLIDE_IN_LEFT_KEYFRAMES}</style>
       <div className="absolute inset-0 bg-black/50 animate-[fade-in_.15s_ease-out]" onClick={onClose} />
       <div
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          // LEFT-anchored panel in both locales (physical left-0).
-          'absolute inset-y-0 left-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
+          // Right-hand side panel in both locales (physical right-0).
+          'absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-white shadow-2xl outline-none',
           size === 'lg' && 'max-w-3xl',
-          // Slides in from the left edge (keyframe defined above).
-          'animate-[drawer-slide-in-left_.22s_ease-out]',
+          // Slides in from the right (globals.css keyframe).
+          'animate-slide-in-end',
         )}
       >
         <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
