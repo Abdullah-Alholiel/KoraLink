@@ -76,6 +76,7 @@ describe('ConversationsService.sendMessage idempotency', () => {
       activities as never,
       notifications as never,
       realtime as never,
+      { assertNotBlockedBetween: jest.fn(async () => undefined) } as never,
     );
     return { service, db, activities, notifications, realtime };
   }

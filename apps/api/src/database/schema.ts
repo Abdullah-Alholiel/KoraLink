@@ -14,6 +14,7 @@ import {
   index,
   uniqueIndex,
   smallint,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -877,6 +878,29 @@ export const follows = pgTable(
   (t) => [
     uniqueIndex('follows_follower_following_idx').on(t.follower_id, t.following_id),
     index('follows_following_idx').on(t.following_id),
+  ],
+);
+
+// P1-53: user blocks — a block in either direction prevents DMs between the
+// pair. Composite PK (blocker_id, blocked_id) makes block idempotent; the
+// blocked_id index serves the reverse-direction check. Self-block is rejected
+// by the user_blocks_no_self CHECK (migration 0045) and in BlocksService.
+export const user_blocks = pgTable(
+  'user_blocks',
+  {
+    blocker_id: varchar('blocker_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    blocked_id: varchar('blocked_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'user_blocks_pk', columns: [t.blocker_id, t.blocked_id] }),
+    index('user_blocks_blocked_id_idx').on(t.blocked_id),
   ],
 );
 

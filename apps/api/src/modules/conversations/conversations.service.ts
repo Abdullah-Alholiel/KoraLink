@@ -19,6 +19,7 @@ import {
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { BlocksService } from '../users/blocks.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -62,6 +63,7 @@ export class ConversationsService {
     private readonly activitiesService: ActivitiesService,
     private readonly notificationsService: NotificationsService,
     private readonly realtime: RealtimeService,
+    private readonly blocksService: BlocksService,
   ) {}
 
   async findOrCreateDirect(userId: string, targetUserId: string): Promise<Conversation> {
@@ -262,6 +264,22 @@ export class ConversationsService {
     }
     await this.assertParticipant(userId, conversationId);
 
+    // P1-53: refuse the send when a block exists in either direction between
+    // the sender and the other participant (403 BLOCKED_BY_RECIPIENT). The
+    // participant list is reused below for the activity/push side effects.
+    const others = await this.db
+      .select({ user_id: conversation_participants.user_id })
+      .from(conversation_participants)
+      .where(
+        and(
+          eq(conversation_participants.conversation_id, conversationId),
+          sql`${conversation_participants.user_id} != ${userId}::text`,
+        ),
+      );
+    for (const other of others) {
+      await this.blocksService.assertNotBlockedBetween(userId, other.user_id);
+    }
+
     const clientMessageIdValue = clientMessageId?.trim() || null;
 
     // Idempotency — a retried send with the same clientMessageId returns the
@@ -336,16 +354,6 @@ export class ConversationsService {
 
     // Sender has read up to this point.
     await this.markRead(userId, conversationId);
-
-    const others = await this.db
-      .select({ user_id: conversation_participants.user_id })
-      .from(conversation_participants)
-      .where(
-        and(
-          eq(conversation_participants.conversation_id, conversationId),
-          sql`${conversation_participants.user_id} != ${userId}::text`,
-        ),
-      );
 
     await this.activitiesService.record({
       actorId: userId,

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { UsersScheduler } from './users.scheduler';
+import { BlocksService } from './blocks.service';
+import { BlocksController } from './blocks.controller';
 import { AuthModule } from '../auth/auth.module';
 import { MailerModule } from '../mailer/mailer.module';
 
@@ -16,8 +18,11 @@ import { MailerModule } from '../mailer/mailer.module';
   // NestJS auto-instantiates providers with `providedIn`-style DI, and
   // the ScheduleModule is already global (root app.module.ts).
   imports: [AuthModule, MailerModule],
-  controllers: [UsersController],
-  providers: [UsersService, UsersScheduler],
-  exports: [UsersService],
+  //
+  // P1-53: BlocksService is exported so ConversationsModule can refuse DMs
+  // across a block (sendMessage → assertNotBlockedBetween).
+  controllers: [UsersController, BlocksController],
+  providers: [UsersService, UsersScheduler, BlocksService],
+  exports: [UsersService, BlocksService],
 })
 export class UsersModule {}

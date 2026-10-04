@@ -31,7 +31,10 @@
     "banned": "Your account has been banned. If you think this is a mistake, contact support.",
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
     "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue.",
-    "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going."
+    "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going.",
+    "blockedByRecipient": "You can't message this user anymore. One of you blocked the other. You can unblock them from their profile.",
+    "blockFailed": "Couldn't block this user. Check your connection and try again.",
+    "unblockFailed": "Couldn't unblock this user. Check your connection and try again."
   },
   "offline": {
     "backToPage": "Back to the page",
@@ -669,7 +672,10 @@
       "body": "Your account will be permanently deleted in {days} day(s). Tap Restore to keep your account active.",
       "restore": "Restore",
       "dismiss": "Hide for now"
-    }
+    },
+    "blockUser": "Block",
+    "unblockUser": "Unblock",
+    "confirmBlock": "Tap again to confirm block"
   },
   "wallet": {
     "title": "Wallet",
@@ -1158,5 +1164,9 @@
       "sub": "Venues and clubs near you.",
       "cta": "Explore"
     }
+  },
+  "blocks": {
+    "blockSuccess": "User blocked",
+    "unblockSuccess": "User unblocked"
   }
 }
