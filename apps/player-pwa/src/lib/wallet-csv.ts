@@ -14,11 +14,21 @@ export const WALLET_CSV_HEADER = [
   'Currency',
 ] as const;
 
-/** RFC 4180 field escaping + OWASP CSV-formula-injection guard. */
+/** RFC 4180 field escaping + OWASP CSV-formula-injection guard.
+ * A leading formula char neutralizes the cell with a leading apostrophe
+ * (PR-Agent MINOR, run #84). Regex is the SHARED contract with the admin
+ * exporter (apps/admin/src/lib/csv-export.ts) — keep them identical; both are
+ * pinned by apps/player-pwa/test/lib/csv-formula-contract.test.ts. Note the
+ * guard path always doubles inner quotes BEFORE quoting (RFC 4180) and only
+ * quotes when the content actually changed, so plain words stay unquoted. */
 export function escapeCsvField(value: string): string {
   // A leading =/+/-/@ would execute as a spreadsheet formula in Excel or
-  // Sheets; neutralize with a leading apostrophe (PR-Agent MINOR, run #84).
-  const guarded = /^[=+@-]/.test(value) ? `'${value}` : value;
+  // Sheets. '-' is guarded unless the cell is a plain decimal number (the
+  // shared admin contract) — wallet debits may legitimately be negative and
+  // must stay numeric in the export, not masquerade as guarded text.
+  const guarded = /^[=+@\t\r]|^-(?!\d+(\.\d+)?$)/.test(value)
+    ? `'${value.replace(/"/g, '""')}`
+    : value;
   if (guarded !== value) return `"${guarded}"`;
   if (/[",\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;

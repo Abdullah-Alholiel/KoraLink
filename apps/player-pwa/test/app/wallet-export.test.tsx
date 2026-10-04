@@ -109,7 +109,12 @@ describe('wallet CSV builder (P2-119)', () => {
     // guarded fields always carry the apostrophe, always quoted
     expect(escapeCsvField('=1+1')).toBe('"\'=1+1"');
     expect(escapeCsvField('+1+1')).toBe('"\'=1+1"'.replace('=1+1', '+1+1'));
-    expect(escapeCsvField('-5')).toBe('"\'-5"');
+    // P2-146 shared contract (run #102): a plain decimal like '-5' is DATA,
+    // not a formula — it stays numeric. Dash-led non-numbers stay guarded
+    // (pinned cross-exporter in test/lib/csv-formula-contract.test.ts).
+    expect(escapeCsvField('-5')).toBe('-5');
+    expect(escapeCsvField('-12.34')).toBe('-12.34');
+    expect(escapeCsvField('-1+cmd')).toBe('"\'-1+cmd"');
     expect(escapeCsvField('@cmd')).toBe('"\'@cmd"');
     // formula char AND comma: guard applies, still RFC4180-quoted
     expect(escapeCsvField('=a,b')).toBe('"\'=a,b"');

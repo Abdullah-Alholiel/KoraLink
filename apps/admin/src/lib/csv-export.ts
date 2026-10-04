@@ -25,8 +25,13 @@ export interface CsvExportFile {
 }
 
 /** Leading characters a spreadsheet would interpret as a formula (OWASP).
- * A plain negative number ("-12.34") is data, not a formula, and stays numeric. */
-const FORMULA_PREFIX = /^[=+@\t\r]|^-(?!\d)/;
+ * A leading '-' is guarded UNLESS the whole cell is a plain decimal number, so
+ * real negative amounts ("-12.34") stay numeric in Excel while every other
+ * dash-led cell (e.g. "-SUM(A1)", "-1+cmd|'Calc'!A0") is treated as a
+ * potential formula and neutralized. Shared contract with the PWA exporter
+ * (apps/player-pwa/src/lib/wallet-csv.ts) — keep both regexes identical;
+ * pinned by apps/player-pwa/test/lib/csv-formula-contract.test.ts. */
+const FORMULA_PREFIX = /^[=+@\t\r]|^-(?!\d+(\.\d+)?$)/;
 
 /** RFC 4180 field escaping + OWASP CSV-formula-injection guard. */
 export function escapeCsvField(value: string): string {
