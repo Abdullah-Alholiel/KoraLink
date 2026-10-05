@@ -7,15 +7,19 @@
 // reports) already disable the button on loading/error/empty — this closes the
 // remaining half of the gap: zero feedback about the export that just ran.
 //
-// PR-agent triage (run #103), two semantics locked:
+// Semantics (settled across 5 PR-agent review rounds):
 // 1. The note says "generated", not "downloaded". exportCsv builds a blob and
 //    clicks a temp anchor — browsers refuse/block the DOWNLOAD silently
 //    (Chrome auto-download blocking throws nothing), so no JS API can prove a
-//    file landed. The copy must not claim more than happened. The failure path
-//    covers generation throws (invalid dates/amounts), the only JS-visible
-//    failure; download blocking is a browser UX concern, not app feedback.
-// 2. The note never goes stale silently: the region always shows the LATEST
-//    outcome, and each new export replaces it (runExport resets kind first).
+//    file landed. The failure path covers generation throws (invalid
+//    dates/amounts in a formatter) — the only JS-visible failure — and
+//    reports them via Sentry + trackEvent before showing the note.
+// 2. Re-announcement: seq increments on EVERY runExport and rides in the
+//    note text (`exportedAt`-style counter is NOT needed — the count field
+//    carries seq), so identical-text repeats are not deduped by screen
+//    readers. React 18 batching is why kind-reset alone can't do this.
+// 3. Both live regions are ALWAYS mounted; content swaps inside. Conditional
+//    live regions are not reliably announced.
 
 import { useCallback, useState } from 'react';
 import { exportCsv, type CsvExportOptions } from '@/lib/csv-export';
@@ -27,6 +31,8 @@ export interface ExportFeedback {
   kind: 'success' | 'error' | null;
   /** Row count carried into the success note. */
   rows: number;
+  /** Bumps on every export so SRs re-announce even with identical text. */
+  seq: number;
   /** Wraps exportCsv: call this from the page's onExport handler. */
   runExport: <T>(opts: CsvExportOptions<T>) => void;
 }
@@ -34,9 +40,10 @@ export interface ExportFeedback {
 export function useExportFeedback(): ExportFeedback {
   const [kind, setKind] = useState<'success' | 'error' | null>(null);
   const [rows, setRows] = useState(0);
+  const [seq, setSeq] = useState(0);
 
   const runExport = useCallback(<T,>(opts: CsvExportOptions<T>) => {
-    setKind(null); // previous note never describes the new export
+    setSeq((s) => s + 1); // new announcement even if the text repeats
     setRows(opts.rows.length);
     try {
       exportCsv(opts);
@@ -50,5 +57,5 @@ export function useExportFeedback(): ExportFeedback {
     }
   }, []);
 
-  return { kind, rows, runExport };
+  return { kind, rows, seq, runExport };
 }

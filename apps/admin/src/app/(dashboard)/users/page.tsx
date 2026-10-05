@@ -294,6 +294,7 @@ export default function UsersPage() {
         {exportFeedback.kind === 'success' && (
           <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
             {tc('exportedRows', { count: exportFeedback.rows })}
+            <span className="sr-only"> #{exportFeedback.seq}</span>
           </span>
         )}
       </p>
