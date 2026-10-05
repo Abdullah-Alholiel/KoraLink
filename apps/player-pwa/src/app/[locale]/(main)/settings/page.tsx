@@ -16,9 +16,8 @@
  *   (hydration-safe: static links + the locale toggle only).
  */
 
-import { usePathname } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import {
     AlertTriangle,
     ArrowLeft,
@@ -38,10 +37,11 @@ import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 export default function SettingsPage() {
-    const pathname = usePathname();
     const router = useRouter();
     const t = useTranslations();
-    const locale = (pathname ?? '').split('/')[1] || 'en';
+    // PR-Agent r1 (run #104): use the framework locale, not hand-parsed
+    // pathname — route-shape changes can't silently break link locales.
+    const locale = useLocale();
     // Same offline signal pattern as the profile page (P2-63 convention).
     const isOnline = useOnlineStatus();
 
@@ -56,7 +56,7 @@ export default function SettingsPage() {
                 back + centered title. */}
             <div className="sticky top-0 z-40 flex items-center bg-white px-4 pt-[var(--top-safe-inset)] pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100">
                 <button
-                    onClick={() => router.push(profilePath)}
+                    onClick={() => router.back()}
                     className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-50"
                     aria-label={t('common.back')}
                 >

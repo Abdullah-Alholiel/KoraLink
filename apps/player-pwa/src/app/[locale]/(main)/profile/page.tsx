@@ -396,13 +396,16 @@ export default function ProfilePage() {
                     </span>
                     <LanguageToggle size="md" ariaLabel={t('profile.language')} />
                 </div>
-                {mounted && isSupported && (
-                    <>
-                        <div className="h-px bg-gray-100 ms-[60px]" />
-                        {/* P2-133 (run #104): anchor target for the Settings
-                            hub's "Push notification settings" link. scroll-mt
-                            clears the sticky header on jump. */}
-                        <div id="notifications" className="scroll-mt-24">
+                {/* PR-Agent r1 (run #104): the anchor div must exist at SSR
+                    time — deep links from the Settings hub land here BEFORE
+                    hydration effects run, and the element must also exist on
+                    browsers without Push support. The conditional CONTENT
+                    stays gated inside; the always-rendered wrapper carries
+                    the id + scroll-mt. */}
+                <div id="notifications" className="scroll-mt-24">
+                    {mounted && isSupported && (
+                        <>
+                            <div className="h-px bg-gray-100 ms-[60px]" />
                             <MenuItem
                             icon={
                                 isSubscribing || isUnsubscribing ? (
@@ -456,7 +459,6 @@ export default function ProfilePage() {
                                 });
                             }}
                         />
-                        </div>
                         {mounted && subscribeHint && !isSubscribed && (
                             <p
                                 role="status"
@@ -594,8 +596,9 @@ export default function ProfilePage() {
                                 </div>
                             </>
                         )}
-                    </>
-                )}
+                        </>
+                    )}
+                </div>
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<Headphones className="h-5 w-5" strokeWidth={1.5} />}
