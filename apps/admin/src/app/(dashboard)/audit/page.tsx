@@ -15,7 +15,7 @@ import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { csvDate, exportCsv } from '@/lib/csv-export';
+import { csvDate } from '@/lib/csv-export';
 import { useExportFeedback } from '@/lib/use-export-feedback';
 
 type AuditResponse = ListResponse<AuditLog> & { logs: AuditLog[] };

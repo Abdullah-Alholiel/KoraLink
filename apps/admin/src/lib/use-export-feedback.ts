@@ -7,19 +7,19 @@
 // reports) already disable the button on loading/error/empty — this closes the
 // remaining half of the gap: zero feedback that a download actually started.
 //
-// error-message standard (what + why + next): the error note carries the
-// failure reason (e.g. download blocked) + the retry hint (the button stays
-// enabled, so "try again" is literal).
+// Error copy is intentionally generic (common.exportFailed, EN+AR): exportCsv
+// builds a blob + clicks a temp anchor, and the browser surfaces no failure
+// reason to script — so there is no real "reason" to carry. The "what to do
+// next" is structural: the button stays enabled, so retry is literal.
 
 import { useCallback, useState } from 'react';
 import { exportCsv, type CsvExportOptions } from '@/lib/csv-export';
 
 export interface ExportFeedback {
-  /** 'success' → note is a completion confirmation; 'error' → note is a failure. */
+  /** 'success' → completion confirmation; 'error' → failure note shown. */
   kind: 'success' | 'error' | null;
   /** Row count carried into the success note. */
   rows: number;
-  note: string | null;
   /** Wraps exportCsv: call this from the page's onExport handler. */
   runExport: <T>(opts: CsvExportOptions<T>) => void;
   /** Clear the note (e.g. before starting a new export). */
@@ -29,11 +29,9 @@ export interface ExportFeedback {
 export function useExportFeedback(): ExportFeedback {
   const [kind, setKind] = useState<'success' | 'error' | null>(null);
   const [rows, setRows] = useState(0);
-  const [note, setNote] = useState<string | null>(null);
 
   const clear = useCallback(() => {
     setKind(null);
-    setNote(null);
   }, []);
 
   const runExport = useCallback(<T,>(opts: CsvExportOptions<T>) => {
@@ -41,13 +39,12 @@ export function useExportFeedback(): ExportFeedback {
     try {
       exportCsv(opts);
       setKind('success');
-      setNote(null);
     } catch {
       // exportCsv builds the blob + clicks a temp anchor; a throw here means
-      // the browser refused the download (rare). What + why + next:
+      // the browser refused the download (rare). Copy comes from the page.
       setKind('error');
     }
   }, []);
 
-  return { kind, rows, note, runExport, clear };
+  return { kind, rows, runExport, clear };
 }

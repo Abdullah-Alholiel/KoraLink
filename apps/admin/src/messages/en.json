@@ -30,7 +30,7 @@
     "dataStale": "Stale — reconnecting",
     "saveFailed": "Save failed: {error}",
     "exportCsv": "Export CSV",
-    "exportedRows": "{count} rows exported.",
+    "exportedRows": "{count, plural, =0 {No rows to export.} one {1 row exported.} other {# rows exported.}}",
     "exportFailed": "Export failed. Try again."
   },
   "notifications": {
