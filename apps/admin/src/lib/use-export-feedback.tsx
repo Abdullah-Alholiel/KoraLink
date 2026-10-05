@@ -72,7 +72,7 @@ export function ExportFeedbackNote({
   const tc = useTranslations('common');
   return (
     <>
-      <p role="status" aria-live="polite" className="mx-8 mt-3 text-sm">
+      <p role="status" aria-live="polite" className={`mx-8 text-sm ${feedback.kind === 'success' ? 'mt-3' : 'h-0'}`}>
         {feedback.kind === 'success' && (
           <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
             {tc('exportedRows', { count: feedback.rows })}
@@ -80,7 +80,7 @@ export function ExportFeedbackNote({
           </span>
         )}
       </p>
-      <p role="alert" className="mx-8 mt-3 text-sm">
+      <p role="alert" className={`mx-8 text-sm ${feedback.kind === 'error' ? 'mt-3' : 'h-0'}`}>
         {feedback.kind === 'error' && (
           <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
             {tc('exportFailed')}
