@@ -3097,12 +3097,23 @@ export class MatchesService {
 
       // Net wallet movement with a balance floor (a reschedule may cost MORE
       // if the new slot is longer / pricier — the host must cover it).
+      //
+      // Run #105 (Reviewer A IMPORTANT, P2-41 fix class): the floor is
+      // enforced INSIDE the UPDATE (`wallet_balance >= delta` predicate) so
+      // the database arbitrates concurrent debits on the same host — the old
+      // shape read the balance unlocked (check-then-act), letting a race
+      // drive the balance negative. The users row is also read .for('update')
+      // first, serializing the floor read against concurrent debits and
+      // matching the join/leave/remove lock discipline (reschedule holds the
+      // match + slot locks BEFORE the users lock; cancelMatch takes the same
+      // match lock before its users touch — no new lock cycle).
       if (walletDeltaSar !== 0) {
         const [wallet] = await tx
           .select({ wallet_balance: users.wallet_balance })
           .from(users)
           .where(eq(users.id, userId))
-          .limit(1);
+          .limit(1)
+          .for('update');
 
         if (walletDeltaSar > 0 && (!wallet || parseFloat(wallet.wallet_balance) < walletDeltaSar)) {
           throw new BadRequestException(
@@ -3110,13 +3121,45 @@ export class MatchesService {
           );
         }
 
-        await tx
+        // Guarded increment when charging (delta > 0): zero rows updated =
+        // a concurrent debit drained the balance between the lock read and
+        // this statement (possible only via another tx that didn't wait on
+        // our lock — i.e. never under READ COMMITTED with the row lock held,
+        // kept as defense-in-depth per the P2-41 pattern). Re-read for the
+        // error message, warn, and roll the whole reschedule back.
+        const floorPredicate =
+          walletDeltaSar > 0
+            ? and(
+                eq(users.id, userId),
+                sql`${users.wallet_balance} >= ${walletDeltaSar.toString()}`,
+              )
+            : eq(users.id, userId);
+
+        const updated = await tx
           .update(users)
           .set({
             wallet_balance: sql`${users.wallet_balance} + ${walletDeltaSar.toString()}`,
             updated_at: new Date(),
           })
-          .where(eq(users.id, userId));
+          .where(floorPredicate)
+          .returning({ wallet_balance: users.wallet_balance });
+
+        if (updated.length === 0) {
+          const [user] = await tx
+            .select({ wallet_balance: users.wallet_balance })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+
+          this.logger.warn(
+            `reschedule_wallet_insufficient hostId=${userId} required=${walletDeltaSar} matchId=${matchId}`,
+            MatchesService.name,
+          );
+
+          throw new BadRequestException(
+            `Insufficient wallet balance for the reschedule. Required: SAR ${walletDeltaSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+          );
+        }
       }
 
       // ── 4. Update the match row (server-authoritative pricing mirror) ──
