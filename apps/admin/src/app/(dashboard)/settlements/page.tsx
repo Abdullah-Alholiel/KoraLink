@@ -19,7 +19,7 @@ import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvAmount, csvDate } from '@/lib/csv-export';
-import { useExportFeedback } from '@/lib/use-export-feedback';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
@@ -187,23 +187,9 @@ export default function SettlementsPage() {
         </button>
       </div>
 
-      {/* both live regions ALWAYS mounted — content swaps inside are
-           announced reliably (conditional live regions are not); */}
-      <p role="status" aria-live="polite" className="mx-8 mt-3 text-sm">
-        {exportFeedback.kind === 'success' && (
-          <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
-            {tc('exportedRows', { count: exportFeedback.rows })}
-            <span className="sr-only"> #{exportFeedback.seq}</span>
-          </span>
-        )}
-      </p>
-      <p role="alert" className="mx-8 mt-3 text-sm">
-        {exportFeedback.kind === 'error' && (
-          <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
-            {tc('exportFailed')}
-          </span>
-        )}
-      </p>
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettlements')}</div>

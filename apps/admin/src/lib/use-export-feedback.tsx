@@ -1,23 +1,23 @@
 'use client';
 
 // ─── CSV export feedback (P2-153, run #103) ───────────────
-// Shared wrapper around exportCsv: renders an aria-live success note after the
-// CSV is generated and a plain-language failure note if generation throws.
-// The 7 exporter pages (users/matches/transactions/settlements/audit/disputes/
-// reports) already disable the button on loading/error/empty — this closes the
-// remaining half of the gap: zero feedback about the export that just ran.
+// Shared wrapper around exportCsv AND the note markup: after the CSV is
+// generated an aria-live note confirms it; if generation throws, an assertive
+// role=alert note explains. Used by the 7 exporter pages (users/matches/
+// transactions/settlements/audit/disputes/reports), which already disable
+// the button on loading/error/empty — this closes the remaining half: zero
+// feedback about the export that just ran.
 //
-// Semantics (settled across 5 PR-agent review rounds):
+// Semantics (settled across 7 PR-agent review rounds):
 // 1. The note says "generated", not "downloaded". exportCsv builds a blob and
 //    clicks a temp anchor — browsers refuse/block the DOWNLOAD silently
 //    (Chrome auto-download blocking throws nothing), so no JS API can prove a
 //    file landed. The failure path covers generation throws (invalid
 //    dates/amounts in a formatter) — the only JS-visible failure — and
 //    reports them via Sentry + trackEvent before showing the note.
-// 2. Re-announcement: seq increments on EVERY runExport and rides in the
-//    note text (`exportedAt`-style counter is NOT needed — the count field
-//    carries seq), so identical-text repeats are not deduped by screen
-//    readers. React 18 batching is why kind-reset alone can't do this.
+// 2. Re-announcement: seq increments on EVERY runExport and rides in both
+//    notes (sr-only suffix), so identical-text repeats are re-announced.
+//    React 18 batching is why kind-reset alone can't do this.
 // 3. Both live regions are ALWAYS mounted; content swaps inside. Conditional
 //    live regions are not reliably announced.
 
@@ -25,6 +25,7 @@ import { useCallback, useState } from 'react';
 import { exportCsv, type CsvExportOptions } from '@/lib/csv-export';
 import * as Sentry from '@sentry/nextjs';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { useTranslations } from 'next-intl';
 
 export interface ExportFeedback {
   /** 'success' → completion confirmation; 'error' → failure note shown. */
@@ -58,4 +59,35 @@ export function useExportFeedback(): ExportFeedback {
   }, []);
 
   return { kind, rows, seq, runExport };
+}
+
+// The always-mounted live-region pair, shared so the markup cannot drift
+// across the 7 pages (PR-agent round-7 finding). Render <ExportFeedbackNote
+// feedback={exportFeedback} /> right after the toolbar div.
+export function ExportFeedbackNote({
+  feedback,
+}: {
+  feedback: ExportFeedback;
+}) {
+  const tc = useTranslations('common');
+  return (
+    <>
+      <p role="status" aria-live="polite" className="mx-8 mt-3 text-sm">
+        {feedback.kind === 'success' && (
+          <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
+            {tc('exportedRows', { count: feedback.rows })}
+            <span className="sr-only"> #{feedback.seq}</span>
+          </span>
+        )}
+      </p>
+      <p role="alert" className="mx-8 mt-3 text-sm">
+        {feedback.kind === 'error' && (
+          <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
+            {tc('exportFailed')}
+            <span className="sr-only"> #{feedback.seq}</span>
+          </span>
+        )}
+      </p>
+    </>
+  );
 }
