@@ -183,14 +183,16 @@ export default function MatchesPage() {
         </button>
       </div>
 
-      {/* persistent live region — always mounted so SRs pick up
-           content swaps (conditional live regions are unreliable); */}
+      {/* both live regions ALWAYS mounted — content swaps inside are
+           announced reliably (conditional live regions are not); */}
       <p role="status" aria-live="polite" className="mx-8 mt-3 text-sm">
         {exportFeedback.kind === 'success' && (
           <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
             {tc('exportedRows', { count: exportFeedback.rows })}
           </span>
         )}
+      </p>
+      <p role="alert" className="mx-8 mt-3 text-sm">
         {exportFeedback.kind === 'error' && (
           <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
             {tc('exportFailed')}
