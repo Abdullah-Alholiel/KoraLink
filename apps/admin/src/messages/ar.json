@@ -30,7 +30,7 @@
     "dataStale": "قديمة — جارٍ إعادة الاتصال",
     "saveFailed": "فشل الحفظ: {error}",
     "exportCsv": "تصدير CSV",
-    "exportedRows": "{count, plural, =0 {لا توجد صفوف للتصدير} one {تم تصدير صف واحد} two {تم تصدير صفين} few {تم تصدير # صفوف} many {تم تصدير # صفًا} other {تم تصدير # صف}}",
+    "exportedRows": "{count, plural, =0 {لا توجد صفوف للتصدير} one {تم إنشاء ملف CSV بصف واحد} two {تم إنشاء ملف CSV بصفين} few {تم إنشاء ملف CSV بـ # صفوف} many {تم إنشاء ملف CSV بـ # صفًا} other {تم إنشاء ملف CSV بـ # صف}}",
     "exportFailed": "فشل تصدير الملف. حاول مرة أخرى."
   },
   "notifications": {

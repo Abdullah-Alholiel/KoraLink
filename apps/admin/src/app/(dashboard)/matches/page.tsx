@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ban, Download, Loader2, Pencil } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
@@ -127,6 +127,12 @@ export default function MatchesPage() {
   const rows = data?.matches ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+
+  // the note describes the export of the CURRENT rows — clear it
+  // when the underlying data changes so it can't go stale
+  useEffect(() => {
+    exportFeedback.clear();
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onExport() {
     exportFeedback.runExport({

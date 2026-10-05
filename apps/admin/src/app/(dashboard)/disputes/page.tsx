@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -40,6 +40,12 @@ export default function DisputesPage() {
   const rows = data?.disputes ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+
+  // the note describes the export of the CURRENT rows — clear it
+  // when the underlying data changes so it can't go stale
+  useEffect(() => {
+    exportFeedback.clear();
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function disputeTypeLabel(d: DisputeListItem): string {
     return t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ');

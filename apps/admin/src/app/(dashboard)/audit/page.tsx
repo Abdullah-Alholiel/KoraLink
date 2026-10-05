@@ -103,6 +103,12 @@ export default function AuditPage() {
   const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
 
+  // the note describes the export of the CURRENT rows — clear it
+  // when the underlying data changes so it can't go stale
+  useEffect(() => {
+    exportFeedback.clear();
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function onExport() {
     exportFeedback.runExport({
       columns: [
