@@ -1179,5 +1179,8 @@
     "hostGuide": "Host guide",
     "language": "Language",
     "dataNote": "Export downloads a JSON copy of your data. Deleting your account schedules removal after a 30-day grace window."
+  },
+  "realtime": {
+    "livePaused": "Live updates paused — reconnecting…"
   }
 }
