@@ -1,16 +1,15 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 104,
+  "last_run": 105,
   "last_run_at": "2026-10-05T10:20Z",
   "last_run_commits": [
-    "637cf87 (PR #83 P2-133 settings hub)",
-    "b0831b2 (PR #84 P2-154 realtime banner)"
+    "77bd739 (PR #85 squash: trust proxy + reschedule wallet floor)"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-05T10-20Z-run104.md",
+  "last_run_report": "kanban/RUNS/2026-10-05T15-15Z-run105.md",
   "in_review_items": [
-    "P2-133 settings hub (PR #83 637cf87) — verify /settings + profile entry row next run",
-    "P2-154 RealtimeBanner (PR #84 b0831b2) — verify strip on socket-down next run"
+    "run105 slice1 trust-proxy (77bd739): /health 200 w/ TRUST_PROXY=1 live; verify next run: real client IP in OTP log line + reschedule flow 200",
+    "run105 slice2 reschedule wallet floor (77bd739): jest 880 green incl. 5 new floor tests; verify next run: reschedule via :8443 still 200 + no reschedule_wallet_insufficient warns in journal"
   ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
@@ -38,8 +37,7 @@
     "P1-49 ban appeal CHANNEL — owner call (queued run #56, reconfirmed decisions queue run #57): reports/disputes channel vs support mailto on BlockedCard.",
     "P1-51 post-match rating/MVP flow (NEW run #57, Reviewer B) — needs Abdullah decision on shape before API work: extend the existing POTM vote vs. per-player ratings; my-games rate UI depends on it.",
     "P2-76(2) critical-event non-push channel — folds into P1-41 email decision (run #65 reconfirmed).",
-    "RUN #66 RECOVERY (2026-09-21): the 01:17Z scheduled session was KILLED after committing 3 review fixes but before Phase 5 (no RUNS report, lock left with pid 'BATCH'). Recovery session per run-#51-manual recipe: lock cleared, gates re-run on final tree (turbo 3/3, vitest 90f/633t, notifications+matches jest 197/197), orphaned commits d9d1a8f..80d7f0d PUSHED. P2-79 residual built this session (SlotPicker loading/empty role=status). ADMIN HOLD continues: projects-dir merge conflict (UU users.service.ts, UU profile/page.tsx, UU ServiceWorkerUpdater, UU PromoBillboard, UU BOARD.md + Abdullah staged Dockerfile/package/users-page edits) still unresolved -> P2-12 held. zai probe: first attempt timed out (20s), retry 200 in 7.6s — treat single-timeout as transient, retry once before failing over. Deploy-target fork unchanged: units serve /home/ubuntu/projects/koralink; staging commits reach live only via Abdullah's merge go.",
-    "RUN #67 (2026-09-21T16:00Z): built P2-87 (d4b5ef1, push-unsubscribe failure feedback). New board rows: P2-88 drizzle meta snapshot gap 0026->0029 (DB-lane TODO), P2-89 audit run-2 confirmed LOW ban-before-transition (ADMIN HOLD). Owner checklist (needs_validation, audit run-1): verify trust-proxy so OTP per-IP cap keys on real client IP behind Traefik/Tailscale. Pruned dead backlog lines (JWT_SECRET fallback fixed, seed header fixed). Mirror cards t_a6730a4e/t_df7b26f0/t_8cd67ba6 created+gated."
+    "RUN #66 RECOVERY (2026-09-21): the 01:17Z scheduled session was KILLED after committing 3 review fixes but before Phase 5 (no RUNS report, lock left with pid 'BATCH'). Recovery session per run-#51-manual recipe: lock cleared, gates re-run on final tree (turbo 3/3, vitest 90f/633t, notifications+matches jest 197/197), orphaned commits d9d1a8f..80d7f0d PUSHED. P2-79 residual built this session (SlotPicker loading/empty role=status). ADMIN HOLD continues: projects-dir merge conflict (UU users.service.ts, UU profile/page.tsx, UU ServiceWorkerUpdater, UU PromoBillboard, UU BOARD.md + Abdullah staged Dockerfile/package/users-page edits) still unresolved -> P2-12 held. zai probe: first attempt timed out (20s), retry 200 in 7.6s — treat single-timeout as transient, retry once before failing over. Deploy-target fork unchanged: units serve /home/ubuntu/projects/koralink; staging commits reach live only via Abdullah's merge go."
   ],
   "consecutive_skip_count": 0,
   "initialized_at": "2026-08-26T00:00:00Z",
