@@ -5,6 +5,7 @@ import Toast from '@/components/layout/Toast';
 import AuthGuard from '@/components/auth/AuthGuard';
 import ScrollableMain from '@/components/layout/ScrollableMain';
 import NotificationProvider from '@/providers/NotificationProvider';
+import RealtimeBanner from '@/components/layout/RealtimeBanner';
 import BadgeHydrator from '@/components/layout/BadgeHydrator';
 import WelcomeCheckpoint from '@/components/pwa/WelcomeCheckpoint';
 
@@ -23,6 +24,11 @@ export default function MainLayout({
                 <AuthGuard>
                     <NotificationProvider>
                         <BadgeHydrator />
+                        {/* Run #104 (Reviewer B P0): app-wide "live updates
+                            paused" strip while the /lobby socket is down —
+                            one subscriber to the shared client's lifecycle
+                            fan-out, lifetime matches the socket's. */}
+                        <RealtimeBanner />
                         {/* Surface boundary: a crash in the routed content renders the
                             fallback in the scroll slot; BottomNav/Toast/WelcomeCheckpoint
                             stay mounted. The outer boundary remains the last resort for
