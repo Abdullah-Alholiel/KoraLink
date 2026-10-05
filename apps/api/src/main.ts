@@ -11,6 +11,7 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
+import { resolveTrustProxyConfig } from './common/security/trust-proxy';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -42,6 +43,19 @@ async function bootstrap(): Promise<void> {
     .filter(Boolean);
   const port = configService.get<number>('PORT', 3001);
   const cookieSecret = configService.get<string>('COOKIE_SECRET', 'change-me');
+
+  // ── Trust proxy (audit run-1 api-auth:per-ip-cap-proxy-trust, run #105) ────
+  // Without it, req.ip = the ingress proxy's address: the per-IP OTP caps
+  // (50/day daily cap + 3/min send-otp throttle) collapse into ONE shared
+  // bucket behind the proxy and admin audit logs record the proxy IP. Opt-in
+  // via TRUST_PROXY (unset = current behavior; '1' = single ingress hop;
+  // 'true' = full XFF chain). Boot-fails on garbage per P0-3 doctrine.
+  // See common/security/trust-proxy.ts. INestApplication does not expose
+  // Express `set` — go through the underlying adapter instance.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', resolveTrustProxyConfig(configService.get<string>('TRUST_PROXY')));
 
   // ── Sentry error tracking (env-gated — no-op without SENTRY_DSN) ────────
   const sentryDsn = configService.get<string>('SENTRY_DSN', '');
