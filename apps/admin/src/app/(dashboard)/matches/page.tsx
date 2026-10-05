@@ -19,6 +19,7 @@ import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import MatchEditDrawer from '@/components/MatchEditDrawer';
 import { csvDate, exportCsv } from '@/lib/csv-export';
+import { useExportFeedback } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
 type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
@@ -125,9 +126,10 @@ export default function MatchesPage() {
 
   const rows = data?.matches ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'match', header: t('thMatch'), value: (m: AdminMatch) => m.title ?? '' },
         { key: 'venue', header: t('thVenue'), value: (m: AdminMatch) => m.venue_name ?? '' },
@@ -178,7 +180,18 @@ export default function MatchesPage() {
           <Download className="h-4 w-4" />
           {t('exportMatches')}
         </button>
-      </div>
+            </div>
+
+      {exportFeedback.kind === 'success' && (
+        <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          {tc('exportedRows', { count: exportFeedback.rows })}
+        </p>
+      )}
+      {exportFeedback.kind === 'error' && (
+        <p role="alert" className="mx-8 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {tc('exportFailed')}
+        </p>
+      )}
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingMatches')}</div>

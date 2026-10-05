@@ -29,7 +29,9 @@
     "dataLive": "Live",
     "dataStale": "Stale — reconnecting",
     "saveFailed": "Save failed: {error}",
-    "exportCsv": "Export CSV"
+    "exportCsv": "Export CSV",
+    "exportedRows": "{count} rows exported.",
+    "exportFailed": "Export failed. Try again."
   },
   "notifications": {
     "bell": "Notifications",
@@ -580,7 +582,7 @@
     "loadingSettings": "Loading settings…",
     "savedOk": "Saved.",
     "disputesTitle": "Disputes",
-    "disputesSubtitle": "No-show cases and player appeals",
+    "disputesSubtitle": "Resolve no-show appeals and other disputes",
     "loadingDisputes": "Loading disputes…",
     "thDispute": "Dispute",
     "thReporter": "Reporter",
@@ -608,7 +610,6 @@
     "settlementsSubtitle": "Venue payouts and earnings",
     "auditSubtitle": "Every admin action, with who did what and when",
     "settingsSubtitle": "Platform-wide configuration",
-    "disputesSubtitle": "Resolve no-show appeals and other disputes",
     "reportsSubtitle": "Triage user, match, and venue reports",
     "dashboardSubtitle": "KoraLink operations overview",
     "metricUsers": "Users",

@@ -19,6 +19,7 @@ import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvAmount, csvDate, exportCsv } from '@/lib/csv-export';
+import { useExportFeedback } from '@/lib/use-export-feedback';
 
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
@@ -121,9 +122,10 @@ export default function SettlementsPage() {
 
   const rows = data?.settlements ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'venue', header: t('thVenue'), value: (s: Settlement) => s.venue_name ?? '' },
         { key: 'amount', header: t('thAmount'), value: (s: Settlement) => csvAmount(s.amount) },
@@ -183,6 +185,17 @@ export default function SettlementsPage() {
           {t('generatePayouts')}
         </button>
       </div>
+
+      {exportFeedback.kind === 'success' && (
+        <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          {tc('exportedRows', { count: exportFeedback.rows })}
+        </p>
+      )}
+      {exportFeedback.kind === 'error' && (
+        <p role="alert" className="mx-8 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {tc('exportFailed')}
+        </p>
+      )}
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettlements')}</div>

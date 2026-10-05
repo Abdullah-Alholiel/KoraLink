@@ -16,6 +16,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvDate, exportCsv } from '@/lib/csv-export';
+import { useExportFeedback } from '@/lib/use-export-feedback';
 import { Download } from 'lucide-react';
 
 type DisputesResponse = ListResponse<DisputeListItem> & { disputes: DisputeListItem[] };
@@ -38,13 +39,14 @@ export default function DisputesPage() {
 
   const rows = data?.disputes ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
 
   function disputeTypeLabel(d: DisputeListItem): string {
     return t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ');
   }
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'match', header: t('thMatch'), value: (d: DisputeListItem) => d.match_title ?? '' },
         { key: 'status', header: t('thStatus'), value: (d: DisputeListItem) => d.status },
@@ -159,6 +161,17 @@ export default function DisputesPage() {
           {t('exportDisputes')}
         </button>
       </div>
+
+      {exportFeedback.kind === 'success' && (
+        <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          {tc('exportedRows', { count: exportFeedback.rows })}
+        </p>
+      )}
+      {exportFeedback.kind === 'error' && (
+        <p role="alert" className="mx-8 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {tc('exportFailed')}
+        </p>
+      )}
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingDisputes')}</div>

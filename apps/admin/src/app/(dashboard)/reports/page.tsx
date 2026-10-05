@@ -16,6 +16,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvDate, exportCsv } from '@/lib/csv-export';
+import { useExportFeedback } from '@/lib/use-export-feedback';
 import { Download } from 'lucide-react';
 
 type ReportsResponse = ListResponse<AdminReportListItem> & { reports: AdminReportListItem[] };
@@ -41,9 +42,10 @@ export default function ReportsPage() {
 
   const rows = data?.reports ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'subject', header: t('thSubject'), value: (r: AdminReportListItem) => r.subject_label ?? '' },
         { key: 'subjectType', header: t('thSubjectType'), value: (r: AdminReportListItem) => r.subject_type },
@@ -141,6 +143,17 @@ export default function ReportsPage() {
           {t('exportReports')}
         </button>
       </div>
+
+      {exportFeedback.kind === 'success' && (
+        <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          {tc('exportedRows', { count: exportFeedback.rows })}
+        </p>
+      )}
+      {exportFeedback.kind === 'error' && (
+        <p role="alert" className="mx-8 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {tc('exportFailed')}
+        </p>
+      )}
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingReports')}</div>
