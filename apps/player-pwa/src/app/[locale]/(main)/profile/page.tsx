@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import {
@@ -14,7 +13,6 @@ import {
     Shield,
     FileText,
     BookOpen,
-    ChevronRight,
     Bell,
     BellOff,
     MessageCircle,
@@ -47,58 +45,11 @@ import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-
-interface MenuItemProps {
-    icon: React.ReactNode;
-    label: string;
-    endText?: string;
-    danger?: boolean;
-    href?: string;
-    onClick?: () => void;
-}
-
-function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps) {
-    const content = (
-        <>
-            <div className={`w-5 h-5 flex-shrink-0 ${danger ? 'text-brand-red' : 'text-brand-green'}`}>
-                {icon}
-            </div>
-            <span
-                className={`flex-1 text-start text-sm font-medium ${
-                    danger ? 'text-brand-red' : 'text-brand-black'
-                }`}
-            >
-                {label}
-            </span>
-            {endText && (
-                <span className="text-sm font-semibold text-gray-500" dir="ltr">
-                    {endText}
-                </span>
-            )}
-            {!danger && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 rtl:rotate-180" strokeWidth={1.5} />}
-        </>
-    );
-
-    // Flat-list row (sketches/004-profile-redesign V2): hairline separators via
-    // sibling selectors live on the parent; rows themselves are borderless and
-    // carry generous 44pt+ tap height (px-6 py-3.5).
-    const className =
-        'w-full flex items-center gap-3.5 px-6 py-3.5 hover:bg-gray-50 transition-colors';
-
-    if (href) {
-        return (
-            <Link href={href} className={className}>
-                {content}
-            </Link>
-        );
-    }
-
-    return (
-        <button onClick={onClick} className={className}>
-            {content}
-        </button>
-    );
-}
+// P2-133 (run #104): MenuItem extracted to a shared component so the Settings
+// hub reuses the exact same row (Reviewer A: extract, don't extend the 775-line
+// profile page). Exact move — props/classes/render identical to the old inline
+// definition (profile/page.tsx:51-101).
+import MenuItem from '@/components/profile/MenuItem';
 
 /** Uppercase micro-label that opens each flat section — shared component. */
 
@@ -438,7 +389,11 @@ export default function ProfilePage() {
                 {mounted && isSupported && (
                     <>
                         <div className="h-px bg-gray-100 ms-[60px]" />
-                        <MenuItem
+                        {/* P2-133 (run #104): anchor target for the Settings
+                            hub's "Push notification settings" link. scroll-mt
+                            clears the sticky header on jump. */}
+                        <div id="notifications" className="scroll-mt-24">
+                            <MenuItem
                             icon={
                                 isSubscribing || isUnsubscribing ? (
                                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
@@ -491,6 +446,7 @@ export default function ProfilePage() {
                                 });
                             }}
                         />
+                        </div>
                         {mounted && subscribeHint && !isSubscribed && (
                             <p
                                 role="status"
@@ -645,7 +601,11 @@ export default function ProfilePage() {
             </div>
 
             {/* ── ACCOUNT (P0-6, run #29: export + delete are auth-gated) ── */}
-            <FlatSectionLabel label={t('profile.sectionAccount')} />
+            {/* P2-133 (run #104): anchor target for the Settings hub's
+                data + sign-out links. scroll-mt clears the sticky header. */}
+            <div id="account" className="scroll-mt-24">
+                <FlatSectionLabel label={t('profile.sectionAccount')} />
+            </div>
             <div>
                 {isAuthenticated && (
                     <>

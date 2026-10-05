@@ -1168,5 +1168,16 @@
   "blocks": {
     "blockSuccess": "تم حظر المستخدم",
     "unblockSuccess": "تم إلغاء حظر المستخدم"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "sectionNotifications": "الإشعارات",
+    "sectionData": "بياناتي",
+    "sectionLegal": "الخصوصية والشروط",
+    "sectionAccount": "الحساب",
+    "notifications": "إعدادات الإشعارات الفورية",
+    "hostGuide": "دليل المضيف",
+    "language": "اللغة",
+    "dataNote": "تصدير البيانات ينزّل نسخة JSON من بياناتك. حذف الحساب يجدول الإزالة بعد مهلة 30 يومًا."
   }
 }

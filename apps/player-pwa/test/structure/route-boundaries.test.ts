@@ -19,6 +19,7 @@ const LOADING = [
   'src/app/[locale]/(main)/my-games/loading.tsx',
   'src/app/[locale]/(main)/clubs/loading.tsx',
   'src/app/[locale]/(main)/profile/loading.tsx',
+  'src/app/[locale]/(main)/settings/loading.tsx',
   'src/app/[locale]/match/[id]/loading.tsx',
 ];
 

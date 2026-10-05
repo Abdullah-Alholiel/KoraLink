@@ -1168,5 +1168,16 @@
   "blocks": {
     "blockSuccess": "User blocked",
     "unblockSuccess": "User unblocked"
+  },
+  "settings": {
+    "title": "Settings",
+    "sectionNotifications": "Notifications",
+    "sectionData": "My data",
+    "sectionLegal": "Privacy & legal",
+    "sectionAccount": "Account",
+    "notifications": "Push notification settings",
+    "hostGuide": "Host guide",
+    "language": "Language",
+    "dataNote": "Export downloads a JSON copy of your data. Deleting your account schedules removal after a 30-day grace window."
   }
 }

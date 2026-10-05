@@ -29,6 +29,7 @@ const REQUIRED_SURFACES: Record<string, string> = {
   '(main)/my-games/page.tsx': 'upcoming games + decision data (pinned run #54 — was wired but unpinned)',
   '(main)/play/page.tsx': 'discovery feed — banner gated on real network state, not on any fetch error (run #92)',
   '(main)/wallet/page.tsx': 'money surface — offline must never read as live; balance carries a stale-cache note (run #92, P2-129)',
+  '(main)/settings/page.tsx': 'settings hub (P2-133, run #104) — links surface carries the same staleness signal',
 };
 
 describe('offline staleness signal coverage (run #53)', () => {
