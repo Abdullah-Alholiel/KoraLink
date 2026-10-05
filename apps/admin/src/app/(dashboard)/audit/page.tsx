@@ -15,7 +15,8 @@ import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { csvDate, exportCsv } from '@/lib/csv-export';
+import { csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type AuditResponse = ListResponse<AuditLog> & { logs: AuditLog[] };
 
@@ -100,9 +101,11 @@ export default function AuditPage() {
 
   const rows = data?.logs ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
+
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'admin', header: t('roleAdmin'), value: (l: AuditLog) => l.admin_name ?? '' },
         { key: 'action', header: t('thAction') },
@@ -161,6 +164,10 @@ export default function AuditPage() {
           {t('exportAudit')}
         </button>
       </div>
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingAudit')}</div>

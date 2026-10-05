@@ -19,7 +19,8 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { csvDate, exportCsv } from '@/lib/csv-export';
+import { csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
 
@@ -80,9 +81,11 @@ export default function UsersPage() {
 
   const rows = data?.users ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
+
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'user', header: t('thUser'), value: (u: AdminUser) => u.full_name ?? '' },
         { key: 'handle', header: t('thHandle'), value: (u: AdminUser) => u.handle ?? '' },
@@ -284,6 +287,10 @@ export default function UsersPage() {
           {t('exportUsers')}
         </button>
       </div>
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingUsers')}</div>

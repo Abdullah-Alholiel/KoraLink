@@ -15,7 +15,8 @@ import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { csvDate, exportCsv } from '@/lib/csv-export';
+import { csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { Download } from 'lucide-react';
 
 type DisputesResponse = ListResponse<DisputeListItem> & { disputes: DisputeListItem[] };
@@ -38,13 +39,15 @@ export default function DisputesPage() {
 
   const rows = data?.disputes ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
+
 
   function disputeTypeLabel(d: DisputeListItem): string {
     return t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ');
   }
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'match', header: t('thMatch'), value: (d: DisputeListItem) => d.match_title ?? '' },
         { key: 'status', header: t('thStatus'), value: (d: DisputeListItem) => d.status },
@@ -159,6 +162,10 @@ export default function DisputesPage() {
           {t('exportDisputes')}
         </button>
       </div>
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingDisputes')}</div>

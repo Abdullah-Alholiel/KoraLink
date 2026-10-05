@@ -29,7 +29,9 @@
     "dataLive": "مباشر",
     "dataStale": "قديمة — جارٍ إعادة الاتصال",
     "saveFailed": "فشل الحفظ: {error}",
-    "exportCsv": "تصدير CSV"
+    "exportCsv": "تصدير CSV",
+    "exportedRows": "{count, plural, =0 {لا توجد صفوف للتصدير} one {تم إنشاء ملف CSV بصف واحد} two {تم إنشاء ملف CSV بصفين} few {تم إنشاء ملف CSV بـ # صفوف} many {تم إنشاء ملف CSV بـ # صفًا} other {تم إنشاء ملف CSV بـ # صف}}",
+    "exportFailed": "فشل تصدير الملف. حاول مرة أخرى."
   },
   "notifications": {
     "bell": "الإشعارات",
@@ -580,7 +582,7 @@
     "loadingSettings": "جارٍ تحميل الإعدادات…",
     "savedOk": "تم الحفظ.",
     "disputesTitle": "النزاعات",
-    "disputesSubtitle": "حالات عدم الحضور واستئنافات اللاعبين",
+    "disputesSubtitle": "حل استئنافات عدم الحضور والنزاعات الأخرى",
     "loadingDisputes": "جارٍ تحميل النزاعات…",
     "thDispute": "النزاع",
     "thReporter": "المُبلِّغ",
@@ -608,7 +610,6 @@
     "settlementsSubtitle": "دفعات المرافق وأرباحهم",
     "auditSubtitle": "كل إجراء إداري مع من قام به ومتى",
     "settingsSubtitle": "إعدادات عامة للمنصة",
-    "disputesSubtitle": "حل استئنافات عدم الحضور والنزاعات الأخرى",
     "reportsSubtitle": "فرز بلاغات المستخدمين والمباريات والمرافق",
     "dashboardSubtitle": "نظرة عامة على عمليات كورالينك",
     "metricUsers": "المستخدمون",

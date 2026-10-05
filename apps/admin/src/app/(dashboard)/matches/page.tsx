@@ -18,7 +18,8 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import MatchEditDrawer from '@/components/MatchEditDrawer';
-import { csvDate, exportCsv } from '@/lib/csv-export';
+import { csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
 type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
@@ -125,9 +126,11 @@ export default function MatchesPage() {
 
   const rows = data?.matches ?? [];
   const exportDisabled = loading || !!error || rows.length === 0;
+  const exportFeedback = useExportFeedback();
+
 
   function onExport() {
-    exportCsv({
+    exportFeedback.runExport({
       columns: [
         { key: 'match', header: t('thMatch'), value: (m: AdminMatch) => m.title ?? '' },
         { key: 'venue', header: t('thVenue'), value: (m: AdminMatch) => m.venue_name ?? '' },
@@ -179,6 +182,10 @@ export default function MatchesPage() {
           {t('exportMatches')}
         </button>
       </div>
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingMatches')}</div>
