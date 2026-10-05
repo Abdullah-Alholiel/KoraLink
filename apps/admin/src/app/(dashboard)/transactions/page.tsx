@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
@@ -120,11 +120,6 @@ export default function TransactionsPage() {
   const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
 
-  // the note describes the export of the CURRENT rows — clear it
-  // when the underlying data changes so it can't go stale
-  useEffect(() => {
-    exportFeedback.clear();
-  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onExport() {
     exportFeedback.runExport({
@@ -192,16 +187,20 @@ export default function TransactionsPage() {
         </button>
       </div>
 
-      {exportFeedback.kind === 'success' && (
-        <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-          {tc('exportedRows', { count: exportFeedback.rows })}
-        </p>
-      )}
-      {exportFeedback.kind === 'error' && (
-        <p role="alert" className="mx-8 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {tc('exportFailed')}
-        </p>
-      )}
+      {/* persistent live region — always mounted so SRs pick up
+           content swaps (conditional live regions are unreliable); */}
+      <p role="status" aria-live="polite" className="mx-8 mt-3 text-sm">
+        {exportFeedback.kind === 'success' && (
+          <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
+            {tc('exportedRows', { count: exportFeedback.rows })}
+          </span>
+        )}
+        {exportFeedback.kind === 'error' && (
+          <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
+            {tc('exportFailed')}
+          </span>
+        )}
+      </p>
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{hq('loadingTransactions')}</div>
