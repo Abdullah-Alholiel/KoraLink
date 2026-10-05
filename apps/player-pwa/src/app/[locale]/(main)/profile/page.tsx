@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import {
@@ -14,7 +13,6 @@ import {
     Shield,
     FileText,
     BookOpen,
-    ChevronRight,
     Bell,
     BellOff,
     MessageCircle,
@@ -26,6 +24,7 @@ import {
     Pencil,
     Gamepad2,
     BellRing,
+    Settings,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -47,58 +46,11 @@ import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-
-interface MenuItemProps {
-    icon: React.ReactNode;
-    label: string;
-    endText?: string;
-    danger?: boolean;
-    href?: string;
-    onClick?: () => void;
-}
-
-function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps) {
-    const content = (
-        <>
-            <div className={`w-5 h-5 flex-shrink-0 ${danger ? 'text-brand-red' : 'text-brand-green'}`}>
-                {icon}
-            </div>
-            <span
-                className={`flex-1 text-start text-sm font-medium ${
-                    danger ? 'text-brand-red' : 'text-brand-black'
-                }`}
-            >
-                {label}
-            </span>
-            {endText && (
-                <span className="text-sm font-semibold text-gray-500" dir="ltr">
-                    {endText}
-                </span>
-            )}
-            {!danger && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 rtl:rotate-180" strokeWidth={1.5} />}
-        </>
-    );
-
-    // Flat-list row (sketches/004-profile-redesign V2): hairline separators via
-    // sibling selectors live on the parent; rows themselves are borderless and
-    // carry generous 44pt+ tap height (px-6 py-3.5).
-    const className =
-        'w-full flex items-center gap-3.5 px-6 py-3.5 hover:bg-gray-50 transition-colors';
-
-    if (href) {
-        return (
-            <Link href={href} className={className}>
-                {content}
-            </Link>
-        );
-    }
-
-    return (
-        <button onClick={onClick} className={className}>
-            {content}
-        </button>
-    );
-}
+// P2-133 (run #104): MenuItem extracted to a shared component so the Settings
+// hub reuses the exact same row (Reviewer A: extract, don't extend the 775-line
+// profile page). Exact move — props/classes/render identical to the old inline
+// definition (profile/page.tsx:51-101).
+import MenuItem from '@/components/profile/MenuItem';
 
 /** Uppercase micro-label that opens each flat section — shared component. */
 
@@ -376,6 +328,15 @@ export default function ProfilePage() {
             {/* ── PLAYING ──────────────────────────────── */}
             <FlatSectionLabel label={t('profile.sectionPlaying')} />
             <div>
+                {/* P2-133 (run #104): entry point to the Settings hub. The
+                    hub links every preference (push, language, data rights,
+                    sign-out); this row is what makes it discoverable. */}
+                <MenuItem
+                    icon={<Settings className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('settings.title')}
+                    href={`/${locale}/settings`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<User className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.personalInfo')}
@@ -435,10 +396,17 @@ export default function ProfilePage() {
                     </span>
                     <LanguageToggle size="md" ariaLabel={t('profile.language')} />
                 </div>
-                {mounted && isSupported && (
-                    <>
-                        <div className="h-px bg-gray-100 ms-[60px]" />
-                        <MenuItem
+                {/* PR-Agent r1 (run #104): the anchor div must exist at SSR
+                    time — deep links from the Settings hub land here BEFORE
+                    hydration effects run, and the element must also exist on
+                    browsers without Push support. The conditional CONTENT
+                    stays gated inside; the always-rendered wrapper carries
+                    the id + scroll-mt. */}
+                <div id="notifications" className="scroll-mt-24">
+                    {mounted && isSupported && (
+                        <>
+                            <div className="h-px bg-gray-100 ms-[60px]" />
+                            <MenuItem
                             icon={
                                 isSubscribing || isUnsubscribing ? (
                                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
@@ -628,8 +596,9 @@ export default function ProfilePage() {
                                 </div>
                             </>
                         )}
-                    </>
-                )}
+                        </>
+                    )}
+                </div>
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<Headphones className="h-5 w-5" strokeWidth={1.5} />}
@@ -645,7 +614,11 @@ export default function ProfilePage() {
             </div>
 
             {/* ── ACCOUNT (P0-6, run #29: export + delete are auth-gated) ── */}
-            <FlatSectionLabel label={t('profile.sectionAccount')} />
+            {/* P2-133 (run #104): anchor target for the Settings hub's
+                data + sign-out links. scroll-mt clears the sticky header. */}
+            <div id="account" className="scroll-mt-24">
+                <FlatSectionLabel label={t('profile.sectionAccount')} />
+            </div>
             <div>
                 {isAuthenticated && (
                     <>
