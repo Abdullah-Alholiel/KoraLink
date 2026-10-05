@@ -20,6 +20,8 @@
 
 import { useCallback, useState } from 'react';
 import { exportCsv, type CsvExportOptions } from '@/lib/csv-export';
+import * as Sentry from '@sentry/nextjs';
+import { trackEvent } from '@/providers/ObservabilityProvider';
 
 export interface ExportFeedback {
   /** 'success' → completion confirmation; 'error' → failure note shown. */
@@ -46,9 +48,11 @@ export function useExportFeedback(): ExportFeedback {
     try {
       exportCsv(opts);
       setKind('success'); // = "file generated, download handed to browser"
-    } catch {
+    } catch (e) {
       // JS-visible failure = generation error (bad date/amount in a formatter).
       // Download blocking is silent in every browser — see header comment.
+      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+      trackEvent('admin_csv_export_error', { rows: opts.rows.length });
       setKind('error');
     }
   }, []);

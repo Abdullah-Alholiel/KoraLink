@@ -291,7 +291,7 @@ export default function UsersPage() {
           <Download className="h-4 w-4" />
           {t('exportUsers')}
         </button>
-            </div>
+      </div>
 
       {exportFeedback.kind === 'success' && (
         <p role="status" className="mx-8 mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
