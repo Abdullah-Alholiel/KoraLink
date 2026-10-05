@@ -24,6 +24,7 @@ import {
     Pencil,
     Gamepad2,
     BellRing,
+    Settings,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -327,6 +328,15 @@ export default function ProfilePage() {
             {/* ── PLAYING ──────────────────────────────── */}
             <FlatSectionLabel label={t('profile.sectionPlaying')} />
             <div>
+                {/* P2-133 (run #104): entry point to the Settings hub. The
+                    hub links every preference (push, language, data rights,
+                    sign-out); this row is what makes it discoverable. */}
+                <MenuItem
+                    icon={<Settings className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('settings.title')}
+                    href={`/${locale}/settings`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<User className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.personalInfo')}

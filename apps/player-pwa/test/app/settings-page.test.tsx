@@ -11,6 +11,8 @@
  * own component specs; here it's a stub), useOnlineStatus (online).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
@@ -97,7 +99,7 @@ describe('settings hub (P2-133)', () => {
         expect(row).toHaveAttribute('href', '/en/host-guide');
     });
 
-    it('renders legal links to privacy + terms routes', () => {
+    it('links legal links to privacy + terms routes', () => {
         renderPage('en');
         expect(screen.getByText('Privacy Policy').closest('a')).toHaveAttribute(
             'href',
@@ -107,5 +109,17 @@ describe('settings hub (P2-133)', () => {
             'href',
             '/en/terms',
         );
+    });
+
+    it('exposes the settings entry row on the profile page (discoverability contract)', () => {
+        // The hub is only useful if profile links to it. Rendering the whole
+        // profile page here would need 8 hook mocks — a structure assertion
+        // pins the same contract (repo pattern: offline-banner-coverage).
+        const src = readFileSync(
+            join(__dirname, '../../src/app/[locale]/(main)/profile/page.tsx'),
+            'utf-8',
+        );
+        expect(src).toContain("href={`/${locale}/settings`}");
+        expect(src).toContain("t('settings.title')");
     });
 });
