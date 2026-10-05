@@ -100,6 +100,8 @@ describe('drizzle snapshot chain — P2-88 guard (REBUILT, run #103)', () => {
       // NOTE: skip by JOURNAL IDX, never by tag prefix — the duplicate
       // 0014_admin_notification_verbs entry sits at idx 39 (post-anchor) and
       // the chain links THROUGH its snapshot (0038 → 0014b → 0039).
+      // Named assertion (not a raw ENOENT): names the offending tag.
+      expect(file ?? `missing snapshot for ${e.tag}`).toEqual(expect.any(String));
       const snap = JSON.parse(readFileSync(file as string, 'utf8'));
       // jest prints actual vs expected on failure; prevId is a UUID so any
       // mismatch is unambiguous about which link broke
