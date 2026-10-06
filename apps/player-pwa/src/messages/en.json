@@ -320,7 +320,8 @@
     "title": "Reschedule Match",
     "pickDay": "Pick a day",
     "noSlots": "No free slots on the selected day. Try another day.",
-    "confirm": "Move Match"
+    "confirm": "Move Match",
+    "success": "Match rescheduled. Players will be notified."
   },
   "emergencyCancel": {
     "title": "Emergency Match Cancellation",

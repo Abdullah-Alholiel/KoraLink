@@ -344,6 +344,7 @@ export function useRescheduleMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  const tReschedule = useTranslations('reschedule');
 
   return useMutation<unknown, FetchError, RescheduleMatchInput>({
     mutationFn: ({ matchId, bookingSlotId }) =>
@@ -356,7 +357,7 @@ export function useRescheduleMatch() {
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['pitch-slots'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('Match rescheduled. Players will be notified.', 'success');
+      showToast(tReschedule('success'), 'success');
       trackEvent('match_rescheduled', { match_id: matchId });
     },
     onError: (error) => {
