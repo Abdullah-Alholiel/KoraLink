@@ -4,6 +4,7 @@ import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-quer
 import { useTranslations } from 'next-intl';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
+import { parseWalletShortfall } from '@/lib/publish-error';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import type { Match, RosterPlayer } from '@/types';
@@ -359,6 +360,25 @@ export function useRescheduleMatch() {
       trackEvent('match_rescheduled', { match_id: matchId });
     },
     onError: (error) => {
+      // Server-confirmed wallet shortfall (run #105's guarded reschedule floor
+      // returns 400 with exact Required/Available amounts). Classify FIRST —
+      // the generic rescheduleFailed copy blames the slot, which is wrong for
+      // this cause and leaves the host without the top-up next step
+      // (error-message standard: what happened + why + what next).
+      const shortfall = parseWalletShortfall(String(error?.message ?? ''));
+      if (shortfall) {
+        trackEvent('reschedule_blocked_insufficient_balance', {
+          required_sar: shortfall.requiredSar,
+          wallet_balance_sar: shortfall.availableSar,
+          shortfall_sar: shortfall.shortfallSar,
+        });
+        showToast(
+          t('rescheduleWalletShortfall', { amount: shortfall.shortfallSar.toFixed(2) }),
+          'error',
+          { detail: t('rescheduleWalletDetail') },
+        );
+        return;
+      }
       showToast(t('rescheduleFailed'), 'error', { detail: kindDetail(t, error) });
     },
   });
