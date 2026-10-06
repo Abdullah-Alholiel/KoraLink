@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { venues, venue_verifications, users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { TransferVenueDto } from './dto/transfer-venue.dto';
@@ -27,11 +28,11 @@ export class AdminVenuesService {
     const conds: SQL[] = [];
 
     if (dto.search) {
-      const q = `%${dto.search.trim()}%`;
-      conds.push(sql`(v.name ILIKE ${q} OR v.city ILIKE ${q} OR u.full_name ILIKE ${q})`);
+      const q = '%' + escapeLikePattern(dto.search.trim()) + '%';
+      conds.push(sql`(v.name ILIKE ${q} ESCAPE '\\' OR v.city ILIKE ${q} ESCAPE '\\' OR u.full_name ILIKE ${q} ESCAPE '\\')`);
     }
     if (dto.city) {
-      conds.push(sql`v.city ILIKE ${'%' + dto.city + '%'}`);
+      conds.push(sql`v.city ILIKE ${'%' + escapeLikePattern(dto.city) + '%'} ESCAPE '\\'`);
     }
     if (dto.status === 'approved') {
       conds.push(sql`v.is_approved = true`);

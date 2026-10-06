@@ -14,6 +14,7 @@ import { eq, sql, and, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 
 /** round to 2 d.p. (halves away from zero) for money amounts. */
 function roundMoney2(n: number): number {
@@ -1215,7 +1216,7 @@ export class MatchesService {
     // neighborhoods from. Additive AND, never short-circuits other filters.
     const neighborhoodTerm = neighborhood?.trim();
     const neighborhoodClause = neighborhoodTerm
-      ? sql`AND v.address ILIKE ${'%' + neighborhoodTerm + '%'}`
+      ? sql`AND v.address ILIKE ${'%' + escapeLikePattern(neighborhoodTerm) + '%'} ESCAPE '\\'`
       : sql``;
 
     // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
