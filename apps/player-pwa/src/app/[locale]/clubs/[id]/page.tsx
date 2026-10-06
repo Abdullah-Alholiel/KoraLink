@@ -86,7 +86,10 @@ export default function ClubPage() {
   // to the plain localized date until the clock effect lands.
   const clubNowMs = useNow() ?? 0;
 
-  const { data: venue, isLoading, error } = useVenue(id);
+  // P2-160: venue-level failures get the same classify + retry treatment as
+  // match detail — a transient network blip on a booking-entry surface must
+  // offer recovery, not a dead end.
+  const { data: venue, isLoading, error, refetch: refetchVenue } = useVenue(id);
 
   // ── Date filter state — null = "all games" first-look (matches Play) ──
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -155,11 +158,21 @@ export default function ClubPage() {
           </div>
         )}
 
-        {/* ── Error ── */}
-        {error && !isLoading && (
+        {/* ── Error (classified copy + retry, P2-160) ── */}
+        {error && !isLoading && !venue && (
           <div className="flex flex-col items-center py-20 px-8">
-            <AlertTriangle className="w-10 h-10 text-brand-red" strokeWidth={1.5} />
-            <p className="text-sm text-gray-400 mt-3">{t('clubs.error')}</p>
+            <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-bold text-brand-black mb-6 text-center">
+              {t(errorKey(classifyError(error)))}
+            </h3>
+            <button
+              onClick={() => refetchVenue()}
+              className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+            >
+              {t('common.retry')}
+            </button>
           </div>
         )}
 
