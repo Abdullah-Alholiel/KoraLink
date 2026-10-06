@@ -47,10 +47,19 @@ export async function fetchAllForExport<TPage, TRow>(opts: {
     }
 
     rows.push(...batch.slice(0, EXPORT_ROW_CAP - rows.length));
+    // Break conditions, in order of certainty:
+    // - cap hit: stop, truncated flag computed below.
+    // - collected >= verified total: complete.
+    // - empty page: offset beyond the (possibly shrunken) set — done.
+    // - short page: ONLY trusted when the envelope never carried a numeric
+    //   total; a mid-stream short page (concurrent deletes) or an endpoint
+    //   that clamps perPage below 100 must NOT end the loop when the total
+    //   says more rows exist (PR-Agent re-review on this PR).
     if (
       rows.length >= EXPORT_ROW_CAP ||
       (sawTotal && rows.length >= total) ||
-      batch.length < EXPORT_PAGE_SIZE
+      batch.length === 0 ||
+      (!sawTotal && batch.length < EXPORT_PAGE_SIZE)
     ) {
       break;
     }
@@ -66,5 +75,7 @@ export async function fetchAllForExport<TPage, TRow>(opts: {
     ? !(sawTotal && total <= EXPORT_ROW_CAP)
     : sawTotal && total > EXPORT_ROW_CAP;
 
-  return { rows, total, truncated };
+  // Without an envelope total, report what we actually have as the total so
+  // the capped note never renders "of 0 rows" (PR-Agent MINOR on this PR).
+  return { rows, total: sawTotal ? total : Math.max(total, rows.length), truncated };
 }
