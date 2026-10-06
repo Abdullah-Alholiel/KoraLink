@@ -80,29 +80,35 @@ export default function UsersPage() {
   const { data, loading, error, reload, live, stale } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
 
   const rows = data?.users ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'user', header: t('thUser'), value: (u: AdminUser) => u.full_name ?? '' },
-        { key: 'handle', header: t('thHandle'), value: (u: AdminUser) => u.handle ?? '' },
-        { key: 'phone', header: t('thPhone'), value: (u: AdminUser) => u.phone ?? '' },
-        { key: 'role', header: t('thRole'), value: (u: AdminUser) => u.role ?? '' },
-        { key: 'status', header: t('thStatus'), value: (u: AdminUser) => userStatus(u) },
-        { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => csvAmount(u.wallet_balance) },
-        { key: 'karma', header: t('thKarma'), value: (u: AdminUser) => String(u.karma_score ?? 0) },
-        { key: 'noShows', header: t('thNoShows'), value: (u: AdminUser) => String(u.no_show_count ?? 0) },
-        { key: 'joined', header: t('thJoined'), value: (u: AdminUser) => csvDate(u.created_at) },
-        { key: 'id', header: t('thId') },
-      ],
-      rows,
-      filePrefix: 'koralink-users',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<UsersResponse, AdminUser>({
+      url: `/admin/users?${qs.toString()}`,
+      rowKey: 'users',
+      build: (allRows) => ({
+        columns: [
+          { key: 'user', header: t('thUser'), value: (u: AdminUser) => u.full_name ?? '' },
+          { key: 'handle', header: t('thHandle'), value: (u: AdminUser) => u.handle ?? '' },
+          { key: 'phone', header: t('thPhone'), value: (u: AdminUser) => u.phone ?? '' },
+          { key: 'role', header: t('thRole'), value: (u: AdminUser) => u.role ?? '' },
+          { key: 'status', header: t('thStatus'), value: (u: AdminUser) => userStatus(u) },
+          { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => csvAmount(u.wallet_balance) },
+          { key: 'karma', header: t('thKarma'), value: (u: AdminUser) => String(u.karma_score ?? 0) },
+          { key: 'noShows', header: t('thNoShows'), value: (u: AdminUser) => String(u.no_show_count ?? 0) },
+          { key: 'joined', header: t('thJoined'), value: (u: AdminUser) => csvDate(u.created_at) },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-users',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.users', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.users', rows: exported });
   }
 
   async function act(id: string, body: Record<string, unknown>) {

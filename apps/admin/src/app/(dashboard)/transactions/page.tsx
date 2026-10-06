@@ -117,26 +117,32 @@ export default function TransactionsPage() {
   ];
 
   const rows = data?.transactions ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'user', header: hq('thUser'), value: (t: AdminTransaction) => t.user_name ?? '' },
-        { key: 'type', header: hq('thType') },
-        { key: 'status', header: hq('thStatus') },
-        { key: 'date', header: hq('thDate'), value: (t: AdminTransaction) => csvDate(t.created_at) },
-        { key: 'amount', header: hq('thAmount'), value: (t: AdminTransaction) => csvAmount(t.amount) },
-        { key: 'reference', header: hq('thReference'), value: (t: AdminTransaction) => t.reference_type.replace(/_/g, ' ') },
-        { key: 'id', header: hq('thId') },
-      ],
-      rows,
-      filePrefix: 'koralink-transactions',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<TxResponse, AdminTransaction>({
+      url: `/admin/transactions?${qs.toString()}`,
+      rowKey: 'transactions',
+      build: (allRows) => ({
+        columns: [
+          { key: 'user', header: hq('thUser'), value: (t: AdminTransaction) => t.user_name ?? '' },
+          { key: 'type', header: hq('thType') },
+          { key: 'status', header: hq('thStatus') },
+          { key: 'date', header: hq('thDate'), value: (t: AdminTransaction) => csvDate(t.created_at) },
+          { key: 'amount', header: hq('thAmount'), value: (t: AdminTransaction) => csvAmount(t.amount) },
+          { key: 'reference', header: hq('thReference'), value: (t: AdminTransaction) => t.reference_type.replace(/_/g, ' ') },
+          { key: 'id', header: hq('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-transactions',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.transactions', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.transactions', rows: exported });
   }
 
   const sortOptions = [

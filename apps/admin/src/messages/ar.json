@@ -31,7 +31,11 @@
     "saveFailed": "فشل الحفظ: {error}",
     "exportCsv": "تصدير CSV",
     "exportedRows": "{count, plural, =0 {لا توجد صفوف للتصدير} one {تم إنشاء ملف CSV بصف واحد} two {تم إنشاء ملف CSV بصفين} few {تم إنشاء ملف CSV بـ # صفوف} many {تم إنشاء ملف CSV بـ # صفًا} other {تم إنشاء ملف CSV بـ # صف}}",
-    "exportFailed": "فشل تصدير الملف. حاول مرة أخرى."
+    "exportFailed": "فشل تصدير الملف. حاول مرة أخرى.",
+    "exportAllSuccess": "تم إنشاء ملف CSV يحتوي على {count, plural, =0 {لا صفوف} one {صف واحد} two {صفين} few {# صفوف} many {# صفًا} other {# صفوف}}.",
+    "exportCapped": "تم تحديد التصدير على أول {limit, number} من إجمالي {total, number} صف.",
+    "exporting": "جارٍ تجهيز التصدير…",
+    "exportAllFailed": "فشل التصدير. حاول مرة أخرى."
   },
   "notifications": {
     "bell": "الإشعارات",

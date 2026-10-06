@@ -38,30 +38,36 @@ export default function DisputesPage() {
   const { data, loading, error, reload, live, stale } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
 
   const rows = data?.disputes ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
   function disputeTypeLabel(d: DisputeListItem): string {
     return t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ');
   }
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'match', header: t('thMatch'), value: (d: DisputeListItem) => d.match_title ?? '' },
-        { key: 'status', header: t('thStatus'), value: (d: DisputeListItem) => d.status },
-        { key: 'opened', header: ts('opened'), value: (d: DisputeListItem) => csvDate(d.created_at) },
-        { key: 'type', header: t('thType'), value: disputeTypeLabel },
-        { key: 'reporter', header: t('thReporter'), value: (d: DisputeListItem) => d.reporter_name ?? '' },
-        { key: 'respondent', header: t('thRespondent'), value: (d: DisputeListItem) => d.respondent_name ?? '' },
-        { key: 'id', header: t('thId') },
-      ],
-      rows,
-      filePrefix: 'koralink-disputes',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<DisputesResponse, DisputeListItem>({
+      url: `/admin/disputes?${qs.toString()}`,
+      rowKey: 'disputes',
+      build: (allRows) => ({
+        columns: [
+          { key: 'match', header: t('thMatch'), value: (d: DisputeListItem) => d.match_title ?? '' },
+          { key: 'status', header: t('thStatus'), value: (d: DisputeListItem) => d.status },
+          { key: 'opened', header: ts('opened'), value: (d: DisputeListItem) => csvDate(d.created_at) },
+          { key: 'type', header: t('thType'), value: disputeTypeLabel },
+          { key: 'reporter', header: t('thReporter'), value: (d: DisputeListItem) => d.reporter_name ?? '' },
+          { key: 'respondent', header: t('thRespondent'), value: (d: DisputeListItem) => d.respondent_name ?? '' },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-disputes',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.disputes', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.disputes', rows: exported });
   }
 
   const columns: ColumnDef<DisputeListItem>[] = [

@@ -100,25 +100,31 @@ export default function AuditPage() {
   ];
 
   const rows = data?.logs ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'admin', header: t('roleAdmin'), value: (l: AuditLog) => l.admin_name ?? '' },
-        { key: 'action', header: t('thAction') },
-        { key: 'entity', header: t('thEntity'), value: (l: AuditLog) => l.entity_type },
-        { key: 'time', header: t('thTime'), value: (l: AuditLog) => csvDate(l.created_at) },
-        { key: 'entityId', header: t('thEntityId'), value: (l: AuditLog) => l.entity_id ?? '' },
-        { key: 'ip', header: t('thIp'), value: (l: AuditLog) => l.ip ?? '' },
-      ],
-      rows,
-      filePrefix: 'koralink-audit',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<AuditResponse, AuditLog>({
+      url: `/admin/audit-logs?${qs.toString()}`,
+      rowKey: 'logs',
+      build: (allRows) => ({
+        columns: [
+          { key: 'admin', header: t('roleAdmin'), value: (l: AuditLog) => l.admin_name ?? '' },
+          { key: 'action', header: t('thAction') },
+          { key: 'entity', header: t('thEntity'), value: (l: AuditLog) => l.entity_type },
+          { key: 'time', header: t('thTime'), value: (l: AuditLog) => csvDate(l.created_at) },
+          { key: 'entityId', header: t('thEntityId'), value: (l: AuditLog) => l.entity_id ?? '' },
+          { key: 'ip', header: t('thIp'), value: (l: AuditLog) => l.ip ?? '' },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-audit',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.audit', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.audit', rows: exported });
   }
 
   return (
