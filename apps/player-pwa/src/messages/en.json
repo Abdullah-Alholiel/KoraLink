@@ -23,6 +23,8 @@
     "startFailed": "Couldn't start the match. Try again in a moment.",
     "completeFailed": "Couldn't complete the match. Try again in a moment.",
     "rescheduleFailed": "Couldn't reschedule — the slot may have been taken. Pick a different slot.",
+    "rescheduleWalletShortfall": "Reschedule needs SAR {amount} more in your wallet.",
+    "rescheduleWalletDetail": "No money was taken and the match kept its original time. Top up your wallet, then reschedule.",
     "waitlistJoinFailed": "Couldn't join the waitlist — it may already be open or you may be in it. Refresh and try.",
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
