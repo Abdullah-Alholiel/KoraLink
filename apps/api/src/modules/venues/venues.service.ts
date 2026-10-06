@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { venues } from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { GetVenuesDto } from './dto/get-venues.dto';
 
 /** Row shape returned by VenuesService.findSuggestions. */
@@ -125,7 +126,7 @@ export class VenuesService {
       : sql``;
 
     const cityClause = city
-      ? sql`AND v.city ILIKE ${'%' + city + '%'}`
+      ? sql`AND v.city ILIKE ${'%' + escapeLikePattern(city) + '%'} ESCAPE '\\'`
       : sql``;
 
     // P1-28 (run #21): server-side free-text search — additive AND, never
@@ -133,7 +134,7 @@ export class VenuesService {
     // city; pg_trgm similarity ranking is a later perf/ranking option.
     const searchTerm = search?.trim();
     const searchClause = searchTerm
-      ? sql`AND (v.name ILIKE ${'%' + searchTerm + '%'} OR v.city ILIKE ${'%' + searchTerm + '%'} OR v.address ILIKE ${'%' + searchTerm + '%'})`
+      ? sql`AND (v.name ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\' OR v.city ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\' OR v.address ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\')`
       : sql``;
 
     const partnerClause = is_koralink_partner !== undefined

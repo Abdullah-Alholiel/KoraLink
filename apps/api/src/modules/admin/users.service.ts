@@ -10,6 +10,7 @@ import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { PgQueryResultHKT, PgTransaction } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase, PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListUsersDto } from './dto/list-users.dto';
@@ -67,9 +68,9 @@ export class AdminUsersService {
     const conds: SQL[] = [];
 
     if (dto.search) {
-      const q = `%${dto.search.trim()}%`;
+      const q = '%' + escapeLikePattern(dto.search.trim()) + '%';
       conds.push(
-        sql`(${users.full_name} ILIKE ${q} OR ${users.phone} ILIKE ${q} OR ${users.handle} ILIKE ${q})`,
+        sql`(${users.full_name} ILIKE ${q} ESCAPE '\\' OR ${users.phone} ILIKE ${q} ESCAPE '\\' OR ${users.handle} ILIKE ${q} ESCAPE '\\')`,
       );
     }
     if (dto.role) conds.push(eq(users.role, dto.role));

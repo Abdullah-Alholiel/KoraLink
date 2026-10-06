@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { pitches } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { ListPitchesDto } from './dto/list-pitches.dto';
 import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AuditService } from './audit.service';
@@ -36,7 +37,7 @@ export class AdminPitchesService {
     const clauses: SQL[] = [];
     if (search) {
       clauses.push(
-        sql`(p.name ILIKE ${'%' + search + '%'} OR v.name ILIKE ${'%' + search + '%'} OR u.full_name ILIKE ${'%' + search + '%'} OR u.phone ILIKE ${'%' + search + '%'})`,
+        sql`(p.name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR v.name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR u.full_name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR u.phone ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\')`,
       );
     }
     if (dto.venueId) {

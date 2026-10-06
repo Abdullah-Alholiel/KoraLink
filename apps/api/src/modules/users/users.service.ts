@@ -14,6 +14,7 @@ import {
 import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import { randomInt } from 'node:crypto';
 import * as Sentry from '@sentry/node';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -919,7 +920,7 @@ export class UsersService {
       return [];
     }
 
-    const q = `%${query.trim()}%`;
+    const q = '%' + escapeLikePattern(query.trim()) + '%';
     return this.db
       .select({
         id: users.id,
@@ -933,7 +934,7 @@ export class UsersService {
         and(
           isNull(users.deleted_at),
           isNull(users.banned_at),
-          sql`(${users.full_name} ILIKE ${q} OR ${users.handle} ILIKE ${q})`,
+          sql`(${users.full_name} ILIKE ${q} ESCAPE '\\' OR ${users.handle} ILIKE ${q} ESCAPE '\\')`,
         ),
       )
       .limit(20);
