@@ -1,0 +1,56 @@
+// ─── Full-set CSV export fetch (P2-147) ───────────────────
+// The list pages render one 20/50-row page, but an export must cover the
+// whole FILTERED dataset. This walks the same list endpoint the page uses
+// (same filters, same sort) at the API's perPage ceiling (@Max(100)) and
+// returns every row, hard-capped so a huge table can't freeze the browser.
+// exportCsv/buildCsvExport stay untouched — this layer only feeds them rows.
+
+import { api } from '@/lib/api';
+
+/** API-side @Max(100) on perPage. */
+export const EXPORT_PAGE_SIZE = 100;
+/** Hard row cap per export; `truncated` flags when the filtered total exceeds it. */
+export const EXPORT_ROW_CAP = 10_000;
+/** Absolute loop guard (non-monotonic totals, misbehaving paging). */
+const MAX_ITERATIONS = 200;
+
+export interface FetchAllForExportResult<TRow> {
+  rows: TRow[];
+  total: number;
+  truncated: boolean;
+}
+
+export async function fetchAllForExport<TPage, TRow>(opts: {
+  url: string;
+  rowKey: keyof TPage & string;
+  signal?: AbortSignal;
+}): Promise<FetchAllForExportResult<TRow>> {
+  const [path, query = ''] = opts.url.split('?', 2);
+  const params = new URLSearchParams(query);
+  params.set('perPage', String(EXPORT_PAGE_SIZE));
+
+  const rows: TRow[] = [];
+  let total = 0;
+  for (let page = 1; page <= MAX_ITERATIONS; page++) {
+    params.set('page', String(page));
+    // api.get throws on any non-OK response; its message carries the status
+    // ("Request failed (500)") unless the API supplied its own message.
+    const res = await api.get<TPage & { total?: number }>(`${path}?${params.toString()}`, {
+      signal: opts.signal,
+    });
+    if (!res) throw new Error(`Export page ${page} returned an empty body`);
+    const batch = (res[opts.rowKey] as unknown as TRow[] | undefined) ?? [];
+    total = Math.max(total, Number(res.total ?? 0));
+
+    rows.push(...batch.slice(0, EXPORT_ROW_CAP - rows.length));
+    if (
+      rows.length >= EXPORT_ROW_CAP ||
+      rows.length >= total ||
+      batch.length < EXPORT_PAGE_SIZE
+    ) {
+      break;
+    }
+  }
+
+  return { rows, total, truncated: total > EXPORT_ROW_CAP };
+}

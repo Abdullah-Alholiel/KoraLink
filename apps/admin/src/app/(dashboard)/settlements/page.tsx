@@ -121,29 +121,35 @@ export default function SettlementsPage() {
   ];
 
   const rows = data?.settlements ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'venue', header: t('thVenue'), value: (s: Settlement) => s.venue_name ?? '' },
-        { key: 'amount', header: t('thAmount'), value: (s: Settlement) => csvAmount(s.amount) },
-        { key: 'status', header: t('thStatus') },
-        {
-          key: 'period',
-          header: t('thPeriod'),
-          value: (s: Settlement) => `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
-        },
-        { key: 'payoutRef', header: t('thPayoutRef'), value: (s: Settlement) => s.payout_ref ?? '' },
-        { key: 'id', header: t('thId') },
-      ],
-      rows,
-      filePrefix: 'koralink-settlements',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<SettlementsResponse, Settlement>({
+      url: `/admin/settlements?${qs.toString()}`,
+      rowKey: 'settlements',
+      build: (allRows) => ({
+        columns: [
+          { key: 'venue', header: t('thVenue'), value: (s: Settlement) => s.venue_name ?? '' },
+          { key: 'amount', header: t('thAmount'), value: (s: Settlement) => csvAmount(s.amount) },
+          { key: 'status', header: t('thStatus') },
+          {
+            key: 'period',
+            header: t('thPeriod'),
+            value: (s: Settlement) => `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
+          },
+          { key: 'payoutRef', header: t('thPayoutRef'), value: (s: Settlement) => s.payout_ref ?? '' },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-settlements',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.settlements', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.settlements', rows: exported });
   }
 
   function onSortChange(v: string) {

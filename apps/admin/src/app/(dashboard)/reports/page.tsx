@@ -41,26 +41,32 @@ export default function ReportsPage() {
   );
 
   const rows = data?.reports ?? [];
-  const exportDisabled = loading || !!error || rows.length === 0;
   const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
 
 
-  function onExport() {
-    exportFeedback.runExport({
-      columns: [
-        { key: 'subject', header: t('thSubject'), value: (r: AdminReportListItem) => r.subject_label ?? '' },
-        { key: 'subjectType', header: t('thSubjectType'), value: (r: AdminReportListItem) => r.subject_type },
-        { key: 'status', header: t('thStatus'), value: (r: AdminReportListItem) => r.status },
-        { key: 'reported', header: t('thReported'), value: (r: AdminReportListItem) => csvDate(r.created_at) },
-        { key: 'reporter', header: t('thReporter'), value: (r: AdminReportListItem) => r.reporter_name ?? r.reporter_handle ?? '' },
-        { key: 'reason', header: t('thReason'), value: (r: AdminReportListItem) => r.reason },
-        { key: 'id', header: t('thId') },
-      ],
-      rows,
-      filePrefix: 'koralink-reports',
-      timestamp: new Date(),
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<ReportsResponse, AdminReportListItem>({
+      url: `/admin/reports?${qs.toString()}`,
+      rowKey: 'reports',
+      build: (allRows) => ({
+        columns: [
+          { key: 'subject', header: t('thSubject'), value: (r: AdminReportListItem) => r.subject_label ?? '' },
+          { key: 'subjectType', header: t('thSubjectType'), value: (r: AdminReportListItem) => r.subject_type },
+          { key: 'status', header: t('thStatus'), value: (r: AdminReportListItem) => r.status },
+          { key: 'reported', header: t('thReported'), value: (r: AdminReportListItem) => csvDate(r.created_at) },
+          { key: 'reporter', header: t('thReporter'), value: (r: AdminReportListItem) => r.reporter_name ?? r.reporter_handle ?? '' },
+          { key: 'reason', header: t('thReason'), value: (r: AdminReportListItem) => r.reason },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-reports',
+        timestamp: new Date(),
+      }),
     });
-    trackEvent('admin_csv_export', { page: 'admin.reports', rows: rows.length });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.reports', rows: exported });
   }
 
   const columns: ColumnDef<AdminReportListItem>[] = [

@@ -31,7 +31,11 @@
     "saveFailed": "Save failed: {error}",
     "exportCsv": "Export CSV",
     "exportedRows": "{count, plural, =0 {No rows to export.} one {CSV generated with 1 row.} other {CSV generated with # rows.}}",
-    "exportFailed": "Export failed. Try again."
+    "exportFailed": "Export failed. Try again.",
+    "exportAllSuccess": "CSV generated with {count, plural, =0 {no rows} one {1 row} other {# rows}}.",
+    "exportCapped": "Export capped at the first {limit, number} of {total, number} rows.",
+    "exporting": "Preparing export…",
+    "exportAllFailed": "Export failed. Try again."
   },
   "notifications": {
     "bell": "Notifications",
