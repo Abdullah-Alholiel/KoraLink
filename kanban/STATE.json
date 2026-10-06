@@ -4,12 +4,14 @@
   "last_run": 108,
   "last_run_at": "2026-10-06T01:16Z",
   "last_run_commits": [
-    "0f65e3b (PR #90 P2-160)",
-    "c8abd4d (PR #91 P2-147 — merge pending CI at report time)"
+    "0f65e3b (PR #90 P2-160, merged)",
+    "830833c (PR #91 P2-147, merged = c8abd4d+d507b0b+540d7aa)",
+    "13bfa98 docs",
+    "493262b graphify"
   ],
   "last_run_report": "kanban/RUNS/2026-10-06T15-18Z-run108.md",
   "in_review_items": [
-    "run108 P2-147 full-set-with-cap CSV (c8abd4d, PR #91): verify next run — all 7 pages call runFullExport; fetch-all-for-export.ts exists with 10k cap + iteration guard; i18n parity 662/662 (4 new common.* keys EN+AR); live E2E ENVELOPE_CONTRACT_OK all 7 endpoints; turbo 3/3 + admin --force rebuild 0 cached",
+    "run108 P2-147 full-set-with-cap CSV (830833c, PR #91 merged): verify next run — all 7 pages call runFullExport; fetch-all-for-export.ts exists (10k cap, iteration guard, verified-total paging, sawTotal semantics); i18n parity 662/662 (4 new common.* keys EN+AR); live E2E ENVELOPE_CONTRACT_OK all 7 endpoints; post-merge force rebuild 3/3 0-cached; PR-Agent residual MINOR (offset drift) documented",
     "run108 P2-160 club-detail venue retry (0f65e3b, PR #90 merged): verify next run — clubs/[id]/page.tsx renders errorKey(classifyError(error)) + common.retry wired to refetchVenue, guarded !venue; vitest 122f/898t"
   ],
   "open_blockers": [
