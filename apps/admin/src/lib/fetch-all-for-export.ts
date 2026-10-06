@@ -31,6 +31,7 @@ export async function fetchAllForExport<TPage, TRow>(opts: {
 
   const rows: TRow[] = [];
   let total = 0;
+  let sawTotal = false; // envelope carried a numeric total at least once
   for (let page = 1; page <= MAX_ITERATIONS; page++) {
     params.set('page', String(page));
     // api.get throws on any non-OK response; its message carries the status
@@ -40,17 +41,30 @@ export async function fetchAllForExport<TPage, TRow>(opts: {
     });
     if (!res) throw new Error(`Export page ${page} returned an empty body`);
     const batch = (res[opts.rowKey] as unknown as TRow[] | undefined) ?? [];
-    total = Math.max(total, Number(res.total ?? 0));
+    if (typeof res.total === 'number') {
+      total = Math.max(total, res.total);
+      sawTotal = true;
+    }
 
     rows.push(...batch.slice(0, EXPORT_ROW_CAP - rows.length));
     if (
       rows.length >= EXPORT_ROW_CAP ||
-      rows.length >= total ||
+      (sawTotal && rows.length >= total) ||
       batch.length < EXPORT_PAGE_SIZE
     ) {
       break;
     }
   }
 
-  return { rows, total, truncated: total > EXPORT_ROW_CAP };
+  // Truncation semantics: with a known total, capped exports flag when the
+  // filtered set exceeded the cap. If the envelope regressed and never
+  // carried a numeric total, paging ran to a short page instead — hitting
+  // the cap there is flagged conservatively (we cannot prove completeness),
+  // never reported as a silent partial (PR-Agent review on this PR).
+  const stoppedAtCap = rows.length >= EXPORT_ROW_CAP;
+  const truncated = stoppedAtCap
+    ? !(sawTotal && total <= EXPORT_ROW_CAP)
+    : sawTotal && total > EXPORT_ROW_CAP;
+
+  return { rows, total, truncated };
 }
