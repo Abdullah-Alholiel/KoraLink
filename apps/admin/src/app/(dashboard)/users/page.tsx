@@ -19,7 +19,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { csvDate } from '@/lib/csv-export';
+import { csvAmount, csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
@@ -92,7 +92,7 @@ export default function UsersPage() {
         { key: 'phone', header: t('thPhone'), value: (u: AdminUser) => u.phone ?? '' },
         { key: 'role', header: t('thRole'), value: (u: AdminUser) => u.role ?? '' },
         { key: 'status', header: t('thStatus'), value: (u: AdminUser) => userStatus(u) },
-        { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => String(u.wallet_balance ?? 0) },
+        { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => csvAmount(u.wallet_balance) },
         { key: 'karma', header: t('thKarma'), value: (u: AdminUser) => String(u.karma_score ?? 0) },
         { key: 'noShows', header: t('thNoShows'), value: (u: AdminUser) => String(u.no_show_count ?? 0) },
         { key: 'joined', header: t('thJoined'), value: (u: AdminUser) => csvDate(u.created_at) },
