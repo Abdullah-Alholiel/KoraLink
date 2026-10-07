@@ -110,6 +110,9 @@ function renderPage() {
 beforeEach(() => {
     vi.clearAllMocks();
     useAppStoreMockState.isHydrated = true;
+    // Signed-in user by default — favorites are a signed-in feature; the
+    // guest case is pinned explicitly in FAV-10.
+    useAppStoreMockState.user = { id: 'u-1', full_name: 'Tester' };
     useVenuesMock.mockReset().mockImplementation(() => ({
         data: [...VENUES], isLoading: false, error: null, refetch: vi.fn(),
     }));
@@ -257,6 +260,23 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
         expect(hearts.length).toBeGreaterThan(0);
         hearts.forEach((h) => expect(h).toBeDisabled());
         // No error strip (nothing failed — auth state is just unknown yet).
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
+    });
+
+    it('FAV-10 (PR-Agent r7): hydrated GUEST → hearts inert (a tap could only 401), no error strip', () => {
+        useAppStoreMockState.user = null;
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isLoading: false, isError: false }));
+        // Default tab — a hydrated guest on the Favorites pill correctly sees
+        // the onboarding empty state (no cards → no hearts there).
+        renderPage();
+
+        // Hearts inert for signed-out visitors — mutation would only 401.
+        const hearts = screen
+            .getAllByRole('button', { name: /from favorites|to favorites/i });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No misleading error strip for a feature the guest doesn't have.
         expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
     });
 });

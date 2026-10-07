@@ -214,15 +214,17 @@ export default function ClubPage() {
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
                   disabled={
-                      // Run #110 (PR-Agent r1+r2+r6): unknown heart state must
-                      // be inert — ids loading, auth store not yet
-                      // rehydrated, or error with NO usable cached ids. A tap
-                      // on a mislabeled heart would silently UNfavorite a
-                      // saved venue. Stale cached ids stay usable (strip
+                      // Run #110 (PR-Agent r1+r2+r6+r7): unknown heart state
+                      // must be inert — ids loading, auth store not yet
+                      // rehydrated, a signed-out visitor, or error with NO
+                      // usable cached ids. A tap on a mislabeled heart would
+                      // silently UNfavorite a saved venue (a guest tap can
+                      // only 401). Stale cached ids stay usable (strip
                       // warns).
                       (favoriteToggle.isPending &&
                           favoriteToggle.variables?.venueId === venue.id) ||
                       !isHydrated ||
+                      !storeUser ||
                       favIdsLoading ||
                       (favIdsError && !favIds)
                   }

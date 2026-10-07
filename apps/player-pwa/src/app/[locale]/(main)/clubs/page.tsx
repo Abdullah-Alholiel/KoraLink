@@ -95,6 +95,7 @@ export default function ClubsPage() {
     const favoriteToggle = useVenueFavoriteToggle();
     const showToast = useAppStore((s) => s.showToast);
     const isHydrated = useAppStore((s) => s.isHydrated);
+    const storeUser = useAppStore((s) => s.user);
 
     // Pills filter the (already server-searched) fetched set client-side, then
     // Nearby applies a stable ascending distance sort — null/missing distance
@@ -342,18 +343,20 @@ export default function ClubsPage() {
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
                                 disabled={
-                                    // Run #110 (PR-Agent r1+r2+r6): unknown
+                                    // Run #110 (PR-Agent r1+r2+r6+r7): unknown
                                     // heart state must be inert — ids
                                     // loading, auth store not yet
-                                    // rehydrated, or error with NO usable
-                                    // cached ids. A tap on a mislabeled
-                                    // heart would silently UNfavorite a
-                                    // saved venue. Stale cached ids stay
+                                    // rehydrated, a signed-out visitor, or
+                                    // error with NO usable cached ids. A tap
+                                    // on a mislabeled heart would silently
+                                    // UNfavorite a saved venue (a guest tap
+                                    // can only 401). Stale cached ids stay
                                     // usable (strip warns). Strip+Retry below
                                     // explains dead hearts on every tab.
                                     (favoriteToggle.isPending &&
                                         favoriteToggle.variables?.venueId === venue.id) ||
                                     !isHydrated ||
+                                    !storeUser ||
                                     favIdsLoading ||
                                     (favIdsError && !favIds)
                                 }
