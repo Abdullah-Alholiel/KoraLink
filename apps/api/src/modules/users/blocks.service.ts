@@ -20,6 +20,8 @@ export interface BlockView {
 
 export interface UnblockResult {
   blocked: false;
+  /** P2-161 rider (run #109): true only when a block row was actually deleted. */
+  removed: boolean;
 }
 
 /** Stable machine code for a DM send rejected by a block (P1-47 convention). */
@@ -73,10 +75,11 @@ export class BlocksService {
   }
 
   async unblock(blockerId: string, blockedId: string): Promise<UnblockResult> {
-    await this.db
+    const deleted = await this.db
       .delete(user_blocks)
-      .where(and(eq(user_blocks.blocker_id, blockerId), eq(user_blocks.blocked_id, blockedId)));
-    return { blocked: false };
+      .where(and(eq(user_blocks.blocker_id, blockerId), eq(user_blocks.blocked_id, blockedId)))
+      .returning({ blocked_id: user_blocks.blocked_id });
+    return { blocked: false, removed: deleted.length > 0 };
   }
 
   async listBlocked(userId: string): Promise<BlockView[]> {

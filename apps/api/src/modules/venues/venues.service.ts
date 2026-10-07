@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException, Inject, NotFoundException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { venues } from '../../database/schema';
+import { venues, venue_favorites } from '../../database/schema';
 import { escapeLikePattern } from '../../common/utils/escape-like';
 import { GetVenuesDto } from './dto/get-venues.dto';
 
@@ -17,6 +17,16 @@ export interface VenueSuggestionRow {
   neighborhood: string;
   /** Number of approved venues at this city + neighborhood pair. */
   venue_count: number;
+}
+
+/** P2-161: idempotent favorite/unfavorite response contract. */
+export interface FavoriteMutationResult {
+  /** True when favorited, false when not favorited. */
+  favorited: boolean;
+  /** addFavorite: a row was actually inserted (false = already favorited). */
+  created?: boolean;
+  /** removeFavorite: a row was actually deleted (false = was not favorited). */
+  removed?: boolean;
 }
 
 /**
@@ -288,5 +298,84 @@ export class VenuesService {
       closed_day_5: venue.closed_day_5,
       closed_day_6: venue.closed_day_6,
     };
+  }
+
+  // ── P2-161: venue favorites (run #109) ──────────────────────────────────
+  // Composite PK (user_id, venue_id) makes both directions idempotent.
+  // Listing mirrors findNearby's EXACT row shape (adapt-by-extending rule) so
+  // the PWA consumes VenueApi[] with zero new adapter code; distance is
+  // always NULL (favorites are not geo-ranked) and ordering is newest-first.
+
+  /** The favorited ids for a user — the PWA heart-state source. */
+  async listFavoriteIds(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ venue_id: venue_favorites.venue_id })
+      .from(venue_favorites)
+      .where(eq(venue_favorites.user_id, userId))
+      .orderBy(sql`created_at DESC`);
+    return rows.map((r) => r.venue_id);
+  }
+
+  /** Full venue rows for the user's favorites, newest-first, findNearby shape. */
+  async listFavoriteVenues(userId: string) {
+    const res = await this.db.execute(sql`
+      SELECT
+        v.id,
+        v.name,
+        v.city,
+        v.address,
+        v.amenities,
+        v.is_approved,
+        v.is_koralink_partner,
+        NULL::float8 AS distance_m,
+        v.owner_id,
+        u.full_name AS owner_name,
+        COUNT(p.id)::int AS pitch_count,
+        v.open_hour::int,
+        v.close_hour::int,
+        v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
+        v.closed_day_4, v.closed_day_5, v.closed_day_6
+      FROM venue_favorites vf
+      INNER JOIN venues v ON v.id = vf.venue_id
+      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN pitches p ON p.venue_id = v.id
+      WHERE vf.user_id = ${userId}
+        AND v.is_approved = true
+      GROUP BY v.id, u.id, vf.created_at
+      ORDER BY vf.created_at DESC, v.name ASC
+    `);
+    return res as unknown as Record<string, unknown>[];
+  }
+
+  /** Idempotent favorite. `created` is true only when a row was inserted. */
+  async addFavorite(userId: string, venueId: string): Promise<FavoriteMutationResult> {
+    const venue = await this.db
+      .select({ id: venues.id })
+      .from(venues)
+      .where(eq(venues.id, venueId))
+      .limit(1);
+    if (venue.length === 0) {
+      throw new NotFoundException(`Venue ${venueId} not found.`);
+    }
+
+    const inserted = await this.db
+      .insert(venue_favorites)
+      .values({ user_id: userId, venue_id: venueId })
+      .onConflictDoNothing()
+      .returning({ venue_id: venue_favorites.venue_id });
+
+    return { favorited: true, created: inserted.length > 0 };
+  }
+
+  /** Idempotent unfavorite. Never 404s on a missing row (mirror of unblock). */
+  async removeFavorite(userId: string, venueId: string): Promise<FavoriteMutationResult> {
+    const deleted = await this.db
+      .delete(venue_favorites)
+      .where(
+        and(eq(venue_favorites.user_id, userId), eq(venue_favorites.venue_id, venueId)),
+      )
+      .returning({ venue_id: venue_favorites.venue_id });
+
+    return { favorited: false, removed: deleted.length > 0 };
   }
 }

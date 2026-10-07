@@ -82,12 +82,20 @@ function makeFakeDb(opts: { existingUsers: string[]; blocks?: BlockRow[] }) {
       };
       return chain;
     }),
-    delete: jest.fn(() => ({
-      where: async () => {
-        const i = blocks.findIndex((r) => r.blocker_id === ctx.a && r.blocked_id === ctx.b);
-        if (i >= 0) blocks.splice(i, 1);
-      },
-    })),
+    delete: jest.fn(() => {
+      const chain: any = {
+        where: () => chain,
+        returning: async () => {
+          const i = blocks.findIndex((r) => r.blocker_id === ctx.a && r.blocked_id === ctx.b);
+          if (i >= 0) {
+            blocks.splice(i, 1);
+            return [{ blocked_id: ctx.b }];
+          }
+          return [];
+        },
+      };
+      return chain;
+    }),
   };
   return { db, blocks, ctx };
 }
@@ -151,12 +159,12 @@ describe('BlocksService', () => {
     expect(h.blocks).toHaveLength(1);
   });
 
-  it('unblock: idempotent — { blocked: false } whether or not a row existed', async () => {
+  it('unblock: idempotent — removed flag distinguishes a real delete (P2-161 rider)', async () => {
     const h = makeBlocks({ existingUsers: ['u1', 'u2'] });
     await h.block('u1', 'u2');
 
-    await expect(h.unblock('u1', 'u2')).resolves.toEqual({ blocked: false });
-    await expect(h.unblock('u1', 'u2')).resolves.toEqual({ blocked: false });
+    await expect(h.unblock('u1', 'u2')).resolves.toEqual({ blocked: false, removed: true });
+    await expect(h.unblock('u1', 'u2')).resolves.toEqual({ blocked: false, removed: false });
     expect(h.blocks).toHaveLength(0);
   });
 

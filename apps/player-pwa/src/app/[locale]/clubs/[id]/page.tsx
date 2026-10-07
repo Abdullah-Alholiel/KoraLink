@@ -18,6 +18,11 @@ import {
   X,
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
+import {
+    useVenueFavoriteIds,
+    useVenueFavoriteToggle,
+} from '@/hooks/useVenueFavorites';
+import { Heart } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
 import { useNow } from '@/hooks/useNow';
 import MatchDateSections from '@/components/matches/MatchDateSections';
@@ -90,6 +95,12 @@ export default function ClubPage() {
   // match detail — a transient network blip on a booking-entry surface must
   // offer recovery, not a dead end.
   const { data: venue, isLoading, error, refetch: refetchVenue } = useVenue(id);
+
+  // ── P2-161: favorite heart state (run #109) ──────────────────────────
+  const { data: favIds } = useVenueFavoriteIds();
+  const favSet = favIds ?? [];
+  const favoriteToggle = useVenueFavoriteToggle();
+  const showToast = useAppStore((s) => s.showToast);
 
   // ── Date filter state — null = "all games" first-look (matches Play) ──
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -188,6 +199,32 @@ export default function ClubPage() {
                 priority
               />
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
+
+              {/* ── P2-161: favorite heart on the hero (run #109) ── */}
+              <button
+                  type="button"
+                  aria-pressed={favSet.includes(venue.id)}
+                  aria-label={
+                      favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
+                  }
+                  disabled={favoriteToggle.isPending}
+                  onClick={() =>
+                      favoriteToggle.mutate(
+                          { venueId: venue.id, venue: venue as never },
+                          { onError: () => showToast(t('errors.favoriteFailed'), 'error') },
+                      )
+                  }
+                  className="absolute top-4 end-5 z-10 w-10 h-10 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+              >
+                  <Heart
+                      className={`w-5 h-5 transition-colors ${
+                          favSet.includes(venue.id)
+                              ? 'fill-brand-red text-brand-red'
+                              : 'text-gray-500'
+                      }`}
+                      strokeWidth={2}
+                  />
+              </button>
 
               {/* Bottom text on hero */}
               <div className="absolute bottom-4 start-5 end-5 text-white">

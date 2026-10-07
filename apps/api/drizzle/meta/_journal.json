@@ -330,6 +330,13 @@
       "when": 1791077581937,
       "tag": "0045_user_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791077641937,
+      "tag": "0046_venue_favorites",
+      "breakpoints": true
     }
   ]
 }
