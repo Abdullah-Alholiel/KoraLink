@@ -5,25 +5,33 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { Search, MapPin, Users, X } from 'lucide-react';
+import { Search, MapPin, Users, X, Heart } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import SuggestionChips from '@/components/search/SuggestionChips';
 import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
 import { filterSuggestions } from '@/lib/search-suggestions';
 import { useVenues } from '@/hooks/useVenues';
+import {
+    useVenueFavoriteIds,
+    useVenueFavoriteToggle,
+} from '@/hooks/useVenueFavorites';
 import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
+import { useAppStore } from '@/store/useAppStore';
 
 // Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — the product
 // has no ratings pipeline (venues.rating is all-zero, no write path), so the
 // pill filtered nothing. Nearby is now a real distance sort (see below).
-const FILTER_KEYS = ['Nearby', 'Indoor', 'Available Now'] as const;
+// P2-161 (run #109): 'Favorites' joins as a real filter — it narrows to the
+// caller's saved venues (server list), independent of the geo sort.
+const FILTER_KEYS = ['Nearby', 'Favorites', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL_MAP: Record<FilterKey, string> = {
     Nearby: 'clubs.filters.nearby',
+    Favorites: 'clubs.favorites',
     Indoor: 'clubs.filters.indoor',
     'Available Now': 'clubs.filters.availableNow',
 };
@@ -70,15 +78,37 @@ export default function ClubsPage() {
         search: debouncedSearch || undefined,
     });
 
+    // ── P2-161: favorites (run #109) ──────────────────────────────────────
+    // Id set drives the card hearts; the toggle is optimistic with rollback.
+    // The 'Favorites' pill narrows to the ids ∩ fetched list (search still
+    // applies server-side, so typing inside the pill searches saved clubs).
+    // PR-Agent run-#109: ids LOADING is distinct from EMPTY — while the ids
+    // query is in flight the pill shows the full list instead of flashing the
+    // onboarding empty state at users who have favorites.
+    const {
+        data: favIds,
+        isLoading: favIdsLoading,
+    } = useVenueFavoriteIds();
+    const favSet = favIds ?? [];
+    const favoriteToggle = useVenueFavoriteToggle();
+    const showToast = useAppStore((s) => s.showToast);
+
     // Pills filter the (already server-searched) fetched set client-side, then
     // Nearby applies a stable ascending distance sort — null/missing distance
     // (location denied / non-geo rows) always sorts LAST, ties keep API order.
     // (Run #68, P2-13 residual: Nearby was previously a no-op pill.)
+    // P2-161: 'Favorites' narrows to saved venues (ids ∩ fetched list).
     const filteredVenues = (venues ?? []).filter((v) => {
         // A tapped suggestion pins the list to its neighborhood (server search
         // already matched city/address; this narrows to the exact district).
         if (suggestedFilter && !v.address.toLowerCase().includes(suggestedFilter.toLowerCase())) {
             return false;
+        }
+        if (activeFilter === 'Favorites') {
+            // PR-Agent run-#109: while the ids query loads, show all (no
+            // false "no favorites" flash); once loaded, narrow to saved.
+            if (favIdsLoading) return true;
+            return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
@@ -239,15 +269,22 @@ export default function ClubsPage() {
                         <MapPin className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
                     </div>
                     <h3 className="text-lg font-bold text-brand-black mb-1">
-                        {venues && venues.length > 0 ? t('common.noResults') : t('clubs.noClubs')}
+                        {activeFilter === 'Favorites'
+                            ? t('clubs.favoritesEmptyTitle')
+                            : venues && venues.length > 0
+                              ? t('common.noResults')
+                              : t('clubs.noClubs')}
                     </h3>
                     {/* Run #68: split the advice line — "adjust your filters" is
                         only true when venues exist but none match the filter;
-                        a truly empty table needs the no-clubs copy instead. */}
+                        a truly empty table needs the no-clubs copy instead.
+                        P2-161: the Favorites pill gets its own onboarding copy. */}
                     <p className="text-sm text-gray-400 text-center mb-6">
-                        {venues && venues.length > 0
-                            ? t('clubs.noClubsDescription')
-                            : t('clubs.noClubsEmpty')}
+                        {activeFilter === 'Favorites'
+                            ? t('clubs.favoritesEmptyDesc')
+                            : venues && venues.length > 0
+                              ? t('clubs.noClubsDescription')
+                              : t('clubs.noClubsEmpty')}
                     </p>
                 </div>
             )}
@@ -256,11 +293,42 @@ export default function ClubsPage() {
             {!isLoading && !error && filteredVenues.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
                     {filteredVenues.map((venue) => (
-                        <Link
+                        <div
                             key={venue.id}
-                            href={`/${locale}/clubs/${venue.id}`}
-                            className="block bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+                            className="relative bg-white rounded-2xl shadow-card animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
                         >
+                            {/* ── P2-161: favorite heart as a SIBLING overlay
+                                (PR-Agent run-#109: button inside <a> violates
+                                the HTML content model / validateDOMNesting) ── */}
+                            <button
+                                type="button"
+                                aria-pressed={favSet.includes(venue.id)}
+                                aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
+                                disabled={favoriteToggle.isPending}
+                                onClick={() => {
+                                    favoriteToggle.mutate(
+                                        { venueId: venue.id },
+                                        {
+                                            onError: () =>
+                                                showToast(t('errors.favoriteFailed'), 'error'),
+                                        },
+                                    );
+                                }}
+                                className="absolute top-3 end-3 z-10 w-9 h-9 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+                            >
+                                <Heart
+                                    className={`w-[18px] h-[18px] transition-colors ${
+                                        favSet.includes(venue.id)
+                                            ? 'fill-brand-red text-brand-red'
+                                            : 'text-gray-400'
+                                    }`}
+                                    strokeWidth={2}
+                                />
+                            </button>
+                            <Link
+                                href={`/${locale}/clubs/${venue.id}`}
+                                className="block p-4"
+                            >
                             <div className="flex items-start justify-between gap-3">
                                 {/* Venue avatar */}
                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
@@ -345,7 +413,8 @@ export default function ClubsPage() {
                                     })()}
                                 </div>
                             </div>
-                        </Link>
+                            </Link>
+                        </div>
                     ))}
                 </div>
             )}

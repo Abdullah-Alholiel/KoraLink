@@ -904,6 +904,29 @@ export const user_blocks = pgTable(
   ],
 );
 
+// P2-161: venue favorites (wishlist). Composite PK (user_id, venue_id) makes
+// favorite idempotent and serves the per-user listing lookup; venue_id index
+// serves cascade + future per-venue counts. Favorites are directional and
+// private to the user — no social surface reads them.
+export const venue_favorites = pgTable(
+  'venue_favorites',
+  {
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'venue_favorites_pk', columns: [t.user_id, t.venue_id] }),
+    index('venue_favorites_venue_id_idx').on(t.venue_id),
+  ],
+);
+
 export const activities = pgTable(
   'activities',
   {

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -9,6 +9,7 @@ import {
 import { VenuesService } from './venues.service';
 import { GetVenuesDto } from './dto/get-venues.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('venues')
 @ApiCookieAuth('access_token')
@@ -42,6 +43,47 @@ export class VenuesController {
   @ApiOkResponse({ description: 'List of nearby approved venues.' })
   findNearby(@Query() dto: GetVenuesDto) {
     return this.venuesService.findNearby(dto);
+  }
+
+  // ── GET /venues/favorites — the caller's saved venues (P2-161, run #109) ─
+  // MUST stay ABOVE GET /venues/:id or "favorites" is captured as :id (same
+  // rule as /suggestions above).
+  @Get('favorites')
+  @ApiOperation({ summary: 'List the authenticated user\'s favorite venues' })
+  @ApiOkResponse({ description: 'Favorite venues, newest-first (findNearby row shape).' })
+  listFavorites(@CurrentUser() user: { sub: string }) {
+    return this.venuesService.listFavoriteVenues(user.sub);
+  }
+
+  // ── GET /venues/favorites/ids — heart-state id set (P2-161) ─────────────
+  // Two segments, so :id cannot shadow it, but declared here to keep the
+  // favorites surface together.
+  @Get('favorites/ids')
+  @ApiOperation({ summary: 'List the authenticated user\'s favorited venue ids (newest-first)' })
+  @ApiOkResponse({ description: 'Array of venue ids.' })
+  listFavoriteIds(@CurrentUser() user: { sub: string }) {
+    return this.venuesService.listFavoriteIds(user.sub);
+  }
+
+  // ── POST /venues/:id/favorite — idempotent save (P2-161) ────────────────
+  @Post(':id/favorite')
+  @ApiOperation({ summary: 'Favorite a venue (idempotent)' })
+  @ApiOkResponse({
+    description: '{ favorited: true, created } — created=true only when newly inserted.',
+  })
+  addFavorite(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.addFavorite(user.sub, id);
+  }
+
+  // ── DELETE /venues/:id/favorite — idempotent unsave (P2-161) ────────────
+  @Delete(':id/favorite')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Unfavorite a venue (idempotent, never 404s on a missing row)' })
+  @ApiOkResponse({
+    description: '{ favorited: false, removed } — removed=true only when a row was deleted.',
+  })
+  removeFavorite(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.removeFavorite(user.sub, id);
   }
 
   // ── GET /venues/:id — Venue details ───────────────────────────────────

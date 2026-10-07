@@ -67,7 +67,7 @@ export class BlocksController {
   @Delete('me/blocks/:blockedId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unblock a user (idempotent)' })
-  @ApiOkResponse({ description: '{ blocked: false }' })
+  @ApiOkResponse({ description: '{ blocked: false, removed } — removed=true only when a row was deleted.' })
   unblock(
     @CurrentUser() user: { sub: string },
     @Param('blockedId') blockedId: string,

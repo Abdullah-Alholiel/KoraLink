@@ -42,6 +42,22 @@ vi.mock('@/hooks/useVenues', async (importOriginal) => {
     };
 });
 
+// ── P2-161 (run #109): controllable favorites fixtures ──
+let favIdsFixture: string[] = [];
+const toggleMutate = vi.fn();
+
+vi.mock('@/hooks/useVenueFavorites', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/hooks/useVenueFavorites')>();
+    return {
+        ...actual,
+        useVenueFavoriteIds: () => ({ data: favIdsFixture, isLoading: false }),
+        useVenueFavoriteToggle: () => ({
+            mutate: toggleMutate,
+            isPending: false,
+        }),
+    };
+});
+
 vi.mock('@/providers/LocationProvider', () => ({
     useLocation: () => ({ coords: null, request: vi.fn(), loading: false }),
 }));
@@ -245,5 +261,73 @@ describe('Clubs page — dynamic search suggestion chips', () => {
         // carries the neighborhood text; the chip is the visible undo.
         expect(input).toHaveValue('Al-Nakheel');
         expect(chip.getAttribute('aria-pressed')).toBe('true');
+    });
+});
+
+// ── P2-161 (run #109): venue favorites ──────────────────────────────────────
+describe('Clubs page — venue favorites (P2-161)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        venueFixture = [];
+        venuesError = null;
+        favIdsFixture = [];
+    });
+
+    it('renders a heart on every card with aria-pressed reflecting favorite state', () => {
+        venueFixture = [
+            venue({ id: 'v1', name: 'Fav Club', distance_m: 100 }),
+            venue({ id: 'v2', name: 'Plain Club', distance_m: 200 }),
+        ];
+        favIdsFixture = ['v1'];
+
+        renderClubs();
+
+        const hearts = screen
+            .getAllByRole('button', { name: /add to favorites|remove from favorites/i })
+            .filter((b) => b.getAttribute('aria-pressed') !== null);
+        expect(hearts).toHaveLength(2);
+        expect(hearts[0].getAttribute('aria-pressed')).toBe('true');
+        expect(hearts[1].getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('tapping a heart toggles without navigating (stopPropagation on the Link card)', () => {
+        venueFixture = [venue({ id: 'v1', name: 'Fav Club', distance_m: 100 })];
+
+        renderClubs();
+
+        const heart = screen.getByRole('button', { name: /add to favorites/i });
+        fireEvent.click(heart);
+        expect(toggleMutate).toHaveBeenCalledTimes(1);
+        expect(toggleMutate).toHaveBeenCalledWith(
+            { venueId: 'v1' },
+            expect.objectContaining({ onError: expect.any(Function) }),
+        );
+    });
+
+    it('the Favorites pill narrows the list to saved venues', () => {
+        venueFixture = [
+            venue({ id: 'v1', name: 'Fav Club', distance_m: 100 }),
+            venue({ id: 'v2', name: 'Plain Club', distance_m: 200 }),
+        ];
+        favIdsFixture = ['v1'];
+
+        renderClubs();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Favorites' }));
+        const names = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+        expect(names).toEqual(['Fav Club']);
+    });
+
+    it('an empty favorites set under the Favorites pill shows the onboarding empty state', () => {
+        venueFixture = [venue({ id: 'v2', name: 'Plain Club', distance_m: 200 })];
+        favIdsFixture = [];
+
+        renderClubs();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Favorites' }));
+        expect(screen.getByText('No favorites yet')).toBeInTheDocument();
+        expect(
+            screen.getByText('Tap the heart on any club to save it here.')
+        ).toBeInTheDocument();
     });
 });

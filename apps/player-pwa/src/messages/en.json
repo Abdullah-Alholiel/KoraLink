@@ -36,7 +36,8 @@
     "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going.",
     "blockedByRecipient": "You can't message this user anymore. One of you blocked the other. You can unblock them from their profile.",
     "blockFailed": "Couldn't block this user. Check your connection and try again.",
-    "unblockFailed": "Couldn't unblock this user. Check your connection and try again."
+    "unblockFailed": "Couldn't unblock this user. Check your connection and try again.",
+    "favoriteFailed": "Couldn't update your favorites — nothing was changed. Check your connection and try again."
   },
   "offline": {
     "backToPage": "Back to the page",
@@ -781,7 +782,12 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "hostHere": "Host a Match Here",
-    "error": "Failed to load venue"
+    "error": "Failed to load venue",
+    "favorites": "Favorites",
+    "favoritesEmptyTitle": "No favorites yet",
+    "favoritesEmptyDesc": "Tap the heart on any club to save it here.",
+    "favoriteAdd": "Add to favorites",
+    "favoriteRemove": "Remove from favorites"
   },
   "messages": {
     "title": "Messages",
