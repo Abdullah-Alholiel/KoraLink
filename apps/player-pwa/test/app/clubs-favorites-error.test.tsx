@@ -1,0 +1,282 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import enMessages from '@/messages/en.json';
+
+/**
+ * Favorites ids-error state (run #110) — clubs page integration specs.
+ *
+ * Contract under test (docs/plans/run110-favorites-error-state/):
+ *   FAV-1  ids query ERROR + Favorites pill active → the venue list stays
+ *          VISIBLE (fail-open) and an error strip with Retry renders — the
+ *          "No favorites yet" onboarding state must NEVER appear (that would
+ *          tell a user with saved clubs their favorites are gone).
+ *   FAV-2  Retry re-fires the ids query (refetch).
+ *   FAV-3  Healthy ids → pill narrows to saved venues only (no strip).
+ *   FAV-4  Per-heart pending isolation: toggling venue A disables only A's
+ *          heart, never B's (variables-scoped pending).
+ *
+ * Page mocks: useVenues + useVenueFavoriteIds/useVenueFavoriteToggle +
+ * LocationProvider + useSearchSuggestions + fetcher (no network, no socket).
+ */
+
+const pushMock = vi.hoisted(() => vi.fn());
+const useVenuesMock = vi.hoisted(() => vi.fn());
+const useVenueFavoriteIdsMock = vi.hoisted(() => vi.fn());
+const useVenueFavoriteToggleMock = vi.hoisted(() => vi.fn());
+const useSearchSuggestionsMock = vi.hoisted(() => vi.fn());
+const showToastMock = vi.hoisted(() => vi.fn());
+// Mutable store state the useAppStore mock selector reads — hoisted so the
+// vi.mock factory below can reference it; tests flip isHydrated on it.
+const useAppStoreMockState = vi.hoisted(() => ({
+    showToast: showToastMock,
+    isHydrated: true,
+}) as Record<string, unknown>);
+
+vi.mock('next/navigation', () => ({
+    usePathname: () => '/en/clubs',
+    useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useVenues', () => ({
+    useVenues: useVenuesMock,
+}));
+
+vi.mock('@/hooks/useVenueFavorites', () => ({
+    useVenueFavoriteIds: useVenueFavoriteIdsMock,
+    useVenueFavoriteToggle: useVenueFavoriteToggleMock,
+}));
+
+vi.mock('@/hooks/useSearchSuggestions', () => ({
+    useSearchSuggestions: useSearchSuggestionsMock,
+}));
+
+vi.mock('@/providers/LocationProvider', () => ({
+    useLocation: () => ({ coords: null, request: vi.fn(), loading: false }),
+}));
+
+vi.mock('@/lib/fetcher', () => ({ fetcher: vi.fn() }));
+
+vi.mock('@/store/useAppStore', () => ({
+    useAppStore: (sel: (s: Record<string, unknown>) => unknown) => sel(useAppStoreMockState),
+}));
+
+import ClubsPage from '@/app/[locale]/(main)/clubs/page';
+
+const VENUES = [
+    {
+        id: 'v-1', name: 'Al-Nakheel Sports Complex', city: 'Jeddah', address: 'Al-Nakheel',
+        amenities: [], rating: 4.5, distance_m: 1200, pitch_count: 2, is_approved: true,
+        open_hour: 8, close_hour: 23,
+    },
+    {
+        id: 'v-2', name: 'Olaya Padel Hub', city: 'Riyadh', address: 'Olaya',
+        amenities: [], rating: 4.0, distance_m: 3400, pitch_count: 1, is_approved: true,
+        open_hour: 8, close_hour: 23,
+    },
+] as const;
+
+const refetchIdsMock = vi.fn();
+const mutateMock = vi.fn();
+
+function idsResult(overrides: Record<string, unknown> = {}) {
+    return {
+        data: [] as string[], isLoading: false, isError: false,
+        refetch: refetchIdsMock, ...overrides,
+    };
+}
+
+function toggleResult(overrides: Record<string, unknown> = {}) {
+    return {
+        isPending: false, variables: undefined as { venueId: string } | undefined,
+        mutate: mutateMock, ...overrides,
+    };
+}
+
+function renderPage() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    return render(
+        <QueryClientProvider client={queryClient}>
+            <NextIntlClientProvider messages={enMessages} locale="en">
+                <ClubsPage />
+            </NextIntlClientProvider>
+        </QueryClientProvider>,
+    );
+}
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStoreMockState.isHydrated = true;
+    // Signed-in user by default — favorites are a signed-in feature; the
+    // guest case is pinned explicitly in FAV-10.
+    useAppStoreMockState.user = { id: 'u-1', full_name: 'Tester' };
+    useVenuesMock.mockReset().mockImplementation(() => ({
+        data: [...VENUES], isLoading: false, error: null, refetch: vi.fn(),
+    }));
+    useVenueFavoriteIdsMock.mockReset().mockImplementation(() => idsResult({ data: ['v-1'] }));
+    useVenueFavoriteToggleMock.mockReset().mockImplementation(() => toggleResult());
+    useSearchSuggestionsMock.mockReset().mockImplementation(() => ({
+        suggestions: [], open: false, listRef: { current: null },
+        handleFocus: vi.fn(), handleBlur: vi.fn(), dismiss: vi.fn(), isLoading: false,
+    }));
+});
+
+function activateFavoritesPill() {
+    fireEvent.click(screen.getByRole('button', { name: 'Favorites' }));
+}
+
+describe('Clubs page — favorites ids error state (run #110)', () => {
+    it('FAV-1: ids ERROR + Favorites pill → list stays visible, error strip renders, NEVER the onboarding empty state', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isError: true, error: { status: 500, message: 'boom' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Fail-open: both venues remain visible despite the unknown fav state.
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.getByText('Olaya Padel Hub')).toBeInTheDocument();
+        // Honest error strip with retry.
+        const strip = screen.getAllByRole('status').find((el) =>
+            el.textContent?.includes("Couldn't load your favorites."),
+        );
+        expect(strip).toBeDefined();
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+        // The false-empty onboarding copy must not render.
+        expect(screen.queryByText('No favorites yet')).not.toBeInTheDocument();
+    });
+
+    it('FAV-2: Retry on the error strip re-fires the ids query', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isError: true, error: { status: 0, message: 'offline' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+        expect(refetchIdsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('FAV-3: healthy ids → Favorites narrows to saved venues only, no error strip', () => {
+        renderPage();
+        activateFavoritesPill();
+
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.queryByText('Olaya Padel Hub')).not.toBeInTheDocument();
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
+    });
+
+    it('FAV-4: per-heart pending — toggling venue A leaves venue B heart enabled', () => {
+        useVenueFavoriteToggleMock.mockImplementation(() =>
+            toggleResult({ isPending: true, variables: { venueId: 'v-1' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Only v-1 visible under the pill; its heart disabled mid-toggle.
+        const heartA = screen.getByRole('button', { name: 'Remove from favorites' });
+        expect(heartA).toBeDisabled();
+
+        // B's heart would be enabled if it were rendered — assert via the
+        // nearby-list case: switch to Nearby (all venues visible).
+        fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
+        const heartB = screen.getByRole('button', { name: 'Add to favorites' });
+        expect(heartB).toBeEnabled();
+    });
+
+    it('FAV-5 (PR-Agent run #110): ids ERROR → hearts inert (no mislabeled unfavorite)', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isError: true, error: { status: 500, message: 'boom' } }));
+        renderPage();
+        // Nearby list (all venues) — hearts render unknown-state and must be
+        // disabled until Retry succeeds. Strip renders on EVERY tab (r2).
+        fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
+
+        const hearts = screen.getAllByRole('button', { name: 'Add to favorites' });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
+
+    it('FAV-6 (PR-Agent r2): ids LOADING → hearts inert too (mislabeled tap would unfavorite)', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() => idsResult({ data: undefined, isLoading: true }));
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
+
+        const hearts = screen.getAllByRole('button', { name: 'Add to favorites' });
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No strip while merely loading — fail-open list, no error noise.
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
+    });
+
+    it('FAV-7 (PR-Agent r3): ids ERROR with stale cached ids → keeps narrowing, hearts stay usable, strip warns', () => {
+        // Background-refetch failure: React Query retains the old ['v-1'] data.
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: ['v-1'], isError: true, error: { status: 0, message: 'offline' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Narrowing honors the stale-but-usable set (not fail-open).
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.queryByText('Olaya Padel Hub')).not.toBeInTheDocument();
+        // Hearts usable (state known from cache); strip still warns.
+        const heartA = screen.getByRole('button', { name: 'Remove from favorites' });
+        expect(heartA).toBeEnabled();
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
+
+    it('FAV-8 (PR-Agent r4): ids ERROR with stale cached EMPTY set → known-empty, shows the real empty state', () => {
+        // `[]` is a KNOWN empty set (user has no favorites) — a failed
+        // background refetch must NOT fail-open to the full list.
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: [], isError: true, error: { status: 0, message: 'offline' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Known-empty narrows to nothing → the genuine onboarding empty state.
+        expect(screen.queryByText('Al-Nakheel Sports Complex')).not.toBeInTheDocument();
+        expect(screen.getByText('No favorites yet')).toBeInTheDocument();
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
+
+    it('FAV-9 (PR-Agent r6): store NOT hydrated → hearts inert, list visible on Favorites pill (no false-empty)', () => {
+        // Auth state unknown pre-rehydration: the ids query is auth-disabled
+        // (data undefined) and hearts must not sit active in an unknown state.
+        (useAppStoreMockState as Record<string, unknown>).isHydrated = false;
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isLoading: false, isError: false }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Fail-open (no false "No favorites yet" flash at a signed-in user).
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.getByText('Olaya Padel Hub')).toBeInTheDocument();
+        expect(screen.queryByText('No favorites yet')).not.toBeInTheDocument();
+        // Both hearts inert (aria-labels favoriteAdd/favoriteRemove — the
+        // 'Favorites' pill button is a different element, name 'Favorites').
+        const hearts = screen
+            .getAllByRole('button', { name: /from favorites|to favorites/i });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No error strip (nothing failed — auth state is just unknown yet).
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
+    });
+
+    it('FAV-10 (PR-Agent r7): hydrated GUEST → hearts inert (a tap could only 401), no error strip', () => {
+        useAppStoreMockState.user = null;
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isLoading: false, isError: false }));
+        // Default tab — a hydrated guest on the Favorites pill correctly sees
+        // the onboarding empty state (no cards → no hearts there).
+        renderPage();
+
+        // Hearts inert for signed-out visitors — mutation would only 401.
+        const hearts = screen
+            .getAllByRole('button', { name: /from favorites|to favorites/i });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No misleading error strip for a feature the guest doesn't have.
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
+    });
+});

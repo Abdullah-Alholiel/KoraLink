@@ -787,7 +787,8 @@
     "favoritesEmptyTitle": "No favorites yet",
     "favoritesEmptyDesc": "Tap the heart on any club to save it here.",
     "favoriteAdd": "Add to favorites",
-    "favoriteRemove": "Remove from favorites"
+    "favoriteRemove": "Remove from favorites",
+    "favoritesError": "Couldn't load your favorites."
   },
   "messages": {
     "title": "Messages",

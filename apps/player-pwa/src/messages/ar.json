@@ -787,7 +787,8 @@
     "favoritesEmptyTitle": "لا توجد مفضلات بعد",
     "favoritesEmptyDesc": "اضغط على القلب في أي نادٍ لحفظه هنا.",
     "favoriteAdd": "أضف إلى المفضلة",
-    "favoriteRemove": "إزالة من المفضلة"
+    "favoriteRemove": "إزالة من المفضلة",
+    "favoritesError": "لم نتمكن من تحميل المفضلة."
   },
   "messages": {
     "title": "الرسائل",

@@ -88,10 +88,14 @@ export default function ClubsPage() {
     const {
         data: favIds,
         isLoading: favIdsLoading,
+        isError: favIdsError,
+        refetch: refetchFavIds,
     } = useVenueFavoriteIds();
     const favSet = favIds ?? [];
     const favoriteToggle = useVenueFavoriteToggle();
     const showToast = useAppStore((s) => s.showToast);
+    const isHydrated = useAppStore((s) => s.isHydrated);
+    const storeUser = useAppStore((s) => s.user);
 
     // Pills filter the (already server-searched) fetched set client-side, then
     // Nearby applies a stable ascending distance sort — null/missing distance
@@ -106,8 +110,20 @@ export default function ClubsPage() {
         }
         if (activeFilter === 'Favorites') {
             // PR-Agent run-#109: while the ids query loads, show all (no
-            // false "no favorites" flash); once loaded, narrow to saved.
-            if (favIdsLoading) return true;
+            // false "no favorites" flash). Run #110: an ids ERROR with NO
+            // data fail-opens (an empty favSet must never render the "No
+            // favorites yet" onboarding at users whose favorites merely
+            // failed to load) — but an error WITH stale cached ids keeps
+            // narrowing per that usable set (PR-Agent r3: React Query
+            // retains data across background-refetch failures; r4: `[]` is
+            // a KNOWN empty set, so only `undefined` ids fail open —
+            // matching the heart-disabled condition). The amber strip
+            // warns in both error cases. r6: BEFORE the store rehydrates
+            // (isHydrated=false) auth state is unknown and the ids query
+            // is auth-disabled — fail-open then too (r6 finding 1: a
+            // logged-in user's first paint must not show the false-empty).
+            if (!isHydrated || favIdsLoading) return true;
+            if (favIdsError && !favIds) return true;
             return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
@@ -228,6 +244,28 @@ export default function ClubsPage() {
                 ))}
             </div>
 
+            {/* ── Favorites ids error strip (run #110) ──
+                role=status (a11y lens): an ids fetch failure must say so —
+                the fail-open filter keeps the list visible, this tells the
+                user WHY hearts are inert (PR-Agent r2: on EVERY tab, since
+                the disabled-hearts guard is tab-independent) and offers
+                Retry. ── */}
+            {isHydrated && storeUser && favIdsError && !favIdsLoading && (
+                <div
+                    role="status"
+                    className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
+                >
+                    <p className="text-sm text-amber-900">{t('clubs.favoritesError')}</p>
+                    <button
+                        type="button"
+                        onClick={() => refetchFavIds()}
+                        className="text-sm font-bold text-brand-green active:scale-95 transition-transform whitespace-nowrap"
+                    >
+                        {t('common.retry')}
+                    </button>
+                </div>
+            )}
+
             {/* ── Loading ── */}
             {isLoading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
@@ -304,7 +342,24 @@ export default function ClubsPage() {
                                 type="button"
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
-                                disabled={favoriteToggle.isPending}
+                                disabled={
+                                    // Run #110 (PR-Agent r1+r2+r6+r7): unknown
+                                    // heart state must be inert — ids
+                                    // loading, auth store not yet
+                                    // rehydrated, a signed-out visitor, or
+                                    // error with NO usable cached ids. A tap
+                                    // on a mislabeled heart would silently
+                                    // UNfavorite a saved venue (a guest tap
+                                    // can only 401). Stale cached ids stay
+                                    // usable (strip warns). Strip+Retry below
+                                    // explains dead hearts on every tab.
+                                    (favoriteToggle.isPending &&
+                                        favoriteToggle.variables?.venueId === venue.id) ||
+                                    !isHydrated ||
+                                    !storeUser ||
+                                    favIdsLoading ||
+                                    (favIdsError && !favIds)
+                                }
                                 onClick={() => {
                                     favoriteToggle.mutate(
                                         { venueId: venue.id },
