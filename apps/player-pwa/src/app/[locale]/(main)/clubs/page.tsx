@@ -250,7 +250,7 @@ export default function ClubsPage() {
                 user WHY hearts are inert (PR-Agent r2: on EVERY tab, since
                 the disabled-hearts guard is tab-independent) and offers
                 Retry. ── */}
-            {isHydrated && favIdsError && !favIdsLoading && (
+            {isHydrated && storeUser && favIdsError && !favIdsLoading && (
                 <div
                     role="status"
                     className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
