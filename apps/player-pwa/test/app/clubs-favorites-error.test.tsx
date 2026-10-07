@@ -181,11 +181,23 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
             idsResult({ data: undefined, isError: true, error: { status: 500, message: 'boom' } }));
         renderPage();
         // Nearby list (all venues) — hearts render unknown-state and must be
-        // disabled until Retry succeeds.
+        // disabled until Retry succeeds. Strip renders on EVERY tab (r2).
         fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
 
         const hearts = screen.getAllByRole('button', { name: 'Add to favorites' });
         expect(hearts.length).toBeGreaterThan(0);
         hearts.forEach((h) => expect(h).toBeDisabled());
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
+
+    it('FAV-6 (PR-Agent r2): ids LOADING → hearts inert too (mislabeled tap would unfavorite)', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() => idsResult({ data: undefined, isLoading: true }));
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
+
+        const hearts = screen.getAllByRole('button', { name: 'Add to favorites' });
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No strip while merely loading — fail-open list, no error noise.
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
     });
 });

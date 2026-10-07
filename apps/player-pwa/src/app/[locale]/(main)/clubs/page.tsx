@@ -236,8 +236,10 @@ export default function ClubsPage() {
             {/* ── Favorites ids error strip (run #110) ──
                 role=status (a11y lens): an ids fetch failure must say so —
                 the fail-open filter keeps the list visible, this tells the
-                user WHY hearts may look wrong and offers Retry. ── */}
-            {activeFilter === 'Favorites' && favIdsError && !favIdsLoading && (
+                user WHY hearts are inert (PR-Agent r2: on EVERY tab, since
+                the disabled-hearts guard is tab-independent) and offers
+                Retry. ── */}
+            {favIdsError && !favIdsLoading && (
                 <div
                     role="status"
                     className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
@@ -330,11 +332,14 @@ export default function ClubsPage() {
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
                                 disabled={
-                                    // Run #110 (PR-Agent): unknown heart state
-                                    // (ids error) must be inert — a tap on a
-                                    // mislabeled heart would UNfavorite.
+                                    // Run #110 (PR-Agent r1+r2): unknown heart
+                                    // state (ids loading OR error) must be
+                                    // inert — a tap on a mislabeled heart
+                                    // would UNfavorite. Strip+Retry below
+                                    // explains the dead hearts on every tab.
                                     (favoriteToggle.isPending &&
                                         favoriteToggle.variables?.venueId === venue.id) ||
+                                    favIdsLoading ||
                                     favIdsError
                                 }
                                 onClick={() => {

@@ -97,7 +97,10 @@ export default function ClubPage() {
   const { data: venue, isLoading, error, refetch: refetchVenue } = useVenue(id);
 
   // ── P2-161: favorite heart state (run #109) ──────────────────────────
-  const { data: favIds, isError: favIdsError } = useVenueFavoriteIds();
+  // Run #110: onError the heart is inert (unknown state must not toggle) —
+  // the compact strip below the hero says why + offers Retry (PR-Agent r2:
+  // a dead control needs an explanation on THIS page, not only the list).
+  const { data: favIds, isLoading: favIdsLoading, isError: favIdsError, refetch: refetchFavIds } = useVenueFavoriteIds();
   const favSet = favIds ?? [];
   const favoriteToggle = useVenueFavoriteToggle();
   const showToast = useAppStore((s) => s.showToast);
@@ -208,11 +211,12 @@ export default function ClubPage() {
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
                   disabled={
-                      // Run #110 (PR-Agent): unknown heart state (ids error)
-                      // must be inert — a tap on a mislabeled heart would
-                      // UNfavorite.
+                      // Run #110 (PR-Agent r1+r2): unknown heart state (ids
+                      // loading OR error) must be inert — a tap on a
+                      // mislabeled heart would UNfavorite.
                       (favoriteToggle.isPending &&
                           favoriteToggle.variables?.venueId === venue.id) ||
+                      favIdsLoading ||
                       favIdsError
                   }
                   onClick={() =>
@@ -236,6 +240,25 @@ export default function ClubPage() {
                       strokeWidth={2}
                   />
               </button>
+
+              {/* Run #110 (PR-Agent r2): compact ids-error strip on the detail
+                  page — the inert heart must explain itself + offer Retry
+                  here, not only on the clubs list. */}
+              {favIdsError && !favIdsLoading && (
+                  <div
+                      role="status"
+                      className="absolute top-16 start-4 end-4 flex items-center justify-between gap-2 rounded-xl bg-black/60 backdrop-blur px-3 py-2"
+                  >
+                      <p className="text-xs text-amber-200">{t('clubs.favoritesError')}</p>
+                      <button
+                          type="button"
+                          onClick={() => refetchFavIds()}
+                          className="text-xs font-bold text-white underline underline-offset-2 active:scale-95 transition-transform whitespace-nowrap"
+                      >
+                          {t('common.retry')}
+                      </button>
+                  </div>
+              )}
 
               {/* Bottom text on hero */}
               <div className="absolute bottom-4 start-5 end-5 text-white">
