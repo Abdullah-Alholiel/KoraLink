@@ -315,7 +315,9 @@ export class VenuesService {
       .from(venue_favorites)
       .innerJoin(venues, eq(venues.id, venue_favorites.venue_id))
       .where(and(eq(venue_favorites.user_id, userId), eq(venues.is_approved, true)))
-      .orderBy(sql`venue_favorites.created_at DESC`);
+      // Run #111: name tiebreaker — mirrors listFavoriteVenues' ordering so
+      // the ids list and the venues list can never disagree on tie order.
+      .orderBy(sql`venue_favorites.created_at DESC`, sql`venues.name ASC`);
     return rows.map((r) => r.venue_id);
   }
 
@@ -356,22 +358,33 @@ export class VenuesService {
     // unapproved ids would let any authed user enumerate the unapproved
     // catalog; and favoriting an unapproved venue would strand the id in the
     // ids list while the list query (is_approved=true) drops it.
-    const venue = await this.db
-      .select({ id: venues.id })
-      .from(venues)
-      .where(and(eq(venues.id, venueId), eq(venues.is_approved, true)))
-      .limit(1);
-    if (venue.length === 0) {
-      throw new NotFoundException(`Venue ${venueId} not found.`);
-    }
+    //
+    // Run #111 (Reviewer A IMPORTANT): the check and the insert share ONE
+    // transaction with a FOR UPDATE row lock on the venue row — run as two
+    // bare statements, a venue unapproved between them left an ORPHAN
+    // favorite row that BOTH list queries (join venues.is_approved = true)
+    // never return: an invisible heart the UI cannot even un-favorite.
+    // The lock serializes against admin unapprove (admin/venues transfer
+    // pattern, :241) so the approval state cannot flip mid-transaction.
+    return this.db.transaction(async (tx) => {
+      const [venue] = await tx
+        .select({ id: venues.id })
+        .from(venues)
+        .where(and(eq(venues.id, venueId), eq(venues.is_approved, true)))
+        .for('update')
+        .limit(1);
+      if (!venue) {
+        throw new NotFoundException(`Venue ${venueId} not found.`);
+      }
 
-    const inserted = await this.db
-      .insert(venue_favorites)
-      .values({ user_id: userId, venue_id: venueId })
-      .onConflictDoNothing()
-      .returning({ venue_id: venue_favorites.venue_id });
+      const inserted = await tx
+        .insert(venue_favorites)
+        .values({ user_id: userId, venue_id: venueId })
+        .onConflictDoNothing()
+        .returning({ venue_id: venue_favorites.venue_id });
 
-    return { favorited: true, created: inserted.length > 0 };
+      return { favorited: true, created: inserted.length > 0 };
+    });
   }
 
   /** Idempotent unfavorite. Never 404s on a missing row (mirror of unblock). */

@@ -18,14 +18,38 @@ function makeVenues(opts: {
   const favorites = opts.favorites ?? [];
   let clock = Date.parse('2026-10-01T00:00:00Z');
 
+  // Run #111 TOCTOU trackers — reset per fake so tests cannot read stale state.
+  (makeVenues as any)._venuesSelectForUpdate = null;
+  (makeVenues as any)._venuesSelectInTx = false;
+  (makeVenues as any)._favoriteInsertInTx = false;
+  (makeVenues as any)._txDepth = 0;
+
   const db: any = {
+    // addFavorite (run #111): check + insert share ONE transaction — the fake
+    // executes the callback against the same db and tracks depth so specs can
+    // pin BOTH statements running inside it.
+    transaction: jest.fn(async (fn: (tx: any) => unknown) => {
+      (makeVenues as any)._txDepth += 1;
+      try {
+        return await fn(db);
+      } finally {
+        (makeVenues as any)._txDepth -= 1;
+      }
+    }),
     select: (projection?: unknown) => ({
       from: (table: unknown) => {
         const chain: any = {
           where: () => chain,
           innerJoin: (_other: unknown, _on: unknown) => chain,
+          for: (mode: string) => {
+            chain.__forUpdate = mode;
+            return chain;
+          },
           limit: async () => {
             if (table === venues) {
+              // Run #111: capture the lock + tx context of the venues probe.
+              (makeVenues as any)._venuesSelectForUpdate = chain.__forUpdate ?? null;
+              (makeVenues as any)._venuesSelectInTx = ((makeVenues as any)._txDepth ?? 0) > 0;
               const wanted = (makeVenues as any)._wantedVenueId;
               const hit = opts.venues.find((v) => v.id === wanted && v.is_approved);
               return hit ? [hit] : [];
@@ -88,6 +112,9 @@ function makeVenues(opts: {
         },
         onConflictDoNothing: () => chain,
         returning: async () => {
+          // Run #111: pin the insert running inside the same transaction as
+          // the venues probe (the TOCTOU fix's second half).
+          (makeVenues as any)._favoriteInsertInTx = ((makeVenues as any)._txDepth ?? 0) > 0;
           const dup = favorites.some(
             (r) => r.user_id === values.user_id && r.venue_id === values.venue_id,
           );
@@ -170,6 +197,22 @@ describe('VenuesService favorites (P2-161)', () => {
     await expect(h.service.addFavorite('u1', 'missing')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  // Run #111 (Reviewer A IMPORTANT): the approval check and the insert share
+  // ONE transaction with a FOR UPDATE row lock — two bare statements left a
+  // window where an unapprove between them stranded an orphan favorite row
+  // no list query would ever return.
+  it('addFavorite: check + insert run in ONE tx, probe takes FOR UPDATE (TOCTOU regression)', async () => {
+    const h = makeService(base);
+    h.setCtx('u1', 'v1');
+    await expect(h.service.addFavorite('u1', 'v1')).resolves.toEqual({
+      favorited: true,
+      created: true,
+    });
+    expect((makeVenues as any)._venuesSelectForUpdate).toBe('update');
+    expect((makeVenues as any)._venuesSelectInTx).toBe(true);
+    expect((makeVenues as any)._favoriteInsertInTx).toBe(true);
   });
 
   it('listFavoriteIds: newest-first ids for the caller only', async () => {
