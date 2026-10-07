@@ -27,6 +27,12 @@ const useVenueFavoriteIdsMock = vi.hoisted(() => vi.fn());
 const useVenueFavoriteToggleMock = vi.hoisted(() => vi.fn());
 const useSearchSuggestionsMock = vi.hoisted(() => vi.fn());
 const showToastMock = vi.hoisted(() => vi.fn());
+// Mutable store state the useAppStore mock selector reads — hoisted so the
+// vi.mock factory below can reference it; tests flip isHydrated on it.
+const useAppStoreMockState = vi.hoisted(() => ({
+    showToast: showToastMock,
+    isHydrated: true,
+}) as Record<string, unknown>);
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/clubs',
@@ -53,8 +59,7 @@ vi.mock('@/providers/LocationProvider', () => ({
 vi.mock('@/lib/fetcher', () => ({ fetcher: vi.fn() }));
 
 vi.mock('@/store/useAppStore', () => ({
-    useAppStore: (sel: (s: Record<string, unknown>) => unknown) =>
-        sel({ showToast: showToastMock }),
+    useAppStore: (sel: (s: Record<string, unknown>) => unknown) => sel(useAppStoreMockState),
 }));
 
 import ClubsPage from '@/app/[locale]/(main)/clubs/page';
@@ -104,6 +109,7 @@ function renderPage() {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    useAppStoreMockState.isHydrated = true;
     useVenuesMock.mockReset().mockImplementation(() => ({
         data: [...VENUES], isLoading: false, error: null, refetch: vi.fn(),
     }));
@@ -229,5 +235,28 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
         expect(screen.queryByText('Al-Nakheel Sports Complex')).not.toBeInTheDocument();
         expect(screen.getByText('No favorites yet')).toBeInTheDocument();
         expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
+
+    it('FAV-9 (PR-Agent r6): store NOT hydrated → hearts inert, list visible on Favorites pill (no false-empty)', () => {
+        // Auth state unknown pre-rehydration: the ids query is auth-disabled
+        // (data undefined) and hearts must not sit active in an unknown state.
+        (useAppStoreMockState as Record<string, unknown>).isHydrated = false;
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isLoading: false, isError: false }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Fail-open (no false "No favorites yet" flash at a signed-in user).
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.getByText('Olaya Padel Hub')).toBeInTheDocument();
+        expect(screen.queryByText('No favorites yet')).not.toBeInTheDocument();
+        // Both hearts inert (aria-labels favoriteAdd/favoriteRemove — the
+        // 'Favorites' pill button is a different element, name 'Favorites').
+        const hearts = screen
+            .getAllByRole('button', { name: /from favorites|to favorites/i });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+        // No error strip (nothing failed — auth state is just unknown yet).
+        expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
     });
 });

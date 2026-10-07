@@ -129,6 +129,9 @@ export default function ClubPage() {
 
   const storeUser = useAppStore(selectUser);
   const currentUserId = storeUser?.id;
+  // Run #110 (PR-Agent r6): auth-ready signal — hearts + ids-dependent UI
+  // stay inert until the persisted store rehydrates (user known vs guest).
+  const isHydrated = useAppStore((s) => s.isHydrated);
 
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
@@ -211,12 +214,15 @@ export default function ClubPage() {
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
                   disabled={
-                      // Run #110 (PR-Agent r1+r2+r3): unknown heart state (ids
-                      // loading, or error with NO usable cached ids) must be
-                      // inert — a tap on a mislabeled heart would UNfavorite.
-                      // Stale cached ids stay usable (strip warns).
+                      // Run #110 (PR-Agent r1+r2+r6): unknown heart state must
+                      // be inert — ids loading, auth store not yet
+                      // rehydrated, or error with NO usable cached ids. A tap
+                      // on a mislabeled heart would silently UNfavorite a
+                      // saved venue. Stale cached ids stay usable (strip
+                      // warns).
                       (favoriteToggle.isPending &&
                           favoriteToggle.variables?.venueId === venue.id) ||
+                      !isHydrated ||
                       favIdsLoading ||
                       (favIdsError && !favIds)
                   }
@@ -242,10 +248,12 @@ export default function ClubPage() {
                   />
               </button>
 
-              {/* Run #110 (PR-Agent r2): compact ids-error strip on the detail
-                  page — the inert heart must explain itself + offer Retry
-                  here, not only on the clubs list. */}
-              {favIdsError && !favIdsLoading && (
+              {/* Run #110 (PR-Agent r2, gated r6): compact ids-error strip on
+                  the detail page — the inert heart must explain itself + offer
+                  Retry here, not only on the clubs list. Only for signed-in
+                  users (r6: guests never query, so a strip here would be a
+                  false "couldn't load" for a feature they don't have). */}
+              {isHydrated && storeUser && favIdsError && !favIdsLoading && (
                   <div
                       role="status"
                       className="absolute top-16 start-4 end-4 flex items-center justify-between gap-2 rounded-xl bg-black/60 backdrop-blur px-3 py-2"
