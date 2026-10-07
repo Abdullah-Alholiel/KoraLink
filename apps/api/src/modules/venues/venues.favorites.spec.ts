@@ -20,21 +20,27 @@ function makeVenues(opts: {
 
   // Run #111 TOCTOU trackers — reset per fake so tests cannot read stale state.
   (makeVenues as any)._venuesSelectForUpdate = null;
-  (makeVenues as any)._venuesSelectInTx = false;
-  (makeVenues as any)._favoriteInsertInTx = false;
-  (makeVenues as any)._txDepth = 0;
 
   const db: any = {
     // addFavorite (run #111): check + insert share ONE transaction — the fake
-    // executes the callback against the same db and tracks depth so specs can
-    // pin BOTH statements running inside it.
+    // hands out a DISTINCT tx handle (PR-Agent r2: tx === db would let a
+    // future this.db refactor pass while running on another connection,
+    // reintroducing the TOCTOU); txUsed pins that BOTH statements ran
+    // THROUGH the transaction-scoped handle.
     transaction: jest.fn(async (fn: (tx: any) => unknown) => {
-      (makeVenues as any)._txDepth += 1;
-      try {
-        return await fn(db);
-      } finally {
-        (makeVenues as any)._txDepth -= 1;
-      }
+      const txUsed = { select: false, insert: false };
+      (makeVenues as any)._txUsed = txUsed;
+      const tx: any = {
+        select: (...args: unknown[]) => {
+          txUsed.select = true;
+          return db.select(...args);
+        },
+        insert: (...args: unknown[]) => {
+          txUsed.insert = true;
+          return db.insert(...args);
+        },
+      };
+      return await fn(tx);
     }),
     select: (projection?: unknown) => ({
       from: (table: unknown) => {
@@ -47,9 +53,8 @@ function makeVenues(opts: {
           },
           limit: async () => {
             if (table === venues) {
-              // Run #111: capture the lock + tx context of the venues probe.
+              // Run #111: capture the lock mode of the venues probe.
               (makeVenues as any)._venuesSelectForUpdate = chain.__forUpdate ?? null;
-              (makeVenues as any)._venuesSelectInTx = ((makeVenues as any)._txDepth ?? 0) > 0;
               const wanted = (makeVenues as any)._wantedVenueId;
               const hit = opts.venues.find((v) => v.id === wanted && v.is_approved);
               return hit ? [hit] : [];
@@ -112,9 +117,6 @@ function makeVenues(opts: {
         },
         onConflictDoNothing: () => chain,
         returning: async () => {
-          // Run #111: pin the insert running inside the same transaction as
-          // the venues probe (the TOCTOU fix's second half).
-          (makeVenues as any)._favoriteInsertInTx = ((makeVenues as any)._txDepth ?? 0) > 0;
           const dup = favorites.some(
             (r) => r.user_id === values.user_id && r.venue_id === values.venue_id,
           );
@@ -202,7 +204,10 @@ describe('VenuesService favorites (P2-161)', () => {
   // Run #111 (Reviewer A IMPORTANT): the approval check and the insert share
   // ONE transaction with a FOR UPDATE row lock — two bare statements left a
   // window where an unapprove between them stranded an orphan favorite row
-  // no list query would ever return.
+  // no list query would ever return. The DISTINCT tx handle (PR-Agent r2)
+  // pins that BOTH statements ran THROUGH the transaction-scoped connection:
+  // a future this.db refactor inside the callback fails this pin instead of
+  // silently reopening the TOCTOU.
   it('addFavorite: check + insert run in ONE tx, probe takes FOR UPDATE (TOCTOU regression)', async () => {
     const h = makeService(base);
     h.setCtx('u1', 'v1');
@@ -211,8 +216,9 @@ describe('VenuesService favorites (P2-161)', () => {
       created: true,
     });
     expect((makeVenues as any)._venuesSelectForUpdate).toBe('update');
-    expect((makeVenues as any)._venuesSelectInTx).toBe(true);
-    expect((makeVenues as any)._favoriteInsertInTx).toBe(true);
+    const txUsed = (makeVenues as any)._txUsed;
+    expect(txUsed.select).toBe(true);
+    expect(txUsed.insert).toBe(true);
   });
 
   it('listFavoriteIds: newest-first ids for the caller only', async () => {
