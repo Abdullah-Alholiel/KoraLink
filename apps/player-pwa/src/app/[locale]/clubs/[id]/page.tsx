@@ -207,7 +207,10 @@ export default function ClubPage() {
                   aria-label={
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
-                  disabled={favoriteToggle.isPending}
+                  disabled={
+                      favoriteToggle.isPending &&
+                      favoriteToggle.variables?.venueId === venue.id
+                  }
                   onClick={() =>
                       favoriteToggle.mutate(
                           // Ids only — the onSettled invalidation refetches the

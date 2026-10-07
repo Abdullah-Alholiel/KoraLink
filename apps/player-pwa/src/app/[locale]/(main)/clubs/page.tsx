@@ -88,6 +88,8 @@ export default function ClubsPage() {
     const {
         data: favIds,
         isLoading: favIdsLoading,
+        isError: favIdsError,
+        refetch: refetchFavIds,
     } = useVenueFavoriteIds();
     const favSet = favIds ?? [];
     const favoriteToggle = useVenueFavoriteToggle();
@@ -107,7 +109,10 @@ export default function ClubsPage() {
         if (activeFilter === 'Favorites') {
             // PR-Agent run-#109: while the ids query loads, show all (no
             // false "no favorites" flash); once loaded, narrow to saved.
-            if (favIdsLoading) return true;
+            // Run #110: on ids ERROR, also show all (fail-open) — an empty
+            // favSet on error would render the "No favorites yet" onboarding
+            // state at users whose favorites merely failed to load.
+            if (favIdsLoading || favIdsError) return true;
             return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
@@ -228,6 +233,26 @@ export default function ClubsPage() {
                 ))}
             </div>
 
+            {/* ── Favorites ids error strip (run #110) ──
+                role=status (a11y lens): an ids fetch failure must say so —
+                the fail-open filter keeps the list visible, this tells the
+                user WHY hearts may look wrong and offers Retry. ── */}
+            {activeFilter === 'Favorites' && favIdsError && !favIdsLoading && (
+                <div
+                    role="status"
+                    className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
+                >
+                    <p className="text-sm text-amber-900">{t('clubs.favoritesError')}</p>
+                    <button
+                        type="button"
+                        onClick={() => refetchFavIds()}
+                        className="text-sm font-bold text-brand-green active:scale-95 transition-transform whitespace-nowrap"
+                    >
+                        {t('common.retry')}
+                    </button>
+                </div>
+            )}
+
             {/* ── Loading ── */}
             {isLoading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
@@ -304,7 +329,10 @@ export default function ClubsPage() {
                                 type="button"
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
-                                disabled={favoriteToggle.isPending}
+                                disabled={
+                                    favoriteToggle.isPending &&
+                                    favoriteToggle.variables?.venueId === venue.id
+                                }
                                 onClick={() => {
                                     favoriteToggle.mutate(
                                         { venueId: venue.id },
