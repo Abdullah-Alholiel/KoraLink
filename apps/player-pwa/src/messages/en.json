@@ -679,7 +679,8 @@
     },
     "blockUser": "Block",
     "unblockUser": "Unblock",
-    "confirmBlock": "Tap again to confirm block"
+    "confirmBlock": "Tap again to confirm block",
+    "myFavorites": "My favorite clubs"
   },
   "wallet": {
     "title": "Wallet",
@@ -788,7 +789,9 @@
     "favoritesEmptyDesc": "Tap the heart on any club to save it here.",
     "favoriteAdd": "Add to favorites",
     "favoriteRemove": "Remove from favorites",
-    "favoritesError": "Couldn't load your favorites."
+    "favoritesError": "Couldn't load your favorites.",
+    "favoritesSignInTitle": "Sign in to save your favorite clubs",
+    "favoritesSignInCta": "Sign in"
   },
   "messages": {
     "title": "Messages",

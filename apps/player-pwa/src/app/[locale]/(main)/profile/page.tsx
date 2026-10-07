@@ -25,6 +25,7 @@ import {
     Gamepad2,
     BellRing,
     Settings,
+    Heart,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -347,6 +348,16 @@ export default function ProfilePage() {
                     icon={<Gamepad2 className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.myGames')}
                     href={`/${locale}/my-games`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
+                {/* P2-165 (run #111): favorites entry point — the clubs-page
+                    pill is the only discoverable surface otherwise; this row
+                    deep-links to the Favorites filter (single source of state,
+                    P2-133 pattern: linked sub-surface, never duplicated). */}
+                <MenuItem
+                    icon={<Heart className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('profile.myFavorites')}
+                    href={`/${locale}/clubs?tab=favorites`}
                 />
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
