@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { useAppStore } from '@/store/useAppStore';
 import type { VenueApi } from '@/hooks/useVenues';
 
 /**
@@ -32,13 +33,18 @@ export interface VenueFavoriteToggleVars {
   venue?: VenueApi | null;
 }
 
-/** The caller's favorited venue ids, newest-first — heart-state source. */
+/** The caller's favorited venue ids, newest-first — heart-state source.
+ *  Run #110 (PR-Agent r5): gated on auth — a signed-out visitor must not
+ *  query (401 is "no session", not "fetch failed"), so no misleading
+ *  error strip and no permanent inert hearts on the public clubs pages. */
 export function useVenueFavoriteIds() {
-  return useQuery<string[], FetchError>({
-    queryKey: ['venues', 'favorites', 'ids'],
-    queryFn: () => fetcher<string[]>('/venues/favorites/ids'),
-    staleTime: 300_000, // favorites change only by explicit user action
-  });
+    const user = useAppStore((s) => s.user);
+    return useQuery<string[], FetchError>({
+        queryKey: ['venues', 'favorites', 'ids'],
+        queryFn: () => fetcher<string[]>('/venues/favorites/ids'),
+        staleTime: 300_000, // favorites change only by explicit user action
+        enabled: !!user,
+    });
 }
 
 /** The caller's favorite venues as full VenueApi rows (Favorites pill source). */
