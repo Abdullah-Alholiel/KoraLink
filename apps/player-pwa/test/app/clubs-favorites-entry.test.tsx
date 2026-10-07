@@ -164,4 +164,22 @@ describe('Clubs page — favorites entry points (P2-165, run #111)', () => {
         expect(ar.clubs.favoritesSignInTitle).toBeTruthy();
         expect(ar.clubs.favoritesSignInCta).toBeTruthy();
     });
+
+    it('FAV-16 (PR-Agent r3 refutation pin): pre-hydration guest on ?tab=favorites → fail-open LIST, no false-empty, no premature CTA', () => {
+        // PR-Agent r3 claimed the dead-end copy flashes pre-hydration. The
+        // r6 fail-open must prevent ANY empty-state render while venues are
+        // listed — this pin holds that contract for the guest variant.
+        searchParamsState.tab = 'favorites';
+        useAppStoreMockState.isHydrated = false;
+        useAppStoreMockState.user = null;
+        useVenueFavoriteIdsMock.mockImplementation(() => idsResult({ data: undefined }));
+        renderPage();
+
+        // Fail-open: the venue list renders (no empty state at all).
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.queryByText('No favorites yet')).not.toBeInTheDocument();
+        // Auth unknown pre-hydration: neither sign-in copy nor CTA yet.
+        expect(screen.queryByText('Sign in to save your favorite clubs')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+    });
 });
