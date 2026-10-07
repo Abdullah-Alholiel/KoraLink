@@ -211,13 +211,14 @@ export default function ClubPage() {
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
                   disabled={
-                      // Run #110 (PR-Agent r1+r2): unknown heart state (ids
-                      // loading OR error) must be inert — a tap on a
-                      // mislabeled heart would UNfavorite.
+                      // Run #110 (PR-Agent r1+r2+r3): unknown heart state (ids
+                      // loading, or error with NO usable cached ids) must be
+                      // inert — a tap on a mislabeled heart would UNfavorite.
+                      // Stale cached ids stay usable (strip warns).
                       (favoriteToggle.isPending &&
                           favoriteToggle.variables?.venueId === venue.id) ||
                       favIdsLoading ||
-                      favIdsError
+                      (favIdsError && !favIds)
                   }
                   onClick={() =>
                       favoriteToggle.mutate(

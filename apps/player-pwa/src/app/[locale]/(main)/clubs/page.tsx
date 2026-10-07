@@ -108,11 +108,15 @@ export default function ClubsPage() {
         }
         if (activeFilter === 'Favorites') {
             // PR-Agent run-#109: while the ids query loads, show all (no
-            // false "no favorites" flash); once loaded, narrow to saved.
-            // Run #110: on ids ERROR, also show all (fail-open) — an empty
-            // favSet on error would render the "No favorites yet" onboarding
-            // state at users whose favorites merely failed to load.
-            if (favIdsLoading || favIdsError) return true;
+            // false "no favorites" flash). Run #110: an ids ERROR with NO
+            // data fail-opens (an empty favSet must never render the "No
+            // favorites yet" onboarding at users whose favorites merely
+            // failed to load) — but an error WITH stale cached ids keeps
+            // narrowing per that usable set (PR-Agent r3: React Query
+            // retains data across background-refetch failures). The amber
+            // strip warns in both error cases.
+            if (favIdsLoading) return true;
+            if (favIdsError && favSet.length === 0) return true;
             return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
@@ -332,15 +336,17 @@ export default function ClubsPage() {
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
                                 disabled={
-                                    // Run #110 (PR-Agent r1+r2): unknown heart
-                                    // state (ids loading OR error) must be
-                                    // inert — a tap on a mislabeled heart
-                                    // would UNfavorite. Strip+Retry below
-                                    // explains the dead hearts on every tab.
+                                    // Run #110 (PR-Agent r1+r2+r3): unknown
+                                    // heart state (ids loading, or error with
+                                    // NO usable cached ids) must be inert — a
+                                    // tap on a mislabeled heart would
+                                    // UNfavorite. Stale cached ids stay
+                                    // usable (strip warns). Strip+Retry below
+                                    // explains dead hearts on every tab.
                                     (favoriteToggle.isPending &&
                                         favoriteToggle.variables?.venueId === venue.id) ||
                                     favIdsLoading ||
-                                    favIdsError
+                                    (favIdsError && !favIds)
                                 }
                                 onClick={() => {
                                     favoriteToggle.mutate(

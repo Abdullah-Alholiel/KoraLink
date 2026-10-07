@@ -200,4 +200,20 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
         // No strip while merely loading — fail-open list, no error noise.
         expect(screen.queryByText("Couldn't load your favorites.")).not.toBeInTheDocument();
     });
+
+    it('FAV-7 (PR-Agent r3): ids ERROR with stale cached ids → keeps narrowing, hearts stay usable, strip warns', () => {
+        // Background-refetch failure: React Query retains the old ['v-1'] data.
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: ['v-1'], isError: true, error: { status: 0, message: 'offline' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Narrowing honors the stale-but-usable set (not fail-open).
+        expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
+        expect(screen.queryByText('Olaya Padel Hub')).not.toBeInTheDocument();
+        // Hearts usable (state known from cache); strip still warns.
+        const heartA = screen.getByRole('button', { name: 'Remove from favorites' });
+        expect(heartA).toBeEnabled();
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
 });
