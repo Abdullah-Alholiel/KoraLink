@@ -33,14 +33,28 @@ export interface VenueFavoriteToggleVars {
   venue?: VenueApi | null;
 }
 
+/** Per-user favorites cache keys (PR-Agent r9, run #110): scoping by user id
+ *  makes a previous account's cached ids/lists unreachable after an account
+ *  switch on a shared device — logout already wipes the persisted IDB cache
+ *  (P2-45) and every logout path hard-navigates (in-memory reset), this is
+ *  the belt-and-braces third layer. Undefined user → literal null segment;
+ *  such keys are never read because the queries are auth-disabled. */
+export function favoritesKeys(userId: string | null | undefined) {
+    return {
+        ids: ['venues', 'favorites', 'ids', userId ?? null] as const,
+        list: ['venues', 'favorites', userId ?? null] as const,
+    };
+}
+
 /** The caller's favorited venue ids, newest-first — heart-state source.
  *  Run #110 (PR-Agent r5): gated on auth — a signed-out visitor must not
  *  query (401 is "no session", not "fetch failed"), so no misleading
  *  error strip and no permanent inert hearts on the public clubs pages. */
 export function useVenueFavoriteIds() {
     const user = useAppStore((s) => s.user);
+    const { ids } = favoritesKeys(user?.id);
     return useQuery<string[], FetchError>({
-        queryKey: ['venues', 'favorites', 'ids'],
+        queryKey: ids,
         queryFn: () => fetcher<string[]>('/venues/favorites/ids'),
         staleTime: 300_000, // favorites change only by explicit user action
         enabled: !!user,
@@ -49,18 +63,21 @@ export function useVenueFavoriteIds() {
 
 /** The caller's favorite venues as full VenueApi rows (Favorites pill source). */
 export function useVenueFavorites() {
-  return useQuery<VenueApi[], FetchError>({
-    queryKey: ['venues', 'favorites'],
-    queryFn: () => fetcher<VenueApi[]>('/venues/favorites'),
-    staleTime: 300_000,
-  });
+    const user = useAppStore((s) => s.user);
+    const { list } = favoritesKeys(user?.id);
+    return useQuery<VenueApi[], FetchError>({
+        queryKey: list,
+        queryFn: () => fetcher<VenueApi[]>('/venues/favorites'),
+        staleTime: 300_000,
+        enabled: !!user,
+    });
 }
 
 /** Idempotent optimistic favorite/unfavorite. */
 export function useVenueFavoriteToggle() {
   const queryClient = useQueryClient();
-  const idsKey = ['venues', 'favorites', 'ids'];
-  const listKey = ['venues', 'favorites'];
+  const user = useAppStore((s) => s.user);
+  const { ids: idsKey, list: listKey } = favoritesKeys(user?.id);
 
   return useMutation<
     FavoriteMutationApi,
