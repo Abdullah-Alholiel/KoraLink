@@ -97,7 +97,7 @@ export default function ClubPage() {
   const { data: venue, isLoading, error, refetch: refetchVenue } = useVenue(id);
 
   // ── P2-161: favorite heart state (run #109) ──────────────────────────
-  const { data: favIds } = useVenueFavoriteIds();
+  const { data: favIds, isError: favIdsError } = useVenueFavoriteIds();
   const favSet = favIds ?? [];
   const favoriteToggle = useVenueFavoriteToggle();
   const showToast = useAppStore((s) => s.showToast);
@@ -208,8 +208,12 @@ export default function ClubPage() {
                       favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
                   }
                   disabled={
-                      favoriteToggle.isPending &&
-                      favoriteToggle.variables?.venueId === venue.id
+                      // Run #110 (PR-Agent): unknown heart state (ids error)
+                      // must be inert — a tap on a mislabeled heart would
+                      // UNfavorite.
+                      (favoriteToggle.isPending &&
+                          favoriteToggle.variables?.venueId === venue.id) ||
+                      favIdsError
                   }
                   onClick={() =>
                       favoriteToggle.mutate(

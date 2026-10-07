@@ -175,4 +175,17 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
         const heartB = screen.getByRole('button', { name: 'Add to favorites' });
         expect(heartB).toBeEnabled();
     });
+
+    it('FAV-5 (PR-Agent run #110): ids ERROR → hearts inert (no mislabeled unfavorite)', () => {
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: undefined, isError: true, error: { status: 500, message: 'boom' } }));
+        renderPage();
+        // Nearby list (all venues) — hearts render unknown-state and must be
+        // disabled until Retry succeeds.
+        fireEvent.click(screen.getByRole('button', { name: 'Nearby' }));
+
+        const hearts = screen.getAllByRole('button', { name: 'Add to favorites' });
+        expect(hearts.length).toBeGreaterThan(0);
+        hearts.forEach((h) => expect(h).toBeDisabled());
+    });
 });

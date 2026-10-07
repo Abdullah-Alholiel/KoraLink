@@ -330,8 +330,12 @@ export default function ClubsPage() {
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
                                 disabled={
-                                    favoriteToggle.isPending &&
-                                    favoriteToggle.variables?.venueId === venue.id
+                                    // Run #110 (PR-Agent): unknown heart state
+                                    // (ids error) must be inert — a tap on a
+                                    // mislabeled heart would UNfavorite.
+                                    (favoriteToggle.isPending &&
+                                        favoriteToggle.variables?.venueId === venue.id) ||
+                                    favIdsError
                                 }
                                 onClick={() => {
                                     favoriteToggle.mutate(
