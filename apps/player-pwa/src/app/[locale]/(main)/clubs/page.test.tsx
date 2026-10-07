@@ -27,6 +27,8 @@ let venuesError: unknown = null;
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/clubs',
+    // Run #111: ClubsPage reads ?tab= behind useSearchParams (P2-165).
+    useSearchParams: () => ({ get: () => null }),
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 

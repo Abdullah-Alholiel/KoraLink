@@ -679,7 +679,8 @@
     },
     "blockUser": "حظر",
     "unblockUser": "إلغاء الحظر",
-    "confirmBlock": "اضغط مرة أخرى لتأكيد الحظر"
+    "confirmBlock": "اضغط مرة أخرى لتأكيد الحظر",
+    "myFavorites": "أنديةي المفضلة"
   },
   "wallet": {
     "title": "المحفظة",
@@ -788,7 +789,9 @@
     "favoritesEmptyDesc": "اضغط على القلب في أي نادٍ لحفظه هنا.",
     "favoriteAdd": "أضف إلى المفضلة",
     "favoriteRemove": "إزالة من المفضلة",
-    "favoritesError": "لم نتمكن من تحميل المفضلة."
+    "favoritesError": "لم نتمكن من تحميل المفضلة.",
+    "favoritesSignInTitle": "سجّل الدخول لحفظ أنديةك المفضلة",
+    "favoritesSignInCta": "تسجيل الدخول"
   },
   "messages": {
     "title": "الرسائل",

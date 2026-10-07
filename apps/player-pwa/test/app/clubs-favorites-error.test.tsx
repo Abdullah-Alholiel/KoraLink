@@ -36,6 +36,9 @@ const useAppStoreMockState = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/clubs',
+    // Run #111: clubs page reads ?tab= for the P2-165 deep-link — tests
+    // default to no param (Nearby), the entry-point specs pin the param.
+    useSearchParams: () => ({ get: () => null }),
     useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn() }),
 }));
 
