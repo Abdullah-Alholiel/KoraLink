@@ -306,13 +306,16 @@ export class VenuesService {
   // the PWA consumes VenueApi[] with zero new adapter code; distance is
   // always NULL (favorites are not geo-ranked) and ordering is newest-first.
 
-  /** The favorited ids for a user — the PWA heart-state source. */
+  /** The favorited ids for a user — the PWA heart-state source. Only ids the
+   *  list endpoint would also return (approved venues); a venue unapproved
+   *  after favoriting disappears from BOTH rather than half-existing. */
   async listFavoriteIds(userId: string): Promise<string[]> {
     const rows = await this.db
       .select({ venue_id: venue_favorites.venue_id })
       .from(venue_favorites)
-      .where(eq(venue_favorites.user_id, userId))
-      .orderBy(sql`created_at DESC`);
+      .innerJoin(venues, eq(venues.id, venue_favorites.venue_id))
+      .where(and(eq(venue_favorites.user_id, userId), eq(venues.is_approved, true)))
+      .orderBy(sql`venue_favorites.created_at DESC`);
     return rows.map((r) => r.venue_id);
   }
 
@@ -349,10 +352,14 @@ export class VenuesService {
 
   /** Idempotent favorite. `created` is true only when a row was inserted. */
   async addFavorite(userId: string, venueId: string): Promise<FavoriteMutationResult> {
+    // PR-Agent run-#109: is_approved required — a 404-vs-success split on
+    // unapproved ids would let any authed user enumerate the unapproved
+    // catalog; and favoriting an unapproved venue would strand the id in the
+    // ids list while the list query (is_approved=true) drops it.
     const venue = await this.db
       .select({ id: venues.id })
       .from(venues)
-      .where(eq(venues.id, venueId))
+      .where(and(eq(venues.id, venueId), eq(venues.is_approved, true)))
       .limit(1);
     if (venue.length === 0) {
       throw new NotFoundException(`Venue ${venueId} not found.`);

@@ -210,7 +210,11 @@ export default function ClubPage() {
                   disabled={favoriteToggle.isPending}
                   onClick={() =>
                       favoriteToggle.mutate(
-                          { venueId: venue.id, venue: venue as never },
+                          // Ids only — the onSettled invalidation refetches the
+                          // list cache; injecting the detail shape (superset
+                          // with pitches) into the VenueApi[] cache via a cast
+                          // was PR-Agent run-#109's type-safety finding.
+                          { venueId: venue.id },
                           { onError: () => showToast(t('errors.favoriteFailed'), 'error') },
                       )
                   }

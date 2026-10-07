@@ -23,16 +23,22 @@ function makeVenues(opts: {
       from: (table: unknown) => {
         const chain: any = {
           where: () => chain,
+          innerJoin: (_other: unknown, _on: unknown) => chain,
           limit: async () => {
             if (table === venues) {
               const wanted = (makeVenues as any)._wantedVenueId;
-              const hit = opts.venues.find((v) => v.id === wanted);
+              const hit = opts.venues.find((v) => v.id === wanted && v.is_approved);
               return hit ? [hit] : [];
             }
             if (table === venue_favorites) {
+              // joined ids path: filter favorites by ctx user + venue approval
               const uid = (makeVenues as any)._ctxUserId;
               return favorites
-                .filter((f) => f.user_id === uid)
+                .filter(
+                  (f) =>
+                    f.user_id === uid &&
+                    opts.venues.find((v) => v.id === f.venue_id)?.is_approved,
+                )
                 .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
             }
             return [];
@@ -150,12 +156,33 @@ describe('VenuesService favorites (P2-161)', () => {
     expect(h.favorites).toHaveLength(1);
   });
 
+  it('addFavorite: unknown OR UNAPPROVED venue 404s (PR-Agent run-#109: no unapproved-id enumeration)', async () => {
+    const h = makeService(base);
+    h.setCtx('u1', 'v3'); // v3 is is_approved: false
+    await expect(h.service.addFavorite('u1', 'v3')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
   it('addFavorite: unknown venue 404s', async () => {
     const h = makeService(base);
     h.setCtx('u1', 'missing');
     await expect(h.service.addFavorite('u1', 'missing')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('listFavoriteIds: newest-first ids for the caller only', async () => {
+    const h = makeService({
+      ...base,
+      favorites: [
+        { user_id: 'u1', venue_id: 'v1', created_at: new Date(1) },
+        { user_id: 'u1', venue_id: 'v2', created_at: new Date(2) },
+        { user_id: 'u2', venue_id: 'v1', created_at: new Date(3) },
+      ],
+    });
+    h.setCtx('u1');
+    await expect(h.service.listFavoriteIds('u1')).resolves.toEqual(['v2', 'v1']);
   });
 
   it('removeFavorite: removed=true on real delete, false when nothing was favorited', async () => {
@@ -170,19 +197,6 @@ describe('VenuesService favorites (P2-161)', () => {
       favorited: false,
       removed: false,
     });
-  });
-
-  it('listFavoriteIds: newest-first ids for the caller only', async () => {
-    const h = makeService({
-      ...base,
-      favorites: [
-        { user_id: 'u1', venue_id: 'v1', created_at: new Date(1) },
-        { user_id: 'u1', venue_id: 'v2', created_at: new Date(2) },
-        { user_id: 'u2', venue_id: 'v1', created_at: new Date(3) },
-      ],
-    });
-    h.setCtx('u1');
-    await expect(h.service.listFavoriteIds('u1')).resolves.toEqual(['v2', 'v1']);
   });
 
   it('listFavoriteVenues: findNearby row shape, unapproved favorites dropped, distance null', async () => {

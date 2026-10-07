@@ -82,7 +82,13 @@ export default function ClubsPage() {
     // Id set drives the card hearts; the toggle is optimistic with rollback.
     // The 'Favorites' pill narrows to the ids ∩ fetched list (search still
     // applies server-side, so typing inside the pill searches saved clubs).
-    const { data: favIds } = useVenueFavoriteIds();
+    // PR-Agent run-#109: ids LOADING is distinct from EMPTY — while the ids
+    // query is in flight the pill shows the full list instead of flashing the
+    // onboarding empty state at users who have favorites.
+    const {
+        data: favIds,
+        isLoading: favIdsLoading,
+    } = useVenueFavoriteIds();
     const favSet = favIds ?? [];
     const favoriteToggle = useVenueFavoriteToggle();
     const showToast = useAppStore((s) => s.showToast);
@@ -99,6 +105,9 @@ export default function ClubsPage() {
             return false;
         }
         if (activeFilter === 'Favorites') {
+            // PR-Agent run-#109: while the ids query loads, show all (no
+            // false "no favorites" flash); once loaded, narrow to saved.
+            if (favIdsLoading) return true;
             return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
@@ -284,21 +293,19 @@ export default function ClubsPage() {
             {!isLoading && !error && filteredVenues.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
                     {filteredVenues.map((venue) => (
-                        <Link
+                        <div
                             key={venue.id}
-                            href={`/${locale}/clubs/${venue.id}`}
-                            className="relative block bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+                            className="relative bg-white rounded-2xl shadow-card animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
                         >
-                            {/* ── P2-161: favorite heart (stopPropagation — the
-                                card is a Link; toggling must not navigate) ── */}
+                            {/* ── P2-161: favorite heart as a SIBLING overlay
+                                (PR-Agent run-#109: button inside <a> violates
+                                the HTML content model / validateDOMNesting) ── */}
                             <button
                                 type="button"
                                 aria-pressed={favSet.includes(venue.id)}
                                 aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
                                 disabled={favoriteToggle.isPending}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
+                                onClick={() => {
                                     favoriteToggle.mutate(
                                         { venueId: venue.id },
                                         {
@@ -318,6 +325,10 @@ export default function ClubsPage() {
                                     strokeWidth={2}
                                 />
                             </button>
+                            <Link
+                                href={`/${locale}/clubs/${venue.id}`}
+                                className="block p-4"
+                            >
                             <div className="flex items-start justify-between gap-3">
                                 {/* Venue avatar */}
                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
@@ -402,7 +413,8 @@ export default function ClubsPage() {
                                     })()}
                                 </div>
                             </div>
-                        </Link>
+                            </Link>
+                        </div>
                     ))}
                 </div>
             )}
