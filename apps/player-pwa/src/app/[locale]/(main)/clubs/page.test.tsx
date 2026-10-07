@@ -19,6 +19,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
 import ClubsPage from '@/app/[locale]/(main)/clubs/page';
 import type { VenueApi } from '@/hooks/useVenues';
+import { useAppStore } from '@/store/useAppStore';
 
 // ── Controllable useVenues fixture ──
 let venueFixture: VenueApi[] = [];
@@ -98,6 +99,8 @@ function renderClubs() {
     });
     return render(
         <QueryClientProvider client={queryClient}>
+            {/* Run #110: hearts are auth-gated (!storeUser in the disabled
+                guard) — seed the real store with a signed-in user. */}
             <NextIntlClientProvider messages={enMessages} locale="en">
                 <ClubsPage />
             </NextIntlClientProvider>
@@ -110,6 +113,13 @@ describe('clubs page — run #68 drain slice', () => {
         vi.clearAllMocks();
         venueFixture = [];
         venuesError = null;
+        // Run #110: seed a signed-in user + hydrated store (hearts are
+        // auth-gated); the persist storage stays localStorage in jsdom.
+        useAppStore.setState({
+            user: { id: 'u-test', full_name: 'Tester', handle: 'tester' } as never,
+            isHydrated: true,
+            isAuthenticated: true,
+        });
     });
 
     it('Nearby (default pill) sorts venues by ascending distance — null distance LAST', () => {
