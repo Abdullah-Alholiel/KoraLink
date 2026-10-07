@@ -113,10 +113,12 @@ export default function ClubsPage() {
             // favorites yet" onboarding at users whose favorites merely
             // failed to load) — but an error WITH stale cached ids keeps
             // narrowing per that usable set (PR-Agent r3: React Query
-            // retains data across background-refetch failures). The amber
-            // strip warns in both error cases.
+            // retains data across background-refetch failures; r4: `[]` is
+            // a KNOWN empty set, so only `undefined` ids fail open —
+            // matching the heart-disabled condition). The amber strip
+            // warns in both error cases.
             if (favIdsLoading) return true;
-            if (favIdsError && favSet.length === 0) return true;
+            if (favIdsError && !favIds) return true;
             return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {

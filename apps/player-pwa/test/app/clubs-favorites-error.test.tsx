@@ -216,4 +216,18 @@ describe('Clubs page — favorites ids error state (run #110)', () => {
         expect(heartA).toBeEnabled();
         expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
     });
+
+    it('FAV-8 (PR-Agent r4): ids ERROR with stale cached EMPTY set → known-empty, shows the real empty state', () => {
+        // `[]` is a KNOWN empty set (user has no favorites) — a failed
+        // background refetch must NOT fail-open to the full list.
+        useVenueFavoriteIdsMock.mockImplementation(() =>
+            idsResult({ data: [], isError: true, error: { status: 0, message: 'offline' } }));
+        renderPage();
+        activateFavoritesPill();
+
+        // Known-empty narrows to nothing → the genuine onboarding empty state.
+        expect(screen.queryByText('Al-Nakheel Sports Complex')).not.toBeInTheDocument();
+        expect(screen.getByText('No favorites yet')).toBeInTheDocument();
+        expect(screen.getByText("Couldn't load your favorites.")).toBeInTheDocument();
+    });
 });
