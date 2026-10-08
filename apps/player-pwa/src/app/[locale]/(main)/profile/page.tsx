@@ -37,6 +37,7 @@ import {
 import { clearAuthToken } from '@/lib/fetcher';
 import { getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { formatMoney } from '@/lib/format';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
@@ -141,10 +142,13 @@ export default function ProfilePage() {
             : t(errorKey(classifyError(walletError))))
         : null;
     const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
+    // Run #112 (A-2): locale-aware money for the wallet row (formatMoney,
+    // P2-128 convention) — hoisted hook call (Rules of Hooks).
+    const intlLocale = useLocale() as 'ar' | 'en';
     const {
         isSubscribed, isSubscribing, isUnsubscribing, isSupported,
         subscribe, unsubscribe,
-    } = usePushNotifications(useLocale());
+    } = usePushNotifications(intlLocale);
 
     // ── Push delivery preferences (P1-20) ──
     const updatePrefs = useUpdatePushPreferences();
@@ -376,7 +380,10 @@ export default function ProfilePage() {
                     endText={
                         displayBalance === null
                             ? '—'
-                            : `SAR ${displayBalance.toFixed(2)}`
+                            : // Run #112 (A-2): formatMoney (P2-128 convention) —
+                              // Arabic users get Arabic-Indic digits + ر.س, en
+                              // keeps the historical "SAR 123.45" shape.
+                              formatMoney(displayBalance, intlLocale)
                     }
                     href={walletErrorMsg ? undefined : `/${locale}/wallet`}
                     onClick={walletErrorMsg ? () => refetchWallet() : undefined}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
@@ -147,6 +147,22 @@ describe('Clubs page — favorites entry points (P2-165, run #111)', () => {
         expect(screen.getByText('Al-Nakheel Sports Complex')).toBeInTheDocument();
         expect(screen.queryByText('Sign in to save your favorite clubs')).not.toBeInTheDocument();
         expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+    });
+
+    it('NUM-1 (run #112 design lens): venue counts render through formatCount — locale numeral convention', async () => {
+        // BlockedCard.tsx header convention: numerals route through lib/format.ts
+        // (ar-SA Arabic-Indic, Gregorian-guarded) — never bare {n} interpolation,
+        // which emits Latin digits for AR users.
+        const fs = await import('node:fs');
+        const src = fs.readFileSync(
+            'src/app/[locale]/(main)/clubs/page.tsx', 'utf8',
+        );
+        expect(src).toContain('formatCount(filteredVenues.length');
+        expect(src).toContain('formatCount(venue.pitch_count');
+        // The bare interpolations must be gone.
+        expect(src).not.toMatch(/\{filteredVenues\.length\} \{t\('clubs\.venues'\)\}/);
+        expect(src).not.toMatch(/\{venue\.pitch_count\} \{t\('clubs\.pitches'\)\}/);
+        // The helper itself pins the digit sets (format.test.ts covers ar/en).
     });
 
     it('FAV-15: profile menu row deep-links to the favorites tab (structure pin)', async () => {
