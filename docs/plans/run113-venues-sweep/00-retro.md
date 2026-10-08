@@ -51,7 +51,7 @@ Not an admin-area item; apps/admin untouched this run. No dirty files anywhere (
 preflight; re-checked before commits).
 
 ## Veto clocks (decision recorded)
-Proposed 2026-10-00T02:30Z → elapse 2026-00-09T02:30Z. Now = 2026-10-08T10:18Z = ~32h elapsed
+Proposed 2026-10-07T02:30Z → elapse 2026-10-09T02:30Z. Now = 2026-10-08T10:18Z = ~32h elapsed
 < 48h → **no clock row buildable this run**. Run #112's report line "run #113 is the FIRST run
 allowed to build elapsed rows" was an arithmetic error (10-07T02:30 + 48h = 10-09T02:30, and
 #113 fires 10-08T10:15Z — 32h in). Runs #114 (15:15Z 10-08) and #115 (01:15Z 10-09) also fire
