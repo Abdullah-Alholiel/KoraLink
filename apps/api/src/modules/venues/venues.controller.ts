@@ -1,4 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 import {
   ApiTags,
   ApiOperation,
@@ -71,7 +72,7 @@ export class VenuesController {
   @ApiOkResponse({
     description: '{ favorited: true, created } — created=true only when newly inserted.',
   })
-  addFavorite(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+  addFavorite(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
     return this.venuesService.addFavorite(user.sub, id);
   }
 
@@ -82,7 +83,7 @@ export class VenuesController {
   @ApiOkResponse({
     description: '{ favorited: false, removed } — removed=true only when a row was deleted.',
   })
-  removeFavorite(@Param('id') id: string, @CurrentUser() user: { sub: string }) {
+  removeFavorite(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
     return this.venuesService.removeFavorite(user.sub, id);
   }
 
@@ -90,7 +91,7 @@ export class VenuesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get full venue details including pitches' })
   @ApiOkResponse({ description: 'Venue details with pitches.' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.venuesService.findOne(id);
   }
 }

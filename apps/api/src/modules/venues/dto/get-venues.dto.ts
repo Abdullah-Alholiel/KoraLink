@@ -36,6 +36,7 @@ export class GetVenuesDto {
   @ApiPropertyOptional({ description: 'City name filter' })
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   city?: string;
 
   @ApiPropertyOptional({ description: 'Filter to KoraLink partner venues only' })
