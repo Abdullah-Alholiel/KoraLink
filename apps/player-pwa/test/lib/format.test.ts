@@ -8,7 +8,29 @@ import {
   formatShortDate,
   formatShortTime,
   riyadhDateFromYMD,
+  formatCount,
 } from '@/lib/format';
+
+describe('formatCount (run #112 locale-aware counts)', () => {
+  it('en renders Latin digits with grouping', () => {
+    expect(formatCount(3, 'en')).toBe('3');
+    expect(formatCount(1234, 'en')).toBe('1,234');
+  });
+
+  it('ar renders Arabic-Indic digits, no Latin digits', () => {
+    const ar = formatCount(3, 'ar');
+    expect(ar).toContain('٣');
+    expect(ar).not.toMatch(/[0-9]/);
+    const grouped = formatCount(1234, 'ar');
+    expect(grouped).toContain('١٢٣٤'.slice(0, 1));
+    expect(grouped).not.toMatch(/[0-9]/);
+  });
+
+  it('handles zero in both locales', () => {
+    expect(formatCount(0, 'en')).toBe('0');
+    expect(formatCount(0, 'ar')).toBe('٠');
+  });
+});
 
 describe('formatDistance', () => {
   it('returns null for null, undefined, or NaN', () => {

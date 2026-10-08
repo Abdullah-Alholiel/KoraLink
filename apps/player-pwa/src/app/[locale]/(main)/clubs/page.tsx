@@ -17,7 +17,7 @@ import {
     useVenueFavoriteToggle,
 } from '@/hooks/useVenueFavorites';
 import { useLocation } from '@/providers/LocationProvider';
-import { formatDistance } from '@/lib/format';
+import { formatDistance, formatCount } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -163,7 +163,7 @@ function ClubsContent() {
                     <h1 className="text-2xl font-bold text-brand-black">{t('clubs.title')}</h1>
                     {filteredVenues.length > 0 && (
                         <p className="text-xs text-gray-400 mt-0.5">
-                            {filteredVenues.length} {t('clubs.venues')}
+                            {formatCount(filteredVenues.length, locale === 'ar' ? 'ar' : 'en')} {t('clubs.venues')}
                         </p>
                     )}
                 </div>
@@ -447,7 +447,7 @@ function ClubsContent() {
                                         <div className="flex items-center gap-0.5">
                                             <Users className="w-3.5 h-3.5 text-brand-green" />
                                             <span className="text-xs font-semibold text-brand-green">
-                                                {venue.pitch_count} {t('clubs.pitches')}
+                                                {formatCount(venue.pitch_count, locale === 'ar' ? 'ar' : 'en')} {t('clubs.pitches')}
                                             </span>
                                         </div>
                                         {(() => {
