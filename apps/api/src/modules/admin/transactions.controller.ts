@@ -11,6 +11,7 @@ import { Request } from 'express';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { AdminTransactionsService } from './transactions.service';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/transactions')
 @UseGuards(AdminAuthGuard)
@@ -23,12 +24,12 @@ export class AdminTransactionsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.transactions.findOne(id);
   }
 
   @Post(':id/refund')
-  refund(@Param('id') id: string, @Req() req: Request) {
+  refund(@Param('id', UuidParamPipe) id: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.transactions.refund(id, adminId, req.ip);
   }

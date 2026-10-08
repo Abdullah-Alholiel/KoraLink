@@ -11,6 +11,7 @@ import { Request } from 'express';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AdminSettlementsService } from './settlements.service';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/settlements')
 @UseGuards(AdminAuthGuard)
@@ -23,12 +24,12 @@ export class AdminSettlementsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.settlements.findOne(id);
   }
 
   @Post(':id/pay')
-  pay(@Param('id') id: string, @Req() req: Request) {
+  pay(@Param('id', UuidParamPipe) id: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.settlements.pay(id, adminId, req.ip);
   }
