@@ -54,11 +54,11 @@ export class AdminVenuesService {
       SELECT
         v.id, v.name, v.city, v.address, v.is_approved, v.is_koralink_partner,
         v.rating, v.created_at,
-        u.id AS owner_id, u.full_name AS owner_name,
+        u.id AS owner_id, COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         COALESCE(vv.status::text, 'pending') AS verification_status
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       LEFT JOIN venue_verifications vv ON vv.venue_id = v.id
       ${where}
@@ -70,7 +70,7 @@ export class AdminVenuesService {
     const countRows = (await this.db.execute(sql`
       SELECT COUNT(DISTINCT v.id)::int AS c
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN venue_verifications vv ON vv.venue_id = v.id
       ${where}
     `)) as unknown as Array<{ c: number }>;
