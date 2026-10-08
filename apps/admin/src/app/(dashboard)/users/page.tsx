@@ -246,7 +246,7 @@ export default function UsersPage() {
             type="submit"
             className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700"
           >
-            Search
+            {tc('search')}
           </button>
         </form>
 
