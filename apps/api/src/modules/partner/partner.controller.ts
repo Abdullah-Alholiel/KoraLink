@@ -21,6 +21,7 @@ import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('partner')
 @UseGuards(JwtCookieAuthGuard, RolesGuard)
@@ -53,7 +54,7 @@ export class PartnerController {
   @Patch('venues/:id')
   updateVenue(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdateVenuePartnerDto,
   ) {
     return this.partner.updateVenue(user.sub, user.role, id, dto);
@@ -64,7 +65,7 @@ export class PartnerController {
   @Get('pitches/:id/slots')
   listSlots(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Query() window: SlotWindowQueryDto,
   ) {
     return this.partner.listSlots(user.sub, user.role, id, window.from, window.to);
@@ -73,7 +74,7 @@ export class PartnerController {
   @Post('pitches/:id/slots/generate')
   generateSlots(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: GenerateSlotsDto,
   ) {
     return this.partner.generateSlots(user.sub, user.role, id, dto);
@@ -82,7 +83,7 @@ export class PartnerController {
   @Post('pitches/:id/slots')
   createSlot(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: CreateSlotDto,
   ) {
     return this.partner.createSlot(user.sub, user.role, id, dto);
@@ -91,7 +92,7 @@ export class PartnerController {
   @Delete('slots/:slotId')
   deleteSlot(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('slotId') slotId: string,
+    @Param('slotId', UuidParamPipe) slotId: string,
   ) {
     return this.partner.deleteSlot(user.sub, user.role, slotId);
   }
@@ -109,7 +110,7 @@ export class PartnerController {
   @Patch('pitches/:id')
   updatePitch(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdatePitchDto,
   ) {
     return this.partner.updatePitch(user.sub, user.role, id, dto);
@@ -118,7 +119,7 @@ export class PartnerController {
   @Delete('pitches/:id')
   deletePitch(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
   ) {
     return this.partner.deletePitch(user.sub, user.role, id);
   }
@@ -155,7 +156,7 @@ export class PartnerController {
   @Get('matches/:id')
   matchDetail(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
   ) {
     return this.partner.getPartnerMatch(user.sub, user.role, id);
   }

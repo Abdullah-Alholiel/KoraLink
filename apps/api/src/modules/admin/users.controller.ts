@@ -13,6 +13,7 @@ import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserAdminDto } from './dto/update-user.dto';
 import { AdminUsersService } from './users.service';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/users')
 @UseGuards(AdminAuthGuard)
@@ -25,13 +26,13 @@ export class AdminUsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.users.findOne(id);
   }
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdateUserAdminDto,
     @Req() req: Request,
   ) {

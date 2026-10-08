@@ -16,6 +16,7 @@ import { ListPitchesDto } from './dto/list-pitches.dto';
 import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AdminPitchesService } from './pitches.service';
 import { CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto } from '../partner/dto/slots.dto';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/pitches')
 @UseGuards(AdminAuthGuard)
@@ -31,7 +32,7 @@ export class AdminPitchesController {
 
   @Get(':id/slots')
   listSlots(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Query() window: SlotWindowQueryDto,
     @Req() req: Request,
   ) {
@@ -41,7 +42,7 @@ export class AdminPitchesController {
 
   @Post(':id/slots/generate')
   generateSlots(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: GenerateSlotsDto,
     @Req() req: Request,
   ) {
@@ -51,7 +52,7 @@ export class AdminPitchesController {
 
   @Post(':id/slots')
   createSlot(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: CreateSlotDto,
     @Req() req: Request,
   ) {
@@ -60,14 +61,14 @@ export class AdminPitchesController {
   }
 
   @Delete('slots/:slotId')
-  deleteSlot(@Param('slotId') slotId: string, @Req() req: Request) {
+  deleteSlot(@Param('slotId', UuidParamPipe) slotId: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.pitches.deleteSlot(slotId, adminId, req.ip);
   }
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdatePitchAdminDto,
     @Req() req: Request,
   ) {
@@ -87,7 +88,7 @@ export class AdminSlotsController {
   constructor(private readonly pitches: AdminPitchesService) {}
 
   @Delete(':slotId')
-  deleteSlot(@Param('slotId') slotId: string, @Req() req: Request) {
+  deleteSlot(@Param('slotId', UuidParamPipe) slotId: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.pitches.deleteSlot(slotId, adminId, req.ip);
   }
