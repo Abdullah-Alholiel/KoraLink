@@ -98,7 +98,7 @@ export class PartnerService {
         is_approved: venues.is_approved,
         is_koralink_partner: venues.is_koralink_partner,
         owner_id: venues.owner_id,
-        owner_name: users.full_name,
+        owner_name: sql<string>`COALESCE(${users.full_name}, '')`,
         pitch_count: sql<number>`(select count(*)::int from ${pitches} p where p.venue_id = ${venues.id})`,
         // P1-25: hours + closed days for the partner venues edit form.
         open_hour: venues.open_hour,
@@ -112,7 +112,7 @@ export class PartnerService {
         closed_day_6: venues.closed_day_6,
       })
       .from(venues)
-      .innerJoin(users, eq(users.id, venues.owner_id))
+      .leftJoin(users, eq(users.id, venues.owner_id))
       .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId))
       .orderBy(venues.created_at);
     return rows;
