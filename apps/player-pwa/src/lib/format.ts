@@ -65,8 +65,15 @@ export function formatMoney(value: number, locale: AppLocale): string {
  * (venues found, pitch counts, players joined) through this — a bare `{n}`
  * in JSX emits Latin digits for AR users (BlockedCard header documents the
  * numeral convention). Grouping follows the locale (en "1,234", ar "١٬٢٣٤").
+ *
+ * Null/undefined/non-finite return '' — matching the bare JSX interpolation
+ * this helper replaced (PR-Agent r1 on the counts PR: Intl coerces null to
+ * "0" and undefined to "NaN"; the old render showed nothing, and a missing
+ * count should keep hiding, not claim "0 pitches"). COUNT() SQL never
+ * returns NULL, so this is a behavior-preserving guard, not a live path.
  */
 export function formatCount(n: number, locale: AppLocale): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '';
   return numberFormat(locale).format(n);
 }
 

@@ -30,6 +30,15 @@ describe('formatCount (run #112 locale-aware counts)', () => {
     expect(formatCount(0, 'en')).toBe('0');
     expect(formatCount(0, 'ar')).toBe('٠');
   });
+
+  it('null/undefined/non-finite render empty (legacy bare-interpolation parity, PR-Agent r1)', () => {
+    expect(formatCount(null as unknown as number, 'en')).toBe('');
+    expect(formatCount(undefined as unknown as number, 'en')).toBe('');
+    expect(formatCount(Number.NaN, 'en')).toBe('');
+    // Never "0" or "NaN" for missing data.
+    expect(formatCount(null as unknown as number, 'en')).not.toBe('0');
+    expect(formatCount(undefined as unknown as number, 'ar')).not.toBe('NaN');
+  });
 });
 
 describe('formatDistance', () => {
