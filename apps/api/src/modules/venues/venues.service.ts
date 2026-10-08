@@ -169,14 +169,14 @@ export class VenuesService {
         v.is_koralink_partner,
         ${distanceExpr} AS distance_m,
         v.owner_id,
-        u.full_name AS owner_name,
+        COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         v.open_hour::int,
         v.close_hour::int,
         v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
         v.closed_day_4, v.closed_day_5, v.closed_day_6
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       WHERE v.is_approved = true
         ${searchClause}
@@ -334,7 +334,7 @@ export class VenuesService {
         v.is_koralink_partner,
         NULL::float8 AS distance_m,
         v.owner_id,
-        u.full_name AS owner_name,
+        COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         v.open_hour::int,
         v.close_hour::int,
@@ -342,7 +342,7 @@ export class VenuesService {
         v.closed_day_4, v.closed_day_5, v.closed_day_6
       FROM venue_favorites vf
       INNER JOIN venues v ON v.id = vf.venue_id
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       WHERE vf.user_id = ${userId}
         AND v.is_approved = true
