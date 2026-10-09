@@ -445,8 +445,10 @@ export class MatchesService {
    * 24h voting window has closed and whose winner was never announced.
    *
    * Idempotent: guarded by `pom_winner_id IS NULL AND pom_announced_at IS NULL`,
-   * and `announcePomWinner` itself no-ops once announced. Tie → earliest vote
-   * wins (POTM invariant: winner must be a roster member, not a no-show).
+   * and `announcePomWinner` itself no-ops once announced.
+   * Tie at the top (or zero votes): NO winner is announced — voting is closed
+   * by stamping `pom_announced_at` so the match drops out of the per-tick
+   * scan (votes cannot change after the window closes).
    *
    * @returns number of matches finalized this tick.
    */

@@ -78,6 +78,31 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     } else if (isCompleted) {
         buttonLabel = t('matchDetail.viewDetails');
         buttonStyle = 'bg-gray-100 text-gray-600';
+        // P1-51 (run #116): History-row POTM outcome — once the 24h window has
+        // RESOLVED (finalizePomVoting stamped winner or tie/no-vote) for a match
+        // the user played/hosted. Feeds without the my-matches fields ship
+        // potmDecided undefined → no pill, unchanged render.
+        if ((isJoined || isHost) && !votingOpenFinal && match.potmDecided) {
+            badge = match.potmWinnerName ? (
+                <span
+                    data-testid="match-card-potm-winner"
+                    className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                >
+                    <Crown className="w-3 h-3 flex-shrink-0" strokeWidth={2} />
+                    <span className="truncate max-w-[140px]">
+                        {t('matchCard.potmWinner', { name: match.potmWinnerName })}
+                    </span>
+                </span>
+            ) : (
+                <span
+                    data-testid="match-card-potm-no-winner"
+                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                >
+                    <XCircle className="w-3 h-3" strokeWidth={2} />
+                    {t('matchCard.potmNoWinner')}
+                </span>
+            );
+        }
     } else if (isHost) {
         buttonLabel = t('matchDetail.yourMatch');
         buttonStyle = 'bg-amber-100 text-amber-800 border border-amber-300';

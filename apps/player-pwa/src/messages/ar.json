@@ -222,7 +222,9 @@
     "votePotm": "صوّت لأفضل لاعب",
     "potmVoted": "تم التصويت",
     "potmBadge": "أفضل لاعب",
-    "fullWaitlist": "مكتمل · {count} بالانتظار"
+    "fullWaitlist": "مكتمل · {count} بالانتظار",
+    "potmWinner": "أفضل لاعب: {name}",
+    "potmNoWinner": "انتهى التصويت — لا يوجد فائز"
   },
   "waitlist": {
     "joinCta": "انضم لقائمة الانتظار",
