@@ -15,6 +15,7 @@ import { users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserAdminDto } from './dto/update-user.dto';
+import { BulkModerateUsersDto } from './dto/bulk-moderate.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -378,5 +379,82 @@ export class AdminUsersService {
     }
 
     return after;
+  }
+
+  /**
+   * P2-107 (run #116): bulk ban / bulk suspend — HQ users list checkbox path.
+   *
+   * Default+48h-veto (proposed run #110, clock elapsed 2026-10-09T11:00Z, no
+   * veto): bulk BAN + SUSPEND only, ≤50 ids/batch, ONE batch audit entry per
+   * action (`admin_bulk_ban` / `admin_bulk_suspend` with the id array).
+   * Purge/restore/delete are NEVER bulk (PDPL irreversible).
+   *
+   * Design: each row goes through the SAME guarded `update()` as the
+   * single-row drawer action, so the PDPL ghost guard, self-moderation guard,
+   * last-admin FOR UPDATE lock, socket force-disconnect and player
+   * notification all apply per row. Per-row failures do NOT abort the batch —
+   * they are reported in `skipped` (partial-success contract). The batch audit
+   * entry records exactly what was applied so the trail shows one ops action,
+   * not N silent rows.
+   */
+  async bulkModerate(
+    dto: BulkModerateUsersDto,
+    adminId: string,
+    ip?: string,
+  ): Promise<{
+    action: 'ban' | 'suspend';
+    requested: number;
+    updated: number;
+    skipped: Array<{ id: string; reason: string }>;
+  }> {
+    // Bulk scope is other accounts — mirror the single-row self-guard intent
+    // at the batch boundary (a batch containing the caller 400s wholesale).
+    if (dto.ids.includes(adminId)) {
+      throw new BadRequestException('You cannot moderate your own account in bulk.');
+    }
+
+    const skipped: Array<{ id: string; reason: string }> = [];
+    const applied: string[] = [];
+
+    for (const id of dto.ids) {
+      try {
+        if (dto.action === 'ban') {
+          await this.update(id, { banned: true }, adminId, ip);
+        } else {
+          // 7-day suspension — same default as the single-row drawer action.
+          await this.update(
+            id,
+            { suspendedUntil: new Date(Date.now() + 7 * 86_400_000).toISOString() },
+            adminId,
+            ip,
+          );
+        }
+        applied.push(id);
+      } catch (err) {
+        // Per-row isolation: guards throw 400 (self/last-admin), 404
+        // (vanished), 409 (PDPL ghost). Report and continue.
+        skipped.push({
+          id,
+          reason: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    await this.audit.log({
+      adminId,
+      action: dto.action === 'ban' ? 'admin_bulk_ban' : 'admin_bulk_suspend',
+      entityType: 'user',
+      entityId: null,
+      after: { ids: dto.ids, updated: applied, skipped },
+      ip,
+    });
+    this.realtime.broadcastOps('users');
+
+    return {
+      action: dto.action,
+      requested: dto.ids.length,
+      updated: applied.length,
+      skipped,
+    };
   }
 }
