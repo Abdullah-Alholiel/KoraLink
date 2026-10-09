@@ -15,6 +15,7 @@ import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import { randomInt } from 'node:crypto';
 import * as Sentry from '@sentry/node';
 import { escapeLikePattern } from '../../common/utils/escape-like';
+import { reportFanOutError } from '../../common/utils/fanout';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -1022,7 +1023,10 @@ export class UsersService {
     if (this.mailer) {
       this.mailer
         .sendToUsers([userId], 'account_deletion')
-        .catch(() => undefined);
+        // P2-169 (run #115): logged + Sentry'd, not swallowed.
+        .catch((err: unknown) =>
+          reportFanOutError('users.deletion-email', err),
+        );
     }
 
     const restore_token = this.jwt.sign(

@@ -12,6 +12,7 @@ import {
   venues,
 } from '../../database/schema';
 import { RealtimeService } from '../gateway/realtime.service';
+import { reportFanOutError } from '../../common/utils/fanout';
 import { MailerService } from '../mailer/mailer.service';
 import { EMAIL_ACTIVITY_VERBS, MailTemplateKey } from '../mailer/mailer.copy';
 
@@ -164,7 +165,10 @@ export class ActivitiesService {
           .sendToUsers(recipients, params.verb as MailTemplateKey, {}, {
             matchId: params.matchId ?? undefined,
           })
-          .catch(() => undefined);
+          // P2-169 (run #115): logged + Sentry'd, not swallowed.
+          .catch((err: unknown) =>
+            reportFanOutError('activities.queue-email', err),
+          );
       });
     }
   }

@@ -13,6 +13,7 @@ import {
   TransactionType,
   ReferenceType,
 } from '../../database/schema';
+import { moneyToNumber } from '../../common/utils/money';
 import { withTimestamp } from '../../common/utils/timestamp';
 
 export interface LedgerEntryDto {
@@ -133,8 +134,12 @@ export class WalletService {
           .where(eq(users.id, userId))
           .returning({ id: users.id, wallet_balance: users.wallet_balance });
 
-        // 3. Guard against negative balance on DEBIT.
-        if (parseFloat(updatedUser.wallet_balance) < 0) {
+        // P2-168 (run #115): exact-cents guard (a vanished user row would
+        // previously parseFloat(undefined) → TypeError 500; now 400).
+        if (!updatedUser) {
+          throw new BadRequestException('Wallet account not found.');
+        }
+        if (moneyToNumber(updatedUser.wallet_balance) < 0) {
           throw new BadRequestException('Insufficient wallet balance.');
         }
 
