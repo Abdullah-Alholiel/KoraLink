@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -13,7 +13,7 @@ export class BulkModerateUsersDto {
   @IsIn(['ban', 'suspend'])
   action!: 'ban' | 'suspend';
 
-  @ApiPropertyOptional({ description: '1..50 user ids (uuid)', type: [String] })
+  @ApiProperty({ description: '1..50 user ids (uuid)', type: [String] })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(50)

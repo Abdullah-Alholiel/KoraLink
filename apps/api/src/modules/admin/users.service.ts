@@ -431,12 +431,23 @@ export class AdminUsersService {
         }
         applied.push(id);
       } catch (err) {
-        // Per-row isolation: guards throw 400 (self/last-admin), 404
-        // (vanished), 409 (PDPL ghost). Report and continue.
-        skipped.push({
-          id,
-          reason: err instanceof Error ? err.message : 'Unknown error',
-        });
+        // Per-row isolation applies ONLY to the known guard rejections: 400
+        // (self/last-admin), 404 (vanished), 409 (PDPL ghost). Anything else
+        // is an infrastructure failure (driver/SQL) — rethrow so the batch
+        // fails loudly (500) instead of masquerading as a partial success,
+        // and no internal driver/SQL text reaches the client or audit trail
+        // (PR-Agent run #116). Rows already applied keep their per-row
+        // `user.update` audit entries from update(); only the BATCH entry is
+        // skipped, so a retry reconciles cleanly.
+        if (
+          err instanceof BadRequestException ||
+          err instanceof NotFoundException ||
+          err instanceof ConflictException
+        ) {
+          skipped.push({ id, reason: err.message });
+        } else {
+          throw err;
+        }
       }
     }
 

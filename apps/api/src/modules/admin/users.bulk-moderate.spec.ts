@@ -107,4 +107,19 @@ describe('AdminUsersService bulkModerate (P2-107)', () => {
     await svc.bulkModerate({ action: 'suspend', ids: [A, B] }, ADMIN);
     expect(auditEntries[0].action).toBe('admin_bulk_suspend');
   });
+
+  it('rethrows non-guard (infrastructure) errors instead of masking them as skipped', async () => {
+    const { svc, auditEntries } = makeService({
+      updateBehavior: async (id) => {
+        if (id === B) throw new Error('db connection terminated'); // NOT a guard HttpException
+        return {};
+      },
+    });
+    await expect(
+      svc.bulkModerate({ action: 'ban', ids: [A, B, C] }, ADMIN),
+    ).rejects.toThrow('db connection terminated');
+    // No batch audit entry: the batch did not complete; applied rows keep
+    // their per-row user.update entries from update() for reconciliation.
+    expect(auditEntries).toHaveLength(0);
+  });
 });
