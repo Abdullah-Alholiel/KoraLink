@@ -37,6 +37,7 @@ import { isVenueOpenNow } from '@/lib/venue-hours';
 import { formatMoney } from '@/lib/format';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
+import VenueReviewsSection from '@/components/venues/VenueReviewsSection';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -397,6 +398,9 @@ export default function ClubPage() {
                   })()}
                 </div>
               </div>
+
+              {/* ── P1-55: booking-verified reviews ── */}
+              <VenueReviewsSection venueId={id} locale={locale} />
 
               {/* ── P1-32: Pitches (what you can actually book here) ── */}
               {(venue.pitches?.length ?? 0) > 0 && (

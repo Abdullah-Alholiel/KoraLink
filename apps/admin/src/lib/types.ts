@@ -45,7 +45,9 @@ export interface AdminVenue {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   created_at?: string;
   owner_id?: string;
   owner_name?: string | null;
@@ -93,7 +95,9 @@ export interface AdminVenueDetail {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   owner: { id: string; full_name: string | null; handle: string | null; phone: string | null } | null;
   pitches: { id: string; name: string; size: string; surface_type: string; hourly_rate: string | number }[];
   verification: AdminVenueVerification | null;
@@ -352,7 +356,9 @@ export interface AdminVenueListRow {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string | null;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   created_at: string;
   owner_id: string | null;
   owner_name: string | null;

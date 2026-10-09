@@ -53,7 +53,7 @@ export class AdminVenuesService {
     const rows = (await this.db.execute(sql`
       SELECT
         v.id, v.name, v.city, v.address, v.is_approved, v.is_koralink_partner,
-        v.rating, v.created_at,
+        v.rating_avg, v.rating_count, v.created_at,
         u.id AS owner_id, COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         COALESCE(vv.status::text, 'pending') AS verification_status
