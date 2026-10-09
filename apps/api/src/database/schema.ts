@@ -319,7 +319,10 @@ export const venues = pgTable(
     city: varchar('city', { length: 100 }).notNull(),
     address: text('address').notNull(),
     amenities: json('amenities').notNull().default(sql`'[]'::json`),
-    rating: doublePrecision('rating').notNull().default(0),
+    // P1-55: aggregates maintained by the review-submit tx (venues.service
+    // submitVenueReview) — never written elsewhere; avg is PG round(AVG,1).
+    rating_avg: doublePrecision('rating_avg').notNull().default(0),
+    rating_count: integer('rating_count').notNull().default(0),
     is_approved: boolean('is_approved').notNull().default(false),
     is_koralink_partner: boolean('is_koralink_partner').notNull().default(false),
     // P1-25 venue operating hours — Riyadh-local wall clock, 24h ints.
@@ -656,6 +659,9 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const venuesRelations = relations(venues, ({ one, many }) => ({
   owner: one(users, { fields: [venues.owner_id], references: [users.id] }),
   pitches: many(pitches),
+  // P1-55: booking-verified reviews feed the aggregates; no relational
+  // consumer yet (reviews read via raw-SQL latest-first listing).
+  reviews: many(venue_reviews),
 }));
 
 export const pitchesRelations = relations(pitches, ({ one, many }) => ({
@@ -924,6 +930,41 @@ export const venue_favorites = pgTable(
   (t) => [
     primaryKey({ name: 'venue_favorites_pk', columns: [t.user_id, t.venue_id] }),
     index('venue_favorites_venue_id_idx').on(t.venue_id),
+  ],
+);
+
+// P1-55: booking-verified venue reviews. UNIQUE(venue_id,user_id) = one
+// review per user per venue (re-submit upserts → latest wins). match_id is a
+// PROOF ID ONLY (the verified Completed booking it derives from), stored
+// WITHOUT an FK: matches purge/cancel flows must never cascade-delete
+// historical reviews (P2-47 pending decision). rating CHECK lives in the
+// migration (drizzle has no CHECK API here).
+export const venue_reviews = pgTable(
+  'venue_reviews',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    match_id: varchar('match_id', { length: 36 }).notNull(),
+    rating: smallint('rating').notNull(),
+    comment: varchar('comment', { length: 500 }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('venue_reviews_venue_user_idx').on(t.venue_id, t.user_id),
+    index('venue_reviews_venue_updated_idx').on(t.venue_id, t.updated_at),
   ],
 );
 

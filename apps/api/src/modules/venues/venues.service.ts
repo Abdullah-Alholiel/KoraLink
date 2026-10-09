@@ -1,8 +1,8 @@
-import { Injectable, BadRequestException, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Inject, NotFoundException } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { venues, venue_favorites } from '../../database/schema';
+import { venues, venue_favorites, venue_reviews } from '../../database/schema';
 import { escapeLikePattern } from '../../common/utils/escape-like';
 import { GetVenuesDto } from './dto/get-venues.dto';
 
@@ -27,6 +27,23 @@ export interface FavoriteMutationResult {
   created?: boolean;
   /** removeFavorite: a row was actually deleted (false = was not favorited). */
   removed?: boolean;
+}
+
+/** P1-55: review submit response contract (upsert analog of the
+ *  return-findOne-after-tx rule — aggregates are computed from THIS tx, so
+ *  they are exactly the state the write produced, without a re-read). */
+export interface ReviewMutationResult {
+  review: {
+    id: string;
+    venue_id: string;
+    user_id: string;
+    match_id: string;
+    rating: number;
+    comment: string | null;
+    created_at: Date;
+    updated_at: Date;
+  };
+  venueRating: { average: number; count: number };
 }
 
 /**
@@ -397,5 +414,187 @@ export class VenuesService {
       .returning({ venue_id: venue_favorites.venue_id });
 
     return { favorited: false, removed: deleted.length > 0 };
+  }
+
+  // ── P1-55: booking-verified venue reviews (run #117) ────────────────────
+  // The verified-booking predicate is the SINGLE source of truth for both the
+  // 403 on submit and the GET's can_review flag (the UI CTA must never claim
+  // eligibility the server would refuse). A review's match_id is a PROOF ID
+  // only — no FK, so match purge/cancel flows can never cascade-delete
+  // historical reviews (P2-47 decision pending).
+
+  /** TRUE when the user has ≥1 Completed match at this venue (any pitch).
+   *  Returns the LATEST completed match id — stored as the review's proof. */
+  private async verifiedBooking(
+    userId: string,
+    venueId: string,
+  ): Promise<string | null> {
+    const res = await this.db.execute(sql`
+      SELECT m.id
+      FROM matches m
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN match_players mp ON mp.match_id = m.id AND mp.user_id = ${userId}
+      WHERE p.venue_id = ${venueId}
+        AND m.status = 'Completed'
+      ORDER BY m.completed_at DESC NULLS LAST, m.scheduled_at DESC
+      LIMIT 1
+    `);
+    const rows = res as unknown as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  }
+
+  /**
+   * Submit (or re-submit) a review. Re-submission UPSERTs — UNIQUE
+   * (venue_id, user_id), latest verdict wins. The aggregate recompute and the
+   * write share ONE transaction guarded by FOR UPDATE on the venue row, so
+   * two concurrent submissions serialize (mirrors addFavorite's lock pattern,
+   * run #111) and rating_avg/rating_count can never drift from the rows.
+   */
+  async submitVenueReview(
+    userId: string,
+    venueId: string,
+    rating: number,
+    comment: string | null,
+  ): Promise<ReviewMutationResult> {
+    return this.db.transaction(async (tx) => {
+      // Lock the venue row: serializes concurrent aggregates + 404s unknown
+      // ids (UuidParamPipe has already shape-checked the id).
+      const [venue] = await tx
+        .select({ id: venues.id })
+        .from(venues)
+        .where(eq(venues.id, venueId))
+        .for('update')
+        .limit(1);
+      if (!venue) {
+        throw new NotFoundException(`Venue ${venueId} not found.`);
+      }
+
+      const proofMatchId = await this.verifiedBookingTx(tx, userId, venueId);
+      if (!proofMatchId) {
+        throw new ForbiddenException(
+          'Only players who completed a game at this venue can review it.',
+        );
+      }
+
+      // Upsert — one review per (venue, user); updated_at rides the table's
+      // $onUpdateFn. comment explicitly NULLable (isNull on update set).
+      const [row] = await tx
+        .insert(venue_reviews)
+        .values({
+          venue_id: venueId,
+          user_id: userId,
+          match_id: proofMatchId,
+          rating,
+          comment: comment ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [venue_reviews.venue_id, venue_reviews.user_id],
+          set: {
+            rating,
+            comment: comment ?? null,
+            match_id: proofMatchId,
+            updated_at: new Date(),
+          },
+        })
+        .returning();
+
+      // Recompute aggregates from the rows inside the same tx.
+      const [agg] = await tx
+        .select({
+          average: sql<string>`COALESCE(round(AVG(${venue_reviews.rating})::numeric, 1), 0)`,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(venue_reviews)
+        .where(eq(venue_reviews.venue_id, venueId));
+
+      await tx
+        .update(venues)
+        .set({ rating_avg: Number(agg.average), rating_count: agg.count })
+        .where(eq(venues.id, venueId));
+
+      return {
+        review: {
+          ...row,
+          rating: Number(row.rating),
+        },
+        venueRating: { average: Number(agg.average), count: agg.count },
+      };
+    });
+  }
+
+  /** tx-scoped verified-booking probe (runs inside the submit transaction). */
+  private async verifiedBookingTx(
+    tx: Parameters<Parameters<typeof this.db.transaction>[0]>[0],
+    userId: string,
+    venueId: string,
+  ): Promise<string | null> {
+    const res = await tx.execute(sql`
+      SELECT m.id
+      FROM matches m
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN match_players mp ON mp.match_id = m.id AND mp.user_id = ${userId}
+      WHERE p.venue_id = ${venueId}
+        AND m.status = 'Completed'
+      ORDER BY m.completed_at DESC NULLS LAST, m.scheduled_at DESC
+      LIMIT 1
+    `);
+    const rows = res as unknown as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  }
+
+  /** Public reviews page for a venue: latest 20 + aggregates + can_review. */
+  async listVenueReviews(userId: string, venueId: string) {
+    const res = await this.db.execute(sql`
+      SELECT
+        vr.id, vr.rating, vr.comment, vr.created_at, vr.updated_at,
+        u.id AS user_id, u.full_name AS user_full_name, u.avatar_url AS user_avatar_url,
+        (vr.user_id = ${userId}) AS mine
+      FROM venue_reviews vr
+      LEFT JOIN users u ON u.id = vr.user_id
+      WHERE vr.venue_id = ${venueId}
+      ORDER BY vr.updated_at DESC
+      LIMIT 20
+    `);
+    const rows = res as unknown as Array<{
+      id: string;
+      rating: number;
+      comment: string | null;
+      created_at: string;
+      updated_at: string;
+      user_id: string;
+      user_full_name: string | null;
+      user_avatar_url: string | null;
+      mine: boolean;
+    }>;
+
+    const [venue] = await this.db
+      .select({ average: venues.rating_avg, count: venues.rating_count })
+      .from(venues)
+      .where(eq(venues.id, venueId))
+      .limit(1);
+    if (!venue) {
+      throw new NotFoundException(`Venue ${venueId} not found.`);
+    }
+
+    const canReview = await this.verifiedBooking(userId, venueId);
+
+    return {
+      reviews: rows.map((r) => ({
+        id: r.id,
+        rating: Number(r.rating),
+        comment: r.comment,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        user: {
+          id: r.user_id,
+          full_name: r.user_full_name,
+          avatar_url: r.user_avatar_url,
+        },
+        mine: r.mine,
+      })),
+      average: Number(venue.average),
+      count: venue.count,
+      can_review: canReview !== null,
+    };
   }
 }

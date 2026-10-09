@@ -1,14 +1,16 @@
-import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards, Body } from '@nestjs/common';
 import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
+  ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
 import { VenuesService } from './venues.service';
 import { GetVenuesDto } from './dto/get-venues.dto';
+import { CreateVenueReviewDto } from './dto/create-venue-review.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -85,6 +87,35 @@ export class VenuesController {
   })
   removeFavorite(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
     return this.venuesService.removeFavorite(user.sub, id);
+  }
+
+  // ── POST /venues/:id/reviews — booking-verified review (P1-55) ──────────
+  // 403 unless the caller has ≥1 Completed match at this venue; re-submit
+  // UPSERTs (one review per user per venue). NOTE: declared ABOVE
+  // GET /venues/:id is not required (different method), but the reviews
+  // surface stays grouped with the favorites surface it mirrors.
+  @Post(':id/reviews')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Submit a booking-verified review (re-submit updates your review)' })
+  @ApiCreatedResponse({
+    description: '{ review, venueRating: { average, count } } — aggregates fresh from the write tx.',
+  })
+  submitReview(
+    @Param('id', UuidParamPipe) id: string,
+    @CurrentUser() user: { sub: string },
+    @Body() dto: CreateVenueReviewDto,
+  ) {
+    return this.venuesService.submitVenueReview(user.sub, id, dto.rating, dto.comment ?? null);
+  }
+
+  // ── GET /venues/:id/reviews — public reviews page (P1-55) ───────────────
+  @Get(':id/reviews')
+  @ApiOperation({ summary: 'Latest 20 reviews + aggregates + whether the caller may review' })
+  @ApiOkResponse({
+    description: '{ reviews[], average, count, can_review }.',
+  })
+  listReviews(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.listVenueReviews(user.sub, id);
   }
 
   // ── GET /venues/:id — Venue details ───────────────────────────────────

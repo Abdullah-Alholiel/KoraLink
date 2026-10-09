@@ -21,9 +21,11 @@ import { formatDistance, formatCount } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
 
-// Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — the product
-// has no ratings pipeline (venues.rating is all-zero, no write path), so the
-// pill filtered nothing. Nearby is now a real distance sort (see below).
+// Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — at the
+// time venues.rating was all-zero with no write path. P1-55 (run #117) added
+// booking-verified reviews (rating_avg now live), but the LIST page still has
+// no per-card stars — a "Top Rated" filter needs a sort contract first; the
+// detail page carries the reviews surface. Nearby stays a real distance sort.
 // P2-161 (run #109): 'Favorites' joins as a real filter — it narrows to the
 // caller's saved venues (server list), independent of the geo sort.
 const FILTER_KEYS = ['Nearby', 'Favorites', 'Indoor', 'Available Now'] as const;

@@ -97,7 +97,11 @@ export default function VenueDetailPage() {
               </div>
               <div>
                 <dt className="text-xs text-gray-500">{t('rating')}</dt>
-                <dd className="mt-0.5 text-gray-900">{String(data.rating ?? '—')}</dd>
+                <dd className="mt-0.5 text-gray-900">
+                  {data.rating_count > 0
+                    ? `${data.rating_avg} (${data.rating_count})`
+                    : '—'}
+                </dd>
               </div>
             </dl>
 
