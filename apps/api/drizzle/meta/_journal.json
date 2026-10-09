@@ -341,7 +341,9 @@
     {
       "idx": 48,
       "when": 1791511109285,
-      "tag": "0047_matches_location_gist"
+      "tag": "0047_matches_location_gist",
+      "version": "7",
+      "breakpoints": true
     }
   ]
 }
