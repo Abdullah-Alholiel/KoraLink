@@ -542,7 +542,11 @@ export class VenuesService {
     return rows[0]?.id ?? null;
   }
 
-  /** Public reviews page for a venue: latest 20 + aggregates + can_review. */
+  /** Public reviews page for a venue: latest 20 + aggregates + can_review.
+   *  userId is ALWAYS a defined jwt sub — the class-level JwtCookieAuthGuard
+   *  on VenuesController precedes this route (guest calls 401, never reach
+   *  here), and the PWA hook is enabled only for signed-in users — so the
+   *  `(vr.user_id = ${userId})` bind can never be NULL/undefined. */
   async listVenueReviews(userId: string, venueId: string) {
     const res = await this.db.execute(sql`
       SELECT

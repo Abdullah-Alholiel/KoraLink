@@ -171,7 +171,10 @@ describe('VenueReviewsSection', () => {
         for (const key of [
             'reviewsTitle', 'reviewCount', 'reviewsEmpty', 'reviewsError',
             'reviewsSignInHint', 'reviewsSignInCta', 'reviewWrite', 'reviewEdit',
+            'reviewWriteA11y', 'reviewEditA11y',
             'reviewWriteTitle', 'reviewEditTitle', 'reviewVerifiedNote',
+            'reviewRatingA11y', 'reviewStarA11y', 'reviewCommentA11y',
+            'reviewPlaceholder', 'reviewAnonymous',
             'reviewSubmit', 'reviewThanks', 'reviewNotAllowed', 'reviewMine',
         ]) {
             expect(typeof en[key]).toBe('string');
