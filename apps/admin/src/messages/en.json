@@ -663,7 +663,21 @@
     "exportDisputes": "Export disputes",
     "exportMatches": "Export matches",
     "exportReports": "Export reports",
-    "exportUsers": "Export users"
+    "exportUsers": "Export users",
+    "bulkBan": "Ban selected",
+    "bulkSuspend": "Suspend selected",
+    "bulkSelectedCount": "{count, plural, =1 {1 user selected} other {# users selected}}",
+    "bulkCapNote": "Max {cap} per batch",
+    "bulkClear": "Clear selection",
+    "bulkSelectAll": "Select all users on this page",
+    "bulkSelectRow": "Select {name}",
+    "bulkConfirmBanTitle": "Ban selected users?",
+    "bulkConfirmSuspendTitle": "Suspend selected users?",
+    "bulkConfirmBanBody": "{count, plural, =1 {This will ban 1 account. They lose access immediately and this is recorded in the audit log.} other {This will ban # accounts. They lose access immediately and this is recorded in the audit log.}}",
+    "bulkConfirmSuspendBody": "{count, plural, =1 {This will suspend 1 account for 7 days. This is recorded in the audit log.} other {This will suspend # accounts for 7 days. This is recorded in the audit log.}}",
+    "bulkResult": "{updated}/{requested} accounts updated",
+    "bulkSkipped": "{count, plural, =1 {1 skipped (see audit log)} other {# skipped (see audit log)}}",
+    "bulkBarLabel": "Bulk moderation actions"
   },
   "list": {
     "sortLabel": "Sort",
