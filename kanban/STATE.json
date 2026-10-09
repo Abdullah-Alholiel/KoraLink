@@ -1,21 +1,24 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 114,
-  "last_run_at": "2026-10-08T15:18Z",
+  "last_run": 115,
+  "last_run_at": "2026-10-09T01:16Z",
   "last_run_commits": [
-    "058574c",
-    "8fc8a26"
+    "b11a137"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-08T15-18Z-run114.md",
+  "last_run_report": "kanban/RUNS/2026-10-09T01-16Z-run115.md",
   "in_review_items": [
     {
-      "id": "P2-166",
-      "claim": "Search labels i18n on users+venues admin pages (PR #98 squash 058574c); verify: grep tc('search') x2 + sweep 0 bare labels"
+      "id": "P2-168",
+      "claim": "exact-cents money math (PR #100 squash b11a137); verify: matches.money-exact.spec 10/10 + reschedule floor suite green + grep 0 parseFloat on wallet reads in reschedule path"
     },
     {
-      "id": "P2-170",
-      "claim": "admin+partner venue owner LEFT JOIN + COALESCE (PR #99 squash 8fc8a26); verify: jest venues.owner-join.spec 3/3 + admin/partner suites"
+      "id": "P2-169",
+      "claim": "fan-out error reporting at 8 sites (same PR); verify: grep 0 .catch(() => undefined) in modules + reportFanOutError import count = 8 files"
+    },
+    {
+      "id": "P2-171",
+      "claim": "migration 0047 matches_location_gist journal parity (same PR); verify: journal entry v7+breakpoints+snapshot chain-walk OK + live pg_indexes has matches_location_gist_idx + tripwire suites 8/8"
     }
   ],
   "open_blockers": [
@@ -55,5 +58,5 @@
   "last_run_started_at": "2026-10-07T15:19:53Z",
   "last_run_finished_at": "2026-10-07T16:35:00Z",
   "last_run_ts": "2026-10-07T15:19Z",
-  "last_run_commit": "8940913"
+  "last_run_commit": "b11a137"
 }
