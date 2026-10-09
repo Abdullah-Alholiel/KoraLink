@@ -222,7 +222,9 @@
     "votePotm": "Vote POTM",
     "potmVoted": "POTM voted",
     "potmBadge": "POTM",
-    "fullWaitlist": "FULL · {count} waiting"
+    "fullWaitlist": "FULL · {count} waiting",
+    "potmWinner": "POTM: {name}",
+    "potmNoWinner": "Voting ended — no winner"
   },
   "waitlist": {
     "joinCta": "Join Waitlist",

@@ -233,15 +233,24 @@ export class UsersService {
         m.host_payout_state AS host_payout_state,
         v.name AS venue_name,
         v.city AS venue_city,
-        COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at
+        COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at,
+        -- P1-51 (run #116): POTM outcome for History rows. The winner is set by
+        -- finalizePomVoting (single top vote); a tie/no-vote finish stamps
+        -- pom_announced_at with pom_winner_id NULL. potm_decided = the window
+        -- resolved either way, so the card can stop showing vote affordances.
+        m.pom_winner_id AS potm_winner_id,
+        u2.full_name AS potm_winner_name,
+        u2.avatar_url AS potm_winner_avatar,
+        (m.pom_winner_id IS NOT NULL OR m.pom_announced_at IS NOT NULL) AS potm_decided
       FROM match_players my
       INNER JOIN matches m ON m.id = my.match_id
       INNER JOIN users u ON u.id = m.host_id
+      LEFT JOIN users u2 ON u2.id = m.pom_winner_id
       INNER JOIN pitches p ON p.id = m.pitch_id
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
-      GROUP BY m.id, u.id, p.id, v.id
+      GROUP BY m.id, u.id, u2.id, p.id, v.id
       ORDER BY
         -- Upcoming/active matches first (scheduled today or later)
         CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN 0
@@ -282,6 +291,10 @@ export class UsersService {
       venue_name: string;
       venue_city: string;
       voting_closes_at: Date;
+      potm_winner_id: string | null;
+      potm_winner_name: string | null;
+      potm_winner_avatar: string | null;
+      potm_decided: boolean;
     }>;
   }
 

@@ -40,6 +40,13 @@ export interface NearbyMatchApi {
   last_message?: string | null;
   /** Authoritative POTM voting deadline from the API (effective completion + 24h). */
   voting_closes_at?: string | Date | null;
+  /** P1-51 (run #116): POTM outcome for History rows — set by finalizePomVoting.
+   *  potm_winner_* NULL until a winner is announced; potm_decided true once the
+   *  window resolved (winner OR tie/no-vote stamp). */
+  potm_winner_id?: string | null;
+  potm_winner_name?: string | null;
+  potm_winner_avatar?: string | null;
+  potm_decided?: boolean;
   /** Player-host responsibility fields (0040): flat feed/my-matches SQL columns. */
   booking_mode?: 'koralink' | 'self';
   is_player_hosted?: boolean;
@@ -384,6 +391,11 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
     hasVotedPotm: row.has_voted ?? false,
+    // P1-51 (run #116): POTM outcome for History rows (undefined on other feeds
+    // — the fields are optional and only my-matches SQL ships them today).
+    potmWinnerName: row.potm_winner_name ?? null,
+    potmWinnerAvatar: row.potm_winner_avatar ?? null,
+    potmDecided: row.potm_decided ?? false,
     distanceM: row.distance_m ?? null,
     isPrivate: row.visibility === 'private',
     // Player-host responsibility (0040): mode-aware labeling source of truth.
