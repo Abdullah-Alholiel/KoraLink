@@ -250,7 +250,7 @@ export class UsersService {
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
-      GROUP BY m.id, u.id, p.id, v.id
+      GROUP BY m.id, u.id, u2.id, p.id, v.id
       ORDER BY
         -- Upcoming/active matches first (scheduled today or later)
         CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN 0
