@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { follows, users } from '../../database/schema';
 import { ActivitiesService } from '../activities/activities.service';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -46,7 +47,10 @@ export class FollowsService {
         subjectId: targetUserId,
         recipients: [targetUserId],
       })
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('follows.followed-activity', err),
+      );
 
     return this.followState(currentUserId, targetUserId);
   }

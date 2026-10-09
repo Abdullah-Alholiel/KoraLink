@@ -15,10 +15,30 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
 import { escapeLikePattern } from '../../common/utils/escape-like';
+import {
+  centsFromMoneyString,
+  centsToMoneyString,
+  moneyToNumber,
+} from '../../common/utils/money';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 /** round to 2 d.p. (halves away from zero) for money amounts. */
 function roundMoney2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Derive the pitch cost from an hourly rate WITHOUT routing the rate through
+ * a raw parseFloat float path (P2-168, run #115): the rate is normalized to
+ * an exact 2dp decimal string first, then the arithmetic runs on exact
+ * integer cents. `hourly_rate` is numeric(10,2) — every valid value is
+ * exactly representable at 2dp, so cents math is exact by construction.
+ */
+export function pitchCostFromHourlyRate(hourlyRate: string | number | null | undefined, durationMins: number): number {
+  const cents = Math.round(
+    (centsFromMoneyString(hourlyRate) * durationMins) / 60,
+  );
+  return cents / 100;
 }
 
 /**
@@ -595,7 +615,10 @@ export class MatchesService {
                     when: riyadhLocal(kickoff),
                   },
                 )
-                .catch(() => undefined);
+                // P2-169 (run #115): logged + Sentry'd, not swallowed.
+                .catch((err: unknown) =>
+                  reportFanOutError('matches.reminder-email', err),
+                );
             }
           }
 
@@ -872,7 +895,7 @@ export class MatchesService {
       // Release a koralink slot + refund the host exactly what he was
       // debited (same semantics as manual cancelMatch).
       if (row.booking_mode === 'koralink' && row.booking_slot_id) {
-        const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
+        const refundSar = moneyToNumber(row.pitch_cost_sar);
         if (refundSar > 0) {
           await tx
             .update(users)
@@ -1726,7 +1749,10 @@ export class MatchesService {
         matchId,
         recipients: participants.map((p) => p.user_id),
       })
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.joined-activity', err),
+      );
 
     return { updatedMatch, join: joinResult };
   }
@@ -2025,8 +2051,11 @@ export class MatchesService {
     // default: an omitted booking_mode means KoraLink books the pitch.
     const bookingMode = dto.booking_mode ?? 'koralink';
     const visibility = dto.visibility ?? 'public';
-    const pitchCostSar = round2(
-      parseFloat(pitch.hourlyRate) * dto.duration_mins / 60,
+    // P2-168 (run #115): exact-cents derivation on create too — same helper
+    // as the reschedule path so both write paths share one money rule.
+    const pitchCostSar = pitchCostFromHourlyRate(
+      pitch.hourlyRate,
+      dto.duration_mins,
     );
     const pricePerPlayer = await this.calculatePricePerPlayer(
       pitchCostSar,
@@ -2218,7 +2247,10 @@ export class MatchesService {
           matchId: created.id,
           recipients: followers.map((f) => f.follower_id),
         })
-        .catch(() => undefined);
+        // P2-169 (run #115): logged + Sentry'd, not swallowed.
+        .catch((err: unknown) =>
+          reportFanOutError('matches.created-activity', err),
+        );
     }
 
     return fullMatch;
@@ -2870,9 +2902,7 @@ export class MatchesService {
           // Refund the exact pitch cost the host was debited at create.
           // Never derive this from price_per_player — that embeds the
           // platform margin and would over-refund the host.
-          const refundSar = match.pitch_cost_sar
-            ? parseFloat(match.pitch_cost_sar)
-            : 0;
+          const refundSar = moneyToNumber(match.pitch_cost_sar);
           refundedSar = refundSar;
           if (refundSar > 0) {
             await tx
@@ -3047,7 +3077,11 @@ export class MatchesService {
       }
 
       // ── 3. Money: refund old cost, charge new cost, net the wallet ────
-      const oldCost = match.pitch_cost_sar ? parseFloat(match.pitch_cost_sar) : 0;
+      // P2-168 (run #115): exact-cents derivation — the hourly rate is
+      // normalized to an exact 2dp string and the math runs on integer
+      // cents (see pitchCostFromHourlyRate). No float passes between the
+      // rate read and the persisted cost.
+      const oldCost = moneyToNumber(match.pitch_cost_sar);
       const [pitch] = await tx
         .select({ hourly_rate: pitches.hourly_rate })
         .from(pitches)
@@ -3056,7 +3090,7 @@ export class MatchesService {
       if (!pitch) {
         throw new NotFoundException(`Pitch ${match.pitch_id} not found.`);
       }
-      const newCost = round2(parseFloat(String(pitch.hourly_rate)) * (newDuration / 60));
+      const newCost = pitchCostFromHourlyRate(pitch.hourly_rate, newDuration);
 
       walletDeltaSar = round2(newCost - oldCost);
 
@@ -3116,9 +3150,18 @@ export class MatchesService {
           .limit(1)
           .for('update');
 
-        if (walletDeltaSar > 0 && (!wallet || parseFloat(wallet.wallet_balance) < walletDeltaSar)) {
+        // P2-168 (run #115): floor comparison + error amounts on exact
+        // integer cents (moneyToNumber/centsFromMoneyString) — the required
+        // figure can never drift a fils from the value the guarded UPDATE
+        // actually enforces.
+        if (
+          walletDeltaSar > 0 &&
+          (!wallet ||
+            centsFromMoneyString(wallet.wallet_balance) <
+              centsFromMoneyString(walletDeltaSar))
+        ) {
           throw new BadRequestException(
-            `Insufficient wallet balance for the reschedule. Required: SAR ${walletDeltaSar.toFixed(2)}, Available: SAR ${parseFloat(wallet?.wallet_balance ?? '0').toFixed(2)}`,
+            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(wallet?.wallet_balance))}`,
           );
         }
 
@@ -3158,7 +3201,7 @@ export class MatchesService {
           );
 
           throw new BadRequestException(
-            `Insufficient wallet balance for the reschedule. Required: SAR ${walletDeltaSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(user?.wallet_balance))}`,
           );
         }
       }
@@ -4099,7 +4142,10 @@ export class MatchesService {
     // Web-push to attendees (fire-and-forget, config-gated).
     this.notificationsService
       .sendPomDecidedNotification(matchId, payload)
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.pom-push', err),
+      );
 
     // Fan out "pom_decided" to match participants (including the winner).
     const participants = await this.db
@@ -4115,7 +4161,10 @@ export class MatchesService {
         recipients: participants.map((p) => p.user_id),
         excludeActor: false,
       })
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.pom-activity', err),
+      );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

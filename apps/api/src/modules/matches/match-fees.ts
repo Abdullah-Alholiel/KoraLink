@@ -7,6 +7,7 @@ import * as schema from '../../database/schema';
 import { transactions, users } from '../../database/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { moneyToNumber } from '../../common/utils/money';
 
 type DB = PostgresJsDatabase<typeof schema>;
 /** Tx handle carried into module-level tx helpers (shares the caller's transaction). */
@@ -82,7 +83,12 @@ export async function chargeMatchFeeTx(
       .where(eq(users.id, userId))
       .returning({ wallet_balance: users.wallet_balance });
 
-    if (parseFloat(updatedUser.wallet_balance) < 0) {
+    // P2-168 (run #115): exact-cents guard (a vanished user row would
+    // previously parseFloat(undefined) → TypeError 500; now a clean 400).
+    if (!updatedUser) {
+      throw new BadRequestException('Wallet account not found.');
+    }
+    if (moneyToNumber(updatedUser.wallet_balance) < 0) {
       // Rolls back the ENTIRE join tx: no seat without payment.
       throw new BadRequestException('Insufficient wallet balance.');
     }
