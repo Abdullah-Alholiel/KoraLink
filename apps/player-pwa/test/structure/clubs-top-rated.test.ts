@@ -46,4 +46,9 @@ describe('P2-173 top-rated venue sort (run #119)', () => {
     expect(EN.clubs?.filters?.topRated).toBe('Top Rated');
     expect(AR.clubs?.filters?.topRated).toBe('الأعلى تقييماً');
   });
+
+  it('keeps clubs.filters.rating (star aria-label) in BOTH locales (PR-Agent r1)', () => {
+    expect(EN.clubs?.filters?.rating).toBeTruthy();
+    expect(AR.clubs?.filters?.rating).toBeTruthy();
+  });
 });
