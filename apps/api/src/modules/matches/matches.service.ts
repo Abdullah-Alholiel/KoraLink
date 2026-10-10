@@ -2318,12 +2318,20 @@ export class MatchesService {
 
     // a. Anchor slot — the pitch + start_time every weekly repeat must match.
     const [anchor] = (await this.db.execute(sql`
-      SELECT id, pitch_id, slot_date, start_time FROM pitch_slots
-      WHERE id = ${dto.booking_slot_id}::text
-    `)) as unknown as [{ id: string; pitch_id: string; slot_date: string; start_time: string } | undefined];
-    if (!anchor) {
-      throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
-    }
+   SELECT id, pitch_id, slot_date, start_time FROM pitch_slots
+   WHERE id = ${dto.booking_slot_id}::text
+ `)) as unknown as [{ id: string; pitch_id: string; slot_date: string; start_time: string } | undefined];
+ if (!anchor) {
+   throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+ }
+
+ // PR-Agent (run #120): the anchor slot MUST belong to the pitch being
+ // priced — otherwise a crafted payload books pitch A's weekly inventory
+ // at pitch B's derived hourly rate (financial mismatch + corrupt
+ // cross-pitch booking_slot_id references).
+ if (anchor.pitch_id !== dto.pitch_id) {
+   throw new BadRequestException('Slot does not belong to this pitch.');
+ }
 
     // b. Target dates — UTC-safe arithmetic on the Riyadh-local date string.
     const anchorDate = String(anchor.slot_date).slice(0, 10);
@@ -2392,7 +2400,7 @@ export class MatchesService {
       }
 
       const ids: string[] = [];
-      for (const slot of resolved) {
+      for (const [weekIdx, slot] of resolved.entries()) {
         const slotDate = String(slot.slot_date).slice(0, 10);
         const [match] = await tx
           .insert(matches)
@@ -2442,19 +2450,25 @@ export class MatchesService {
             .returning({ wallet_balance: users.wallet_balance });
 
           if (deducted.length === 0) {
-            const [user] = await tx
+            // In-tx re-read sees prior weeks' debits, but the throw ROLLS THE
+            // WHOLE TX BACK — the host's real balance after this failure is
+            // balance minus nothing (all debits undo). Post-rollback re-read
+            // for the honest figure; best-effort (row could be gone).
+            const balanceAfterRollback = await this.db
               .select({ wallet_balance: users.wallet_balance })
               .from(users)
               .where(eq(users.id, hostId))
               .limit(1);
 
             this.logger.warn(
-              `koralink_wallet_insufficient hostId=${hostId} required=${pitchCostSar} slotId=${slot.id}`,
+              `koralink_wallet_insufficient hostId=${hostId} requiredPerWeek=${pitchCostSar} weeks=${repeatWeeks} slotId=${slot.id}`,
               MatchesService.name,
             );
 
             throw new BadRequestException(
-              `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+              `Insufficient wallet balance for ${repeatWeeks} weekly bookings. ` +
+                `Required: SAR ${(pitchCostSar * repeatWeeks).toFixed(2)} (${pitchCostSar.toFixed(2)}/week × ${repeatWeeks}; week ${weekIdx + 1} failed), ` +
+                `Available: SAR ${parseFloat(balanceAfterRollback[0]?.wallet_balance ?? '0').toFixed(2)}`,
             );
           }
 

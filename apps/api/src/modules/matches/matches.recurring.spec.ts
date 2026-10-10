@@ -70,7 +70,7 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
   const dialect = new PgDialect();
   const sqlText = (q: unknown) => dialect.sqlToQuery(q as never).sql;
 
-  function makeDb(candidates: Slot[]) {
+  function makeDb(candidates: Slot[], opts: { deductFail?: boolean } = {}) {
     const calls: { op: string; table?: unknown; valuesArg?: Record<string, unknown> }[] = [];
     let matchSeq = 0;
 
@@ -100,7 +100,12 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
             const op = table === users ? 'deduct' : table === pitch_slots ? 'slot' : 'update';
             calls.push({ op, table, valuesArg: setArg });
             const ret: any = {};
-            ret.returning = async () => (table === users ? [{ wallet_balance: '1000.00' }] : []);
+            ret.returning = async () =>
+              table === users
+                ? opts.deductFail
+                  ? []
+                  : [{ wallet_balance: '1000.00' }]
+                : [];
             ret.then = (r: (v: unknown) => void) => r(undefined);
             return ret;
           },
@@ -129,7 +134,7 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
           const b: any = {};
           b.innerJoin = () => b;
           b.where = () => b;
-          b.limit = async () => (table === pitches ? [PITCH] : table === users ? [{ role: 'Player' }] : []);
+          b.limit = async () => (table === pitches ? [PITCH] : table === users ? [{ role: 'Player', wallet_balance: '499.99' }] : []);
           b.then = (r: (v: unknown) => void) => r([]);
           return b;
         },
@@ -269,5 +274,47 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
       '2099-01-15T17:00:00.000Z',
       '2099-01-22T17:00:00.000Z',
     ]);
+  });
+
+  it('rejects an anchor slot from a DIFFERENT pitch (financial-integrity guard, PR-Agent)', async () => {
+    const { db } = makeDb([]);
+    const svc = makeService(db);
+
+    const err = await svc.createMatch(HOST_ID, input({ repeat_weeks: 2 })).catch((e) => e);
+    // The mocked anchor carries pitch_id PITCH_ID; price a DIFFERENT pitch.
+    const cross = await svc
+      .createMatch(HOST_ID, { ...input({ repeat_weeks: 2 }), pitch_id: 'pitch-other' })
+      .catch((e) => e);
+    expect(cross).toBeInstanceOf(BadRequestException);
+    expect(cross.message).toBe('Slot does not belong to this pitch.');
+    expect(db.transaction).not.toHaveBeenCalled();
+    void err;
+  });
+
+  it('reports the TOTAL requirement (not one week) when a weekly debit fails', async () => {
+    const { db, calls } = makeDb(
+      [
+        slot('slot-w1', '2099-01-01'),
+        slot('slot-w2', '2099-01-08'),
+        slot('slot-w3', '2099-01-15'),
+        slot('slot-w4', '2099-01-22'),
+      ],
+      { deductFail: true },
+    );
+    const svc = makeService(db);
+
+    const err = await svc.createMatch(HOST_ID, input({ repeat_weeks: 4 })).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    // Total + per-week + failing week number, in parser-compatible shape.
+    expect(err.message).toContain('for 4 weekly bookings');
+    expect(err.message).toContain('Required: SAR 640.00');
+    expect(err.message).toContain('160.00/week × 4');
+    expect(err.message).toContain('week 1 failed');
+    expect(err.message).toContain('Available: SAR 499.99');
+    // PWA parser contract must keep working (Required:/Available: extracts).
+    expect(err.message).toMatch(/Insufficient wallet balance/i);
+    expect(err.message).toMatch(/Required:\s*SAR\s*640\.00/);
+    // Nothing persisted — the failing debit threw inside the tx.
+    expect(calls.filter((c) => c.op === 'ledger')).toHaveLength(0);
   });
 });
