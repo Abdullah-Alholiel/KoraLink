@@ -279,7 +279,16 @@ export class AdminDisputesService {
 
       const reopened = await tx
         .update(disputes)
-        .set(withTimestamp({ status: 'opened', evidence: evidence as never }))
+        .set(
+          withTimestamp({
+            status: 'opened',
+            // PR-Agent run-#118 r2: a reopened dispute gets a FRESH SLA
+            // window — clear the old escalation flag so the sweep can
+            // re-flag only after another 7 neglected days.
+            sla_escalated: false,
+            evidence: evidence as never,
+          }),
+        )
         .where(and(eq(disputes.id, id), inArray(disputes.status, ['resolved', 'rejected'])))
         .returning({ id: disputes.id });
 
@@ -333,9 +342,13 @@ export class AdminDisputesService {
    * row is locked FOR UPDATE, the UPDATE is status-predicated
    * (opened/under_review) AND gated on sla_escalated = false, so a dispute
    * decided mid-sweep is skipped and a concurrent tick's loser matches zero
-   * rows. Decided rows and re-opened-but-fresh rows are never touched. The
-   * evidence dedup is judged INSIDE the lock, so two ticks serialize and the
-   * second sees the first's entry. Informational only — no side effects.
+   * rows. The clock keys on updated_at (PR-Agent run-#118 r2: created_at
+   * alone flagged a freshly REOPENED old dispute instantly — reopen()
+   * resets the flag AND bumps updated_at, so the dispute must sit untouched
+   * for another 7 days before re-escalation; admin replies also reset the
+   * neglect clock, which is the intent for a neglect detector). The evidence
+   * dedup is judged INSIDE the lock, so two ticks serialize and the second
+   * sees the first's entry. Informational only — no side effects.
    *
    * @returns number of disputes escalated by THIS call.
    */
@@ -351,7 +364,7 @@ export class AdminDisputesService {
       .where(
         and(
           inArray(disputes.status, ['opened', 'under_review']),
-          lt(disputes.created_at, cutoff),
+          lt(disputes.updated_at, cutoff),
           eq(disputes.sla_escalated, false),
         ),
       );

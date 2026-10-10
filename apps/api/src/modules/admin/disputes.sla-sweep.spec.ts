@@ -131,4 +131,52 @@ describe('AdminDisputesService — SLA sweep (P1-63)', () => {
     const set = capturedSets[0] as { sla_escalated: boolean };
     expect(set.sla_escalated).toBe(true);
   });
+
+  // PR-Agent run-#118 r2: the neglect clock keys on updated_at, not
+  // created_at — a freshly reopened old dispute must NOT re-flag instantly.
+  it('keys the window on updated_at (reopened disputes get a fresh 7 days)', async () => {
+    const whereFragments: unknown[] = [];
+    const db = {
+      query: { disputes: {}, dispute_messages: {} },
+      select: jest.fn(() => {
+        const chain: { from: () => { where: (w: unknown) => Promise<unknown[]> } } = {
+          from: () => ({
+            where: async (w: unknown) => {
+              whereFragments.push(w);
+              return [];
+            },
+          }),
+        };
+        return chain;
+      }),
+      transaction: jest.fn(async () => undefined),
+    };
+    const svc = new AdminDisputesService(
+      db as never,
+      { log: jest.fn(async () => {}) } as never,
+      { broadcastOps: jest.fn() } as never,
+      { record: jest.fn(async () => {}) } as never,
+    );
+    const escalated = await svc.escalateOverdueDisputes();
+    expect(escalated).toBe(0);
+    // Drizzle fragments hold circular table refs — walk column names safely.
+    const seen: string[] = [];
+    const walk = (node: unknown, depth = 0): void => {
+      if (depth > 6 || node === null || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach((n) => walk(n, depth + 1));
+        return;
+      }
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (typeof v === 'string') seen.push(`${k}=${v}`);
+        else if (v && typeof v === 'object' && (k === 'name' || k === 'column')) seen.push(k);
+        walk(v, depth + 1);
+      }
+    };
+    walk(whereFragments[0]);
+    const joined = seen.join('|');
+    expect(joined).toContain('sla_escalated');
+    expect(joined).toContain('updated_at');
+    expect(joined).not.toContain('created_at');
+  });
 });
