@@ -29,6 +29,10 @@ export interface VenueApi {
   closed_day_4?: boolean;
   closed_day_5?: boolean;
   closed_day_6?: boolean;
+  // P2-173 (run #119): review aggregates from the venues list SELECT
+  // (NOT NULL DEFAULT 0 per migration 0048; 0 count = no approved reviews).
+  rating_avg?: number;
+  rating_count?: number;
 }
 
 export interface PitchApi {
@@ -58,6 +62,9 @@ export function useVenues(params?: {
   city?: string;
   search?: string;
   is_koralink_partner?: boolean;
+  // P2-173 (run #119): 'top_rated' orders by rating_avg DESC / count DESC /
+  // name server-side (coords-independent); absent = today's default order.
+  sort?: 'distance' | 'top_rated';
 }) {
   return useQuery<VenueApi[], FetchError>({
     queryKey: ['venues', params],
@@ -69,6 +76,7 @@ export function useVenues(params?: {
       if (params?.search) searchParams.search = params.search;
       if (params?.is_koralink_partner != null)
         searchParams.is_koralink_partner = String(params.is_koralink_partner);
+      if (params?.sort) searchParams.sort = params.sort;
       return fetcher<VenueApi[]>('/venues', {
         params: Object.keys(searchParams).length > 0 ? searchParams : undefined,
       });
