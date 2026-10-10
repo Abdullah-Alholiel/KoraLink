@@ -51,4 +51,11 @@ describe('P2-173 top-rated venue sort (run #119)', () => {
     expect(EN.clubs?.filters?.rating).toBeTruthy();
     expect(AR.clubs?.filters?.rating).toBeTruthy();
   });
+
+  it('exposes filter pills to screen readers via aria-pressed (run #120 design lens)', () => {
+    // Reviewer B (run #120): the pills toggled styling only — a screen reader
+    // could not tell which filter was active. The pill button MUST carry
+    // aria-pressed bound to the active filter.
+    expect(src).toMatch(/aria-pressed=\{activeFilter === filter\}/);
+  });
 });
