@@ -263,7 +263,6 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
     expect(calls.filter((c) => c.op === 'deduct')).toHaveLength(4);
     expect(calls.filter((c) => c.op === 'slot')).toHaveLength(4);
     expect(calls.filter((c) => c.op === 'player')).toHaveLength(4);
-
     // Each instance is scheduled from ITS slot (Riyadh +03:00).
     const scheduled = calls
       .filter((c) => c.op === 'match')
@@ -316,5 +315,32 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
     expect(err.message).toMatch(/Required:\s*SAR\s*640\.00/);
     // Nothing persisted — the failing debit threw inside the tx.
     expect(calls.filter((c) => c.op === 'ledger')).toHaveLength(0);
+  });
+
+  it('normalizes slot_date whatever form the driver returns (string or Date)', async () => {
+    // PR-Agent r2 scenario: a raw driver parser can hand back PG DATE as a
+    // JS Date. asDateKey must collapse both forms to the same week math.
+    const weeks = [
+      slot('slot-w1', '2099-01-01'),
+      slot('slot-w2', '2099-01-08'),
+      slot('slot-w3', '2099-01-15'),
+    ];
+    const asRawDriver = weeks.map((w) => ({
+      ...w,
+      slot_date: new Date(`${w.slot_date}T00:00:00Z`) as unknown as string,
+    }));
+    const bespoke = makeDb(asRawDriver);
+    const svc = makeService(bespoke.db);
+
+    const res = await svc.createMatch(HOST_ID, input({ repeat_weeks: 3 }));
+    expect(res.id).toBe('match-1');
+    const scheduled = bespoke.calls
+      .filter((c) => c.op === 'match')
+      .map((c) => (c.valuesArg?.scheduled_at as Date).toISOString());
+    expect(scheduled).toEqual([
+      '2099-01-01T17:00:00.000Z',
+      '2099-01-08T17:00:00.000Z',
+      '2099-01-15T17:00:00.000Z',
+    ]);
   });
 });

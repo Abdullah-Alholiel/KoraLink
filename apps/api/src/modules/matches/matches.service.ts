@@ -2316,6 +2316,14 @@ export class MatchesService {
 
     type SlotRow = { id: string; slot_date: string; start_time: string; is_booked: boolean };
 
+    // PR-Agent r2: under raw postgres-js parsers a PG DATE arrives as a JS
+    // Date (UTC midnight of the calendar date). Through the app's drizzle
+    // session it is the plain "YYYY-MM-DD" string (verified live run #120),
+    // but keep this type-agnostic so a driver/parser change can never 500
+    // the week math. Both forms collapse to the same date key.
+    const asDateKey = (v: unknown): string =>
+      v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+
     // a. Anchor slot — the pitch + start_time every weekly repeat must match.
     const [anchor] = (await this.db.execute(sql`
    SELECT id, pitch_id, slot_date, start_time FROM pitch_slots
@@ -2334,7 +2342,7 @@ export class MatchesService {
  }
 
     // b. Target dates — UTC-safe arithmetic on the Riyadh-local date string.
-    const anchorDate = String(anchor.slot_date).slice(0, 10);
+    const anchorDate = asDateKey(anchor.slot_date);
     const dates = [anchorDate];
     for (let w = 1; w < repeatWeeks; w++) {
       const d = new Date(anchorDate + 'T00:00:00Z');
@@ -2353,7 +2361,7 @@ export class MatchesService {
     // Same strictly-future guard as the single path (getPitchSlots mirror).
     const isFuture = (slot: SlotRow) => {
       const todayKey = riyadhDateKey();
-      const slotDate = String(slot.slot_date).slice(0, 10);
+      const slotDate = asDateKey(slot.slot_date);
       const startMin = String(slot.start_time).slice(0, 5);
       return slotDate > todayKey || (slotDate === todayKey && startMin > riyadhTimeNow());
     };
@@ -2361,7 +2369,7 @@ export class MatchesService {
     // d. Resolve every week IN DATE ORDER — first failure names its date.
     const resolved: SlotRow[] = [];
     for (const date of dates) {
-      const candidate = candidates.find((c) => String(c.slot_date).slice(0, 10) === date);
+      const candidate = candidates.find((c) => asDateKey(c.slot_date) === date);
       if (!candidate) {
         throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
       }
@@ -2386,7 +2394,7 @@ export class MatchesService {
       `)) as unknown as SlotRow[];
 
       for (const r of resolved) {
-        const date = String(r.slot_date).slice(0, 10);
+        const date = asDateKey(r.slot_date);
         const slot = locked.find((l) => l.id === r.id);
         if (!slot) {
           throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
@@ -2401,7 +2409,7 @@ export class MatchesService {
 
       const ids: string[] = [];
       for (const [weekIdx, slot] of resolved.entries()) {
-        const slotDate = String(slot.slot_date).slice(0, 10);
+        const slotDate = asDateKey(slot.slot_date);
         const [match] = await tx
           .insert(matches)
           .values({
