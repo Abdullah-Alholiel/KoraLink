@@ -341,10 +341,20 @@ export class AdminDisputesService {
    */
   async escalateOverdueDisputes(): Promise<number> {
     const cutoff = new Date(Date.now() - SLA_MS);
+    // PR-Agent run-#118 MINOR: gate the CANDIDATE query on the flag too —
+    // otherwise every already-escalated-but-unresolved dispute is re-selected,
+    // row-locked and its evidence JSON re-read on every daily tick forever.
+    // (The in-lock skip below stays as belt-and-braces for races.)
     const candidates = await this.db
       .select({ id: disputes.id })
       .from(disputes)
-      .where(and(inArray(disputes.status, ['opened', 'under_review']), lt(disputes.created_at, cutoff)));
+      .where(
+        and(
+          inArray(disputes.status, ['opened', 'under_review']),
+          lt(disputes.created_at, cutoff),
+          eq(disputes.sla_escalated, false),
+        ),
+      );
 
     let escalated = 0;
     for (const { id } of candidates) {

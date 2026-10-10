@@ -393,6 +393,8 @@
     "reopened": "أعادت الإدارة فتح الحالة",
     "slaBadge": "تجاوز مدة الاستجابة",
     "slaTimeline": "تم التصعيد: مفتوح لأكثر من 7 أيام",
+    "slaExportYes": "نعم",
+    "slaExportNo": "لا",
     "followUps": "رسائل المتابعة",
     "replyTitle": "رد على الأطراف",
     "replyPlaceholder": "اكتب رداً على المُبلِّغ/الطرف الآخر…",

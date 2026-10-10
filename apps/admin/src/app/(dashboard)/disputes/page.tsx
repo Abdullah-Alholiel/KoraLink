@@ -56,7 +56,7 @@ export default function DisputesPage() {
         columns: [
           { key: 'match', header: t('thMatch'), value: (d: DisputeListItem) => d.match_title ?? '' },
           { key: 'status', header: t('thStatus'), value: (d: DisputeListItem) => d.status },
-          { key: 'sla', header: t('slaBadge'), value: (d: DisputeListItem) => (d.sla_escalated ? 'yes' : 'no') },
+          { key: 'sla', header: t('slaBadge'), value: (d: DisputeListItem) => (d.sla_escalated ? t('slaExportYes') : t('slaExportNo')) },
           { key: 'opened', header: ts('opened'), value: (d: DisputeListItem) => csvDate(d.created_at) },
           { key: 'type', header: t('thType'), value: disputeTypeLabel },
           { key: 'reporter', header: t('thReporter'), value: (d: DisputeListItem) => d.reporter_name ?? '' },
