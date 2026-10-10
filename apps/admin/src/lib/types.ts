@@ -117,6 +117,7 @@ export interface DisputeListItem {
   match_title: string | null;
   appeal_count: number;
   has_appealed: boolean;
+  sla_escalated: boolean;
 }
 
 export interface AdminReportListItem {

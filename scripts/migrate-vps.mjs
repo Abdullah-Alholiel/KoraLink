@@ -33,7 +33,15 @@ const dbUrl =
   process.env.MIGRATE_DATABASE_URL ||
   process.env.DATABASE_URL ||
   (() => {
-    const envText = fs.readFileSync(ENV_FILE, 'utf8');
+    // Run #118 Reviewer A MINOR: a Render cold run with NEITHER env var NOR a
+    // repo .env used to die on an unhandled readFileSync stack; fail-loud
+    // with the contract message (exit 5) instead.
+    let envText;
+    try {
+      envText = fs.readFileSync(ENV_FILE, 'utf8');
+    } catch {
+      return undefined;
+    }
     return envText
       .split('\n')
       .map((l) => l.trim())

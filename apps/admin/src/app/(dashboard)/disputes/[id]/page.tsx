@@ -20,6 +20,7 @@ interface DisputeDetail {
   decision: string | null;
   internal_note: string | null;
   policy_ref: string | null;
+  sla_escalated: boolean;
   evidence: { action?: string; reason?: string; by?: string; at?: string }[] | unknown;
   created_at: string;
   reporter: { full_name: string | null; phone: string | null } | null;
@@ -163,6 +164,7 @@ export default function DisputeDetailPage() {
     if (action === 'marked_no_show') return t('noShowMarked');
     if (action === 'appeal') return t('appeal');
     if (action === 'reopened') return t('reopened');
+    if (action === 'sla_escalated') return t('slaTimeline');
     return t('evidence');
   }
 
@@ -204,7 +206,14 @@ export default function DisputeDetailPage() {
               <div>
                 <dt className="text-xs text-gray-500">{t('status')}</dt>
                 <dd className="mt-0.5">
-                  <StatusBadge status={data.status} />
+                  <span className="inline-flex items-center gap-1.5">
+                    <StatusBadge status={data.status} />
+                    {data.sla_escalated ? (
+                      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                        {t('slaBadge')}
+                      </span>
+                    ) : null}
+                  </span>
                 </dd>
               </div>
               {data.policy_ref && (
@@ -241,7 +250,9 @@ export default function DisputeDetailPage() {
                             ? 'bg-blue-500'
                             : e.action === 'reopened'
                               ? 'bg-purple-500'
-                              : 'bg-amber-500'
+                              : e.action === 'sla_escalated'
+                                ? 'bg-red-500'
+                                : 'bg-amber-500'
                         }`}
                       />
                       {evidenceLabel(e.action)}
