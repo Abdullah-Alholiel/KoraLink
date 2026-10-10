@@ -1,6 +1,13 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SQL, and, eq, inArray, sql } from 'drizzle-orm';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { SQL, and, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as Sentry from '@sentry/node';
 import * as schema from '../../database/schema';
 import { disputes, dispute_messages, match_players, users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
@@ -13,8 +20,14 @@ import { ActivitiesService } from '../activities/activities.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
+/** SLA window before an unanswered dispute escalates (owner default, run #109). */
+const SLA_DAYS = 7;
+const SLA_MS = SLA_DAYS * 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class AdminDisputesService {
+  private readonly logger = new Logger(AdminDisputesService.name);
+
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly audit: AuditService,
@@ -58,6 +71,7 @@ export class AdminDisputesService {
     const rows = (await this.db.execute(sql`
       SELECT
         d.id, d.type, d.status, d.decision, d.policy_ref, d.created_at, d.updated_at,
+        d.sla_escalated,
         r.full_name AS reporter_name, resp.full_name AS respondent_name,
         m.id AS match_id, m.title AS match_title,
         (
@@ -170,20 +184,14 @@ export class AdminDisputesService {
     });
 
     const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'dispute.resolve',
-      entityType: 'dispute',
-      entityId: id,
-      before,
-      after,
-      ip,
-    });
+    await this.auditSafe(adminId, 'dispute.resolve', id, before, after, ip);
     this.realtime.broadcastOps('disputes');
     this.realtime.broadcastOps('users');
 
     // ── Player notification (the reporter must learn the outcome) ──
     // Best-effort: a notification failure must never fail the resolution.
+    // (Run #118 Reviewer A: the bare catch swallowed the error silently —
+    // capture + tag so a broken fan-out is visible in Sentry.)
     try {
       await this.activities.record({
         actorId: adminId,
@@ -192,8 +200,9 @@ export class AdminDisputesService {
         recipients: [before.reporter_id],
         excludeActor: false,
       });
-    } catch {
-      // swallow — feed/WS fan-out is supplementary
+    } catch (err) {
+      this.logger.error(`dispute notification failed for ${id}: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'admin.disputes.notify' } });
     }
 
     return after;
@@ -223,14 +232,7 @@ export class AdminDisputesService {
     });
 
     const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'dispute.message',
-      entityType: 'dispute',
-      entityId: id,
-      before,
-      after,
-    });
+    await this.auditSafe(adminId, 'dispute.message', id, before, after);
     this.realtime.broadcastOps('disputes');
 
     return after;
@@ -287,15 +289,7 @@ export class AdminDisputesService {
     });
 
     const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'dispute.reopen',
-      entityType: 'dispute',
-      entityId: id,
-      before,
-      after,
-      ip,
-    });
+    await this.auditSafe(adminId, 'dispute.reopen', id, before, after, ip);
     this.realtime.broadcastOps('disputes');
 
     return after;
@@ -322,17 +316,107 @@ export class AdminDisputesService {
       .where(eq(disputes.id, id));
 
     const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'dispute.update',
-      entityType: 'dispute',
-      entityId: id,
-      before,
-      after,
-      ip,
-    });
+    await this.auditSafe(adminId, 'dispute.update', id, before, after, ip);
     this.realtime.broadcastOps('disputes');
 
     return after;
+  }
+
+  // ── P1-63: dispute SLA sweep (owner default 7-day reminder, run #109) ────
+
+  /**
+   * Escalate open/under_review disputes that passed the 7-day window:
+   * append ONE `{action:'sla_escalated'}` evidence entry (dedup = idempotent
+   * across ticks/restarts) and set the `sla_escalated` queue flag.
+   *
+   * Safety mirrors resolve()/reopen(): ONE transaction per dispute row, the
+   * row is locked FOR UPDATE, the UPDATE is status-predicated
+   * (opened/under_review) AND gated on sla_escalated = false, so a dispute
+   * decided mid-sweep is skipped and a concurrent tick's loser matches zero
+   * rows. Decided rows and re-opened-but-fresh rows are never touched. The
+   * evidence dedup is judged INSIDE the lock, so two ticks serialize and the
+   * second sees the first's entry. Informational only — no side effects.
+   *
+   * @returns number of disputes escalated by THIS call.
+   */
+  async escalateOverdueDisputes(): Promise<number> {
+    const cutoff = new Date(Date.now() - SLA_MS);
+    const candidates = await this.db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(and(inArray(disputes.status, ['opened', 'under_review']), lt(disputes.created_at, cutoff)));
+
+    let escalated = 0;
+    for (const { id } of candidates) {
+      try {
+        const didEscalate = await this.db.transaction(async (tx) => {
+          const [locked] = await tx
+            .select({ id: disputes.id, evidence: disputes.evidence, slaEscalated: disputes.sla_escalated })
+            .from(disputes)
+            .where(eq(disputes.id, id))
+            .for('update');
+
+          if (!locked || locked.slaEscalated) return false;
+          const evidence = Array.isArray(locked.evidence)
+            ? (locked.evidence as unknown[])
+            : [];
+          const already = evidence.some(
+            (e) => typeof e === 'object' && e !== null && (e as { action?: string }).action === 'sla_escalated',
+          );
+          if (already) return false;
+
+          const entry = {
+            action: 'sla_escalated',
+            at: new Date().toISOString(),
+            note: `Open for more than ${SLA_DAYS} days`,
+          };
+          const updated = await tx
+            .update(disputes)
+            .set(
+              withTimestamp({
+                sla_escalated: true,
+                evidence: [...evidence, entry] as never,
+              }),
+            )
+            .where(
+              and(
+                eq(disputes.id, id),
+                inArray(disputes.status, ['opened', 'under_review']),
+                eq(disputes.sla_escalated, false),
+              ),
+            )
+            .returning({ id: disputes.id });
+          return updated.length > 0;
+        });
+        if (didEscalate) escalated += 1;
+      } catch (err) {
+        // One bad row must not kill the sweep; next tick re-tries it (idempotent).
+        this.logger.warn(`SLA sweep row ${id} failed: ${(err as Error).message}`);
+        Sentry.captureException(err, { tags: { scope: 'admin.disputes.sla-sweep' } });
+      }
+    }
+    return escalated;
+  }
+
+  /**
+   * Post-commit audit write that must NEVER throw after a successful side
+   * effect (Reviewer A run-#118 IMPORTANT: a throwing audit.log left a
+   * committed no_show reversal permanently unaudited). Failure is logged and
+   * Sentry-tagged; the audit gap is surfaced for ops instead of lost.
+   */
+  private async auditSafe(
+    adminId: string,
+    action: string,
+    entityId: string,
+    before: unknown,
+    after: unknown,
+    ip?: string,
+  ): Promise<void> {
+    try {
+      await this.audit.log({ adminId, action, entityType: 'dispute', entityId, before, after, ip });
+    } catch (err) {
+      this.logger.error(`audit.log failed after ${action} on ${entityId}: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'admin.disputes.audit' } });
+    }
   }
 }

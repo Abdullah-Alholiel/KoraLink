@@ -1046,6 +1046,10 @@ export const disputes = pgTable(
     }),
     internal_note: text('internal_note'),
     policy_ref: text('policy_ref'),
+    // P1-63 (run #118): set by the daily admin SLA sweep when an
+    // open/under_review dispute passes the 7-day window; informational flag
+    // for the admin queue (no money-path coupling, no auto-resolution).
+    sla_escalated: boolean('sla_escalated').notNull().default(false),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

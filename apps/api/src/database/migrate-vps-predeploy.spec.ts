@@ -20,8 +20,16 @@ describe('migrate-vps.mjs P2-51 pre-deploy contract (run #117)', () => {
   const src = readFileSync(SCRIPT_PATH, 'utf8');
 
   it('resolves the DB url: MIGRATE_DATABASE_URL → DATABASE_URL → apps/api/.env', () => {
-    const m = src.match(/process\.env\.MIGRATE_DATABASE_URL\s*\|\|[\s\S]{0,80}?process\.env\.DATABASE_URL\s*\|\|[\s\S]{0,120}?readFileSync\(ENV_FILE/);
+    const m = src.match(/process\.env\.MIGRATE_DATABASE_URL\s*\|[\s\S]{0,80}?process\.env\.DATABASE_URL\s*\|[\s\S]{0,400}?readFileSync\(ENV_FILE/);
     expect(m).not.toBeNull();
+  });
+
+  // Run #118 Reviewer A MINOR: a missing .env file must fail-loud via the
+  // exit-5 branch (undefined -> contract message), never an unhandled
+  // readFileSync stack trace on a Render cold misconfig.
+  it('tolerates a missing .env file (try/catch -> undefined -> exit 5)', () => {
+    const chain = src.match(/readFileSync\(ENV_FILE[^)]*\)[\s\S]{0,200}?catch/);
+    expect(chain).not.toBeNull();
   });
 
   it('still exits 5 when no source resolves (fail-loud preserved)', () => {
