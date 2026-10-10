@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { Search, MapPin, Users, X, Heart, Loader2 } from 'lucide-react';
+import { Search, MapPin, Users, X, Heart, Loader2, Star } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import SuggestionChips from '@/components/search/SuggestionChips';
@@ -21,18 +21,20 @@ import { formatDistance, formatCount } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
 
-// Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — at the
-// time venues.rating was all-zero with no write path. P1-55 (run #117) added
-// booking-verified reviews (rating_avg now live), but the LIST page still has
-// no per-card stars — a "Top Rated" filter needs a sort contract first; the
-// detail page carries the reviews surface. Nearby stays a real distance sort.
+// Run #68 (P2-13 residual) removed the dead "Top Rated" pill when venues.rating
+// was all-zero with no write path. P1-55 (run #117) shipped booking-verified
+// reviews; P2-173 (run #119) brings the pill BACK as a real server-side sort:
+// `?sort=top_rated` orders findNearby by rating_avg DESC / rating_count DESC /
+// name ASC (coords-independent — the user picked rating over proximity).
+// Per-card stars render whenever a venue has approved reviews (rating_count>0).
 // P2-161 (run #109): 'Favorites' joins as a real filter — it narrows to the
 // caller's saved venues (server list), independent of the geo sort.
-const FILTER_KEYS = ['Nearby', 'Favorites', 'Indoor', 'Available Now'] as const;
+const FILTER_KEYS = ['Nearby', 'Top Rated', 'Favorites', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL_MAP: Record<FilterKey, string> = {
     Nearby: 'clubs.filters.nearby',
+    'Top Rated': 'clubs.filters.topRated',
     Favorites: 'clubs.favorites',
     Indoor: 'clubs.filters.indoor',
     'Available Now': 'clubs.filters.availableNow',
@@ -86,6 +88,10 @@ function ClubsContent() {
     } = useVenues({
         ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
         search: debouncedSearch || undefined,
+        // P2-173 (run #119): the Top Rated pill flips the SERVER sort —
+        // rating order arrives pre-sorted and coords-independent. Absent on
+        // every other pill = today's default ordering, unchanged.
+        sort: activeFilter === 'Top Rated' ? 'top_rated' : undefined,
     });
 
     // ── P2-161: favorites (run #109) ──────────────────────────────────────
@@ -444,7 +450,7 @@ function ClubsContent() {
                                         </span>
                                     </div>
 
-                                    {/* Pitch count + P1-25 open/closed badge */}
+                                    {/* Pitch count + P1-25 open/closed badge + P2-173 rating */}
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="flex items-center gap-0.5">
                                             <Users className="w-3.5 h-3.5 text-brand-green" />
@@ -467,6 +473,26 @@ function ClubsContent() {
                                                 </span>
                                             );
                                         })()}
+                                        {/* P2-173 (run #119): booking-verified review
+                                            aggregates (P1-55) — stars on EVERY tab,
+                                            not just Top Rated; hidden until the
+                                            venue has approved reviews (count 0).
+                                            formatCount renders Arabic-Indic digits
+                                            for ar; the average is 1-decimal. */}
+                                        {(venue.rating_count ?? 0) > 0 && (
+                                            <span
+                                                className="flex items-center gap-0.5 flex-shrink-0"
+                                                aria-label={`${t('clubs.filters.rating')}: ${formatCount(Math.round((venue.rating_avg ?? 0) * 10) / 10, locale === 'ar' ? 'ar' : 'en')} (${formatCount(venue.rating_count ?? 0, locale === 'ar' ? 'ar' : 'en')})`}
+                                            >
+                                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                                <span className="text-xs font-semibold text-brand-black">
+                                                    {formatCount(Math.round((venue.rating_avg ?? 0) * 10) / 10, locale === 'ar' ? 'ar' : 'en')}
+                                                </span>
+                                                <span className="text-[11px] text-gray-400">
+                                                    ({formatCount(venue.rating_count ?? 0, locale === 'ar' ? 'ar' : 'en')})
+                                                </span>
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Amenities badges */}

@@ -121,6 +121,10 @@ export interface NearbyVenueRow {
   closed_day_4: boolean;
   closed_day_5: boolean;
   closed_day_6: boolean;
+  // P2-173 (run #119): P1-55 review aggregates on every list row (NOT NULL
+  // DEFAULT 0 per migration 0048 — 0/0 means "no approved reviews yet").
+  rating_avg: number;
+  rating_count: number;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -134,7 +138,7 @@ export class VenuesService {
    * Uses PostGIS ST_DWithin for geo-filtering (same pattern as matches service).
    */
   async findNearby(dto: GetVenuesDto): Promise<NearbyVenueRow[]> {
-    const { lat, lng, radius_km = 50, city, is_koralink_partner, search } = dto;
+    const { lat, lng, radius_km = 50, city, is_koralink_partner, search, sort } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -175,6 +179,25 @@ export class VenuesService {
           )`
       : sql`NULL`;
 
+    // P2-173 (run #119): "Top Rated" ordering. Contract:
+    //   * default (no sort) = today's exact behavior: [distance_m ASC,] name ASC
+    //   * sort=top_rated    = rating_avg DESC, rating_count DESC, name ASC —
+    //     COORDS-INDEPENDENT (the user picked rating over proximity;
+    //     distance_m is still SELECTed but does not order rows).
+    //   * sort NEVER changes the WHERE (additive-only rule — the pills'
+    //     filters keep composing; ordering is not a predicate).
+    //   * The two rating columns are ALWAYS in the SELECT (additive row-shape
+    //     keys, cards can show stars on every tab); only ordering flips.
+    //   * rating_avg/rating_count are NOT NULL DEFAULT 0 per 0048, so unrated
+    //     venues sort last naturally (0 first ascending = last descending).
+    //     No index needed at ~50 venues (seq scan wins at this scale —
+    //     Reviewer A run #119).
+    const orderBy =
+      sort === 'top_rated'
+        ? sql`v.rating_avg DESC, v.rating_count DESC, v.name ASC`
+        : sql`${hasCoords ? sql`distance_m ASC,` : sql``}
+        v.name ASC`;
+
     const rows = await this.db.execute(sql`
       SELECT
         v.id,
@@ -191,7 +214,9 @@ export class VenuesService {
         v.open_hour::int,
         v.close_hour::int,
         v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
-        v.closed_day_4, v.closed_day_5, v.closed_day_6
+        v.closed_day_4, v.closed_day_5, v.closed_day_6,
+        v.rating_avg::float8 AS rating_avg,
+        v.rating_count::int AS rating_count
       FROM venues v
       LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
@@ -202,8 +227,7 @@ export class VenuesService {
         ${geoClause}
       GROUP BY v.id, u.id
       ORDER BY
-        ${hasCoords ? sql`distance_m ASC,` : sql``}
-        v.name ASC
+        ${orderBy}
       LIMIT 50
     `);
 

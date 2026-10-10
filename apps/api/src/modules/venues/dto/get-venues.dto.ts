@@ -1,4 +1,12 @@
-import { IsOptional, IsNumber, Min, Max, IsString, MaxLength } from 'class-validator';
+import {
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsString,
+  MaxLength,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -43,4 +51,14 @@ export class GetVenuesDto {
   @IsOptional()
   @Type(() => Boolean)
   is_koralink_partner?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'List ordering. top_rated = rating_avg DESC (NULLs last), rating_count DESC, name ASC — coordinates are ignored when sorting by rating. Absent = distance (coords) or name order.',
+    enum: ['distance', 'top_rated'],
+    default: 'distance',
+  })
+  @IsOptional()
+  @IsIn(['distance', 'top_rated'])
+  sort?: 'distance' | 'top_rated';
 }

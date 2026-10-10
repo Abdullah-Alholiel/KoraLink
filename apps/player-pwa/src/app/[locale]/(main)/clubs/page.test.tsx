@@ -158,11 +158,11 @@ describe('clubs page — run #68 drain slice', () => {
         expect(names).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 
-    it('the dead "Top Rated" pill is gone; the live pills remain', () => {
+    it('the Top Rated pill is BACK (P2-173 run #119: real server sort) beside the live pills', () => {
         venueFixture = [venue({ id: 'v-1', name: 'Some Club' })];
         renderClubs();
 
-        expect(screen.queryByText('Top Rated')).toBeNull();
+        expect(screen.getByText('Top Rated')).toBeTruthy();
         expect(screen.getByText('Nearby')).toBeTruthy();
         expect(screen.getByText('Indoor')).toBeTruthy();
         expect(screen.getByText('Available Now')).toBeTruthy();
