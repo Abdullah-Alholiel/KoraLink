@@ -249,6 +249,7 @@ function ClubsContent() {
                     <button
                         key={filter}
                         onClick={() => setActiveFilter(filter)}
+                        aria-pressed={activeFilter === filter}
                         className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all active:scale-95 ${
                             activeFilter === filter
                                 ? 'bg-brand-black text-white'
