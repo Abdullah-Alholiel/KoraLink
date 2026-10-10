@@ -335,20 +335,25 @@ export class AdminDisputesService {
 
   /**
    * Escalate open/under_review disputes that passed the 7-day window:
-   * append ONE `{action:'sla_escalated'}` evidence entry (dedup = idempotent
-   * across ticks/restarts) and set the `sla_escalated` queue flag.
+   * append an `{action:'sla_escalated'}` evidence entry and set the
+   * `sla_escalated` queue flag.
    *
-   * Safety mirrors resolve()/reopen(): ONE transaction per dispute row, the
-   * row is locked FOR UPDATE, the UPDATE is status-predicated
-   * (opened/under_review) AND gated on sla_escalated = false, so a dispute
-   * decided mid-sweep is skipped and a concurrent tick's loser matches zero
-   * rows. The clock keys on updated_at (PR-Agent run-#118 r2: created_at
-   * alone flagged a freshly REOPENED old dispute instantly — reopen()
-   * resets the flag AND bumps updated_at, so the dispute must sit untouched
-   * for another 7 days before re-escalation; admin replies also reset the
-   * neglect clock, which is the intent for a neglect detector). The evidence
-   * dedup is judged INSIDE the lock, so two ticks serialize and the second
-   * sees the first's entry. Informational only — no side effects.
+   * Idempotency = the sla_escalated FLAG + the row lock ONLY. (PR-Agent
+   * run-#118 r3 IMPORTANT: an earlier draft ALSO deduped on any historical
+   * `sla_escalated` evidence entry — that permanently blocked re-escalation
+   * after a reopen, because the pre-reopen entry survives in the append-only
+   * timeline. The flag is cleared on reopen, so the flag alone is the
+   * "currently escalated" marker; multiple timeline entries across separate
+   * neglect episodes are CORRECT history, not duplicates.) ONE transaction
+   * per dispute row, the row is locked FOR UPDATE, the UPDATE is
+   * status-predicated (opened/under_review) AND gated on
+   * sla_escalated = false, so a dispute decided mid-sweep is skipped and a
+   * concurrent tick's loser matches zero rows. The clock keys on updated_at
+   * (PR-Agent r2: created_at alone flagged a freshly REOPENED old dispute
+   * instantly — reopen() resets the flag AND bumps updated_at, so the
+   * dispute must sit untouched for another 7 days before re-escalation;
+   * admin replies also reset the neglect clock, which is the intent for a
+   * neglect detector). Informational only — no side effects.
    *
    * @returns number of disputes escalated by THIS call.
    */
@@ -383,10 +388,6 @@ export class AdminDisputesService {
           const evidence = Array.isArray(locked.evidence)
             ? (locked.evidence as unknown[])
             : [];
-          const already = evidence.some(
-            (e) => typeof e === 'object' && e !== null && (e as { action?: string }).action === 'sla_escalated',
-          );
-          if (already) return false;
 
           const entry = {
             action: 'sla_escalated',

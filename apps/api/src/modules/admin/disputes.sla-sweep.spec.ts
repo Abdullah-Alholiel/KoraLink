@@ -92,7 +92,10 @@ describe('AdminDisputesService — SLA sweep (P1-63)', () => {
     expect(capturedSets).toHaveLength(0);
   });
 
-  it('dedups on the evidence entry even when the flag lags', async () => {
+  // PR-Agent run-#118 r3 IMPORTANT (behavior REVERSED by design): a historical
+  // sla_escalated evidence entry must NOT block re-escalation after a reopen
+  // (the flag was reset; multiple entries across neglect episodes = history).
+  it('re-escalates a reopened dispute despite its old sla_escalated entry', async () => {
     const { svc, tx, capturedSets } = makeService({
       candidates: [{ id: 'd1' }],
       lockedRows: [
@@ -100,9 +103,12 @@ describe('AdminDisputesService — SLA sweep (P1-63)', () => {
       ],
     });
     const escalated = await svc.escalateOverdueDisputes();
-    expect(escalated).toBe(0);
-    expect(tx.update).not.toHaveBeenCalled();
-    expect(capturedSets).toHaveLength(0);
+    expect(escalated).toBe(1);
+    expect(tx.update).toHaveBeenCalled();
+    expect(capturedSets).toHaveLength(1);
+    const set = capturedSets[0] as { evidence: { action: string }[] };
+    expect(set.evidence).toHaveLength(2); // old entry + the new episode's entry
+    expect(set.evidence[1].action).toBe('sla_escalated');
   });
 
   it('counts zero when the guarded UPDATE matches no rows (race lost)', async () => {
