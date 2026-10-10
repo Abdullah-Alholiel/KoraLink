@@ -12,6 +12,9 @@ export interface PublishWarningSheetProps {
     errorKey?: string | null;
     /** Security deposit amount (pitch cost, koralink mode). Null = nothing to show. */
     depositSar?: number | null;
+    /** P1-64: weekly instances being booked. >1 → depositSar is the TOTAL
+     *  across all weeks and the card shows the per-week breakdown. */
+    repeatWeeks?: number;
     /** Host's current wallet balance; null while loading/unknown. */
     walletBalanceSar?: number | null;
     /** True once the balance query has resolved (drives the loading line). */
@@ -30,7 +33,7 @@ export interface PublishWarningSheetProps {
 }
 
 export default function PublishWarningSheet({
-    open, mode, errorKey, depositSar, walletBalanceSar, balanceResolved, serverShortfallSar, consentAccepted, onConsentChange, onTopUp, onConfirm, onCancel, isPending,
+    open, mode, errorKey, depositSar, repeatWeeks = 1, walletBalanceSar, balanceResolved, serverShortfallSar, consentAccepted, onConsentChange, onTopUp, onConfirm, onCancel, isPending,
 }: PublishWarningSheetProps) {
     const t = useTranslations();
 
@@ -140,6 +143,13 @@ export default function PublishWarningSheet({
                                 SAR {depositSar.toFixed(2)}
                             </span>
                         </div>
+                        {repeatWeeks > 1 && (
+                            <div className="flex justify-end mb-1">
+                                <span dir="ltr" data-testid="deposit-breakdown" className="text-xs text-gray-500">
+                                    SAR {(depositSar / repeatWeeks).toFixed(2)} × {repeatWeeks}
+                                </span>
+                            </div>
+                        )}
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs text-gray-400">{t('host.yourBalance')}</span>
                             {balanceResolved === false ? (

@@ -468,7 +468,14 @@
     "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
     "slotsLoading": "Loading available slots…",
     "slotsError": "Couldn't load available slots. Check your connection.",
-    "slotsRetry": "Try Again"
+    "slotsRetry": "Try Again",
+    "repeat": {
+      "once": "Once",
+      "weekly2": "Weekly ×2",
+      "weekly4": "Weekly ×4",
+      "weekly6": "Weekly ×6",
+      "weekly8": "Weekly ×8"
+    }
   },
   "hostOnboarding": {
     "skip": "Skip",

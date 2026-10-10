@@ -81,4 +81,15 @@ export class CreateMatchDto {
   @IsOptional()
   @IsBoolean()
   acceptedHostingTerms?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Create N weekly instances of this match (koralink booking mode only). Omit or 1 = single match.',
+    minimum: 1,
+    maximum: 8,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(8)
+  repeat_weeks?: number;
 }

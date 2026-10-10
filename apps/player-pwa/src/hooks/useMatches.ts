@@ -43,6 +43,8 @@ export const hostMatchSchema = z.object({
   booking_mode: z.enum(['koralink', 'self']).default('koralink'),
   booking_slot_id: z.string().min(1).optional(),
   visibility: z.enum(['public', 'private']).default('public'),
+  // P1-64: N weekly instances (koralink only). Omit = single match.
+  repeat_weeks: z.number().int().min(1).max(8).optional(),
   // Hosting-terms consent (player-host-responsibility). MUST be listed here:
   // Zod strips unknown keys in .parse(), so an unlisted field never reaches
   // the API and every publish 400s with "Hosting terms must be accepted".
