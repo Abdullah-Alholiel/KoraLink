@@ -2012,6 +2012,8 @@ export class MatchesService {
       // Player-host responsibility: mandatory acceptance of the hosting terms
       // (responsibility split + payout-on-completion + refund policy).
       acceptedHostingTerms?: boolean;
+      // P1-64: create N weekly instances (koralink only). Omit or 1 = single.
+      repeat_weeks?: number;
     },
   ) {
     // Consent gate (cycle player-host-responsibility): NO booking without the
@@ -2021,6 +2023,13 @@ export class MatchesService {
       throw new BadRequestException(
         'Hosting terms must be accepted before booking.',
       );
+    }
+
+    // P1-64: recurring matches reuse KoraLink-managed pitch_slots — a
+    // self-booked host has no slots for us to reserve on later weeks.
+    const repeatWeeks = dto.repeat_weeks ?? 1;
+    if ((dto.booking_mode ?? 'koralink') === 'self' && repeatWeeks > 1) {
+      throw new BadRequestException('Recurring matches require KoraLink booking.');
     }
 
     // Validate pitch exists and fetch venue location + hourly rate.
@@ -2081,6 +2090,19 @@ export class MatchesService {
     const isPlayerHosted = host?.role === 'Player';
     const hostPayoutState: (typeof schema.hostPayoutStateEnum.enumValues)[number] =
       isPlayerHosted && pricePerPlayer > 0 ? 'held' : 'not_applicable';
+
+    if (bookingMode === 'koralink' && repeatWeeks > 1) {
+      return this.createRecurringMatches(hostId, dto, repeatWeeks, {
+        pitchLocation: pitch.venueLocation,
+        capacity,
+        minPlayers,
+        pitchCostSar,
+        pricePerPlayer,
+        isPlayerHosted,
+        hostPayoutState,
+        visibility,
+      });
+    }
 
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
@@ -2254,6 +2276,240 @@ export class MatchesService {
           reportFanOutError('matches.created-activity', err),
         );
     }
+
+    return fullMatch;
+  }
+
+  /**
+   * P1-64 — recurring matches. Books the anchor slot plus the same pitch +
+   * start_time on each of the next N-1 weeks, all-or-nothing in ONE
+   * transaction: every slot is locked, re-verified, booked, and debited
+   * (per-slot ledger key) exactly like the single koralink path. Returns the
+   * FIRST instance (unchanged response shape); later instances surface in
+   * My Games.
+   */
+  private async createRecurringMatches(
+    hostId: string,
+    dto: {
+      pitch_id: string;
+      title: string;
+      match_type: typeof schema.matchTypeEnum.enumValues[number];
+      gender_rule: typeof schema.genderRuleEnum.enumValues[number];
+      duration_mins: number;
+      booking_slot_id?: string;
+    },
+    repeatWeeks: number,
+    ctx: {
+      pitchLocation: unknown;
+      capacity: number;
+      minPlayers: number;
+      pitchCostSar: number;
+      pricePerPlayer: number;
+      isPlayerHosted: boolean;
+      hostPayoutState: (typeof schema.hostPayoutStateEnum.enumValues)[number];
+      visibility: 'public' | 'private';
+    },
+  ) {
+    if (!dto.booking_slot_id) {
+      throw new BadRequestException('booking_slot_id is required for koralink mode');
+    }
+
+    type SlotRow = { id: string; slot_date: string; start_time: string; is_booked: boolean };
+
+    // PR-Agent r2: under raw postgres-js parsers a PG DATE arrives as a JS
+    // Date (UTC midnight of the calendar date). Through the app's drizzle
+    // session it is the plain "YYYY-MM-DD" string (verified live run #120),
+    // but keep this type-agnostic so a driver/parser change can never 500
+    // the week math. Both forms collapse to the same date key.
+    const asDateKey = (v: unknown): string =>
+      v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+
+    // a. Anchor slot — the pitch + start_time every weekly repeat must match.
+    const [anchor] = (await this.db.execute(sql`
+   SELECT id, pitch_id, slot_date, start_time FROM pitch_slots
+   WHERE id = ${dto.booking_slot_id}::text
+ `)) as unknown as [{ id: string; pitch_id: string; slot_date: string; start_time: string } | undefined];
+ if (!anchor) {
+   throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+ }
+
+ // PR-Agent (run #120): the anchor slot MUST belong to the pitch being
+ // priced — otherwise a crafted payload books pitch A's weekly inventory
+ // at pitch B's derived hourly rate (financial mismatch + corrupt
+ // cross-pitch booking_slot_id references).
+ if (anchor.pitch_id !== dto.pitch_id) {
+   throw new BadRequestException('Slot does not belong to this pitch.');
+ }
+
+    // b. Target dates — UTC-safe arithmetic on the Riyadh-local date string.
+    const anchorDate = asDateKey(anchor.slot_date);
+    const dates = [anchorDate];
+    for (let w = 1; w < repeatWeeks; w++) {
+      const d = new Date(anchorDate + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 7 * w);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+
+    // c. ONE candidates query for all N dates (anchor included).
+    const candidates = (await this.db.execute(sql`
+      SELECT id, slot_date, start_time, is_booked FROM pitch_slots
+      WHERE pitch_id = ${anchor.pitch_id}::text
+        AND start_time = ${anchor.start_time}::time
+        AND slot_date IN (${sql.join(dates.map((d) => sql`${d}::date`), sql`, `)})
+    `)) as unknown as SlotRow[];
+
+    // Same strictly-future guard as the single path (getPitchSlots mirror).
+    const isFuture = (slot: SlotRow) => {
+      const todayKey = riyadhDateKey();
+      const slotDate = asDateKey(slot.slot_date);
+      const startMin = String(slot.start_time).slice(0, 5);
+      return slotDate > todayKey || (slotDate === todayKey && startMin > riyadhTimeNow());
+    };
+
+    // d. Resolve every week IN DATE ORDER — first failure names its date.
+    const resolved: SlotRow[] = [];
+    for (const date of dates) {
+      const candidate = candidates.find((c) => asDateKey(c.slot_date) === date);
+      if (!candidate) {
+        throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
+      }
+      if (candidate.is_booked) {
+        throw new ConflictException(`Slot on ${date} is already booked.`);
+      }
+      if (!isFuture(candidate)) {
+        throw new BadRequestException(`Slot on ${date} has already started.`);
+      }
+      resolved.push(candidate);
+    }
+
+    const { pitchCostSar } = ctx;
+
+    // e. One transaction: lock all N, re-verify inside the lock, then book.
+    const createdIds = await this.db.transaction(async (tx) => {
+      const locked = (await tx.execute(sql`
+        SELECT id, slot_date, start_time, is_booked FROM pitch_slots
+        WHERE id IN (${sql.join(resolved.map((r) => sql`${r.id}::text`), sql`, `)})
+        ORDER BY id
+        FOR UPDATE
+      `)) as unknown as SlotRow[];
+
+      for (const r of resolved) {
+        const date = asDateKey(r.slot_date);
+        const slot = locked.find((l) => l.id === r.id);
+        if (!slot) {
+          throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
+        }
+        if (slot.is_booked) {
+          throw new ConflictException(`Slot on ${date} is already booked.`);
+        }
+        if (!isFuture(slot)) {
+          throw new BadRequestException(`Slot on ${date} has already started.`);
+        }
+      }
+
+      const ids: string[] = [];
+      for (const [weekIdx, slot] of resolved.entries()) {
+        const slotDate = asDateKey(slot.slot_date);
+        const [match] = await tx
+          .insert(matches)
+          .values({
+            host_id: hostId,
+            pitch_id: dto.pitch_id,
+            title: dto.title,
+            match_type: dto.match_type,
+            gender_rule: dto.gender_rule,
+            scheduled_at: new Date(`${slotDate}T${String(slot.start_time).slice(0, 5)}:00+03:00`),
+            duration_mins: dto.duration_mins,
+            price_per_player: ctx.pricePerPlayer.toString(),
+            pitch_cost_sar: pitchCostSar.toString(),
+            max_players: ctx.capacity,
+            min_players: ctx.minPlayers,
+            is_player_hosted: ctx.isPlayerHosted,
+            host_payout_state: ctx.hostPayoutState,
+            host_accepted_terms_at: new Date(),
+            status: 'Open',
+            visibility: ctx.visibility,
+            booking_mode: 'koralink',
+            booking_slot_id: slot.id,
+            ...(ctx.pitchLocation ? { location: ctx.pitchLocation as typeof matches.$inferInsert.location } : {}),
+          })
+          .returning();
+
+        await tx
+          .update(pitch_slots)
+          .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
+          .where(eq(pitch_slots.id, slot.id));
+
+        // Same guarded debit as the single path — the predicate lives in
+        // the UPDATE so concurrent bookings can never overdraw the wallet.
+        if (pitchCostSar > 0) {
+          const deducted = await tx
+            .update(users)
+            .set({
+              wallet_balance: sql`${users.wallet_balance} - ${pitchCostSar.toString()}`,
+              updated_at: new Date(),
+            })
+            .where(
+              and(
+                eq(users.id, hostId),
+                sql`${users.wallet_balance} >= ${pitchCostSar.toString()}`,
+              ),
+            )
+            .returning({ wallet_balance: users.wallet_balance });
+
+          if (deducted.length === 0) {
+            // In-tx re-read sees prior weeks' debits, but the throw ROLLS THE
+            // WHOLE TX BACK — the host's real balance after this failure is
+            // balance minus nothing (all debits undo). Post-rollback re-read
+            // for the honest figure; best-effort (row could be gone).
+            const balanceAfterRollback = await this.db
+              .select({ wallet_balance: users.wallet_balance })
+              .from(users)
+              .where(eq(users.id, hostId))
+              .limit(1);
+
+            this.logger.warn(
+              `koralink_wallet_insufficient hostId=${hostId} requiredPerWeek=${pitchCostSar} weeks=${repeatWeeks} slotId=${slot.id}`,
+              MatchesService.name,
+            );
+
+            throw new BadRequestException(
+              `Insufficient wallet balance for ${repeatWeeks} weekly bookings. ` +
+                `Required: SAR ${(pitchCostSar * repeatWeeks).toFixed(2)} (${pitchCostSar.toFixed(2)}/week × ${repeatWeeks}; week ${weekIdx + 1} failed), ` +
+                `Available: SAR ${parseFloat(balanceAfterRollback[0]?.wallet_balance ?? '0').toFixed(2)}`,
+            );
+          }
+
+          await tx.insert(schema.transactions).values({
+            user_id: hostId,
+            type: 'DEBIT',
+            amount: pitchCostSar.toString(),
+            reference_type: 'PITCH_BOOKING',
+            reference_id: slot.id,
+            idempotency_key: `slot-booking-${slot.id}`,
+            status: 'Completed',
+          });
+        }
+
+        await tx.insert(schema.match_players).values({
+          match_id: match.id,
+          user_id: hostId,
+          is_host: true,
+          team: 'Home',
+        });
+
+        ids.push(match.id);
+      }
+      return ids;
+    });
+
+    // f. Response shape unchanged — the client navigates to the first one.
+    const fullMatch = await this.findOne(createdIds[0]);
+
+    this.logger.log(
+      `recurring_matches_created count=${repeatWeeks} hostId=${hostId} totalCostSar=${(pitchCostSar * repeatWeeks).toFixed(2)}`,
+      MatchesService.name,
+    );
 
     return fullMatch;
   }

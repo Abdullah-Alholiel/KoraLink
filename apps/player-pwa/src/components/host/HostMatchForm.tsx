@@ -21,6 +21,15 @@ import PublishWarningSheet from './PublishWarningSheet';
 import VisibilityToggle, { type Visibility } from './VisibilityToggle';
 import type { PitchSlotApi } from '@/hooks/usePitchSlots';
 
+// P1-64 weekly-repeat chips: value = number of weekly instances to book.
+const REPEAT_OPTIONS = [
+    { weeks: 1, key: 'host.repeat.once' },
+    { weeks: 2, key: 'host.repeat.weekly2' },
+    { weeks: 4, key: 'host.repeat.weekly4' },
+    { weeks: 6, key: 'host.repeat.weekly6' },
+    { weeks: 8, key: 'host.repeat.weekly8' },
+] as const;
+
 export default function HostMatchForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -66,6 +75,8 @@ export default function HostMatchForm() {
     });
     const [selectedPitch, setSelectedPitch] = useState<PitchApi | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<PitchSlotApi | null>(null);
+    // P1-64: weekly repeat count (koralink + slot only). 1 = single match.
+    const [repeatWeeks, setRepeatWeeks] = useState(1);
 
     const { data: venueDetail } = useVenue(selectedVenue?.id ?? null);
 
@@ -131,7 +142,9 @@ export default function HostMatchForm() {
      * short — with the exact deficit and a top-up route. The balance query
      * only runs while the sheet is open in koralink mode. */
     const wallet = useWalletBalance({ enabled: showWarning && mode === 'koralink' });
-    const depositSar = mode === 'koralink' && pitchCostSar > 0 ? pitchCostSar : null;
+    // P1-64: the API debits the pitch cost once PER weekly instance, so the
+    // deposit (and the shortfall pre-check below) covers all repeats.
+    const depositSar = mode === 'koralink' && pitchCostSar > 0 ? pitchCostSar * repeatWeeks : null;
     const walletBalanceSar = wallet.data != null ? wallet.data.balance : null;
     const shortBy = depositSar != null && walletBalanceSar != null
         ? computeShortfall(depositSar, walletBalanceSar)
@@ -145,6 +158,7 @@ export default function HostMatchForm() {
         setSelectedVenue(null);
         setSelectedPitch(null);
         setSelectedSlot(null);
+        setRepeatWeeks(1);
         // Re-apply the club-calendar date (if any) — the user's intent "I want
         // this day" is mode-independent. Slot-driven dates re-set themselves
         // once a slot is picked.
@@ -173,6 +187,7 @@ export default function HostMatchForm() {
             pitchCostSar,
             booking_mode: mode,
             booking_slot_id: mode === 'koralink' ? selectedSlot?.id : undefined,
+            repeat_weeks: repeatWeeks > 1 ? repeatWeeks : undefined,
             visibility,
             acceptedHostingTerms: hostingConsent,
         };
@@ -337,9 +352,31 @@ export default function HostMatchForm() {
                                         } else {
                                             setDate('');
                                             setTime('');
+                                            setRepeatWeeks(1);
                                         }
                                     }}
                                 />
+                            )}
+
+                            {/* Weekly repeat (P1-64) — only once a KoraLink slot is picked */}
+                            {mode === 'koralink' && selectedSlot && (
+                                <div role="group" data-testid="repeat-chips" className="flex flex-wrap gap-2 mt-3">
+                                    {REPEAT_OPTIONS.map(({ weeks, key }) => (
+                                        <button
+                                            key={weeks}
+                                            type="button"
+                                            aria-pressed={repeatWeeks === weeks}
+                                            onClick={() => setRepeatWeeks(weeks)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                                                repeatWeeks === weeks
+                                                    ? 'bg-brand-green text-white border-brand-green'
+                                                    : 'bg-white text-gray-600 border-gray-200'
+                                            }`}
+                                        >
+                                            {t(key)}
+                                        </button>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     ) : (
@@ -430,6 +467,7 @@ export default function HostMatchForm() {
                 mode={mode}
                 errorKey={publishErrorKey}
                 depositSar={depositSar}
+                repeatWeeks={repeatWeeks}
                 walletBalanceSar={serverShortfall?.availableSar ?? walletBalanceSar}
                 balanceResolved={wallet.isSuccess}
                 serverShortfallSar={serverShortfall?.shortfallSar ?? null}
