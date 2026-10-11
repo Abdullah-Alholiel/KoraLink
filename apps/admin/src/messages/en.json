@@ -689,7 +689,17 @@
     "bulkConfirmSuspendBody": "{count, plural, =1 {This will suspend 1 account for 7 days. This is recorded in the audit log.} other {This will suspend # accounts for 7 days. This is recorded in the audit log.}}",
     "bulkResult": "{updated}/{requested} accounts updated",
     "bulkSkipped": "{count, plural, =1 {1 skipped (see audit log)} other {# skipped (see audit log)}}",
-    "bulkBarLabel": "Bulk moderation actions"
+    "bulkBarLabel": "Bulk moderation actions",
+    "slaBadge": "SLA escalated",
+    "slaExportYes": "yes",
+    "slaExportNo": "no",
+    "slaFilterLabel": "SLA urgency",
+    "slaFilterAny": "Any urgency",
+    "slaFilterBreaching": "Breaching (past deadline)",
+    "slaFilterEscalated": "Escalated",
+    "slaBreached": "SLA breached",
+    "slaHoursLeft": "{h}h left",
+    "slaNone": "—"
   },
   "list": {
     "sortLabel": "Sort",
