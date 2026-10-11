@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Gauge, TrendingUp, Wallet } from 'lucide-react';
+import { Download, Gauge, TrendingUp, Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -14,6 +14,16 @@ import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import WeeklyTrendChart from '@/components/WeeklyTrendChart';
+import {
+  buildCsvExport,
+  csvAmount,
+  csvDate,
+  csvFilename,
+  type CsvExportFile,
+} from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+import * as Sentry from '@sentry/nextjs';
 
 interface PartnerSettlement {
   id: string;
@@ -30,6 +40,74 @@ export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+  const ef = useExportFeedback();
+
+  // P2-178: one CSV with two sections — per-venue revenue, then settlements.
+  function buildEarningsCsv(earnings: PartnerEarnings): CsvExportFile {
+    const timestamp = new Date();
+    const revenue = buildCsvExport({
+      columns: [
+        { key: 'venue', header: t('thVenue') },
+        { key: 'bookings', header: t('thBookings') },
+        { key: 'revenue', header: t('thRevenue') },
+      ],
+      rows: (earnings.perVenue ?? []).map((v) => ({
+        venue: v.venueName || '',
+        bookings: v.bookedCount,
+        revenue: csvAmount(v.revenue),
+      })),
+      filePrefix: 'koralink-partner-revenue',
+      timestamp,
+    });
+    const settlements = buildCsvExport({
+      columns: [
+        { key: 'venue', header: t('thVenue') },
+        { key: 'amount', header: t('thAmount') },
+        { key: 'status', header: t('thStatus') },
+        { key: 'period', header: t('thPeriod') },
+        { key: 'payoutRef', header: t('thPayoutRef') },
+        { key: 'created', header: t('thCreated') },
+      ],
+      rows: (earnings.settlements ?? []).map((s) => ({
+        venue: s.venue_name ?? '',
+        amount: csvAmount(s.amount),
+        status: s.status,
+        period: `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
+        payoutRef: s.payout_ref ?? '',
+        created: csvDate(s.created_at),
+      })),
+      filePrefix: 'koralink-partner-settlements',
+      timestamp,
+    });
+    // Section A keeps the file's only BOM; strip B's. buildCsvExport already
+    // ends each section with CRLF (csv-export.ts), so the sections join
+    // cleanly — no extra separator needed (PR-Agent r1 IMPORTANT refuted:
+    // it assumed no trailing newline; csv-export.ts:77 emits one).
+    return {
+      filename: csvFilename('koralink-partner-earnings', timestamp),
+      content: revenue.content + settlements.content.replace(/^\uFEFF/, ''),
+    };
+  }
+
+  async function onExport() {
+    if (!data) return;
+    const rowCount = (data.perVenue?.length ?? 0) + (data.settlements?.length ?? 0);
+    if (rowCount === 0) return;
+    // Build inside the same failure envelope as runPrebuilt: a formatter
+    // throw during generation must reach Sentry + the error note, not the
+    // console (PR-Agent r1 MINOR).
+    try {
+      ef.runPrebuilt(buildEarningsCsv(data), rowCount);
+      trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+    } catch (e) {
+      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+      trackEvent('admin_csv_export_error', { page: 'partner.earnings' });
+      ef.reportError();
+    }
+  }
+
+  const exportDisabled =
+    loading || !!error || ef.exporting || (data?.perVenue?.length ?? 0) + (data?.settlements?.length ?? 0) === 0;
 
   // P1-65: revenue overview — server-aggregated over the 4-week Riyadh window.
   const fourWeekTrend = data?.fourWeekTrend ?? [];
@@ -113,7 +191,26 @@ export default function PartnerEarningsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<LiveBadge live={live} stale={stale} />} />
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exportDisabled}
+              aria-label={t('exportEarnings')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {t('exportEarnings')}
+            </button>
+            <LiveBadge live={live} stale={stale} />
+          </div>
+        }
+      />
+      <ExportFeedbackNote feedback={ef} />
 
       <div className="space-y-6 p-8">
         {loading ? (

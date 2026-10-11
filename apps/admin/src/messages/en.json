@@ -225,6 +225,7 @@
       "title": "Earnings",
       "subtitle": "Settlements and payouts for your venues",
       "loading": "Loading…",
+      "exportEarnings": "Export CSV",
       "error": "Failed to load: {error}",
       "totalPending": "Total Pending",
       "totalPaid": "Total Paid",

@@ -89,6 +89,21 @@ export function exportCsv<T>(opts: CsvExportOptions<T>): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/** Browser download trigger for an already-built CsvExportFile. */
+export function downloadCsvFile(file: CsvExportFile): void {
+  const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke on the next tick so the browser has picked up the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 /** ISO-8601 timestamp for CSV cells; passes unparseable values through. */
 export function csvDate(value: string | null | undefined): string {
   if (!value) return '';
