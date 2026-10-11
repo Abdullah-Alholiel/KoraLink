@@ -21,7 +21,10 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
       execute: jest.fn(async (q: unknown) => {
         queries.push(q);
         const text = new PgDialect().sqlToQuery(q as never).sql;
-        return /COUNT\(\*\)/.test(text) ? [{ c: 0 }] : [];
+        // Branch on TOP-LEVEL shape: the count query STARTS with SELECT COUNT —
+        // the page query only CONTAINS a COUNT(*) subquery (appeal_count).
+        // (PR-Agent r1: an unanchored /COUNT(*)/ test served [{c:0}] to both.)
+        return text.trimStart().startsWith('SELECT COUNT(*)') ? [{ c: 0 }] : [];
       }),
     };
     const svc = new AdminDisputesService(
@@ -57,13 +60,15 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
     expect(sqlText).toMatch(/\/ 3600\.0, 1\)::float8/);
   });
 
-  it('sla=escalated filters on the PERSISTED flag in page AND count queries', async () => {
+  it('escalated filter applies to BOTH queries; page and count are distinguished by shape', async () => {
     const { svc, queries } = makeService();
-    await svc.list({ page: 1, perPage: 20, sla: 'escalated' } as ListDisputesDto);
+    const result = await svc.list({ page: 1, perPage: 20, sla: 'escalated' } as ListDisputesDto);
     expect(queries).toHaveLength(2);
     for (const q of queries) {
       expect(render(q).sqlText).toContain('d.sla_escalated = true');
     }
+    // page query got [] (no COUNT prefix) → mapped disputes; count got [{c:0}]
+    expect(result).toEqual({ disputes: [], total: 0, page: 1, perPage: 20 });
   });
 
   it('sla=breaching mirrors the sweep predicate: undecided + aged + NOT yet escalated', async () => {
