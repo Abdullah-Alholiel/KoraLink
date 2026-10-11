@@ -39,6 +39,9 @@ function makeService(rows: Array<Record<string, unknown>>) {
       // First execute = page query, second = count query.
       return queries.length === 1 ? rows : [{ c: 42 }];
     },
+    // Run #123: list() wraps page + count in one transaction; the mock runs the
+    // callback against the same executor (query order preserved).
+    transaction: async (cb: (tx: unknown) => unknown) => cb(db),
   };
   const svc = new AdminDisputesService(
     db as never,
