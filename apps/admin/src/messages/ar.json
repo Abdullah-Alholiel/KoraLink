@@ -698,7 +698,7 @@
     "slaFilterBreaching": "تجاوزت المهلة",
     "slaFilterEscalated": "تم تصعيدها",
     "slaBreached": "تجاوزت مدة الاستجابة",
-    "slaHoursLeft": "متبقٍ {h} ساعة",
+    "slaHoursLeft": "{h, plural, =0 {انتهت المهلة الآن} =1 {متبقٍ ساعة واحدة} =2 {متبقٍ ساعتان} few {متبقٍ {n} ساعات} other {متبقٍ {n} ساعة}}",
     "slaNone": "—"
   },
   "list": {

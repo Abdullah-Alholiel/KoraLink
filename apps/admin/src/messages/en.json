@@ -698,7 +698,7 @@
     "slaFilterBreaching": "Breaching (past deadline)",
     "slaFilterEscalated": "Escalated",
     "slaBreached": "SLA breached",
-    "slaHoursLeft": "{h}h left",
+    "slaHoursLeft": "{n}h left",
     "slaNone": "—"
   },
   "list": {

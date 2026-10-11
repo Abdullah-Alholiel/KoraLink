@@ -76,7 +76,9 @@ export default function DisputesPage() {
           urgent ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'
         }`}
       >
-        {t('slaHoursLeft', { h: formatMetricInt(h) })}
+        {/* numeric h drives the AR plural select (one/two/few/other); n renders
+            the Latin-digit number per the console convention. */}
+        {t('slaHoursLeft', { h, n: formatMetricInt(h) })}
       </span>
     );
   }
