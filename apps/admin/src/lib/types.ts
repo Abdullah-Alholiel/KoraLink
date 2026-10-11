@@ -118,6 +118,11 @@ export interface DisputeListItem {
   appeal_count: number;
   has_appealed: boolean;
   sla_escalated: boolean;
+  /** Run #122 SLA triage: deadline = updated_at + 7d (sweep clock); null for decided rows. */
+  sla_deadline: string | null;
+  /** Decimal hours left until the SLA deadline (numeric, SQL-computed); null for decided rows. */
+  sla_hours_left: number | null;
+  sla_breached: boolean;
 }
 
 export interface AdminReportListItem {

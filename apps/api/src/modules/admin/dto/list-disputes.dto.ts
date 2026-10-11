@@ -20,6 +20,16 @@ export class ListDisputesDto {
   @IsIn(['true', 'false'])
   appeal?: 'true' | 'false';
 
+  /** SLA triage filter (run #122). `escalated` → the PERSISTED sla_escalated flag
+   * (set by the daily sweep; flag+row-lock is the only idempotency contract, so
+   * the filter MUST read the flag, not the evidence history — PR #105 r3).
+   * `breaching` → the sweep-window predicate (updated_at + 7d < now) over rows
+   * the sweep has not yet escalated. */
+  @ApiPropertyOptional({ enum: ['escalated', 'breaching'] })
+  @IsOptional()
+  @IsIn(['escalated', 'breaching'])
+  sla?: 'escalated' | 'breaching';
+
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
   @IsInt()

@@ -100,30 +100,31 @@ describe('AdminDisputesService.list — appeal visibility (run #98)', () => {
     expect(count.sqlText).toMatch(/AND\s+EXISTS\s*\(/);
   });
 
-  it('no appeal param: zero regression — no appeal WHERE, legacy ordering', async () => {
+  it('no appeal param: zero regression — no appeal WHERE, SLA-first ordering (run #122)', async () => {
     const { svc, queries } = makeService([]);
     await svc.list({} as never);
 
     const page = render(queries[0]);
-    // The appeal-first ORDER BY (with its EXISTS) is ALWAYS present; what the
-    // omitted filter proves is that no predicate sits between the joins and
-    // the ORDER BY (the probes' own `WHERE e->>'action'` text is expected).
-    expect(page.sqlText).toMatch(/d\.match_id\s+ORDER BY EXISTS/);
-    expect(page.sqlText).toContain('ORDER BY EXISTS');
-    expect(page.sqlText).toMatch(/DESC, d\.created_at DESC/);
+    // run #122: ORDER BY is now undecided-first, then least SLA time, with the
+    // appeal EXISTS kept as a tiebreaker and created_at last.
+    expect(page.sqlText).toMatch(/d\.match_id\s+ORDER BY/);
+    expect(page.sqlText).toContain("(d.status IN ('opened','under_review')) DESC");
+    expect(page.sqlText).toContain('END ASC NULLS LAST');
+    expect(page.sqlText).toMatch(/DESC,\s*d\.created_at DESC/);
     const count = render(queries[1]);
     expect(count.sqlText).not.toContain('WHERE');
     expect(count.sqlText).not.toContain('EXISTS');
   });
 
-  it('page query surfaces appeal_count and orders appealed disputes first', async () => {
+  it('page query surfaces appeal_count and keeps the appeal tiebreaker in ORDER BY', async () => {
     const { svc, queries } = makeService([]);
     await svc.list({ appeal: 'true' } as never);
 
     const { sqlText } = render(queries[0]);
     expect(sqlText).toContain('AS appeal_count');
-    expect(sqlText).toMatch(/ORDER BY EXISTS/);
-    expect(sqlText).toMatch(/DESC, d\.created_at DESC/);
+    // appeal EXISTS still orders appealed-first WITHIN the same SLA bucket
+    expect(sqlText).toMatch(/ORDER BY[\s\S]*EXISTS\s*\(/);
+    expect(sqlText).toMatch(/DESC,\s*d\.created_at DESC/);
   });
 
   it('maps appeal_count → has_appealed server-side (0/null → false)', async () => {

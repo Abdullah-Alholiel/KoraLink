@@ -8,7 +8,7 @@ import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import type { DisputeListItem, ListResponse } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatMetricInt } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
@@ -28,12 +28,14 @@ export default function DisputesPage() {
   const tc = useTranslations('common');
   const [status, setStatus] = useState('');
   const [appeal, setAppeal] = useState<'' | 'true' | 'false'>('');
+  const [sla, setSla] = useState<'' | 'escalated' | 'breaching'>('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<DisputeListItem | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
   if (appeal) qs.set('appeal', appeal);
+  if (sla) qs.set('sla', sla);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<DisputesResponse>(`/admin/disputes?${qs.toString()}`);
 
@@ -44,6 +46,41 @@ export default function DisputesPage() {
 
   function disputeTypeLabel(d: DisputeListItem): string {
     return t.has(`disputeType.${d.type}`) ? t(`disputeType.${d.type}`) : d.type.replace(/_/g, ' ');
+  }
+
+  // SLA countdown chip (run #122): escalated flag (red) > breached (amber) >
+  // hours-left countdown (amber when ≤72h, neutral gray otherwise). Decided
+  // rows (no clock) render nothing. Hours are Latin digits per console
+  // convention (formatMetricInt), rounded to whole hours.
+  function slaChip(d: DisputeListItem) {
+    if (d.sla_escalated) {
+      return (
+        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+          {t('slaBadge')}
+        </span>
+      );
+    }
+    if (d.sla_hours_left === null) return null;
+    if (d.sla_breached) {
+      return (
+        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+          {t('slaBreached')}
+        </span>
+      );
+    }
+    const h = Math.round(d.sla_hours_left);
+    const urgent = h <= 72;
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+          urgent ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'
+        }`}
+      >
+        {/* numeric h drives the AR plural select (one/two/few/other); n renders
+            the Latin-digit number per the console convention. */}
+        {t('slaHoursLeft', { h, n: formatMetricInt(h) })}
+      </span>
+    );
   }
 
   // P2-147: export the FULL filtered set (same filters/sort as the table),
@@ -85,11 +122,7 @@ export default function DisputesPage() {
       render: (d) => (
         <span className="inline-flex items-center gap-1.5">
           <StatusBadge status={d.status} />
-          {d.sla_escalated ? (
-            <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-              {t('slaBadge')}
-            </span>
-          ) : null}
+          {slaChip(d)}
         </span>
       ),
     },
@@ -167,6 +200,19 @@ export default function DisputesPage() {
           <option value="true">{t('withAppeal')}</option>
           <option value="false">{t('withoutAppeal')}</option>
         </select>
+        <select
+          aria-label={t('slaFilterLabel')}
+          value={sla}
+          onChange={(e) => {
+            setSla(e.target.value as '' | 'escalated' | 'breaching');
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('slaFilterAny')}</option>
+          <option value="breaching">{t('slaFilterBreaching')}</option>
+          <option value="escalated">{t('slaFilterEscalated')}</option>
+        </select>
         <button
           type="button"
           onClick={onExport}
@@ -218,6 +264,10 @@ export default function DisputesPage() {
                 {
                   label: t('thAppeal'),
                   value: selected.has_appealed ? t('appealBadge', { count: selected.appeal_count }) : '—',
+                },
+                {
+                  label: t('slaFilterLabel'),
+                  value: slaChip(selected) ?? <span className="text-gray-400">{t('slaNone')}</span>,
                 },
                 { label: ts('opened'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
               ]
