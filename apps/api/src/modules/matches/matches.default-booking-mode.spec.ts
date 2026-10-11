@@ -86,12 +86,15 @@ describe('MatchesService.createMatch — default booking mode', () => {
     const execute = async (query: unknown) => {
       const { PgDialect } = await import('drizzle-orm/pg-core');
       const text = new PgDialect().sqlToQuery(query as never).sql;
-      if (text.includes('SELECT id, is_booked, slot_date, start_time FROM pitch_slots')) {
+      if (/SELECT .* FROM pitch_slots/.test(text)) {
+        // Match on the table, not the column list (686e383 convention): future
+        // column additions can't stale this mock.
         calls.push({ op: 'slot-lock' });
         return [
           opts?.slot === undefined
             ? {
                 id: SLOT_A,
+                pitch_id: PITCH_ID,
                 is_booked: false,
                 // Default: a clearly FUTURE slot (tomorrow, 23:00) so the
                 // started-guard never fires for the pre-existing cases.
@@ -238,7 +241,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
   it('rejects a TODAY slot whose start has passed (409 slot started)', async () => {
     const now = riyadhTimeNow();
     const { tx, calls } = makeTx({
-      slot: { id: SLOT_A, is_booked: false, slot_date: riyadhDateKey(), start_time: '00:00:00' },
+      slot: { id: SLOT_A, pitch_id: PITCH_ID, is_booked: false, slot_date: riyadhDateKey(), start_time: '00:00:00' },
     });
     const svc = makeService(makeDb(tx));
 
@@ -253,7 +256,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
   it('rejects a YESTERDAY-dated slot regardless of time (409 slot started)', async () => {
     const yesterday = riyadhDateKey(new Date(Date.now() - 86_400_000));
     const { tx, calls } = makeTx({
-      slot: { id: SLOT_A, is_booked: false, slot_date: yesterday, start_time: '23:00:00' },
+      slot: { id: SLOT_A, pitch_id: PITCH_ID, is_booked: false, slot_date: yesterday, start_time: '23:00:00' },
     });
     const svc = makeService(makeDb(tx));
 
@@ -270,7 +273,7 @@ describe('MatchesService.createMatch — default booking mode', () => {
     // legitimate UI flow can never submit one.
     const nowHM = riyadhTimeNow();
     const { tx, calls } = makeTx({
-      slot: { id: SLOT_A, is_booked: false, slot_date: riyadhDateKey(), start_time: `${nowHM}:00` },
+      slot: { id: SLOT_A, pitch_id: PITCH_ID, is_booked: false, slot_date: riyadhDateKey(), start_time: `${nowHM}:00` },
     });
     const svc = makeService(makeDb(tx));
 
@@ -279,5 +282,51 @@ describe('MatchesService.createMatch — default booking mode', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(calls.find((c) => c.op === 'match')).toBeUndefined();
     expect(calls.find((c) => c.op === 'deduct')).toBeUndefined();
+  });
+
+  // ── P2-174: cross-pitch slot↔pitch pairing guard (PR-Agent, run #120) ──
+  // A crafted payload pairing pitch B's slot id with pitch A's pitch_id must
+  // be rejected BEFORE the match insert or wallet debit: the price derives
+  // from dto.pitch_id's hourly rate, so the mismatch books one pitch's
+  // inventory at another's price. Same guard + wording as the recurring path.
+
+  it('rejects a slot from a DIFFERENT pitch (financial-integrity guard) BEFORE any insert/debit', async () => {
+    const { tx, calls } = makeTx({
+      slot: {
+        id: SLOT_A,
+        pitch_id: 'pitch-OTHER', // crafted payload: slot belongs to another pitch
+        is_booked: false,
+        slot_date: riyadhDateKey(new Date(Date.now() + 86_400_000)),
+        start_time: '23:00:00',
+      },
+    });
+    const svc = makeService(makeDb(tx));
+
+    await expect(
+      svc.createMatch(HOST_ID, { ...baseDto, booking_slot_id: SLOT_A }),
+    ).rejects.toThrow('Slot does not belong to this pitch.');
+    expect(calls.find((c) => c.op === 'match')).toBeUndefined();
+    expect(calls.find((c) => c.op === 'deduct')).toBeUndefined();
+    expect(calls.find((c) => c.op === 'ledger')).toBeUndefined();
+    expect(calls.find((c) => c.op === 'slot')).toBeUndefined(); // slot never marked booked
+  });
+
+  it('accepts a slot whose pitch_id MATCHES the priced pitch (guard does not block legit flow)', async () => {
+    const { tx, calls } = makeTx({
+      slot: {
+        id: SLOT_A,
+        pitch_id: PITCH_ID,
+        is_booked: false,
+        slot_date: riyadhDateKey(new Date(Date.now() + 86_400_000)),
+        start_time: '23:00:00',
+      },
+    });
+    const svc = makeService(makeDb(tx));
+
+    await svc.createMatch(HOST_ID, { ...baseDto, booking_slot_id: SLOT_A });
+
+    expect(calls.find((c) => c.op === 'slot-lock')).toBeDefined();
+    expect(calls.find((c) => c.op === 'match')).toBeDefined();
+    expect(calls.find((c) => c.op === 'deduct')).toBeDefined();
   });
 });
