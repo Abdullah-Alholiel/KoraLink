@@ -698,7 +698,7 @@
     "slaFilterBreaching": "Breaching (past deadline)",
     "slaFilterEscalated": "Escalated",
     "slaBreached": "SLA breached",
-    "slaHoursLeft": "{n}h left",
+    "slaHoursLeft": "{h, plural, =0 {Deadline reached} other {{n}h left}}",
     "slaNone": "—"
   },
   "list": {
