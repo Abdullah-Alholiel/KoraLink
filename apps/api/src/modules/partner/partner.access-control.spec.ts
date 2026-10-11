@@ -205,7 +205,12 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
     it('returns an empty ledger for an owner with no venues', async () => {
       const { service } = makeService({ venues: [otherVenue], settlements: [] });
       const earnings = await service.getEarnings(OWNER, 'VenueOwner');
-      expect(earnings).toEqual({ settlements: [], totalPending: 0, totalPaid: 0 });
+      // Legacy fields stay byte-compatible; P1-65 adds the zeroed revenue view.
+      expect(earnings).toMatchObject({ settlements: [], totalPending: 0, totalPaid: 0 });
+      expect(earnings.perVenue).toEqual([]);
+      expect(earnings.fourWeekTrend).toHaveLength(4);
+      expect(earnings.fourWeekTrend.every((w) => w.revenue === '0.00' && w.bookedCount === 0)).toBe(true);
+      expect(earnings.utilizationPct).toBe(0);
     });
   });
 

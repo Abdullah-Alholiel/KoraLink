@@ -236,7 +236,15 @@
       "thStatus": "الحالة",
       "thPayoutRef": "مرجع الدفع",
       "thCreated": "تاريخ الإنشاء",
-      "empty": "لا توجد تسويات بعد."
+      "empty": "لا توجد تسويات بعد.",
+      "revenueOverviewTitle": "نظرة عامة على الإيرادات",
+      "revenueOverviewSubtitle": "المباريات المحجوزة على ملاعبك خلال آخر ٤ أسابيع",
+      "fourWeekRevenue": "إيرادات الحجوزات (٤ أسابيع)",
+      "utilization": "نسبة إشغال الفترات (٤ أسابيع)",
+      "perVenueTitle": "الإيرادات حسب المنشأة",
+      "thBookings": "الحجوزات",
+      "thRevenue": "الإيرادات",
+      "noRevenueData": "لا توجد إيرادات منشآت لعرضها بعد."
     },
     "settings": {
       "title": "الإعدادات",

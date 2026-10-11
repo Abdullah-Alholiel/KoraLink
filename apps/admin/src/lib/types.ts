@@ -347,6 +347,23 @@ export interface PartnerEarnings {
   }[];
   totalPending: number;
   totalPaid: number;
+  /** P1-65: 4-week Riyadh window, SQL-aggregated; money as numeric strings. */
+  perVenue: PartnerVenueRevenue[];
+  fourWeekTrend: PartnerRevenueWeek[];
+  utilizationPct: number;
+}
+
+export interface PartnerVenueRevenue {
+  venueId: string;
+  venueName: string;
+  bookedCount: number;
+  revenue: string;
+}
+
+export interface PartnerRevenueWeek {
+  weekStart: string;
+  revenue: string;
+  bookedCount: number;
 }
 
 /** One row of GET /admin/venues (used by admin pickers and lists). */
