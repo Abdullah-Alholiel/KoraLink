@@ -16,8 +16,11 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 describe('AdminDisputesService — SLA triage list (run #122)', () => {
   function makeService() {
     const queries: unknown[] = [];
+    const txOpts: unknown[] = [];
     const db = {
       query: { disputes: {}, dispute_messages: {} },
+      // Same executor object serves both db.execute and the tx handle: list()
+      // routes every statement through the same mock regardless of path.
       execute: jest.fn(async (q: unknown) => {
         queries.push(q);
         const text = new PgDialect().sqlToQuery(q as never).sql;
@@ -26,6 +29,12 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
         // (PR-Agent r1: an unanchored /COUNT(*)/ test served [{c:0}] to both.)
         return text.trimStart().startsWith('SELECT COUNT(*)') ? [{ c: 0 }] : [];
       }),
+      // Run #123: list() wraps page + count in ONE transaction so both read the
+      // same snapshot. The mock records the isolation options for the pin below.
+      transaction: jest.fn(async (cb: (tx: unknown) => unknown, opts?: unknown) => {
+        txOpts.push(opts);
+        return cb(db);
+      }),
     };
     const svc = new AdminDisputesService(
       db as never,
@@ -33,7 +42,7 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
       { broadcastOps: jest.fn() } as never,
       { record: jest.fn(async () => {}) } as never,
     );
-    return { svc, queries };
+    return { svc, queries, txOpts };
   }
 
   const render = (q: unknown) => {
@@ -60,13 +69,16 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
     expect(sqlText).toMatch(/\/ 3600\.0, 1\)::float8/);
   });
 
-  it('escalated filter applies to BOTH queries; page and count are distinguished by shape', async () => {
-    const { svc, queries } = makeService();
+  it('sla=escalated filter applies to BOTH queries; page and count are distinguished by shape', async () => {
+    const { svc, queries, txOpts } = makeService();
     const result = await svc.list({ page: 1, perPage: 20, sla: 'escalated' } as ListDisputesDto);
     expect(queries).toHaveLength(2);
     for (const q of queries) {
       expect(render(q).sqlText).toContain('d.sla_escalated = true');
     }
+    // Run #123: page + count share ONE transaction (repeatable read) so a
+    // concurrent sweep write cannot flip `total` vs the returned page.
+    expect(txOpts).toEqual([{ isolationLevel: 'repeatable read' }]);
     // page query got [] (no COUNT prefix) → mapped disputes; count got [{c:0}]
     expect(result).toEqual({ disputes: [], total: 0, page: 1, perPage: 20 });
   });
@@ -94,7 +106,6 @@ describe('AdminDisputesService — SLA triage list (run #122)', () => {
     const order = sqlText.slice(sqlText.indexOf('ORDER BY'));
     const undecided = order.indexOf("(d.status IN ('opened','under_review')) DESC");
     const hoursAsc = order.indexOf('END ASC NULLS LAST');
-    const appealTiebreak = order.indexOf("WHERE e->>'action' = 'appeal'");
     const appealTail = order.lastIndexOf("e->>'action' = 'appeal'");
     expect(undecided).toBeGreaterThan(-1);
     expect(hoursAsc).toBeGreaterThan(undecided);

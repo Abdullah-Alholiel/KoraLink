@@ -83,7 +83,13 @@ export class AdminDisputesService {
       ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
       : undefined;
 
-    const rows = (await this.db.execute(sql`
+    // Page + COUNT share ONE transaction (repeatable read snapshot) — Reviewer
+    // B (run #123): two bare statements let a concurrent SLA-sweep write flip
+    // `total` vs the returned page. One snapshot keeps them consistent; the
+    // body is read-only, so the isolation upgrade costs nothing.
+    return this.db.transaction(
+      async (tx) => {
+        const rows = (await tx.execute(sql`
       SELECT
         d.id, d.type, d.status, d.decision, d.policy_ref, d.created_at, d.updated_at,
         d.sla_escalated,
@@ -132,15 +138,18 @@ export class AdminDisputesService {
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 
-    // Boolean derived server-side (no client-side drift on the JSON shape).
-    const disputes = rows.map((r) => ({ ...r, has_appealed: Number(r.appeal_count ?? 0) > 0 }));
+        // Boolean derived server-side (no client-side drift on the JSON shape).
+        const disputes = rows.map((r) => ({ ...r, has_appealed: Number(r.appeal_count ?? 0) > 0 }));
 
-    const countRows = (await this.db.execute(sql`
-      SELECT COUNT(*)::int AS c FROM disputes d
-      ${where}
-    `)) as unknown as Array<{ c: number }>;
+        const countRows = (await tx.execute(sql`
+          SELECT COUNT(*)::int AS c FROM disputes d
+          ${where}
+        `)) as unknown as Array<{ c: number }>;
 
-    return { disputes, total: countRows[0]?.c ?? 0, page, perPage };
+        return { disputes, total: countRows[0]?.c ?? 0, page, perPage };
+      },
+      { isolationLevel: 'repeatable read' },
+    );
   }
 
   async findOne(id: string) {
