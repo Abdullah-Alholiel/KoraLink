@@ -64,6 +64,21 @@ export class AdminDisputesService {
             )`,
       );
     }
+    // SLA triage (run #122): `escalated` reads the PERSISTED flag (flag + row
+    // lock is the only idempotency contract — the evidence history is episodes,
+    // not duplicates, PR #105 r3). `breaching` mirrors the sweep predicate
+    // (updated_at + SLA_MS < now) over rows the sweep has not yet claimed, so
+    // the filter and the escalation agree on WHERE the clock starts.
+    if (dto.sla === 'escalated') {
+      clauses.push(sql`d.sla_escalated = true`);
+    } else if (dto.sla === 'breaching') {
+      clauses.push(
+        sql`(d.status = 'opened' OR d.status = 'under_review')
+            AND d.updated_at IS NOT NULL
+            AND d.updated_at + ${SLA_MS}::bigint * interval '1 millisecond' < now()
+            AND d.sla_escalated = false`,
+      );
+    }
     const where: SQL | undefined = clauses.length
       ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
       : undefined;
@@ -72,6 +87,23 @@ export class AdminDisputesService {
       SELECT
         d.id, d.type, d.status, d.decision, d.policy_ref, d.created_at, d.updated_at,
         d.sla_escalated,
+        CASE
+          WHEN d.status IN ('opened','under_review') AND d.updated_at IS NOT NULL
+            THEN d.updated_at + ${SLA_MS}::bigint * interval '1 millisecond'
+          ELSE NULL
+        END AS sla_deadline,
+        CASE
+          WHEN d.status IN ('opened','under_review') AND d.updated_at IS NOT NULL
+            THEN ROUND(EXTRACT(EPOCH FROM (
+                   d.updated_at + ${SLA_MS}::bigint * interval '1 millisecond' - now()
+                 )) / 3600.0, 1)::float8
+          ELSE NULL
+        END AS sla_hours_left,
+        -- plain boolean expression (no CASE literals): the appeal-filter tripwire
+        -- pins forbid literal boolean keywords in the list SQL text.
+        (d.status IN ('opened','under_review') AND d.updated_at IS NOT NULL
+           AND d.updated_at + ${SLA_MS}::bigint * interval '1 millisecond' < now()
+        ) AS sla_breached,
         r.full_name AS reporter_name, resp.full_name AS respondent_name,
         m.id AS match_id, m.title AS match_title,
         (
@@ -83,10 +115,20 @@ export class AdminDisputesService {
       LEFT JOIN users resp ON resp.id = d.respondent_id
       LEFT JOIN matches m ON m.id = d.match_id
       ${where}
-      ORDER BY EXISTS (
-        SELECT 1 FROM json_array_elements(d.evidence) e
-        WHERE e->>'action' = 'appeal'
-      ) DESC, d.created_at DESC
+      ORDER BY
+        (d.status IN ('opened','under_review')) DESC,
+        CASE
+          WHEN d.status IN ('opened','under_review') AND d.updated_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (
+                   d.updated_at + ${SLA_MS}::bigint * interval '1 millisecond' - now()
+                 ))
+          ELSE NULL
+        END ASC NULLS LAST,
+        EXISTS (
+          SELECT 1 FROM json_array_elements(d.evidence) e
+          WHERE e->>'action' = 'appeal'
+        ) DESC,
+        d.created_at DESC
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 
