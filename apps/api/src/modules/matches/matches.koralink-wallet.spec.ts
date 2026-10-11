@@ -118,6 +118,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
         return [
           {
             id: SLOT_A,
+            pitch_id: PITCH_ID,
             is_booked: false,
             slot_date: '2099-01-01', // strictly future → past-slot guard passes
             start_time: '23:59:00',

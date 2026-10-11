@@ -2112,13 +2112,22 @@ export class MatchesService {
         }
 
         const [slot] = await tx.execute(sql`
-          SELECT id, is_booked, slot_date, start_time FROM pitch_slots
+          SELECT id, is_booked, slot_date, start_time, pitch_id FROM pitch_slots
           WHERE id = ${dto.booking_slot_id}::text
           FOR UPDATE
-        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string }];
+        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string; pitch_id: string }];
 
         if (!slot) {
           throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+        }
+
+        // P2-174 (PR-Agent, run #120): the slot MUST belong to the pitch being
+        // priced — same financial-integrity guard as createRecurringMatches
+        // and rescheduleMatch. Without it a crafted payload pairs pitch B's
+        // slot id with pitch A's derived hourly rate, booking A's inventory
+        // at the wrong price and stamping a corrupt cross-pitch booking_slot_id.
+        if (slot.pitch_id !== dto.pitch_id) {
+          throw new BadRequestException('Slot does not belong to this pitch.');
         }
 
         if (slot.is_booked) {
