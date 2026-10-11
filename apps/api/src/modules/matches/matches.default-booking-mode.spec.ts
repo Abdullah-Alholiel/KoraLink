@@ -86,7 +86,9 @@ describe('MatchesService.createMatch — default booking mode', () => {
     const execute = async (query: unknown) => {
       const { PgDialect } = await import('drizzle-orm/pg-core');
       const text = new PgDialect().sqlToQuery(query as never).sql;
-      if (text.includes('SELECT id, is_booked, slot_date, start_time, pitch_id FROM pitch_slots')) {
+      if (/SELECT .* FROM pitch_slots/.test(text)) {
+        // Match on the table, not the column list (686e383 convention): future
+        // column additions can't stale this mock.
         calls.push({ op: 'slot-lock' });
         return [
           opts?.slot === undefined
