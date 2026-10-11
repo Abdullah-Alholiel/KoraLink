@@ -7,6 +7,8 @@ import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-r
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { pitchCostForDuration, pricePerPlayer, riyadhISO, parseHostDateParam } from '@/lib/api-adapter';
 import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall, computeShortfall } from '@/lib/publish-error';
 import { trackEvent } from '@/providers/ObservabilityProvider';
@@ -36,6 +38,8 @@ export default function HostMatchForm() {
     const locale = useLocale();
     const t = useTranslations();
     const createMatch = useCreateMatch();
+    // P2-177: proactive offline cue for the slot picker (5-UX-states).
+    const isOnline = useOnlineStatus();
 
     /* ── Venue pre-select from query params ─────────── */
     const venueIdFromQuery = searchParams?.get('venue');
@@ -339,6 +343,17 @@ export default function HostMatchForm() {
 
                             {/* Slot picker — only in koralink mode */}
                             {mode === 'koralink' && selectedPitch && (
+                                <>
+                                {/* P2-177: offline strip BEFORE the picker — a host on
+                                    stadium Wi-Fi sees WHY no slots load instead of a
+                                    silent spinner (context copy via the shared banner). */}
+                                {!isOnline && (
+                                    <OfflineBanner
+                                        isOffline
+                                        message={t('host.slotsOffline')}
+                                        className="mb-2 mx-0"
+                                    />
+                                )}
                                 <SlotPicker
                                     pitchId={selectedPitch.id}
                                     selectedSlot={selectedSlot}
@@ -356,6 +371,7 @@ export default function HostMatchForm() {
                                         }
                                     }}
                                 />
+                                </>
                             )}
 
                             {/* Weekly repeat (P1-64) — only once a KoraLink slot is picked */}

@@ -469,6 +469,7 @@
     "slotsLoading": "Loading available slots…",
     "slotsError": "Couldn't load available slots. Check your connection.",
     "slotsRetry": "Try Again",
+    "slotsOffline": "You're offline — slots can't load right now. Reconnect to pick a time.",
     "repeat": {
       "once": "Once",
       "weekly2": "Weekly ×2",
