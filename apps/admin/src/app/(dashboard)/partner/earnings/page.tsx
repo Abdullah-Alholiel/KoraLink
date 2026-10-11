@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Wallet } from 'lucide-react';
+import { Gauge, TrendingUp, Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import type { PartnerEarnings } from '@/lib/types';
-import { formatDate, formatMoney } from '@/lib/utils';
+import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
+import { formatDate, formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
+import WeeklyTrendChart from '@/components/WeeklyTrendChart';
 
 interface PartnerSettlement {
   id: string;
@@ -29,6 +30,40 @@ export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+
+  // P1-65: revenue overview — server-aggregated over the 4-week Riyadh window.
+  const fourWeekTrend = data?.fourWeekTrend ?? [];
+  const fourWeekRevenue = fourWeekTrend.reduce((sum, w) => sum + Number(w.revenue), 0);
+  const trendPoints = fourWeekTrend.map((w) => ({
+    date: w.weekStart,
+    bookedSlots: w.bookedCount,
+    revenue: Number(w.revenue),
+  }));
+
+  const venueColumns: ColumnDef<PartnerVenueRevenue>[] = [
+    {
+      key: 'venue',
+      header: t('thVenue'),
+      role: 'identity',
+      render: (v) => <span className="font-medium text-gray-900">{v.venueName || '—'}</span>,
+    },
+    {
+      key: 'bookings',
+      header: t('thBookings'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (v) => v.bookedCount,
+    },
+    {
+      key: 'revenue',
+      header: t('thRevenue'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (v) => formatMoney(v.revenue),
+    },
+  ];
 
   const columns: ColumnDef<PartnerSettlement>[] = [
     {
@@ -87,6 +122,31 @@ export default function PartnerEarningsPage() {
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <>
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">{t('revenueOverviewTitle')}</h2>
+                <p className="mt-1 text-xs text-gray-500">{t('revenueOverviewSubtitle')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
+                <MetricCard label={t('fourWeekRevenue')} value={formatMoney(fourWeekRevenue)} icon={TrendingUp} />
+                <MetricCard
+                  label={t('utilization')}
+                  value={formatPercent((data?.utilizationPct ?? 0) / 100)}
+                  icon={Gauge}
+                />
+              </div>
+              <WeeklyTrendChart data={trendPoints} />
+              <div>
+                <h3 className="mb-4 text-sm font-semibold text-gray-900">{t('perVenueTitle')}</h3>
+                <DataTable
+                  columns={venueColumns}
+                  rows={data?.perVenue ?? []}
+                  rowKey={(v) => v.venueId}
+                  empty={<p className="px-4 py-10 text-sm text-gray-400">{t('noRevenueData')}</p>}
+                />
+              </div>
+            </section>
+
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
               <MetricCard label={t('totalPending')} value={formatMoney(data?.totalPending ?? 0)} icon={Wallet} />
               <MetricCard label={t('totalPaid')} value={formatMoney(data?.totalPaid ?? 0)} icon={Wallet} />

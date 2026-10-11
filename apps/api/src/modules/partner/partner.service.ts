@@ -59,6 +59,46 @@ export function riyadhTrendDays(nowMs: number = Date.now()): string[] {
   return days;
 }
 
+/** P1-65: earnings revenue window = 4 Riyadh weeks (28 days) ending Riyadh-today. */
+export const EARNINGS_TREND_WEEKS = 4;
+
+/** P1-65: the 4 weekly bucket start dates (YYYY-MM-DD), oldest first; the last week ends today. */
+export function riyadhTrendWeeks(nowMs: number = Date.now()): string[] {
+  const today = riyadhDateString(nowMs);
+  const windowStart = addDaysToDateString(today, -(EARNINGS_TREND_WEEKS * 7 - 1));
+  const weeks: string[] = [];
+  for (let i = 0; i < EARNINGS_TREND_WEEKS; i++) weeks.push(addDaysToDateString(windowStart, i * 7));
+  return weeks;
+}
+
+export interface EarningsVenueRevenue {
+  venueId: string;
+  venueName: string;
+  bookedCount: number;
+  revenue: string;
+}
+
+export interface EarningsTrendWeek {
+  weekStart: string;
+  revenue: string;
+  bookedCount: number;
+}
+
+const ZERO_MONEY = '0.00';
+
+function zeroTrendWeeks(weeks: string[]): EarningsTrendWeek[] {
+  return weeks.map((weekStart) => ({ weekStart, revenue: ZERO_MONEY, bookedCount: 0 }));
+}
+
+function normalizeVenueRevenue(r: EarningsVenueRevenue): EarningsVenueRevenue {
+  return {
+    venueId: String(r.venueId),
+    venueName: String(r.venueName ?? ''),
+    bookedCount: Number(r.bookedCount),
+    revenue: String(r.revenue),
+  };
+}
+
 @Injectable()
 export class PartnerService {
   constructor(
@@ -581,9 +621,21 @@ export class PartnerService {
   // ── Earnings ──────────────────────────────────────────────────────────────
 
   async getEarnings(ownerId: string, actorRole?: string) {
+    // P1-65: one Riyadh-calendar axis drives the SQL window AND the JS buckets.
+    const trendWeeks = riyadhTrendWeeks();
+    const windowStart = trendWeeks[0];
+    const windowEnd = addDaysToDateString(windowStart, EARNINGS_TREND_WEEKS * 7 - 1);
+
     const venueIds = await this.scopedVenueIds(ownerId, actorRole);
     if (!venueIds.length) {
-      return { settlements: [], totalPending: 0, totalPaid: 0 };
+      return {
+        settlements: [],
+        totalPending: 0,
+        totalPaid: 0,
+        perVenue: [] as EarningsVenueRevenue[],
+        fourWeekTrend: zeroTrendWeeks(trendWeeks),
+        utilizationPct: 0,
+      };
     }
 
     const rows = await this.db
@@ -610,7 +662,87 @@ export class PartnerService {
       .filter((r) => r.status === 'paid')
       .reduce((sum, r) => sum + Number(r.amount), 0);
 
-    return { settlements: rows, totalPending, totalPaid };
+    const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
+    const revenue = await this.getEarningsRevenue(venueIds, pitchIds, trendWeeks, windowStart, windowEnd);
+
+    return { settlements: rows, totalPending, totalPaid, ...revenue };
+  }
+
+  /**
+   * P1-65: partner revenue read-model over the 4-week Riyadh window — all
+   * aggregation happens in SQL; money is SUM(matches.pitch_cost_sar)::text,
+   * counts are ints. Cancelled matches never count as booked revenue.
+   */
+  private async getEarningsRevenue(
+    venueIds: string[],
+    pitchIds: string[],
+    trendWeeks: string[],
+    windowStart: string,
+    windowEnd: string,
+  ): Promise<{ perVenue: EarningsVenueRevenue[]; fourWeekTrend: EarningsTrendWeek[]; utilizationPct: number }> {
+    const inWindow = sql`${matches.scheduled_at} >= (${windowStart}::date::timestamp AT TIME ZONE 'Asia/Riyadh')
+        AND ${matches.scheduled_at} < ((${windowEnd}::date + 1)::timestamp AT TIME ZONE 'Asia/Riyadh')
+        AND ${matches.status} <> 'Cancelled'`;
+
+    const perVenueRows = (await this.db.execute(sql`
+      SELECT
+        ${venues.id} AS "venueId",
+        ${venues.name} AS "venueName",
+        COUNT(${matches.id})::int AS "bookedCount",
+        COALESCE(SUM(${matches.pitch_cost_sar}), 0)::numeric(12,2)::text AS revenue
+      FROM ${venues}
+      LEFT JOIN ${pitches} ON ${pitches.venue_id} = ${venues.id}
+      LEFT JOIN ${matches} ON ${matches.pitch_id} = ${pitches.id} AND ${inWindow}
+      WHERE ${inArray(venues.id, venueIds)}
+      GROUP BY ${venues.id}, ${venues.name}
+      ORDER BY COALESCE(SUM(${matches.pitch_cost_sar}), 0) DESC, ${venues.name} ASC
+    `)) as unknown as EarningsVenueRevenue[];
+
+    if (!pitchIds.length) {
+      return {
+        perVenue: perVenueRows.map(normalizeVenueRevenue),
+        fourWeekTrend: zeroTrendWeeks(trendWeeks),
+        utilizationPct: 0,
+      };
+    }
+
+    const weekRows = (await this.db.execute(sql`
+      SELECT
+        ((${matches.scheduled_at} AT TIME ZONE 'Asia/Riyadh')::date - ${windowStart}::date) / 7 AS "weekIndex",
+        COUNT(${matches.id})::int AS "bookedCount",
+        COALESCE(SUM(${matches.pitch_cost_sar}), 0)::numeric(12,2)::text AS revenue
+      FROM ${matches}
+      WHERE ${inArray(matches.pitch_id, pitchIds)}
+        AND ${inWindow}
+      GROUP BY 1
+    `)) as unknown as Array<{ weekIndex: number | string; bookedCount: number | string; revenue: string }>;
+
+    const [slotRow] = (await this.db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total,
+        (COUNT(*) FILTER (WHERE ${pitch_slots.is_booked}))::int AS booked
+      FROM ${pitch_slots}
+      WHERE ${inArray(pitch_slots.pitch_id, pitchIds)}
+        AND ${pitch_slots.slot_date} >= ${windowStart}::date
+        AND ${pitch_slots.slot_date} <= ${windowEnd}::date
+    `)) as unknown as Array<{ total: number | string; booked: number | string }>;
+
+    // Fill all 4 weeks so the chart never has holes.
+    const byWeek = new Map(weekRows.map((r) => [Number(r.weekIndex), r]));
+    const fourWeekTrend = trendWeeks.map((weekStart, i) => {
+      const r = byWeek.get(i);
+      return {
+        weekStart,
+        revenue: r ? String(r.revenue) : ZERO_MONEY,
+        bookedCount: r ? Number(r.bookedCount) : 0,
+      };
+    });
+
+    const total = Number(slotRow?.total ?? 0);
+    const booked = Number(slotRow?.booked ?? 0);
+    const utilizationPct = total > 0 ? Math.round((booked / total) * 1000) / 10 : 0;
+
+    return { perVenue: perVenueRows.map(normalizeVenueRevenue), fourWeekTrend, utilizationPct };
   }
 
   // ── Verification (business profile) ───────────────────────────────────────

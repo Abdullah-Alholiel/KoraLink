@@ -236,7 +236,15 @@
       "thStatus": "Status",
       "thPayoutRef": "Payout ref",
       "thCreated": "Created",
-      "empty": "No settlements yet."
+      "empty": "No settlements yet.",
+      "revenueOverviewTitle": "Revenue overview",
+      "revenueOverviewSubtitle": "Booked matches on your pitches over the last 4 weeks",
+      "fourWeekRevenue": "Booked revenue (4 weeks)",
+      "utilization": "Slot utilization (4 weeks)",
+      "perVenueTitle": "Revenue by venue",
+      "thBookings": "Bookings",
+      "thRevenue": "Revenue",
+      "noRevenueData": "No venue revenue to show yet."
     },
     "settings": {
       "title": "Settings",
