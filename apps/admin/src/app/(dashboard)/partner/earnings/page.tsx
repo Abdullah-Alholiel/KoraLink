@@ -14,9 +14,16 @@ import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import WeeklyTrendChart from '@/components/WeeklyTrendChart';
-import { buildCsvExport, csvAmount, csvDate, type CsvExportFile } from '@/lib/csv-export';
+import {
+  buildCsvExport,
+  csvAmount,
+  csvDate,
+  csvFilename,
+  type CsvExportFile,
+} from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import * as Sentry from '@sentry/nextjs';
 
 interface PartnerSettlement {
   id: string;
@@ -72,10 +79,13 @@ export default function PartnerEarningsPage() {
       filePrefix: 'koralink-partner-settlements',
       timestamp,
     });
-    // Section A keeps the file's only BOM; strip B's.
+    // Section A keeps the file's only BOM; strip B's. buildCsvExport already
+    // ends each section with CRLF (csv-export.ts), so the sections join
+    // cleanly — no extra separator needed (PR-Agent r1 IMPORTANT refuted:
+    // it assumed no trailing newline; csv-export.ts:77 emits one).
     return {
-      filename: revenue.filename,
-      content: revenue.content + settlements.content.replace(/^\uFEFF/, '') + '\r\n',
+      filename: csvFilename('koralink-partner-earnings', timestamp),
+      content: revenue.content + settlements.content.replace(/^\uFEFF/, ''),
     };
   }
 
@@ -83,8 +93,17 @@ export default function PartnerEarningsPage() {
     if (!data) return;
     const rowCount = (data.perVenue?.length ?? 0) + (data.settlements?.length ?? 0);
     if (rowCount === 0) return;
-    ef.runPrebuilt(buildEarningsCsv(data), rowCount);
-    trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+    // Build inside the same failure envelope as runPrebuilt: a formatter
+    // throw during generation must reach Sentry + the error note, not the
+    // console (PR-Agent r1 MINOR).
+    try {
+      ef.runPrebuilt(buildEarningsCsv(data), rowCount);
+      trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+    } catch (e) {
+      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+      trackEvent('admin_csv_export_error', { page: 'partner.earnings' });
+      ef.reportError();
+    }
   }
 
   const exportDisabled =

@@ -48,6 +48,10 @@ export interface ExportFeedback {
   runExport: <T>(opts: CsvExportOptions<T>) => void;
   /** Like runExport, for a file the page already built (e.g. multi-section CSV). */
   runPrebuilt: (file: CsvExportFile, rowCount: number) => void;
+  /** Shows the error note for a failure that happened OUTSIDE the hook (e.g.
+   * the page's CSV build threw before a file existed). Pairs with the page's
+   * own Sentry capture + analytics event. */
+  reportError: () => void;
   /** True while a full-set export is fetching — keep the button disabled. */
   exporting: boolean;
   /** Last full-set export: filtered total and whether it hit the row cap. */
@@ -107,6 +111,15 @@ export function useExportFeedback(): ExportFeedback {
     }
   }, []);
 
+  // Error path for failures OUTSIDE runPrebuilt (e.g. the page's own CSV build
+  // throwing before the file exists). Run-#123 PR-Agent r1: a formatter throw
+  // in buildEarningsCsv escaped the click handler with no user-visible note.
+  const reportError = useCallback(() => {
+    setMode('page');
+    setSeq((s) => s + 1);
+    setKind('error');
+  }, []);
+
   const runFullExport = useCallback(
     async <TPage, TRow>(opts: {
       url: string;
@@ -149,7 +162,19 @@ export function useExportFeedback(): ExportFeedback {
     [],
   );
 
-  return { kind, rows, seq, runExport, runPrebuilt, exporting, total, truncated, mode, runFullExport };
+  return {
+    kind,
+    rows,
+    seq,
+    runExport,
+    runPrebuilt,
+    reportError,
+    exporting,
+    total,
+    truncated,
+    mode,
+    runFullExport,
+  };
 }
 
 // The always-mounted live-region pair, shared so the markup cannot drift
