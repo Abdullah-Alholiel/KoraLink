@@ -26,7 +26,12 @@
 //    `exporting` must also disable the page's button.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { exportCsv, type CsvExportOptions } from '@/lib/csv-export';
+import {
+  downloadCsvFile,
+  exportCsv,
+  type CsvExportFile,
+  type CsvExportOptions,
+} from '@/lib/csv-export';
 import { fetchAllForExport, EXPORT_ROW_CAP } from '@/lib/fetch-all-for-export';
 import * as Sentry from '@sentry/nextjs';
 import { trackEvent } from '@/providers/ObservabilityProvider';
@@ -41,6 +46,8 @@ export interface ExportFeedback {
   seq: number;
   /** Wraps exportCsv: call this from the page's onExport handler. */
   runExport: <T>(opts: CsvExportOptions<T>) => void;
+  /** Like runExport, for a file the page already built (e.g. multi-section CSV). */
+  runPrebuilt: (file: CsvExportFile, rowCount: number) => void;
   /** True while a full-set export is fetching — keep the button disabled. */
   exporting: boolean;
   /** Last full-set export: filtered total and whether it hit the row cap. */
@@ -82,6 +89,20 @@ export function useExportFeedback(): ExportFeedback {
       // Download blocking is silent in every browser — see header comment.
       Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
       trackEvent('admin_csv_export_error', { rows: opts.rows.length });
+      setKind('error');
+    }
+  }, []);
+
+  const runPrebuilt = useCallback((file: CsvExportFile, rowCount: number) => {
+    setMode('page');
+    setSeq((s) => s + 1);
+    setRows(rowCount);
+    try {
+      downloadCsvFile(file);
+      setKind('success');
+    } catch (e) {
+      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+      trackEvent('admin_csv_export_error', { rows: rowCount });
       setKind('error');
     }
   }, []);
@@ -128,7 +149,7 @@ export function useExportFeedback(): ExportFeedback {
     [],
   );
 
-  return { kind, rows, seq, runExport, exporting, total, truncated, mode, runFullExport };
+  return { kind, rows, seq, runExport, runPrebuilt, exporting, total, truncated, mode, runFullExport };
 }
 
 // The always-mounted live-region pair, shared so the markup cannot drift
