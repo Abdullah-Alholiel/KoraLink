@@ -21,11 +21,16 @@ const LOADING = [
   'src/app/[locale]/(main)/profile/loading.tsx',
   'src/app/[locale]/(main)/settings/loading.tsx',
   'src/app/[locale]/match/[id]/loading.tsx',
+  // P2-180 (run #124): standalone club-detail route ships its own skeleton.
+  'src/app/[locale]/clubs/[id]/loading.tsx',
 ];
 
 const ERRORS = [
   'src/app/[locale]/(main)/error.tsx',
   'src/app/[locale]/match/[id]/error.tsx',
+  // P2-180 (run #124): clubs/[id] is OUTSIDE (main) — the (main)/layout
+  // surface boundary never covers it, so it needs its own scoped boundary.
+  'src/app/[locale]/clubs/[id]/error.tsx',
 ];
 
 const ROUTE_ERROR = 'src/components/layout/RouteError.tsx';
