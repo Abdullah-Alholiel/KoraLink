@@ -18,7 +18,7 @@ import {
     usePitchSlots,
     type PitchSlotApi,
 } from '@/hooks/usePitchSlots';
-import { dateInRiyadh, todayInRiyadh } from '@/lib/api-adapter';
+import { dateInRiyadh, todayInRiyadh } from '@/lib/riyadh-time';
 
 interface RescheduleSheetProps {
     isOpen: boolean;

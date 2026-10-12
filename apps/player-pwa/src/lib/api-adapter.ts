@@ -5,6 +5,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Match, Transaction, OrganizerInfo, RosterPlayer, Comment } from '@/types';
+import { dateInRiyadh } from '@/lib/riyadh-time';
+import { POTM_VOTING_WINDOW_HOURS } from '@/lib/match-pricing';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // API Raw Types (snake_case, matches what the backend returns)
@@ -174,85 +176,25 @@ function fmtTime(d: Date): string {
   });
 }
 
-/** Formats a date as YYYY-MM-DD in Asia/Riyadh — the app's display timezone
- *  (set in i18n/request.ts). Using the UTC ISO date instead would mislabel
- *  matches that start before 03:00 Riyadh time. */
-export function dateInRiyadh(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Riyadh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-/** Today's date (YYYY-MM-DD) in Asia/Riyadh — pair with dateInRiyadh(). */
-export function todayInRiyadh(): string {
-  return dateInRiyadh(new Date());
-}
-
-/** Build an ISO timestamp from a Riyadh-local "YYYY-MM-DD" date and "HH:MM"
- *  time. Riyadh is UTC+3 with no DST, so the offset is constant. The host form
- *  must use this (not `new Date(`${date}T${time}`)`) so kick-off is stored
- *  correctly regardless of the device's local timezone. */
-export function riyadhISO(date: string, time: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  const asUTC = Date.UTC(y, m - 1, d, hh - 3, mm);
-  return new Date(asUTC).toISOString();
-}
-
-/** Validate a `?date=` query param for the host form (e.g. passed from the
- *  club calendar). Accepts only YYYY-MM-DD strings that are today-or-later in
- *  Asia/Riyadh; anything else (garbage, past dates) is ignored → null, so a
- *  bad param never blocks or corrupts the form. */
-export function parseHostDateParam(
-  raw: string | null | undefined,
-  today: string = todayInRiyadh(),
-): string | null {
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  // ISO dates compare chronologically as strings.
-  return raw >= today ? raw : null;
-}
-
-/** POTM voting window length — must mirror MatchesService.VOTING_WINDOW_HOURS. */
-export const POTM_VOTING_WINDOW_HOURS = 24;
-
-/** Platform margin (SAR) added per player on top of the raw pitch-cost share.
- *  MUST mirror MatchesService.PLATFORM_MARGIN_SAR — pinned by test/lib/pricing.test.ts. */
-export const PLATFORM_MARGIN_SAR = 5;
-
-/** Round a SAR amount up to 2 decimal places (money-safe, never rounds down). */
-export const round2 = (n: number): number => Math.ceil(n * 100) / 100;
-
-/** Pitch cost prorated from the pitch hourly rate (mirrors the server). */
-export function pitchCostForDuration(hourlyRate: number, durationMins: number): number {
-  return round2(hourlyRate * durationMins / 60);
-}
-
-/** Per-player price mirroring MatchesService.calculatePricePerPlayer. */
-export function pricePerPlayer(pitchCostSar: number, maxPlayers: number): number {
-  if (maxPlayers < 2) return pitchCostSar;
-  return round2(pitchCostSar / (maxPlayers - 1) + PLATFORM_MARGIN_SAR);
-}
-
-/** True while the POTM voting window (match end + 24h) is open. When `now`
- *  is omitted the live `Date.now()` is used (server contexts + tests); UI
- *  render paths MUST pass the hydration-safe `useNow()` value instead —
- *  a raw render-path clock SSRs a different answer than the device
- *  (Reviewer A CRITICAL, run #40; `null` = pre-mount = optimistic open,
- *  the API re-validates authoritatively on submit). */
-export function isPotmVotingOpen(
-  scheduledAt?: string,
-  durationMins = 60,
-  now?: number | null,
-): boolean {
-  if (!scheduledAt) return false;
-  const endMs = new Date(scheduledAt).getTime() + durationMins * 60_000;
-  const closesAtMs = endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000;
-  if (now === null) return true; // pre-mount: optimistic open
-  return (now ?? Date.now()) < closesAtMs;
-}
+// ── Domain-pure helpers (P2-153 hex fold, run #124) ────────────────────────
+// The Riyadh-time + pricing/POTM helpers moved to domain modules so UI
+// components never import the adapter; these re-exports keep every existing
+// hook/test import working. New code: import from '@/lib/riyadh-time' /
+// '@/lib/match-pricing' directly.
+export {
+  dateInRiyadh,
+  todayInRiyadh,
+  riyadhISO,
+  parseHostDateParam,
+} from '@/lib/riyadh-time';
+export {
+  POTM_VOTING_WINDOW_HOURS,
+  PLATFORM_MARGIN_SAR,
+  round2,
+  pitchCostForDuration,
+  pricePerPlayer,
+  isPotmVotingOpen,
+} from '@/lib/match-pricing';
 
 function fmtEnd(scheduled: Date, durationMins: number): string {
   return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000));
