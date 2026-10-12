@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2, ShieldAlert, UserCheck, XCircle } from 'lucide-react';
 import type { Match } from '@/types';
-import { isPotmVotingOpen } from '@/lib/api-adapter';
+import { isPotmVotingOpen } from '@/lib/match-pricing';
 import { useNow } from '@/hooks/useNow';
 import { formatDistance } from '@/lib/format';
 
