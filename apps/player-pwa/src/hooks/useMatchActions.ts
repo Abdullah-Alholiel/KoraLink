@@ -116,6 +116,7 @@ export function useJoinMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  const tMatch = useTranslations('gameDetails');
 
   return useMutation<unknown, FetchError, string | { matchId: string; idempotencyKey?: string }, { snapshot: DetailSnapshot; matchId: string }>({
     mutationFn: (input) => {
@@ -160,7 +161,7 @@ export function useJoinMatch() {
       // the ledger changed, so wallet caches must refetch.
       queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
       queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
-      showToast('Successfully joined the match! 🎉', 'success');
+      showToast(tMatch('joinedToast'), 'success');
     },
   });
 }
@@ -211,6 +212,7 @@ export function useLeaveMatch() {
   // Slice 4: outcome-specific toasts (the API states the exact refund rule
   // that applied to THIS leave — refunded / backfilled_refunded / forfeited).
   const tRefund = useTranslations('refund');
+  const tMatch = useTranslations('gameDetails');
 
   return useMutation<
     { your_leave_refund?: 'refunded' | 'backfilled_refunded' | 'forfeited' | null } & Record<string, unknown>,
@@ -259,7 +261,7 @@ export function useLeaveMatch() {
           showToast(tRefund('leftForfeited'), 'error');
           break;
         default:
-          showToast('You left the match.', 'info');
+          showToast(tMatch('leftToast'), 'info');
       }
     },
   });
@@ -271,6 +273,7 @@ export function useCancelMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  const tMatch = useTranslations('gameDetails');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -279,7 +282,7 @@ export function useCancelMatch() {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('Match cancelled. Players will be notified.', 'info');
+      showToast(tMatch('cancelledToast'), 'info');
       trackEvent('match_cancelled', { match_id: matchId });
     },
     onError: (error) => {
@@ -294,6 +297,7 @@ export function useStartMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  const tMatch = useTranslations('gameDetails');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -302,7 +306,7 @@ export function useStartMatch() {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
-      showToast('Match started! ⚽', 'success');
+      showToast(tMatch('startedToast'), 'success');
     },
     onError: (error) => {
       showToast(t('startFailed'), 'error', { detail: kindDetail(t, error) });
@@ -316,6 +320,7 @@ export function useCompleteMatch() {
   const queryClient = useQueryClient();
   const showToast = useToast();
   const t = useTranslations('errors');
+  const tMatch = useTranslations('gameDetails');
 
   return useMutation<unknown, FetchError, string>({
     mutationFn: (matchId) =>
@@ -325,7 +330,7 @@ export function useCompleteMatch() {
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
-      showToast('Match completed! Vote for Player of the Match.', 'success');
+      showToast(tMatch('completedToast'), 'success');
     },
     onError: (error) => {
       showToast(t('completeFailed'), 'error', { detail: kindDetail(t, error) });
