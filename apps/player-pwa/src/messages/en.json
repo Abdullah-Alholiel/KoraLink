@@ -342,6 +342,11 @@
     "stay": "Stay"
   },
   "gameDetails": {
+    "joinedToast": "Successfully joined the match! 🎉",
+    "leftToast": "You left the match.",
+    "cancelledToast": "Match cancelled. Players will be notified.",
+    "startedToast": "Match started! ⚽",
+    "completedToast": "Match completed! Vote for Player of the Match.",
     "date": "Date",
     "time": "Time",
     "price": "Price",
