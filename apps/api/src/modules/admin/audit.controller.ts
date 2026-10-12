@@ -4,6 +4,7 @@ import { SQL, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { ListAuditDto } from './dto/list-audit.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -22,7 +23,7 @@ export class AdminAuditController {
     if (dto.entityType) conds.push(sql`a.entity_type = ${dto.entityType}`);
     // Escape LIKE wildcards so a literal search term (e.g. "50%") matches itself.
     if (dto.action) {
-      const pattern = '%' + dto.action.replace(/[\\%_]/g, (m) => '\\' + m) + '%';
+      const pattern = '%' + escapeLikePattern(dto.action) + '%';
       conds.push(sql`a.action ILIKE ${pattern} ESCAPE '\\'`);
     }
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
