@@ -1,14 +1,16 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 125,
-  "last_run_at": "2026-10-11T16:2xZ",
+  "last_run": 126,
+  "last_run_at": "2026-10-12T15:18Z",
   "last_run_commits": [
-    "54207bb"
+    "f278415",
+    "e2e0a74"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-12T10-17Z-run125.md",
+  "last_run_report": "kanban/RUNS/2026-10-12T15-18Z-run126.md",
   "in_review_items": [
-    "P2-182 audit.controller escapeLikePattern dedup + fire-tested tripwire (PR #118 squash 54207bb): verify dist serving the helper call (grep escapeLikePattern apps/api/dist/src/modules/admin/audit.controller.js), tripwire spec green, no inline [\\\\%_] class outside apps/api/src/common/utils/"
+    "P2-181 success-toast i18n (zeroshot lane 01a130c3, PR #120 squash e2e0a74): verify 5 gameDetails.*Toast keys exist in BOTH en.json+ar.json, useMatchActions.ts has zero non-i18n showToast literals, and a toast renders Arabic on /ar (spot-check build chunk grep joinedToast).",
+    "P2-140 status predicates on start/complete/cancel (PR #119 squash f278415): verify matches.service.ts:~2895/~2974/~3104 carry eq/inArray status predicates + returning guards, and join-leave-lock spec still green (jest --testPathPattern join-leave-lock)."
   ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
