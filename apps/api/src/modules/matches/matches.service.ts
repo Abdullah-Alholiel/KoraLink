@@ -2890,10 +2890,23 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const started = await tx
         .update(matches)
         .set(withTimestamp({ status: 'InProgress' }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): status predicate in the UPDATE
+        // itself. The FOR UPDATE + in-tx check above is the primary guard;
+        // this makes the statement safe even if the check is ever refactored
+        // away (race between check and write can never corrupt state).
+        .where(
+          and(eq(matches.id, matchId), eq(matches.status, 'Full')),
+        )
+        .returning({ id: matches.id });
+
+      if (started.length === 0) {
+        throw new ConflictException(
+          'Match is no longer in a startable state (expected Full).',
+        );
+      }
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
@@ -2958,10 +2971,22 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const completed = await tx
         .update(matches)
         .set(withTimestamp({ status: 'Completed', completed_at: new Date() }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): predicate + conflict guard, same
+        // pattern as startMatch — the race loser throws before any side effect
+        // (waitlist clear, payout flip) is applied.
+        .where(
+          and(eq(matches.id, matchId), eq(matches.status, 'InProgress')),
+        )
+        .returning({ id: matches.id });
+
+      if (completed.length === 0) {
+        throw new ConflictException(
+          'Match is no longer completable (expected InProgress).',
+        );
+      }
 
       // P1-17: a completed match can never seat its queue — clear it and
       // remember who was waiting for the post-commit notification.
@@ -3076,10 +3101,26 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const cancelled = await tx
         .update(matches)
         .set(withTimestamp({ status: 'Cancelled' }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): predicate + conflict guard, same
+        // pattern as start/complete — a cancel losing a concurrent transition
+        // throws before any side effect (waitlist clear, refund sweep, payout
+        // flip) is applied.
+        .where(
+          and(
+            eq(matches.id, matchId),
+            inArray(matches.status, ['Open', 'Full', 'InProgress']),
+          ),
+        )
+        .returning({ id: matches.id });
+
+      if (cancelled.length === 0) {
+        throw new ConflictException(
+          'Match is no longer cancellable (expected Open, Full, or InProgress).',
+        );
+      }
 
       // P1-17: a cancelled match can never seat its queue — clear it and
       // notify the waiters after commit.

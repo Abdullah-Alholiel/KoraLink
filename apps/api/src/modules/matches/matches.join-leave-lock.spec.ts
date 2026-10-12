@@ -71,7 +71,20 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
           return chainFor([], table);
         },
       }),
-      update: () => ({ set: () => ({ where: () => thenable() }) }),
+      update: () => ({
+        set: () => ({
+          where: () => {
+            // Await directly (payout flips do) → resolves like before;
+            // .returning() (start/complete/cancel P2-140 guard) → row array.
+            const q: any = {
+              then: (r: (v: unknown) => void) => r([]),
+              returning: () =>
+                ({ then: (r: (v: unknown) => void) => r([{ id: 'match-1' }]) }) as any,
+            };
+            return q;
+          },
+        }),
+      }),
       delete: () => ({ where: () => thenable() }),
       // Slice 2 (player-host-responsibility): joinMatch inserts the roster
       // row with .returning({ id }) — stub the episode id the DB would mint.
