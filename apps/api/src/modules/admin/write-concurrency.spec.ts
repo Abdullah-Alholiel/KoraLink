@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminDisputesService } from './disputes.service';
 import { AdminMatchesService } from './matches.service';
 import { AdminVenuesService } from './venues.service';
@@ -375,6 +376,23 @@ describe('Admin edit-path race guards (P2-191)', () => {
     return chain;
   }
 
+  const dialect = new PgDialect();
+
+  /** Render the drizzle where-expression to SQL text and require the `status`
+   * column to appear (PR-Agent run #129 MINOR: without this, reverting the fix
+   * to a bare `.where(eq(id))` would still pass every mocked 409 test. SQL
+   * rendering is used instead of node-walking because drizzle column objects
+   * carry a `.table` back-reference whose column bag includes `status`, which
+   * makes any structural walk vacuously true.) */
+  function renderedWhereHasStatusPredicate(node: unknown): boolean {
+    try {
+      const { sql } = dialect.sqlToQuery(node as never);
+      return /"disputes"\."status"|"reports"\."status"|(?<![a-z_])status(?![a-z_])/.test(sql);
+    } catch {
+      return false;
+    }
+  }
+
   function makeDisputesService(opts: { updateRows: unknown[]; findOne?: jest.Mock }) {
     const update = jest.fn(() => predicatedUpdateChain(opts.updateRows));
     const db = { update };
@@ -397,6 +415,9 @@ describe('Admin edit-path race guards (P2-191)', () => {
     const { svc, db, audit } = makeDisputesService({ updateRows: [{ id: 'd1' }] });
     const after = await svc.update('d1', { decision: 'upheld' } as never, 'admin-1');
     expect(db.update).toHaveBeenCalledTimes(1);
+    // The write must actually carry the status predicate (anti-regression).
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    expect(renderedWhereHasStatusPredicate(chain._capturedWhere())).toBe(true);
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'dispute.update', entityId: 'd1' }),
     );
@@ -463,6 +484,9 @@ describe('Admin edit-path race guards (P2-191)', () => {
 
     await svc.update('r1', { resolution: 'warned' } as never, 'admin-1');
     expect(db.update).toHaveBeenCalledTimes(1);
+    // The write must actually carry the status predicate (anti-regression).
+    const chain = (update as jest.Mock).mock.results[0].value;
+    expect(renderedWhereHasStatusPredicate(chain._capturedWhere())).toBe(true);
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'report.update', entityId: 'r1' }),
     );
