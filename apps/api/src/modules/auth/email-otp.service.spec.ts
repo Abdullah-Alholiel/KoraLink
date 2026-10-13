@@ -12,6 +12,8 @@ describe('EmailOtpService', () => {
   } = {}) {
     const otpStore = {
       isCooldownActive: jest.fn().mockResolvedValue(false),
+      // P2-194: the send gate reads remaining seconds; default = no cooldown.
+      getCooldownRemaining: jest.fn().mockResolvedValue(0),
       getDailyCount: jest.fn().mockResolvedValue(0),
       getIpDailyCount: jest.fn().mockResolvedValue(0),
       incrementIpDaily: jest.fn().mockResolvedValue(1),
@@ -102,8 +104,7 @@ describe('EmailOtpService', () => {
   it('send blocked by cooldown (429)', async () => {
     const { service, emailSender } = setup({
       otpStore: {
-        isCooldownActive: jest.fn().mockResolvedValue(true),
-        // P2-194: the 429 body carries the server's remaining cooldown seconds.
+        // P2-194: the gate reads getCooldownRemaining (single cache read).
         getCooldownRemaining: jest.fn().mockResolvedValue(41),
       },
     });

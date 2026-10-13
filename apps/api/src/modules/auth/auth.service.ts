@@ -58,15 +58,20 @@ export class AuthService {
 
   async sendOtp(phone: string, ip?: string): Promise<void> {
     // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
-    if (await this.otpStore.isCooldownActive(phone)) {
-      const retryAfter = await this.otpStore.getCooldownRemaining(phone);
-      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${retryAfter}s)`);
+    // P2-194: one cache read gates AND sizes the 429 — if the key's TTL
+    // expires between a guard read and a second read, the old two-read shape
+    // threw 429 with retryAfter: 0 (PR-Agent r2 MINOR). remaining > 0 ⟺ the
+    // cooldown genuinely holds; an expired deadline falls through and the
+    // send proceeds.
+    const cooldownRemaining = await this.otpStore.getCooldownRemaining(phone);
+    if (cooldownRemaining > 0) {
+      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
-          retryAfter,
+          retryAfter: cooldownRemaining,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );

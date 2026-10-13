@@ -17,7 +17,7 @@ describe('AuthService OTP abuse protection', () => {
         overrides.isCooldownActive ?? jest.fn().mockResolvedValue(false),
       // P2-194: cooldown 429s carry retryAfter seconds
       getCooldownRemaining:
-        overrides.getCooldownRemaining ?? jest.fn().mockResolvedValue(42),
+        overrides.getCooldownRemaining ?? jest.fn().mockResolvedValue(0),
       getDailyCount: overrides.getDailyCount ?? jest.fn().mockResolvedValue(0),
       setOtp: jest.fn().mockResolvedValue(undefined),
       setCooldown: jest.fn().mockResolvedValue(undefined),
@@ -68,7 +68,9 @@ describe('AuthService OTP abuse protection', () => {
 
   it('sendOtp throws 429 when resend cooldown is active', async () => {
     const { service, unifonic } = setup({
-      isCooldownActive: jest.fn().mockResolvedValue(true),
+      // P2-194: the gate reads getCooldownRemaining — isCooldownActive is no
+      // longer consulted on this path.
+      getCooldownRemaining: jest.fn().mockResolvedValue(60),
     });
     const err = await service.sendOtp('+966500000001').catch((e) => e);
     expect(err).toBeInstanceOf(HttpException);
@@ -80,7 +82,6 @@ describe('AuthService OTP abuse protection', () => {
   // can show an honest "try again in Ns" countdown instead of a blind retry.
   it('sendOtp cooldown 429 body carries retryAfter seconds (P2-194)', async () => {
     const { service } = setup({
-      isCooldownActive: jest.fn().mockResolvedValue(true),
       getCooldownRemaining: jest.fn().mockResolvedValue(37),
     });
     const err = await service.sendOtp('+966500000001').catch((e) => e);
