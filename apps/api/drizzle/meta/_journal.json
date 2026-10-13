@@ -358,6 +358,13 @@
       "when": 1791511109287,
       "tag": "0049_dispute_sla",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1791598051701,
+      "tag": "0050_disputes_sla_queue_idx",
+      "breakpoints": true
     }
   ]
 }
