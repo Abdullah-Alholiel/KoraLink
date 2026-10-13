@@ -68,7 +68,8 @@ export default function ConversationPage({
   const storeUser = useAppStore(selectUser);
 
   const { conversations } = useConversations();
-  const { messages, isLoading, error, sendMessage, retryMessage } = useConversationMessages(id);
+  const { messages, isLoading, error, sendMessage, retryMessage, refetch } =
+    useConversationMessages(id);
   const isOnline = useOnlineStatus();
 
   const [draft, setDraft] = useState('');
@@ -184,6 +185,12 @@ export default function ConversationPage({
           {error && (
             <div className="text-center py-8">
               <p className="text-xs text-gray-400">{t(errorKey(classifyError(error)))}</p>
+              <button
+                onClick={() => refetch()}
+                className="mt-4 bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+              >
+                {t('common.retry')}
+              </button>
             </div>
           )}
 

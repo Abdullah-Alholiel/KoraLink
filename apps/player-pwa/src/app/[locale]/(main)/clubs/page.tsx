@@ -509,7 +509,21 @@ function ClubsContent() {
                                             cafe: '☕',
                                             water_cooler: '💧',
                                             gym: '🏋️',
+                                            indoor: '🏠',
+                                            wifi: '📶',
+                                            prayer_room: '🕌',
                                         };
+                                        // Localized amenity chips (P2-187, run #128):
+                                        // known code → icon + localized label; unknown → generic
+                                        // localized label (same fallback as the detail page).
+                                        // Key set derives from AMENITY_ICONS — one list, no drift.
+                                        const AMENITY_LABEL_KEYS = new Set(Object.keys(AMENITY_ICONS));
+                                        const amenityLabel = (code: string): string =>
+                                            AMENITY_LABEL_KEYS.has(code)
+                                                ? t(`clubs.amenity.${code}`)
+                                                : t('clubs.amenity.unknown');
+                                        const amenityIcon = (code: string): string =>
+                                            AMENITY_ICONS[code] || '✓';
                                         const shown = amenities.slice(0, 3);
                                         const overflow = amenities.length - 3;
                                         return (
@@ -519,7 +533,7 @@ function ClubsContent() {
                                                         key={code}
                                                         className="text-[9px] px-1.5 py-px rounded-full bg-gray-100 text-gray-500 font-medium"
                                                     >
-                                                        {AMENITY_ICONS[code] || code}
+                                                        {amenityIcon(code)} {amenityLabel(code)}
                                                     </span>
                                                 ))}
                                                 {overflow > 0 && (
