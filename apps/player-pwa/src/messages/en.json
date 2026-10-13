@@ -792,6 +792,8 @@
       "prayer_room": "Prayer room",
       "cafe": "Cafe",
       "floodlights": "Floodlights",
+      "indoor": "Indoor",
+      "wifi": "Wi-Fi",
       "unknown": "Amenity"
     },
     "availablePitches": "Pitches",

@@ -792,6 +792,8 @@
       "prayer_room": "مصلى",
       "cafe": "مقهى",
       "floodlights": "إضاءة كاشفات",
+      "indoor": "داخلي",
+      "wifi": "واي فاي",
       "unknown": "مرفق"
     },
     "availablePitches": "الملاعب",

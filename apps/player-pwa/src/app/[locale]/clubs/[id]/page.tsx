@@ -77,7 +77,27 @@ const AMENITY_ICONS: Record<string, string> = {
   gym: '🏋️',
   indoor: '🏠',
   wifi: '📶',
+  prayer_room: '🕌',
 };
+
+// Localized amenity label with graceful fallback for unknown future codes
+// (P2-187, run #128): t(`clubs.amenity.<code>`) when the code has a key,
+// generic `clubs.amenity.unknown` otherwise (never blank, never raw code).
+const AMENITY_LABEL_KEYS = new Set([
+  'parking',
+  'changing_rooms',
+  'floodlights',
+  'cafe',
+  'water_cooler',
+  'gym',
+  'indoor',
+  'wifi',
+  'prayer_room',
+]);
+function amenityLabel(code: string, t: (key: string) => string): string {
+  if (AMENITY_LABEL_KEYS.has(code)) return t(`clubs.amenity.${code}`);
+  return t('clubs.amenity.unknown');
+}
 
 export default function ClubPage() {
   const params = useParams<{ id: string }>();
@@ -388,7 +408,7 @@ export default function ClubPage() {
                                 key={code}
                                 className="text-[10px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-medium"
                               >
-                                {AMENITY_ICONS[code] || '✓'} {code.replace(/_/g, ' ')}
+                                {AMENITY_ICONS[code] || '✓'} {amenityLabel(code, t)}
                               </span>
                             ))}
                           </div>
