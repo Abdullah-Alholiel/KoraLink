@@ -15,7 +15,9 @@ export class FetchError extends Error {
     public readonly status: number,
     public readonly url: string,
     /** Stable machine code from the API body (`{ message, code }`), if sent. */
-    public readonly code?: string
+    public readonly code?: string,
+    /** Seconds the client should wait before retrying (P2-194, 429 cooldown paths). */
+    public readonly retryAfter?: number
   ) {
     super(message);
     this.name = 'FetchError';
@@ -121,6 +123,7 @@ export async function fetcher<T>(
     // status text when the body isn't JSON or has no message.
     let apiMessage = '';
     let apiCode: string | undefined;
+    let retryAfter: number | undefined;
     try {
       const body = await response.clone().json().catch(() => null);
       apiMessage =
@@ -129,6 +132,18 @@ export async function fetcher<T>(
       if (Array.isArray(body?.message)) apiMessage = body.message[0] ?? '';
       // P1-47: stable machine code (e.g. ACCOUNT_BANNED) for classification.
       if (body && typeof body.code === 'string') apiCode = body.code;
+      // P2-194: cooldown 429s carry retryAfter (seconds) — hoist to the error
+      // so rate-limit UIs can show an honest countdown instead of a guess.
+      const rawRetry = body?.retryAfter;
+      if (typeof rawRetry === 'number' && Number.isFinite(rawRetry) && rawRetry > 0) {
+        retryAfter = Math.ceil(rawRetry);
+      } else if (
+        typeof rawRetry === 'string' &&
+        Number.isFinite(Number(rawRetry)) &&
+        Number(rawRetry) > 0
+      ) {
+        retryAfter = Math.ceil(Number(rawRetry));
+      }
     } catch {
       apiMessage = '';
     }
@@ -183,7 +198,8 @@ export async function fetcher<T>(
       apiMessage || `Request failed with status ${response.status}`,
       response.status,
       url.toString(),
-      apiCode
+      apiCode,
+      retryAfter
     );
   }
 

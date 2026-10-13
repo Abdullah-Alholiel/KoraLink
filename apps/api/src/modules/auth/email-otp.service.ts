@@ -58,13 +58,16 @@ export class EmailOtpService {
     const key = OTP_KEY(email);
 
     // ── Abuse protection — identical thresholds to the phone flow ──
-    if (await this.otpStore.isCooldownActive(key)) {
-      this.logger.warn(`email send-otp blocked (cooldown) for ${email}`);
+    // P2-194: single-read gate (see auth.service sendOtp comment).
+    const cooldownRemaining = await this.otpStore.getCooldownRemaining(key);
+    if (cooldownRemaining > 0) {
+      this.logger.warn(`email send-otp blocked (cooldown) for ${email} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter: cooldownRemaining,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );

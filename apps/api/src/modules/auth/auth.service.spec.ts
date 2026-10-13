@@ -5,6 +5,7 @@ import { OtpStoreService } from './otp-store.service';
 describe('AuthService OTP abuse protection', () => {
   function setup(overrides: {
     isCooldownActive?: jest.Mock;
+    getCooldownRemaining?: jest.Mock;
     getDailyCount?: jest.Mock;
     getIpDailyCount?: jest.Mock;
     incrementIpDaily?: jest.Mock;
@@ -14,6 +15,9 @@ describe('AuthService OTP abuse protection', () => {
     const otpStore = {
       isCooldownActive:
         overrides.isCooldownActive ?? jest.fn().mockResolvedValue(false),
+      // P2-194: cooldown 429s carry retryAfter seconds
+      getCooldownRemaining:
+        overrides.getCooldownRemaining ?? jest.fn().mockResolvedValue(0),
       getDailyCount: overrides.getDailyCount ?? jest.fn().mockResolvedValue(0),
       setOtp: jest.fn().mockResolvedValue(undefined),
       setCooldown: jest.fn().mockResolvedValue(undefined),
@@ -64,12 +68,25 @@ describe('AuthService OTP abuse protection', () => {
 
   it('sendOtp throws 429 when resend cooldown is active', async () => {
     const { service, unifonic } = setup({
-      isCooldownActive: jest.fn().mockResolvedValue(true),
+      // P2-194: the gate reads getCooldownRemaining — isCooldownActive is no
+      // longer consulted on this path.
+      getCooldownRemaining: jest.fn().mockResolvedValue(60),
     });
     const err = await service.sendOtp('+966500000001').catch((e) => e);
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
     expect(unifonic.sendSms).not.toHaveBeenCalled();
+  });
+
+  // P2-194 (run #129): the cooldown 429 carries retryAfter seconds so the PWA
+  // can show an honest "try again in Ns" countdown instead of a blind retry.
+  it('sendOtp cooldown 429 body carries retryAfter seconds (P2-194)', async () => {
+    const { service } = setup({
+      getCooldownRemaining: jest.fn().mockResolvedValue(37),
+    });
+    const err = await service.sendOtp('+966500000001').catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getResponse()).toMatchObject({ retryAfter: 37 });
   });
 
   it('sendOtp throws 429 when daily cap is reached', async () => {
