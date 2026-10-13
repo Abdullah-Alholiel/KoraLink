@@ -1,15 +1,15 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 127,
+  "last_run": 128,
   "last_run_at": "2026-10-12T15:18Z",
   "last_run_commits": [
-    "f9937fb"
+    "d016108"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-13T01-17Z-run127.md",
+  "last_run_report": "kanban/RUNS/2026-10-13T10-15Z-run128.md",
   "in_review_items": [
-    "P2-179 disputes SLA queue index (PR #121 squash f9937fb): verify 0050 in pg_indexes live + journal idx51 + EXPLAIN index-scan availability + doc file exists with sorted Rule-3 list.",
-    "P2-184 CORS http funnel (PR #121 squash f9937fb): verify PLAYER_URL in apps/api/.env carries the http variant + live ACAO probe on http origin (restart persists)."
+    "P2-187 amenity labels EN+AR (PR #122 squash d016108): verify clubs.amenity.* keys (10) in en.json+ar.json, amenityLabel() on both club surfaces, prayer_room icon, key set derived from Object.keys(AMENITY_ICONS).",
+    "P2-188 DM error retry (PR #122 squash d016108): verify Retry button in messages/[id] error block wired to refetch + common.retry key."
   ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
