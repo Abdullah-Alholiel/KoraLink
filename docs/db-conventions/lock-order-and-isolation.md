@@ -38,14 +38,16 @@ admin disputes :321/:436, admin reports :208, admin matches :192.
 
 ## Rule 3 — Multi-resource acquisition = SORTED lock order, always
 
-Acquire multiple locks in one deterministic global order. Today's convention is
-**lexicographic by table name, then by id inside a table**:
+Acquire multiple locks in one deterministic global order: **lexicographic by table name,
+then by primary-key id inside the same table**. Canonical order:
 
-- `rescheduleMatch` locks both pitch_slots `ORDER BY id` (P1-13) — the in-tree reference.
-- If a future path must lock `matches` + `pitch_slots` in one tx, take the slot lock
-  FIRST (pitch_slots < ... alphabetically slot tables vs matches: lock in this order —
-  `match_players` → `matches` → `pitch_slots` → `users` → `venue_favorites` → …
-  alphabetical), then matches. Never acquire in two different orders anywhere.
+`match_players` → `matches` → `pitch_slots` → `users` → `venue_favorites` → … (ASCII order
+of the table names — `match_players` < `matches` because `_` < `e`).
+
+- `rescheduleMatch` locks both target slots `ORDER BY id` (P1-13) — same-table ordering is
+  by id, which IS this rule applied within `pitch_slots`.
+- If a future path must lock `matches` + `pitch_slots` in one tx, take the `matches` lock
+  FIRST, then the slots. Never acquire in two different orders anywhere in the codebase.
 
 ## Rule 4 — `creditWalletTx` / `debitWalletTx` caller contract
 
