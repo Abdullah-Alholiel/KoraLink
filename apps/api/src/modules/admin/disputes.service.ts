@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -358,6 +359,13 @@ export class AdminDisputesService {
   /**
    * Edit a dispute's decision/internal note in ANY status — including after
    * closure (post-decision corrections are the point). Null clears the text.
+   *
+   * The write carries a status predicate (P2-191, Reviewer A run #129): the
+   * UPDATE only fires while the row is still in the status `findOne` saw, so a
+   * concurrent resolve()/reopen() cannot be silently clobbered between the
+   * read and the write — the race loser gets a clean 409 and the audit
+   * before/after pair stays truthful. Single guarded statement = atomic under
+   * READ COMMITTED (docs/db-conventions/lock-order-and-isolation.md Rule 1).
    */
   async update(id: string, dto: UpdateDisputeDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
@@ -370,10 +378,15 @@ export class AdminDisputesService {
     if (dto.decision !== undefined) updates.decision = dto.decision ?? null;
     if (dto.internalNote !== undefined) updates.internal_note = dto.internalNote ?? null;
 
-    await this.db
+    const updated = await this.db
       .update(disputes)
       .set(withTimestamp(updates) as never)
-      .where(eq(disputes.id, id));
+      .where(and(eq(disputes.id, id), eq(disputes.status, before.status)))
+      .returning({ id: disputes.id });
+
+    if (updated.length === 0) {
+      throw new ConflictException('Dispute was concurrently updated — re-check its status.');
+    }
 
     const after = await this.findOne(id);
     await this.auditSafe(adminId, 'dispute.update', id, before, after, ip);

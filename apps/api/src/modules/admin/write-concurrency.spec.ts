@@ -1,4 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { AdminDisputesService } from './disputes.service';
 import { AdminMatchesService } from './matches.service';
 import { AdminVenuesService } from './venues.service';
 import { AdminReportsService } from './reports.service';
@@ -346,5 +348,147 @@ describe('Admin write-path concurrency (P2-141)', () => {
     expect(db.transaction).not.toHaveBeenCalled();
     expect(tx.update).toHaveBeenCalled();
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.update' }), tx);
+  });
+});
+
+// ── P2-191 (Reviewer A, run #129): status-predicated edit guards ────────────
+//
+// disputes.update() and reports.update() used to write decision/note/resolution
+// with WHERE id only, outside any tx. A concurrent resolve()/reopen() between
+// the findOne read and the write was silently clobbered (and the audit
+// before/after pair mis-recorded it). The fix: the UPDATE itself carries
+// `AND status = <status findOne saw>` + `.returning({id})`; zero rows → 409.
+// ANY-status editing stays allowed — the guard is on concurrency, not on
+// which statuses may be edited.
+
+describe('Admin edit-path race guards (P2-191)', () => {
+  function predicatedUpdateChain(returningRows: unknown[]) {
+    let capturedWhere: unknown;
+    const chain: any = {
+      set: () => chain,
+      where: (w: unknown) => {
+        capturedWhere = w;
+        return chain;
+      },
+      returning: () => returningRows,
+      _capturedWhere: () => capturedWhere,
+    };
+    return chain;
+  }
+
+  const dialect = new PgDialect();
+
+  /** Render the drizzle where-expression to SQL text and require the `status`
+   * column to appear (PR-Agent run #129 MINOR: without this, reverting the fix
+   * to a bare `.where(eq(id))` would still pass every mocked 409 test. SQL
+   * rendering is used instead of node-walking because drizzle column objects
+   * carry a `.table` back-reference whose column bag includes `status`, which
+   * makes any structural walk vacuously true.) */
+  function renderedWhereHasStatusPredicate(node: unknown): boolean {
+    try {
+      const { sql } = dialect.sqlToQuery(node as never);
+      return /"disputes"\."status"|"reports"\."status"|(?<![a-z_])status(?![a-z_])/.test(sql);
+    } catch {
+      return false;
+    }
+  }
+
+  function makeDisputesService(opts: { updateRows: unknown[]; findOne?: jest.Mock }) {
+    const update = jest.fn(() => predicatedUpdateChain(opts.updateRows));
+    const db = { update };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const activities = { record: jest.fn(async () => {}) };
+    const svc = new AdminDisputesService(
+      db as never,
+      audit as never,
+      realtime as never,
+      activities as never,
+    );
+    jest
+      .spyOn(svc as never, 'findOne')
+      .mockResolvedValue({ id: 'd1', status: 'under_review' } as never);
+    return { svc, db, audit, realtime };
+  }
+
+  it('disputes.update: fires the guarded UPDATE and returns the fresh aggregate on success', async () => {
+    const { svc, db, audit } = makeDisputesService({ updateRows: [{ id: 'd1' }] });
+    const after = await svc.update('d1', { decision: 'upheld' } as never, 'admin-1');
+    expect(db.update).toHaveBeenCalledTimes(1);
+    // The write must actually carry the status predicate (anti-regression).
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    expect(renderedWhereHasStatusPredicate(chain._capturedWhere())).toBe(true);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'dispute.update', entityId: 'd1' }),
+    );
+    expect(after).toMatchObject({ id: 'd1', status: 'under_review' });
+  });
+
+  it('disputes.update: status drift between read and write → 409, no audit write', async () => {
+    const { svc, audit } = makeDisputesService({ updateRows: [] });
+    await expect(
+      svc.update('d1', { internalNote: 'note' } as never, 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('disputes.update: still rejects a no-op payload before any write', async () => {
+    const { svc, db } = makeDisputesService({ updateRows: [{ id: 'd1' }] });
+    await expect(
+      svc.update('d1', {} as never, 'admin-1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('reports.update: zero rows on status-predicated UPDATE → 409 before audit', async () => {
+    // Reuse the reports harness: update() path does NOT use tx — patch db.update directly.
+    const update = jest.fn(() => predicatedUpdateChain([]));
+    const db = { update, transaction: jest.fn() };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const svc = new AdminReportsService(
+      db as never,
+      audit as never,
+      realtime as never,
+      { update: jest.fn() } as never,
+      { record: jest.fn() } as never,
+      { sendPushToUsers: jest.fn() } as never,
+    );
+    jest
+      .spyOn(svc as never, 'findOne')
+      .mockResolvedValue({ id: 'r1', status: 'open', subject_type: 'user', subject_id: 'u1' } as never);
+
+    await expect(
+      svc.update('r1', { resolution: 'x' } as never, 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(audit.log).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled(); // single-statement guard, no tx
+  });
+
+  it('reports.update: fires the guarded UPDATE and audits on success', async () => {
+    const update = jest.fn(() => predicatedUpdateChain([{ id: 'r1' }]));
+    const db = { update, transaction: jest.fn() };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const svc = new AdminReportsService(
+      db as never,
+      audit as never,
+      realtime as never,
+      { update: jest.fn() } as never,
+      { record: jest.fn() } as never,
+      { sendPushToUsers: jest.fn() } as never,
+    );
+    jest
+      .spyOn(svc as never, 'findOne')
+      .mockResolvedValue({ id: 'r1', status: 'open', subject_type: 'user', subject_id: 'u1' } as never);
+
+    await svc.update('r1', { resolution: 'warned' } as never, 'admin-1');
+    expect(db.update).toHaveBeenCalledTimes(1);
+    // The write must actually carry the status predicate (anti-regression).
+    const chain = (update as jest.Mock).mock.results[0].value;
+    expect(renderedWhereHasStatusPredicate(chain._capturedWhere())).toBe(true);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'report.update', entityId: 'r1' }),
+    );
   });
 });
