@@ -784,6 +784,16 @@
     "hours": "Hours",
     "perHour": "hour",
     "amenities": "Amenities",
+    "amenity": {
+      "changing_rooms": "Changing rooms",
+      "parking": "Parking",
+      "water_cooler": "Water cooler",
+      "gym": "Gym",
+      "prayer_room": "Prayer room",
+      "cafe": "Cafe",
+      "floodlights": "Floodlights",
+      "unknown": "Amenity"
+    },
     "availablePitches": "Pitches",
     "venues": "venues",
     "venue": "Venue",

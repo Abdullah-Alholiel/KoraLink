@@ -784,6 +784,16 @@
     "hours": "ساعات العمل",
     "perHour": "الساعة",
     "amenities": "المرافق",
+    "amenity": {
+      "changing_rooms": "غرف الملابس",
+      "parking": "مواقف سيارات",
+      "water_cooler": "مبرد مياه",
+      "gym": "صالة رياضية",
+      "prayer_room": "مصلى",
+      "cafe": "مقهى",
+      "floodlights": "إضاءة كاشفات",
+      "unknown": "مرفق"
+    },
     "availablePitches": "الملاعب",
     "venues": "نادي",
     "venue": "النادي",
