@@ -267,6 +267,17 @@ function VerifyContent() {
         // localized moderation copy instead of a generic "send failed".
         const onSendError = (err: unknown) => {
             const kind = classifyError(err);
+            // P2-194: the cooldown 429 carries retryAfter (server truth).
+            // Self-heal the countdown (multi-device sends drift past the
+            // client's local 60s guess) and show a retry-in copy instead of
+            // a generic failure — the button re-enables exactly when the
+            // server will accept the send again.
+            const retryAfter = (err as { retryAfter?: number })?.retryAfter;
+            if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
+                setResendCountdown(Math.min(retryAfter, RESEND_COOLDOWN));
+                setError(tErrors('rateLimitedRetryIn', { seconds: retryAfter }));
+                return;
+            }
             setError(
                 kind === 'rateLimited'
                     ? tErrors('rateLimited')

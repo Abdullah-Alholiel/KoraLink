@@ -57,6 +57,27 @@ describe('OtpStoreService', () => {
     jest.useRealTimers();
   });
 
+  // P2-194 (run #129): getCooldownRemaining powers the retryAfter contract.
+  it('getCooldownRemaining: 0 when idle, honest remaining when armed, capped at 60', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(0);
+    await otp.setCooldown('+966500000001');
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(60);
+    jest.setSystemTime(new Date('2026-01-01T00:00:23Z'));
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(37);
+    // expiry: TTL removes the key → 0 again
+    jest.setSystemTime(new Date('2026-01-01T00:01:02Z'));
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(0);
+    jest.useRealTimers();
+  });
+
+  it('getCooldownRemaining: legacy string entries report the full cooldown', async () => {
+    // Pre-P2-194 runs stored '1' as the cooldown value (no deadline).
+    await cache.set('otp:cooldown:+966500000001', '1', 60_000);
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(60);
+  });
+
   it('increments the daily counter', async () => {
     await expect(otp.getDailyCount('+966500000001')).resolves.toBe(0);
     await expect(otp.incrementDaily('+966500000001')).resolves.toBe(1);

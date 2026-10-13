@@ -575,11 +575,13 @@ export class UsersService {
     // ── Shared abuse caps (identical semantics to auth sendOtp) ──
     const otp = this.otp();
     if (await otp.isCooldownActive(newPhone)) {
+      const retryAfter = await otp.getCooldownRemaining(newPhone);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );

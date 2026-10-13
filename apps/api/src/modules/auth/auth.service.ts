@@ -59,12 +59,14 @@ export class AuthService {
   async sendOtp(phone: string, ip?: string): Promise<void> {
     // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
     if (await this.otpStore.isCooldownActive(phone)) {
-      this.logger.warn(`send-otp blocked (cooldown) for ${phone}`);
+      const retryAfter = await this.otpStore.getCooldownRemaining(phone);
+      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${retryAfter}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );

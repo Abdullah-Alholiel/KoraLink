@@ -59,12 +59,14 @@ export class EmailOtpService {
 
     // ── Abuse protection — identical thresholds to the phone flow ──
     if (await this.otpStore.isCooldownActive(key)) {
-      this.logger.warn(`email send-otp blocked (cooldown) for ${email}`);
+      const retryAfter = await this.otpStore.getCooldownRemaining(key);
+      this.logger.warn(`email send-otp blocked (cooldown) for ${email} (retryAfter ${retryAfter}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );

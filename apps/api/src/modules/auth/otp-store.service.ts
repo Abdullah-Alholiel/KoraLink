@@ -57,8 +57,24 @@ export class OtpStoreService {
     return !!(await this.cache.get(keys.cooldown(phone)));
   }
 
+  /**
+   * Seconds left on the resend cooldown, 0 when none is active (P2-194).
+   * The cooldown value is the absolute deadline (epoch ms) — cache TTL does
+   * the expiry, the stored deadline gives the client an honest countdown.
+   * Legacy entries (pre-P2-194 runs stored the string '1') parse to a bogus
+   * deadline; those conservatively report the full cooldown.
+   */
+  async getCooldownRemaining(phone: string): Promise<number> {
+    const raw = await this.cache.get(keys.cooldown(phone));
+    if (raw === undefined || raw === null) return 0;
+    const deadline = typeof raw === 'number' ? raw : Number(raw);
+    const remainingSec = Math.ceil((deadline - Date.now()) / 1000);
+    if (!Number.isFinite(remainingSec) || remainingSec <= 0) return OTP_COOLDOWN_MS / 1000;
+    return Math.min(remainingSec, OTP_COOLDOWN_MS / 1000);
+  }
+
   async setCooldown(phone: string): Promise<void> {
-    await this.cache.set(keys.cooldown(phone), '1', OTP_COOLDOWN_MS);
+    await this.cache.set(keys.cooldown(phone), Date.now() + OTP_COOLDOWN_MS, OTP_COOLDOWN_MS);
   }
 
   // ── Daily SMS cap ───────────────────────────────────────────────────────

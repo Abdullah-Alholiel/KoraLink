@@ -101,10 +101,17 @@ describe('EmailOtpService', () => {
 
   it('send blocked by cooldown (429)', async () => {
     const { service, emailSender } = setup({
-      otpStore: { isCooldownActive: jest.fn().mockResolvedValue(true) },
+      otpStore: {
+        isCooldownActive: jest.fn().mockResolvedValue(true),
+        // P2-194: the 429 body carries the server's remaining cooldown seconds.
+        getCooldownRemaining: jest.fn().mockResolvedValue(41),
+      },
     });
-    await expect(service.requestEmailOtp('a@b.com')).rejects.toMatchObject({
-      status: HttpStatus.TOO_MANY_REQUESTS,
+    const err = await service.requestEmailOtp('a@b.com').catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getResponse()).toMatchObject({
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      retryAfter: 41,
     });
     expect(emailSender.send).not.toHaveBeenCalled();
   });
