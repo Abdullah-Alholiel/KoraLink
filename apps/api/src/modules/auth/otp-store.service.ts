@@ -68,8 +68,15 @@ export class OtpStoreService {
     const raw = await this.cache.get(keys.cooldown(phone));
     if (raw === undefined || raw === null) return 0;
     const deadline = typeof raw === 'number' ? raw : Number(raw);
+    // Legacy marker (pre-P2-194 runs stored '1'): no deadline info exists, so
+    // report the full cooldown — the key may have been set up to 60s ago.
+    if (!Number.isFinite(deadline) || deadline < 1e12) return OTP_COOLDOWN_MS / 1000;
+    // A real deadline that already passed (clock skew between app nodes while
+    // the Redis TTL still holds the key) → report 0, not the cooldown: the
+    // deadline is the truth for when sends resume, and the window is
+    // sub-second. (PR-Agent run #129 MINOR.)
     const remainingSec = Math.ceil((deadline - Date.now()) / 1000);
-    if (!Number.isFinite(remainingSec) || remainingSec <= 0) return OTP_COOLDOWN_MS / 1000;
+    if (remainingSec <= 0) return 0;
     return Math.min(remainingSec, OTP_COOLDOWN_MS / 1000);
   }
 

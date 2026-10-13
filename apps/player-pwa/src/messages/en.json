@@ -11,7 +11,7 @@
     "conflict": "That change was just made by someone else. Refresh and try again.",
     "validation": "Some details are missing or invalid. Review them and try again.",
     "rateLimited": "Too many attempts. Wait a moment and try again.",
-    "rateLimitedRetryIn": "Too many attempts. Try again in {seconds} seconds.",
+    "rateLimitedRetryIn": "{seconds, plural, one {Too many attempts. Try again in 1 second.} other {Too many attempts. Try again in # seconds.}}",
     "server": "Our servers hit a snag — your data is safe. Try again in a moment.",
     "unknown": "That didn't work. Try again — if it keeps failing, check your connection.",
     "walletTopupFailed": "Your top-up didn't go through — no money was taken. Please try again.",

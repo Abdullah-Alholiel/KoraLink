@@ -72,10 +72,20 @@ describe('OtpStoreService', () => {
     jest.useRealTimers();
   });
 
-  it('getCooldownRemaining: legacy string entries report the full cooldown', async () => {
-    // Pre-P2-194 runs stored '1' as the cooldown value (no deadline).
+  it('getCooldownRemaining: legacy marker entries report the full cooldown', async () => {
+    // Pre-P2-194 runs stored '1' as a marker (no deadline info) — Number('1')
+    // is 1ms epoch, far below any real epoch-ms deadline, so the <1e12 guard
+    // classifies it as legacy → full cooldown.
     await cache.set('otp:cooldown:+966500000001', '1', 60_000);
     await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(60);
+  });
+
+  it('getCooldownRemaining: real expired deadline under a live key reports 0 (clock-skew case)', async () => {
+    // A genuine epoch-ms deadline that already passed while the Redis TTL
+    // still holds the key → 0 (server would accept again immediately), NOT
+    // the full-cooldown fallback. (PR-Agent run #129 MINOR.)
+    await cache.set('otp:cooldown:+966500000001', Date.now() - 5_000, 60_000);
+    await expect(otp.getCooldownRemaining('+966500000001')).resolves.toBe(0);
   });
 
   it('increments the daily counter', async () => {

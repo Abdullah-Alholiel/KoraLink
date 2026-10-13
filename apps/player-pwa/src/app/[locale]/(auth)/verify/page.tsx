@@ -274,8 +274,12 @@ function VerifyContent() {
             // server will accept the send again.
             const retryAfter = (err as { retryAfter?: number })?.retryAfter;
             if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
-                setResendCountdown(Math.min(retryAfter, RESEND_COOLDOWN));
-                setError(tErrors('rateLimitedRetryIn', { seconds: retryAfter }));
+                // One capped value drives BOTH the countdown and the copy so
+                // the text can never promise a wait longer than the disable
+                // (PR-Agent run #129 MINOR: copy/countdown mismatch).
+                const capped = Math.min(retryAfter, RESEND_COOLDOWN);
+                setResendCountdown(capped);
+                setError(tErrors('rateLimitedRetryIn', { seconds: capped }));
                 return;
             }
             setError(
