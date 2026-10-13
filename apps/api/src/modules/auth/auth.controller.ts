@@ -129,6 +129,10 @@ export class AuthController {
   // is now always signed with `expiresIn: JWT_EXPIRY` (defense in depth).
   @Post('dev-login')
   @HttpCode(HttpStatus.OK)
+  // run-3 audit (api-auth:dev-login-throttle, fixed run #129): route-level cap
+  // mirroring send-otp — the global 60/min throttle alone lets a script pump
+  // 3 token-mints/minute forever against a route that bypasses OTP entirely.
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({
     summary:
       '[DEV ONLY] Login as a seeded user by phone. Sets auth cookie directly.',

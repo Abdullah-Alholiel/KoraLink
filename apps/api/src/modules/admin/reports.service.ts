@@ -246,7 +246,14 @@ export class AdminReportsService {
     return after;
   }
 
-  /** Edit the resolution text in ANY status; null clears it. */
+  /** Edit the resolution text in ANY status; null clears it.
+   *
+   * Status-predicated guard (P2-191, Reviewer A run #129): the UPDATE only
+   * fires while the row is still in the status `findOne` saw, so a concurrent
+   * resolve()/reopen() cannot be silently clobbered between the read and the
+   * write — the race loser gets a clean 409. Single guarded statement =
+   * atomic under READ COMMITTED (docs/db-conventions Rule 1).
+   */
   async update(id: string, dto: UpdateReportDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
 
@@ -254,10 +261,15 @@ export class AdminReportsService {
       throw new BadRequestException('No changes provided.');
     }
 
-    await this.db
+    const updated = await this.db
       .update(reports)
       .set(withTimestamp({ resolution: dto.resolution ?? null }))
-      .where(eq(reports.id, id));
+      .where(and(eq(reports.id, id), eq(reports.status, before.status)))
+      .returning({ id: reports.id });
+
+    if (updated.length === 0) {
+      throw new ConflictException('Report was concurrently updated — re-check its status.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
