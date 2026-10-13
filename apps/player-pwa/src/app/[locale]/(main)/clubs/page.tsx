@@ -514,22 +514,14 @@ function ClubsContent() {
                                             prayer_room: '🕌',
                                         };
                                         // Localized amenity chips (P2-187, run #128):
-                                        // known code → icon + localized label; unknown → ✓ + raw code.
-                                        const AMENITY_LABEL_KEYS = new Set([
-                                            'parking',
-                                            'changing_rooms',
-                                            'floodlights',
-                                            'cafe',
-                                            'water_cooler',
-                                            'gym',
-                                            'indoor',
-                                            'wifi',
-                                            'prayer_room',
-                                        ]);
+                                        // known code → icon + localized label; unknown → generic
+                                        // localized label (same fallback as the detail page).
+                                        // Key set derives from AMENITY_ICONS — one list, no drift.
+                                        const AMENITY_LABEL_KEYS = new Set(Object.keys(AMENITY_ICONS));
                                         const amenityLabel = (code: string): string =>
                                             AMENITY_LABEL_KEYS.has(code)
                                                 ? t(`clubs.amenity.${code}`)
-                                                : code.replace(/_/g, ' ');
+                                                : t('clubs.amenity.unknown');
                                         const amenityIcon = (code: string): string =>
                                             AMENITY_ICONS[code] || '✓';
                                         const shown = amenities.slice(0, 3);

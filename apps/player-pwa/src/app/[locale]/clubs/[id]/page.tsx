@@ -83,17 +83,8 @@ const AMENITY_ICONS: Record<string, string> = {
 // Localized amenity label with graceful fallback for unknown future codes
 // (P2-187, run #128): t(`clubs.amenity.<code>`) when the code has a key,
 // generic `clubs.amenity.unknown` otherwise (never blank, never raw code).
-const AMENITY_LABEL_KEYS = new Set([
-  'parking',
-  'changing_rooms',
-  'floodlights',
-  'cafe',
-  'water_cooler',
-  'gym',
-  'indoor',
-  'wifi',
-  'prayer_room',
-]);
+// Key set derives from AMENITY_ICONS — one list, no duplicate drift.
+const AMENITY_LABEL_KEYS = new Set(Object.keys(AMENITY_ICONS));
 function amenityLabel(code: string, t: (key: string) => string): string {
   if (AMENITY_LABEL_KEYS.has(code)) return t(`clubs.amenity.${code}`);
   return t('clubs.amenity.unknown');
