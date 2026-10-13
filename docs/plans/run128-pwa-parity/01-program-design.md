@@ -8,8 +8,12 @@
 - i18n keys `clubs.amenity.<code>` for the 7 live-DB codes (changing_rooms, parking,
   water_cooler, gym, prayer_room, cafe, floodlights) + `clubs.amenity.unknown` fallback,
   both en.json + ar.json (parity count +15 leaves).
-- Unknown-code fallback chain: `t(known key)` → `code.replace(/_/g,' ')` with EN text —
-  future amenities degrade to today's behavior, never blank.
+- Unknown-code fallback chain (REVISED during review rounds 2-3, PR #122): any code present
+  in AMENITY_ICONS → localized `clubs.amenity.<code>`; anything else → localized
+  `clubs.amenity.unknown` ("Amenity"/"مرفق") on BOTH surfaces. Rationale: raw de-spaced
+  English codes shown to Arabic users are the exact defect class this item fixes
+  (EN+AR-always doctrine); label keys derive from `Object.keys(AMENITY_ICONS)` so a new
+  icon automatically gains a label slot. Never blank.
 - Icons: add `prayer_room: '🕌'` to AMENITY_ICONS (club detail page).
 - Both sites: `clubs/[id]/page.tsx` (full labels) + `(main)/clubs/page.tsx` (label in chips).
 - API/DB unchanged (codes are stable enum-ish strings).
