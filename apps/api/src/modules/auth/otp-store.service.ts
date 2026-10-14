@@ -17,6 +17,9 @@ const keys = {
   day: (phone: string) => `otp:day:${phone}`,
   ip_day: (ip: string) => `otp:ip_day:${ip}`,
   fails: (phone: string) => `otp:fails:${phone}`,
+  // P2-198 (run #131): absolute lockout deadline — powers the retryAfter on
+  // the verify lockout 429 (same contract as the P2-194 send cooldown).
+  failsDeadline: (phone: string) => `otp:fails_deadline:${phone}`,
   // P1-19 (run #44): phone-change flow — separate namespace so a login OTP
   // can never verify a phone change (and vice versa).
   changeOtp: (phone: string) => `${OTP_PREFIX}change:${phone}`,
@@ -121,11 +124,40 @@ export class OtpStoreService {
   async incrementFail(phone: string): Promise<number> {
     const next = ((await this.cache.get<number>(keys.fails(phone))) ?? 0) + 1;
     await this.cache.set(keys.fails(phone), next, OTP_LOCKOUT_MS);
+    // P2-198: arming the deadline at the limit gives getLockoutRemaining an
+    // honest epoch to count down from (the fails counter alone carries no
+    // time info — its TTL slides on every wrong attempt).
+    if (next >= OTP_FAIL_LIMIT) await this.armLockout(phone);
     return next;
   }
 
   async resetFails(phone: string): Promise<void> {
     await this.cache.del(keys.fails(phone));
+    await this.cache.del(keys.failsDeadline(phone));
+  }
+
+  // ── Verify lockout countdown (P2-198) ───────────────────────────────────
+  // Same deadline-in-the-value pattern as getCooldownRemaining: cache TTL
+  // does the expiry, the stored absolute epoch gives the client an honest
+  // countdown. Unarmed/legacy entries report 0 (the caller falls back to the
+  // generic rate-limited copy).
+
+  async armLockout(phone: string): Promise<void> {
+    await this.cache.set(
+      keys.failsDeadline(phone),
+      Date.now() + OTP_LOCKOUT_MS,
+      OTP_LOCKOUT_MS,
+    );
+  }
+
+  async getLockoutRemaining(phone: string): Promise<number> {
+    const raw = await this.cache.get(keys.failsDeadline(phone));
+    if (raw === undefined || raw === null) return 0;
+    const deadline = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(deadline) || deadline < 1e12) return 0;
+    const remainingSec = Math.ceil((deadline - Date.now()) / 1000);
+    if (remainingSec <= 0) return 0;
+    return Math.min(remainingSec, OTP_LOCKOUT_MS / 1000);
   }
 
   // ── Phone-change flow OTP (P1-19, run #44) ───────────────────────────────

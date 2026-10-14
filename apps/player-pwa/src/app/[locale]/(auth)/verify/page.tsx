@@ -217,11 +217,7 @@ function VerifyContent() {
                             clearAuthFlow();
                             return;
                         }
-                        setError(
-                            kind === 'rateLimited'
-                                ? tErrors('rateLimited')
-                                : tErrors('otpFailed'),
-                        );
+                        setError(verifyErrorCopy(err));
                     },
                 },
             );
@@ -244,14 +240,32 @@ function VerifyContent() {
                         clearAuthFlow();
                         return;
                     }
-                    setError(
-                        kind === 'rateLimited'
-                            ? tErrors('rateLimited')
-                            : tErrors('otpFailed'),
-                    );
+                    setError(verifyErrorCopy(err));
                 },
             },
         );
+    };
+
+    // P2-198 (run #131): the verify LOCKOUT 429 now carries retryAfter
+    // (server truth). One helper drives BOTH verify onError paths so the
+    // copy and the countdown can never disagree; the retry-in copy reuses
+    // the P2-194 ICU key. The resend button is pinned to the same window
+    // (capped at RESEND_COOLDOWN, its natural max) — resends are pointless
+    // while locked out.
+    const verifyErrorCopy = (err: unknown): string => {
+        const kind = classifyError(err);
+        const retryAfter = (err as { retryAfter?: number })?.retryAfter;
+        if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
+            const wait = Math.ceil(retryAfter);
+            // Copy shows SERVER truth (PR-Agent run #131: clamping a 15-min
+            // lockout into a 60s message loops the user through blind
+            // retries that always 429 again). The resend button keeps its
+            // natural 60s window — an early resend mid-lockout is harmless,
+            // the send-path cooldown still guards it server-side.
+            setResendCountdown(Math.min(wait, RESEND_COOLDOWN));
+            return tErrors('rateLimitedRetryIn', { seconds: wait });
+        }
+        return kind === 'rateLimited' ? tErrors('rateLimited') : tErrors('otpFailed');
     };
 
     const handleResend = () => {

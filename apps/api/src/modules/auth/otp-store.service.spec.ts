@@ -104,6 +104,37 @@ describe('OtpStoreService', () => {
     await expect(otp.getFailCount('+966500000001')).resolves.toBe(0);
   });
 
+  // ── P2-198 (run #131): verify-lockout countdown powers the 429 retryAfter ──
+
+  it('getLockoutRemaining: 0 when unarmed', async () => {
+    await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(0);
+  });
+
+  it('incrementFail arms the lockout deadline at the limit; resetFails clears it', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    try {
+      for (let i = 0; i < OtpStoreService.FAIL_LIMIT - 1; i++) {
+        await otp.incrementFail('+966500000001');
+      }
+      // Below the limit: no deadline armed yet.
+      await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(0);
+      await otp.incrementFail('+966500000001'); // limit reached → armed
+      await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(900);
+      jest.setSystemTime(new Date('2026-01-01T00:05:00Z'));
+      await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(600);
+      await otp.resetFails('+966500000001');
+      await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('getLockoutRemaining: legacy/garbage deadline values report 0', async () => {
+    await cache.set('otp:fails_deadline:+966500000001', '1', 60_000);
+    await expect(otp.getLockoutRemaining('+966500000001')).resolves.toBe(0);
+  });
+
   // ── Run-#53: verify atomicity (mutex + claim/consume) ─────────────────────
 
   it('runExclusive serializes same-key fns (claim atomicity) and releases on throw', async () => {

@@ -174,14 +174,19 @@ export class AuthService {
       // ── Abuse protection: attempt lockout ──
       const failCount = await this.otpStore.getFailCount(phone);
       if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        // P2-198: machine-readable lockout countdown (same contract as the
+        // P2-194 send-cooldown retryAfter). A missing/legacy deadline reports
+        // 0 — the PWA falls back to the generic rate-limited copy.
+        const retryAfter = await this.otpStore.getLockoutRemaining(phone);
         this.logger.warn(
-          `verify-otp blocked (lockout after ${failCount} fails) for ${phone}`,
+          `verify-otp blocked (lockout after ${failCount} fails) for ${phone} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {
             statusCode: HttpStatus.TOO_MANY_REQUESTS,
             message: 'Too many attempts. Try again later.',
             error: 'Too Many Requests',
+            retryAfter,
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );
