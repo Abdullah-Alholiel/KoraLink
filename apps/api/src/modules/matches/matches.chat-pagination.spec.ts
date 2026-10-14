@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { asc, desc } from 'drizzle-orm';
 import { match_messages } from '../../database/schema';
 import { MatchesService } from './matches.service';
@@ -234,5 +234,81 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
       svc.getMessages(MATCH_ID, OUTSIDER, { before: 'm-x' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(findManyCalls).toHaveLength(0);
+  });
+
+  // ── P2-196 (run #132): the `after` direction — reconnect backfill ──────
+
+  it('after cursor: anchors on the message row and pages strictly newer (ASC)', async () => {
+    const anchorTime = new Date('2026-09-01T10:00:00Z');
+    const newerPage = [{ id: 'm-new' }];
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: newerPage,
+      cursorRow: { id: 'm-cursor', match_id: MATCH_ID, created_at: anchorTime },
+    });
+    const out = await svc.getMessages(MATCH_ID, MEMBER, {
+      after: 'm-cursor',
+      limit: 20,
+    });
+    expect(out).toEqual(newerPage);
+    expect(findManyCalls[0].limit).toBe(20);
+    // The composite keyset predicate must mention the cursor id bound value.
+    const pairs: Array<[string, unknown]> = [];
+    collectEqPairs(findManyCalls[0].where, pairs);
+    expect(pairs.some(([, v]) => v === 'm-cursor')).toBe(true);
+    // Backfill pages forward — ASC order, mirroring the before direction.
+    expect(orderSignature(findManyCalls[0].orderBy)).toMatch(/^created_at,id\|asc$/);
+  });
+
+  it('after cursor: unknown id → NotFoundException (no silent empty page)', async () => {
+    const { svc } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: null,
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { after: 'forged-id' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('after cursor from ANOTHER match → NotFoundException (no cross-match leak)', async () => {
+    const { svc } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: {
+        id: 'm-other',
+        match_id: 'match-OTHER',
+        created_at: new Date(),
+      },
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { after: 'm-other' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('both cursors at once → BadRequestException (client bug, clean 400)', async () => {
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: { id: 'm-c', match_id: MATCH_ID, created_at: new Date() },
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, {
+        before: 'm-c',
+        after: 'm-c',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    // The 400 fires before any cursor anchor read.
+    expect(findManyCalls).toHaveLength(0);
+  });
+
+  it('after with a large limit still clamps into [1, 100]', async () => {
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: { id: 'm-c', match_id: MATCH_ID, created_at: new Date() },
+    });
+    await svc.getMessages(MATCH_ID, MEMBER, { after: 'm-c', limit: 5000 });
+    expect(findManyCalls[0].limit).toBe(100);
   });
 });
