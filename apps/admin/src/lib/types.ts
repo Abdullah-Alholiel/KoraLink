@@ -156,6 +156,8 @@ export interface AdminReportDetail extends AdminReportListItem {
   };
   resolvedBy: { id: string; full_name: string | null } | null;
   subject: ReportSubject;
+  /** P2-192: optimistic-edit token — echo on PATCH /admin/reports/:id. */
+  version: number;
 }
 
 export interface AdminTransaction {

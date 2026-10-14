@@ -261,13 +261,43 @@ export class AdminReportsService {
       throw new BadRequestException('No changes provided.');
     }
 
+    // P2-192: optimistic-edit token — same contract as disputes.update() above
+    // (guard + bump ride ONE predicated UPDATE; absent version = legacy client).
+    const beforeVersion = (before as { version?: number | null }).version ?? 1;
+    const guardVersion = dto.version !== undefined;
+    const guards = [
+      eq(reports.id, id),
+      eq(reports.status, before.status),
+      ...(guardVersion ? [eq(reports.version, beforeVersion)] : []),
+    ];
+
     const updated = await this.db
       .update(reports)
-      .set(withTimestamp({ resolution: dto.resolution ?? null }))
-      .where(and(eq(reports.id, id), eq(reports.status, before.status)))
-      .returning({ id: reports.id });
+      .set(
+        withTimestamp({
+          resolution: dto.resolution ?? null,
+          ...(guardVersion ? { version: beforeVersion + 1 } : {}),
+        }),
+      )
+      .where(and(...guards))
+      .returning({ id: reports.id, version: reports.version });
 
     if (updated.length === 0) {
+      // Race loser — disambiguate version-stale vs status-drift (see disputes).
+      // Only the version-guarded path can use the fresh read.
+      if (guardVersion) {
+        const fresh = await this.db.query.reports.findFirst({
+          where: eq(reports.id, id),
+          columns: { status: true, version: true },
+        });
+        if (fresh && fresh.version !== dto.version) {
+          throw new ConflictException({
+            message:
+              'This report was edited by another admin while you were working — your view is stale.',
+            version: fresh.version,
+          });
+        }
+      }
       throw new ConflictException('Report was concurrently updated — re-check its status.');
     }
 

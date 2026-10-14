@@ -378,13 +378,49 @@ export class AdminDisputesService {
     if (dto.decision !== undefined) updates.decision = dto.decision ?? null;
     if (dto.internalNote !== undefined) updates.internal_note = dto.internalNote ?? null;
 
+    // P2-192: optimistic-edit token. P2-191 guards status transitions; this
+    // guards SAME-STATUS edits — when the client echoes the version it saw,
+    // the write additionally requires the row to still carry it, so two
+    // admins editing decision/note concurrently get a 409 instead of silent
+    // last-write-wins. The bump rides the same single predicated UPDATE
+    // (atomic; no second statement to interleave). Absent `version` =
+    // legacy client → guard skipped (P2-191 predicates still apply).
+    const beforeVersion = (before as { version?: number | null }).version ?? 1;
+    if (dto.version !== undefined) {
+      updates.version = beforeVersion + 1;
+    }
+
+    const guards = [
+      eq(disputes.id, id),
+      eq(disputes.status, before.status),
+      ...(dto.version !== undefined ? [eq(disputes.version, beforeVersion)] : []),
+    ];
+
     const updated = await this.db
       .update(disputes)
       .set(withTimestamp(updates) as never)
-      .where(and(eq(disputes.id, id), eq(disputes.status, before.status)))
-      .returning({ id: disputes.id });
+      .where(and(...guards))
+      .returning({ id: disputes.id, version: disputes.version });
 
     if (updated.length === 0) {
+      // Race loser — disambiguate for the client: a version mismatch with an
+      // unchanged status means someone SAVED while this admin was editing
+      // (echo the fresh version so the UI can reload + re-apply); anything
+      // else is the P2-191 status-drift class. Only the version-guarded path
+      // can use the fresh read — legacy clients skip it entirely.
+      if (dto.version !== undefined) {
+        const fresh = await this.db.query.disputes.findFirst({
+          where: eq(disputes.id, id),
+          columns: { status: true, version: true },
+        });
+        if (fresh && fresh.version !== dto.version) {
+          throw new ConflictException({
+            message:
+              'This dispute was edited by another admin while you were working — your view is stale.',
+            version: fresh.version,
+          });
+        }
+      }
       throw new ConflictException('Dispute was concurrently updated — re-check its status.');
     }
 
