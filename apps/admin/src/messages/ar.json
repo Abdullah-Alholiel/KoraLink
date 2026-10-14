@@ -35,7 +35,8 @@
     "exportAllSuccess": "تم إنشاء ملف CSV يحتوي على {count, plural, =0 {لا صفوف} one {صف واحد} two {صفين} few {# صفوف} many {# صفًا} other {# صفوف}}.",
     "exportCapped": "تم تحديد التصدير على أول {limit, number} من إجمالي {total, number} صف.",
     "exporting": "جارٍ تجهيز التصدير…",
-    "exportAllFailed": "فشل التصدير. حاول مرة أخرى."
+    "exportAllFailed": "فشل التصدير. حاول مرة أخرى.",
+    "editStale": "حفظ أحد المشرفين هذا السجل أثناء تحريرك. لم يتم حفظ تعديلاتك — راجع النسخة الأحدث ثم احفظ مرة أخرى لإعادة تطبيقها."
   },
   "notifications": {
     "bell": "الإشعارات",

@@ -492,3 +492,185 @@ describe('Admin edit-path race guards (P2-191)', () => {
     );
   });
 });
+
+// ── P2-192 (PR-Agent r2 MINOR on PR #123, run #130): optimistic-edit tokens ──
+//
+// The P2-191 predicate guards status TRANSITIONS only; two admins editing
+// decision/note/resolution while the status stays unchanged still hit silent
+// last-write-wins. Fix: `version` integer column (0051); when the client
+// echoes `version`, the guarded UPDATE additionally requires
+// `AND version = <findOne saw>` and bumps it in the same statement; a race
+// loser gets 409 with the CURRENT version echoed so the UI can reload.
+// Absent `version` = legacy client → guard skipped (P2-191 still applies).
+
+describe('Admin edit optimistic-version tokens (P2-192)', () => {
+  function capturingChain(returningRows: unknown[]) {
+    let capturedWhere: unknown;
+    let capturedSet: unknown;
+    const chain: any = {
+      set: (s: unknown) => {
+        capturedSet = s;
+        return chain;
+      },
+      where: (w: unknown) => {
+        capturedWhere = w;
+        return chain;
+      },
+      returning: () => returningRows,
+      _capturedWhere: () => capturedWhere,
+      _capturedSet: () => capturedSet,
+    };
+    return chain;
+  }
+
+  const dialect = new PgDialect();
+  const renderSql = (node: unknown): string => {
+    try {
+      return dialect.sqlToQuery(node as never).sql;
+    } catch {
+      return '';
+    }
+  };
+
+  function makeDisputesService(opts: {
+    updateRows: unknown[];
+    findOneRow?: Record<string, unknown>;
+    freshRow?: { status: string; version: number } | null;
+  }) {
+    const update = jest.fn(() => capturingChain(opts.updateRows));
+    const db = {
+      update,
+      query: {
+        disputes: {
+          findFirst: jest.fn(async () => opts.freshRow ?? null),
+        },
+      },
+    };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const activities = { record: jest.fn(async () => {}) };
+    const svc = new AdminDisputesService(
+      db as never,
+      audit as never,
+      realtime as never,
+      activities as never,
+    );
+    jest
+      .spyOn(svc as never, 'findOne')
+      .mockResolvedValue((opts.findOneRow ?? { id: 'd1', status: 'under_review', version: 3 }) as never);
+    return { svc, db, audit };
+  }
+
+  function makeReportsService(opts: {
+    updateRows: unknown[];
+    findOneRow?: Record<string, unknown>;
+    freshRow?: { status: string; version: number } | null;
+  }) {
+    const update = jest.fn(() => capturingChain(opts.updateRows));
+    const db = {
+      update,
+      transaction: jest.fn(),
+      query: {
+        reports: {
+          findFirst: jest.fn(async () => opts.freshRow ?? null),
+        },
+      },
+    };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const svc = new AdminReportsService(
+      db as never,
+      audit as never,
+      realtime as never,
+      { update: jest.fn() } as never,
+      { record: jest.fn() } as never,
+      { sendPushToUsers: jest.fn() } as never,
+    );
+    jest
+      .spyOn(svc as never, 'findOne')
+      .mockResolvedValue(
+        (opts.findOneRow ?? { id: 'r1', status: 'open', subject_type: 'user', subject_id: 'u1', version: 2 }) as never,
+      );
+    return { svc, db, audit };
+  }
+
+  it('disputes.update: version echo adds version predicate + bump in ONE statement', async () => {
+    const { svc, db } = makeDisputesService({ updateRows: [{ id: 'd1', version: 4 }] });
+    await svc.update('d1', { decision: 'upheld', version: 3 } as never, 'admin-1');
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    const sql = renderSql(chain._capturedWhere());
+    expect(sql).toContain('"disputes"."version"');
+    expect(sql).toContain('"disputes"."status"');
+    // bump rides the same .set() — never a second interleavable statement
+    expect(chain._capturedSet()).toMatchObject({ version: 4 });
+  });
+
+  it('disputes.update: same-status concurrent save → 409 echoes the fresh version', async () => {
+    const { svc, audit } = makeDisputesService({
+      updateRows: [],
+      freshRow: { status: 'under_review', version: 4 },
+    });
+    const err = await svc
+      .update('d1', { internalNote: 'note', version: 3 } as never, 'admin-1')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      version: 4,
+      message: expect.stringContaining('edited by another admin'),
+    });
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('disputes.update: status drift (row deleted) → plain 409 even with version echo', async () => {
+    const { svc } = makeDisputesService({ updateRows: [], freshRow: null });
+    await expect(
+      svc.update('d1', { decision: 'x', version: 3 } as never, 'admin-1'),
+    ).rejects.toMatchObject({
+      message: 'Dispute was concurrently updated — re-check its status.',
+    });
+  });
+
+  it('disputes.update: legacy payload (no version) skips the version guard', async () => {
+    const { svc, db } = makeDisputesService({ updateRows: [{ id: 'd1', version: 2 }] });
+    await svc.update('d1', { decision: 'upheld' } as never, 'admin-1');
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    expect(renderSql(chain._capturedWhere())).not.toContain('"disputes"."version"');
+    // findOne saw no version → default 1, but no echo means NO bump either
+    expect(chain._capturedSet()).not.toHaveProperty('version');
+  });
+
+  it('reports.update: version echo adds version predicate + bump in ONE statement', async () => {
+    const { svc, db } = makeReportsService({ updateRows: [{ id: 'r1', version: 3 }] });
+    await svc.update('r1', { resolution: 'warned', version: 2 } as never, 'admin-1');
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    const sql = renderSql(chain._capturedWhere());
+    expect(sql).toContain('"reports"."version"');
+    expect(sql).toContain('"reports"."status"');
+    expect(chain._capturedSet()).toMatchObject({ version: 3 });
+  });
+
+  it('reports.update: same-status concurrent save → 409 echoes the fresh version', async () => {
+    const { svc, audit } = makeReportsService({
+      updateRows: [],
+      freshRow: { status: 'open', version: 5 },
+    });
+    const err = await svc
+      .update('r1', { resolution: 'x', version: 2 } as never, 'admin-1')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      version: 5,
+      message: expect.stringContaining('edited by another admin'),
+    });
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('reports.update: legacy payload (no version) skips the version guard', async () => {
+    const { svc, db } = makeReportsService({ updateRows: [{ id: 'r1', version: 3 }] });
+    await svc.update('r1', { resolution: 'warned' } as never, 'admin-1');
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    expect(renderSql(chain._capturedWhere())).not.toContain('"reports"."version"');
+    expect(chain._capturedSet()).not.toHaveProperty('version');
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+});

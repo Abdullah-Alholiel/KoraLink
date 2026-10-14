@@ -1050,6 +1050,10 @@ export const disputes = pgTable(
     // open/under_review dispute passes the 7-day window; informational flag
     // for the admin queue (no money-path coupling, no auto-resolution).
     sla_escalated: boolean('sla_escalated').notNull().default(false),
+    // P2-192 (run #130): optimistic-edit token. Bumped only by the guarded
+    // admin update() so a second admin editing the same decision/note gets a
+    // 409 instead of a silent last-write-wins. Read paths just echo it.
+    version: integer('version').notNull().default(1),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1203,6 +1207,8 @@ export const reports = pgTable(
       onDelete: 'set null',
     }),
     resolved_at: timestamp('resolved_at', { withTimezone: true }),
+    // P2-192 (run #130): optimistic-edit token — see disputes.version comment.
+    version: integer('version').notNull().default(1),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

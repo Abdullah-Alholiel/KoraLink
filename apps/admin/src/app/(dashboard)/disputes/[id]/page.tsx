@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
 import { api, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
@@ -21,6 +22,7 @@ interface DisputeDetail {
   internal_note: string | null;
   policy_ref: string | null;
   sla_escalated: boolean;
+  version: number;
   evidence: { action?: string; reason?: string; by?: string; at?: string }[] | unknown;
   created_at: string;
   reporter: { full_name: string | null; phone: string | null } | null;
@@ -125,11 +127,21 @@ export default function DisputeDetailPage() {
       await api.patch(`/admin/disputes/${id}`, {
         decision: editDecision,
         internalNote: editNote,
+        version: d.version,
       });
       setEditing(false);
       reload();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      if (isStaleEditError(e)) {
+        // P2-192: another admin saved while this editor was open. Keep the
+        // editor OPEN (the typed draft is not lost), say what happened +
+        // what to do next, and refresh the row in the background so the
+        // next save carries the fresh version.
+        setSaveError(tc('editStale'));
+        reload();
+      } else {
+        setSaveError(e instanceof Error ? e.message : t('failed'));
+      }
     } finally {
       setSaving(false);
     }
