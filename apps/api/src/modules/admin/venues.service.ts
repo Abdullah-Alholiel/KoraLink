@@ -186,10 +186,19 @@ export class AdminVenuesService {
       throw new BadRequestException('No changes provided.');
     }
 
-    await this.db
+    // P2-202 (run #132): guarded update — the .returning() rowcount turns a
+    // vanished id into an immediate 404 instead of a silent no-op that still
+    // lands in the audit log as a change (parity with the P2-191/192
+    // predicated-update pattern; no version column exists on this table).
+    const updated = await this.db
       .update(venues)
       .set(withTimestamp(updates) as never)
-      .where(eq(venues.id, id));
+      .where(eq(venues.id, id))
+      .returning({ id: venues.id });
+
+    if (updated.length === 0) {
+      throw new NotFoundException('Venue not found.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
