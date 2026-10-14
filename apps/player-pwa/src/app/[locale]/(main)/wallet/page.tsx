@@ -223,7 +223,7 @@ export default function WalletPage() {
                         className="w-10 h-10 flex items-center justify-center"
                         aria-label={t('common.back')}
                     >
-                        <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                        <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
                     </button>
                     <h1 className="text-lg font-bold text-brand-black flex-1 text-center">
                         {t('wallet.title')}

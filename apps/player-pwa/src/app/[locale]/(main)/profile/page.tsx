@@ -37,7 +37,7 @@ import {
 import { clearAuthToken } from '@/lib/fetcher';
 import { getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { formatMoney } from '@/lib/format';
+import { formatCount, formatMoney } from '@/lib/format';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
@@ -301,7 +301,7 @@ export default function ProfilePage() {
                             ) : (
                                 <>
                                     <div className="flex-1 py-3.5 text-center">
-                                        <p className="text-xl font-extrabold leading-none">{stats?.games_played ?? 0}</p>
+                                        <p className="text-xl font-extrabold leading-none">{formatCount(stats?.games_played ?? 0, intlLocale)}</p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.gamesPlayed')}
                                         </p>
@@ -310,7 +310,7 @@ export default function ProfilePage() {
                                     <div className="flex-1 py-3.5 text-center">
                                         <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none">
                                             <Trophy className="h-4 w-4 text-amber-300" strokeWidth={2} />
-                                            <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
+                                            <span dir="ltr">{formatCount(apiUser?.pom_count ?? 0, intlLocale)}</span>
                                         </p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.pomCount')}
@@ -318,7 +318,7 @@ export default function ProfilePage() {
                                     </div>
                                     <div className="w-px bg-white/15" />
                                     <div className="flex-1 py-3.5 text-center">
-                                        <p className="text-xl font-extrabold leading-none">{stats?.karma_score ?? 0}</p>
+                                        <p className="text-xl font-extrabold leading-none">{formatCount(stats?.karma_score ?? 0, intlLocale)}</p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.karma')}
                                         </p>

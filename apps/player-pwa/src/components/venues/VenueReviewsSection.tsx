@@ -11,7 +11,7 @@ import {
 } from '@/hooks/useVenueReviews';
 import { useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
-import { formatCount } from '@/lib/format';
+import { formatCount, resolveDateLocale } from '@/lib/format';
 
 /**
  * P1-55 (run #117): booking-verified venue reviews on the club detail page.
@@ -42,7 +42,7 @@ function Stars({ value, size = 'w-3.5 h-3.5' }: { value: number; size?: string }
   );
 }
 
-function ReviewRow({ review }: { review: VenueReviewApi }) {
+function ReviewRow({ review, locale }: { review: VenueReviewApi; locale: string }) {
   const t = useTranslations();
   const initials = (review.user.full_name ?? '?').trim().charAt(0).toUpperCase();
   return (
@@ -67,7 +67,7 @@ function ReviewRow({ review }: { review: VenueReviewApi }) {
           <div className="flex items-center gap-2 mt-0.5">
             <Stars value={review.rating} size="w-3 h-3" />
             <span className="text-[10px] text-gray-400">
-              {new Date(review.updated_at).toLocaleDateString(undefined, {
+              {new Date(review.updated_at).toLocaleDateString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -210,7 +210,7 @@ export default function VenueReviewsSection({
       {data.reviews.length > 0 ? (
         <ul className="mt-1 divide-y divide-gray-100">
           {data.reviews.slice(0, 5).map((r) => (
-            <ReviewRow key={r.id} review={r} />
+            <ReviewRow key={r.id} review={r} locale={locale} />
           ))}
         </ul>
       ) : (

@@ -87,7 +87,7 @@ export default function CompleteProfilePage() {
                     aria-label={tCommon('back')}
                     className="w-10 h-10 flex items-center justify-center"
                 >
-                    <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                    <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
                 </button>
             </div>
 

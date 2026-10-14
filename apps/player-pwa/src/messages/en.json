@@ -312,7 +312,10 @@
     "copyInviteLink": "Share invite link",
     "inviteShareText": "You're invited to a private KoraLink match!",
     "joinToChat": "Join the match to see and send messages.",
-    "reschedule": "Reschedule"
+    "reschedule": "Reschedule",
+    "shareText": "⚽ {title}\n{date} at {time}\n📍 {venue}\n💸 {price}",
+    "heroShareText": "{title} — {date} {time} @ {venue}",
+    "whatsAppShareText": "⚽ Join me for \"{title}\" on {date} at {time}!\n📍 {venue}\n💸 {price}\n{url}\n\nJoin on KoraLink!"
   },
   "cancelMatch": {
     "title": "Cancel Match?",
