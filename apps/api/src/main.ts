@@ -1,5 +1,5 @@
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { HttpException, HttpStatus, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
@@ -12,6 +12,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
 import { resolveTrustProxyConfig } from './common/security/trust-proxy';
+import { originAllowed } from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -106,13 +107,25 @@ async function bootstrap(): Promise<void> {
   // Never widen this with a NODE_ENV check — an attacker on the same Tailscale
   // network with a misconfigured .env (NODE_ENV unset) would then be able to
   // make credentialed cross-origin requests from any origin.
+  // P2-201 (run #131): origins normalized (trailing-slash env misconfigs no
+  // longer 500 every cross-origin call) and denials throw an HttpException
+  // with status 403 — a bare Error reached the filter as an unclassified
+  // exception and rendered a misleading 500 for what is a policy refusal.
+  // The deny MUST stay a thrown error: `callback(null, false)` makes the cors
+  // middleware `next()` WITHOUT CORS headers, letting the request execute
+  // routes (side effects!) while only the browser hides the response.
   const allowedOrigins = [...playerUrls, ...adminUrls];
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (originAllowed(origin, allowedOrigins)) {
         return callback(null, true);
       }
-      callback(new Error(`CORS origin not allowed: ${origin}`));
+      callback(
+        new HttpException(
+          `CORS origin not allowed: ${origin}`,
+          HttpStatus.FORBIDDEN,
+        ),
+      );
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
