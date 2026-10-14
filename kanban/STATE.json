@@ -1,18 +1,18 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 131,
+  "last_run": 132,
   "last_run_at": "2026-10-14T12:20:00Z",
   "last_run_commits": [
     "63a0b5e",
     "8cf6746",
     "3e9d59a"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-14T10-17Z-run131.md",
+  "last_run_report": "kanban/RUNS/2026-10-14T15-18Z-run132.md",
   "in_review_items": [
-    "P2-189 AR-polish batch (PR #127 63a0b5e): verify i18n parity 1092/1092, rtl:-scale-x-100 at the 10 arrow sites, share keys matchDetail.shareText|heroShareText|whatsAppShareText in BOTH locales, resolveDateLocale at the 5 former bare-toLocale sites, formatCount in profile/my-games stats.",
-    "P2-198 OTP verify-lockout retryAfter (PR #128 8cf6746): verify getLockoutRemaining + armLockout in otp-store.service.ts, retryAfter in the verifyOtp lockout 429 body (auth.service ~:177-197), verifyErrorCopy helper in verify/page.tsx (uncapped copy, capped button), 5 new jest cases.",
-    "P2-201 CORS denial shape (PR #129 3e9d59a): verify HttpException 403 deny in main.ts + common/utils/cors-origin.ts helpers + 8-case spec; live probe: GET with foreign Origin -> 403 (not 500), allowed origin -> 200."
+    "P2-196 lobby backfill (PR #130 lane/run132-p2196-backfill, 2388dd3): verify API `after` keyset cursor (anchor 404s x2, strictly-newer composite, both-cursors 400, clamp), useMatchChat backfill-on-reconnect (first-connect latch, after=<newest known id> limit 100), ChatSheet newWhileAway divider both locales, jest +5 / vitest +4.",
+    "P2-202 guard-parity (PR #132 lane/run132-guard-parity, 849b3d1): venues+pitches update() .returning({id}) + 0-row -> NotFoundException BEFORE audit.log; spec 4/4.",
+    "P2-203 review-fix batch (PR #133 lane/run132-review-fixes, 1857767): RescheduleSheet resolveDateLocale (+hour12, no Hijri), verify countdown formatCount, match-detail shareAria/whatsAppShareAria keys EN+AR."
   ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
