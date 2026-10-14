@@ -151,6 +151,37 @@ describe('useMatchChat reconnect backfill (P2-196, run #132)', () => {
     );
   });
 
+  it('a >100-message gap paginates: continues from the last fetched id until a short page', async () => {
+    // Page 1: 100 full rows (m3..m102) after m2 → loop must continue.
+    backfillPage = Array.from({ length: 100 }, (_, i) =>
+      msg(`m${i + 3}`, new Date(Date.UTC(2026, 9, 14, 10, 5, i)).toISOString()),
+    );
+    const { result } = renderHook(() => useMatchChat(M1), { wrapper: createWrapper() });
+    await waitFor(() =>
+      expect(result.current.messages.map((m) => m.id)).toEqual(['m1', 'm2']),
+    );
+
+    act(() => fire('connect'));
+    await waitFor(() => expect(result.current.isConnected).toBe(true));
+    act(() => fire('disconnect'));
+    act(() => fire('connect'));
+
+    await waitFor(() => {
+      const afterCalls = mockFetcher.mock.calls.filter((c) => fetchUrl(c).includes('after='));
+      expect(afterCalls.length).toBeGreaterThanOrEqual(2);
+      // Second request continues from the LAST id of page 1 (m102).
+      expect(fetchUrl(afterCalls[1])).toBe(
+        `/matches/${M1}/messages?after=${encodeURIComponent('m102')}&limit=100`,
+      );
+    });
+    // The merged view carries the first page (order-stable at the tail).
+    await waitFor(() => {
+      const ids = result.current.messages.map((m) => m.id);
+      expect(ids.length).toBeGreaterThan(100);
+      expect(ids[2]).toBe('m3');
+    });
+  });
+
   it('genuinely-new rows arm missedMarker {count, firstId}; dismiss clears it', async () => {
     backfillPage = [msg('m3', '2026-10-14T10:05:00Z'), msg('m4', '2026-10-14T10:06:00Z')];
     const { result } = renderHook(() => useMatchChat(M1), { wrapper: createWrapper() });

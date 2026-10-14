@@ -326,17 +326,36 @@ export function useMatchChat(
     if (!hadServerMessagesRef.current || !lastServerIdRef.current) return;
     backfillInFlightRef.current = true;
     try {
-      const missed = await fetcher<MatchMessage[]>(
-        `/matches/${matchId}/messages?after=${encodeURIComponent(lastServerIdRef.current)}&limit=100`,
-        { method: 'GET' },
-      );
-      if (!Array.isArray(missed) || missed.length === 0) return;
-      // Snapshot BEFORE reconciling: reconcile feeds these rows into state,
-      // and the known-ids effect only runs after the next render.
-      const fresh = missed.filter((m) => !knownIdsRef.current.has(m.id));
-      for (const m of missed) reconcile(m);
-      if (fresh.length > 0) {
-        setMissedMarker({ count: fresh.length, firstId: fresh[0].id });
+      // PR-Agent (run #132): one 100-row page would strand the rest of a
+      // >100-message gap permanently (loadOlder pages OLDER than the oldest
+      // displayed message, never into a middle hole). Continue from the last
+      // fetched id until a short page (gap exhausted), 10-page safety cap —
+      // a cap hit degrades to partial backfill; the next reconnect continues
+      // from the NEW newest-known id, so nothing is permanently lost.
+      let cursor: string = lastServerIdRef.current;
+      let freshCount = 0;
+      let freshFirstId: string | null = null;
+      for (let page = 0; page < 10; page += 1) {
+        const batch = await fetcher<MatchMessage[]>(
+          `/matches/${matchId}/messages?after=${encodeURIComponent(cursor)}&limit=100`,
+          { method: 'GET' },
+        );
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        // Snapshot BEFORE reconciling: reconcile feeds these rows into
+        // state, and the known-ids effect only runs after the next render —
+        // knownIdsRef stays stable across the whole loop.
+        for (const m of batch) {
+          if (!knownIdsRef.current.has(m.id)) {
+            freshCount += 1;
+            if (!freshFirstId) freshFirstId = m.id;
+          }
+          reconcile(m);
+        }
+        if (batch.length < 100) break; // gap exhausted
+        cursor = batch[batch.length - 1].id;
+      }
+      if (freshCount > 0 && freshFirstId) {
+        setMissedMarker({ count: freshCount, firstId: freshFirstId });
       }
     } catch {
       // Silent: a failed backfill must not boot the user out of a recovered
