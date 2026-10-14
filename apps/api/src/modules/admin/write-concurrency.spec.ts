@@ -629,6 +629,20 @@ describe('Admin edit optimistic-version tokens (P2-192)', () => {
     expect(audit.log).not.toHaveBeenCalled();
   });
 
+  it('disputes.update: version null (JSON-absent case) skips the guard, no eq(col,null)', async () => {
+    // @IsOptional() lets null through; a null claim must degrade to legacy
+    // (no guard), never build the never-match eq(version, null) predicate.
+    const { svc, db } = makeDisputesService({
+      updateRows: [{ id: 'd1', version: 8 }],
+      findOneRow: { id: 'd1', status: 'under_review', version: 7 },
+    });
+    await svc.update('d1', { decision: 'upheld', version: null } as never, 'admin-1');
+    const chain = (db.update as jest.Mock).mock.results[0].value;
+    const rendered = dialect.sqlToQuery(chain._capturedWhere() as never);
+    expect(rendered.sql).not.toContain('"disputes"."version"');
+    expect(chain._capturedSet()).not.toHaveProperty('version');
+  });
+
   it('disputes.update: same-status concurrent save → 409 echoes the fresh version', async () => {
     const { svc, audit } = makeDisputesService({
       updateRows: [],

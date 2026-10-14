@@ -267,7 +267,10 @@ export class AdminReportsService {
     // bump = dto.version + 1 in the same statement; absent version (client
     // OR row) = guard skipped.
     const rowVersion = (before as { version?: number | null }).version;
-    const guardVersion = dto.version !== undefined && typeof rowVersion === 'number';
+    // typeof dto.version (not !== undefined): @IsOptional() lets null through,
+    // and a null claim would build the eq(col, null) never-match predicate
+    // (standing pitfall class) + a null+1 bump — treat null as legacy/no guard.
+    const guardVersion = typeof dto.version === 'number' && typeof rowVersion === 'number';
     const claimedVersion = guardVersion ? (dto.version as number) : undefined;
     const guards = [
       eq(reports.id, id),

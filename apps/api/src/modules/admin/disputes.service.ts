@@ -387,7 +387,10 @@ export class AdminDisputesService {
     // clients and columns-restricted reads keep the P2-191 behavior; never
     // pin a default (PR-Agent run #130).
     const rowVersion = (before as { version?: number | null }).version;
-    const guardVersion = dto.version !== undefined && typeof rowVersion === 'number';
+    // typeof dto.version (not !== undefined): @IsOptional() lets null through,
+    // and a null claim would build the eq(col, null) never-match predicate
+    // (standing pitfall class) + a null+1 bump — treat null as legacy/no guard.
+    const guardVersion = typeof dto.version === 'number' && typeof rowVersion === 'number';
     const claimedVersion = guardVersion ? (dto.version as number) : undefined;
     if (guardVersion) {
       updates.version = (claimedVersion as number) + 1;
