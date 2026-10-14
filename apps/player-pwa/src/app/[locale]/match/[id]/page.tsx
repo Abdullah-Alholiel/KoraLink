@@ -316,6 +316,7 @@ export default function MatchDetailPage({
                             <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            aria-label={isJoined ? t('common.messages') : t('matchDetail.shareAria')}
                             onClick={() => {
                                 if (isJoined) {
                                     setShowChatSheet(true);
@@ -733,6 +734,7 @@ export default function MatchDetailPage({
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    aria-label={t('matchDetail.whatsAppShareAria')}
                                     className="block bg-brand-green rounded-2xl py-3.5 px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(37,65,50,0.4)] active:scale-[0.98] transition-transform cursor-pointer"
                                 >
                                     <div className="flex items-center gap-2">

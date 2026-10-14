@@ -19,6 +19,7 @@ import {
     type PitchSlotApi,
 } from '@/hooks/usePitchSlots';
 import { dateInRiyadh, todayInRiyadh } from '@/lib/riyadh-time';
+import { resolveDateLocale } from '@/lib/format';
 
 interface RescheduleSheetProps {
     isOpen: boolean;
@@ -62,7 +63,10 @@ export default function RescheduleSheet({
         () =>
             slotDate
                 ? new Date(`${slotDate}T00:00:00`).toLocaleDateString(
-                    locale === 'ar' ? 'ar-SA' : 'en-US',
+                    // P2-189 follow-through (Reviewer A run #132): ar-SA renders
+                    // the HIJRI calendar — route through resolveDateLocale so
+                    // AR users see Gregorian dates like every other screen.
+                    resolveDateLocale(locale === 'ar' ? 'ar' : 'en'),
                     { weekday: 'long', day: 'numeric', month: 'long' },
                 )
                 : '',
@@ -71,8 +75,8 @@ export default function RescheduleSheet({
 
     const fmtTime = (time: string) =>
         new Date(`2025-01-01T${time.slice(0, 5)}`).toLocaleTimeString(
-            locale === 'ar' ? 'ar-SA' : 'en-US',
-            { hour: 'numeric', minute: '2-digit' },
+            resolveDateLocale(locale === 'ar' ? 'ar' : 'en'),
+            { hour: 'numeric', minute: '2-digit', hour12: true },
         );
 
     const handleDaySelect = (date: Date) => {

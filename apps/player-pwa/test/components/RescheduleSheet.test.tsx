@@ -100,8 +100,8 @@ describe('RescheduleSheet — host reschedule (P1-13, cross-day run #21)', () =>
     renderSheet();
     // Default day = today (Riyadh), unchanged from the run #20 behavior.
     expect(lastQueriedDate()).toBe(TODAY);
-    expect(screen.getByText('6:00 PM')).toBeInTheDocument();
-    expect(screen.getByText('8:00 PM')).toBeInTheDocument();
+    expect(screen.getByText('6:00 pm')).toBeInTheDocument();
+    expect(screen.getByText('8:00 pm')).toBeInTheDocument();
     expect(screen.queryByText('slot-taken')).not.toBeInTheDocument();
     expect(screen.queryByText('slot-current')).not.toBeInTheDocument();
   });
@@ -185,7 +185,7 @@ describe('RescheduleSheet — host reschedule (P1-13, cross-day run #21)', () =>
     const confirm = screen.getByRole('button', { name: /move match/i });
     expect(confirm).toBeDisabled();
 
-    await user.click(screen.getByText('8:00 PM'));
+    await user.click(screen.getByText('8:00 pm'));
     expect(confirm).toBeEnabled();
     await user.click(confirm);
     expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -204,7 +204,7 @@ describe('RescheduleSheet — host reschedule (P1-13, cross-day run #21)', () =>
     } as never);
     renderSheet({ onConfirm });
 
-    await user.click(screen.getByText('6:00 PM'));
+    await user.click(screen.getByText('6:00 pm'));
     const confirm = screen.getByRole('button', { name: /move match/i });
     expect(confirm).toBeEnabled();
     await user.click(confirm);
