@@ -174,13 +174,17 @@ export class MatchesController {
     @Param('id') id: string,
     @CurrentUser() user: { sub: string },
     @Query('before') before?: string,
+    @Query('after') after?: string,
     @Query('limit') limit?: string,
   ) {
     // P0-1: members-only, mirroring the WS gateway's join-lobby check.
     // P1-3 (run #65): optional keyset pagination — bare-array contract kept.
+    // P2-196 (run #132): `after` pages strictly NEWER than the cursor — the
+    // reconnect backfill direction (service 400s when both cursors arrive).
     const limitNum = limit !== undefined ? Number(limit) : undefined;
     return this.matchesService.getMessages(id, user.sub, {
       before,
+      after,
       limit: Number.isFinite(limitNum) ? limitNum : undefined,
     });
   }

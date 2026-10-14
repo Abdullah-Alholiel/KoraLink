@@ -315,6 +315,8 @@
     "reschedule": "Reschedule",
     "shareText": "⚽ {title}\n{date} at {time}\n📍 {venue}\n💸 {price}",
     "heroShareText": "{title} — {date} {time} @ {venue}",
+    "shareAria": "Share match",
+    "whatsAppShareAria": "Share match invite on WhatsApp",
     "whatsAppShareText": "⚽ Join me for \"{title}\" on {date} at {time}!\n📍 {venue}\n💸 {price}\n{url}\n\nJoin on KoraLink!"
   },
   "cancelMatch": {
@@ -853,6 +855,7 @@
     "noMessages": "No messages yet",
     "noMessagesDescription": "Join a match to start chatting with players.",
     "noMessagesYet": "No messages yet",
+    "newWhileAway": "New while you were away: {count}",
     "typeMessage": "Type a message…",
     "offlineCachedHistory": "You're offline — showing your recent messages. Reconnect to load new ones.",
     "startFailed": "Couldn't start the chat. Check your connection and try again.",

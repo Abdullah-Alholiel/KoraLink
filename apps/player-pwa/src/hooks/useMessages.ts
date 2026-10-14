@@ -159,6 +159,11 @@ function mergeMessages(
  * never duplicates rows. When the no-cursor probe returns fewer than the
  * page size the whole history is known-finite (hasMore=false without an
  * extra request — the probe already over-fetched by one).
+ *
+ * P2-196 (run #132): on every socket RE-connect the hook backfills the gap
+ * (`after`-cursor fetch for messages missed while disconnected) and exposes
+ * `missedMarker` + `dismissMissedMarker` so the sheet can show a
+ * "new while you were away" divider above the first missed message.
  */
 const CHAT_PAGE_SIZE = 50;
 
@@ -184,6 +189,26 @@ export function useMatchChat(
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Reconnect backfill (P2-196, run #132) ────────────────────────────────
+  // A socket drop between "connected" moments silently loses room fan-out.
+  // On every RE-connect (not the first connect — the initial REST history
+  // probe already covers that), the hook pages the server for messages
+  // STRICTLY NEWER than the newest server message we hold (`after` keyset,
+  // the P1-3 direction added server-side this run) and reconciles them in.
+  // Messages that are genuinely new (ids never seen) arm the "new while you
+  // were away" marker the sheet renders above the first missed message.
+  const [missedMarker, setMissedMarker] = useState<{ count: number; firstId: string } | null>(
+    null,
+  );
+  const hadServerMessagesRef = useRef(false);
+  const lastServerIdRef = useRef<string | null>(null);
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const backfillInFlightRef = useRef(false);
+  // Latch: the FIRST connect of a subscription is covered by the initial
+  // REST history probe — backfilling it would replay the same window. Only
+  // SUBSEQUENT connects (real reconnects) page the server.
+  const firstConnectDoneRef = useRef(false);
 
   // ── Typing indicator (P2-99, run #74) ─────────────────────────────────────
   // userIds currently typing in this lobby; 4s TTL per signal (server relays
@@ -283,6 +308,85 @@ export function useMatchChat(
     [queryClient, matchId],
   );
 
+  // ── Reconnect backfill fetcher (P2-196, run #132) ────────────────────────
+  // Fired by the socket effect's `connect` handler on every RE-connect.
+  // Pages the server for messages strictly newer than the newest server
+  // message we already hold (`after` keyset — matches.service.ts getMessages
+  // P2-196 direction) and reconciles them in. Ids never seen before arm the
+  // "new while you were away" marker (cleared by a send or via the sheet).
+  const backfillAfterReconnect = useCallback(async () => {
+    if (!matchId || backfillInFlightRef.current) return;
+    // First connect: the initial REST history probe already covers this
+    // window — backfilling here would just replay the same page. The latch
+    // flips on the first connect; later connects (real reconnects) pass.
+    if (!firstConnectDoneRef.current) {
+      firstConnectDoneRef.current = true;
+      return;
+    }
+    if (!hadServerMessagesRef.current || !lastServerIdRef.current) return;
+    backfillInFlightRef.current = true;
+    try {
+      // PR-Agent (run #132): one 100-row page would strand the rest of a
+      // >100-message gap permanently (loadOlder pages OLDER than the oldest
+      // displayed message, never into a middle hole). Continue from the last
+      // fetched id until a short page (gap exhausted), 10-page safety cap —
+      // a cap hit degrades to partial backfill; the next reconnect continues
+      // from the NEW newest-known id, so nothing is permanently lost.
+      let cursor: string = lastServerIdRef.current;
+      let freshCount = 0;
+      let freshFirstId: string | null = null;
+      for (let page = 0; page < 10; page += 1) {
+        const batch = await fetcher<MatchMessage[]>(
+          `/matches/${matchId}/messages?after=${encodeURIComponent(cursor)}&limit=100`,
+          { method: 'GET' },
+        );
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        // Snapshot BEFORE reconciling: reconcile feeds these rows into
+        // state, and the known-ids effect only runs after the next render —
+        // knownIdsRef stays stable across the whole loop.
+        for (const m of batch) {
+          if (!knownIdsRef.current.has(m.id)) {
+            freshCount += 1;
+            if (!freshFirstId) freshFirstId = m.id;
+          }
+          reconcile(m);
+        }
+        if (batch.length < 100) break; // gap exhausted
+        cursor = batch[batch.length - 1].id;
+      }
+      if (freshCount > 0 && freshFirstId) {
+        setMissedMarker({ count: freshCount, firstId: freshFirstId });
+      }
+    } catch {
+      // Silent: a failed backfill must not boot the user out of a recovered
+      // session — the next reconnect retries (same posture as loadOlder).
+    } finally {
+      backfillInFlightRef.current = false;
+    }
+  }, [matchId, reconcile]);
+
+  // Track server-message ids seen (marker freshness + backfill cursor).
+  // Runs after every merged-view change; refs are written here, never in
+  // render. The newest cursor follows the (created_at, id) keyset order.
+  useEffect(() => {
+    let last: MatchMessage | null = null;
+    for (const m of messages) {
+      if (m.id.startsWith('local-')) continue;
+      knownIdsRef.current.add(m.id);
+      if (
+        !last ||
+        m.created_at > last.created_at ||
+        (m.created_at === last.created_at && m.id > last.id)
+      ) {
+        last = m;
+      }
+    }
+    if (last) {
+      hadServerMessagesRef.current = true;
+      lastServerIdRef.current = last.id;
+    }
+  });
+
   // Socket.IO subscription (real-time) — shared client (Slice 2).
   useEffect(() => {
     if (!matchId) return;
@@ -300,6 +404,10 @@ export function useMatchChat(
 
     const onConnect = () => {
       setIsConnected(true);
+      // P2-196: a RE-connect may have missed room fan-out — page the server
+      // for everything newer than our newest known message. No-op on the
+      // first connect (guard inside).
+      void backfillAfterReconnect();
     };
     const onDisconnect = () => setIsConnected(false);
     const onNewMessage = (payload: unknown) => {
@@ -351,6 +459,13 @@ export function useMatchChat(
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
+      // P2-196: reset the reconnect-backfill cursors + marker on unmount or
+      // match switch — a new lobby starts from the fresh history probe.
+      hadServerMessagesRef.current = false;
+      lastServerIdRef.current = null;
+      knownIdsRef.current = new Set();
+      firstConnectDoneRef.current = false;
+      setMissedMarker(null);
       // P2-99: clear all typing expiry timers + state on unmount/switch.
       // `typingTimers` is the SAME Map instance as typingTimersRef.current —
       // the captured alias satisfies react-hooks/exhaustive-deps (run #75)
@@ -431,6 +546,9 @@ export function useMatchChat(
       });
     },
     onMutate: ({ content, clientMessageId }) => {
+      // P2-196: composing a message means the user has seen the backfilled
+      // window — clear the "new while you were away" marker.
+      setMissedMarker(null);
       const optimistic: MatchMessage = {
         id: `local-${clientMessageId}`,
         match_id: matchId ?? '',
@@ -548,5 +666,8 @@ export function useMatchChat(
     // P2-99 typing surface
     typingUserIds,
     emitTyping,
+    // P2-196 reconnect-backfill surface
+    missedMarker,
+    dismissMissedMarker: useCallback(() => setMissedMarker(null), []),
   };
 }

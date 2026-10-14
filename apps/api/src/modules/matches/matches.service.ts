@@ -10,7 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { eq, sql, and, inArray, isNull, lt, or } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, gt, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
@@ -2596,7 +2596,7 @@ export class MatchesService {
   async getMessages(
     matchId: string,
     viewerId?: string,
-    opts: { before?: string; limit?: number } = {},
+    opts: { before?: string; after?: string; limit?: number } = {},
   ) {
     // Access control (P0-1): chat history is members-only, mirroring the WS
     // gateway's join-lobby/send-message membership enforcement. Internal
@@ -2613,30 +2613,62 @@ export class MatchesService {
     // Clamp: hard bounds keep arbitrary limit values from dumping the table.
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50) || 50, 1), 100);
     const before = opts.before?.trim() || undefined;
+    const after = opts.after?.trim() || undefined;
 
-    if (before) {
+    // P2-196 (run #132): the reconnect backfill direction. `after` mirrors
+    // the `before` anchor semantics exactly — unknown or cross-match cursor
+    // → 404 (no silent empty page, no cross-match leak); composite keyset
+    // strictly newer in (created_at, id); ASC output. Both cursors at once
+    // is a client bug → clean 400 (single-direction anchor reads only).
+    if (before && after) {
+      throw new BadRequestException(
+        'Use either before or after, not both.',
+      );
+    }
+
+    const cursor = before ?? after;
+    if (cursor) {
+      // PR-Agent r2 (run #132): reject non-UUID-shaped cursors BEFORE the PK
+      // read — same contract as the WS gateway's isUuidShape gate. Belt and
+      // braces: the column is varchar(36) (no uuid cast today), but the
+      // shape guard pins the 404 contract against any future column-type
+      // drift and keeps forged query params out of the DB entirely.
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor)) {
+        throw new NotFoundException('Unknown message cursor.');
+      }
       // The cursor is a PK read; validating it (existence + same-match)
       // turns a forged cursor into a clean 404 instead of a silent
       // cross-match leak or an empty page.
       const anchor = await this.db.query.match_messages.findFirst({
-        where: eq(match_messages.id, before),
+        where: eq(match_messages.id, cursor),
         columns: { id: true, match_id: true, created_at: true },
       });
       if (!anchor || anchor.match_id !== matchId) {
         throw new NotFoundException('Unknown message cursor.');
       }
 
+      // Keyset comparator flips with the direction: `before` pages strictly
+      // OLDER than the anchor, `after` pages strictly NEWER.
+      const newerThanAnchor = after !== undefined;
+
       return this.db.query.match_messages.findMany({
         where: and(
           eq(match_messages.match_id, matchId),
-          // Composite keyset: strictly before the anchor in (created_at, id).
-          or(
-            lt(match_messages.created_at, anchor.created_at),
-            and(
-              eq(match_messages.created_at, anchor.created_at),
-              lt(match_messages.id, anchor.id),
-            ),
-          ),
+          newerThanAnchor
+            ? or(
+                gt(match_messages.created_at, anchor.created_at),
+                and(
+                  eq(match_messages.created_at, anchor.created_at),
+                  gt(match_messages.id, anchor.id),
+                ),
+              )
+            : or(
+                lt(match_messages.created_at, anchor.created_at),
+                and(
+                  eq(match_messages.created_at, anchor.created_at),
+                  lt(match_messages.id, anchor.id),
+                ),
+              ),
         ),
         orderBy: (msg, { asc }) => [asc(msg.created_at), asc(msg.id)],
         limit,

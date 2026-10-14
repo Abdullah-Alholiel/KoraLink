@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
-import { resolveDateLocale } from '@/lib/format';
+import { resolveDateLocale, formatCount, type AppLocale } from '@/lib/format';
 import { useNow } from '@/hooks/useNow';
 import { classifyError, errorKey, type ErrorKind } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -72,7 +72,7 @@ export default function ChatSheet({
   matchTitle,
 }: ChatSheetProps) {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useLocale() as AppLocale;
   const user = useAppStore(selectUser);
   const currentUserId = user?.id;
 
@@ -89,6 +89,10 @@ export default function ChatSheet({
     loadOlder,
     typingUserIds,
     emitTyping,
+    // P2-196 (run #132): reconnect-backfill marker — divider above the first
+    // message that arrived while the socket was down; tappable to dismiss.
+    missedMarker,
+    dismissMissedMarker,
   } = useMatchChat(isOpen ? matchId : null, (err) =>
     setChatNoticeKind(classifyError(err)),
   );
@@ -282,8 +286,29 @@ export default function ChatSheet({
                 });
 
                 return (
-                  <div
-                    key={msg.id}
+                  <Fragment key={msg.id}>
+                    {/* P2-196 (run #132): "new while you were away" divider —
+                        rendered once, above the first message that arrived
+                        during a socket gap. Tappable to dismiss. */}
+                    {missedMarker?.firstId === msg.id && (
+                      <button
+                        type="button"
+                        onClick={dismissMissedMarker}
+                        aria-label={t('messages.newWhileAway', {
+                          count: formatCount(missedMarker.count, locale),
+                        })}
+                        className="w-full flex items-center gap-2 px-4 py-2"
+                      >
+                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                        <span className="text-[10px] font-semibold text-brand-green bg-brand-green/10 rounded-full px-3 py-0.5 whitespace-nowrap">
+                          {t('messages.newWhileAway', {
+                            count: formatCount(missedMarker.count, locale),
+                          })}
+                        </span>
+                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                      </button>
+                    )}
+                    <div
                     className={`flex items-end gap-2 px-4 py-1.5 ${
                       isMine ? 'flex-row-reverse' : 'flex-row'
                     }`}
@@ -344,6 +369,7 @@ export default function ChatSheet({
                       )}
                     </span>
                   </div>
+                  </Fragment>
                 );
               })}
             </div>

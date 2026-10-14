@@ -315,6 +315,8 @@
     "reschedule": "تغيير الموعد",
     "shareText": "⚽ {title}\n{date} الساعة {time}\n📍 {venue}\n💸 {price}",
     "heroShareText": "{title} — {date} {time} في {venue}",
+    "shareAria": "مشاركة المباراة",
+    "whatsAppShareAria": "مشاركة دعوة المباراة عبر واتساب",
     "whatsAppShareText": "⚽ انضم إليّ في «{title}» يوم {date} الساعة {time}!\n📍 {venue}\n💸 {price}\n{url}\n\nانضم عبر كورالينك!"
   },
   "cancelMatch": {
@@ -853,6 +855,7 @@
     "noMessages": "لا توجد رسائل بعد",
     "noMessagesDescription": "انضم لمباراة لبدء المحادثة مع اللاعبين.",
     "noMessagesYet": "لا توجد رسائل بعد",
+    "newWhileAway": "جديدة أثناء غيابك: {count}",
     "typeMessage": "اكتب رسالة…",
     "offlineCachedHistory": "أنت غير متصل — نعرض رسائلك الأخيرة. أعد الاتصال لتحميل الرسائل الجديدة.",
     "startFailed": "تعذّر بدء المحادثة. تحقّق من اتصالك وحاول مرة أخرى.",
