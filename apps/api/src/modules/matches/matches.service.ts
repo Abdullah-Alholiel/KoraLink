@@ -2628,6 +2628,14 @@ export class MatchesService {
 
     const cursor = before ?? after;
     if (cursor) {
+      // PR-Agent r2 (run #132): reject non-UUID-shaped cursors BEFORE the PK
+      // read — same contract as the WS gateway's isUuidShape gate. Belt and
+      // braces: the column is varchar(36) (no uuid cast today), but the
+      // shape guard pins the 404 contract against any future column-type
+      // drift and keeps forged query params out of the DB entirely.
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor)) {
+        throw new NotFoundException('Unknown message cursor.');
+      }
       // The cursor is a PK read; validating it (existence + same-match)
       // turns a forged cursor into a clean 404 instead of a silent
       // cross-match leak or an empty page.
