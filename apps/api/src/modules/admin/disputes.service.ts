@@ -384,16 +384,21 @@ export class AdminDisputesService {
     // admins editing decision/note concurrently get a 409 instead of silent
     // last-write-wins. The bump rides the same single predicated UPDATE
     // (atomic; no second statement to interleave). Absent `version` =
-    // legacy client → guard skipped (P2-191 predicates still apply).
-    const beforeVersion = (before as { version?: number | null }).version ?? 1;
-    if (dto.version !== undefined) {
-      updates.version = beforeVersion + 1;
+    // legacy client → guard skipped (P2-191 predicates still apply). A row
+    // that arrives WITHOUT a version (columns-restricted future findOne)
+    // also skips the guard — pinning to a default would 409 every save on
+    // rows already bumped past it (PR-Agent run #130).
+    const rowVersion = (before as { version?: number | null }).version;
+    const guardVersion = dto.version !== undefined && typeof rowVersion === 'number';
+    const beforeVersion = guardVersion ? (rowVersion as number) : undefined;
+    if (guardVersion) {
+      updates.version = (beforeVersion as number) + 1;
     }
 
     const guards = [
       eq(disputes.id, id),
       eq(disputes.status, before.status),
-      ...(dto.version !== undefined ? [eq(disputes.version, beforeVersion)] : []),
+      ...(guardVersion ? [eq(disputes.version, beforeVersion as number)] : []),
     ];
 
     const updated = await this.db
@@ -408,7 +413,7 @@ export class AdminDisputesService {
       // (echo the fresh version so the UI can reload + re-apply); anything
       // else is the P2-191 status-drift class. Only the version-guarded path
       // can use the fresh read — legacy clients skip it entirely.
-      if (dto.version !== undefined) {
+      if (guardVersion) {
         const fresh = await this.db.query.disputes.findFirst({
           where: eq(disputes.id, id),
           columns: { status: true, version: true },
