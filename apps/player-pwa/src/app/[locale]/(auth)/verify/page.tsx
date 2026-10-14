@@ -256,9 +256,14 @@ function VerifyContent() {
         const kind = classifyError(err);
         const retryAfter = (err as { retryAfter?: number })?.retryAfter;
         if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
-            const capped = Math.min(Math.ceil(retryAfter), RESEND_COOLDOWN);
-            setResendCountdown(capped);
-            return tErrors('rateLimitedRetryIn', { seconds: capped });
+            const wait = Math.ceil(retryAfter);
+            // Copy shows SERVER truth (PR-Agent run #131: clamping a 15-min
+            // lockout into a 60s message loops the user through blind
+            // retries that always 429 again). The resend button keeps its
+            // natural 60s window — an early resend mid-lockout is harmless,
+            // the send-path cooldown still guards it server-side.
+            setResendCountdown(Math.min(wait, RESEND_COOLDOWN));
+            return tErrors('rateLimitedRetryIn', { seconds: wait });
         }
         return kind === 'rateLimited' ? tErrors('rateLimited') : tErrors('otpFailed');
     };
