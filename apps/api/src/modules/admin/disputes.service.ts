@@ -379,26 +379,24 @@ export class AdminDisputesService {
     if (dto.internalNote !== undefined) updates.internal_note = dto.internalNote ?? null;
 
     // P2-192: optimistic-edit token. P2-191 guards status transitions; this
-    // guards SAME-STATUS edits — when the client echoes the version it saw,
-    // the write additionally requires the row to still carry it, so two
-    // admins editing decision/note concurrently get a 409 instead of silent
-    // last-write-wins. The bump rides the same single predicated UPDATE
-    // (atomic; no second statement to interleave). Absent `version` =
-    // legacy client → guard skipped (P2-191 predicates still apply). A row
-    // that arrives WITHOUT a version (columns-restricted future findOne)
-    // also skips the guard — pinning to a default would 409 every save on
-    // rows already bumped past it (PR-Agent run #130).
+    // guards SAME-STATUS edits. The WHERE pins the version the CLIENT echoed
+    // (dto.version) — NOT the freshly-read row version, which would always
+    // self-match and turn the guard into a no-op (caught by the live E2E,
+    // run #130). Bump = dto.version + 1, riding the same single predicated
+    // statement. Absent `version` (client OR row) = guard skipped — legacy
+    // clients and columns-restricted reads keep the P2-191 behavior; never
+    // pin a default (PR-Agent run #130).
     const rowVersion = (before as { version?: number | null }).version;
     const guardVersion = dto.version !== undefined && typeof rowVersion === 'number';
-    const beforeVersion = guardVersion ? (rowVersion as number) : undefined;
+    const claimedVersion = guardVersion ? (dto.version as number) : undefined;
     if (guardVersion) {
-      updates.version = (beforeVersion as number) + 1;
+      updates.version = (claimedVersion as number) + 1;
     }
 
     const guards = [
       eq(disputes.id, id),
       eq(disputes.status, before.status),
-      ...(guardVersion ? [eq(disputes.version, beforeVersion as number)] : []),
+      ...(guardVersion ? [eq(disputes.version, claimedVersion as number)] : []),
     ];
 
     const updated = await this.db

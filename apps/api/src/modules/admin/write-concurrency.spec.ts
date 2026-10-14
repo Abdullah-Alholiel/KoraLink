@@ -595,14 +595,38 @@ describe('Admin edit optimistic-version tokens (P2-192)', () => {
   }
 
   it('disputes.update: version echo adds version predicate + bump in ONE statement', async () => {
-    const { svc, db } = makeDisputesService({ updateRows: [{ id: 'd1', version: 4 }] });
+    // Row sits at 7 (already saved before); client echoes 3 (what IT saw).
+    const { svc, db } = makeDisputesService({
+      updateRows: [{ id: 'd1', version: 4 }],
+      findOneRow: { id: 'd1', status: 'under_review', version: 7 },
+    });
     await svc.update('d1', { decision: 'upheld', version: 3 } as never, 'admin-1');
     const chain = (db.update as jest.Mock).mock.results[0].value;
-    const sql = renderSql(chain._capturedWhere());
-    expect(sql).toContain('"disputes"."version"');
-    expect(sql).toContain('"disputes"."status"');
-    // bump rides the same .set() — never a second interleavable statement
+    const rendered = dialect.sqlToQuery(chain._capturedWhere() as never);
+    expect(rendered.sql).toContain('"disputes"."version"');
+    expect(rendered.sql).toContain('"disputes"."status"');
+    // The WHERE must bind the CLIENT-claimed version (3), not the freshly-read
+    // row version (7) — pinning the row version would always self-match into a
+    // no-op guard (caught by the live E2E, run #130).
+    expect(rendered.params).toContain(3);
+    expect(rendered.params).not.toContain(7);
+    // bump = claimed + 1, riding the same .set() — never a second statement
     expect(chain._capturedSet()).toMatchObject({ version: 4 });
+  });
+
+  it('disputes.update: claimed version pinned in WHERE even when row has drifted ahead', async () => {
+    // row already at 7 (someone saved), client still echoing 3 → 0 rows → 409
+    const { svc, audit } = makeDisputesService({
+      updateRows: [],
+      findOneRow: { id: 'd1', status: 'under_review', version: 7 },
+      freshRow: { status: 'under_review', version: 7 },
+    });
+    const err = await svc
+      .update('d1', { decision: 'x', version: 3 } as never, 'admin-1')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({ version: 7 });
+    expect(audit.log).not.toHaveBeenCalled();
   });
 
   it('disputes.update: same-status concurrent save → 409 echoes the fresh version', async () => {

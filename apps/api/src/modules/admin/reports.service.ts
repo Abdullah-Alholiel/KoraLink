@@ -262,15 +262,17 @@ export class AdminReportsService {
     }
 
     // P2-192: optimistic-edit token — same contract as disputes.update():
-    // guard + bump ride ONE predicated statement; absent version (client OR
-    // row) = guard skipped (PR-Agent run #130: never pin a default).
+    // the WHERE pins the CLIENT-echoed version (never the just-read row
+    // version — that self-matches into a no-op guard, caught live run #130);
+    // bump = dto.version + 1 in the same statement; absent version (client
+    // OR row) = guard skipped.
     const rowVersion = (before as { version?: number | null }).version;
     const guardVersion = dto.version !== undefined && typeof rowVersion === 'number';
-    const beforeVersion = guardVersion ? (rowVersion as number) : undefined;
+    const claimedVersion = guardVersion ? (dto.version as number) : undefined;
     const guards = [
       eq(reports.id, id),
       eq(reports.status, before.status),
-      ...(guardVersion ? [eq(reports.version, beforeVersion as number)] : []),
+      ...(guardVersion ? [eq(reports.version, claimedVersion as number)] : []),
     ];
 
     const updated = await this.db
@@ -278,7 +280,7 @@ export class AdminReportsService {
       .set(
         withTimestamp({
           resolution: dto.resolution ?? null,
-          ...(guardVersion ? { version: (beforeVersion as number) + 1 } : {}),
+          ...(guardVersion ? { version: (claimedVersion as number) + 1 } : {}),
         }),
       )
       .where(and(...guards))
