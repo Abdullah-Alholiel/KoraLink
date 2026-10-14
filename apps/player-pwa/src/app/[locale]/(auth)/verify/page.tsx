@@ -11,7 +11,7 @@ import { classifyError } from '@/lib/error-classify';
 import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft, setAuthChannel, setAuthEmailDraft, setAuthPhoneDraft } from '@/lib/auth-flow';
 import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
 import type { BlockedReason } from '@/components/auth/BlockedCard';
-import type { AppLocale } from '@/lib/format';
+import { formatCount, type AppLocale } from '@/lib/format';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -443,7 +443,7 @@ function VerifyContent() {
                         <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
                     )}
                     {resendCountdown > 0
-                        ? `${t('resendIn')} ${resendCountdown} ${t('seconds')}`
+                        ? `${t('resendIn')} ${formatCount(resendCountdown, (locale === 'ar' ? 'ar' : 'en') as AppLocale)} ${t('seconds')}`
                         : t('resend')}
                 </button>
             </div>
