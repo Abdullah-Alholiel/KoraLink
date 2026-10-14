@@ -129,10 +129,18 @@ export class AdminPitchesService {
     if (dto.is_active !== undefined) updates.is_active = dto.is_active;
     if (dto.venue_id !== undefined) updates.venue_id = dto.venue_id;
 
-    await this.db
+    // P2-202 (run #132): guarded update — same parity as venues (the
+    // .returning() rowcount detects a vanished id; 0 rows → 404 BEFORE the
+    // audit write, so a no-op is never recorded as a change).
+    const updated = await this.db
       .update(pitches)
       .set(withTimestamp(updates) as never)
-      .where(eq(pitches.id, id));
+      .where(eq(pitches.id, id))
+      .returning({ id: pitches.id });
+
+    if (updated.length === 0) {
+      throw new NotFoundException('Pitch not found.');
+    }
 
     const after = await this.findOne(id);
 
