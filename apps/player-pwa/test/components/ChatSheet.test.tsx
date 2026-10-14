@@ -177,8 +177,9 @@ describe('ChatSheet', () => {
 
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.getByText('Yesterday')).toBeTruthy();
-    // The 2020 message renders under a plain localized date, not "Today".
-    expect(screen.getByText('Jan 1')).toBeTruthy();
+    // The 2020 message renders under a plain localized date, not "Today" —
+    // via resolveDateLocale (P2-189), so EN is the canonical en-GB "1 Jan".
+    expect(screen.getByText('1 Jan')).toBeTruthy();
   });
 
   it('CS-3c: null clock (SSR/first-render posture) does not crash and recovers to real-clock labels (P2-59)', () => {

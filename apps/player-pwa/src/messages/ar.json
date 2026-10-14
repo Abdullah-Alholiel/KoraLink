@@ -312,7 +312,10 @@
     "copyInviteLink": "مشاركة رابط الدعوة",
     "inviteShareText": "أنت مدعو إلى مباراة خاصة في كورالينك!",
     "joinToChat": "انضم إلى المباراة لرؤية الرسائل وإرسالها.",
-    "reschedule": "تغيير الموعد"
+    "reschedule": "تغيير الموعد",
+    "shareText": "⚽ {title}\n{date} الساعة {time}\n📍 {venue}\n💸 {price}",
+    "heroShareText": "{title} — {date} {time} في {venue}",
+    "whatsAppShareText": "⚽ انضم إليّ في «{title}» يوم {date} الساعة {time}!\n📍 {venue}\n💸 {price}\n{url}\n\nانضم عبر كورالينك!"
   },
   "cancelMatch": {
     "title": "إلغاء المباراة؟",

@@ -7,6 +7,7 @@ import { useMatchChat } from '@/hooks/useMessages';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
+import { resolveDateLocale } from '@/lib/format';
 import { useNow } from '@/hooks/useNow';
 import { classifyError, errorKey, type ErrorKind } from '@/lib/error-classify';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -50,7 +51,7 @@ function groupMessages(
     const label =
       group === 'today' ? t('messages.today') :
       group === 'yesterday' ? t('messages.yesterday') :
-      new Date(msg.created_at).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+      new Date(msg.created_at).toLocaleDateString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), { month: 'short', day: 'numeric' });
 
     const last = groups[groups.length - 1];
     if (last && last.label === label) {
@@ -274,7 +275,7 @@ export default function ChatSheet({
               {group.messages.map((msg) => {
                 const isMine = msg.user_id === currentUserId;
                 const avatarInitial = (msg.user?.full_name ?? 'P').charAt(0).toUpperCase();
-                const timeStr = new Date(msg.created_at).toLocaleTimeString(locale, {
+                const timeStr = new Date(msg.created_at).toLocaleTimeString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), {
                   hour: 'numeric',
                   minute: '2-digit',
                   hour12: true,

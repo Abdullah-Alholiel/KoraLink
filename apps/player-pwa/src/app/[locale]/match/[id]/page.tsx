@@ -34,7 +34,7 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
 import { shareOrCopy } from '@/lib/share';
-import { formatClockTime, type AppLocale } from '@/lib/format';
+import { formatClockTime, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
 import {
     matchHasStarted,
     matchHasEnded,
@@ -206,6 +206,21 @@ export default function MatchDetailPage({
         void refetch();
     };
 
+    /* ── Share-text params (P2-189): date/time/price through the locale
+     * formatters (Gregorian + Arabic-Indic digits for AR) instead of the
+     * adapter's fixed-EN `match.date`/`match.time` strings. */
+    const shareParams = (m: NonNullable<typeof match>) => {
+        const appLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
+        const scheduled = m.scheduledAt ? new Date(m.scheduledAt) : null;
+        return {
+            title: m.title,
+            date: scheduled ? formatShortDate(scheduled, appLocale) : m.date,
+            time: scheduled ? formatClockTime(scheduled, appLocale) : m.time,
+            venue: m.venueName,
+            price: m.price === 0 ? t('gameDetails.free') : formatMoney(m.price, appLocale),
+        };
+    };
+
     /* ── Universal share / copy (works on HTTP origins + iOS PWA) ──
      * navigator.clipboard is UNDEFINED on non-secure origins (Tailscale IP
      * over HTTP) and gated in installed iOS PWAs — the old `?.writeText`
@@ -214,9 +229,7 @@ export default function MatchDetailPage({
      * execCommand, and reports the honest outcome. */
     const handleShareMatch = async (opts?: { text?: string; url?: string; context: string }) => {
         if (!match) return;
-        const shareText =
-            opts?.text ??
-            `⚽ ${match.title}\n${match.date} at ${match.time}\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}`;
+        const shareText = opts?.text ?? t('matchDetail.shareText', shareParams(match));
         const url = opts?.url ?? (typeof window !== 'undefined' ? window.location.href : '');
 
         const outcome = await shareOrCopy({ title: match.title, text: shareText, url });
@@ -300,7 +313,7 @@ export default function MatchDetailPage({
                             onClick={() => router.back()}
                             className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
                         >
-                            <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
+                            <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
                             onClick={() => {
@@ -308,7 +321,7 @@ export default function MatchDetailPage({
                                     setShowChatSheet(true);
                                 } else {
                                     handleShareMatch({
-                                        text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
+                                        text: t('matchDetail.heroShareText', shareParams(match)),
                                         context: 'hero',
                                     });
                                 }
@@ -716,7 +729,7 @@ export default function MatchDetailPage({
                             <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
-                                        `⚽ Join me for "${match.title}" on ${match.date} at ${match.time}!\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}\n${shareUrl}\n\nJoin on KoraLink!`
+                                        t('matchDetail.whatsAppShareText', { ...shareParams(match), url: shareUrl })
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"

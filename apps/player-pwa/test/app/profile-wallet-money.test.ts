@@ -16,7 +16,7 @@ describe('profile wallet money rendering (run #112 A-2 pin)', () => {
             'src/app/[locale]/(main)/profile/page.tsx', 'utf8',
         );
         // The convention import is present.
-        expect(src).toContain("import { formatMoney } from '@/lib/format'");
+        expect(src).toMatch(/import \{[^}]*\bformatMoney\b[^}]*\} from '@\/lib\/format'/);
         // The endText branch calls the helper.
         expect(src).toContain('formatMoney(displayBalance, intlLocale)');
         // The hardcoded template is gone.

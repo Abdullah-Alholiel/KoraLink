@@ -13,6 +13,7 @@ import { useNow } from '@/hooks/useNow';
 import { useMyMatches, useUserStats } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
+import { formatCount } from '@/lib/format';
 
 /** True while POTM voting is still open — uses the authoritative API deadline
  *  when present, falling back to the coarse scheduled-end estimate otherwise.
@@ -68,7 +69,7 @@ export default function MyGamesPage() {
           onClick={() => router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
         >
-          <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+          <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
         </button>
         <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
           {t('myGames.title')}
@@ -153,14 +154,14 @@ export default function MyGamesPage() {
               ) : !statsError && stats ? (
                 <div className="bg-white rounded-2xl shadow-card px-2 py-4 flex">
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played ?? 0}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{formatCount(stats.games_played ?? 0, locale === 'ar' ? 'ar' : 'en')}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsPlayed')}
                     </p>
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.matches_hosted ?? 0}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{formatCount(stats.matches_hosted ?? 0, locale === 'ar' ? 'ar' : 'en')}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsHosted')}
                     </p>

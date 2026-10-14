@@ -14,6 +14,7 @@ import ReportSheet from '@/components/matches/ReportSheet';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import { useNow } from '@/hooks/useNow';
 import { uuid } from '@/lib/uuid';
+import { resolveDateLocale } from '@/lib/format';
 import type { RosterPlayer } from '@/types';
 
 // ── Date grouping (same style as ChatSheet) ────────────
@@ -44,7 +45,7 @@ function groupMessages(
     const label =
       group === 'today' ? t('messages.today') :
       group === 'yesterday' ? t('messages.yesterday') :
-      new Date(msg.createdAt).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+      new Date(msg.createdAt).toLocaleDateString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), { month: 'short', day: 'numeric' });
 
     const last = groups[groups.length - 1];
     if (last && last.label === label) {
@@ -138,7 +139,7 @@ export default function ConversationPage({
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
             aria-label={t('common.back')}
           >
-            <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+            <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
           </button>
           {/* Other participant — tap to open their profile sheet */}
           <button
@@ -218,7 +219,7 @@ export default function ConversationPage({
                 const mine = m.sender.id === storeUser?.id;
                 const timeStr = now === null
                   ? ' '
-                  : new Date(m.createdAt).toLocaleTimeString(locale, {
+                  : new Date(m.createdAt).toLocaleTimeString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), {
                       hour: 'numeric',
                       minute: '2-digit',
                       hour12: true,
