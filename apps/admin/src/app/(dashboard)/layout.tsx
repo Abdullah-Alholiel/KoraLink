@@ -103,7 +103,6 @@ export default function DashboardLayout({
           onClick={() => setNavOpen(true)}
           aria-label={tn('openMenu')}
           aria-expanded={navOpen}
-          aria-pressed={navOpen}
           aria-controls="mobile-sidebar"
           className="rounded-lg p-1.5 text-gray-300 hover:bg-white/10 hover:text-white"
         >
