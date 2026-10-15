@@ -474,7 +474,10 @@ export function useMatchChat(
       typingTimers.clear();
       setTypingUserIds(new Set());
     };
-  }, [matchId, reconcile, rt, currentUserId]);
+    // backfillAfterReconnect is a stable useCallback dep of the reconnect
+    // wiring above; the cleanup only touches refs/state — listed to satisfy
+    // exhaustive-deps without changing teardown behavior (run #133 lint gate).
+  }, [matchId, reconcile, rt, currentUserId, backfillAfterReconnect]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark

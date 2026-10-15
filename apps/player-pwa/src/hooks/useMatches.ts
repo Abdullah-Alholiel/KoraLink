@@ -19,6 +19,7 @@ import {
 } from '@/lib/api-adapter';
 import { z } from 'zod';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
+import { useLocale } from 'next-intl';
 
 // ─── API Response Types (snake_case raw) ──────────────
 
@@ -91,6 +92,10 @@ export function useMatches(filters?: {
   /** Free-text venue-address filter (search-suggestions feature). */
   neighborhood?: string | null;
 }): UseMatchesResult {
+  // P2-rider (run #133): clock-time rendering follows the active locale
+  // (ar → Arabic-Indic "٧:٠٠ م"). Locale switches remount the [locale] tree,
+  // so the closure cannot outlive its locale — no queryKey churn needed.
+  const locale = useLocale() as 'ar' | 'en';
   const query = useInfiniteQuery({
     queryKey: ['matches', filters],
     initialPageParam: 0,
@@ -131,7 +136,7 @@ export function useMatches(filters?: {
 
       const { total, hasMore } = !Array.isArray(raw) ? raw : {};
       return {
-        matches: adaptMatchList(rows),
+        matches: adaptMatchList(rows, undefined, locale),
         total,
         // Legacy array shape carries no hasMore — never page on it.
         hasMore: hasMore ?? false,
@@ -179,6 +184,7 @@ export function useMatches(filters?: {
 
 export function useMatch(id: string, currentUserId?: string) {
   const queryClient = useQueryClient();
+  const locale = useLocale() as 'ar' | 'en';
 
   useEffect(() => {
     if (!id) return;
@@ -217,7 +223,7 @@ export function useMatch(id: string, currentUserId?: string) {
     queryKey: ['match', id, { currentUserId }],
     queryFn: async () => {
       const raw = await fetcher<MatchDetailApi>(`/matches/${id}`);
-      return adaptMatchDetail(raw, currentUserId);
+      return adaptMatchDetail(raw, currentUserId, locale);
     },
     enabled: !!id,
   });

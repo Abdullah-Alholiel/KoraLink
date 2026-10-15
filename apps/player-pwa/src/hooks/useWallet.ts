@@ -9,6 +9,7 @@ import {
   adaptTransactionList,
   adaptWalletBalance,
 } from '@/lib/api-adapter';
+import { useLocale } from 'next-intl';
 
 // ─── Fetch Wallet Balance ───────────────────────────
 
@@ -57,7 +58,8 @@ async function fetchWalletHistoryPage({
   perPage,
   from,
   to,
-}: WalletHistoryArgs): Promise<WalletHistoryPage> {
+  locale = 'en',
+}: WalletHistoryArgs & { locale?: 'ar' | 'en' }): Promise<WalletHistoryPage> {
   const params: Record<string, string> = { page: String(page), perPage: String(perPage) };
   if (from) params.from = from;
   if (to) params.to = to;
@@ -67,7 +69,7 @@ async function fetchWalletHistoryPage({
     hasMore: boolean;
   }>('/wallet/history', { params });
   return {
-    transactions: adaptTransactionList(raw.transactions),
+    transactions: adaptTransactionList(raw.transactions, locale),
     total: raw.total,
     hasMore: raw.hasMore,
   };
@@ -75,9 +77,13 @@ async function fetchWalletHistoryPage({
 
 export function useWalletHistory(params?: WalletHistoryParams) {
   const { page = 1, perPage = 20, from, to } = params ?? {};
+  // P2-rider (run #133): transaction descriptions render clock times in the
+  // active locale ("٧:٣٠ م • Completed" in ar). Locale switches remount the
+  // [locale] tree, so the closure cannot outlive its locale.
+  const locale = useLocale() as 'ar' | 'en';
   return useQuery<WalletHistoryPage, FetchError>({
     queryKey: walletHistoryKey({ page, perPage, from, to }),
-    queryFn: () => fetchWalletHistoryPage({ page, perPage, from, to }),
+    queryFn: () => fetchWalletHistoryPage({ page, perPage, from, to, locale }),
     staleTime: 60_000,
     retry: false,
   });

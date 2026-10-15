@@ -45,7 +45,9 @@ export default function MyGamesPage() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useUserStats();
   const storeUser = useAppStore(selectUser);
   const now = useNow();
-  const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
+  const matches = matchesApi
+    ? adaptMatchList(matchesApi, storeUser?.id, locale === 'ar' ? 'ar' : 'en')
+    : [];
 
   const activeMatches = matches.filter((m) =>
     // Active = joinable OR played within the POTM voting window (24h after

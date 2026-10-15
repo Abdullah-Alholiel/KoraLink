@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '@/messages/en.json';
 import React from 'react';
 
 // Mock fetcher
@@ -25,14 +27,16 @@ import {
   useTopupWallet,
 } from '@/hooks/useWallet';
 
-// Wrapper with QueryClientProvider
+// Wrapper with QueryClientProvider (+ NextIntl — useLocale() in the hooks)
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <NextIntlClientProvider messages={enMessages} locale="en">
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </NextIntlClientProvider>
     ),
     queryClient,
   };
