@@ -66,7 +66,7 @@ const PROFILE = {
 };
 
 function mockFetch(routes: Record<string, unknown>) {
-  vi.mocked(fetcher).mockImplementation(((path: string, _opts?: unknown) => {
+  vi.mocked(fetcher).mockImplementation(((path: string) => {
     if (path in routes) {
       const v = routes[path];
       if (v instanceof Error) return Promise.reject(v);

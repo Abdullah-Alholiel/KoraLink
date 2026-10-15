@@ -168,8 +168,17 @@ function toNum(v: string | number): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function fmtTime(d: Date): string {
-  return d.toLocaleTimeString('en-US', {
+import type { AppLocale } from '@/lib/format';
+
+/**
+ * P2-rider (run #133): clock-time rendering follows the active locale —
+ * ar → "٧:٠٠ م" (Gregorian-pinned, Arabic-Indic digits), en → byte-identical
+ * legacy "7:00 PM" (explicit en-US keeps the uppercase AM/PM; en-GB renders
+ * lowercase in some ICU builds). Default 'en' keeps existing direct callers
+ * (tests, non-locale surfaces) byte-for-byte; hooks thread the real locale.
+ */
+function fmtTime(d: Date, locale: AppLocale = 'en'): string {
+  return d.toLocaleTimeString(locale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -196,8 +205,8 @@ export {
   isPotmVotingOpen,
 } from '@/lib/match-pricing';
 
-function fmtEnd(scheduled: Date, durationMins: number): string {
-  return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000));
+function fmtEnd(scheduled: Date, durationMins: number, locale: AppLocale = 'en'): string {
+  return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000), locale);
 }
 
 function mapGender(rule: string): 'men' | 'women' | 'mixed' {
@@ -285,7 +294,11 @@ export function buildComments(messages: MatchMessageApi[]): Comment[] {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** Adapts a NearbyMatchApi row → frontend Match (sparse fields from feed query) */
-export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): Match {
+export function adaptNearbyMatch(
+  row: NearbyMatchApi,
+  currentUserId?: string,
+  locale: AppLocale = 'en',
+): Match {
   const scheduled = new Date(row.scheduled_at);
   const durationMins = row.duration_mins ?? 60;
   const startMs = scheduled.getTime();
@@ -307,8 +320,8 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
       avatarUrl: row.host_avatar ?? '',
     },
     date: dateInRiyadh(scheduled),
-    time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, durationMins),
+    time: fmtTime(scheduled, locale),
+    endTime: fmtEnd(scheduled, durationMins, locale),
     scheduledAt: scheduled.toISOString(),
     endsAt: new Date(endMs).toISOString(),
     votingClosesAt: row.voting_closes_at
@@ -356,6 +369,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
 export function adaptMatchDetail(
   detail: MatchDetailApi,
   currentUserId?: string,
+  locale: AppLocale = 'en',
 ): Match {
   const scheduled = new Date(detail.scheduled_at);
   const duration = detail.duration_mins ?? 60;
@@ -378,8 +392,8 @@ export function adaptMatchDetail(
     hostId: detail.host_id,
     organizer: buildOrganizer(detail.host),
     date: dateInRiyadh(scheduled),
-    time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, duration),
+    time: fmtTime(scheduled, locale),
+    endTime: fmtEnd(scheduled, duration, locale),
     scheduledAt: scheduled.toISOString(),
     endsAt: new Date(endMs).toISOString(),
     votingClosesAt: new Date(
@@ -426,14 +440,21 @@ export function adaptMatchDetail(
 }
 
 /** Adapts many NearbyMatchApi rows → Match[] */
-export function adaptMatchList(rows: NearbyMatchApi[], currentUserId?: string): Match[] {
-  return rows.map(row => adaptNearbyMatch(row, currentUserId));
+export function adaptMatchList(
+  rows: NearbyMatchApi[],
+  currentUserId?: string,
+  locale: AppLocale = 'en',
+): Match[] {
+  return rows.map((row) => adaptNearbyMatch(row, currentUserId, locale));
 }
 
 // ── Wallet Adapters ──────────────────────────────────────────────────────────
 
 /** Adapts a raw transaction row → frontend Transaction */
-export function adaptTransaction(row: TransactionApi): Transaction {
+export function adaptTransaction(
+  row: TransactionApi,
+  locale: AppLocale = 'en',
+): Transaction {
   const amount = toNum(row.amount);
   const category = mapTransactionCategory(row.reference_type);
   const type = mapTransactionType(row.type);
@@ -442,7 +463,7 @@ export function adaptTransaction(row: TransactionApi): Transaction {
 
   // Build human-readable title and description
   const title = buildTransactionTitle(row.reference_type, row.reference_id);
-  const description = buildTransactionDescription(status, row.created_at);
+  const description = buildTransactionDescription(status, row.created_at, locale);
 
   return {
     id: row.id,
@@ -458,8 +479,8 @@ export function adaptTransaction(row: TransactionApi): Transaction {
 }
 
 /** Adapts many TransactionApi rows → Transaction[] */
-export function adaptTransactionList(rows: TransactionApi[]): Transaction[] {
-  return rows.map(adaptTransaction);
+export function adaptTransactionList(rows: TransactionApi[], locale: AppLocale = 'en'): Transaction[] {
+  return rows.map((row) => adaptTransaction(row, locale));
 }
 
 /** Parses wallet balance from string to number */
@@ -482,9 +503,10 @@ function buildTransactionTitle(ref: string, refId: string | null): string {
 function buildTransactionDescription(
   status: 'pending' | 'completed' | 'failed',
   createdAt: string,
+  locale: AppLocale = 'en',
 ): string {
   const date = new Date(createdAt);
-  const timeStr = date.toLocaleTimeString('en-US', {
+  const timeStr = date.toLocaleTimeString(locale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
