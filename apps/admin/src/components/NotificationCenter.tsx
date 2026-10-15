@@ -311,18 +311,20 @@ interface BellButtonProps {
  */
 export function BellButton({ variant = 'sidebar' }: BellButtonProps) {
   const t = useTranslations('notifications');
-  const { unread } = useOpsActivity();
+  const { unread, feedOpen } = useOpsActivity();
 
-  function open() {
-    setFeedOpen(true);
-    trackEvent('admin_notifications_feed_open', { unread });
+  function toggle() {
+    setFeedOpen(!feedOpen);
+    if (!feedOpen) trackEvent('admin_notifications_feed_open', { unread });
   }
 
   if (variant === 'bar') {
     return (
       <button
-        onClick={open}
-        aria-label={t('bellAria')}
+        type="button"
+        onClick={toggle}
+        aria-label={t('bell')}
+        aria-pressed={feedOpen}
         className="relative rounded-lg p-1.5 text-gray-300 hover:bg-white/10 hover:text-white"
       >
         <Bell className="h-5 w-5" strokeWidth={1.5} />
@@ -340,7 +342,10 @@ export function BellButton({ variant = 'sidebar' }: BellButtonProps) {
 
   return (
     <button
-      onClick={open}
+      type="button"
+      onClick={toggle}
+      aria-label={t('bell')}
+      aria-pressed={feedOpen}
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white"
     >
       <span className="relative">

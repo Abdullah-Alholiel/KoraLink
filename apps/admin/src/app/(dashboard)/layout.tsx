@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Activity, Menu, X } from 'lucide-react';
 import { getRole, canAccessPath, homeForRole } from '@/lib/rbac';
 import type { Role } from '@/lib/api';
@@ -41,6 +42,7 @@ export default function DashboardLayout({
   // the mount effect and held in state; render stays a pure function of it
   // (null = still deciding → placeholder, exactly the old UX).
   const [guardRole, setGuardRole] = useState<Role | null>(null);
+  const tn = useTranslations('nav');
 
   useEffect(() => {
     const role = getRole();
@@ -97,8 +99,12 @@ export default function DashboardLayout({
       {/* Mobile top bar (<md only): brand + menu + notifications. */}
       <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-gray-900 px-4 md:hidden">
         <button
+          type="button"
           onClick={() => setNavOpen(true)}
-          aria-label="Menu"
+          aria-label={tn('openMenu')}
+          aria-expanded={navOpen}
+          aria-pressed={navOpen}
+          aria-controls="mobile-sidebar"
           className="rounded-lg p-1.5 text-gray-300 hover:bg-white/10 hover:text-white"
         >
           <Menu className="h-5 w-5" />

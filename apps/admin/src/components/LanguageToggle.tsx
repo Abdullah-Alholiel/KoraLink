@@ -12,8 +12,10 @@ export default function LanguageToggle() {
   const next = locale === 'en' ? 'ar' : 'en';
   return (
     <button
+      type="button"
       onClick={() => setAdminLocale(next)}
       aria-label={locale === 'en' ? 'Switch to Arabic' : 'التبديل إلى الإنجليزية'}
+      aria-pressed={locale === 'ar'}
       title={locale === 'en' ? 'العربية' : 'English'}
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white"
     >
