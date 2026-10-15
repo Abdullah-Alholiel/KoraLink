@@ -51,11 +51,11 @@ const PUSH_LOCALE_KEY = '/__kl/push-locale';
 // silently — exactly the failure rotation handling exists to prevent.
 const PUSH_API_BASE_KEY = '/__kl/push-api-base';
 const PUSH_VAPID_KEY = '/__kl/push-vapid';
-// Public VAPID key — same value the hook uses (public by design). Kept as
-// the fallback: a rotation that fires before ANY page subscribe still has
-// the deployed key.
-const VAPID_PUBLIC_KEY =
-  'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
+// P1-66 (run #135): the fallback key is EMPTY — the old literal was the
+// Google web-push codelab DEMO key (private half published). The real key is
+// env-configured (NEXT_PUBLIC_VAPID_PUBLIC_KEY) and reaches the worker only
+// via the page-written KV (/__kl/push-vapid); no key → rotation aborts.
+const DEFAULT_VAPID_PUBLIC_KEY = '';
 // Same-origin fallback used only when the hook has never written the KV
 // (no subscribe has happened yet → nothing to re-point anyway).
 const DEFAULT_API_BASE = '/api/v1';
@@ -152,7 +152,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
     (async () => {
       let locale = 'ar';
       let apiBase = DEFAULT_API_BASE;
-      let vapidKey = VAPID_PUBLIC_KEY;
+      let vapidKey = DEFAULT_VAPID_PUBLIC_KEY;
       try {
         const cache = await caches.open(PUSH_META_CACHE);
         const cachedLocale = await cache.match(PUSH_LOCALE_KEY);
@@ -176,8 +176,12 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         }
       } catch (_) {
         // missing/unreadable KV → Arabic-first default (P2-72 convention),
-        // deployed VAPID key, same-origin API base.
+        // empty VAPID key (→ abort below), same-origin API base.
       }
+
+      // P1-66 (run #135): no effective VAPID key → never call
+      // pushManager.subscribe with an empty applicationServerKey.
+      if (!vapidKey) return;
 
       let newSub = null;
       try {
