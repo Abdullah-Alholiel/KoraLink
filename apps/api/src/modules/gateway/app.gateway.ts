@@ -25,6 +25,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from './realtime.service';
 import { WsRateLimitService } from './rate-limit.service';
 import { UUID_SHAPE } from '../../common/validation/id-shape';
+import { wsAllowRequest, extractHandshakeOrigin, setWsAllowedOriginsProvider } from '../../common/utils/ws-origin';
+import { originAllowed } from '../../common/utils/cors-origin';
 
 /** Parity with the REST message DTOs (@MaxLength(2000)). */
 const WS_MESSAGE_MAX_LENGTH = 2000;
@@ -67,12 +69,20 @@ type DB = PostgresJsDatabase<typeof schema>;
 @WebSocketGateway({
   cors: {
     origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Origins are validated at connect time using ConfigService inside the class.
-      // This factory approach is used because static decorator values cannot read
-      // runtime config; actual origin check happens in handleConnection.
+      // P2-185 (run #133): origins are rejected pre-upgrade by `allowRequest`
+      // below; this factory only controls the CORS reflection header. Real
+      // origin enforcement lives in ws-origin.ts (allowRequest) + the
+      // defense-in-depth re-check in handleConnection.
       callback(null, true);
     },
     credentials: true,
+  },
+  // P2-185 (run #133): reject unlisted browser origins BEFORE the engine.io
+  // upgrade completes — previously every probe paid a full handshake+disconnect
+  // cycle before handleConnection's post-connect check fired. Non-browser
+  // requests (no Origin header) pass through; provider failures fail CLOSED.
+  allowRequest: (req: { headers?: Record<string, string | string[] | undefined> }, callback: (err: Error | null, allow?: boolean) => void) => {
+    callback(null, wsAllowRequest(req));
   },
   namespace: '/lobby',
 })
@@ -93,6 +103,26 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     private readonly rateLimit: WsRateLimitService,
   ) {}
 
+  onModuleInit(): void {
+    // P2-185 (run #133): the decorator context has no DI, so the allowRequest
+    // hook reads the allowlist through this module-level provider. Config is
+    // read LIVE per request (env edits + restarts propagate without a rebuild
+    // beyond the process restart itself).
+    setWsAllowedOriginsProvider(() => {
+      const playerUrls = this.config
+        .get<string>('PLAYER_URL', 'http://localhost:3000')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const adminUrls = this.config
+        .get<string>('ADMIN_URL', 'http://localhost:3002')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return [...playerUrls, ...adminUrls];
+    });
+  }
+
   afterInit(): void {
     this.realtime.registerServer(this.server);
     this.logger.log('Gateway initialised — realtime server registered');
@@ -102,7 +132,6 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
     // Validate origin against the configured whitelist.
-    const origin = client.handshake.headers?.origin;
     const playerUrls = this.config
       .get<string>('PLAYER_URL', 'http://localhost:3000')
       .split(',')
@@ -123,9 +152,15 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // Tighten: ALWAYS reject unlisted origins. Listing PLAYER_URL / ADMIN_URL
     // for any new local interface is a one-env-var change; loosening at the
     // gateway is a privilege-escalation surface we don't need.
-    if (origin && !allowedOrigins.includes(origin)) {
+    // P2-185 (run #133): defense-in-depth layer — allowRequest now rejects
+    // pre-upgrade; this post-connect check stays as a second gate and moves
+    // onto originAllowed() so BOTH layers share the normalize rule.
+    const handshakeOrigin = extractHandshakeOrigin({
+      headers: client.handshake.headers as Record<string, string | string[] | undefined>,
+    });
+    if (handshakeOrigin && !originAllowed(handshakeOrigin, allowedOrigins)) {
       this.logger.warn(
-        `WS connection from unlisted origin "${origin}" rejected (allowlist: ${allowedOrigins.join(', ')})`,
+        `WS connection from unlisted origin "${handshakeOrigin}" rejected (allowlist: ${allowedOrigins.join(', ')})`,
       );
       client.disconnect(true);
       return;
