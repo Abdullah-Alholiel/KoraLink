@@ -937,7 +937,7 @@ export class PartnerService {
       const totalCapacity =
         pattern.weeks_ahead *
         pattern.days_of_week.reduce(
-          (sum, dow) => sum + windowCapacity(startMins, endMins, dur),
+          (sum, _dow) => sum + windowCapacity(startMins, endMins, dur),
           0,
         );
 

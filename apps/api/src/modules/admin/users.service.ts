@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { SQL, and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
-import type { PgQueryResultHKT, PgTransaction } from 'drizzle-orm/pg-core';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase, PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { escapeLikePattern } from '../../common/utils/escape-like';

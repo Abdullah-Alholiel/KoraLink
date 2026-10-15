@@ -162,6 +162,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           )}
         />
         <aside
+          id="mobile-sidebar"
           className={cn(
             'absolute inset-y-0 left-0 flex w-64 flex-col bg-gray-900 text-gray-300 transition-transform duration-200',
             mobileOpen ? 'translate-x-0' : '-translate-x-full',
