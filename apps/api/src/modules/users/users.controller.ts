@@ -19,7 +19,6 @@ import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
-  ApiCreatedResponse,
   ApiBadRequestResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';

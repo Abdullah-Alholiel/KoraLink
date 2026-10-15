@@ -9,12 +9,10 @@ import {
   Body,
   Res,
   UseGuards,
-  UseInterceptors,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
   ApiOperation,
