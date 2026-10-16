@@ -12,7 +12,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
 import { resolveTrustProxyConfig } from './common/security/trust-proxy';
-import { originAllowed } from './common/utils/cors-origin';
+import { isProbeShapedOrigin, originAllowed } from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -66,6 +66,18 @@ async function bootstrap(): Promise<void> {
       environment: configService.get('NODE_ENV', 'development'),
       tracesSampleRate: 0.1,
       beforeSend(event) {
+        // P2-110 (run #137): CORS probe denials are classified at deny time
+        // (cors-origin.ts isProbeShapedOrigin → `CORS_PROBE_BLOCKED:` message)
+        // and dropped HERE — Sentry's express instrumentation captures the
+        // HttpException before the AllExceptionsFilter's >=500 rule, so
+        // ignoreErrors is inert for these (proven empirically against
+        // @sentry/node 10.70: both Glob and RegExp ignoreErrors forms let the
+        // event through; beforeSend → null drops exactly the classified event).
+        // Verified live: recording-transport probe = 1 of 2 events sent.
+        const excVal = event?.exception?.values?.[0]?.value;
+        if (typeof excVal === 'string' && excVal.startsWith('CORS_PROBE_BLOCKED: ')) {
+          return null;
+        }
         // Strip PII before it leaves the box. `sendDefaultPii` is false, but
         // headers (Authorization) and body data (phone) can still leak.
         const req = event.request;
@@ -120,9 +132,21 @@ async function bootstrap(): Promise<void> {
       if (originAllowed(origin, allowedOrigins)) {
         return callback(null, true);
       }
+      // P2-110 (run #137): denied origins are CLASSIFIED, not silenced. Probe-
+      // shaped origins (RFC 2606 reserved TLDs, known scanner payload hosts)
+      // get a `CORS_PROBE_BLOCKED:` message that main.ts's Sentry beforeSend
+      // drops — scanner noise (130 events/24h) stops burying real errors. Any
+      // OTHER denied origin keeps the original message and STILL captures: a
+      // denied infra-shaped origin (Tailscale IP, LAN host, real domain) is a
+      // deployment misconfiguration worth a Sentry event. The deny MUST keep
+      // throwing either way (P2-201): `callback(null, false)` would let the
+      // request execute routes (side effects!) while only the browser hides
+      // the response.
       callback(
         new HttpException(
-          `CORS origin not allowed: ${origin}`,
+          isProbeShapedOrigin(origin)
+            ? `CORS_PROBE_BLOCKED: ${origin}`
+            : `CORS origin not allowed: ${origin}`,
           HttpStatus.FORBIDDEN,
         ),
       );
