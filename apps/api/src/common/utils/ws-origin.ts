@@ -16,14 +16,19 @@
 import { originAllowed } from './cors-origin';
 
 /**
+ * P2-205 (run #137): single source for the pre-DI bootstrap allowlist —
+ * shared by the module-level provider initializer AND the test-reset seam so
+ * a spec that resets without re-installing the real provider provably falls
+ * back to the same defaults main.ts uses (was duplicated verbatim before).
+ */
+const DEFAULT_WS_ORIGINS = ['http://localhost:3000', 'http://localhost:3002'];
+
+/**
  * Module-level provider for the live allowlist. The gateway constructor
  * (which HAS ConfigService) installs a closure over PLAYER_URL/ADMIN_URL;
  * until then it falls back to the same bootstrap defaults main.ts uses.
  */
-let allowedOriginsProvider: () => string[] = () => [
-  'http://localhost:3000',
-  'http://localhost:3002',
-];
+let allowedOriginsProvider: () => string[] = () => [...DEFAULT_WS_ORIGINS];
 
 /** Installed by AppGateway on init — wires ConfigService into the gate. */
 export function setWsAllowedOriginsProvider(provider: () => string[]): void {
@@ -32,10 +37,7 @@ export function setWsAllowedOriginsProvider(provider: () => string[]): void {
 
 /** Test seam — resets to bootstrap defaults. */
 export function resetWsAllowedOriginsProvider(): void {
-  allowedOriginsProvider = () => [
-    'http://localhost:3000',
-    'http://localhost:3002',
-  ];
+  allowedOriginsProvider = () => [...DEFAULT_WS_ORIGINS];
 }
 
 /**
