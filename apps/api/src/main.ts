@@ -12,7 +12,11 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
 import { resolveTrustProxyConfig } from './common/security/trust-proxy';
-import { isProbeShapedOrigin, originAllowed } from './common/utils/cors-origin';
+import {
+  corsDenyMessage,
+  isSentryDroppedCorsProbe,
+  originAllowed,
+} from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -75,7 +79,7 @@ async function bootstrap(): Promise<void> {
         // event through; beforeSend → null drops exactly the classified event).
         // Verified live: recording-transport probe = 1 of 2 events sent.
         const excVal = event?.exception?.values?.[0]?.value;
-        if (typeof excVal === 'string' && excVal.startsWith('CORS_PROBE_BLOCKED: ')) {
+        if (isSentryDroppedCorsProbe(excVal)) {
           return null;
         }
         // Strip PII before it leaves the box. `sendDefaultPii` is false, but
@@ -142,14 +146,7 @@ async function bootstrap(): Promise<void> {
       // throwing either way (P2-201): `callback(null, false)` would let the
       // request execute routes (side effects!) while only the browser hides
       // the response.
-      callback(
-        new HttpException(
-          isProbeShapedOrigin(origin)
-            ? `CORS_PROBE_BLOCKED: ${origin}`
-            : `CORS origin not allowed: ${origin}`,
-          HttpStatus.FORBIDDEN,
-        ),
-      );
+      callback(new HttpException(corsDenyMessage(origin), HttpStatus.FORBIDDEN));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],

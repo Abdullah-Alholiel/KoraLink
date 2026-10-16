@@ -1,5 +1,9 @@
 import {
+  CORS_DENY_MESSAGE,
+  CORS_PROBE_BLOCKED_PREFIX,
+  corsDenyMessage,
   isProbeShapedOrigin,
+  isSentryDroppedCorsProbe,
   normalizeOrigin,
   originAllowed,
 } from './cors-origin';
@@ -85,5 +89,42 @@ describe('cors-origin helpers (P2-201, run #131)', () => {
       expect(isProbeShapedOrigin('https://example museum.com')).toBe(false);
       expect(isProbeShapedOrigin('https://attackerwatch.com')).toBe(false);
     });
+  });
+});
+
+describe('CORS deny message contract (P2-110, PR-Agent r1 pin)', () => {
+  it('corsDenyMessage classifies probes vs infra denials', () => {
+    expect(corsDenyMessage('https://attacker.example')).toBe(
+      'CORS_PROBE_BLOCKED: https://attacker.example',
+    );
+    expect(corsDenyMessage('https://100.93.99.24:9450')).toBe(
+      'CORS origin not allowed: https://100.93.99.24:9450',
+    );
+    expect(corsDenyMessage(undefined)).toBe('CORS origin not allowed: undefined');
+  });
+
+  it('beforeSend drop predicate is the exact construction twin (silent re-flood guard)', () => {
+    // The Sentry drop in main.ts MUST fire for every probe-classified message
+    // and NEVER for infra denials or unrelated errors.
+    expect(isSentryDroppedCorsProbe(corsDenyMessage('https://attacker.example'))).toBe(
+      true,
+    );
+    expect(isSentryDroppedCorsProbe(corsDenyMessage('https://100.93.99.24:9450'))).toBe(
+      false,
+    );
+    expect(isSentryDroppedCorsProbe('Error: Failed query: select 1')).toBe(false);
+    expect(isSentryDroppedCorsProbe(undefined)).toBe(false);
+    expect(isSentryDroppedCorsProbe(42)).toBe(false);
+  });
+
+  it('message prefixes are the single shared constants (no inline drift)', () => {
+    expect(CORS_PROBE_BLOCKED_PREFIX).toBe('CORS_PROBE_BLOCKED: ');
+    expect(CORS_DENY_MESSAGE).toBe('CORS origin not allowed: ');
+    expect(
+      corsDenyMessage('https://attacker.example').startsWith(CORS_PROBE_BLOCKED_PREFIX),
+    ).toBe(true);
+    expect(
+      corsDenyMessage('https://koralink.vercel.app').startsWith(CORS_DENY_MESSAGE),
+    ).toBe(true);
   });
 });

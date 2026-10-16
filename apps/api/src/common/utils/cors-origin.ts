@@ -59,3 +59,25 @@ export function isProbeShapedOrigin(origin: string | undefined): boolean {
   if (/(^|\.)attacker(\..+)?$/.test(host)) return true;
   return false;
 }
+
+/**
+ * P2-110 (run #137, PR-Agent round 1): the deny message and the Sentry drop
+ * MUST share one constant — a future rewording of either side would silently
+ * re-flood Sentry (~130 events/day). main.ts consumes corsDenyMessage() at the
+ * deny callback and isSentryDroppedCorsProbe() in beforeSend; do not inline
+ * these strings anywhere else.
+ */
+export const CORS_PROBE_BLOCKED_PREFIX = 'CORS_PROBE_BLOCKED: ';
+export const CORS_DENY_MESSAGE = 'CORS origin not allowed: ';
+
+/** Single construction point for the CORS deny message (both classes throw 403). */
+export function corsDenyMessage(origin: string | undefined): string {
+  return isProbeShapedOrigin(origin)
+    ? `${CORS_PROBE_BLOCKED_PREFIX}${origin}`
+    : `${CORS_DENY_MESSAGE}${origin}`;
+}
+
+/** Telemetry-side twin of corsDenyMessage — true ONLY for probe-classified denials. */
+export function isSentryDroppedCorsProbe(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith(CORS_PROBE_BLOCKED_PREFIX);
+}
