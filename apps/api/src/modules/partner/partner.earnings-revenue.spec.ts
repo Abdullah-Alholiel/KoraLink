@@ -1,5 +1,5 @@
 import { PgDialect } from 'drizzle-orm/pg-core';
-import type { SQL } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { PartnerService, riyadhTrendWeeks } from './partner.service';
 
 /**
@@ -27,7 +27,7 @@ interface Fixture {
   slots?: { total: number; booked: number };
 }
 
-function makeService(fx: Fixture) {
+function makeService(fx: Fixture & { pendingTotal?: string; paidTotal?: string }) {
   const executed: { sql: string; params: unknown[] }[] = [];
   const db = {
     select: () => ({
@@ -35,6 +35,13 @@ function makeService(fx: Fixture) {
         innerJoin: () => ({
           where: () => ({ orderBy: async () => [] }),
         }),
+        // P2-209: getEarnings totals now run as two scalar SUM selects on the
+        // settlements table (no join). Answer them in pending/paid order.
+        where: (cond?: SQL) => {
+          const { sql: sqlText } = dialect.sqlToQuery((cond ?? sql`true`) as SQL);
+          const want = sqlText.includes("'pending'") ? fx.pendingTotal : fx.paidTotal;
+          return Promise.resolve([{ total: want }]);
+        },
       }),
     }),
     execute: async (q: SQL) => {
@@ -78,8 +85,8 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
     const res = await svc.getEarnings('owner', 'VenueOwner');
     expect(res).toEqual({
       settlements: [],
-      totalPending: 0,
-      totalPaid: 0,
+      totalPending: '0.00',
+      totalPaid: '0.00',
       perVenue: [],
       fourWeekTrend: WEEKS.map((weekStart) => ({ weekStart, revenue: '0.00', bookedCount: 0 })),
       utilizationPct: 0,

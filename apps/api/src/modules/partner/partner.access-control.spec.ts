@@ -48,6 +48,13 @@ function ownerFilterValue(cond: unknown): unknown | undefined {
   return pairs.find(([col]) => col === 'owner_id')?.[1];
 }
 
+/** P2-209: status literal of a settlements SUM select (bound eq pair). */
+function statusFilterValue(cond: unknown): unknown | undefined {
+  const pairs: Array<[string, unknown]> = [];
+  collectEqPairs(cond, pairs);
+  return pairs.find(([col]) => col === 'status')?.[1];
+}
+
 const OWNER = 'owner-1';
 const OTHER_OWNER = 'owner-2';
 const ADMIN = 'admin-1';
@@ -97,6 +104,8 @@ function makeService(rows: StubRows) {
 
   function chainFor(table: unknown) {
     let scoped = allRowsFor(table);
+    // P2-209: settlements SUM selects resolve to a single quantized {total} row.
+    let sumResult: Array<{ total: string }> | undefined;
     const chain: any = {
       where: (cond: unknown) => {
         captured.set(table, cond);
@@ -107,6 +116,17 @@ function makeService(rows: StubRows) {
         if (ownerVal !== undefined) {
           scoped = scoped.filter((r) => (r as { owner_id?: string }).owner_id === ownerVal);
         }
+        if (table === settlements && cond) {
+          const statusVal = statusFilterValue(cond);
+          if (statusVal !== undefined) {
+            let sum = 0;
+            for (const r of scoped) {
+              const row = r as { status?: string; amount: string };
+              if (row.status === statusVal) sum += Number(row.amount);
+            }
+            sumResult = [{ total: sum.toFixed(2) }];
+          }
+        }
         return chain;
       },
       innerJoin: () => chain,
@@ -115,7 +135,7 @@ function makeService(rows: StubRows) {
       orderBy: () => chain,
       limit: () => chain,
     };
-    chain.then = (resolve: (v: unknown) => void) => resolve(scoped);
+    chain.then = (resolve: (v: unknown) => void) => resolve(sumResult ?? scoped);
     return chain;
   }
 
@@ -190,7 +210,9 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
       });
       const earnings = await service.getEarnings(ADMIN, 'Admin');
       expect(ownerFilterValue(captured.get(venues))).toBeUndefined();
-      expect(earnings.totalPaid).toBe(10);
+      // P2-209: totals are quantized SQL SUMs (numeric text), not JS floats.
+      expect(earnings.totalPaid).toBe('10.00');
+      expect(typeof earnings.totalPaid).toBe('string');
     });
 
     it('scopes an owner to their own venues only', async () => {
@@ -205,8 +227,8 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
     it('returns an empty ledger for an owner with no venues', async () => {
       const { service } = makeService({ venues: [otherVenue], settlements: [] });
       const earnings = await service.getEarnings(OWNER, 'VenueOwner');
-      // Legacy fields stay byte-compatible; P1-65 adds the zeroed revenue view.
-      expect(earnings).toMatchObject({ settlements: [], totalPending: 0, totalPaid: 0 });
+      // P2-209: empty ledger carries quantized string money (no legacy 0s).
+      expect(earnings).toMatchObject({ settlements: [], totalPending: '0.00', totalPaid: '0.00' });
       expect(earnings.perVenue).toEqual([]);
       expect(earnings.fourWeekTrend).toHaveLength(4);
       expect(earnings.fourWeekTrend.every((w) => w.revenue === '0.00' && w.bookedCount === 0)).toBe(true);

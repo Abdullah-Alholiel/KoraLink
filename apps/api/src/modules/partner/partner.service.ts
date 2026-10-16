@@ -286,7 +286,7 @@ export class PartnerService {
         venueNames: [],
         todayUtilization: 0,
         upcomingMatches: 0,
-        revenueToday: 0,
+        revenueToday: '0.00',
         nextMatchInMinutes: null,
         scheduleToday: [],
         recentDeposits: [],
@@ -318,13 +318,17 @@ export class PartnerService {
 
     const [revenue] = await this.db
       .select({
-        total: sql<string>`coalesce(sum(${matches.pitch_cost_sar}), 0)::text`,
+        total: sql<string>`coalesce(sum(${matches.pitch_cost_sar}), 0)::numeric(12,2)::text`,
       })
       .from(matches)
       .where(
         and(
           inArray(matches.pitch_id, pitchIds),
-          sql`date_trunc('day', ${matches.scheduled_at}) = CURRENT_DATE`,
+          // P2-209 (run #138): "today" is the RIYADH day, matching the endpoint's
+          // own P2-109 trend axis — the old `date_trunc(...) = CURRENT_DATE` let the
+          // server's UTC clock disagree with the Riyadh-labelled figure ~21:00-24:00 UTC.
+          sql`${matches.scheduled_at} >= (CURRENT_DATE AT TIME ZONE 'Asia/Riyadh')
+              AND ${matches.scheduled_at} < ((CURRENT_DATE + 1) AT TIME ZONE 'Asia/Riyadh')`,
         ),
       );
 
@@ -630,8 +634,8 @@ export class PartnerService {
     if (!venueIds.length) {
       return {
         settlements: [],
-        totalPending: 0,
-        totalPaid: 0,
+        totalPending: '0.00',
+        totalPaid: '0.00',
         perVenue: [] as EarningsVenueRevenue[],
         fourWeekTrend: zeroTrendWeeks(trendWeeks),
         utilizationPct: 0,
@@ -655,12 +659,22 @@ export class PartnerService {
       .where(inArray(settlements.venue_id, venueIds))
       .orderBy(desc(settlements.created_at));
 
-    const totalPending = rows
-      .filter((r) => r.status === 'pending')
-      .reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalPaid = rows
-      .filter((r) => r.status === 'paid')
-      .reduce((sum, r) => sum + Number(r.amount), 0);
+    // P2-209 (run #138): totals aggregate in SQL as numeric(12,2)::text — the old
+    // JS `Number(amount)` float reduce was the P2-4 money class (Review-A IMPORTANT).
+    const [pendingRow] = await this.db
+      .select({
+        total: sql<string>`coalesce(sum(${settlements.amount}), 0)::numeric(12,2)::text`,
+      })
+      .from(settlements)
+      .where(and(inArray(settlements.venue_id, venueIds), eq(settlements.status, 'pending')));
+    const [paidRow] = await this.db
+      .select({
+        total: sql<string>`coalesce(sum(${settlements.amount}), 0)::numeric(12,2)::text`,
+      })
+      .from(settlements)
+      .where(and(inArray(settlements.venue_id, venueIds), eq(settlements.status, 'paid')));
+    const totalPending = pendingRow?.total ?? '0.00';
+    const totalPaid = paidRow?.total ?? '0.00';
 
     const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
     const revenue = await this.getEarningsRevenue(venueIds, pitchIds, trendWeeks, windowStart, windowEnd);
