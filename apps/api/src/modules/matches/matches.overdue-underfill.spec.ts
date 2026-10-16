@@ -2,7 +2,6 @@ import { MatchesService } from './matches.service';
 import {
   match_players,
   pitch_slots,
-  transactions,
   users,
 } from '../../database/schema';
 import { PgDialect } from 'drizzle-orm/pg-core';

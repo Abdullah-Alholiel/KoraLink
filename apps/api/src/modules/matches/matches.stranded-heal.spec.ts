@@ -1,5 +1,5 @@
 import { MatchesService } from './matches.service';
-import { matches, match_players, match_waitlist } from '../../database/schema';
+import { matches, match_players } from '../../database/schema';
 import { BadRequestException } from '@nestjs/common';
 import { PgDialect } from 'drizzle-orm/pg-core';
 

@@ -38,8 +38,6 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
   const SLOT_A = 'slot-A';
   const SLOT_B = 'slot-B';
   const PITCH_ID = 'pitch-1';
-  const COST = 80;
-
   const PITCH = {
     id: PITCH_ID,
     venueLocation: { type: 'Point', coordinates: [46.6, 24.7] },
@@ -67,7 +65,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
 
     const update = (table: unknown) => ({
       set: (setArg: Record<string, unknown>) => ({
-        where: (whereClause: unknown) => ({
+        where: (_whereClause: unknown) => ({
           returning: () => {
             const op = table === users ? 'deduct' : table === pitch_slots ? 'slot' : 'update';
             calls.push({ op, table, setArg });
@@ -167,7 +165,7 @@ describe('MatchesService.createMatch — koralink booking wallet TOCTOU', () => 
     return {
       transaction,
       select: () => ({ from: selectChain }),
-      execute: async (query: unknown) => {
+      execute: async (_query: unknown) => {
         // The slot FOR UPDATE lives inside the tx.execute path; not called
         // from the outer db. Return [].
         return [];

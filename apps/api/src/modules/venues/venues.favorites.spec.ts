@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { VenuesService } from './venues.service';
-import { venues, venue_favorites, users, pitches } from '../../database/schema';
+import { venues, venue_favorites } from '../../database/schema';
 
 /**
  * P2-161: venue favorites. The drizzle db is an in-memory fake covering the
@@ -42,7 +42,7 @@ function makeVenues(opts: {
       };
       return await fn(tx);
     }),
-    select: (projection?: unknown) => ({
+    select: (_projection?: unknown) => ({
       from: (table: unknown) => {
         const chain: any = {
           where: () => chain,
@@ -84,7 +84,7 @@ function makeVenues(opts: {
         return chain;
       },
     }),
-    execute: async (query: unknown) => {
+    execute: async (_query: unknown) => {
       const uid = (makeVenues as any)._ctxUserId;
       const rows = favorites
         .filter((f) => f.user_id === uid)
