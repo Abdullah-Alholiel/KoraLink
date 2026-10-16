@@ -41,9 +41,21 @@
   touched surfaces.
 - Hex lane: clean, 10/10 metrics at baseline.
 - Sentry 24h: no new actionable signatures (130× CORS-probe rejections = guard working,
-  probe noise — new P2-209 row proposing log-level demotion; venue_favorites failures
-  are the known P2-51 deploy-before-migrate evidence; koralink-web viewport-diagnostic
-  55× stale since Oct 12 = MINOR, watched).
+  probe noise — matches existing P2-110 row, evidence refreshed 130/24h; venue_favorites
+  failures are the known P2-51 deploy-before-migrate evidence; koralink-web
+  viewport-diagnostic 55× stale since Oct 12 = MINOR, watched).
+
+## Lane & second item (Phase 3.6 + 3.5 decisions)
+
+- **zeroshot lane: skipped** — primary item (P2-207) is a small single-file slice with
+  pre-existing test scaffolding; lane worktree + fresh `npm ci` + status-poll overhead
+  exceeds the fix itself. Routed on the normal PR path (PR #137) — proven faster for
+  <100-line mechanical slices. Same reasoning applies to the P2-204 hardening rider.
+- **Second item: P2-204** (API lint override cleanup, PR-Agent r2 on #135) — 35
+  mechanical residuals measured live (34 no-unused-vars + 1 `Function` type in
+  mailer.spec.ts:234 + 1 `require()` in matches.pitch-slots-filter.spec.ts:28),
+  `**/*.spec.ts` only, zero overlap with the sibling's dirty `ws-origin.ts`.
+  Re-enables all three overridden rules strict. Hardening rider (1/run max).
 
 ## Tech-debt signals
 
