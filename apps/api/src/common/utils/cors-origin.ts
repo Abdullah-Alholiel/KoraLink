@@ -55,7 +55,7 @@ export function isProbeShapedOrigin(origin: string | undefined): boolean {
   if (/\.(example|test|invalid|localhost)$/.test(host)) return true;
   if (/(^|\.)example\.(com|net|org)$/.test(host)) return true;
   // Well-known scanner payload hosts (Sentry issue KORALINK-API-B evidence).
-  if (host === 'evil.com' || /(^|\.)evil\.com$/.test(host)) return true;
+  if (/(^|\.)evil\.com$/.test(host)) return true; // incl. bare evil.com
   if (/(^|\.)attacker(\..+)?$/.test(host)) return true;
   return false;
 }
