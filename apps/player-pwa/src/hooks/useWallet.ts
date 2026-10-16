@@ -47,10 +47,19 @@ export type WalletHistoryPage = {
 type WalletHistoryArgs = Required<Pick<WalletHistoryParams, 'page' | 'perPage'>> &
   WalletHistoryParams;
 
-function walletHistoryKey({ page, perPage, from, to }: WalletHistoryArgs) {
-  // P2-15: the key MUST carry every filter (page/perPage/from/to) — a bare
-  // ['wallet','history'] cached page 1 forever and changing it never refetched.
-  return ['wallet', 'history', { page, perPage, from, to }] as const;
+function walletHistoryKey({
+  page,
+  perPage,
+  from,
+  to,
+  locale,
+}: WalletHistoryArgs & { locale: 'ar' | 'en' }) {
+  // P2-15: the key MUST carry every filter (page/perPage/from/to).
+  // P2-207: AND every closure variable that affects the cached VALUE —
+  // locale renders the descriptions ("٧:٣٠ م • Completed" vs "7:30 PM •
+  // Completed"), so it belongs in the key: an ar↔en switch must refetch,
+  // not serve the old locale's strings for up to staleTime 60s.
+  return ['wallet', 'history', { page, perPage, from, to, locale }] as const;
 }
 
 async function fetchWalletHistoryPage({
@@ -77,12 +86,13 @@ async function fetchWalletHistoryPage({
 
 export function useWalletHistory(params?: WalletHistoryParams) {
   const { page = 1, perPage = 20, from, to } = params ?? {};
-  // P2-rider (run #133): transaction descriptions render clock times in the
-  // active locale ("٧:٣٠ م • Completed" in ar). Locale switches remount the
-  // [locale] tree, so the closure cannot outlive its locale.
+  // P2-207 (corrects the run-#133 rider comment): locale goes into the
+  // query KEY, not just the closure. The [locale] remount guarantee does
+  // NOT bust the React Query cache — the same key would keep serving the
+  // previous locale's rendered strings for up to staleTime 60s.
   const locale = useLocale() as 'ar' | 'en';
   return useQuery<WalletHistoryPage, FetchError>({
-    queryKey: walletHistoryKey({ page, perPage, from, to }),
+    queryKey: walletHistoryKey({ page, perPage, from, to, locale }),
     queryFn: () => fetchWalletHistoryPage({ page, perPage, from, to, locale }),
     staleTime: 60_000,
     retry: false,
@@ -99,14 +109,21 @@ export const WALLET_EXPORT_MAX_PAGES = 20;
 */
 export function useFetchAllWalletHistory() {
   const queryClient = useQueryClient();
+  // P2-207: exports render the SAME localized descriptions as the screen.
+  // Without this, adaptTransactionList defaulted to 'en' and Arabic users
+  // got EN clock strings in their financial CSV. useLocale() default keeps
+  // the call-site unchanged; the optional override serves non-hook contexts.
+  const hookLocale = useLocale() as 'ar' | 'en';
   return async (
     range: { from?: string; to?: string },
+    opts?: { locale?: 'ar' | 'en' },
   ): Promise<{ rows: Transaction[]; truncated: boolean }> => {
+    const locale = opts?.locale ?? hookLocale;
     const perPage = 100;
     const all: Transaction[] = [];
     let truncated = false;
     for (let page = 1; page <= WALLET_EXPORT_MAX_PAGES; page++) {
-      const args = { page, perPage, from: range.from, to: range.to };
+      const args = { page, perPage, from: range.from, to: range.to, locale };
       const data = await queryClient.fetchQuery<WalletHistoryPage, FetchError>({
         queryKey: walletHistoryKey(args),
         queryFn: () => fetchWalletHistoryPage(args),
