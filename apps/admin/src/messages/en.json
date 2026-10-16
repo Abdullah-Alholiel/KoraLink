@@ -247,7 +247,16 @@
       "perVenueTitle": "Revenue by venue",
       "thBookings": "Bookings",
       "thRevenue": "Revenue",
-      "noRevenueData": "No venue revenue to show yet."
+      "noRevenueData": "No venue revenue to show yet.",
+      "payoutRequestCta": "Request payout",
+      "payoutRequesting": "Requesting…",
+      "payoutCtaTitle": "Payout request",
+      "payoutCtaSubtitle": "Ask HQ to settle your unsettled completed bookings. HQ reviews and pays the pending settlement.",
+      "payoutConfirmTitle": "Request payout from HQ?",
+      "payoutConfirmBody": "One pending settlement per venue with unsettled completed bookings will be created for HQ to review and pay. No money moves until HQ approves it.",
+      "payoutRequestedNote": "Payout request sent: {count} settlement(s), {amount} total, now pending HQ approval.",
+      "payoutErrorPrefix": "Request failed:",
+      "payoutErrorFallback": "please try again in a moment."
     },
     "settings": {
       "title": "Settings",
