@@ -47,7 +47,9 @@ if (!DATABASE_URL) {
   }
   let host = '';
   try {
-    host = new URL(DATABASE_URL).hostname;
+    // URL.hostname keeps IPv6 brackets ('[::1]') — strip them so the
+    // loopback allowlist actually matches (PR-Agent MINOR, run #139).
+    host = new URL(DATABASE_URL).hostname.replace(/^\[|\]$/g, '');
   } catch {
     host = 'unparseable'; // fail safe: treat as remote
   }
