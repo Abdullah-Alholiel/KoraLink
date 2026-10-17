@@ -346,7 +346,9 @@
   },
   "confirm": {
     "confirmTitle": "Are you sure?",
-    "cancelLabel": "Cancel"
+    "cancelLabel": "Cancel",
+    "refundConfirmTitle": "Refund this transaction?",
+    "refundConfirmMessage": "This credits the amount back to the user's wallet and cannot be undone."
   },
   "toast": {
     "saved": "Changes saved",
@@ -702,7 +704,9 @@
     "slaFilterEscalated": "Escalated",
     "slaBreached": "SLA breached",
     "slaHoursLeft": "{h, plural, =0 {Deadline reached} other {{n}h left}}",
-    "slaNone": "—"
+    "slaNone": "—",
+    "refundSuccess": "Refund completed. The amount was credited back to the user's wallet.",
+    "refundFailed": "Refund failed — no money was moved. Check the transaction status and try again."
   },
   "list": {
     "sortLabel": "Sort",
