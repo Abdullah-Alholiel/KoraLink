@@ -33,6 +33,36 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
+// ── Destructive-seed guard (Reviewer A, run #139) ──────────────────────────
+// seed() unconditionally DELETEs ~14 production-shaped tables. One accidental
+// `DATABASE_URL=<prod> npx tsx seed.ts` would wipe them. The normal staging
+// flow targets the local VPS Postgres (127.0.0.1), so it needs no flag; any
+// remote host (Neon prod/demo, anything off-box) must be explicitly opted in
+// with ALLOW_DESTRUCTIVE_SEED=1, and NODE_ENV=production is refused outright.
+{
+  const allowDestructive = process.env.ALLOW_DESTRUCTIVE_SEED === '1';
+  if (process.env.NODE_ENV === 'production' && !allowDestructive) {
+    console.error('❌ Refusing to seed: NODE_ENV=production. Set ALLOW_DESTRUCTIVE_SEED=1 to override.');
+    process.exit(1);
+  }
+  let host = '';
+  try {
+    // URL.hostname keeps IPv6 brackets ('[::1]') — strip them so the
+    // loopback allowlist actually matches (PR-Agent MINOR, run #139).
+    host = new URL(DATABASE_URL).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    host = 'unparseable'; // fail safe: treat as remote
+  }
+  const isLocal = ['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(host);
+  if (!isLocal && !allowDestructive) {
+    console.error(
+      `❌ Refusing to seed a REMOTE database (host: ${host}). The seed wipes all data.\n` +
+        '   Target staging on this box instead, or set ALLOW_DESTRUCTIVE_SEED=1 to force.',
+    );
+    process.exit(1);
+  }
+}
+
 const pool = postgres(DATABASE_URL, { max: 1 });
 const db = drizzle(pool, { schema });
 
