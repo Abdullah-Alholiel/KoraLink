@@ -46,8 +46,10 @@ export interface ExportFeedback {
   seq: number;
   /** Wraps exportCsv: call this from the page's onExport handler. */
   runExport: <T>(opts: CsvExportOptions<T>) => void;
-  /** Like runExport, for a file the page already built (e.g. multi-section CSV). */
-  runPrebuilt: (file: CsvExportFile, rowCount: number) => void;
+  /** Like runExport, for a file the page already built (e.g. multi-section CSV).
+   *  Returns whether the export SUCCEEDED — gate success analytics on it (the
+   *  hook itself already reports the failure note + Sentry + error event). */
+  runPrebuilt: (file: CsvExportFile, rowCount: number) => boolean;
   /** Shows the error note for a failure that happened OUTSIDE the hook (e.g.
    * the page's CSV build threw before a file existed). Pairs with the page's
    * own Sentry capture + analytics event. */
@@ -97,19 +99,24 @@ export function useExportFeedback(): ExportFeedback {
     }
   }, []);
 
-  const runPrebuilt = useCallback((file: CsvExportFile, rowCount: number) => {
-    setMode('page');
-    setSeq((s) => s + 1);
-    setRows(rowCount);
-    try {
-      downloadCsvFile(file);
-      setKind('success');
-    } catch (e) {
-      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
-      trackEvent('admin_csv_export_error', { rows: rowCount });
-      setKind('error');
-    }
-  }, []);
+  const runPrebuilt: (file: CsvExportFile, rowCount: number) => boolean = useCallback(
+    (file, rowCount) => {
+      setMode('page');
+      setSeq((s) => s + 1);
+      setRows(rowCount);
+      try {
+        downloadCsvFile(file);
+        setKind('success');
+        return true;
+      } catch (e) {
+        Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+        trackEvent('admin_csv_export_error', { rows: rowCount });
+        setKind('error');
+        return false;
+      }
+    },
+    [],
+  );
 
   // Error path for failures OUTSIDE runPrebuilt (e.g. the page's own CSV build
   // throwing before the file exists). Run-#123 PR-Agent r1: a formatter throw
@@ -126,7 +133,13 @@ export function useExportFeedback(): ExportFeedback {
       rowKey: keyof TPage & string;
       build: (rows: TRow[]) => CsvExportOptions<TRow>;
     }): Promise<number | null> => {
-      if (inFlightRef.current) return null; // one export at a time
+      // One export at a time. Silent null here is CORRECT, not a lost signal:
+      // every page's export button is disabled while `exporting` is true (all
+      // 7 exporters include exportFeedback.exporting in exportDisabled), so
+      // this guard only trips on a sub-frame double-click — and the FIRST
+      // invocation owns the note/analytics, so the second returning null
+      // silently loses no feedback (run-#138 MINOR reviewed run #139).
+      if (inFlightRef.current) return null;
       const controller = new AbortController();
       inFlightRef.current = controller;
       setExporting(true);
