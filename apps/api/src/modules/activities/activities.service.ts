@@ -46,7 +46,9 @@ export type ActivityVerb =
   | 'waitlist_promoted'
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   | 'venue_ownership_added'
-  | 'venue_ownership_removed';
+  | 'venue_ownership_removed'
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  | 'payout_paid';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
 const DIRECTED_VERBS = [
@@ -67,6 +69,7 @@ const DIRECTED_VERBS = [
   'report_resolved',
   'match_rescheduled',
   'waitlist_promoted',
+  'payout_paid',
 ] as const;
 
 /** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */

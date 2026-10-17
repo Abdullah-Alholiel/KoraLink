@@ -22,7 +22,9 @@ export type ActivityVerb =
   | 'host_underfilled_nudge'
   | 'player_removed'
   | 'match_auto_cancelled'
-  | 'report_resolved';
+  | 'report_resolved'
+  // ── Partner money flows (P1-67, run #141) ──
+  | 'payout_paid';
 
 export interface FeedItem {
   id: string;

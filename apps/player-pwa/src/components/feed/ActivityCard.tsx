@@ -29,6 +29,7 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   player_removed: UserMinus,
   match_auto_cancelled: XCircle,
   report_resolved: Flag,
+  payout_paid: Wallet,
 };
 
 const VERB_LABEL: Record<ActivityVerb, string> = {
@@ -49,6 +50,7 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   player_removed: 'feed.playerRemoved',
   match_auto_cancelled: 'feed.matchAutoCancelled',
   report_resolved: 'feed.reportResolved',
+  payout_paid: 'feed.payoutPaid',
 };
 
 export default function ActivityCard({ item, locale }: ActivityCardProps) {
