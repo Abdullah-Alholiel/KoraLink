@@ -463,8 +463,11 @@ export default function ProfilePage() {
                                 setSubscribeHint(null);
                                 subscribe().then((outcome) => {
                                     if (
+                                        // P1-66 (run #135): 'not-configured'
+                                        // = no VAPID key deployed.
                                         (outcome === 'not-installed' ||
-                                            outcome === 'permission-denied') &&
+                                            outcome === 'permission-denied' ||
+                                            outcome === 'not-configured') &&
                                         !isSubscribed
                                     ) {
                                         setSubscribeHint(outcome);
@@ -484,7 +487,9 @@ export default function ProfilePage() {
                             >
                                 {subscribeHint === 'permission-denied'
                                     ? t('common.permissionDenied')
-                                    : t('common.installRequired')}
+                                    : subscribeHint === 'not-configured'
+                                      ? t('common.pushNotConfigured')
+                                      : t('common.installRequired')}
                             </p>
                         )}
                         {mounted && isSubscribed && (
