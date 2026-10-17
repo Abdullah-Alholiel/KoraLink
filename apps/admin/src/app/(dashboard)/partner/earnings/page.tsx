@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Gauge, TrendingUp, Wallet } from 'lucide-react';
+import { Download, Gauge, TrendingUp, Wallet, HandCoins } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { api } from '@/lib/api';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
 import { formatDate, formatMoney, formatPercent } from '@/lib/utils';
@@ -41,6 +43,31 @@ export default function PartnerEarningsPage() {
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
   const ef = useExportFeedback();
+
+  // ── P2-3: partner-initiated payout request ─────────────────────────────
+  const [confirming, setConfirming] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestNote, setRequestNote] = useState<string | null>(null);
+
+  async function onRequestPayout() {
+    setConfirming(false);
+    setRequesting(true);
+    setRequestError(null);
+    try {
+      const res = await api.post<{ requested: number; totalAmount: string }>('/partner/payout-requests', {});
+      setRequestNote(t('payoutRequestedNote', { count: res.requested, amount: formatMoney(res.totalAmount) }));
+      trackEvent('partner_payout_request', { page: 'partner.earnings', requested: res.requested, total: res.totalAmount });
+      reload();
+    } catch (e) {
+      // Error-message standard: what happened + why + what to do next.
+      const msg = e instanceof Error ? e.message : t('payoutErrorFallback');
+      setRequestError(msg);
+      trackEvent('partner_payout_request_error', { page: 'partner.earnings' });
+    } finally {
+      setRequesting(false);
+    }
+  }
 
   // P2-178: one CSV with two sections — per-venue revenue, then settlements.
   function buildEarningsCsv(earnings: PartnerEarnings): CsvExportFile {
@@ -249,6 +276,43 @@ export default function PartnerEarningsPage() {
               <MetricCard label={t('totalPaid')} value={formatMoney(data?.totalPaid ?? 0)} icon={Wallet} />
             </div>
 
+            {/* ── P2-3: payout request action + 5 UX states ─────────────── */}
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{t('payoutCtaTitle')}</p>
+                  <p className="text-xs text-gray-500">{t('payoutCtaSubtitle')}</p>
+                </div>
+                <button
+                  type="button"
+                  role="button"
+                  aria-busy={requesting}
+                  disabled={requesting || loading || !!error}
+                  onClick={() => setConfirming(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {requesting ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  ) : (
+                    <HandCoins className="h-3.5 w-3.5" />
+                  )}
+                  {requesting ? t('payoutRequesting') : t('payoutRequestCta')}
+                </button>
+              </div>
+              {/* Success note (role=status) */}
+              {requestNote && (
+                <p role="status" className="mt-2 text-xs font-medium text-emerald-700">
+                  {requestNote}
+                </p>
+              )}
+              {/* Error note (role=alert) — what happened + why + what next */}
+              {requestError && (
+                <p role="alert" className="mt-2 text-xs font-medium text-red-600">
+                  {t('payoutErrorPrefix')} {requestError}
+                </p>
+              )}
+            </div>
+
             <div>
               <h2 className="mb-4 text-sm font-semibold text-gray-900">{t('settlementsTitle')}</h2>
               <DataTable
@@ -262,6 +326,16 @@ export default function PartnerEarningsPage() {
           </>
         )}
       </div>
+
+      {/* ── P2-3: request confirmation — names the action + that HQ pays it ── */}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={onRequestPayout}
+        title={t('payoutConfirmTitle')}
+        message={t('payoutConfirmBody')}
+        confirmLabel={t('payoutRequestCta')}
+      />
 
       <RecordDrawer
         open={!!selected}

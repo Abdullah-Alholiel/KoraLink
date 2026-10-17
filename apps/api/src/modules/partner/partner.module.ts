@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { PartnerController } from './partner.controller';
 import { PartnerService } from './partner.service';
+import { AuditService } from '../admin/audit.service';
 import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [GatewayModule],
   controllers: [PartnerController],
-  providers: [PartnerService],
+  providers: [PartnerService, AuditService],
   // Exported so AdminModule can delegate slot/venue management to the same
   // service (admin bypasses ownership via actorRole='Admin').
   exports: [PartnerService],

@@ -20,6 +20,9 @@ import {
   venues,
 } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { quantizeMoney2dpString } from '../../common/utils/money';
+import { AuditService } from '../admin/audit.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
@@ -104,6 +107,12 @@ export class PartnerService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     private readonly realtime: RealtimeService,
+    // Optional at the type level so legacy spec constructions compile; the
+    // real DI graph (PartnerModule) always provides AuditService.
+    private readonly audit?: AuditService,
+    // Optional for the same reason; SettingsModule is @Global so the real DI
+    // graph always provides it. Undefined (legacy specs) → cadence fallback 7.
+    private readonly settings?: PlatformSettingsService,
   ) {}
 
   /** Venue ids an actor may see — Admins scope to ALL venues (support/moderation). */
@@ -123,6 +132,151 @@ export class PartnerService {
       .innerJoin(venues, eq(pitches.venue_id, venues.id))
       .where(actorRole === 'Admin' ? sql`true` : eq(venues.owner_id, ownerId));
     return rows.map((r) => r.id);
+  }
+
+  /**
+   * P2-3 (run #138): partner-initiated payout REQUEST.
+   *
+   * Creates ONE `pending` settlement per venue that has unsettled completed
+   * KoraLink-booked revenue (same money source + NOT-EXISTS shape as the
+   * admin generator). Moves NO money and pays NOTHING — admin `pay()` stays
+   * the only settlement action (P0-2/DECISIONS.md untouched). The unique
+   * `(venue_id, period_start)` index + onConflictDoNothing close the
+   * double-request race; the venue-row FOR UPDATE lock serializes against a
+   * concurrent admin `generatePending` window (P2-105 lock idiom).
+   */
+  async requestPayout(
+    ownerId: string,
+    actorRole?: string,
+  ): Promise<{
+    requested: number;
+    totalAmount: string;
+    settlements: Array<{
+      id: string;
+      venueId: string;
+      venueName: string;
+      amount: string;
+      periodStart: string;
+      periodEnd: string;
+      status: string;
+    }>;
+  }> {
+    if (actorRole === 'Admin') {
+      // Admins already own the generator (POST /admin/settlements/generate);
+      // the request route is the PARTNER action.
+      throw new ForbiddenException('Admins use the settlement generator instead.');
+    }
+
+    // P2-211: window + dedupe guard MUST mirror the admin generator's money
+    // source — admin settlements.service.ts keys BOTH to the rolling
+    // `payout_cadence_days` PlatformSetting (default 7). Hardcoding 365d here
+    // structurally locked a venue out of requesting new unsettled revenue for
+    // up to a year after its first request (silent 400 dead-end).
+    const cadenceDays = this.settings
+      ? await this.settings.getNumber('payout_cadence_days', 7)
+      : 7;
+    const windowStartIso = new Date(
+      Date.now() - cadenceDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    // One tx: lock the partner's venue rows FIRST (blocks a concurrent
+    // generate/request window for the same venues until commit), then compute
+    // unsettled revenue and insert.
+    const created = await this.db.transaction(async (tx) => {
+      const venueRows = (await tx
+        .select({ id: venues.id, name: venues.name })
+        .from(venues)
+        .where(eq(venues.owner_id, ownerId))
+        .for('update')) as Array<{ id: string; name: string }>;
+      if (!venueRows.length) return [] as Array<{ id: string; venueId: string; venueName: string; amount: string; periodStart: string; periodEnd: string; status: string }>;
+
+      const rows = (await tx.execute(sql`
+        SELECT
+          v.id AS venue_id,
+          COALESCE(SUM(m.pitch_cost_sar), 0)::numeric(12,2)::text AS amount
+        FROM venues v
+        INNER JOIN pitches p ON p.venue_id = v.id
+        INNER JOIN matches m ON m.pitch_id = p.id
+        WHERE v.id IN (${sql.join(
+          venueRows.map((v) => sql`${v.id}`),
+          sql`, `,
+        )})
+          AND m.status = 'Completed'
+          AND m.booking_mode = 'koralink'
+          AND m.scheduled_at >= ${windowStartIso}
+          AND m.scheduled_at < ((CURRENT_DATE + 1) AT TIME ZONE 'Asia/Riyadh')
+          AND NOT EXISTS (
+            SELECT 1 FROM settlements s
+            WHERE s.venue_id = v.id
+              AND s.period_start >= ${windowStartIso}::date
+          )
+        GROUP BY v.id
+        HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
+      `)) as unknown as Array<{ venue_id: string; amount: string }>;
+
+      const nameById = new Map(venueRows.map((v) => [v.id, v.name]));
+      const today = riyadhDateString();
+      const out: Array<{ id: string; venueId: string; venueName: string; amount: string; periodStart: string; periodEnd: string; status: string }> = [];
+      for (const row of rows) {
+        // Postgres exact-decimal string — quantized, never a float (P2-4 rule).
+        const amount = quantizeMoney2dpString(row.amount);
+        const [settlement] = await tx
+          .insert(settlements)
+          .values({
+            venue_id: row.venue_id,
+            amount,
+            period_start: today,
+            period_end: today,
+            status: 'pending',
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (settlement) {
+          out.push({
+            id: settlement.id,
+            venueId: row.venue_id,
+            venueName: nameById.get(row.venue_id) ?? '',
+            amount: settlement.amount,
+            periodStart: settlement.period_start,
+            periodEnd: settlement.period_end,
+            status: settlement.status,
+          });
+        }
+      }
+      return out;
+    });
+
+    if (!created.length) {
+      throw new BadRequestException('No unsettled revenue available to request.');
+    }
+
+    const totalAmount = quantizeMoney2dpString(
+      created.reduce((acc, s) => acc + Number(s.amount), 0).toFixed(2),
+    );
+
+    // Audit trail: the partner actor is recorded as the settlement's origin
+    // (admin actions carry `settlement.generate`; this is the request leg).
+    // Outside the tx — audit failures must not roll back a committed request.
+    if (this.audit) {
+      await this.audit.log({
+        adminId: ownerId,
+        action: 'settlement.payout_requested',
+        entityType: 'settlement',
+        entityId: created[0].id,
+        before: undefined,
+        after: { requested: created.length, totalAmount, venueIds: created.map((s) => s.venueId) },
+      });
+    }
+    // PostHog/Pino ride the standard interceptors; the audit trail + live HQ
+    // refresh are the important side effects here. broadcastOps('settlements')
+    // so an open HQ Settlements page updates without a manual reload.
+    this.realtime.broadcastOps('settlements');
+
+    return {
+      requested: created.length,
+      totalAmount,
+      settlements: created,
+    };
   }
 
   async getVenues(ownerId: string, actorRole?: string) {

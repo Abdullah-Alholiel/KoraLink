@@ -129,6 +129,17 @@ export class PartnerController {
     return this.partner.getEarnings(user.sub, user.role);
   }
 
+  /**
+   * P2-3 (run #138): partner-initiated payout REQUEST — creates pending
+   * settlements for unsettled completed-booking revenue. Moves NO money;
+   * HQ still pays via the existing settlement flow (owner decision ledger:
+   * P0-2 untouched). Route is VenueOwner-only via the class @Roles guard.
+   */
+  @Post('payout-requests')
+  requestPayout(@CurrentUser() user: { sub: string; role: string }) {
+    return this.partner.requestPayout(user.sub, user.role);
+  }
+
   @Get('verification')
   getVerification(@CurrentUser() user: { sub: string }) {
     return this.partner.getVerification(user.sub);
