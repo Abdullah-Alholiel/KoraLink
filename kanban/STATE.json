@@ -1,19 +1,17 @@
 {
   "schema": 1,
   "loop": "koralink-factory-5h",
-  "last_run": 140,
+  "last_run": 141,
   "last_run_at": "2026-10-15T17:05:00Z",
   "last_run_commits": [
-    "0e4c0f4 PR #137 squash (P2-207 merged)",
-    "8df2de3 PR #138 squash (P2-204 merged)",
-    "c43a5ec PR #139 squash (P2-110 merged)",
-    "36e9048 P2-211 fix on lane/run138-p2-3 (PR #142 head, with base-refresh merge 1466616)"
+    "23a0ad5",
+    "5a58184"
   ],
-  "last_run_report": "kanban/RUNS/2026-10-17T10-15Z-run140.md",
+  "last_run_report": "kanban/RUNS/2026-10-17T15-17Z-run141.md",
   "in_review_items": [
-    "P2-211 fix rides PR #142 (head 1466616): verify branch carries 36e9048 + base refresh; jest 1055/1055 + tsc 0 in lane; merge waits on P2-208",
-    "PR #143 (P2-210) + PR #145 (export MINORs): diffs re-verified correctly scoped run #140 (3-dot: 3 files / 2 files); merge waits on P2-208",
-    "P2-208 queue is now SIX PRs (#136/#140/#141/#142/#143/#145) — all repo checks green, only the stale Vercel kora-link status fails; owner dashboard disconnect unblocks all six"
+    "P1-67 built run #141 (PR #146, 5a58184): jest 119/119 suites 1067/1067 + tsc 0 + vitest 132f/970t + turbo 3/3; needs bot checks + merge (+ db:migrate 0052 + api restart post-merge)",
+    "PR #146 likely fires the stale kora-link Vercel status (PWA-path diff) — if so it joins the five gated PRs (#136/#140/#141/#143/#145) awaiting the owner Vercel disconnect (P2-208)",
+    "Five PRs remain gated on P2-208: #136/#140/#141/#143/#145 — all repo-green"
   ],
   "open_blockers": [
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
