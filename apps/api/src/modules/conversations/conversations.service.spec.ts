@@ -2,7 +2,6 @@ import { ConflictException } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import {
   conversation_participants,
-  personal_messages,
   users,
 } from '../../database/schema';
 

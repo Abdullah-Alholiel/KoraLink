@@ -231,7 +231,7 @@ describe('P1-41 deliver() render hardening (run #36, Reviewer A)', () => {
     // Configured transport so deliver() reaches renderEmail; fetch stubbed to
     // success — the ONLY failure source is the poisoned details object.
     const svc = makeMailer([], { RESEND_API_KEY: 'k', MAIL_FROM: 'KoraLink <no-reply@koralink.app>' });
-    const deliver = (svc as unknown as { deliver: Function }).deliver.bind(svc);
+    const deliver = (svc as unknown as { deliver: (...args: unknown[]) => unknown }).deliver.bind(svc);
     const realFetch = global.fetch;
     global.fetch = (async () =>
       new Response(JSON.stringify({ id: 'x' }), { status: 200 })) as unknown as typeof fetch;

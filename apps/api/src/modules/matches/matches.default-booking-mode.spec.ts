@@ -5,7 +5,6 @@ import {
   match_players,
   pitch_slots,
   pitches,
-  transactions,
   users,
 } from '../../database/schema';
 import { riyadhDateKey, riyadhTimeNow } from '../../common/utils/riyadh';
@@ -26,16 +25,12 @@ describe('MatchesService.createMatch — default booking mode', () => {
   const HOST_ID = 'host-1';
   const SLOT_A = 'slot-A';
   const PITCH_ID = 'pitch-1';
-  const COST = 80;
-
   const PITCH = {
     id: PITCH_ID,
     venueLocation: { type: 'Point', coordinates: [46.6, 24.7] },
     hourlyRate: '160.00', // 160 SAR/hr × 30 min = 80 SAR
   size: '7v7', // capacity derived: 14 (2 × 7)
   };
-
-  const HOST = { id: HOST_ID, wallet_balance: '100.00' };
 
   interface CapturedCall {
     op: string;

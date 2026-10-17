@@ -132,11 +132,8 @@ describe('MatchesService.rescheduleMatch — wallet floor atomicity (run #105)',
         },
       }),
       update: (table: unknown) => ({
-        set: (setArg: Record<string, unknown>) => ({
-          where: (whereClause: unknown) => {
-            const compiledWhere = whereClause
-              ? new PgDialect().sqlToQuery(whereClause as never).sql
-              : '';
+        set: (_setArg: Record<string, unknown>) => ({
+          where: (_whereClause: unknown) => {
             return {
               returning: () =>
                 table === users
@@ -149,8 +146,8 @@ describe('MatchesService.rescheduleMatch — wallet floor atomicity (run #105)',
           },
         }),
       }),
-      insert: (table: unknown) => ({
-        values: (v: Record<string, unknown>) => {
+      insert: (_table: unknown) => ({
+        values: (_v: Record<string, unknown>) => {
           return {
             then: (r: (v: unknown) => void) => r([]),
             onConflictDoNothing: () => ({ then: (r: (v: unknown) => void) => r([]) }),

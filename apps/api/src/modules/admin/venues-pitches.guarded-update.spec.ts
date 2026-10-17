@@ -43,7 +43,7 @@ describe('P2-202: admin venues/pitches guarded update (run #132)', () => {
   });
 
   it('venues.update: 1-row UPDATE proceeds — audit.log called, row returned', async () => {
-    const { db, returning } = makeDb([{ id: 'v-1' }]);
+    const { db } = makeDb([{ id: 'v-1' }]);
     const audit = { log: jest.fn() };
     const realtime = { broadcastOps: jest.fn() };
     const svc = new VenuesService(db, audit as never, realtime as never, {} as never);
@@ -73,7 +73,7 @@ describe('P2-202: admin venues/pitches guarded update (run #132)', () => {
   });
 
   it('pitches.update: 1-row UPDATE proceeds — audit.log called, row returned', async () => {
-    const { db, returning } = makeDb([{ id: 'p-1' }]);
+    const { db } = makeDb([{ id: 'p-1' }]);
     const audit = { log: jest.fn() };
     const realtime = { broadcastOps: jest.fn() };
     const svc = new PitchesService(db, audit as never, realtime as never, {} as never);
