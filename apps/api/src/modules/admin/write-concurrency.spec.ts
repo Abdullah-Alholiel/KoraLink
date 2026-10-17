@@ -1,12 +1,10 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminDisputesService } from './disputes.service';
 import { AdminMatchesService } from './matches.service';
 import { AdminVenuesService } from './venues.service';
 import { AdminReportsService } from './reports.service';
 import { AdminUsersService } from './users.service';
-import { matches, venues, reports, users } from '../../database/schema';
-import { withTimestamp } from '../../common/utils/timestamp';
 
 /**
  * P2-141 (Reviewer A, run #98): admin write-path concurrency hardening.

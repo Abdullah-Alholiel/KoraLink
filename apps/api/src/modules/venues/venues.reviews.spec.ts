@@ -1,6 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { VenuesService } from './venues.service';
-import { venues, venue_reviews } from '../../database/schema';
+import { venues } from '../../database/schema';
 
 /**
  * P1-55: booking-verified venue reviews (run #117). The drizzle db is an
@@ -115,7 +115,7 @@ function makeDb(opts: {
       };
       return chain;
     },
-    insert: (table: unknown) => {
+    insert: (_table: unknown) => {
       const chain: any = {
         values: (vals: any) => {
           (makeDb as any)._inserted = vals;

@@ -1,5 +1,5 @@
 import { PartnerService } from './partner.service';
-import { pitches, venues } from '../../database/schema';
+import { pitches } from '../../database/schema';
 
 /**
  * P2-5 residual contract (run #39): createVenue must return the FULL inserted
