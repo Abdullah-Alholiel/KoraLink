@@ -101,11 +101,12 @@ function kickoffDate(iso: string | undefined, locale: 'en-GB' | 'ar-SA'): string
 
 /**
  * P1-67 (run #141): render an exact 2dp SAR amount string per push locale —
- * en → "SAR 3,150.00", ar → Arabic-Indic digits + "ر.س". TOTAL: a missing or
- * unparseable input renders the raw value as-is (display-only passthrough —
- * the payout amount is decided server-side as an exact numeric(12,2) string,
- * so this formatter NEVER does money math; a malformed value can only come
- * from a data bug and must not be silently re-quantized here).
+ * en → "SAR 3,150.00", ar → Arabic-Indic digits + "ر.س". TOTAL (never throws):
+ * a MISSING amount renders the localized zero datum "0.00" (pay() always
+ * passes `s.amount::text`, so this can only fire from a data bug — a payout
+ * push without a number is meaningless); a PROVIDED-but-unparseable value
+ * renders the raw string as-is (display-only passthrough — this formatter
+ * NEVER does money math and must not silently re-quantize).
  */
 function payoutAmount(amount: string | undefined, locale: 'en-GB' | 'ar-SA'): string {
   if (!amount) return '0.00';
