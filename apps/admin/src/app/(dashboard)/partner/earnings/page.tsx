@@ -97,8 +97,13 @@ export default function PartnerEarningsPage() {
     // throw during generation must reach Sentry + the error note, not the
     // console (PR-Agent r1 MINOR).
     try {
-      ef.runPrebuilt(buildEarningsCsv(data), rowCount);
-      trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+      const built = buildEarningsCsv(data);
+      // runPrebuilt returns success: the hook already fired the error note +
+      // Sentry + error event on failure — success analytics must not fire too
+      // (run-#138 Reviewer-A MINOR).
+      if (ef.runPrebuilt(built, rowCount)) {
+        trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+      }
     } catch (e) {
       Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
       trackEvent('admin_csv_export_error', { page: 'partner.earnings' });
