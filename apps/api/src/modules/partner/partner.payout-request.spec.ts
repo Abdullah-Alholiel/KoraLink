@@ -24,7 +24,12 @@ interface TxFixture {
   unsettled: Array<{ venue_id: string; amount: string }>;
 }
 
-function makeService(fx: TxFixture & { audit?: { log: (e: unknown) => Promise<void> } }) {
+function makeService(
+  fx: TxFixture & {
+    audit?: { log: (e: unknown) => Promise<void> };
+    settings?: { getNumber: (key: string, fallback: number) => Promise<number> };
+  },
+) {
   const inserted: Inserted[] = [];
   const captured = {
     /** SQL text of the raw unsettled-revenue query. */
@@ -77,7 +82,12 @@ function makeService(fx: TxFixture & { audit?: { log: (e: unknown) => Promise<vo
     transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   };
 
-  const svc = new PartnerService(db as never, { broadcastOps: () => {} } as never);
+  const svc = new PartnerService(
+    db as never,
+    { broadcastOps: () => {} } as never,
+    (fx.audit ?? undefined) as never,
+    (fx.settings ?? undefined) as never,
+  );
   return { svc, inserted, captured };
 }
 
@@ -123,6 +133,50 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     expect(captured.rawSql).toContain('koralink');
     expect(captured.rawSql).toContain('NOT EXISTS');
     expect(captured.rawSql).toContain('settlements');
+    // P2-211: the window + dedupe guard ride the payout_cadence_days setting
+    // (mirrors the admin generator) — no 365-day hardcode, and both bound
+    // params are the SAME rolling instant.
+    expect(captured.rawSql).not.toContain('365 days');
+    const stamps =
+      captured.rawSql.match(/20\d{2}-\d{2}-\d{2}T[\d:]+(\.\d+)?Z?/g) ?? [];
+    expect(stamps.length).toBe(2);
+    const [windowStart, guardStart] = stamps;
+    if (!windowStart || !guardStart) throw new Error('expected two window timestamps in SQL');
+    expect(windowStart).toBe(guardStart);
+  });
+
+  it('window follows payout_cadence_days — mirrors the admin generator, 7-day fallback', async () => {
+    const t0 = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+
+    // No settings service (legacy spec construction) → documented 7-day fallback.
+    const fallback = makeService({
+      venueRows: [{ id: 'v1', name: 'A' }],
+      unsettled: [{ venue_id: 'v1', amount: '50.00' }],
+    });
+    await fallback.svc.requestPayout('owner-1', 'VenueOwner');
+
+    // Cadence overridden to 14 → the money window widens to match the generator.
+    const override = makeService({
+      venueRows: [{ id: 'v1', name: 'A' }],
+      unsettled: [{ venue_id: 'v1', amount: '50.00' }],
+      settings: { getNumber: async (key, fb) => (key === 'payout_cadence_days' ? 14 : fb) },
+    });
+    await override.svc.requestPayout('owner-1', 'VenueOwner');
+    const t1 = Date.now();
+
+    const stampOf = (cap: { rawSql: string }): number => {
+      const s = cap.rawSql.match(/20\d{2}-\d{2}-\d{2}T[\d:]+(\.\d+)?Z?/g) ?? [];
+      const stamp = s.find(Boolean);
+      if (!stamp) throw new Error('expected a rolling-window timestamp in captured SQL');
+      return Date.parse(stamp.endsWith('Z') ? stamp : `${stamp}Z`);
+    };
+    const mid = (t0 + t1) / 2;
+    // Fallback window ≈ now-7d (±10 min test-execution slack).
+    expect(Math.abs(stampOf(fallback.captured) - (mid - 7 * day))).toBeLessThan(10 * 60 * 1000);
+    // Override window ≈ now-14d, i.e. strictly older than the fallback window.
+    expect(Math.abs(stampOf(override.captured) - (mid - 14 * day))).toBeLessThan(10 * 60 * 1000);
+    expect(stampOf(override.captured)).toBeLessThan(stampOf(fallback.captured) - 5 * day);
   });
 
   it('400 with nothing unsettled (zero-revenue venues)', async () => {

@@ -22,6 +22,7 @@ import {
 import { withTimestamp } from '../../common/utils/timestamp';
 import { quantizeMoney2dpString } from '../../common/utils/money';
 import { AuditService } from '../admin/audit.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
@@ -109,6 +110,9 @@ export class PartnerService {
     // Optional at the type level so legacy spec constructions compile; the
     // real DI graph (PartnerModule) always provides AuditService.
     private readonly audit?: AuditService,
+    // Optional for the same reason; SettingsModule is @Global so the real DI
+    // graph always provides it. Undefined (legacy specs) → cadence fallback 7.
+    private readonly settings?: PlatformSettingsService,
   ) {}
 
   /** Venue ids an actor may see — Admins scope to ALL venues (support/moderation). */
@@ -163,6 +167,18 @@ export class PartnerService {
       throw new ForbiddenException('Admins use the settlement generator instead.');
     }
 
+    // P2-211: window + dedupe guard MUST mirror the admin generator's money
+    // source — admin settlements.service.ts keys BOTH to the rolling
+    // `payout_cadence_days` PlatformSetting (default 7). Hardcoding 365d here
+    // structurally locked a venue out of requesting new unsettled revenue for
+    // up to a year after its first request (silent 400 dead-end).
+    const cadenceDays = this.settings
+      ? await this.settings.getNumber('payout_cadence_days', 7)
+      : 7;
+    const windowStartIso = new Date(
+      Date.now() - cadenceDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
     // One tx: lock the partner's venue rows FIRST (blocks a concurrent
     // generate/request window for the same venues until commit), then compute
     // unsettled revenue and insert.
@@ -187,12 +203,12 @@ export class PartnerService {
         )})
           AND m.status = 'Completed'
           AND m.booking_mode = 'koralink'
-          AND m.scheduled_at >= (CURRENT_DATE - INTERVAL '365 days')
+          AND m.scheduled_at >= ${windowStartIso}
           AND m.scheduled_at < ((CURRENT_DATE + 1) AT TIME ZONE 'Asia/Riyadh')
           AND NOT EXISTS (
             SELECT 1 FROM settlements s
             WHERE s.venue_id = v.id
-              AND s.period_start >= (CURRENT_DATE - INTERVAL '365 days')
+              AND s.period_start >= ${windowStartIso}::date
           )
         GROUP BY v.id
         HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
