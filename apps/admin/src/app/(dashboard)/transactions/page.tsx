@@ -16,8 +16,10 @@ import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import * as Sentry from '@sentry/nextjs';
 import { csvAmount, csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
@@ -25,6 +27,7 @@ type TxResponse = ListResponse<AdminTransaction> & { transactions: AdminTransact
 
 export default function TransactionsPage() {
   const hq = useTranslations('hq');
+  const cf = useTranslations('confirm');
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
@@ -34,6 +37,11 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminTransaction | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<AdminTransaction | null>(null);
+  // Refund feedback (P2-210): always-mounted polite/assertive pair so SRs
+  // announce it — same pattern as ExportFeedbackNote below.
+  const [refundNote, setRefundNote] = useState<'success' | 'error' | null>(null);
+  const [refundSeq, setRefundSeq] = useState(0);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
@@ -46,12 +54,24 @@ export default function TransactionsPage() {
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<TxResponse>(`/admin/transactions?${qs.toString()}`);
 
+  // Money op (P2-210): the click only OPENS the confirm dialog; `onConfirm`
+  // runs the POST. Failure is surfaced — never swallowed (run-#138 Reviewer-B
+  // P0): assertive localized note + Sentry + analytics; the drawer stays open
+  // so the admin can read the amount and retry.
   async function refund(id: string) {
     setBusyId(id);
     try {
       await api.post(`/admin/transactions/${id}/refund`);
       reload();
       setSelected(null);
+      setRefundSeq((s) => s + 1);
+      setRefundNote('success');
+      trackEvent('admin_refund_success', { page: 'admin.transactions' });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { area: 'admin-refund' } });
+      trackEvent('admin_refund_failed', { page: 'admin.transactions' });
+      setRefundSeq((s) => s + 1);
+      setRefundNote('error');
     } finally {
       setBusyId(null);
     }
@@ -197,6 +217,28 @@ export default function TransactionsPage() {
            error assertive) — markup lives beside the hook */}
       <ExportFeedbackNote feedback={exportFeedback} />
 
+      {/* refund note pair (P2-210): always mounted so SRs announce repeats */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={`mx-8 text-sm ${refundNote === 'success' ? 'mt-3' : 'h-0'}`}
+      >
+        {refundNote === 'success' && (
+          <span className="inline-block rounded-lg bg-green-50 px-3 py-2 text-green-700">
+            {hq('refundSuccess')}
+            <span className="sr-only"> #{refundSeq}</span>
+          </span>
+        )}
+      </p>
+      <p role="alert" className={`mx-8 text-sm ${refundNote === 'error' ? 'mt-3' : 'h-0'}`}>
+        {refundNote === 'error' && (
+          <span className="inline-block rounded-lg bg-red-50 px-3 py-2 text-red-700">
+            {hq('refundFailed')}
+            <span className="sr-only"> #{refundSeq}</span>
+          </span>
+        )}
+      </p>
+
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{hq('loadingTransactions')}</div>
       ) : error ? (
@@ -241,7 +283,7 @@ export default function TransactionsPage() {
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             ) : (
               <button
-                onClick={() => refund(selected.id)}
+                onClick={() => setConfirmTarget(selected)}
                 className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> {hq('refundAction')}
@@ -249,6 +291,20 @@ export default function TransactionsPage() {
             )
           ) : undefined
         }
+      />
+
+      <ConfirmDialog
+        open={!!confirmTarget}
+        title={cf('refundConfirmTitle')}
+        message={
+          confirmTarget
+            ? `${cf('refundConfirmMessage')} (${formatMoney(confirmTarget.amount)})`
+            : undefined
+        }
+        confirmLabel={hq('refundAction')}
+        danger
+        onConfirm={() => confirmTarget && refund(confirmTarget.id)}
+        onClose={() => setConfirmTarget(null)}
       />
     </div>
   );
