@@ -121,7 +121,9 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'venue_ownership_added',
   'venue_ownership_removed',
   // ── Account security (P1-19 phone change) ──
-  'phone_changed'
+  'phone_changed',
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  'payout_paid'
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);

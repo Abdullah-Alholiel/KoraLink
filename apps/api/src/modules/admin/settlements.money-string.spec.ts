@@ -45,6 +45,8 @@ describe('money aggregates are exact strings (P2-4)', () => {
       { log: jest.fn(async () => {}) } as never,
       { getNumber: jest.fn(async () => 7) } as never,
       { broadcastOps: jest.fn() } as never,
+      { record: jest.fn(async () => {}) } as never,
+      { sendPushToUsers: jest.fn(async () => 0) } as never,
     );
     return { svc, db, insertChain, sqls };
   }

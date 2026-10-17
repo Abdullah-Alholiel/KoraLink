@@ -927,7 +927,8 @@
     "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
-    "playerRemoved": "{name} removed you from a match"
+    "playerRemoved": "{name} removed you from a match",
+    "payoutPaid": "KoraLink sent your venue payout"
   },
   "payment": {
     "title": "Checkout",
@@ -1105,7 +1106,8 @@
     "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
-    "playerRemoved": "{name} removed you from a match"
+    "playerRemoved": "{name} removed you from a match",
+    "payoutPaid": "Your venue payout has been sent"
   },
   "attendance": {
     "title": "Attendance",

@@ -13,6 +13,9 @@ import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -39,6 +42,8 @@ export class AdminSettlementsService {
     private readonly audit: AuditService,
     private readonly settings: PlatformSettingsService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(dto: ListSettlementsDto) {
@@ -118,6 +123,44 @@ export class AdminSettlementsService {
       ip,
     });
     this.realtime.broadcastOps('settlements');
+
+    // P1-67 (run #141): tell the venue partner their money moved. The guard
+    // above guarantees `status: 'paid'` — notify AFTER the write + audit so a
+    // notification is never emitted for a pay that didn't happen (TOCTOU-safe
+    // ordering). Best-effort: a resolve/fan-out failure is logged + Sentry'd
+    // (reportFanOutError) and NEVER throws into the admin's pay() — a paid
+    // settlement must not 500 because a push didn't land.
+    try {
+      const [target] = (await this.db.execute(sql`
+        SELECT v.owner_id,
+               v.name AS venue_name,
+               s.amount::text AS amount
+        FROM settlements s
+        INNER JOIN venues v ON v.id = s.venue_id
+        WHERE s.id = ${id}
+      `)) as unknown as Array<{
+        owner_id: string;
+        venue_name: string | null;
+        amount: string;
+      }>;
+
+      if (target?.owner_id) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: 'payout_paid',
+          subjectId: id,
+          recipients: [target.owner_id],
+          excludeActor: false,
+        });
+        await this.notifications.sendPushToUsers([target.owner_id], {
+          key: 'payout_paid', // P2-8: text localized per subscription locale
+          vars: { venueName: target.venue_name ?? undefined, amount: target.amount },
+          data: { type: 'payout-paid' },
+        });
+      }
+    } catch (err) {
+      reportFanOutError('settlements.pay-notify', err);
+    }
 
     return after;
   }
