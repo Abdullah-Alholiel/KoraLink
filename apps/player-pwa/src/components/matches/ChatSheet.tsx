@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, Fragment } from 'react';
-import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical } from 'lucide-react';
+import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical, Clock } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useMatchChat } from '@/hooks/useMessages';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import type { MatchMessage } from '@/hooks/useMessages';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
@@ -93,9 +94,21 @@ export default function ChatSheet({
     // message that arrived while the socket was down; tappable to dismiss.
     missedMarker,
     dismissMissedMarker,
-  } = useMatchChat(isOpen ? matchId : null, (err) =>
-    setChatNoticeKind(classifyError(err)),
+  } = useMatchChat(
+    isOpen ? matchId : null,
+    (err) => setChatNoticeKind(classifyError(err)),
+    // Fires when a send is parked offline — show the "will send" toast.
+    // Closure over setQueuedToast is safe: it runs on a later event, after
+    // the component body has fully executed (no TDZ at call time).
+    {
+      onQueued: () => {
+        setQueuedToast(true);
+      },
+    },
   );
+  // P2-172: offline awareness for the queued-send affordance (banner +
+  // queued marker toast). SSR-safe: defaults true until the client effect.
+  const isOnline = useOnlineStatus();
 
   const [input, setInput] = useState('');
   // P2-111 (run #81): why the last send failed — the classified ErrorKind,
@@ -108,6 +121,9 @@ export default function ChatSheet({
   // P1-31 parity (run #53): report an abusive RECEIVED lobby message — same
   // pattern as the DM conversation surface (messages/[id]/page.tsx).
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  // P2-172: fires once per offline send ("will send when back online").
+  const queuedToastShownRef = useRef(false);
+  const [queuedToast, setQueuedToast] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +154,23 @@ export default function ChatSheet({
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen]);
+
+  // ── P2-172: "will send when back online" toast after an offline send ──
+  // Shows once per offline send; auto-dismisses. Declared BEFORE the early
+  // return (hook order stays stable regardless of isOpen).
+  useEffect(() => {
+    if (!queuedToast) return;
+    if (queuedToastShownRef.current) {
+      setQueuedToast(false);
+      return;
+    }
+    queuedToastShownRef.current = true;
+    const timer = setTimeout(() => {
+      setQueuedToast(false);
+      queuedToastShownRef.current = false;
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [queuedToast]);
 
   // Hydration-safe wall clock (P2-59, run #50): null pre-mount → 0 buckets
   // all messages "older" on the first render, identical on both sides; the
@@ -347,6 +380,16 @@ export default function ChatSheet({
                       {isMine && msg.status === 'sending' && (
                         <Loader2 className="w-3 h-3 animate-spin text-gray-400" strokeWidth={2} />
                       )}
+                      {isMine && msg.status === 'queued' && (
+                        // P2-172: parked offline — will deliver on reconnect.
+                        <span
+                          className="flex items-center gap-0.5 text-gray-400"
+                          title={t('messages.queuedOffline')}
+                          aria-label={t('messages.queuedOffline')}
+                        >
+                          <Clock className="w-3 h-3" strokeWidth={2} />
+                        </span>
+                      )}
                       {isMine && msg.status === 'failed' && (
                         <button
                           onClick={() => handleRetry(msg)}
@@ -407,6 +450,29 @@ export default function ChatSheet({
             className="px-4 py-2 text-xs bg-brand-red/10 text-brand-red flex-shrink-0"
           >
             {t(errorKey(chatNoticeKind))}
+          </div>
+        )}
+
+        {/* P2-172: offline notice above the composer — queued sends deliver
+            automatically on reconnect (read-only affordance, role=status). */}
+        {!isOnline && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-gray-100 text-gray-600 flex items-center gap-1.5 flex-shrink-0"
+          >
+            <WifiOff className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+            <span>{t('messages.offlineQueuedBanner')}</span>
+          </div>
+        )}
+
+        {/* P2-172: queued-send confirmation toast (info, auto-dismisses). */}
+        {queuedToast && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-brand-green/10 text-brand-green flex items-center gap-1.5 flex-shrink-0"
+          >
+            <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+            <span>{t('messages.queuedOffline')}</span>
           </div>
         )}
 

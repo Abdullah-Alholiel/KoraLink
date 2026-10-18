@@ -11,10 +11,200 @@ import {
   type DiscussionsApiResponse,
 } from '@/lib/discussion-adapter';
 import type { Discussion } from '@/types';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+
+// ─── P2-172 (run #144): offline chat-send queue ───────────────────────────
+// A message composed while offline is parked in a persisted module-level
+// queue and replayed automatically on reconnect through the SAME idempotent
+// send path (client_message_id — the server dedupes replays). Money actions
+// (join/booking) are deliberately NOT queued: their server side is a fee
+// debit, and queueing money moves without an owner decision is out of scope
+// (see docs/plans/offline-chat-queue/00-retro.md Gate 1).
+
+export type MessageStatus = 'sending' | 'sent' | 'failed' | 'queued';
+
+/** Marker error — never shown to users; the onError branch intercepts it. */
+export class OfflineSendSignal extends Error {
+  constructor() {
+    super('offline: queued for replay');
+    this.name = 'OfflineSendSignal';
+  }
+}
+
+export interface QueuedChatMessage {
+  matchId: string;
+  content: string;
+  clientMessageId: string;
+  queuedAt: string;
+}
+
+const OFFLINE_QUEUE_KEY = 'kl.offlineChatQueue.v1';
+
+function isNetworkOnline(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine !== false;
+}
+
+function readOfflineQueue(): QueuedChatMessage[] {
+  if (typeof window === 'undefined') return offlineQueue;
+  try {
+    const raw = window.localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return offlineQueue;
+    const parsed = JSON.parse(raw) as QueuedChatMessage[];
+    if (!Array.isArray(parsed)) return offlineQueue;
+    // Module memory is authoritative within a session; storage seeds it.
+    if (offlineQueue.length === 0 && parsed.length > 0) offlineQueue = parsed;
+    return offlineQueue;
+  } catch {
+    return offlineQueue;
+  }
+}
+
+function persistOfflineQueue(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
+  } catch {
+    // Private mode / quota — degrade to in-memory queue for this session.
+  }
+}
+
+let offlineQueue: QueuedChatMessage[] = [];
+
+/** Park a message for replay. Returns false when the id is already queued. */
+function enqueueOfflineMessage(entry: QueuedChatMessage): boolean {
+  readOfflineQueue();
+  if (offlineQueue.some((m) => m.clientMessageId === entry.clientMessageId)) {
+    return false;
+  }
+  offlineQueue.push(entry);
+  persistOfflineQueue();
+  return true;
+}
+
+/** Remove a delivered entry (any delivery path: REST response, WS echo, flush). */
+function discardOfflineMessage(clientMessageId: string): void {
+  readOfflineQueue();
+  const next = offlineQueue.filter((m) => m.clientMessageId !== clientMessageId);
+  if (next.length !== offlineQueue.length) {
+    offlineQueue = next;
+    persistOfflineQueue();
+  }
+}
+
+function getQueuedEntriesForMatch(matchId: string): QueuedChatMessage[] {
+  readOfflineQueue();
+  return offlineQueue.filter((m) => m.matchId === matchId);
+}
+
+function getOfflineQueueCount(matchId?: string): number {
+  readOfflineQueue();
+  return matchId
+    ? offlineQueue.filter((m) => m.matchId === matchId).length
+    : offlineQueue.length;
+}
+
+// ── Flush plumbing ────────────────────────────────────────────────────────
+// Flusher lives at MODULE level (a queued message must deliver even after
+// the sheet that wrote it unmounts — e.g. the user navigates away while
+// offline). Open sheets subscribe and reconcile deliveries into their view.
+
+type FlushListener = (
+  message: MatchMessage | null,
+  failedEntry?: QueuedChatMessage,
+) => void;
+const flushListeners = new Set<FlushListener>();
+
+/** Subscribe to delivered flush messages (open sheets reconcile their view). */
+export function registerOfflineFlushListener(fn: FlushListener): () => void {
+  flushListeners.add(fn);
+  return () => flushListeners.delete(fn);
+}
+
+let flushing = false;
+
+/** Replay the queue oldest-first through the idempotent REST send path. */
+export async function flushOfflineQueue(): Promise<void> {
+  if (flushing || !isNetworkOnline()) return;
+  flushing = true;
+  try {
+    // Re-read each iteration: deliveries remove entries while we iterate.
+    for (const entry of [...readOfflineQueue()]) {
+      if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
+      try {
+        const delivered = await fetcher<MatchMessage | undefined>(
+          `/matches/${entry.matchId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: entry.content,
+              clientMessageId: entry.clientMessageId,
+            }),
+          },
+        );
+        discardOfflineMessage(entry.clientMessageId);
+        const message =
+          delivered && 'id' in delivered
+            ? delivered
+            : ({
+                // WS echo may have beaten the REST response — fabricate the
+                // minimum shape; reconcile dedupes on client_message_id.
+                id: `flushed-${entry.clientMessageId}`,
+                match_id: entry.matchId,
+                content: entry.content,
+                created_at: new Date().toISOString(),
+                client_message_id: entry.clientMessageId,
+              } as MatchMessage);
+        for (const fn of flushListeners) fn(message);
+        trackEvent('chat_offline_queue_flushed');
+      } catch {
+        // Still failing (server unreachable / chat closed) — leave queued,
+        // but tell open sheets so the bubble flips to the FAILED state (red
+        // + tap-to-retry) instead of spinning as `queued` forever. A
+        // chat-closed rejection surfaces its authored copy on manual retry.
+        for (const fn of flushListeners) fn(null, entry);
+        break;
+      }
+    }
+  } finally {
+    flushing = false;
+  }
+}
+
+let watcherStarted = false;
+
+/**
+ * Idempotently arm the reconnect flusher: `online` event + a short
+ * rising-edge poll (some browsers/page-restores restore without firing the
+ * event). Re-armed by every offline send; safe to call repeatedly.
+ */
+export function startOfflineQueueWatcher(): void {
+  if (watcherStarted || typeof window === 'undefined') return;
+  watcherStarted = true;
+  window.addEventListener('online', () => {
+    void flushOfflineQueue();
+  });
+  window.setInterval(() => {
+    if (isNetworkOnline() && getOfflineQueueCount() > 0) {
+      void flushOfflineQueue();
+    }
+  }, 5_000);
+}
+
+/** Test-only: reset queue + flush state between spec cases. */
+export function __resetOfflineChatQueueForTests(): void {
+  offlineQueue = [];
+  flushing = false;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(OFFLINE_QUEUE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 // ─── Types ────────────────────────────────────────────
-
-export type MessageStatus = 'sending' | 'sent' | 'failed';
 
 export interface MatchMessage {
   id: string;
@@ -174,8 +364,13 @@ export function useMatchChat(
   // carrier of WHY a send failed — e.g. the chat-closed code on a finished
   // match. The sheet turns it into authored, localized copy (P1-47 pattern).
   onSendError?: (err: FetchError) => void,
+  // P2-172 (run #144): fired when a send is parked in the offline queue —
+  // the sheet surfaces an info toast ("will send when back online").
+  opts?: { onQueued?: () => void },
 ) {
   const queryClient = useQueryClient();
+  const onQueuedRef = useRef<(() => void) | undefined>(undefined);
+  onQueuedRef.current = opts?.onQueued;
   const currentUser = useAppStore(selectUser);
   const rt = getRealtime();
   // P2-99 (run #75 lint fix): the typing own-echo filter and the socket
@@ -537,6 +732,10 @@ export function useMatchChat(
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
+      // P2-172: an offline send never reaches the wire — the onError branch
+      // parks it in the persisted queue; flushOfflineQueue replays it with
+      // the SAME clientMessageId on reconnect (server dedupes replays).
+      if (!isNetworkOnline()) throw new OfflineSendSignal();
       if (rt.isConnected()) {
         rt.emit('send-message', { matchId, content, clientMessageId });
         // Authoritative message arrives via the `new-message` echo.
@@ -593,12 +792,37 @@ export function useMatchChat(
       ackTimersRef.current.set(clientMessageId, timer);
     },
     onSuccess: (data, { clientMessageId }) => {
+      // P2-172: any successful delivery (including a manual retry of a
+      // flush-failed message) retires the queue entry — retry is the
+      // user-driven escape hatch from a failed flush.
+      discardOfflineMessage(clientMessageId);
       // REST fallback returns the created message directly → reconcile it.
       if (data && 'id' in data && data.client_message_id === clientMessageId) {
         reconcile(data);
       }
     },
-    onError: (err, { clientMessageId }) => {
+    onError: (err, { content, clientMessageId }) => {
+      // P2-172: offline send — park the message in the persisted queue and
+      // keep the bubble in a `queued` state (no failure UX, no error copy).
+      // The flusher replays it with the SAME clientMessageId on reconnect.
+      // Content comes from the mutation VARIABLES (not state — the optimistic
+      // append is not guaranteed visible in this closure yet).
+      if (err instanceof OfflineSendSignal) {
+        enqueueOfflineMessage({
+          matchId: matchId ?? '',
+          content: content,
+          clientMessageId: clientMessageId,
+          queuedAt: new Date().toISOString(),
+        });
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.client_message_id === clientMessageId ? { ...m, status: 'queued' } : m,
+          ),
+        );
+        startOfflineQueueWatcher();
+        onQueuedRef.current?.();
+        return;
+      }
       setLocalMessages((prev) =>
         prev.map((m) =>
           m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m,
@@ -637,7 +861,77 @@ export function useMatchChat(
 
   // P1-3: merged view = paged older history + authoritative newest window +
   // locally-appended (optimistic/real-time) messages.
-  const messages = mergeMessages([...olderMessages, ...history], localMessages);
+  // P2-172: messages queued OFFLINE in a PREVIOUS session (page closed before
+  // reconnect) backfill into the view as `queued` so they never vanish; the
+  // flusher delivers them and reconcile swaps in the server message.
+  const queuedForMatch: MatchMessage[] = matchId
+    ? getQueuedEntriesForMatch(matchId)
+        .filter(
+          (q) =>
+            !localMessages.some((m) => m.client_message_id === q.clientMessageId) &&
+            !history.some((m) => m.client_message_id === q.clientMessageId),
+        )
+        .map((q) => ({
+          id: `queued-${q.clientMessageId}`,
+          match_id: q.matchId,
+          user_id: currentUser?.id ?? '',
+          content: q.content,
+          created_at: q.queuedAt,
+          user: {
+            id: currentUser?.id ?? '',
+            full_name: currentUser?.fullName ?? null,
+            handle: currentUser?.handle ?? null,
+            avatar_url: currentUser?.avatarUrl ?? null,
+          },
+          client_message_id: q.clientMessageId,
+          status: 'queued' as const,
+        }))
+    : [];
+  const messages = mergeMessages(
+    [...olderMessages, ...history],
+    [...localMessages, ...queuedForMatch],
+  );
+
+  // P2-172: arm the module flusher once per session (idempotent) so this
+  // sheet's queued messages deliver on reconnect even if it stays mounted.
+  useEffect(() => {
+    startOfflineQueueWatcher();
+  }, []);
+
+  // P2-172: while this sheet is open, a flush delivery for ANY match
+  // reconciles into the local view (dedup on client_message_id) so the
+  // bubble flips queued → sent without a refetch. A flush FAILURE flips the
+  // bubble to `failed` (red + tap-to-retry) — never a stuck spinner.
+  useEffect(
+    () =>
+      registerOfflineFlushListener((message, failedEntry) => {
+        if (message) {
+          setLocalMessages((prev) => {
+            if (!message.client_message_id) return prev;
+            const index = prev.findIndex(
+              (m) => m.client_message_id === message.client_message_id,
+            );
+            if (index >= 0) {
+              const next = [...prev];
+              next[index] = { ...message, status: 'sent' };
+              return next;
+            }
+            return prev;
+          });
+          return;
+        }
+        if (failedEntry) {
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.client_message_id === failedEntry.clientMessageId
+                ? { ...m, status: 'failed' }
+                : m,
+            ),
+          );
+        }
+      }),
+    [],
+  );
 
   // Batched read-mark: any newly-seen message authored by someone else marks
   // the chat read (ONE watermark write per batch — never per message). Uses
@@ -672,5 +966,9 @@ export function useMatchChat(
     // P2-196 reconnect-backfill surface
     missedMarker,
     dismissMissedMarker: useCallback(() => setMissedMarker(null), []),
+    // P2-172 offline-queue surface: entries still parked for THIS match in
+    // the persisted queue (the authoritative retry backlog — includes both
+    // session-queued and previous-session entries until delivery succeeds).
+    queuedCount: matchId ? getOfflineQueueCount(matchId) : 0,
   };
 }
