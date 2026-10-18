@@ -82,6 +82,7 @@ export default function TransactionsPage() {
       setRefundNote('error');
     } finally {
       setBusyId(null);
+      setConfirmTarget(null);
     }
   }
 
