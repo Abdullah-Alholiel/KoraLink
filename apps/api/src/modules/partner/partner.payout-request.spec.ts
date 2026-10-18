@@ -123,6 +123,26 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     expect(captured.conflictDoNothing).toBe(true);
   });
 
+  // P2-C (run #143): every settlement a partner request creates carries the
+  // requesting actor — provenance separates partner-requested rows from the
+  // admin auto-generator's (requested_by NULL) in the console read-model.
+  it('stamps requested_by with the partner actor on every created settlement', async () => {
+    const { svc, inserted } = makeService({
+      venueRows: [
+        { id: 'v1', name: 'Riyadh Arena' },
+        { id: 'v2', name: 'Jeddah Court' },
+      ],
+      unsettled: [
+        { venue_id: 'v1', amount: '1234.50' },
+        { venue_id: 'v2', amount: '88.00' },
+      ],
+    });
+    await svc.requestPayout('owner-1', 'VenueOwner');
+
+    expect(inserted).toHaveLength(2);
+    expect(inserted.every((r) => r.requested_by === 'owner-1')).toBe(true);
+  });
+
   it('the unsettled-revenue query filters to completed koralink bookings with the NOT-EXISTS guard', async () => {
     const { svc, captured } = makeService({
       venueRows: [{ id: 'v1', name: 'A' }],

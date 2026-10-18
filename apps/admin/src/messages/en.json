@@ -256,7 +256,11 @@
       "payoutConfirmBody": "One pending settlement per venue with unsettled completed bookings will be created for HQ to review and pay. No money moves until HQ approves it.",
       "payoutRequestedNote": "Payout request sent: {count} settlement(s), {amount} total, now pending HQ approval.",
       "payoutErrorPrefix": "Request failed:",
-      "payoutErrorFallback": "please try again in a moment."
+      "payoutErrorFallback": "please try again in a moment.",
+      "requestedChip": "requested",
+      "requestedBy": "Requested by",
+      "autoOrigin": "Auto (HQ)",
+      "payoutRequestedVenue": "{venue}: {amount}"
     },
     "settings": {
       "title": "Settings",

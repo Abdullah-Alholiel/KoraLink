@@ -256,7 +256,11 @@
       "payoutConfirmBody": "سيتم إنشاء تسوية معلقة واحدة لكل منشأة لديها حجوزات مكتملة غير مسوّاة، لتراجعها الإدارة وتصرفها. لا تتحرك أي مبالغ قبل موافقة الإدارة.",
       "payoutRequestedNote": "تم إرسال طلب الصرف: {count} تسوية، بإجمالي {amount}، وهي الآن بانتظار موافقة الإدارة.",
       "payoutErrorPrefix": "فشل الطلب:",
-      "payoutErrorFallback": "يرجى المحاولة مرة أخرى بعد قليل."
+      "payoutErrorFallback": "يرجى المحاولة مرة أخرى بعد قليل.",
+      "requestedChip": "مطلوب",
+      "requestedBy": "طلب بواسطة",
+      "autoOrigin": "تلقائي (الإدارة)",
+      "payoutRequestedVenue": "{venue}: {amount}"
     },
     "settings": {
       "title": "الإعدادات",

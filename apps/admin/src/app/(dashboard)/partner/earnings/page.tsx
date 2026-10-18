@@ -36,6 +36,9 @@ interface PartnerSettlement {
   status: string;
   payout_ref?: string | null;
   created_at: string;
+  /** P2-C (run #143): payout-request provenance (null = auto-generated). */
+  requested_by?: string | null;
+  requested_by_name?: string | null;
 }
 
 export default function PartnerEarningsPage() {
@@ -55,8 +58,19 @@ export default function PartnerEarningsPage() {
     setRequesting(true);
     setRequestError(null);
     try {
-      const res = await api.post<{ requested: number; totalAmount: string }>('/partner/payout-requests', {});
-      setRequestNote(t('payoutRequestedNote', { count: res.requested, amount: formatMoney(res.totalAmount) }));
+      const res = await api.post<{
+        requested: number;
+        totalAmount: string;
+        settlements: Array<{ venueName: string; amount: string }>;
+      }>('/partner/payout-requests', {});
+      // P2-D (run #143): the note states EXACTLY what was requested — venue
+      // + amount per line, then the total — not just a count.
+      const venueLines = res.settlements
+        .map((s) => t('payoutRequestedVenue', { venue: s.venueName, amount: formatMoney(s.amount) }))
+        .join(' · ');
+      setRequestNote(
+        `${t('payoutRequestedNote', { count: res.requested, amount: formatMoney(res.totalAmount) })} ${venueLines}`,
+      );
       trackEvent('partner_payout_request', { page: 'partner.earnings', requested: res.requested, total: res.totalAmount });
       reload();
     } catch (e) {
@@ -189,7 +203,19 @@ export default function PartnerEarningsPage() {
       key: 'status',
       header: t('thStatus'),
       role: 'meta',
-      render: (s) => <StatusBadge status={s.status} />,
+      // P2-C (run #143): a partner-requested settlement carries a "requested"
+      // chip next to its status — the partner sees at a glance which rows came
+      // from their own payout requests vs the admin auto-generator.
+      render: (s) => (
+        <span className="inline-flex items-center gap-1.5">
+          <StatusBadge status={s.status} />
+          {s.requested_by && (
+            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+              {t('requestedChip')}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'period',
@@ -358,6 +384,14 @@ export default function PartnerEarningsPage() {
                   ),
                 },
                 { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
+                {
+                  // P2-C (run #143): requester identity in the detail drawer —
+                  // the partner name for requested rows, auto for the rest.
+                  label: t('requestedBy'),
+                  value:
+                    selected.requested_by_name ??
+                    (selected.requested_by ? <span dir="ltr">{selected.requested_by}</span> : t('autoOrigin')),
+                },
                 { label: t('thCreated'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
               ]
             : []

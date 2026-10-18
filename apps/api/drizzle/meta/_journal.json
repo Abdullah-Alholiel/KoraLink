@@ -379,6 +379,13 @@
       "breakpoints": true,
       "when": 1792251717864,
       "tag": "0052_partner_payout_paid_notify"
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251718864,
+      "tag": "0053_settlements_requested_by"
     }
   ]
 }
