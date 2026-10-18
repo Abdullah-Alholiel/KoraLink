@@ -257,7 +257,7 @@
       "payoutRequestedNote": "تم إرسال طلب الصرف: {count} تسوية، بإجمالي {amount}، وهي الآن بانتظار موافقة الإدارة.",
       "payoutErrorPrefix": "فشل الطلب:",
       "payoutErrorFallback": "يرجى المحاولة مرة أخرى بعد قليل.",
-      "requestedChip": "مطلوب",
+      "requestedChip": "مطلوبة",
       "requestedBy": "طلب بواسطة",
       "autoOrigin": "تلقائي (الإدارة)",
       "payoutRequestedVenue": "{venue}: {amount}"
