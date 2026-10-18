@@ -36,6 +36,8 @@ export interface QueuedChatMessage {
   content: string;
   clientMessageId: string;
   queuedAt: string;
+  /** Owner binding — entries replay ONLY under the session that authored them. */
+  userId: string;
 }
 
 const OFFLINE_QUEUE_KEY = 'kl.offlineChatQueue.v1';
@@ -92,16 +94,19 @@ function discardOfflineMessage(clientMessageId: string): void {
   }
 }
 
-function getQueuedEntriesForMatch(matchId: string): QueuedChatMessage[] {
+function getQueuedEntriesForMatch(matchId: string, userId?: string): QueuedChatMessage[] {
   readOfflineQueue();
-  return offlineQueue.filter((m) => m.matchId === matchId);
+  return offlineQueue.filter(
+    (m) => m.matchId === matchId && (!userId || m.userId === userId),
+  );
 }
 
-function getOfflineQueueCount(matchId?: string): number {
+function getOfflineQueueCount(matchId?: string, userId?: string): number {
   readOfflineQueue();
-  return matchId
-    ? offlineQueue.filter((m) => m.matchId === matchId).length
-    : offlineQueue.length;
+  return offlineQueue.filter(
+    (m) =>
+      (!matchId || m.matchId === matchId) && (!userId || m.userId === userId),
+  ).length;
 }
 
 // ── Flush plumbing ────────────────────────────────────────────────────────
@@ -126,11 +131,17 @@ let flushing = false;
 /** Replay the queue oldest-first through the idempotent REST send path. */
 export async function flushOfflineQueue(): Promise<void> {
   if (flushing || !isNetworkOnline()) return;
+  // Owner binding (PR-Agent #149): an entry replays ONLY under the session
+  // that authored it — a queued message must never be sent (or shown) under
+  // another account on a shared device. No logged-in user → no replay.
+  const currentUserId = useAppStore.getState().user?.id;
+  if (!currentUserId) return;
   flushing = true;
   try {
     // Re-read each iteration: deliveries remove entries while we iterate.
     for (const entry of [...readOfflineQueue()]) {
       if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
+      if (entry.userId !== currentUserId) continue; // another account's message
       try {
         const delivered = await fetcher<MatchMessage | undefined>(
           `/matches/${entry.matchId}/messages`,
@@ -151,19 +162,29 @@ export async function flushOfflineQueue(): Promise<void> {
                 // minimum shape; reconcile dedupes on client_message_id.
                 id: `flushed-${entry.clientMessageId}`,
                 match_id: entry.matchId,
+                user_id: entry.userId,
                 content: entry.content,
                 created_at: new Date().toISOString(),
+                user: (() => {
+                  const u = useAppStore.getState().user;
+                  return {
+                    id: entry.userId,
+                    full_name: u?.fullName ?? null,
+                    handle: u?.handle ?? null,
+                    avatar_url: u?.avatarUrl ?? null,
+                  };
+                })(),
                 client_message_id: entry.clientMessageId,
               } as MatchMessage);
         for (const fn of flushListeners) fn(message);
         trackEvent('chat_offline_queue_flushed');
       } catch {
         // Still failing (server unreachable / chat closed) — leave queued,
-        // but tell open sheets so the bubble flips to the FAILED state (red
-        // + tap-to-retry) instead of spinning as `queued` forever. A
-        // chat-closed rejection surfaces its authored copy on manual retry.
+        // tell open sheets (bubble flips to FAILED + tap-to-retry), and
+        // CONTINUE: one permanently-rejected entry (e.g. a chat closed on
+        // the server) must never head-of-line-block healthy entries behind
+        // it (PR-Agent #149). Each flush cycle attempts each entry once.
         for (const fn of flushListeners) fn(null, entry);
-        break;
       }
     }
   } finally {
@@ -813,6 +834,9 @@ export function useMatchChat(
           content: content,
           clientMessageId: clientMessageId,
           queuedAt: new Date().toISOString(),
+          // Owner binding (PR-Agent #149): entries replay only under the
+          // authoring session — never under a different account.
+          userId: currentUserId ?? '',
         });
         setLocalMessages((prev) =>
           prev.map((m) =>
@@ -864,8 +888,9 @@ export function useMatchChat(
   // P2-172: messages queued OFFLINE in a PREVIOUS session (page closed before
   // reconnect) backfill into the view as `queued` so they never vanish; the
   // flusher delivers them and reconcile swaps in the server message.
-  const queuedForMatch: MatchMessage[] = matchId
-    ? getQueuedEntriesForMatch(matchId)
+  const queuedForMatch: MatchMessage[] =
+    matchId && currentUserId
+      ? getQueuedEntriesForMatch(matchId, currentUserId)
         .filter(
           (q) =>
             !localMessages.some((m) => m.client_message_id === q.clientMessageId) &&
@@ -900,8 +925,15 @@ export function useMatchChat(
 
   // P2-172: while this sheet is open, a flush delivery for ANY match
   // reconciles into the local view (dedup on client_message_id) so the
-  // bubble flips queued → sent without a refetch. A flush FAILURE flips the
-  // bubble to `failed` (red + tap-to-retry) — never a stuck spinner.
+  // bubble flips queued → sent without a refetch. A delivery for an entry
+  // this sheet renders via queuedForMatch (previous-session backfill) is
+  // APPENDED to localMessages — otherwise discarding the queue entry would
+  // make the delivered bubble vanish (PR-Agent #149). A flush FAILURE flips
+  // the bubble to `failed` (red + tap-to-retry) — never a stuck spinner.
+  // matchId is read through a ref: the subscription is mounted once for the
+  // hook's lifetime, and matchId never changes while the sheet is open.
+  const matchIdRef = useRef(matchId);
+  matchIdRef.current = matchId;
   useEffect(
     () =>
       registerOfflineFlushListener((message, failedEntry) => {
@@ -915,6 +947,12 @@ export function useMatchChat(
               const next = [...prev];
               next[index] = { ...message, status: 'sent' };
               return next;
+            }
+            // Backfilled (previous-session) entry: persist the delivery —
+            // but ONLY for this sheet's match (the flusher fans out for
+            // every match; a foreign delivery must not land in this view).
+            if (message.match_id === matchIdRef.current) {
+              return [...prev, { ...message, status: 'sent' }];
             }
             return prev;
           });
@@ -966,9 +1004,11 @@ export function useMatchChat(
     // P2-196 reconnect-backfill surface
     missedMarker,
     dismissMissedMarker: useCallback(() => setMissedMarker(null), []),
-    // P2-172 offline-queue surface: entries still parked for THIS match in
-    // the persisted queue (the authoritative retry backlog — includes both
-    // session-queued and previous-session entries until delivery succeeds).
-    queuedCount: matchId ? getOfflineQueueCount(matchId) : 0,
+    // P2-172 offline-queue surface: THIS user's entries still parked for
+    // THIS match in the persisted queue (the authoritative retry backlog).
+    queuedCount:
+      matchId && currentUserId
+        ? getOfflineQueueCount(matchId, currentUserId)
+        : 0,
   };
 }

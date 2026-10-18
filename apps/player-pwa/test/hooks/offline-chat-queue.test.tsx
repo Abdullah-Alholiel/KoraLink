@@ -294,6 +294,7 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
           content: 'from last session',
           clientMessageId: 'cm-prev-1',
           queuedAt: new Date().toISOString(),
+          userId: 'user-me',
         },
       ]),
     );
@@ -305,6 +306,63 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
     expect(backfilled?.status).toBe('queued');
     expect(backfilled?.content).toBe('from last session');
     expect(result.current.queuedCount).toBe(1);
+  });
+
+  it('a flush replays ONLY the current account entries and leaves others parked (cross-account guard)', async () => {
+    // Two accounts queued while offline; user-me is logged in now.
+    window.localStorage.setItem(
+      'kl.offlineChatQueue.v1',
+      JSON.stringify([
+        {
+          matchId: 'm1',
+          content: 'mine',
+          clientMessageId: 'cm-mine-1',
+          queuedAt: new Date().toISOString(),
+          userId: 'user-me',
+        },
+        {
+          matchId: 'm1',
+          content: 'someone else wrote this on a shared device',
+          clientMessageId: 'cm-other-1',
+          queuedAt: new Date().toISOString(),
+          userId: 'user-other',
+        },
+      ]),
+    );
+    const sentBodies: string[] = [];
+    mockFetcher.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(url).endsWith('/messages/read')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (init?.method === 'POST') {
+        sentBodies.push(String(init.body));
+        const body = JSON.parse(String(init.body)) as { clientMessageId: string };
+        return Promise.resolve({
+          id: `srv-${body.clientMessageId}`,
+          match_id: 'm1',
+          user_id: 'user-me',
+          content: 'echo',
+          created_at: new Date().toISOString(),
+          user: { id: 'user-me', full_name: 'Test User', handle: 'tester', avatar_url: null },
+          client_message_id: body.clientMessageId,
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    await act(async () => {
+      await flushOfflineQueue();
+    });
+
+    // Exactly ONE send POST fired — the current account's entry.
+    const sendPosts = sentBodies.filter((b) => !b.includes('messages/read'));
+    expect(sendPosts).toHaveLength(1);
+    expect(JSON.parse(sendPosts[0]).clientMessageId).toBe('cm-mine-1');
+    // The foreign entry was NOT delivered — it stays parked untouched.
+    const stored = JSON.parse(
+      window.localStorage.getItem('kl.offlineChatQueue.v1') ?? '[]',
+    ) as Array<{ clientMessageId: string }>;
+    expect(stored.map((e) => e.clientMessageId)).toEqual(['cm-other-1']);
   });
 
   it('an ONLINE send bypasses the queue entirely and still works', async () => {
