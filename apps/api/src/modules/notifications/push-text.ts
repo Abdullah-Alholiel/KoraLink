@@ -26,7 +26,9 @@ export type PushKey =
   | 'report_resolved'
   | 'report_dismissed'
   | 'waitlist_promoted'
-  | 'waitlist_closed';
+  | 'waitlist_closed'
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  | 'payout_paid';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -47,6 +49,11 @@ export type PushVars = {
   kickoffDateISO?: string;
   /** New queue position (waitlist_promoted only). */
   position?: number;
+  /** Venue display name (payout_paid only) — embedded as-is. */
+  venueName?: string;
+  /** Exact 2dp SAR amount string, e.g. "3150.00" (payout_paid only). Rendered
+   *  through Intl.NumberFormat per locale (ar → Arabic-Indic digits). */
+  amount?: string;
 };
 
 type Entry = { title: string; body: (v: PushVars) => string };
@@ -90,6 +97,26 @@ function kickoffDate(iso: string | undefined, locale: 'en-GB' | 'ar-SA'): string
     dateStyle: 'long',
     timeZone: 'Asia/Riyadh',
   }).format(d);
+}
+
+/**
+ * P1-67 (run #141): render an exact 2dp SAR amount string per push locale —
+ * en → "SAR 3,150.00", ar → Arabic-Indic digits + "ر.س". TOTAL (never throws):
+ * a MISSING amount renders the localized zero datum "0.00" (pay() always
+ * passes `s.amount::text`, so this can only fire from a data bug — a payout
+ * push without a number is meaningless); a PROVIDED-but-unparseable value
+ * renders the raw string as-is (display-only passthrough — this formatter
+ * NEVER does money math and must not silently re-quantize).
+ */
+function payoutAmount(amount: string | undefined, locale: 'en-GB' | 'ar-SA'): string {
+  if (!amount) return '0.00';
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'SAR',
+    currencyDisplay: 'narrowSymbol',
+  }).format(n);
 }
 
 const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
@@ -233,6 +260,21 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
       title: 'تحديث قائمة الانتظار',
       body: (v) =>
         `انتهت "${v.title ?? 'المباراة'}" قبل أن يفضي مكان. حظًا أوفر في المباراة القادمة!`,
+    },
+  },
+  // P1-67 (run #141): settlement marked paid → venue owner. Money-specifics in
+  // the body (venue + per-locale amount); title stays generic so the lock
+  // screen never truncates the part that matters.
+  payout_paid: {
+    en: {
+      title: '💸 Payout sent',
+      body: (v) =>
+        `${v.venueName ?? 'Your venue'}: your payout of ${payoutAmount(v.amount, 'en-GB')} has been sent by KoraLink.`,
+    },
+    ar: {
+      title: '💸 تم إرسال الدفعة',
+      body: (v) =>
+        `${v.venueName ?? 'ملعبك'}: تم إرسال دفعتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} من كورا لينك.`,
     },
   },
 };
