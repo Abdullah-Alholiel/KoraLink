@@ -42,6 +42,14 @@ export default function TransactionsPage() {
   // announce it — same pattern as ExportFeedbackNote below.
   const [refundNote, setRefundNote] = useState<'success' | 'error' | null>(null);
   const [refundSeq, setRefundSeq] = useState(0);
+  // A stale note must not outlive its row context (run-#142 Reviewer A
+  // MINOR): paging/sorting/filtering moves the list out from under the
+  // note, and the success note deliberately survives drawer-close — so the
+  // reset hooks the moments the admin changes what they're LOOKING at, not
+  // the drawer lifecycle.
+  function resetRefundNote() {
+    setRefundNote(null);
+  }
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (status) qs.set('status', status);
@@ -177,14 +185,14 @@ export default function TransactionsPage() {
       <PageHeader title={hq('transactionsTitle')} subtitle={hq('transactionsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       <div className="flex flex-wrap items-center gap-3 px-8 py-4">
-        <select aria-label={tc('filterByStatus')} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select aria-label={tc('filterByStatus')} value={status} onChange={(e) => { resetRefundNote(); setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">{hq('allStatuses')}</option>
           <option value="Pending">{ts('pending')}</option>
           <option value="Completed">{ts('completed')}</option>
           <option value="Failed">{ts('failed')}</option>
           <option value="Reversed">{ts('reversed')}</option>
         </select>
-        <select aria-label={tc('filterByType')} value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select aria-label={tc('filterByType')} value={type} onChange={(e) => { resetRefundNote(); setType(e.target.value); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">{hq('allTypes')}</option>
           <option value="DEBIT">{hq('typeDebit')}</option>
           <option value="CREDIT">{hq('typeCredit')}</option>
@@ -193,6 +201,7 @@ export default function TransactionsPage() {
           value={sort}
           options={sortOptions}
           onChange={(v) => {
+            resetRefundNote();
             setSort(v);
             setPage(1);
             if (v) {
@@ -250,11 +259,11 @@ export default function TransactionsPage() {
               columns={columns}
               rows={rows}
               rowKey={(t) => t.id}
-              onRowClick={(t) => setSelected(t)}
+              onRowClick={(t) => { resetRefundNote(); setSelected(t); }}
               empty={<EmptyState message={tc('noData')} />}
             />
           </div>
-          <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
+          <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={(p) => { resetRefundNote(); setPage(p); }} />
         </>
       )}
 
