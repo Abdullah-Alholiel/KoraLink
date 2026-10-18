@@ -33,6 +33,11 @@ function makeService(fx: Fixture) {
     select: () => ({
       from: () => ({
         innerJoin: () => ({
+          // P2-C (run #143): getEarnings LEFT JOINs users for payout-request
+          // provenance; the chain passes through, rows resolve at where().
+          leftJoin: () => ({
+            where: () => ({ orderBy: async () => [] }),
+          }),
           where: () => ({ orderBy: async () => [] }),
         }),
       }),

@@ -351,6 +351,9 @@ export interface PartnerEarnings {
     paid_at: string | null;
     created_at: string;
     venue_name: string | null;
+    /** P2-C (run #143): payout-request provenance — partner actor id or null (auto). */
+    requested_by: string | null;
+    requested_by_name: string | null;
   }[];
   totalPending: number;
   totalPaid: number;
