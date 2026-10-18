@@ -30,6 +30,14 @@ import {
   type OpsEntity,
 } from '@/lib/ops-activity-store';
 import { opsRealtime, type OpsSocketStatus } from '@/lib/ops-realtime';
+import {
+  clearPartnerFeed,
+  feedEntityOf,
+  hydratePartnerFeed,
+  markPartnerFeedRead,
+  recordPartnerFeedItem,
+  usePartnerFeed,
+} from '@/lib/partner-feed-store';
 
 /** Entity → lucide icon (same icon the sidebar uses for the section). */
 const ENTITY_ICON: Record<OpsEntity, typeof Users> = {
@@ -85,6 +93,11 @@ const ENTITY_PATH_BY_ROLE: Record<'Admin' | 'VenueOwner', Partial<Record<OpsEnti
   },
 };
 
+/** Directed verb → its i18n key (unknown verbs fall back to `directed.fallback`). */
+const DIRECTED_KEY: Record<string, string> = {
+  payout_paid: 'directed.payout_paid',
+};
+
 /**
  * Coarse relative age. Deliberately NOT Intl.RelativeTimeFormat: one tick
  * timer per open feed is enough to keep "just now" honest, and the unit
@@ -125,10 +138,17 @@ export default function NotificationCenter() {
   const router = useRouter();
   const t = useTranslations('notifications');
   const { entries, feedOpen } = useOpsActivity();
+  const partner = usePartnerFeed();
   // 0 until the feed opens (the feedOpen effect sets the real clock) — keeps
   // the server and first client render identical.
   const [now, setNow] = useState(0);
   const [status, setStatus] = useState<OpsSocketStatus>('connecting');
+
+  // Role comes from the session JWT (localStorage) — derived BEFORE the
+  // effects so the partner wiring below can depend on it.
+  const role = getRole();
+  const roleKey: 'Admin' | 'VenueOwner' = role === 'VenueOwner' ? 'VenueOwner' : 'Admin';
+  const isPartner = roleKey === 'VenueOwner';
 
   useEffect(() => {
     setStatus(opsRealtime.getStatus());
@@ -153,6 +173,17 @@ export default function NotificationCenter() {
     };
   }, []);
 
+  // Partner directed feed (P2-214, run #142): VenueOwner consoles carry ONLY
+  // personal items — hydrated from /users/me/notifications (JWT-scoped, no
+  // cross-tenant data) and appended live from the user-directed
+  // `notification` event on the SAME shared socket. The ops feed above stays
+  // silent for partners (isEntityInScope, run #99 stopgap pending P1-60).
+  useEffect(() => {
+    if (!isPartner) return;
+    void hydratePartnerFeed();
+    return opsRealtime.on('notification', recordPartnerFeedItem);
+  }, [isPartner]);
+
   // Keep relative timestamps fresh while the feed is open (30s is plenty).
   // Re-baseline the clock the moment the drawer opens — events that arrived
   // while it was closed must not render as "Just now" against a stale
@@ -164,24 +195,37 @@ export default function NotificationCenter() {
     return () => window.clearInterval(id);
   }, [feedOpen]);
 
-  const role = getRole();
-  const roleKey: 'Admin' | 'VenueOwner' = role === 'VenueOwner' ? 'VenueOwner' : 'Admin';
+  // Opening the partner drawer marks its items read: the badge clears
+  // immediately (store-local), the server converges via the bulk read
+  // endpoint inside the store.
+  useEffect(() => {
+    if (isPartner && feedOpen) markPartnerFeedRead();
+  }, [isPartner, feedOpen]);
+
   const pathByEntity = ENTITY_PATH_BY_ROLE[roleKey];
 
-  const rows = useMemo(
-    () =>
-      entries.map((entry) => {
-        const Icon = ENTITY_ICON[entry.entity];
-        const href =
-          pathByEntity[entry.entity] ?? (roleKey === 'VenueOwner' ? '/partner' : '/dashboard');
-        const age = ageParts(entry.at, now);
-        return { entry, Icon, href, age };
-      }),
+  // Unified rows: admins see platform ops pings; partners see ONLY their
+  // directed items (verb → entity class → the same icon/chip/label system).
+  const rows = useMemo(() => {
+    if (isPartner) {
+      return partner.items.map((item) => {
+        const entity: OpsEntity = feedEntityOf(item.verb);
+        const Icon = ENTITY_ICON[entity];
+        const href = pathByEntity[entity] ?? '/partner';
+        const age = ageParts(new Date(item.createdAt).getTime(), now);
+        return { key: item.id, item, entity, Icon, href, age, count: 1 };
+      });
+    }
+    return entries.map((entry) => {
+      const Icon = ENTITY_ICON[entry.entity];
+      const href = pathByEntity[entry.entity] ?? '/dashboard';
+      const age = ageParts(entry.at, now);
+      return { key: entry.key, item: null, entity: entry.entity, Icon, href, age, count: entry.count };
+    });
     // pathByEntity/roleKey derive from the JWT in localStorage — stable for
-    // the session; entries + now are the real re-render drivers.
+    // the session; entries/partner.items + now are the real re-render drivers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, now],
-  );
+  }, [isPartner, entries, partner.items, now]);
 
   function go(href: string, entity: OpsEntity) {
     setFeedOpen(false);
@@ -197,7 +241,7 @@ export default function NotificationCenter() {
       subtitle={t('subtitle')}
       footer={
         <button
-          onClick={clearOpsActivity}
+          onClick={() => (isPartner ? clearPartnerFeed() : clearOpsActivity())}
           disabled={rows.length === 0}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
         >
@@ -246,7 +290,32 @@ export default function NotificationCenter() {
           {t('status.offline')}
         </div>
       )}
-      {rows.length === 0 ? (
+      {/* Partner hydrating (P2-214): brief spinner row — never a false "empty". */}
+      {isPartner && !partner.hydrated && rows.length === 0 && (
+        <div className="flex items-center justify-center px-8 py-16" role="status">
+          <RefreshCw className="h-6 w-6 animate-spin text-gray-300" strokeWidth={1.5} />
+        </div>
+      )}
+      {/* Partner hydrate failed: stale items (if any) stay visible + retry. */}
+      {isPartner && partner.hydrated && partner.error && (
+        <div
+          className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+          role="status"
+        >
+          <span>{t('directed.loadFailed')}</span>
+          <button
+            onClick={() => {
+              trackEvent('admin_notifications_partner_retry');
+              void hydratePartnerFeed();
+            }}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-200"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t('status.retry')}
+          </button>
+        </div>
+      )}
+      {rows.length === 0 && !(isPartner && !partner.hydrated) && (
         <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
             <ScrollText className="h-8 w-8 text-gray-300" strokeWidth={1.5} />
@@ -254,33 +323,41 @@ export default function NotificationCenter() {
           <h3 className="mt-4 text-sm font-semibold text-gray-900">{t('emptyTitle')}</h3>
           <p className="mt-1 text-sm text-gray-400">{t('emptyHint')}</p>
         </div>
-      ) : (
+      )}
+      {rows.length > 0 && (
         <ul className="divide-y divide-gray-100">
-          {rows.map(({ entry, Icon, href, age }) => (
-            <li key={entry.key}>
+          {rows.map(({ key, item, entity, Icon, href, age, count }) => (
+            <li key={key}>
               <button
-                onClick={() => go(href, entry.entity)}
+                onClick={() => go(href, entity)}
                 className="flex w-full items-center gap-3 px-1 py-3 text-start hover:bg-gray-50"
               >
                 <span
-                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${ENTITY_CHIP[entry.entity]}`}
+                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${ENTITY_CHIP[entity]}`}
                   aria-hidden
                 >
                   <Icon className="h-4 w-4" strokeWidth={1.5} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-gray-900">
-                    {t(`entity.${entry.entity}`)}
+                    {item
+                      ? t(DIRECTED_KEY[item.verb] ?? 'directed.fallback')
+                      : t(`entity.${entity}`)}
                   </span>
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-gray-400">
-                    <span>
+                    <span className="truncate">
+                      {item
+                        ? item.venueName ?? item.matchTitle ?? item.actorName ?? ''
+                        : ''}
+                    </span>
+                    <span className="flex-shrink-0">
                       {age.unit === 'now'
                         ? t('timeNow')
                         : t(`time.${age.unit}`, { count: age.n })}
                     </span>
-                    {entry.count > 1 && (
+                    {!item && count > 1 && (
                       <span className="font-medium text-gray-500">
-                        {t('changes', { count: entry.count })}
+                        {t('changes', { count })}
                       </span>
                     )}
                   </span>
@@ -308,14 +385,27 @@ interface BellButtonProps {
  * reads (useSyncExternalStore), so any NotificationCenter mount — wherever
  * the layout puts it — drives every bell on screen. Opening the feed clears
  * the badge in the store; all bells update together.
+ *
+ * VenueOwner sessions badge off the partner directed feed instead (P2-214):
+ * the ops feed records nothing for partners (run #99 stopgap), so the ops
+ * unread count would pin the bell at zero even with a fresh payout item.
  */
 export function BellButton({ variant = 'sidebar' }: BellButtonProps) {
   const t = useTranslations('notifications');
-  const { unread, feedOpen } = useOpsActivity();
+  const ops = useOpsActivity();
+  const partner = usePartnerFeed();
+
+  // VenueOwner sessions badge off the partner directed feed (P2-214): the
+  // ops feed records nothing for partners (run #99 stopgap), so the ops
+  // unread count would pin the bell at zero even with a fresh payout item.
+  // The drawer open-flag itself stays in the ops store for BOTH roles — one
+  // drawer, one open state.
+  const isPartner = getRole() === 'VenueOwner';
+  const unread = isPartner ? partner.unread : ops.unread;
 
   function toggle() {
-    setFeedOpen(!feedOpen);
-    if (!feedOpen) trackEvent('admin_notifications_feed_open', { unread });
+    setFeedOpen(!ops.feedOpen);
+    if (!ops.feedOpen) trackEvent('admin_notifications_feed_open', { unread });
   }
 
   if (variant === 'bar') {
@@ -324,7 +414,7 @@ export function BellButton({ variant = 'sidebar' }: BellButtonProps) {
         type="button"
         onClick={toggle}
         aria-label={t('bell')}
-        aria-pressed={feedOpen}
+        aria-pressed={ops.feedOpen}
         className="relative rounded-lg p-1.5 text-gray-300 hover:bg-white/10 hover:text-white"
       >
         <Bell className="h-5 w-5" strokeWidth={1.5} />
@@ -345,7 +435,7 @@ export function BellButton({ variant = 'sidebar' }: BellButtonProps) {
       type="button"
       onClick={toggle}
       aria-label={t('bell')}
-      aria-pressed={feedOpen}
+      aria-pressed={ops.feedOpen}
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white"
     >
       <span className="relative">

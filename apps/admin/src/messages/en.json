@@ -64,6 +64,11 @@
       "settlements": "Settlements updated",
       "settings": "Settings updated"
     },
+    "directed": {
+      "payout_paid": "Settlement paid",
+      "fallback": "Account update",
+      "loadFailed": "Could not load your notifications — showing stale data"
+    },
     "status": {
       "connecting": "Connecting…",
       "reconnecting": "Connection interrupted — retrying…",
