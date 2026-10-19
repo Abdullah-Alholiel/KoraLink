@@ -2752,43 +2752,12 @@ export class MatchesService {
       throw new BadRequestException('Message cannot be empty.');
     }
 
-    // Only match members may post to the lobby.
-    const [membership] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        and(
-          eq(match_players.match_id, matchId),
-          eq(match_players.user_id, userId),
-        ),
-      )
-      .limit(1);
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this match.');
-    }
-
-    // P2-111 (run #81): a terminal (or expired non-in-progress) match no
-    // longer accepts lobby messages. Stable machine code → PWA localized
-    // copy (P1-47 pattern). Shared predicate with the WS send-message path.
-    const [chatMatch] = await this.db
-      .select({
-        status: matches.status,
-        scheduled_at: matches.scheduled_at,
-        duration_mins: matches.duration_mins,
-      })
-      .from(matches)
-      .where(eq(matches.id, matchId))
-      .limit(1);
-    if (chatMatch && isChatClosed(chatMatch)) {
-      throw new ForbiddenException({
-        message: 'This match has ended — the lobby chat is closed.',
-        code: CHAT_CLOSED_ERROR_CODE,
-      });
-    }
-
     const clientMessageIdValue = clientMessageId?.trim() || null;
 
     // Idempotency — retried sends return the existing message, no duplicate.
+    // Checked BEFORE the chat-closed guard so a terminal-race retry still
+    // reconciles to the original row (P2-172 offline-queue contract) instead
+    // of surfacing a 403 for a message that was accepted when sent.
     if (clientMessageIdValue) {
       const existing = await this.db.query.match_messages.findFirst({
         where: and(
@@ -2810,59 +2779,109 @@ export class MatchesService {
       if (existing) return existing;
     }
 
-    const [inserted] = await this.db
-      .insert(match_messages)
-      .values({
-        match_id: matchId,
-        user_id: userId,
-        content: trimmed,
-        client_message_id: clientMessageIdValue,
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    // Concurrent retry won the race (unique index match_messages_client_msg_uidx
-    // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
-    // return the row the winner inserted instead of raising a unique-violation 500.
-    if (!inserted) {
-      if (!clientMessageIdValue) {
-        // Lost the unique-key race without an idempotency key — surface
-        // a 409 so the caller retries the send.
-        throw new ConflictException('Message send conflicted; retry.');
+    // P2-220 (run #146): the membership + chat-closed checks used to run as
+    // independent statements beside the INSERT, so a match could flip
+    // terminal between the check and the write and one message landed in a
+    // just-closed chat. Everything below now shares ONE transaction with a
+    // `SELECT … FOR UPDATE` on the match row — the same serialization the
+    // host status transitions (complete/cancel) and the dispute-evidence
+    // append already use — so the state the predicate reads is the state the
+    // INSERT writes under. Also fixes a latent bug: an unknown matchId used
+    // to skip the closed-chat guard and die on the FK as a 500; it now 404s.
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+          duration_mins: matches.duration_mins,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .for('update');
+      if (!locked) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
       }
-      const existing = await this.db.query.match_messages.findFirst({
-        where: and(
-          eq(match_messages.user_id, userId),
-          eq(match_messages.match_id, matchId),
-          eq(match_messages.client_message_id, clientMessageIdValue),
-        ),
-        with: {
-          user: {
-            columns: {
-              id: true,
-              full_name: true,
-              handle: true,
-              avatar_url: true,
+
+      // Only match members may post to the lobby.
+      const [membership] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          and(
+            eq(match_players.match_id, matchId),
+            eq(match_players.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!membership) {
+        throw new ForbiddenException('You are not a member of this match.');
+      }
+
+      // P2-111 (run #81): a terminal (or expired non-in-progress) match no
+      // longer accepts lobby messages. Stable machine code → PWA localized
+      // copy (P1-47 pattern). Shared predicate with the WS send-message path,
+      // now evaluated against the LOCKED row.
+      if (isChatClosed(locked)) {
+        throw new ForbiddenException({
+          message: 'This match has ended — the lobby chat is closed.',
+          code: CHAT_CLOSED_ERROR_CODE,
+        });
+      }
+
+      const [inserted] = await tx
+        .insert(match_messages)
+        .values({
+          match_id: matchId,
+          user_id: userId,
+          content: trimmed,
+          client_message_id: clientMessageIdValue,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // Concurrent retry won the race (unique index match_messages_client_msg_uidx
+      // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
+      // return the row the winner inserted instead of raising a unique-violation 500.
+      if (!inserted) {
+        if (!clientMessageIdValue) {
+          // Lost the unique-key race without an idempotency key — surface
+          // a 409 so the caller retries the send.
+          throw new ConflictException('Message send conflicted; retry.');
+        }
+        const existing = await this.db.query.match_messages.findFirst({
+          where: and(
+            eq(match_messages.user_id, userId),
+            eq(match_messages.match_id, matchId),
+            eq(match_messages.client_message_id, clientMessageIdValue),
+          ),
+          with: {
+            user: {
+              columns: {
+                id: true,
+                full_name: true,
+                handle: true,
+                avatar_url: true,
+              },
             },
           },
-        },
-      });
-      if (existing) return existing;
-      throw new ConflictException('Message send conflicted; retry.');
-    }
+        });
+        if (existing) return existing;
+        throw new ConflictException('Message send conflicted; retry.');
+      }
 
-    const [user] = await this.db
-      .select({
-        id: users.id,
-        full_name: users.full_name,
-        handle: users.handle,
-        avatar_url: users.avatar_url,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+      const [user] = await this.db
+        .select({
+          id: users.id,
+          full_name: users.full_name,
+          handle: users.handle,
+          avatar_url: users.avatar_url,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
 
-    return { ...inserted, user };
+      return { ...inserted, user };
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
