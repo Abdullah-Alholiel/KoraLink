@@ -312,7 +312,10 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     membership: Array<{ id: string }> = [{ id: 'mp-1' }],
     matchRow: MatchRow | null = FUTURE_MATCH,
   ) {
-    return {
+    // P2-220-twin (run #147): handleMessage now runs its checks + INSERT inside
+    // a transaction with `.for('update')` on the matches row — the stub routes
+    // the tx callback to the same table-aware chain.
+    const routedChain = {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
@@ -328,9 +331,16 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
                       ? [matchRow]
                       : []
                     : [],
+            for: async () =>
+              table === matches ? (matchRow ? [matchRow] : []) : [],
           }),
         }),
       }),
+    };
+    // The tx callback must see the SAME surface as the outer db stub —
+    // select/query/insert/update all live on one object (tx.insert is called).
+    const chain = {
+      ...routedChain,
       query: { match_messages: { findFirst: async () => undefined } },
       insert: () => ({
         values: () => ({
@@ -344,6 +354,10 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
           where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
         }),
       }),
+    };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
     };
   }
 
@@ -486,16 +500,29 @@ describe('AppGateway WS input hardening (run #78)', () => {
   const clean = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null };
 
   function makeGw() {
-    const db = {
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            // P2-111: the send-message path also reads the matches row for
-            // the chat predicate — serve a live future match (chat open).
-            limit: async () =>
-              table === users
-                ? [clean]
-                : table === matches
+    const db = (() => {
+      // P2-220-twin (run #147): table-routed chain with .for('update') support,
+      // shared by the tx callback via transaction().
+      const routedChain = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              // P2-111: the send-message path also reads the matches row for
+              // the chat predicate — serve a live future match (chat open).
+              limit: async () =>
+                table === users
+                  ? [clean]
+                  : table === matches
+                    ? [
+                        {
+                          status: 'Open',
+                          scheduled_at: new Date(Date.now() + 3_600_000),
+                          duration_mins: 90,
+                        },
+                      ]
+                    : [{ id: 'mp-1' }],
+              for: async () =>
+                table === matches
                   ? [
                       {
                         status: 'Open',
@@ -503,10 +530,14 @@ describe('AppGateway WS input hardening (run #78)', () => {
                         duration_mins: 90,
                       },
                     ]
-                  : [{ id: 'mp-1' }],
+                  : [],
+            }),
           }),
         }),
-      }),
+      };
+    // The tx callback must see the SAME surface as the outer db stub.
+    const chain = {
+      ...routedChain,
       query: { match_messages: { findFirst: async () => undefined } },
       insert: () => ({
         values: () => ({
@@ -521,6 +552,11 @@ describe('AppGateway WS input hardening (run #78)', () => {
         }),
       }),
     };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+    };
+  })();
     const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
     const sendMessage = jest.fn(async () => ({ id: 'dm-1' }));
     const gateway = new AppGateway(
@@ -706,7 +742,9 @@ describe('AppGateway WS input hardening (run #78)', () => {
   describe('send-message chat predicate (P2-111)', () => {
     /** Stub serving a matches row with the given status/clock for the predicate. */
     function makeGwWithMatch(matchRow: unknown) {
-      const db = {
+      // P2-220-twin (run #147): handleMessage runs inside db.transaction with
+      // `.for('update')` on the matches row — the tx callback shares this chain.
+      const routedChain = {
         select: () => ({
           from: (table: unknown) => ({
             where: () => ({
@@ -718,23 +756,32 @@ describe('AppGateway WS input hardening (run #78)', () => {
                       ? [matchRow]
                       : []
                     : [{ id: 'mp-1' }],
+              for: async () => (table === matches ? (matchRow ? [matchRow] : []) : []),
             }),
           }),
         }),
-      query: { match_messages: { findFirst: async () => undefined } },
-      insert: () => ({
-        values: () => ({
-          onConflictDoNothing: () => ({
-            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+      };
+      // The tx callback must see the SAME surface as the outer db stub.
+      const chain = {
+        ...routedChain,
+        query: { match_messages: { findFirst: async () => undefined } },
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+            }),
           }),
         }),
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+          }),
         }),
-      }),
-    };
+      };
+      const db = {
+        ...chain,
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+      };
     const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
     const gateway = new AppGateway(
       db as never,
@@ -781,6 +828,168 @@ describe('AppGateway WS input hardening (run #78)', () => {
     await expect(
       gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow('lobby chat is closed');
+  });
+});
+
+// ── P2-220-twin (run #147): serialize WS send-message against status flips ──
+describe('send-message tx serialization (P2-220-twin, run #147)', () => {
+  const clean = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null };
+  const future = { status: 'Open', scheduled_at: new Date(Date.now() + 3_600_000), duration_mins: 90 };
+
+  /** DB stub whose behavior is fully injectable per test. */
+  function makeDbStub(opts: {
+    matchRow?: unknown;
+    insertReturns?: unknown[];
+    conflictWinner?: unknown;
+  }) {
+    // Default to a live future match so only tests that need a missing row /
+    // closed status pass matchRow explicitly.
+    const matchRow = 'matchRow' in opts ? opts.matchRow : future;
+    const routedChain = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () =>
+              table === users ? [clean] : table === matches ? (matchRow ? [matchRow] : []) : [{ id: 'mp-1' }],
+            for: async () => (table === matches ? (matchRow ? [matchRow] : []) : []),
+          }),
+        }),
+      }),
+    };
+    // The tx callback must see the SAME surface as the outer db stub.
+    const chain = {
+      ...routedChain,
+      query: { match_messages: { findFirst: async () => opts.conflictWinner } },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => opts.insertReturns ?? [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+    };
+  }
+
+  function makeGw2(db: unknown) {
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true } as never,
+      { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
+      {} as never,
+      {} as never,
+      { consume: () => ({ allowed: true, retryAfterSec: 0 }), release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return gateway;
+  }
+
+  function makeClient2() {
+    return { id: 'sock-1', userId: 'u1', to: () => ({ emit: () => undefined }) };
+  }
+
+  it('inserts inside the transaction (race window closed: checks + INSERT share the tx)', async () => {
+    let sawForUpdate = false;
+    const db = makeDbStub({});
+    // Wrap the tx stub so we can observe the chain the callback actually used.
+    (db as { transaction: unknown }).transaction = async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [future],
+              for: () => {
+                sawForUpdate = true;
+                return Promise.resolve([future]);
+              },
+            }),
+          }),
+        }),
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: 'msg-1' }],
+            }),
+          }),
+        }),
+      });
+    const gateway = makeGw2(db);
+    await gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never);
+    expect(sawForUpdate).toBe(true);
+  });
+
+  it('unknown matchId → clean not-found rejection (was: FK server error)', async () => {
+    const gateway = makeGw2(makeDbStub({ matchRow: null }));
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('not found');
+  });
+
+  it('lost idempotency race WITHOUT clientMessageId → clean conflict rejection (was: garbage emit)', async () => {
+    const gateway = makeGw2(makeDbStub({ insertReturns: [] }));
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('Message send conflicted; retry.');
+  });
+
+  it('lost idempotency race WITH clientMessageId → reconciles to the winner row (P2-172 contract)', async () => {
+    const winner = { id: 'msg-orig', match_id: MATCH_ID, user_id: 'u1', content: 'first' };
+    const gateway = makeGw2(makeDbStub({ insertReturns: [], conflictWinner: winner }));
+    const client = { ...makeClient2(), to: () => ({ emit: (ev: string, payload: unknown) => undefined }) };
+    // Capture the emitted payload via the room broadcast.
+    let emitted: unknown;
+    (gateway as { server: unknown }).server = {
+      to: () => ({ emit: (_ev: string, payload: unknown) => { emitted = payload; } }),
+    } as never;
+    await gateway.handleMessage(
+      { matchId: MATCH_ID, content: 'second try', clientMessageId: 'cmid-1' },
+      client as never,
+    );
+    expect(emitted).toMatchObject({ id: 'msg-orig', content: 'first' });
+  });
+
+  it('closed chat evaluated against the LOCKED row inside the tx (status flip cannot slip in)', async () => {
+    let forUpdateCalledBeforeInsert = false;
+    let insertCalled = false;
+    const db = makeDbStub({ matchRow: { ...future, status: 'Completed' } });
+    (db as { transaction: unknown }).transaction = async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ ...future, status: 'Completed' }],
+              for: () => {
+                forUpdateCalledBeforeInsert = !insertCalled;
+                return Promise.resolve([{ ...future, status: 'Completed' }]);
+              },
+            }),
+          }),
+        }),
+        insert: () => {
+          insertCalled = true;
+          return {
+            values: () => ({
+              onConflictDoNothing: () => ({ returning: async () => [] }),
+            }),
+          };
+        },
+      });
+    const gateway = makeGw2(db);
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('lobby chat is closed');
+    expect(forUpdateCalledBeforeInsert).toBe(true);
+    expect(insertCalled).toBe(false);
   });
 });
 });
