@@ -863,6 +863,8 @@
     "sending": "Sending…",
     "failedToSend": "Not sent",
     "tapToRetry": "Tap to retry",
+    "queuedOffline": "Will send when back online",
+    "offlineQueuedBanner": "You're offline — new messages will send automatically when you reconnect.",
     "online": "Online",
     "offline": "Offline",
     "lastSeen": "Last seen",
