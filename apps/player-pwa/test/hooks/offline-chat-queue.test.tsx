@@ -79,12 +79,22 @@ vi.mock('@/store/useAppStore', () => {
     handle: 'tester',
     avatarUrl: null,
   };
-  const selectUser = (s: { user?: MockUser }) => s.user;
+  // Run-#145 orphan-guard test flips this to null (logged out) and restores it.
+  let activeUser: MockUser | null = mockUser;
+  const selectUser = (s: { user?: MockUser | null }) => s.user;
   const useAppStore = Object.assign(
-    (selector: (s: { user: MockUser }) => unknown) => selector({ user: mockUser }),
-    { getState: () => ({ user: mockUser }), selectUser },
+    (selector: (s: { user: MockUser | null }) => unknown) =>
+      selector({ user: activeUser }),
+    { getState: () => ({ user: activeUser }), selectUser },
   );
-  return { useAppStore, selectUser };
+  return {
+    useAppStore,
+    selectUser,
+    // Test-only: flip the active user (null = logged out); undefined restores.
+    __setActiveUser: (u?: MockUser | null) => {
+      activeUser = u === undefined ? mockUser : u;
+    },
+  };
 });
 
 import {
@@ -402,5 +412,142 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
       ).toBe('sent'),
     );
     expect(result.current.queuedCount).toBe(0);
+  });
+
+  // ── Run #145 hardening (Reviewer A findings on #144) ─────────────────────
+
+  it('prunes TTL-expired entries (7d) and keeps fresh ones', async () => {
+    const now = Date.now();
+    const eightDaysAgo = new Date(now - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const fresh = new Date(now - 60 * 1000).toISOString();
+    window.localStorage.setItem(
+      'kl.offlineChatQueue.v1',
+      JSON.stringify([
+        {
+          matchId: 'm1',
+          content: 'ancient',
+          clientMessageId: 'cm-old-1',
+          queuedAt: eightDaysAgo,
+          userId: 'user-me',
+        },
+        {
+          matchId: 'm1',
+          content: 'fresh',
+          clientMessageId: 'cm-new-1',
+          queuedAt: fresh,
+          userId: 'user-me',
+        },
+      ]),
+    );
+    const { result } = await mountChat();
+    // The expired entry never backfills; the fresh one does.
+    expect(
+      result.current.messages.some((m) => m.client_message_id === 'cm-old-1'),
+    ).toBe(false);
+    expect(
+      result.current.messages.find((m) => m.client_message_id === 'cm-new-1')?.status,
+    ).toBe('queued');
+    expect(result.current.queuedCount).toBe(1);
+    // The next persist rewrites storage without the expired entry.
+    const stored = JSON.parse(
+      window.localStorage.getItem('kl.offlineChatQueue.v1') ?? '[]',
+    ) as Array<{ clientMessageId: string }>;
+    expect(stored.map((e) => e.clientMessageId)).toEqual(['cm-new-1']);
+  });
+
+  it('caps the backlog at 50 entries, dropping the OLDEST', async () => {
+    const now = Date.now();
+    const entries = Array.from({ length: 60 }, (_, i) => ({
+      matchId: 'm1',
+      content: `msg-${i}`,
+      clientMessageId: `cm-cap-${i}`,
+      // Strictly increasing timestamps → oldest first in storage order.
+      queuedAt: new Date(now - (1000 - i) * 1000).toISOString(),
+      userId: 'user-me',
+    }));
+    window.localStorage.setItem('kl.offlineChatQueue.v1', JSON.stringify(entries));
+
+    // Route by URL (pitfall rule): history GET → [], read-mark POST → {ok},
+    // send POST (offline → never fires, but reject loudly if it does).
+    mockFetcher.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(url).endsWith('/messages/read')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (init?.method === 'POST') {
+        return Promise.reject(new Error('offline send must not hit the wire'));
+      }
+      return Promise.resolve([]);
+    });
+
+    // A read (via mount) prunes; then one MORE enqueue must push the count
+    // over the cap and drop the oldest entries, keeping the newest 50.
+    // (Offline BEFORE mount — the proven test-1 shape; the enqueue-time cap
+    // is what's under test, not the online→offline transition.)
+    setOnline(false);
+    const { result } = await mountChat();
+    expect(result.current.queuedCount).toBe(50); // already capped by prune
+
+    act(() => {
+      result.current.sendMessage.mutate({
+        content: 'overflow entry',
+        clientMessageId: 'cm-cap-new',
+      });
+    });
+    await waitFor(() =>
+      expect(
+        result.current.messages.find((m) => m.client_message_id === 'cm-cap-new')
+          ?.status,
+      ).toBe('queued'),
+    );
+    const stored = JSON.parse(
+      window.localStorage.getItem('kl.offlineChatQueue.v1') ?? '[]',
+    ) as Array<{ clientMessageId: string }>;
+    expect(stored).toHaveLength(50);
+    // Oldest dropped, newest kept (the incoming entry is the last).
+    expect(stored.some((e) => e.clientMessageId === 'cm-cap-0')).toBe(false);
+    expect(stored[49]?.clientMessageId).toBe('cm-cap-new');
+  });
+
+  it('an offline send with NO logged-in user fails loudly instead of parking an orphan', async () => {
+    const store = (await import('@/store/useAppStore')) as unknown as {
+      __setActiveUser: (u: null | undefined) => void;
+    };
+    // Route by URL (pitfall rule) BEFORE mounting: the mount-time history GET
+    // must resolve or React Query wedges the render and onError never lands.
+    mockFetcher.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(url).endsWith('/messages/read')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (init?.method === 'POST') {
+        return Promise.reject(new Error('orphan send must not hit the wire'));
+      }
+      return Promise.resolve([]);
+    });
+    store.__setActiveUser(null);
+    // Offline BEFORE mount — the proven test-1 shape; the guard is what's
+    // under test, not the online→offline transition.
+    setOnline(false);
+    try {
+      const { result } = await mountChat();
+      act(() => {
+        result.current.sendMessage.mutate({
+          content: 'orphan send',
+          clientMessageId: 'cm-orphan-1',
+        });
+      });
+      await waitFor(() =>
+        expect(
+          result.current.messages.find((m) => m.client_message_id === 'cm-orphan-1')
+            ?.status,
+        ).toBe('failed'),
+      );
+      // Nothing parked: storage stays empty; no flush will ever pick it up.
+      expect(
+        JSON.parse(window.localStorage.getItem('kl.offlineChatQueue.v1') ?? '[]'),
+      ).toEqual([]);
+      expect(result.current.queuedCount).toBe(0);
+    } finally {
+      store.__setActiveUser(undefined); // restore user-me for later cases
+    }
   });
 });

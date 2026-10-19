@@ -56,6 +56,9 @@ function readOfflineQueue(): QueuedChatMessage[] {
     if (!Array.isArray(parsed)) return offlineQueue;
     // Module memory is authoritative within a session; storage seeds it.
     if (offlineQueue.length === 0 && parsed.length > 0) offlineQueue = parsed;
+    // Hygiene runs on every read — stale entries age out even when the
+    // storage copy is never re-seeded from (memory already held them).
+    pruneOfflineQueue();
     return offlineQueue;
   } catch {
     return offlineQueue;
@@ -73,13 +76,55 @@ function persistOfflineQueue(): void {
 
 let offlineQueue: QueuedChatMessage[] = [];
 
+/**
+ * Queue hygiene (run #145, Reviewer A on #144):
+ * - OFFLINE_QUEUE_TTL_MS — entries older than this are pruned. A message
+ *   parked for a chat that has since closed on the server would otherwise
+ *   replay-fail on every flush cycle forever, and localStorage would grow
+ *   without bound across abandoned chats.
+ * - OFFLINE_QUEUE_MAX — hard cap on parked entries. Enqueue drops the
+ *   OLDEST entries past the cap (FIFO backlog: the newest are the ones the
+ *   user still expects to deliver). localStorage is a bounded resource; an
+ *   unbounded backlog eventually throws QuotaExceededError, which
+ *   persistOfflineQueue swallows — silently degrading the queue to
+ *   in-memory-only for the session.
+ */
+const OFFLINE_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const OFFLINE_QUEUE_MAX = 50;
+
+/** Drop TTL-expired entries (and cap overflow) from the in-memory queue. */
+function pruneOfflineQueue(nowMs: number = Date.now()): void {
+  if (offlineQueue.length === 0) return;
+  const cutoff = nowMs - OFFLINE_QUEUE_TTL_MS;
+  const kept = offlineQueue.filter((m) => {
+    const ts = Date.parse(m.queuedAt);
+    // Undateable entry (malformed queuedAt): keep — never destroy what we
+    // cannot date; the owner-binding guard still blocks its replay.
+    return Number.isNaN(ts) ? true : ts >= cutoff;
+  });
+  const capped =
+    kept.length > OFFLINE_QUEUE_MAX
+      ? kept.slice(kept.length - OFFLINE_QUEUE_MAX)
+      : kept;
+  if (capped.length !== offlineQueue.length) {
+    offlineQueue = capped;
+    persistOfflineQueue();
+  }
+}
+
 /** Park a message for replay. Returns false when the id is already queued. */
 function enqueueOfflineMessage(entry: QueuedChatMessage): boolean {
-  readOfflineQueue();
+  readOfflineQueue(); // also runs TTL/cap hygiene before the insert
   if (offlineQueue.some((m) => m.clientMessageId === entry.clientMessageId)) {
     return false;
   }
   offlineQueue.push(entry);
+  // Hard cap (FIFO): drop the OLDEST entries past the cap — the newest are
+  // the ones the user still expects to deliver. After the push, keep the
+  // last OFFLINE_QUEUE_MAX entries (the incoming one is the last).
+  if (offlineQueue.length > OFFLINE_QUEUE_MAX) {
+    offlineQueue = offlineQueue.slice(offlineQueue.length - OFFLINE_QUEUE_MAX);
+  }
   persistOfflineQueue();
   return true;
 }
@@ -829,6 +874,24 @@ export function useMatchChat(
       // Content comes from the mutation VARIABLES (not state — the optimistic
       // append is not guaranteed visible in this closure yet).
       if (err instanceof OfflineSendSignal) {
+        // Orphan guard (run #145, Reviewer A on #144): an entry parked with
+        // no owner can never replay (the flusher bails without a user) nor
+        // backfill (view mapping filters on currentUserId) — it would sit
+        // as a dead bubble forever. Fail LOUDLY instead: real failure UX,
+        // the user can retry once logged back in.
+        if (!currentUserId) {
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m,
+            ),
+          );
+          const timer = ackTimersRef.current.get(clientMessageId);
+          if (timer) {
+            clearTimeout(timer);
+            ackTimersRef.current.delete(clientMessageId);
+          }
+          return;
+        }
         enqueueOfflineMessage({
           matchId: matchId ?? '',
           content: content,
@@ -836,8 +899,18 @@ export function useMatchChat(
           queuedAt: new Date().toISOString(),
           // Owner binding (PR-Agent #149): entries replay only under the
           // authoring session — never under a different account.
-          userId: currentUserId ?? '',
+          userId: currentUserId,
         });
+        // Stand down the 10s ack timer (armed in onMutate for WS-echo
+        // timeouts): a parked bubble waits for RECONNECT, not an echo —
+        // left running it silently flipped queued → failed after 10s while
+        // the message was still safely queued (run #145 finding). The
+        // flusher owns queued → sent/failed transitions from here.
+        const queuedTimer = ackTimersRef.current.get(clientMessageId);
+        if (queuedTimer) {
+          clearTimeout(queuedTimer);
+          ackTimersRef.current.delete(clientMessageId);
+        }
         setLocalMessages((prev) =>
           prev.map((m) =>
             m.client_message_id === clientMessageId ? { ...m, status: 'queued' } : m,
