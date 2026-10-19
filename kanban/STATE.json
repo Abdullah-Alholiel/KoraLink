@@ -1,25 +1,24 @@
 {
-  "last_run": 145,
-  "last_run_report": "kanban/RUNS/2026-10-19T01-15Z-run145.md",
+  "last_run": 146,
+  "last_run_report": "kanban/RUNS/2026-10-19T10-17Z-run146.md",
   "last_run_commits": [
-    "c8c1f4b",
-    "66e1521",
-    "2135e91"
+    "dc66eab",
+    "3b82080"
   ],
   "in_review_items": [
     {
-      "id": "P2-172",
-      "claim": "hardening PR #150 merged after checks",
-      "verify": "gh pr checks 150 green + squash on staging; then confirm hex-audit still clean"
+      "id": "P2-220",
+      "claim": "sendMessage tx+FOR UPDATE serialization BUILT run #146 (PR #151, 3b82080; escape head dc66eab)",
+      "verify": "gh pr checks 151 all green except bare Vercel; squash on staging; suite 8/8 + jest full green at merge"
     },
     {
       "id": "P2-208",
-      "claim": "queue = FIVE (#136/#140/#141/#145/#147) + #150 escaping",
-      "verify": "commit-status API per head next run"
+      "claim": "queue = FIVE (#136/#140/#141/#145/#147) + #151 escape attempt (head dc66eab)",
+      "verify": "commit-status API per head next run; merge any status-free green head"
     }
   ],
   "open_blockers": [
-    "P2-208 (run #145): #149 ESCAPED → merged c8c1f4b; PR #150 head 2135e91 ALSO escaped (empty-commit re-push play works). Queue = FIVE owner-gated: #136/#140/#141/#145/#147, all repo-green, all MERGEABLE, each head carries bare Vercel: failure. Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
+    "P2-208 (run #146): queue FIVE #136/#140/#141/#145/#147 all repo-green + MERGEABLE, every head carries bare Vercel: failure (kora-link project). PR #151 (P2-220) added; escape attempt queued on head dc66eab. Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
     "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
     "P2-51: Render demo deploy-before-migrate drift — repo half done (PR #104); dashboard migrate-hook toggle = owner-only. Blocks promote-PR assembly; promote merge itself owner-only.",
     "P2-47: admin cancel-purge vs restore-on-behalf — still needs Abdullah decision.",
@@ -30,7 +29,7 @@
     "P1-12 admin i18n visual RTL check — needs Abdullah's eyes (browserless box).",
     "Headless browser unavailable on VPS — visual checks need Abdullah or a working browser.",
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
-    "RUNBOOK: hermes cron sessions can't run execute_code (approval wall) — use terminal; foreground timeout cap 600s -> long builds run as tracked background processes (poll via process_manage).",
+    "RUNBOOK: hermes cron sessions cannot run execute_code (approval wall) — use terminal; foreground timeout cap 600s -> long builds run as tracked background processes (poll via process_manage).",
     "RUNBOOK: ALWAYS prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
     "RUNBOOK: heredoc-stdin python and curl|python pipes trip the terminal approval wall — write scripts to /tmp via write_file, curl to a temp file, then parse in a second step.",
     "RUNBOOK (live E2E): probe the API on loopback :3001 with the PWA PUBLIC origin (aa.tail2948f9.ts.net:10000); dev-login needs -c on the login call; partner endpoints need seed 0003.",
@@ -39,13 +38,14 @@
     "P2-42 CSP script-src migration — standing reviewer item, 2-PR effort.",
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin->HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
-    "zai delegation-path: run #144 probe 200 in 2.2s, reviewers 173s/201s, zero Go spend. Policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path: run #146 probe 200 in 2.6s, reviewers 361s/221s both schema-valid, zero Go spend. Policy unchanged: try zai first, failover on first child error.",
     "KILL-PATTERN (14 dead sessions through run #70, root cause unknown — cron/scheduler/host side): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog in koralink-factory-prestate.py handles recovery.",
     "RUN #66 RECOVERY: see kanban/RUNS/2026-09-21* report; ADMIN HOLD on projects-dir merge conflict was lifted run #76.",
     "RUN #121 OWNER DECISION SURFACED: recurring-match series identity — 8 weekly instances are independent matches (no series id); cancelled week does not propagate. Product-shape call needed.",
     "CLAUDE LANE: claude Pro OAuth logged out (run #143 + #144) — owner re-login restores the zeroshot lane.",
     "P2-217/P2-218 (NEW run #144, hex): match-fees.ts drizzle imports (re-classify vs extract = owner-optional decision) + PaymentSheet direct fetcher import (money-path lane). Both deferred deliberately, not drive-by fixed.",
-    "P2-219 (NEW run #144): DM conversation page zero-message empty state — small PWA slice, keys exist in both locales."
+    "P2-219 (run #145): DM empty state CLOSED verified-no-build; dead i18n key messages.noMessagesDescription en/ar :856 — fold into next i18n sweep.",
+    "SENTRY WATCH (run #146): 1C Neon quota-exceeded fired ONE event on PRODUCTION today 10:00Z (srv-dadabif, release 2307a2a on main, hourly cadence era Sep 24-25 otherwise). DB probe: stale creds on this box; prod /health 200 + no Failed-query storm = classified TRANSIENT watch item, re-check next run (2+ events = escalate P1)."
   ],
   "consecutive_skip_count": 0,
   "notes": "Run #144 (2026-10-18 15:16Z, PWA lane): P2-172 chat-send offline queue BUILT (PR #149, ab44904+517812a) — persisted queue, replay on reconnect via idempotent client_message_id, owner-bound after PR-Agent cross-account finding, no head-of-line block, backfill delivery persists. Gates: vitest 976/976 (6 new), tsc 0, lint clean, turbo 3/3, tripwires 8/8. PR #149 repo checks 6/6 green; merge gated ONLY on foreign kora-link Vercel status (P2-208 owner). Queue reconcile: all 5 old heads still carry the failing status; #148 MERGED confirmed. Reviewer B verified ALL run-#143 claims (incl. live /partner/earnings probe); refuted their own venue-offline P0 by code read (OfflineBanner present clubs/[id]:167). New board rows P2-217/218 (hex deferrals, money-path lanes) + P2-219 (DM empty state). Strix not due (Nov 1-3). Lane skipped: claude Pro OAuth logged out. Next run #145 = API lane (145%4=1): P2-216 settlement window-bound unification candidate. RUN#145(10-19): #149 merged c8c1f4b + hardening PR #150 (TTL/cap/orphan/ack-standdown; 979 vitest); P2-216 blocked by open PR #141 (same file) — revisit post-merge; P2-219/P2-153 closed verified-no-build; P2-220 boarded (sendMessage TOCTOU); hex baselines folded (279/59) — lane CLEAN; claude lane skipped (auth logged out); escape play (empty-commit re-push) works first try."
