@@ -902,6 +902,12 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
     let sawForUpdate = false;
     const db = makeDbStub({});
     // Wrap the tx stub so we can observe the chain the callback actually used.
+    // The OUTER chain's insert is a tripwire: if a regression ever moves the
+    // INSERT outside the transaction (Reviewer A run #147), this test fails
+    // on the stray outer insert instead of passing silently.
+    (db as { insert: unknown }).insert = () => {
+      throw new Error('insert must run inside the transaction, not on the outer db');
+    };
     (db as { transaction: unknown }).transaction = async (cb: (tx: unknown) => Promise<unknown>) =>
       cb({
         select: () => ({

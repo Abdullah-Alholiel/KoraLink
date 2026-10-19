@@ -483,7 +483,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     if (!messageRow && clientMessageId) {
       messageRow = await this.db.query.match_messages.findFirst({
         where: and(
-          eq(match_messages.user_id, client.userId),
+          eq(match_messages.user_id, userId),
           eq(match_messages.match_id, data.matchId),
           eq(match_messages.client_message_id, clientMessageId),
         ),
