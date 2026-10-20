@@ -90,6 +90,9 @@ vi.mock('@/hooks/useConversations', () => ({
         error: null,
         sendMessage: { mutate: vi.fn() },
         retryMessage: vi.fn(),
+        // P2-225 (run #149): DM typing surface consumed by the page.
+        typingUserIds: new Set<string>(),
+        emitTyping: vi.fn(),
       };
     }) as unknown as typeof import('@/hooks/useConversations').useConversationMessages,
   ),
@@ -233,6 +236,8 @@ describe('ConversationPage — DM chat rendering (ChatSheet parity)', () => {
       error: null,
       sendMessage: { mutate: vi.fn() },
       retryMessage: vi.fn(),
+      typingUserIds: new Set<string>(),
+      emitTyping: vi.fn(),
     });
     renderPage();
     act(() => {

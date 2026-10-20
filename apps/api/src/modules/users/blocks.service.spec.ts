@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { BlocksService, BLOCKED_BY_RECIPIENT } from './blocks.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import {
+  conversations,
   conversation_participants,
   personal_messages,
   user_blocks,
@@ -20,6 +21,8 @@ function rowChain(rows: () => unknown[]) {
     where: () => chain,
     limit: () => chain,
     orderBy: () => chain,
+    // P2-227: conversation-row FOR UPDATE (tx serialization) — chainable no-op.
+    for: () => chain,
   };
   chain.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) => {
     try {
@@ -229,6 +232,7 @@ describe('ConversationsService.sendMessage × blocks (P1-53)', () => {
       select: (sel: Record<string, unknown>) => ({
         from: (table: unknown) => {
           if (table === users) return simple([SENDER_ROW]);
+          if (table === conversations) return simple([{ id: 'c1' }]);
           if (table === conversation_participants) {
             if ('user_id' in (sel ?? {})) return simple([{ user_id: 'u2' }]);
             return simple([{ id: 'cp1' }]);
@@ -247,6 +251,10 @@ describe('ConversationsService.sendMessage × blocks (P1-53)', () => {
         return chain;
       }),
       update: jest.fn(() => ({ set: () => ({ where: () => Promise.resolve() }) })),
+      // P2-227 (run #149): the DM send runs inside one tx — the tx callback
+      // sees the SAME surface as the outer stub (conversation FOR UPDATE
+      // lookup routes through select().from(conversations) above).
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(db),
     };
 
     const service = new ConversationsService(

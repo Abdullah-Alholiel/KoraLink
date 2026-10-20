@@ -262,95 +262,131 @@ export class ConversationsService {
     if (!trimmed) {
       throw new BadRequestException('Message cannot be empty.');
     }
-    await this.assertParticipant(userId, conversationId);
-
-    // P1-53: refuse the send when a block exists in either direction between
-    // the sender and the other participant (403 BLOCKED_BY_RECIPIENT). The
-    // participant list is reused below for the activity/push side effects.
-    const others = await this.db
-      .select({ user_id: conversation_participants.user_id })
-      .from(conversation_participants)
-      .where(
-        and(
-          eq(conversation_participants.conversation_id, conversationId),
-          sql`${conversation_participants.user_id} != ${userId}::text`,
-        ),
-      );
-    for (const other of others) {
-      await this.blocksService.assertNotBlockedBetween(userId, other.user_id);
-    }
-
     const clientMessageIdValue = clientMessageId?.trim() || null;
 
-    // Idempotency — a retried send with the same clientMessageId returns the
-    // already-persisted message instead of inserting a duplicate.
-    if (clientMessageIdValue) {
-      const existing = await this.db.query.personal_messages.findFirst({
-        where: and(
-          eq(personal_messages.sender_id, userId),
-          eq(personal_messages.conversation_id, conversationId),
-          eq(personal_messages.client_message_id, clientMessageIdValue),
-        ),
-      });
-      if (existing) {
-        const [sender] = await this.db
-          .select({
-            id: users.id,
-            full_name: users.full_name,
-            handle: users.handle,
-            avatar_url: users.avatar_url,
-          })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        return { ...existing, sender };
+    // P2-227 (run #149): the conversation lookup, membership proof, block
+    // checks, idempotency re-read and the INSERT share ONE transaction guarded
+    // by a `SELECT … FOR UPDATE` on the conversation row — the same
+    // serialization match chat has had since P2-220 (runs #146–#148).
+    // Previously these checks ran as independent statements beside the INSERT.
+    // LOCK INVARIANT: every mutation of a conversation's participant set must
+    // take this same conversation-row lock. Today the participant set is
+    // written exactly once — the create-time insert in startConversation —
+    // and has NO removal path (grep-verified run #149), so there is nothing
+    // to serialize against yet; if a leave/remove endpoint is ever added it
+    // MUST lock the conversation row first or the mid-flight window reopens.
+    // RESIDUAL (documented): user_blocks is READ (not locked) inside the tx —
+    // a block created between the check and the insert lets exactly one
+    // message through; the block rejects every subsequent send. Accepted as a
+    // benign one-message race (docs/plans/run149-dm-chat-hardening/).
+    const outcome = await this.db.transaction(async (tx) => {
+      // Unknown conversation → clean 404 (explicit lookup under the lock; was
+      // a membership-check 403 on a nonexistent id before).
+      const [convRow] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1)
+        .for('update');
+      if (!convRow) {
+        throw new NotFoundException('Conversation not found.');
       }
-    }
 
-    const [inserted] = await this.db
-      .insert(personal_messages)
-      .values({
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: trimmed,
-        client_message_id: clientMessageIdValue,
-      })
-      .onConflictDoNothing()
-      .returning();
+      const [participant] = await tx
+        .select({ id: conversation_participants.id })
+        .from(conversation_participants)
+        .where(
+          and(
+            eq(conversation_participants.conversation_id, conversationId),
+            eq(conversation_participants.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!participant) {
+        throw new ForbiddenException('You are not a participant in this conversation.');
+      }
 
-    // Concurrent retry won the race (unique index personal_messages_client_msg_uidx
-    // on (sender_id, conversation_id, client_message_id) WHERE client_message_id
-    // IS NOT NULL): return the row the winner inserted instead of raising a
-    // unique-violation 500 — and skip the side effects below (read receipt,
-    // "messaged" activity, push) so a duplicate retry never double-fires them.
-    if (!inserted) {
-      if (!clientMessageIdValue) {
-        // Lost the unique-key race without an idempotency key — surface
-        // a 409 so the caller retries the send.
+      // P1-53: refuse the send when a block exists in either direction between
+      // the sender and any other participant (403 BLOCKED_BY_RECIPIENT). The
+      // participant list rides the outcome for the activity/push side effects.
+      // user_blocks is READ (not locked) inside the tx: a block created in the
+      // residual window rejects the NEXT send — a benign one-message race,
+      // accepted and documented in docs/plans/run149-dm-chat-hardening/.
+      const others = await tx
+        .select({ user_id: conversation_participants.user_id })
+        .from(conversation_participants)
+        .where(
+          and(
+            eq(conversation_participants.conversation_id, conversationId),
+            sql`${conversation_participants.user_id} != ${userId}::text`,
+          ),
+        );
+      const othersIds = others.map((o) => o.user_id);
+      for (const other of others) {
+        await this.blocksService.assertNotBlockedBetween(userId, other.user_id);
+      }
+
+      // Idempotency — a retried send with the same clientMessageId returns the
+      // already-persisted message instead of inserting a duplicate.
+      if (clientMessageIdValue) {
+        const existing = await tx.query.personal_messages.findFirst({
+          where: and(
+            eq(personal_messages.sender_id, userId),
+            eq(personal_messages.conversation_id, conversationId),
+            eq(personal_messages.client_message_id, clientMessageIdValue),
+          ),
+        });
+        if (existing) {
+          return { kind: 'winner' as const, row: existing, othersIds };
+        }
+      }
+
+      const [inserted] = await tx
+        .insert(personal_messages)
+        .values({
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: trimmed,
+          client_message_id: clientMessageIdValue,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // Concurrent retry won the race (unique index
+      // personal_messages_client_msg_uidx on (sender_id, conversation_id,
+      // client_message_id) WHERE client_message_id IS NOT NULL): return the
+      // row the winner inserted instead of raising a unique-violation 500 —
+      // and skip the side effects below (read receipt, "messaged" activity,
+      // push) so a duplicate retry never double-fires them.
+      if (!inserted) {
+        if (clientMessageIdValue) {
+          const winner = await tx.query.personal_messages.findFirst({
+            where: and(
+              eq(personal_messages.sender_id, userId),
+              eq(personal_messages.conversation_id, conversationId),
+              eq(personal_messages.client_message_id, clientMessageIdValue),
+            ),
+          });
+          if (winner) {
+            return { kind: 'winner' as const, row: winner, othersIds };
+          }
+        }
+        // Lost the unique-key race with no reconcilable winner — surface a 409
+        // so the caller retries the send.
         throw new ConflictException('Message send conflicted; retry.');
       }
-      const existing = await this.db.query.personal_messages.findFirst({
-        where: and(
-          eq(personal_messages.sender_id, userId),
-          eq(personal_messages.conversation_id, conversationId),
-          eq(personal_messages.client_message_id, clientMessageIdValue),
-        ),
-      });
-      if (existing) {
-        const [sender] = await this.db
-          .select({
-            id: users.id,
-            full_name: users.full_name,
-            handle: users.handle,
-            avatar_url: users.avatar_url,
-          })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        return { ...existing, sender };
-      }
-      throw new ConflictException('Message send conflicted; retry.');
+
+      return { kind: 'inserted' as const, row: inserted, othersIds };
+    });
+
+    // Idempotent/lost-race path: no side effects (a duplicate retry must never
+    // re-fire the read receipt, "messaged" activity, or push).
+    if (outcome.kind === 'winner') {
+      return { ...outcome.row, sender: await this.fetchSenderView(userId) };
     }
+
+    const inserted = outcome.row;
+    const othersIds = outcome.othersIds;
 
     // Sender has read up to this point.
     await this.markRead(userId, conversationId);
@@ -358,14 +394,12 @@ export class ConversationsService {
     await this.activitiesService.record({
       actorId: userId,
       verb: 'messaged',
-      subjectId: others[0]?.user_id,
-      recipients: others.map((o) => o.user_id),
+      subjectId: othersIds[0],
+      recipients: othersIds,
     });
 
     // Web push for recipients with no live socket (PWA closed, US10).
-    const offline = others
-      .map((o) => o.user_id)
-      .filter((uid) => !this.realtime.isUserOnline(uid));
+    const offline = othersIds.filter((uid) => !this.realtime.isUserOnline(uid));
     if (offline.length > 0) {
       const [sender] = await this.db
         .select({ full_name: users.full_name })
@@ -388,6 +422,11 @@ export class ConversationsService {
         .catch(() => 0);
     }
 
+    return { ...inserted, sender: await this.fetchSenderView(userId) };
+  }
+
+  /** Sender view ({ id, full_name, handle, avatar_url }) for message payloads. */
+  private async fetchSenderView(userId: string) {
     const [sender] = await this.db
       .select({
         id: users.id,
@@ -398,8 +437,7 @@ export class ConversationsService {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-
-    return { ...inserted, sender };
+    return sender;
   }
 
   async markRead(userId: string, conversationId: string): Promise<void> {
