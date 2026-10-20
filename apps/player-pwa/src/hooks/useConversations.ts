@@ -293,6 +293,12 @@ export function useConversationMessages(conversationId: string | null) {
     if (queuedToastTimerRef.current) clearTimeout(queuedToastTimerRef.current);
     queuedToastTimerRef.current = setTimeout(() => setQueuedToast(false), 4_000);
   }, []);
+  // P2-224 (PR-Agent run #148 MINOR): the queued backfill reads
+  // window.localStorage — gate it on mount so the first client render matches
+  // the server markup (run #49 hydration-safety pattern); parked bubbles
+  // appear immediately after hydration.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
 
   const historyQuery = useQuery<PersonalMessage[], FetchError>({
     queryKey: ['conversation', conversationId, 'messages'],
@@ -541,7 +547,7 @@ export function useConversationMessages(conversationId: string | null) {
   // against local + history clientMessageIds.
   const currentUserId = currentUser?.id;
   const queuedForConversation: PersonalMessage[] =
-    conversationId && currentUserId
+    isMounted && conversationId && currentUserId
       ? getQueuedDmsForConversation(conversationId, currentUserId)
           .filter(
             (q) =>
