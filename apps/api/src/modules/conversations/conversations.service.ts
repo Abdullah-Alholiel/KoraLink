@@ -268,12 +268,17 @@ export class ConversationsService {
     // checks, idempotency re-read and the INSERT share ONE transaction guarded
     // by a `SELECT … FOR UPDATE` on the conversation row — the same
     // serialization match chat has had since P2-220 (runs #146–#148).
-    // Previously these checks ran as independent statements beside the INSERT,
-    // so a participant removal or a block created mid-flight could let one
-    // message land in a conversation the sender may no longer post to. The
-    // conversation row is the arbiter of the participant set and is never
-    // row-locked anywhere else in the API (grep-verified), so a single-lock
-    // design has no lock-ordering hazard.
+    // Previously these checks ran as independent statements beside the INSERT.
+    // LOCK INVARIANT: every mutation of a conversation's participant set must
+    // take this same conversation-row lock. Today the participant set is
+    // written exactly once — the create-time insert in startConversation —
+    // and has NO removal path (grep-verified run #149), so there is nothing
+    // to serialize against yet; if a leave/remove endpoint is ever added it
+    // MUST lock the conversation row first or the mid-flight window reopens.
+    // RESIDUAL (documented): user_blocks is READ (not locked) inside the tx —
+    // a block created between the check and the insert lets exactly one
+    // message through; the block rejects every subsequent send. Accepted as a
+    // benign one-message race (docs/plans/run149-dm-chat-hardening/).
     const outcome = await this.db.transaction(async (tx) => {
       // Unknown conversation → clean 404 (explicit lookup under the lock; was
       // a membership-check 403 on a nonexistent id before).
