@@ -1,25 +1,25 @@
 {
-  "last_run": 147,
-  "last_run_report": "kanban/RUNS/2026-10-19T15-17Z-run147.md",
+  "last_run": 148,
+  "last_run_report": "kanban/RUNS/2026-10-20T01-16Z-run148.md",
   "last_run_commits": [
-    "c2a1e32",
-    "ad3b35b"
+    "16bb61e",
+    "e1ad78b"
   ],
   "in_review_items": [
     {
       "id": "P2-220",
-      "claim": "WS twin built (PR #152, c2a1e32+ad3b35b): tx + match-row FOR UPDATE on handleMessage; jest 1075/1075, tsc 0, turbo 3/3, vitest 979/979",
-      "verify": "next run: PR #152 head status (kora-link absent?) + repo checks green + PR-Agent review body real -> fix CRITICAL/IMPORTANT -> squash-merge -> live WS probe (unknown-match send-message -> clean not-found) -> rebuild+restart API"
+      "claim": "FULLY DONE: WS twin merged (PR #152 squash 16bb61e) after 3 PR-Agent follow-up fixes (reconcile-before-guard 7190997, pre-read before limiter db1c878, sender-scoped ack 66208e6); LIVE WS E2E verified on rebuilt+restarted API (unknown-match send-message -> clean not-found WsException); jest 1076/1076, turbo 3/3",
+      "verify": "next run: spot-check the P2-220 board row status cell says DONE with 16bb61e; optional re-probe of the live WS path only if gateway files changed since 66208e6"
     },
     {
-      "id": "P1-52",
-      "claim": "prod Neon quota 1C re-fired: 9 events/24h, latest 2026-10-19T15:00Z, release 2307a2a (prod /health still 200 — intermittent, not outage)",
-      "verify": "next run: re-pull 1C count/lastSeen via Sentry API; >=2 fresh events = escalate; owner action = Neon billing/quota (console.neon.tech)"
+      "id": "P2-224",
+      "claim": "DM offline queue merged (PR #153 squash e1ad78b): parallel lib/offline-dm-queue.ts + hook wiring + queued badge/toast UI + hydration gate 028fca6; vitest 987/987 (new 8-spec suite), tsc 0, turbo 3/3; PR-Agent review clean on fix head",
+      "verify": "next run: (a) board row status cell DONE; (b) spot-check one user-facing flow: messages/[id] page renders queued clock marker + toast keys exist EN+AR (messages.queuedOffline en:866/ar:866); (c) confirm P2-226 row exists (terminal-error retirement follow-up)"
     }
   ],
   "open_blockers": [
-    "P2-208 (run #146): queue FIVE #136/#140/#141/#145/#147 all repo-green + MERGEABLE, every head carries bare Vercel: failure (kora-link project). PR #151 (P2-220) added; escape attempt queued on head dc66eab. Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
-    "P1-41 RESEND/BREVO PROVISIONING: email layer is log-only until Abdullah provisions the provider (API key + verified sender domain) and sets the env keys in apps/api/.env, then restarts koralink-api. Feature self-disables until then. Console-side steps pending (Brevo cutover staged).",
+    "P1-52 ESCALATED (run #148): prod Neon quota 1C fired 4 FRESH events (Oct 19 10/15/20:00Z + Oct 20 00:00Z, exact 5h purge-window cadence); issue count 11/24h. TOP infra risk. Owner: console.neon.tech -> solitary-thunder-20087776 billing/usage -> upgrade or free CU-hrs.",
+    "P2-208 (run #148): queue FIVE #136/#140/#141/#145/#147 all repo-green 5/5, every head still carries bare Vercel: failure (kora-link). No escapes this window (#152/#153 were the escaped ones, both merged). Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
     "P2-51: Render demo deploy-before-migrate drift — repo half done (PR #104); dashboard migrate-hook toggle = owner-only. Blocks promote-PR assembly; promote merge itself owner-only.",
     "P2-47: admin cancel-purge vs restore-on-behalf — still needs Abdullah decision.",
     "P1-38+P2-50 upload pipeline — still needs Abdullah decision (one decision covers both).",
@@ -31,21 +31,23 @@
     "RUNBOOK: never source apps/api/.env in the run shell (NODE_ENV leak breaks turbo builds); probe DB via one-shot `node --env-file=.env -e` subprocess; unset NODE_ENV before gates.",
     "RUNBOOK: hermes cron sessions cannot run execute_code (approval wall) — use terminal; foreground timeout cap 600s -> long builds run as tracked background processes (poll via process_manage).",
     "RUNBOOK: ALWAYS prefix kanban calls with `env -u HERMES_DELEGATED_CHILD_CONTEXT`.",
-    "RUNBOOK: heredoc-stdin python and curl|python pipes trip the terminal approval wall — write scripts to /tmp via write_file, curl to a temp file, then parse in a second step.",
-    "RUNBOOK (live E2E): probe the API on loopback :3001 with the PWA PUBLIC origin (aa.tail2948f9.ts.net:10000); dev-login needs -c on the login call; partner endpoints need seed 0003.",
+    "RUNBOOK: heredoc-stdin python and curl|python pipes trip the terminal approval wall — write scripts to /tmp via write_file, then run them.",
+    "RUNBOOK (live E2E): probe the API on loopback :3001 with the PWA PUBLIC origin (aa.tail2948f9.ts.net:10000); dev-login needs -c on the login call; partner endpoints need seed 0003. WS probes (run #148 recipe): socket.io-client from repo node_modules via CJS require; NestJS handler throws surface as an \"exception\" EVENT not an ack; settle 500ms after connect before emitting (userId not yet set); seed user id from DB, not fabricated.",
     "OPS: first admin build can OOM (137); solo `turbo run build --filter=admin` retry passes.",
     "OPS (run #35): drizzle bookkeeping on this VPS = drizzle.__drizzle_migrations; migrations 0030+ hand-written + journal-appended. drizzle-kit generate DEAD on VPS (both trees, run #143).",
     "P2-42 CSP script-src migration — standing reviewer item, 2-PR effort.",
     "P1-17b partial: secret rotation still TODO (Sentry token, Redis password, admin->HttpOnly cookies, server-side session invalidation).",
     "drizzle-orm 0.45.2 deferred to a focused half-day cycle.",
-    "zai delegation-path: run #146 probe 200 in 2.6s, reviewers 361s/221s both schema-valid, zero Go spend. Policy unchanged: try zai first, failover on first child error.",
+    "zai delegation-path: run #148 probe 200 in 1.8s (weekly 1%); reviewers 327s/246s both under 6k chars, zero Go spend. Policy unchanged: try zai first, failover on first child error.",
     "KILL-PATTERN (14 dead sessions through run #70, root cause unknown — cron/scheduler/host side): a killed session leaves kanban/LOCK.json + possible uncommitted half-work; a YOUNG dead lock makes the next scheduled fire SKIP. Watchdog in koralink-factory-prestate.py handles recovery.",
     "RUN #66 RECOVERY: see kanban/RUNS/2026-09-21* report; ADMIN HOLD on projects-dir merge conflict was lifted run #76.",
     "RUN #121 OWNER DECISION SURFACED: recurring-match series identity — 8 weekly instances are independent matches (no series id); cancelled week does not propagate. Product-shape call needed.",
-    "CLAUDE LANE: claude Pro OAuth logged out (run #143 + #144) — owner re-login restores the zeroshot lane.",
-    "P2-217/P2-218 (NEW run #144, hex): match-fees.ts drizzle imports (re-classify vs extract = owner-optional decision) + PaymentSheet direct fetcher import (money-path lane). Both deferred deliberately, not drive-by fixed.",
+    "CLAUDE LANE: claude Pro OAuth logged out (run #143 + #144, still out run #148) — owner re-login restores the zeroshot lane.",
+    "P2-217/P2-218 (hex, run #144): match-fees.ts drizzle imports + PaymentSheet direct fetcher import. Both deferred deliberately, not drive-by fixed.",
     "P2-219 (run #145): DM empty state CLOSED verified-no-build; dead i18n key messages.noMessagesDescription en/ar :856 — fold into next i18n sweep.",
-    "SENTRY WATCH (run #146): 1C Neon quota-exceeded fired ONE event on PRODUCTION today 10:00Z (srv-dadabif, release 2307a2a on main, hourly cadence era Sep 24-25 otherwise). DB probe: stale creds on this box; prod /health 200 + no Failed-query storm = classified TRANSIENT watch item, re-check next run (2+ events = escalate P1)."
+    "P2-226 (NEW run #148): offline-queue terminal-error retirement (both queues) — PR-Agent #153 + Reviewer A #148 matched finding. Small PWA lane item.",
+    "P2-220 residual (run #148, accepted): WS reconcile pre-read HITS bypass the rate limiter (REST-parity trade-off; un-rate-limited indexed SELECTs, membership-gated, bounded blast radius). Recorded on the P2-220 row; revisit only if abuse observed.",
+    "SENTRY WATCH (run #148): 1C ESCALATED (4 fresh, 5h cadence). CORS noise B silent since Oct 13 (PR #139 drop holding). Everything else stale."
   ],
   "consecutive_skip_count": 0,
   "notes": "Run #147 (2026-10-19 15:17Z, DB&Infra rotation): P2-220 WS twin BUILT — PR #152 (lane/run147-p2-220-ws, c2a1e32+ad3b35b): app.gateway handleMessage now ONE tx with match-row FOR UPDATE (mirror of REST 5367063); unknown matchId -> clean not-found (was FK crash); no-key idempotency race -> clean conflict (was garbage emit); with-key reconcile preserved (P2-172). Gates: jest 1075/1075 (+5 race specs), tsc 0, turbo 3/3, vitest 979/979. Reviewer A 'sound', both follow-ups fixed same run; Reviewer B verified all 4 run-#146 claims (live 404 probe). PR #152 LEFT OPEN: repo checks starved in GH runner queue >35 min (gate/fresh-apply/semgrep/review queued; GitGuardian+Vercel green; kora-link status ABSENT on head ad3b35b = 5th escape) — NEXT RUN: reconcile head status, verify PR-Agent review body, squash, live WS probe, rebuild+restart API. P1-52 RE-OPENED: prod Neon quota 1C fired 9 events/24h (latest 15:00Z, hourly cadence, release 2307a2a) — OWNER: Neon billing/quota check (same fix as run #76); prod /health still 200. New rows P2-224 (DM offline queue — Reviewer B IMPORTANT, next PWA lane) + P2-225 (DM typing). Queue FIVE unchanged (all heads still Vercel:failure). Hex clean (10/10 flat). E2E recipe: staging CORS rejects localhost:10000 — use tailscale PWA origin on probes. Claude lane skipped (logged out, 4th run). Strix not due (Nov 1-3)."
