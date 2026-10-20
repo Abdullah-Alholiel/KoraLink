@@ -435,9 +435,15 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
           .where(eq(users.id, client.userId))
           .limit(1);
         const message = { ...existing, user };
-        this.server
-          .to(`match:${data.matchId}`)
-          .emit('new-message', message);
+        // Reconcile ack goes ONLY to the sender's socket (PR-Agent run #148
+        // IMPORTANT): everyone else already received this message on first
+        // delivery, so a room-wide re-broadcast is a pure amplification
+        // surface — an authenticated member flooding send-message with an
+        // accepted clientMessageId would fan every emit to the whole room
+        // with no rate limit. Sender-scoped, a flood only echoes to the
+        // attacker's own socket; the P2-172 offline queue reconciles off
+        // this sender-side ack (its own echoed sends still broadcast).
+        client.emit('new-message', message);
         // No not-viewing fan-out here (bell + web push): the ORIGINAL send
         // already announced this message; re-fanning would double-notify.
         return;

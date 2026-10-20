@@ -909,7 +909,13 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
   }
 
   function makeClient2() {
-    return { id: 'sock-1', userId: 'u1', to: () => ({ emit: () => undefined }) };
+    return {
+      id: 'sock-1',
+      userId: 'u1',
+      to: () => ({ emit: () => undefined }),
+      // Run #148: the P2-172 reconcile ack emits to the SENDER's socket.
+      emit: () => undefined,
+    };
   }
 
   it('inserts inside the transaction (race window closed: checks + INSERT share the tx)', async () => {
@@ -982,20 +988,33 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
   // ALREADY accepted must reconcile to the original row even after the match
   // went terminal — reconcile happens BEFORE the closed-chat guard (REST
   // parity), so the offline-queue replay never surfaces a false chat-closed.
+  // The reconcile ack is SENDER-SCOPED (client.emit, not room broadcast).
   it('terminal-flip retry WITH clientMessageId → reconciles to the original row BEFORE the closed-chat guard', async () => {
     const original = { id: 'msg-accepted', match_id: MATCH_ID, user_id: 'u1', content: 'sent while open' };
     const gateway = makeGw2(makeDbStub({ matchRow: { ...future, status: 'Completed' }, preReadResult: original }));
-    let emitted: unknown;
+    let emittedToSender: unknown;
+    const client = {
+      ...makeClient2(),
+      emit: (ev: string, payload: unknown) => {
+        if (ev === 'new-message') emittedToSender = payload;
+      },
+    };
+    let roomBroadcasts = 0;
     (gateway as { server: unknown }).server = {
-      to: () => ({ emit: (_ev: string, payload: unknown) => { emitted = payload; } }),
+      to: () => ({ emit: () => {
+        roomBroadcasts += 1;
+      } }),
     } as never;
     await expect(
       gateway.handleMessage(
         { matchId: MATCH_ID, content: 'sent while open', clientMessageId: 'cmid-offline-1' },
-        makeClient2() as never,
+        client as never,
       ),
     ).resolves.toBeUndefined();
-    expect(emitted).toMatchObject({ id: 'msg-accepted', content: 'sent while open' });
+    expect(emittedToSender).toMatchObject({ id: 'msg-accepted', content: 'sent while open' });
+    // Sender-scoped: NO room-wide re-broadcast on the reconcile path
+    // (PR-Agent run #148 — amplification surface on a clientMessageId flood).
+    expect(roomBroadcasts).toBe(0);
   });
 
   it('closed chat evaluated against the LOCKED row inside the tx (status flip cannot slip in)', async () => {
