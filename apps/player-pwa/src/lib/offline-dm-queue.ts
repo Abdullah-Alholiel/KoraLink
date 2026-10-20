@@ -14,7 +14,7 @@
  * reconcile, and discards delivered entries.
  */
 
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, FetchError } from '@/lib/fetcher';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -155,6 +155,8 @@ export function getOfflineDmQueueCount(
 type DmFlushListener = (
   message: QueuedDmDelivery | null,
   failedEntry?: QueuedDmMessage,
+  /** P2-226: true when the entry was RETIRED (permanent 4xx) — no replay. */
+  terminal?: boolean,
 ) => void;
 
 /** Minimum shape an open thread needs to reconcile a flushed delivery. */
@@ -176,6 +178,17 @@ export function registerOfflineDmFlushListener(fn: DmFlushListener): () => void 
 }
 
 let flushing = false;
+
+/**
+ * P2-226: a PERMANENT server rejection (conversation deleted → 404, blocked →
+ * 403, …) can never succeed on replay. 408 (timeout) and 429 (rate limit) are
+ * retry-later; 5xx and non-HTTP errors (network TypeError) are transient.
+ */
+function isTerminalDmSendError(err: unknown): boolean {
+  if (!(err instanceof FetchError)) return false;
+  const { status } = err;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 /** Replay the queue oldest-first through the idempotent REST send path. */
 export async function flushOfflineDmQueue(): Promise<void> {
@@ -209,10 +222,19 @@ export async function flushOfflineDmQueue(): Promise<void> {
           });
         }
         trackEvent('dm_offline_queue_flushed');
-      } catch {
-        // Still failing (server unreachable / conversation gone) — leave
-        // queued, tell open threads (bubble flips to FAILED + tap-to-retry),
-        // and CONTINUE: one permanently-rejected entry must never
+      } catch (err) {
+        if (isTerminalDmSendError(err)) {
+          // P2-226: permanently rejected (conversation gone / forbidden) —
+          // RETIRE the entry so the watcher poll stops re-POSTing it every
+          // cycle until the TTL; open threads flip the bubble to FAILED
+          // (tap-to-retry re-sends through the normal path).
+          discardOfflineDm(entry.clientMessageId);
+          for (const fn of dmFlushListeners) fn(null, entry, true);
+          continue;
+        }
+        // Still failing transiently (server unreachable / 408 / 429 / 5xx) —
+        // leave queued, tell open threads (bubble flips to FAILED +
+        // tap-to-retry), and CONTINUE: one failing entry must never
         // head-of-line-block healthy entries behind it. Each flush cycle
         // attempts each entry once.
         for (const fn of dmFlushListeners) fn(null, entry);

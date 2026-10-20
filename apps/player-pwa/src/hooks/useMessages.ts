@@ -162,6 +162,8 @@ function getOfflineQueueCount(matchId?: string, userId?: string): number {
 type FlushListener = (
   message: MatchMessage | null,
   failedEntry?: QueuedChatMessage,
+  /** P2-226: true when the entry was RETIRED (permanent 4xx) — no replay. */
+  terminal?: boolean,
 ) => void;
 const flushListeners = new Set<FlushListener>();
 
@@ -172,6 +174,17 @@ export function registerOfflineFlushListener(fn: FlushListener): () => void {
 }
 
 let flushing = false;
+
+/**
+ * P2-226: a PERMANENT server rejection (match chat gone → 404, not a member →
+ * 403, …) can never succeed on replay. 408 (timeout) and 429 (rate limit) are
+ * retry-later; 5xx and non-HTTP errors (network TypeError) are transient.
+ */
+function isTerminalChatSendError(err: unknown): boolean {
+  if (!(err instanceof FetchError)) return false;
+  const { status } = err;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 /** Replay the queue oldest-first through the idempotent REST send path. */
 export async function flushOfflineQueue(): Promise<void> {
@@ -223,12 +236,21 @@ export async function flushOfflineQueue(): Promise<void> {
               } as MatchMessage);
         for (const fn of flushListeners) fn(message);
         trackEvent('chat_offline_queue_flushed');
-      } catch {
-        // Still failing (server unreachable / chat closed) — leave queued,
-        // tell open sheets (bubble flips to FAILED + tap-to-retry), and
-        // CONTINUE: one permanently-rejected entry (e.g. a chat closed on
-        // the server) must never head-of-line-block healthy entries behind
-        // it (PR-Agent #149). Each flush cycle attempts each entry once.
+      } catch (err) {
+        if (isTerminalChatSendError(err)) {
+          // P2-226: permanently rejected (chat closed / forbidden) — RETIRE
+          // the entry so the watcher poll stops re-POSTing it every cycle
+          // until the TTL; open sheets flip the bubble to FAILED
+          // (tap-to-retry re-sends through the normal path).
+          discardOfflineMessage(entry.clientMessageId);
+          for (const fn of flushListeners) fn(null, entry, true);
+          continue;
+        }
+        // Still failing transiently (server unreachable / 408 / 429 / 5xx) —
+        // leave queued, tell open sheets (bubble flips to FAILED +
+        // tap-to-retry), and CONTINUE: one failing entry must never
+        // head-of-line-block healthy entries behind it (PR-Agent #149).
+        // Each flush cycle attempts each entry once.
         for (const fn of flushListeners) fn(null, entry);
       }
     }
@@ -1009,7 +1031,7 @@ export function useMatchChat(
   matchIdRef.current = matchId;
   useEffect(
     () =>
-      registerOfflineFlushListener((message, failedEntry) => {
+      registerOfflineFlushListener((message, failedEntry, terminal) => {
         if (message) {
           setLocalMessages((prev) => {
             if (!message.client_message_id) return prev;
@@ -1032,13 +1054,41 @@ export function useMatchChat(
           return;
         }
         if (failedEntry) {
-          setLocalMessages((prev) =>
-            prev.map((m) =>
-              m.client_message_id === failedEntry.clientMessageId
-                ? { ...m, status: 'failed' }
-                : m,
-            ),
-          );
+          setLocalMessages((prev) => {
+            if (prev.some((m) => m.client_message_id === failedEntry.clientMessageId)) {
+              return prev.map((m) =>
+                m.client_message_id === failedEntry.clientMessageId
+                  ? { ...m, status: 'failed' }
+                  : m,
+              );
+            }
+            // P2-226: a RETIRED backfilled (previous-session) entry is gone
+            // from the queue, so queuedForMatch no longer renders it — append
+            // the failed bubble (this match only) so it never silently
+            // vanishes and stays tap-to-retry.
+            if (terminal && failedEntry.matchId === matchIdRef.current) {
+              const u = useAppStore.getState().user;
+              return [
+                ...prev,
+                {
+                  id: `flushed-${failedEntry.clientMessageId}`,
+                  match_id: failedEntry.matchId,
+                  user_id: failedEntry.userId,
+                  content: failedEntry.content,
+                  created_at: failedEntry.queuedAt,
+                  user: {
+                    id: failedEntry.userId,
+                    full_name: u?.fullName ?? null,
+                    handle: u?.handle ?? null,
+                    avatar_url: u?.avatarUrl ?? null,
+                  },
+                  client_message_id: failedEntry.clientMessageId,
+                  status: 'failed' as const,
+                },
+              ];
+            }
+            return prev;
+          });
         }
       }),
     [],

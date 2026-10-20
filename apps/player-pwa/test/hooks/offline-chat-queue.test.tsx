@@ -104,6 +104,7 @@ import {
   __resetOfflineChatQueueForTests,
 } from '@/hooks/useMessages';
 import { getRealtime } from '@/lib/realtime';
+import { FetchError } from '@/lib/fetcher';
 
 getRealtime().setSocketFactory(() => stubSocket as never);
 
@@ -549,5 +550,122 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
     } finally {
       store.__setActiveUser(undefined); // restore user-me for later cases
     }
+  });
+
+  // P2-226: a PERMANENTLY-rejected replay (4xx except 408/429) is RETIRED
+  // from the queue so the watcher poll stops re-POSTing it; transient
+  // failures (network TypeError, 408, 429, 5xx) stay parked.
+  describe('terminal-error retirement (P2-226)', () => {
+    function parkChatEntry(clientMessageId: string, content: string) {
+      window.localStorage.setItem(
+        'kl.offlineChatQueue.v1',
+        JSON.stringify([
+          {
+            matchId: 'm1',
+            content,
+            clientMessageId,
+            queuedAt: new Date().toISOString(),
+            userId: 'user-me',
+          },
+        ]),
+      );
+    }
+
+    function rejectPostsWith(err: unknown) {
+      mockFetcher.mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST' && String(url).endsWith('/messages/read')) {
+          return Promise.resolve({ ok: true });
+        }
+        if (init?.method === 'POST') return Promise.reject(err);
+        return Promise.resolve([]);
+      });
+    }
+
+    function sendPostCount(): number {
+      return mockFetcher.mock.calls.filter(
+        ([url, init]) =>
+          (init as RequestInit | undefined)?.method === 'POST' &&
+          String(url) === '/matches/m1/messages',
+      ).length;
+    }
+
+    function storedQueue(): unknown[] {
+      return JSON.parse(window.localStorage.getItem('kl.offlineChatQueue.v1') ?? '[]');
+    }
+
+    it.each([
+      [404, 'chat gone'],
+      [403, 'forbidden'],
+    ])('retires the entry on %i (%s) and never re-POSTs it on the next cycle', async (status) => {
+      parkChatEntry('cm-term', 'doomed');
+      rejectPostsWith(new FetchError('rejected', status, '/matches/m1/messages'));
+      const failures: Array<{ id: string; terminal?: boolean }> = [];
+      offFlush = registerOfflineFlushListener((message, failedEntry, terminal) => {
+        if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+      });
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(sendPostCount()).toBe(1);
+      expect(storedQueue()).toEqual([]);
+      expect(failures).toEqual([{ id: 'cm-term', terminal: true }]);
+
+      // Next watcher cycle: nothing left to replay.
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(sendPostCount()).toBe(1);
+    });
+
+    it.each([
+      ['408 timeout', () => new FetchError('timeout', 408, '/x')],
+      ['429 rate limit', () => new FetchError('slow down', 429, '/x')],
+      ['503 server error', () => new FetchError('unavailable', 503, '/x')],
+      ['network TypeError', () => new TypeError('Failed to fetch')],
+    ])('keeps the entry queued on a transient %s and retries next cycle', async (_label, makeErr) => {
+      parkChatEntry('cm-transient', 'retry me');
+      rejectPostsWith(makeErr());
+      const failures: Array<{ id: string; terminal?: boolean }> = [];
+      offFlush = registerOfflineFlushListener((message, failedEntry, terminal) => {
+        if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+      });
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(storedQueue()).toHaveLength(1);
+      expect(failures).toEqual([{ id: 'cm-transient', terminal: undefined }]);
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(sendPostCount()).toBe(2);
+      expect(storedQueue()).toHaveLength(1);
+    });
+
+    it('a retired backfilled entry stays visible in the open sheet as `failed`', async () => {
+      parkChatEntry('cm-term-ui', 'closed chat');
+      rejectPostsWith(new FetchError('not found', 404, '/matches/m1/messages'));
+      // Block auto-flush until the sheet has rendered the backfill.
+      setOnline(false);
+      const { result } = await mountChat();
+      expect(
+        result.current.messages.find((m) => m.client_message_id === 'cm-term-ui')?.status,
+      ).toBe('queued');
+      setOnline(true);
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+
+      await waitFor(() =>
+        expect(
+          result.current.messages.find((m) => m.client_message_id === 'cm-term-ui')?.status,
+        ).toBe('failed'),
+      );
+      expect(result.current.queuedCount).toBe(0);
+      expect(storedQueue()).toEqual([]);
+    });
   });
 });
