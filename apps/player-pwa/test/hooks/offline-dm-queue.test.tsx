@@ -32,8 +32,10 @@ import {
   getOfflineDmQueueCount,
   flushOfflineDmQueue,
   startOfflineDmQueueWatcher,
+  registerOfflineDmFlushListener,
   __resetOfflineDmQueueForTests,
 } from '@/lib/offline-dm-queue';
+import { FetchError } from '@/lib/fetcher';
 
 const mockFetcher = vi.fn();
 vi.mock('@/lib/fetcher', () => ({
@@ -369,5 +371,125 @@ describe('offline DM queue (P2-224, run #148)', () => {
       startOfflineDmQueueWatcher();
       startOfflineDmQueueWatcher();
     }).not.toThrow();
+  });
+});
+
+// P2-226: a PERMANENTLY-rejected replay (4xx except 408/429) is RETIRED from
+// the queue so the watcher poll stops re-POSTing it; transient failures
+// (network TypeError, 408, 429, 5xx) stay parked for the next cycle.
+describe('offline DM queue — terminal-error retirement (P2-226)', () => {
+  let offFlush: (() => void) | undefined;
+  afterEach(() => {
+    offFlush?.();
+    offFlush = undefined;
+  });
+
+  function rejectPostsWith(err: unknown) {
+    mockFetcher.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.reject(err);
+      return Promise.resolve([]);
+    });
+  }
+
+  function postCount(): number {
+    return mockFetcher.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    ).length;
+  }
+
+  it.each([
+    [404, 'conversation deleted'],
+    [403, 'forbidden'],
+  ])('retires the entry on %i (%s): no re-POST, badge keeps counting (r2 retain)', async (status) => {
+    parkEntry('cmid-term', 'doomed');
+    rejectPostsWith(new FetchError('rejected', status, `/conversations/${CONV_ID}/messages`));
+    const failures: Array<{ id: string; terminal?: boolean }> = [];
+    offFlush = registerOfflineDmFlushListener((delivery, failedEntry, terminal) => {
+      if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+    });
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(postCount()).toBe(1);
+    // P2-226 r2: the entry is RETAINED (marked retiredAt) — the badge keeps
+    // counting it so a closed thread still shows the dead message.
+    expect(getOfflineDmQueueCount()).toBe(1);
+    expect(failures).toEqual([{ id: 'cmid-term', terminal: true }]);
+
+    // Next watcher cycle: the retired entry is NOT replayed.
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(postCount()).toBe(1);
+  });
+
+  it('a 401 (expired token) stays TRANSIENT — the entry re-POSTs after re-auth', async () => {
+    parkEntry('cmid-401', 'recoverable');
+    rejectPostsWith(new FetchError('expired', 401, `/conversations/${CONV_ID}/messages`));
+    const failures: Array<{ id: string; terminal?: boolean }> = [];
+    offFlush = registerOfflineDmFlushListener((delivery, failedEntry, terminal) => {
+      if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+    });
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(getOfflineDmQueueCount()).toBe(1);
+    expect(failures).toEqual([{ id: 'cmid-401', terminal: undefined }]);
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(postCount()).toBe(2); // NOT retired — retries next cycle
+  });
+
+  it.each([
+    ['408 timeout', () => new FetchError('timeout', 408, '/x')],
+    ['429 rate limit', () => new FetchError('slow down', 429, '/x')],
+    ['503 server error', () => new FetchError('unavailable', 503, '/x')],
+    ['network TypeError', () => new TypeError('Failed to fetch')],
+  ])('keeps the entry queued on a transient %s and retries next cycle', async (_label, makeErr) => {
+    parkEntry('cmid-transient', 'retry me');
+    rejectPostsWith(makeErr());
+    const failures: Array<{ id: string; terminal?: boolean }> = [];
+    offFlush = registerOfflineDmFlushListener((delivery, failedEntry, terminal) => {
+      if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+    });
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(getOfflineDmQueueCount()).toBe(1);
+    expect(failures).toEqual([{ id: 'cmid-transient', terminal: undefined }]);
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(postCount()).toBe(2);
+    expect(getOfflineDmQueueCount()).toBe(1);
+  });
+
+  it('a retired backfilled entry stays visible in the open thread as `failed`', async () => {
+    parkEntry('cmid-term-ui', 'gone convo');
+
+    const { Wrapper, queryClient } = makeWrapper();
+    seedHistory(queryClient, []);
+    const { result } = renderHook(() => useConversationMessages(CONV_ID), {
+      wrapper: Wrapper,
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    rejectPostsWith(new FetchError('not found', 404, `/conversations/${CONV_ID}/messages`));
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+
+    await waitFor(() =>
+      expect(
+        result.current.messages.find((m) => m.clientMessageId === 'cmid-term-ui')?.status,
+      ).toBe('failed'),
+    );
+    expect(getOfflineDmQueueCount(CONV_ID, ME.id)).toBe(1); // r2: retained, not discarded
   });
 });

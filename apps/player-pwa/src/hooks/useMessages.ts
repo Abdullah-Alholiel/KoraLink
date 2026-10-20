@@ -36,6 +36,13 @@ export interface QueuedChatMessage {
   content: string;
   clientMessageId: string;
   queuedAt: string;
+  /**
+   * P2-226: set when the server PERMANENTLY rejected the send (4xx except
+   * 401/408/429/5xx — 401 is recoverable via re-auth). A retired entry is
+   * never re-POSTed by the flusher; it stays queued so the open sheet can
+   * render it as failed (tap-to-retry re-enqueues a fresh entry).
+   */
+  retiredAt?: string;
   /** Owner binding — entries replay ONLY under the session that authored them. */
   userId: string;
 }
@@ -129,6 +136,20 @@ function enqueueOfflineMessage(entry: QueuedChatMessage): boolean {
   return true;
 }
 
+/**
+ * P2-226 r2: mark an entry TERMINALLY failed (permanent 4xx rejection) —
+ * the flusher never re-POSTs it, but it stays queued so the open sheet
+ * can render it as failed and the badge keeps counting it (visible trace).
+ */
+function markChatRetired(clientMessageId: string): void {
+  readOfflineQueue();
+  const entry = offlineQueue.find((m) => m.clientMessageId === clientMessageId);
+  if (entry && !entry.retiredAt) {
+    entry.retiredAt = new Date().toISOString();
+    persistOfflineQueue();
+  }
+}
+
 /** Remove a delivered entry (any delivery path: REST response, WS echo, flush). */
 function discardOfflineMessage(clientMessageId: string): void {
   readOfflineQueue();
@@ -162,6 +183,8 @@ function getOfflineQueueCount(matchId?: string, userId?: string): number {
 type FlushListener = (
   message: MatchMessage | null,
   failedEntry?: QueuedChatMessage,
+  /** P2-226: true when the entry was RETIRED (permanent 4xx) — no replay. */
+  terminal?: boolean,
 ) => void;
 const flushListeners = new Set<FlushListener>();
 
@@ -172,6 +195,21 @@ export function registerOfflineFlushListener(fn: FlushListener): () => void {
 }
 
 let flushing = false;
+
+/**
+ * P2-226: a PERMANENT server rejection (match chat gone → 404, not a member →
+ * 403, …) can never succeed on replay. 408 (timeout) and 429 (rate limit) are
+ * retry-later; 5xx and non-HTTP errors (network TypeError) are transient.
+ */
+function isTerminalChatSendError(err: unknown): boolean {
+  if (!(err instanceof FetchError)) return false;
+  const { status } = err;
+  // P2-226 r2 (PR-Agent #155): 401 is RECOVERABLE — the fetcher treats a 401
+  // on authed surfaces as an expired token and bounces to re-auth; retiring
+  // the message would permanently lose recoverable content.
+  if (status === 401) return false;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 /** Replay the queue oldest-first through the idempotent REST send path. */
 export async function flushOfflineQueue(): Promise<void> {
@@ -187,6 +225,7 @@ export async function flushOfflineQueue(): Promise<void> {
     for (const entry of [...readOfflineQueue()]) {
       if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
       if (entry.userId !== currentUserId) continue; // another account's message
+      if (entry.retiredAt) continue; // P2-226 r2: terminally failed — never replayed
       try {
         const delivered = await fetcher<MatchMessage | undefined>(
           `/matches/${entry.matchId}/messages`,
@@ -223,12 +262,21 @@ export async function flushOfflineQueue(): Promise<void> {
               } as MatchMessage);
         for (const fn of flushListeners) fn(message);
         trackEvent('chat_offline_queue_flushed');
-      } catch {
-        // Still failing (server unreachable / chat closed) — leave queued,
-        // tell open sheets (bubble flips to FAILED + tap-to-retry), and
-        // CONTINUE: one permanently-rejected entry (e.g. a chat closed on
-        // the server) must never head-of-line-block healthy entries behind
-        // it (PR-Agent #149). Each flush cycle attempts each entry once.
+      } catch (err) {
+        if (isTerminalChatSendError(err)) {
+          // P2-226 r2 (PR-Agent #155): RETAIN the entry with a retiredAt
+          // marker instead of discarding — the poll stops re-POSTing it, the
+          // badge keeps counting it (visible trace), and the open sheet
+          // renders it failed (tap-to-retry re-enqueues a fresh entry).
+          markChatRetired(entry.clientMessageId);
+          for (const fn of flushListeners) fn(null, entry, true);
+          continue;
+        }
+        // Still failing transiently (server unreachable / 401 / 408 / 429 /
+        // 5xx) — leave queued, tell open sheets (bubble flips to FAILED +
+        // tap-to-retry), and CONTINUE: one failing entry must never
+        // head-of-line-block healthy entries behind it (PR-Agent #149).
+        // Each flush cycle attempts each entry once.
         for (const fn of flushListeners) fn(null, entry);
       }
     }
@@ -982,7 +1030,7 @@ export function useMatchChat(
             avatar_url: currentUser?.avatarUrl ?? null,
           },
           client_message_id: q.clientMessageId,
-          status: 'queued' as const,
+          status: (q.retiredAt ? 'failed' : 'queued') as 'failed' | 'queued',
         }))
     : [];
   const messages = mergeMessages(
@@ -1039,6 +1087,11 @@ export function useMatchChat(
                 : m,
             ),
           );
+          // P2-226 r2: a RETIRED entry is NOT discarded — it stays queued,
+          // so entries that were never in localMessages (previous-session
+          // backfill) keep rendering through `queuedForMatch`, which now
+          // maps retired entries to `failed`. No silent vanishing, no
+          // double-render.
         }
       }),
     [],

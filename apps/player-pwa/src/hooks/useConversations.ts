@@ -611,7 +611,7 @@ export function useConversationMessages(conversationId: string | null) {
             content: q.content,
             createdAt: q.queuedAt,
             clientMessageId: q.clientMessageId,
-            status: 'queued' as const,
+            status: (q.retiredAt ? 'failed' : 'queued') as 'failed' | 'queued',
           }))
     : [];
 
