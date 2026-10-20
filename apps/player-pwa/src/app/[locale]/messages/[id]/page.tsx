@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { ArrowLeft, Send, AlertCircle, Loader2, MoreVertical, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Send, AlertCircle, Loader2, MoreVertical, MessageSquare, Clock } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
@@ -69,8 +69,15 @@ export default function ConversationPage({
   const storeUser = useAppStore(selectUser);
 
   const { conversations } = useConversations();
-  const { messages, isLoading, error, sendMessage, retryMessage, refetch } =
-    useConversationMessages(id);
+  const {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    retryMessage,
+    refetch,
+    queuedToast,
+  } = useConversationMessages(id);
   const isOnline = useOnlineStatus();
 
   const [draft, setDraft] = useState('');
@@ -167,6 +174,16 @@ export default function ConversationPage({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto scroll-container py-4">
+          {/* P2-224: queued-send confirmation toast (info, auto-dismisses). */}
+          {queuedToast && (
+            <div
+              role="status"
+              className="mx-4 mb-2 rounded-lg bg-brand-green/10 text-brand-green px-3 py-2 flex items-center justify-center gap-1.5"
+            >
+              <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+              <span className="text-[11px] font-medium">{t('messages.queuedOffline')}</span>
+            </div>
+          )}
           {!isOnline && !isLoading && !error && (
             <div
               className="mx-4 mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2"
@@ -275,6 +292,17 @@ export default function ConversationPage({
                       <span className="text-[9px] text-gray-400">{timeStr}</span>
                       {mine && m.status === 'sending' && (
                         <Loader2 className="w-3 h-3 animate-spin text-gray-400" strokeWidth={2} />
+                      )}
+                      {mine && m.status === 'queued' && (
+                        // P2-224: parked offline — will deliver on reconnect
+                        // (same affordance as the match-chat queued badge).
+                        <span
+                          className="flex items-center gap-0.5 text-gray-400"
+                          title={t('messages.queuedOffline')}
+                          aria-label={t('messages.queuedOffline')}
+                        >
+                          <Clock className="w-3 h-3" strokeWidth={2} />
+                        </span>
                       )}
                       {mine && m.status === 'failed' && (
                         <button
