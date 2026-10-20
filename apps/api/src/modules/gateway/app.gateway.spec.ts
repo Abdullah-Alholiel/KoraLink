@@ -841,6 +841,10 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
     matchRow?: unknown;
     insertReturns?: unknown[];
     conflictWinner?: unknown;
+    /** Run #148: result of the FIRST findFirst call (the P2-172 reconcile
+     * pre-read). Defaults to undefined (no prior message); later calls return
+     * conflictWinner (the in-tx lost-race re-read). */
+    preReadResult?: unknown;
   }) {
     // Default to a live future match so only tests that need a missing row /
     // closed status pass matchRow explicitly.
@@ -856,10 +860,20 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
         }),
       }),
     };
+    // Call-count-aware findFirst: call 1 = reconcile pre-read (before the tx),
+    // call 2 = the in-tx lost-race re-read after onConflictDoNothing returned
+    // nothing. With preReadResult absent the pre-read sees no prior message.
+    let findFirstCall = 0;
+    const findFirstResults: unknown[] =
+      'preReadResult' in opts ? [opts.preReadResult, opts.conflictWinner] : [undefined, opts.conflictWinner];
     // The tx callback must see the SAME surface as the outer db stub.
     const chain = {
       ...routedChain,
-      query: { match_messages: { findFirst: async () => opts.conflictWinner } },
+      query: {
+        match_messages: {
+          findFirst: async () => findFirstResults[Math.min(findFirstCall++, findFirstResults.length - 1)],
+        },
+      },
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
@@ -962,6 +976,26 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
       client as never,
     );
     expect(emitted).toMatchObject({ id: 'msg-orig', content: 'first' });
+  });
+
+  // Run #148 (PR-Agent follow-up): a retried send whose clientMessageId was
+  // ALREADY accepted must reconcile to the original row even after the match
+  // went terminal — reconcile happens BEFORE the closed-chat guard (REST
+  // parity), so the offline-queue replay never surfaces a false chat-closed.
+  it('terminal-flip retry WITH clientMessageId → reconciles to the original row BEFORE the closed-chat guard', async () => {
+    const original = { id: 'msg-accepted', match_id: MATCH_ID, user_id: 'u1', content: 'sent while open' };
+    const gateway = makeGw2(makeDbStub({ matchRow: { ...future, status: 'Completed' }, preReadResult: original }));
+    let emitted: unknown;
+    (gateway as { server: unknown }).server = {
+      to: () => ({ emit: (_ev: string, payload: unknown) => { emitted = payload; } }),
+    } as never;
+    await expect(
+      gateway.handleMessage(
+        { matchId: MATCH_ID, content: 'sent while open', clientMessageId: 'cmid-offline-1' },
+        makeClient2() as never,
+      ),
+    ).resolves.toBeUndefined();
+    expect(emitted).toMatchObject({ id: 'msg-accepted', content: 'sent while open' });
   });
 
   it('closed chat evaluated against the LOCKED row inside the tx (status flip cannot slip in)', async () => {

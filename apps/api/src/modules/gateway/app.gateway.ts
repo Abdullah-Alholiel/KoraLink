@@ -411,6 +411,40 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
 
+    // P2-172 reconcile pre-read (run #148, PR-Agent review follow-up on the
+    // P2-220-twin): checked BEFORE the tx so a retried send whose
+    // clientMessageId was already accepted returns the ORIGINAL row even if
+    // the match has since gone terminal — the message WAS accepted when sent,
+    // so the offline-queue replay must reconcile, not surface chat-closed.
+    // Same order as the REST path (matches.service.ts: idempotency pre-read
+    // → tx → guard → insert).
+    if (clientMessageId) {
+      const existing = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, data.matchId),
+          eq(match_messages.client_message_id, clientMessageId),
+        ),
+      });
+      if (existing) {
+        const [user] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, client.userId))
+          .limit(1);
+        const message = { ...existing, user };
+        this.server
+          .to(`match:${data.matchId}`)
+          .emit('new-message', message);
+        return;
+      }
+    }
+
     // Only match members may post to the lobby. P2-220-twin (run #147): the
     // membership + chat-closed checks used to run as independent statements
     // beside the INSERT, so a match could flip terminal between the check and
