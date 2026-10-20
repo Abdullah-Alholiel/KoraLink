@@ -2,11 +2,18 @@ import { WsException } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
 import { AppGateway } from './app.gateway';
 import { WsRateLimitService } from './rate-limit.service';
-import { users } from '../../database/schema';
+import { users, matches } from '../../database/schema';
 
 /** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
 const MATCH_ID = '11111111-1111-4111-8111-111111111111';
 const CONV_ID = '22222222-2222-4222-8222-222222222222';
+
+/** Live future match row — the P2-220-twin tx reads it FOR UPDATE (chat open). */
+const LIVE_MATCH = {
+  status: 'Open',
+  scheduled_at: new Date(Date.now() + 3_600_000),
+  duration_mins: 90,
+};
 
 /** The gateway's augmented socket type is not exported — reconstruct it. */
 type AuthSocket = Socket & { userId?: string; role?: string };
@@ -33,6 +40,11 @@ function makeGatewayWithLimiter(rl: WsRateLimitService): AppGateway {
     // member of this match.'). The P1-42 guards run BEFORE the gate, so
     // "reached membership" still proves the guards passed.
     {
+      // P2-220-twin (run #147): handleMessage now runs its membership +
+      // chat-closed checks inside db.transaction — the tx callback shares
+      // this routed chain. `matches` resolves a LIVE match (chat open) so
+      // the guard falls through to the EMPTY match_players roster and still
+      // rejects with the membership error the assertions expect.
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
@@ -40,11 +52,35 @@ function makeGatewayWithLimiter(rl: WsRateLimitService): AppGateway {
               Promise.resolve(
                 table === users
                   ? [{ banned_at: null, suspended_until: null, deleted_at: null }]
-                  : [],
+                  : table === matches
+                    ? [LIVE_MATCH]
+                    : [],
+              ),
+            for: () =>
+              Promise.resolve(
+                table === matches ? [LIVE_MATCH] : [],
               ),
           }),
         }),
       }),
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          select: () => ({
+            from: (table: unknown) => ({
+              where: () => ({
+                limit: () =>
+                  Promise.resolve(
+                    table === users
+                      ? [{ banned_at: null, suspended_until: null, deleted_at: null }]
+                      : table === matches
+                        ? [LIVE_MATCH]
+                        : [],
+                  ),
+                for: () => Promise.resolve(table === matches ? [LIVE_MATCH] : []),
+              }),
+            }),
+          }),
+        }),
     } as never,
     {} as never,
     {} as never,

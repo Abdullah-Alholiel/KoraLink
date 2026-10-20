@@ -381,6 +381,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // Narrowed once for use inside the tx callback (TS drops property
+    // narrowing across async closure boundaries).
+    const userId: string = client.userId;
     if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
@@ -401,6 +404,52 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
+    // P2-172 reconcile pre-read (run #148, PR-Agent review follow-up on the
+    // P2-220-twin): checked BEFORE the rate limiter so a retried send whose
+    // clientMessageId was already accepted returns the ORIGINAL row even if
+    // the match has since gone terminal or the replay storm exhausted the
+    // bucket — the message WAS accepted when sent, so reconciliation is a
+    // read, not a send, and must never surface as chat-closed or rate-limited
+    // (either would flip a delivered bubble to failed in the offline queue).
+    // Same order as the REST path (matches.service.ts: idempotency pre-read
+    // → tx → guard → insert). A miss falls through to the limiter, so spam
+    // stays bounded; the miss lookup is one indexed point SELECT from an
+    // authenticated socket.
+    if (clientMessageId) {
+      const existing = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, data.matchId),
+          eq(match_messages.client_message_id, clientMessageId),
+        ),
+      });
+      if (existing) {
+        const [user] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, client.userId))
+          .limit(1);
+        const message = { ...existing, user };
+        // Reconcile ack goes ONLY to the sender's socket (PR-Agent run #148
+        // IMPORTANT): everyone else already received this message on first
+        // delivery, so a room-wide re-broadcast is a pure amplification
+        // surface — an authenticated member flooding send-message with an
+        // accepted clientMessageId would fan every emit to the whole room
+        // with no rate limit. Sender-scoped, a flood only echoes to the
+        // attacker's own socket; the P2-172 offline queue reconciles off
+        // this sender-side ack (its own echoed sends still broadcast).
+        client.emit('new-message', message);
+        // No not-viewing fan-out here (bell + web push): the ORIGINAL send
+        // already announced this message; re-fanning would double-notify.
+        return;
+      }
+    }
+
     // P1-42 (run #36) + run #78: per-socket bucket AND a per-user cross-socket
     // bucket — reconnecting no longer refills the budget.
     const rl = this.rateLimit.consume(`msg:${client.id}`, client.userId);
@@ -408,75 +457,86 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
 
-    // Only match members may post to the lobby.
-    const [membership] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        and(
-          eq(match_players.match_id, data.matchId),
-          eq(match_players.user_id, client.userId),
-        ),
-      )
-      .limit(1);
+    // Only match members may post to the lobby. P2-220-twin (run #147): the
+    // membership + chat-closed checks used to run as independent statements
+    // beside the INSERT, so a match could flip terminal between the check and
+    // the write and one WS message landed in a just-closed chat. Everything
+    // below shares ONE transaction with a `SELECT … FOR UPDATE` on the match
+    // row — the same serialization the REST sendMessage path has used since
+    // P2-220 (run #146, matches.service.ts) — so the state the predicate reads
+    // is the state the INSERT writes under. Also fixes a latent WS bug: an
+    // unknown matchId used to skip the closed-chat guard and die on the FK as
+    // a raw server error; it now rejects with a clean not-found message.
+    const txResult = await this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({
+          status: schema.matches.status,
+          scheduled_at: schema.matches.scheduled_at,
+          duration_mins: schema.matches.duration_mins,
+        })
+        .from(schema.matches)
+        .where(eq(schema.matches.id, data.matchId))
+        .for('update');
+      if (!locked) {
+        throw new WsException(`Match ${data.matchId} not found.`);
+      }
 
-    if (!membership) throw new WsException('You are not a member of this match.');
+      const [membership] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          and(
+            eq(match_players.match_id, data.matchId),
+            eq(match_players.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!membership) throw new WsException('You are not a member of this match.');
 
-    // P2-111 (run #81): terminal/expired matches stop accepting lobby
-    // messages — same shared predicate as the REST sendMessage path.
-    const [chatMatch] = await this.db
-      .select({
-        status: schema.matches.status,
-        scheduled_at: schema.matches.scheduled_at,
-        duration_mins: schema.matches.duration_mins,
-      })
-      .from(schema.matches)
-      .where(eq(schema.matches.id, data.matchId))
-      .limit(1);
-    if (chatMatch && isChatClosed(chatMatch)) {
-      const err = new WsException(
-        'This match has ended — the lobby chat is closed.',
-      ) as WsException & { code?: string };
-      err.code = CHAT_CLOSED_ERROR_CODE;
-      throw err;
-    }
+      // P2-111 (run #81): terminal/expired matches stop accepting lobby
+      // messages — shared predicate with the REST sendMessage path, now
+      // evaluated against the LOCKED row.
+      if (isChatClosed(locked)) {
+        const err = new WsException(
+          'This match has ended — the lobby chat is closed.',
+        ) as WsException & { code?: string };
+        err.code = CHAT_CLOSED_ERROR_CODE;
+        throw err;
+      }
 
-    // Idempotency — a retried send with the same clientMessageId returns the
-    // already-persisted message instead of inserting a duplicate.
-    let messageRow: typeof match_messages.$inferSelect | undefined;
-    if (clientMessageId) {
-      messageRow = await this.db.query.match_messages.findFirst({
-        where: and(
-          eq(match_messages.user_id, client.userId),
-          eq(match_messages.match_id, data.matchId),
-          eq(match_messages.client_message_id, clientMessageId),
-        ),
-      });
-    }
-
-    if (!messageRow) {
-      const [insertedMessage] = await this.db
+      // Concurrent retry won the unique-index race
+      // (match_messages_client_msg_uidx) while we were between the pre-read
+      // and the INSERT. With a clientMessageId: return the sentinel so the
+      // winner re-read below reconciles to the original row (P2-172 contract).
+      // WITHOUT one there is nothing to reconcile — reject cleanly instead of
+      // emitting a garbage `{...undefined}` payload (REST-side 409 parity).
+      const [insertedMessage] = await tx
         .insert(match_messages)
         .values({
           match_id: data.matchId,
-          user_id: client.userId,
+          user_id: userId,
           content,
           client_message_id: clientMessageId,
         })
         .onConflictDoNothing()
         .returning();
-      messageRow = insertedMessage;
-      // Concurrent retry won the race (unique index match_messages_client_msg_uidx):
-      // re-read the winner's row instead of raising a unique-violation 500.
-      if (!messageRow && clientMessageId) {
-        messageRow = await this.db.query.match_messages.findFirst({
-          where: and(
-            eq(match_messages.user_id, client.userId),
-            eq(match_messages.match_id, data.matchId),
-            eq(match_messages.client_message_id, clientMessageId),
-          ),
-        });
-      }
+      return { insertedMessage };
+    });
+
+    let messageRow: typeof match_messages.$inferSelect | undefined =
+      txResult.insertedMessage;
+
+    if (!messageRow && clientMessageId) {
+      messageRow = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, data.matchId),
+          eq(match_messages.client_message_id, clientMessageId),
+        ),
+      });
+    }
+    if (!messageRow) {
+      throw new WsException('Message send conflicted; retry.');
     }
 
     const [user] = await this.db
