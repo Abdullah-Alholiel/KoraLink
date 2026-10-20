@@ -1,25 +1,24 @@
 {
-  "last_run": 148,
-  "last_run_report": "kanban/RUNS/2026-10-20T01-16Z-run148.md",
+  "last_run": 149,
+  "last_run_report": "kanban/RUNS/2026-10-20T10-16Z-run149.md",
   "last_run_commits": [
-    "16bb61e",
-    "e1ad78b"
+    "022327c",
+    "6467b92",
+    "f9c20a7"
   ],
   "in_review_items": [
     {
-      "id": "P2-220",
-      "claim": "FULLY DONE: WS twin merged (PR #152 squash 16bb61e) after 3 PR-Agent follow-up fixes (reconcile-before-guard 7190997, pre-read before limiter db1c878, sender-scoped ack 66208e6); LIVE WS E2E verified on rebuilt+restarted API (unknown-match send-message -> clean not-found WsException); jest 1076/1076, turbo 3/3",
-      "verify": "next run: spot-check the P2-220 board row status cell says DONE with 16bb61e; optional re-probe of the live WS path only if gateway files changed since 66208e6"
+      "id": "P2-227",
+      "claim": "DONE: DM send serialization merged (PR #154 squash 022327c on staging) — conversations.service sendMessage in ONE tx with conversation-row FOR UPDATE; unknown conv 404; WS send-dm P2-172 pre-read before limiter (sender-scoped ack). Gates: jest 1080/1080, vitest 992/992, tsc 0x2, turbo 3/3. LIVE E2E on rebuilt+restarted API: REST unknown conv → 404 {\"message\":\"Conversation not found.\"}; idempotent double send-dm → exactly 1 personal_messages row per clientMessageId (live PG check) + reconcile ack received; API /health 200 post-restart. Next run: spot-check a DM send in the PWA."
     },
     {
-      "id": "P2-224",
-      "claim": "DM offline queue merged (PR #153 squash e1ad78b): parallel lib/offline-dm-queue.ts + hook wiring + queued badge/toast UI + hydration gate 028fca6; vitest 987/987 (new 8-spec suite), tsc 0, turbo 3/3; PR-Agent review clean on fix head",
-      "verify": "next run: (a) board row status cell DONE; (b) spot-check one user-facing flow: messages/[id] page renders queued clock marker + toast keys exist EN+AR (messages.queuedOffline en:866/ar:866); (c) confirm P2-226 row exists (terminal-error retirement follow-up)"
+      "id": "P2-225",
+      "claim": "DONE: DM typing indicator merged (same PR #154 022327c) — conv-typing WS relay (gate → convtyping bucket → participant proof → client.to), PWA typingUserIds + throttled emitTyping (2.5s/4s), DM page pill reusing chatSheet.typingOne/typingMany (zero new i18n keys). LIVE E2E: participant typing → no exception; non-participant random conv → clean WsException. Next run: eyeball the pill on the messages page (two browsers or ask Abdullah)."
     }
   ],
   "open_blockers": [
-    "P1-52 ESCALATED (run #148): prod Neon quota 1C fired 4 FRESH events (Oct 19 10/15/20:00Z + Oct 20 00:00Z, exact 5h purge-window cadence); issue count 11/24h. TOP infra risk. Owner: console.neon.tech -> solitary-thunder-20087776 billing/usage -> upgrade or free CU-hrs.",
-    "P2-208 (run #148): queue FIVE #136/#140/#141/#145/#147 all repo-green 5/5, every head still carries bare Vercel: failure (kora-link). No escapes this window (#152/#153 were the escaped ones, both merged). Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
+    "P1-52 ESCALATED (runs #148+149): 1C fired again Oct 20 10:00Z (15 min before run #149 start) + NEW companion issue 1F (push_subscriptions 03:07Z sweep delete failed with the SAME Neon quota error, 2nd event) — the purge window is now failing in two places. Owner: console.neon.tech → solitary-thunder-20087776 → billing/usage → upgrade or free CU-hrs.",
+    "P2-208 (run #149): queue FIVE #136/#140/#141/#145/#147 — every head STILL carries bare Vercel=failure (commit-status API re-check); no escapes this window. PR #154 head ESCAPED (6th consecutive) and merged clean. Abdullah: fix/disconnect kora-link in vercel.com/abdullah-alholaiels-projects.",
     "P2-51: Render demo deploy-before-migrate drift — repo half done (PR #104); dashboard migrate-hook toggle = owner-only. Blocks promote-PR assembly; promote merge itself owner-only.",
     "P2-47: admin cancel-purge vs restore-on-behalf — still needs Abdullah decision.",
     "P1-38+P2-50 upload pipeline — still needs Abdullah decision (one decision covers both).",
@@ -50,5 +49,5 @@
     "SENTRY WATCH (run #148): 1C ESCALATED (4 fresh, 5h cadence). CORS noise B silent since Oct 13 (PR #139 drop holding). Everything else stale."
   ],
   "consecutive_skip_count": 0,
-  "notes": "Run #147 (2026-10-19 15:17Z, DB&Infra rotation): P2-220 WS twin BUILT — PR #152 (lane/run147-p2-220-ws, c2a1e32+ad3b35b): app.gateway handleMessage now ONE tx with match-row FOR UPDATE (mirror of REST 5367063); unknown matchId -> clean not-found (was FK crash); no-key idempotency race -> clean conflict (was garbage emit); with-key reconcile preserved (P2-172). Gates: jest 1075/1075 (+5 race specs), tsc 0, turbo 3/3, vitest 979/979. Reviewer A 'sound', both follow-ups fixed same run; Reviewer B verified all 4 run-#146 claims (live 404 probe). PR #152 LEFT OPEN: repo checks starved in GH runner queue >35 min (gate/fresh-apply/semgrep/review queued; GitGuardian+Vercel green; kora-link status ABSENT on head ad3b35b = 5th escape) — NEXT RUN: reconcile head status, verify PR-Agent review body, squash, live WS probe, rebuild+restart API. P1-52 RE-OPENED: prod Neon quota 1C fired 9 events/24h (latest 15:00Z, hourly cadence, release 2307a2a) — OWNER: Neon billing/quota check (same fix as run #76); prod /health still 200. New rows P2-224 (DM offline queue — Reviewer B IMPORTANT, next PWA lane) + P2-225 (DM typing). Queue FIVE unchanged (all heads still Vercel:failure). Hex clean (10/10 flat). E2E recipe: staging CORS rejects localhost:10000 — use tailscale PWA origin on probes. Claude lane skipped (logged out, 4th run). Strix not due (Nov 1-3)."
+  "notes": "Run #147 (2026-10-19 15:17Z, DB&Infra rotation): P2-220 WS twin BUILT — PR #152 (lane/run147-p2-220-ws, c2a1e32+ad3b35b): app.gateway handleMessage now ONE tx with match-row FOR UPDATE (mirror of REST 5367063); unknown matchId -> clean not-found (was FK crash); no-key idempotency race -> clean conflict (was garbage emit); with-key reconcile preserved (P2-172). Gates: jest 1075/1075 (+5 race specs), tsc 0, turbo 3/3, vitest 979/979. Reviewer A 'sound', both follow-ups fixed same run; Reviewer B verified all 4 run-#146 claims (live 404 probe). PR #152 LEFT OPEN: repo checks starved in GH runner queue >35 min (gate/fresh-apply/semgrep/review queued; GitGuardian+Vercel green; kora-link status ABSENT on head ad3b35b = 5th escape) — NEXT RUN: reconcile head status, verify PR-Agent review body, squash, live WS probe, rebuild+restart API. P1-52 RE-OPENED: prod Neon quota 1C fired 9 events/24h (latest 15:00Z, hourly cadence, release 2307a2a) — OWNER: Neon billing/quota check (same fix as run #76); prod /health still 200. New rows P2-224 (DM offline queue — Reviewer B IMPORTANT, next PWA lane) + P2-225 (DM typing). Queue FIVE unchanged (all heads still Vercel:failure). Hex clean (10/10 flat). E2E recipe: staging CORS rejects localhost:10000 — use tailscale PWA origin on probes. Claude lane skipped (logged out, 4th run). Strix not due (Nov 1-3).\nRun #149: P2-227+P2-225 DONE via PR #154 (022327c) — DM sends serialized + DM typing live; hex baseline 281 (P2-227 404 folded in, P2-223 shape); CI caught blocks-spec tx stub (run FULL jest locally before pushing — new pitfall); Reviewer B push-delivery P1 REFUTED (sendPushToUsers at conversations.service.ts:410 + app.gateway.ts:601; real gap = P1-66 VAPID, PR #136 open); new rows P2-228 (PaymentSheet error copy) + P2-229 (host page error state); PR-Agent persistent-review UPDATES the same comment (check createdAt, not count)."
 }
