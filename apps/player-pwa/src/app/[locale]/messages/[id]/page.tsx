@@ -77,6 +77,9 @@ export default function ConversationPage({
     retryMessage,
     refetch,
     queuedToast,
+    // P2-225 (run #149): DM typing indicator.
+    typingUserIds,
+    emitTyping,
   } = useConversationMessages(id);
   const isOnline = useOnlineStatus();
 
@@ -126,6 +129,13 @@ export default function ConversationPage({
     if (!content) return;
     sendMessage.mutate({ content, clientMessageId: uuid() });
     setDraft('');
+  };
+
+  // P2-225: every keystroke pokes the (throttled) typing emitter — the hook
+  // caps it at one WS emit per 2.5s; the server relays to the other user only.
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    emitTyping();
   };
 
   const handleRetry = (m: { clientMessageId?: string | null; content: string }) => {
@@ -334,13 +344,32 @@ export default function ConversationPage({
         </div>
 
         {/* Input row — same style as ChatSheet */}
-        <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
+        <div className="relative flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
+          {/* P2-225: typing indicator strip (above the input row, ChatSheet style). */}
+          {typingUserIds.size > 0 && (
+            <div
+              role="status"
+              className="absolute bottom-full left-0 right-0 px-4 pb-1 text-xs text-gray-500"
+            >
+              {typingUserIds.size === 1
+                ? t('chatSheet.typingOne', {
+                    name:
+                      typingUserIds.size === 1 &&
+                      otherParticipant?.id === [...typingUserIds][0]
+                        ? otherParticipant?.fullName ??
+                          otherParticipant?.handle ??
+                          t('chatSheet.typingPlayer')
+                        : t('chatSheet.typingPlayer'),
+                  })
+                : t('chatSheet.typingMany')}
+            </div>
+          )}
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
             <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
             <input
               type="text"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => handleDraftChange(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder={t('messages.typeMessage')}
               maxLength={2000}

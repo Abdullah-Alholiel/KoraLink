@@ -283,6 +283,14 @@ export function useConversationMessages(conversationId: string | null) {
   // cleared by emitting mark-read once the socket confirms delivery.
   const [unreadIncomingIds, setUnreadIncomingIds] = useState<Set<string>>(new Set());
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // P2-225 (run #149): DM typing indicator — mirrors useMatchChat (P2-99).
+  // Stateless: the peer's client re-emits every ~2.5s while typing; receivers
+  // expire the signal after 4s of silence. WS-only, no REST fallback.
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastTypingSentRef = useRef(0);
+  const TYPING_EMIT_INTERVAL_MS = 2_500;
+  const TYPING_EXPIRE_MS = 4_000;
   // P2-224: fired when a send parks in the offline queue — the page shows the
   // queued-confirmation toast (same affordance as ChatSheet's P2-172 toast).
   const [queuedToast, setQueuedToast] = useState(false);
@@ -389,19 +397,54 @@ export function useConversationMessages(conversationId: string | null) {
     };
     const offNewDm = rt.on('new-dm', onNewDm);
 
+    // P2-225: peer typing signals — add the userId, re-arm the 4s expiry on
+    // every signal, ignore the own-user echo (server skips the sender;
+    // belt+braces) and unknown payloads.
+    const onConvTyping = (payload: { userId?: string }) => {
+      const userId = payload?.userId;
+      if (!userId || userId === currentUser?.id) return;
+      setTypingUserIds((prev) => {
+        if (prev.has(userId)) return prev;
+        const next = new Set(prev);
+        next.add(userId);
+        return next;
+      });
+      const existing = typingTimersRef.current.get(userId);
+      if (existing) clearTimeout(existing);
+      typingTimersRef.current.set(
+        userId,
+        setTimeout(() => {
+          typingTimersRef.current.delete(userId);
+          setTypingUserIds((prev) => {
+            if (!prev.has(userId)) return prev;
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }, TYPING_EXPIRE_MS),
+      );
+    };
+    const offConvTyping = rt.on('conv-typing', onConvTyping);
+
     // NOTE: no manual 'join-conversation' emit here — joinRoom() above already
     // emits it (first ref) and socket.io buffers it until the socket connects.
     // A second emit double-fires the server's markRead-on-join (Slice 2 review).
 
     return () => {
       offNewDm();
+      offConvTyping();
       rt.leaveRoom('conversation', conversationId);
       rt.disconnect();
       setLocalMessages([]);
+      // P2-225: clear all typing expiry timers + state on unmount/switch
+      // (no setState-after-unmount; a new thread starts signal-free).
+      typingTimersRef.current.forEach(clearTimeout);
+      typingTimersRef.current.clear();
+      setTypingUserIds(new Set());
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
     };
-  }, [conversationId, reconcile, rt]);
+  }, [conversationId, reconcile, rt, currentUser?.id]);
 
   const sendMessage = useMutation<
     PersonalMessage | undefined,
@@ -667,6 +710,20 @@ export function useConversationMessages(conversationId: string | null) {
     startOfflineDmQueueWatcher();
   }, []);
 
+  // ── Typing emitter (P2-225) ────────────────────────────────────────────────
+  // Throttled: at most one WS emit per 2.5s while the user keeps typing. The
+  // server relays to everyone except the typer; receivers expire the signal
+  // after 4s of silence. WS-only: typing is ephemeral presence — silently
+  // dropped when offline. Sent even before history resolves (typing is
+  // presence, not data).
+  const emitTyping = useCallback(() => {
+    if (!rt.isConnected() || !conversationId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_EMIT_INTERVAL_MS) return;
+    lastTypingSentRef.current = now;
+    rt.emit('conv-typing', { conversationId });
+  }, [conversationId, rt]);
+
   const messages = mergePersonalMessages(historyQuery.data ?? [], [
     ...localMessages,
     ...queuedForConversation,
@@ -684,5 +741,8 @@ export function useConversationMessages(conversationId: string | null) {
       conversationId && currentUserId
         ? getOfflineDmQueueCount(conversationId, currentUserId)
         : 0,
+    // P2-225 typing surface: peer userIds typing now + throttled emit fn.
+    typingUserIds,
+    emitTyping,
   };
 }

@@ -17,7 +17,7 @@ import { Inject } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { match_players, match_messages, users } from '../../database/schema';
+import { match_players, match_messages, personal_messages, users } from '../../database/schema';
 import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from '../matches/chat-status.predicate';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -658,6 +658,49 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .emit('typing', { matchId: data.matchId, userId: client.userId });
   }
 
+  // ── DM typing indicator (P2-225, run #149) ────────────────────────────────
+
+  /**
+   * Relays "user is typing" to a personal conversation room (`conv:<id>`).
+   * Mirrors the match-lobby `typing` handler (P2-99): deliberately stateless —
+   * no DB write, no persistence; the client re-emits every ~2.5s while typing
+   * and receivers expire the signal after ~4s of silence.
+   *
+   * Guard chain (ws-gate-coverage tripwire + P2-74 proportionality): the
+   * moderation gate FIRST, then an independent typing bucket (never consumes
+   * the dm/msg budget), then a PARTICIPANT proof — a socket that never joined
+   * `conv:<id>` could otherwise target any room it can name.
+   */
+  @SubscribeMessage('conv-typing')
+  async handleConvTyping(
+    @MessageBody() data: { conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    await this.requireActiveUser(client.userId);
+
+    // Independent bucket — typing bursts must never consume the dm/msg budgets.
+    const rl = this.rateLimit.consume(`convtyping:${client.id}`, client.userId);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
+
+    const isParticipant = await this.conversationsService.isParticipant(
+      client.userId,
+      data.conversationId,
+    );
+    if (!isParticipant) {
+      throw new WsException('You are not a participant in this conversation.');
+    }
+
+    // Everyone in the conversation EXCEPT the typer (client.to semantics).
+    client
+      .to(`conv:${data.conversationId}`)
+      .emit('conv-typing', { conversationId: data.conversationId, userId: client.userId });
+  }
+
   // ── Join a conversation (DM room) ────────────────────────────────────────
 
   @SubscribeMessage('join-conversation')
@@ -765,6 +808,43 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // REST DTO parity: same 2000-char cap the conversations REST endpoint enforces.
     if (content.length > WS_MESSAGE_MAX_LENGTH) {
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
+    }
+
+    // P2-227 (run #149): P2-172 reconcile pre-read BEFORE the rate limiter —
+    // same contract as send-message (run #148): a retried DM whose
+    // clientMessageId was already accepted returns the ORIGINAL row even if a
+    // replay storm exhausted the bucket — reconcile is a read, not a send, and
+    // must never surface as "Rate limit exceeded" (that would flip a delivered
+    // bubble to failed in the P2-224 offline queue). A miss falls through to
+    // the limiter, so spam stays bounded; the miss lookup is one indexed point
+    // SELECT from an authenticated socket. `clientMessageId` here is the
+    // normalizeClientMessageId output above (length/type already validated).
+    if (clientMessageId) {
+      const existing = await this.db.query.personal_messages.findFirst({
+        where: and(
+          eq(personal_messages.sender_id, client.userId),
+          eq(personal_messages.conversation_id, data.conversationId),
+          eq(personal_messages.client_message_id, clientMessageId),
+        ),
+      });
+      if (existing) {
+        const [sender] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, client.userId))
+          .limit(1);
+        // Sender-scoped reconcile ack (PR-Agent run #148 rule): the room
+        // already received this message on first delivery — a room-wide
+        // re-broadcast would be a pure amplification surface.
+        client.emit('new-dm', { ...existing, sender });
+        // No activity/push fan-out here: the ORIGINAL send announced it.
+        return;
+      }
     }
 
     // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM

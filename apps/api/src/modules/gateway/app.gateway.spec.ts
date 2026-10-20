@@ -535,10 +535,15 @@ describe('AppGateway WS input hardening (run #78)', () => {
           }),
         }),
       };
-    // The tx callback must see the SAME surface as the outer db stub.
+    // The tx callback must see the SAME surface as the outer db stub. Run
+    // #149: `query.personal_messages` serves the send-dm P2-172 reconcile
+    // pre-read (always-empty here — reconcile tests live in the tx spec).
     const chain = {
       ...routedChain,
-      query: { match_messages: { findFirst: async () => undefined } },
+      query: {
+        match_messages: { findFirst: async () => undefined },
+        personal_messages: { findFirst: async () => undefined },
+      },
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
@@ -731,10 +736,12 @@ describe('AppGateway WS input hardening (run #78)', () => {
     await gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never);
     await gateway.handleDm({ conversationId: CONV_ID, content: 'hi' }, client as never);
     await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+    await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
     expect(consume.mock.calls).toEqual([
       ['msg:sock-1', 'u1'],
       ['dm:sock-1', 'u1'],
       ['typing:sock-1', 'u1'],
+      ['convtyping:sock-1', 'u1'],
     ]);
   });
 
