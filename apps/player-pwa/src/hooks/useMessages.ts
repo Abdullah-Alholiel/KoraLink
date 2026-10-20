@@ -36,6 +36,13 @@ export interface QueuedChatMessage {
   content: string;
   clientMessageId: string;
   queuedAt: string;
+  /**
+   * P2-226: set when the server PERMANENTLY rejected the send (4xx except
+   * 401/408/429/5xx — 401 is recoverable via re-auth). A retired entry is
+   * never re-POSTed by the flusher; it stays queued so the open sheet can
+   * render it as failed (tap-to-retry re-enqueues a fresh entry).
+   */
+  retiredAt?: string;
   /** Owner binding — entries replay ONLY under the session that authored them. */
   userId: string;
 }
@@ -129,6 +136,20 @@ function enqueueOfflineMessage(entry: QueuedChatMessage): boolean {
   return true;
 }
 
+/**
+ * P2-226 r2: mark an entry TERMINALLY failed (permanent 4xx rejection) —
+ * the flusher never re-POSTs it, but it stays queued so the open sheet
+ * can render it as failed and the badge keeps counting it (visible trace).
+ */
+function markChatRetired(clientMessageId: string): void {
+  readOfflineQueue();
+  const entry = offlineQueue.find((m) => m.clientMessageId === clientMessageId);
+  if (entry && !entry.retiredAt) {
+    entry.retiredAt = new Date().toISOString();
+    persistOfflineQueue();
+  }
+}
+
 /** Remove a delivered entry (any delivery path: REST response, WS echo, flush). */
 function discardOfflineMessage(clientMessageId: string): void {
   readOfflineQueue();
@@ -183,6 +204,10 @@ let flushing = false;
 function isTerminalChatSendError(err: unknown): boolean {
   if (!(err instanceof FetchError)) return false;
   const { status } = err;
+  // P2-226 r2 (PR-Agent #155): 401 is RECOVERABLE — the fetcher treats a 401
+  // on authed surfaces as an expired token and bounces to re-auth; retiring
+  // the message would permanently lose recoverable content.
+  if (status === 401) return false;
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
@@ -200,6 +225,7 @@ export async function flushOfflineQueue(): Promise<void> {
     for (const entry of [...readOfflineQueue()]) {
       if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
       if (entry.userId !== currentUserId) continue; // another account's message
+      if (entry.retiredAt) continue; // P2-226 r2: terminally failed — never replayed
       try {
         const delivered = await fetcher<MatchMessage | undefined>(
           `/matches/${entry.matchId}/messages`,
@@ -238,16 +264,16 @@ export async function flushOfflineQueue(): Promise<void> {
         trackEvent('chat_offline_queue_flushed');
       } catch (err) {
         if (isTerminalChatSendError(err)) {
-          // P2-226: permanently rejected (chat closed / forbidden) — RETIRE
-          // the entry so the watcher poll stops re-POSTing it every cycle
-          // until the TTL; open sheets flip the bubble to FAILED
-          // (tap-to-retry re-sends through the normal path).
-          discardOfflineMessage(entry.clientMessageId);
+          // P2-226 r2 (PR-Agent #155): RETAIN the entry with a retiredAt
+          // marker instead of discarding — the poll stops re-POSTing it, the
+          // badge keeps counting it (visible trace), and the open sheet
+          // renders it failed (tap-to-retry re-enqueues a fresh entry).
+          markChatRetired(entry.clientMessageId);
           for (const fn of flushListeners) fn(null, entry, true);
           continue;
         }
-        // Still failing transiently (server unreachable / 408 / 429 / 5xx) —
-        // leave queued, tell open sheets (bubble flips to FAILED +
+        // Still failing transiently (server unreachable / 401 / 408 / 429 /
+        // 5xx) — leave queued, tell open sheets (bubble flips to FAILED +
         // tap-to-retry), and CONTINUE: one failing entry must never
         // head-of-line-block healthy entries behind it (PR-Agent #149).
         // Each flush cycle attempts each entry once.
@@ -1004,7 +1030,7 @@ export function useMatchChat(
             avatar_url: currentUser?.avatarUrl ?? null,
           },
           client_message_id: q.clientMessageId,
-          status: 'queued' as const,
+          status: (q.retiredAt ? 'failed' : 'queued') as 'failed' | 'queued',
         }))
     : [];
   const messages = mergeMessages(
@@ -1031,7 +1057,7 @@ export function useMatchChat(
   matchIdRef.current = matchId;
   useEffect(
     () =>
-      registerOfflineFlushListener((message, failedEntry, terminal) => {
+      registerOfflineFlushListener((message, failedEntry) => {
         if (message) {
           setLocalMessages((prev) => {
             if (!message.client_message_id) return prev;
@@ -1054,41 +1080,18 @@ export function useMatchChat(
           return;
         }
         if (failedEntry) {
-          setLocalMessages((prev) => {
-            if (prev.some((m) => m.client_message_id === failedEntry.clientMessageId)) {
-              return prev.map((m) =>
-                m.client_message_id === failedEntry.clientMessageId
-                  ? { ...m, status: 'failed' }
-                  : m,
-              );
-            }
-            // P2-226: a RETIRED backfilled (previous-session) entry is gone
-            // from the queue, so queuedForMatch no longer renders it — append
-            // the failed bubble (this match only) so it never silently
-            // vanishes and stays tap-to-retry.
-            if (terminal && failedEntry.matchId === matchIdRef.current) {
-              const u = useAppStore.getState().user;
-              return [
-                ...prev,
-                {
-                  id: `flushed-${failedEntry.clientMessageId}`,
-                  match_id: failedEntry.matchId,
-                  user_id: failedEntry.userId,
-                  content: failedEntry.content,
-                  created_at: failedEntry.queuedAt,
-                  user: {
-                    id: failedEntry.userId,
-                    full_name: u?.fullName ?? null,
-                    handle: u?.handle ?? null,
-                    avatar_url: u?.avatarUrl ?? null,
-                  },
-                  client_message_id: failedEntry.clientMessageId,
-                  status: 'failed' as const,
-                },
-              ];
-            }
-            return prev;
-          });
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.client_message_id === failedEntry.clientMessageId
+                ? { ...m, status: 'failed' }
+                : m,
+            ),
+          );
+          // P2-226 r2: a RETIRED entry is NOT discarded — it stays queued,
+          // so entries that were never in localMessages (previous-session
+          // backfill) keep rendering through `queuedForMatch`, which now
+          // maps retired entries to `failed`. No silent vanishing, no
+          // double-render.
         }
       }),
     [],

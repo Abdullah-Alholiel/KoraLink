@@ -31,6 +31,13 @@ export interface QueuedDmMessage {
   content: string;
   clientMessageId: string;
   queuedAt: string;
+  /**
+   * P2-226: set when the server PERMANENTLY rejected the send (4xx except
+   * 401/408/429/5xx — 401 is recoverable via re-auth). A retired entry is
+   * never re-POSTed by the flusher; it stays queued so the open thread can
+   * render it as failed (tap-to-retry re-enqueues a fresh entry).
+   */
+  retiredAt?: string;
   /** Owner binding — entries replay ONLY under the session that authored them. */
   userId: string;
 }
@@ -115,6 +122,20 @@ export function enqueueOfflineDm(entry: QueuedDmMessage): boolean {
   return true;
 }
 
+/**
+ * P2-226 r2: mark an entry TERMINALLY failed (permanent 4xx rejection) —
+ * the flusher never re-POSTs it, but it stays queued so the open thread
+ * can render it as failed and the badge keeps counting it (visible trace).
+ */
+function markDmRetired(clientMessageId: string): void {
+  readOfflineDmQueue();
+  const entry = offlineDmQueue.find((m) => m.clientMessageId === clientMessageId);
+  if (entry && !entry.retiredAt) {
+    entry.retiredAt = new Date().toISOString();
+    persistOfflineDmQueue();
+  }
+}
+
 /** Remove a delivered entry (any delivery path: REST response, WS echo, flush). */
 export function discardOfflineDm(clientMessageId: string): void {
   readOfflineDmQueue();
@@ -187,6 +208,10 @@ let flushing = false;
 function isTerminalDmSendError(err: unknown): boolean {
   if (!(err instanceof FetchError)) return false;
   const { status } = err;
+  // P2-226 r2 (PR-Agent #155): 401 is RECOVERABLE — the fetcher treats a 401
+  // on authed surfaces as an expired token and bounces to re-auth; retiring
+  // the message would permanently lose recoverable content.
+  if (status === 401) return false;
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
@@ -204,6 +229,7 @@ export async function flushOfflineDmQueue(): Promise<void> {
     for (const entry of [...readOfflineDmQueue()]) {
       if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
       if (entry.userId !== currentUserId) continue; // another account's message
+      if (entry.retiredAt) continue; // P2-226 r2: terminally failed — never replayed
       try {
         await fetcher<{ id: string }>(`/conversations/${entry.conversationId}/messages`, {
           method: 'POST',
@@ -224,16 +250,16 @@ export async function flushOfflineDmQueue(): Promise<void> {
         trackEvent('dm_offline_queue_flushed');
       } catch (err) {
         if (isTerminalDmSendError(err)) {
-          // P2-226: permanently rejected (conversation gone / forbidden) —
-          // RETIRE the entry so the watcher poll stops re-POSTing it every
-          // cycle until the TTL; open threads flip the bubble to FAILED
-          // (tap-to-retry re-sends through the normal path).
-          discardOfflineDm(entry.clientMessageId);
+          // P2-226 r2 (PR-Agent #155): RETAIN the entry with a retiredAt
+          // marker instead of discarding — the poll stops re-POSTing it, the
+          // badge keeps counting it (visible trace), and the open thread
+          // renders it failed (tap-to-retry re-enqueues a fresh entry).
+          markDmRetired(entry.clientMessageId);
           for (const fn of dmFlushListeners) fn(null, entry, true);
           continue;
         }
-        // Still failing transiently (server unreachable / 408 / 429 / 5xx) —
-        // leave queued, tell open threads (bubble flips to FAILED +
+        // Still failing transiently (server unreachable / 401 / 408 / 429 /
+        // 5xx) — leave queued, tell open threads (bubble flips to FAILED +
         // tap-to-retry), and CONTINUE: one failing entry must never
         // head-of-line-block healthy entries behind it. Each flush cycle
         // attempts each entry once.

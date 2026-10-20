@@ -400,7 +400,7 @@ describe('offline DM queue — terminal-error retirement (P2-226)', () => {
   it.each([
     [404, 'conversation deleted'],
     [403, 'forbidden'],
-  ])('retires the entry on %i (%s) and never re-POSTs it on the next cycle', async (status) => {
+  ])('retires the entry on %i (%s): no re-POST, badge keeps counting (r2 retain)', async (status) => {
     parkEntry('cmid-term', 'doomed');
     rejectPostsWith(new FetchError('rejected', status, `/conversations/${CONV_ID}/messages`));
     const failures: Array<{ id: string; terminal?: boolean }> = [];
@@ -412,14 +412,36 @@ describe('offline DM queue — terminal-error retirement (P2-226)', () => {
       await flushOfflineDmQueue();
     });
     expect(postCount()).toBe(1);
-    expect(getOfflineDmQueueCount()).toBe(0);
+    // P2-226 r2: the entry is RETAINED (marked retiredAt) — the badge keeps
+    // counting it so a closed thread still shows the dead message.
+    expect(getOfflineDmQueueCount()).toBe(1);
     expect(failures).toEqual([{ id: 'cmid-term', terminal: true }]);
 
-    // Next watcher cycle: nothing left to replay.
+    // Next watcher cycle: the retired entry is NOT replayed.
     await act(async () => {
       await flushOfflineDmQueue();
     });
     expect(postCount()).toBe(1);
+  });
+
+  it('a 401 (expired token) stays TRANSIENT — the entry re-POSTs after re-auth', async () => {
+    parkEntry('cmid-401', 'recoverable');
+    rejectPostsWith(new FetchError('expired', 401, `/conversations/${CONV_ID}/messages`));
+    const failures: Array<{ id: string; terminal?: boolean }> = [];
+    offFlush = registerOfflineDmFlushListener((delivery, failedEntry, terminal) => {
+      if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+    });
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(getOfflineDmQueueCount()).toBe(1);
+    expect(failures).toEqual([{ id: 'cmid-401', terminal: undefined }]);
+
+    await act(async () => {
+      await flushOfflineDmQueue();
+    });
+    expect(postCount()).toBe(2); // NOT retired — retries next cycle
   });
 
   it.each([
@@ -468,6 +490,6 @@ describe('offline DM queue — terminal-error retirement (P2-226)', () => {
         result.current.messages.find((m) => m.clientMessageId === 'cmid-term-ui')?.status,
       ).toBe('failed'),
     );
-    expect(getOfflineDmQueueCount(CONV_ID, ME.id)).toBe(0);
+    expect(getOfflineDmQueueCount(CONV_ID, ME.id)).toBe(1); // r2: retained, not discarded
   });
 });

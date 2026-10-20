@@ -596,7 +596,7 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
     it.each([
       [404, 'chat gone'],
       [403, 'forbidden'],
-    ])('retires the entry on %i (%s) and never re-POSTs it on the next cycle', async (status) => {
+    ])('retires the entry on %i (%s): no re-POST, entry retained with failed render (r2)', async (status) => {
       parkChatEntry('cm-term', 'doomed');
       rejectPostsWith(new FetchError('rejected', status, '/matches/m1/messages'));
       const failures: Array<{ id: string; terminal?: boolean }> = [];
@@ -608,14 +608,38 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
         await flushOfflineQueue();
       });
       expect(sendPostCount()).toBe(1);
-      expect(storedQueue()).toEqual([]);
+      // P2-226 r2: RETAINED (marked retiredAt, never re-POSTed) — the badge
+      // keeps counting it and an open sheet renders it via queuedForMatch as
+      // `failed`.
+      expect(storedQueue()).toHaveLength(1);
+      expect((storedQueue()[0] as { retiredAt?: string }).retiredAt).toBeTruthy();
       expect(failures).toEqual([{ id: 'cm-term', terminal: true }]);
 
-      // Next watcher cycle: nothing left to replay.
+      // Next watcher cycle: the retired entry is NOT replayed.
       await act(async () => {
         await flushOfflineQueue();
       });
       expect(sendPostCount()).toBe(1);
+    });
+
+    it('a 401 (expired token) stays TRANSIENT — the entry re-POSTs after re-auth', async () => {
+      parkChatEntry('cm-401', 'recoverable');
+      rejectPostsWith(new FetchError('expired', 401, '/matches/m1/messages'));
+      const failures: Array<{ id: string; terminal?: boolean }> = [];
+      offFlush = registerOfflineFlushListener((message, failedEntry, terminal) => {
+        if (failedEntry) failures.push({ id: failedEntry.clientMessageId, terminal });
+      });
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(storedQueue()).toHaveLength(1);
+      expect(failures).toEqual([{ id: 'cm-401', terminal: undefined }]);
+
+      await act(async () => {
+        await flushOfflineQueue();
+      });
+      expect(sendPostCount()).toBe(2); // NOT retired — retries next cycle
     });
 
     it.each([
@@ -664,8 +688,10 @@ describe('offline chat-send queue (P2-172, run #144)', () => {
           result.current.messages.find((m) => m.client_message_id === 'cm-term-ui')?.status,
         ).toBe('failed'),
       );
-      expect(result.current.queuedCount).toBe(0);
-      expect(storedQueue()).toEqual([]);
+      // r2: the entry is RETAINED (badge keeps counting; renders as failed
+      // through queuedForMatch's retiredAt mapping).
+      expect(result.current.queuedCount).toBe(1);
+      expect((storedQueue()[0] as { retiredAt?: string }).retiredAt).toBeTruthy();
     });
   });
 });
