@@ -404,20 +404,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
-    // P1-42 (run #36) + run #78: per-socket bucket AND a per-user cross-socket
-    // bucket — reconnecting no longer refills the budget.
-    const rl = this.rateLimit.consume(`msg:${client.id}`, client.userId);
-    if (!rl.allowed) {
-      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
-    }
-
     // P2-172 reconcile pre-read (run #148, PR-Agent review follow-up on the
-    // P2-220-twin): checked BEFORE the tx so a retried send whose
+    // P2-220-twin): checked BEFORE the rate limiter so a retried send whose
     // clientMessageId was already accepted returns the ORIGINAL row even if
-    // the match has since gone terminal — the message WAS accepted when sent,
-    // so the offline-queue replay must reconcile, not surface chat-closed.
+    // the match has since gone terminal or the replay storm exhausted the
+    // bucket — the message WAS accepted when sent, so reconciliation is a
+    // read, not a send, and must never surface as chat-closed or rate-limited
+    // (either would flip a delivered bubble to failed in the offline queue).
     // Same order as the REST path (matches.service.ts: idempotency pre-read
-    // → tx → guard → insert).
+    // → tx → guard → insert). A miss falls through to the limiter, so spam
+    // stays bounded; the miss lookup is one indexed point SELECT from an
+    // authenticated socket.
     if (clientMessageId) {
       const existing = await this.db.query.match_messages.findFirst({
         where: and(
@@ -441,8 +438,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         this.server
           .to(`match:${data.matchId}`)
           .emit('new-message', message);
+        // No not-viewing fan-out here (bell + web push): the ORIGINAL send
+        // already announced this message; re-fanning would double-notify.
         return;
       }
+    }
+
+    // P1-42 (run #36) + run #78: per-socket bucket AND a per-user cross-socket
+    // bucket — reconnecting no longer refills the budget.
+    const rl = this.rateLimit.consume(`msg:${client.id}`, client.userId);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
 
     // Only match members may post to the lobby. P2-220-twin (run #147): the
