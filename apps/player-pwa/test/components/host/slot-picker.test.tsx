@@ -30,6 +30,10 @@ const { usePitchSlotsMock, queryClientMock } = vi.hoisted(() => ({
 
 vi.mock('@/hooks/usePitchSlots', () => ({
     usePitchSlots: usePitchSlotsMock,
+    PITCH_SLOTS_BASE_KEY: 'pitch-slots',
+    pitchSlotsQueryKey: (p: string | null, d: string | null) => [
+        'pitch-slots', p, d,
+    ],
 }));
 
 // The tap-revalidation hook (P2-234) reads the query client directly. Default

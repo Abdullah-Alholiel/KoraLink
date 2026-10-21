@@ -15,10 +15,10 @@
  *  - A background network refetch re-reads availability; a stale snapshot
  *    is corrected within ~a round-trip even when the user never taps.
  *  - If the tapped slot is gone/booked in the fresh data, the caller's
- *    clear callback fires (onSelectSlot(null) — which resets date/time in
- *    HostMatchForm and unmarks the row in RescheduleSheet) and `taken`
- *    flips true so the surface renders host.errorSlotTaken (§12: localized,
- *    in-surface, role="alert", retry stays available).
+ *    onTaken callback fires (onSelectSlot(null) — which resets date/time
+ *    in HostMatchForm and unmarks the row in RescheduleSheet) and `taken`
+ *    flips true so the surface renders host.errorSlotTaken (§12:
+ *    localized, in-surface, role="alert", retry stays available).
  *  - Every tap re-checks from a clean slate: the taken flag clears at the
  *    start of each tap, so re-tapping a slot that has since become free
  *    recovers (the pick stands and the flag stays down). Without a fresh
@@ -28,15 +28,7 @@
 
 import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { PitchSlotApi } from '@/hooks/usePitchSlots';
-
-/**
- * Query-key[0] of every pitch-slot query — the literal (NOT the
- * PITCH_SLOTS_BASE_KEY import: a value import from usePitchSlots would be
- * unresolvable inside vi.mock factories that stub @tanstack/react-query,
- * and any future key rename must stay in lockstep across all three files).
- */
-const PITCH_SLOTS_KEY_0 = 'pitch-slots';
+import { pitchSlotsQueryKey, type PitchSlotApi } from '@/hooks/usePitchSlots';
 
 export function useSlotTapRevalidate(
     pitchId: string | null,
@@ -69,15 +61,11 @@ export function useSlotTapRevalidate(
             // Every tap re-checks from a clean slate — a slot taken a
             // moment ago may be free again, so the stale flag must not
             // survive into a new decision.
-            if (taken) setTaken(false);
+            setTaken(false);
 
             // 0s-latest read: fire the network call first, then reconcile
             // against its result.
-            const key: [string, string | null, string | null] = [
-                PITCH_SLOTS_KEY_0,
-                pitchId,
-                date,
-            ];
+            const key = pitchSlotsQueryKey(pitchId, date);
             // dataUpdateCount only advances on a SUCCESSFUL data set — a
             // failed refetch keeps the previous data AND the old count, so
             // the count is what separates "fresh read landed" from "stale
@@ -111,10 +99,11 @@ export function useSlotTapRevalidate(
 
             opts.onSelect(slot);
         },
-        // opts is read inside but its identity changes every render — list
-        // only the fields the callback actually closes over.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [queryClient, pitchId, date, taken, checkSlot, opts.isCommitting],
+        // opts is a fresh object literal each render; keeping it in deps
+        // guarantees the callback never closes over a stale parent handler
+        // (PR-Agent r1, P2-234). handleSelect is a click handler, not an
+        // effect dep, so the per-render identity is free.
+        [queryClient, pitchId, date, opts, checkSlot],
     );
 
     // Stable identity — SlotPicker's day-change effect keys on this; an

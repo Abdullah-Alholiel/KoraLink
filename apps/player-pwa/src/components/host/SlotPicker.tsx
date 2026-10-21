@@ -25,7 +25,8 @@ import DatePicker from '@/components/matches/DatePicker';
 export interface SlotPickerProps {
     pitchId: string | null;
     selectedSlot: PitchSlotApi | null;
-    onSelectSlot: (slot: PitchSlotApi) => void;
+    /** Receives the picked slot, or null when a pick is cleared/reset. */
+    onSelectSlot: (slot: PitchSlotApi | null) => void;
 }
 
 export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: SlotPickerProps) {
@@ -57,7 +58,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
         effectiveKey,
         {
             onSelect: onSelectSlot,
-            onTaken: () => onSelectSlot(null as unknown as PitchSlotApi),
+            onTaken: () => onSelectSlot(null),
         },
     );
 
@@ -108,7 +109,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                     </div>
                     <button
                         type="button"
-                        onClick={() => onSelectSlot(null as unknown as PitchSlotApi)}
+                        onClick={() => onSelectSlot(null)}
                         className="text-xs text-brand-red font-medium active:scale-95 transition-transform"
                     >
                         {t('host.changeSlot')}

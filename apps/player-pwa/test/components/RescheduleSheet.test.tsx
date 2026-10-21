@@ -11,6 +11,10 @@ import { riyadhDateKey } from '@/lib/venue-hours';
 // Mock the slots hook — the sheet is a pure consumer of its 5 states.
 vi.mock('@/hooks/usePitchSlots', () => ({
   usePitchSlots: vi.fn(),
+  PITCH_SLOTS_BASE_KEY: 'pitch-slots',
+  pitchSlotsQueryKey: (p: string | null, d: string | null) => [
+    'pitch-slots', p, d,
+  ],
 }));
 
 // The tap-revalidation hook (P2-234) reads the query client directly. Default
