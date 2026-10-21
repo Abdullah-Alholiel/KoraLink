@@ -26,7 +26,7 @@
  *    confirm call remains the authoritative gate.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pitchSlotsQueryKey, type PitchSlotApi } from '@/hooks/usePitchSlots';
 
@@ -49,6 +49,13 @@ export function useSlotTapRevalidate(
     // newer tap would accuse the OLD slot and clear the NEW selection
     // (PR-Agent r2 MINOR, P2-234).
     const tapSeq = useRef(0);
+
+    // A pitch/day context change invalidates every in-flight continuation —
+    // the old day's refetch landing after a day switch must not accuse in
+    // the NEW day's context (PR-Agent r3 focus area, P2-234).
+    useEffect(() => {
+        tapSeq.current += 1;
+    }, [pitchId, date]);
 
     /** True when the slot the user tapped is no longer bookable. */
     const checkSlot = useCallback(
