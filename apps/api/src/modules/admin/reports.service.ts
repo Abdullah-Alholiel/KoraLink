@@ -172,7 +172,10 @@ export class AdminReportsService {
       await this.notifications.sendPushToUsers([reporter.id], {
         // P2-8 (run #24): localized per subscriber locale (key picks the text).
         key: dto.outcome === 'resolved' ? 'report_resolved' : 'report_dismissed',
-        data: { type: 'report-resolved' },
+        // P2-233 (run #151): carry the report id so the service worker can tag
+        // this notification uniquely — without it, two distinct report
+        // resolutions renotify-replaced each other (only the latest visible).
+        data: { type: 'report-resolved', reportId: before.id },
       });
     } catch {
       // best-effort — resolution already committed and audited

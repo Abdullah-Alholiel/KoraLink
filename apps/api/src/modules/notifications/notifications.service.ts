@@ -246,7 +246,7 @@ export class NotificationsService {
       | {
           title: string;
           body: string;
-          data: { type: string; matchId?: string; conversationId?: string };
+          data: { type: string; matchId?: string; conversationId?: string; reportId?: string };
           // P0-5 (run #28): the inline form now carries an optional
           // `category` so the per-category mute gate can drop a chat
           // push for a user who has muted `chat`. Omitting the field is
@@ -257,7 +257,7 @@ export class NotificationsService {
         }
       // P2-8 (run #24): semantic-key form — text is rendered per-subscription
       // from push-text.ts using the subscription's stored locale.
-      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string } },
+      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string; reportId?: string } },
   ): Promise<number> {
     if (!this.vapidConfigured || userIds.length === 0) {
       return 0;

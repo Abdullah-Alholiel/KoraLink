@@ -262,12 +262,26 @@ self.addEventListener('push', (event) => {
   )
     url = `/${locale}/match/${data.matchId}`;
 
+  // P2-233 (run #151): the tag must identify ONE notification, not one TYPE.
+  // A type-only tag renotify-replaced distinct same-type events (two different
+  // report resolutions showed as one). Priority: entity ids when present
+  // (same-entity re-stamps still replace — that dedupe is wanted), then a
+  // per-event unique tag for id-less types. The unique fallback also keeps
+  // `renotify: true` legal — it throws TypeError when tag is undefined.
+  const entityId = data.matchId ?? data.conversationId ?? data.reportId;
+  const uniqueSuffix = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tag = data.type
+    ? entityId
+      ? `${data.type}:${entityId}`
+      : `${data.type}:${uniqueSuffix}`
+    : uniqueSuffix;
+
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       icon: '/icons/icon-192x192.png',
       badge: '/icons/icon-192x192-maskable.png',
-      tag: data.type ? `${data.type}:${data.matchId ?? data.conversationId ?? ''}` : undefined,
+      tag,
       renotify: true,
       data: { ...data, url },
       // P2-8 (run #24): Arabic notifications render RTL, others auto.
