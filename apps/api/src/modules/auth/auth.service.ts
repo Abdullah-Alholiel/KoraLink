@@ -268,22 +268,44 @@ export class AuthService {
       throw new BadRequestException('Handle already taken.');
     }
 
-    const [updated] = await this.db
-      .update(users)
-      .set(withTimestamp(dto))
-      .where(eq(users.id, userId))
-      .returning({
-        id: users.id,
-        phone: users.phone,
-        full_name: users.full_name,
-        handle: users.handle,
-        avatar_url: users.avatar_url,
-        preferred_location: users.preferred_location,
-        preferred_position: users.preferred_position,
-        role: users.role,
-      });
+    // P2-238 (run #153, Reviewer A): the pre-check above is check-then-act
+    // against a UNIQUE column (users.handle). Two concurrent claims of the
+    // same handle: the loser 500s with a raw 23505. Catch the race the same
+    // way the other create paths do (conversations :111-131, email-otp
+    // :196-223): 23505 → re-select → clean 400 identical to the pre-check.
+    try {
+      const [updated] = await this.db
+        .update(users)
+        .set(withTimestamp(dto))
+        .where(eq(users.id, userId))
+        .returning({
+          id: users.id,
+          phone: users.phone,
+          full_name: users.full_name,
+          handle: users.handle,
+          avatar_url: users.avatar_url,
+          preferred_location: users.preferred_location,
+          preferred_position: users.preferred_position,
+          role: users.role,
+        });
 
-    return updated;
+      return updated;
+    } catch (err) {
+      const pgCode = (err as { code?: string; cause?: { code?: string } })?.code ??
+        (err as { cause?: { code?: string } })?.cause?.code;
+      if (pgCode !== '23505') throw err;
+      // Lost a handle race → verify it was really the handle (never another
+      // user's unique column) and return the SAME 400 the pre-check throws.
+      const [winner] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.handle, dto.handle))
+        .limit(1);
+      if (winner && winner.id !== userId) {
+        throw new BadRequestException('Handle already taken.');
+      }
+      throw err;
+    }
   }
 
   private generateOtp(): string {

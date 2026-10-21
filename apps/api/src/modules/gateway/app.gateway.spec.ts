@@ -35,7 +35,10 @@ function makeDb(rows: UserRow[]) {
   };
 }
 
-function makeGateway(dbRows: UserRow[], payload: { sub: string; role?: string }) {
+function makeGateway(
+  dbRows: UserRow[],
+  payload: { sub: string; role?: string; purpose?: string },
+) {
   const gateway = new AppGateway(
     makeDb(dbRows) as never,
     { verify: () => payload } as never,
@@ -126,6 +129,48 @@ describe('AppGateway.handleConnection — moderation enforcement', () => {
 
     expect(client.role).toBe('Player');
     expect(client.joined).toEqual(['user:u1']); // no 'ops'
+  });
+
+  it('rejects a spent restore-purpose token before any user lookup (P1-68, run #153)', async () => {
+    // A restore JWT that already restored its account: REST 403s it on every
+    // route (jwt-cookie.strategy replay guard); the WS handshake must refuse
+    // it just as strictly instead of opening a full 7-day session.
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null }],
+      { sub: 'u1', role: 'Player', purpose: 'restore' },
+    );
+    const client = makeClient();
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(disconnect).toHaveBeenCalledWith(true);
+    expect(client.userId).toBeUndefined();
+    expect(client.joined).toEqual([]);
+  });
+
+  it('rejects a restore-purpose token even when the DB row still looks deleted', async () => {
+    // Defense in depth: the purpose check fires before the deleted_at branch.
+    const gateway = makeGateway(
+      [
+        {
+          id: 'u1',
+          role: 'Player',
+          banned_at: null,
+          suspended_until: null,
+          deleted_at: new Date(),
+        },
+      ],
+      { sub: 'u1', role: 'Player', purpose: 'restore' },
+    );
+    const client = makeClient();
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(disconnect).toHaveBeenCalledWith(true);
+    expect(client.userId).toBeUndefined();
+    expect(client.joined).toEqual([]);
   });
 
   it('rejects a banned user before joining any room', async () => {

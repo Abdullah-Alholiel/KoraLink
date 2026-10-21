@@ -183,9 +183,25 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
       if (!token) throw new Error('No token');
 
-      const payload = this.jwt.verify<{ sub: string; role?: string }>(token, {
+      const payload = this.jwt.verify<{ sub: string; role?: string; purpose?: string }>(token, {
         secret: this.config.getOrThrow<string>('JWT_SECRET'),
       });
+
+      // P1-68 (run #153, Reviewer A): a `purpose:'restore'` JWT is a one-shot
+      // account-recovery credential, NOT a session token. REST rejects a spent
+      // restore token on every route (jwt-cookie.strategy.ts — "This restore
+      // token has already been used"), but this handshake only checked the
+      // signature + moderation state, so a restore token that had already
+      // restored its account (deleted_at NULL) opened a FULL socket session
+      // for up to 7 days — chat, DMs, and the ops room for a staff account.
+      // Mirror the REST replay guard: purpose tokens never open sockets.
+      if (payload.purpose === 'restore') {
+        this.logger.warn(
+          `WS connection rejected: restore token used as session (account ${payload.sub})`,
+        );
+        client.disconnect(true);
+        return;
+      }
 
       // Re-read the user row so moderation actions (ban/suspend) and role
       // changes apply IMMEDIATELY on the socket — a JWT can outlive them.
