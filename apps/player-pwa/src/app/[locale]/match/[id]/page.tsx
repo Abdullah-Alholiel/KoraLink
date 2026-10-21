@@ -1090,6 +1090,7 @@ export default function MatchDetailPage({
                 matchLocation={match.venueName}
                 matchId={match.id}
                 price={match.price}
+                currency={match.currency}
                 walletBalance={walletBalance}
                 isPlayerHosted={match.isPlayerHosted}
                 bookingMode={match.bookingMode}

@@ -18,6 +18,8 @@ interface PaymentSheetProps {
     matchLocation: string;
     matchId: string;
     price: number;
+    /** ISO currency code the match price is denominated in (default 'SAR'). */
+    currency?: string;
     walletBalance: number;
     /** Player-host responsibility: who operates this match (drives the notice). */
     isPlayerHosted?: boolean;
@@ -33,6 +35,7 @@ export default function PaymentSheet({
     matchLocation,
     matchId,
     price,
+    currency = 'SAR',
     walletBalance,
     isPlayerHosted,
     bookingMode,
@@ -47,7 +50,10 @@ export default function PaymentSheet({
     // Stable idempotency key per logical join+pay attempt. Slice 2: the key
     // rides the JOIN request — the server charges inside the join transaction
     // and replays return the original outcome (no double charge, no double seat).
-    // Only regenerates when the user explicitly re-opens the sheet.
+    // Regenerates on page remount (the component instance survives sheet
+    // close/reopen), which is safe: the server scopes the fee key per roster
+    // episode — `join:<episodeId>:<key>` (matches.service.ts) — and leaveMatch
+    // deletes the episode, so a leave→rejoin can never collide.
     const [idempotencyKey] = useState(() => uuid());
 
     const toPay = Math.max(0, price - walletBalance);
@@ -127,16 +133,16 @@ export default function PaymentSheet({
                 <div className="mx-5 mt-5 space-y-3">
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('payment.total')}</span>
-                        <span className="text-sm font-bold text-brand-black">SAR {price.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{currency} {price.toFixed(2)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('profile.wallet')}</span>
-                        <span className="text-sm font-bold text-brand-black">SAR {walletBalance.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{currency} {walletBalance.toFixed(2)}</span>
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div className="flex items-center justify-between">
                         <span className="text-base font-bold text-brand-black">{t('payment.total')}</span>
-                        <span className="text-xl font-extrabold text-brand-red">SAR {toPay.toFixed(2)}</span>
+                        <span className="text-xl font-extrabold text-brand-red">{currency} {toPay.toFixed(2)}</span>
                     </div>
                 </div>
 
@@ -231,7 +237,7 @@ export default function PaymentSheet({
                     ) : !canAfford ? (
                         t('payment.insufficientBalance')
                     ) : (
-                        <>{t('payment.payWithWallet')} SAR {price.toFixed(2)}</>
+                        <>{t('payment.payWithWallet')} {currency} {price.toFixed(2)}</>
                     )}
                 </button>
                 {joinError && (
