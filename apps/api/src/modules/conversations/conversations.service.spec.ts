@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { ConversationsService } from './conversations.service';
 import {
   conversations,
@@ -100,7 +101,7 @@ describe('ConversationsService.sendMessage — tx serialization (P2-227, run #14
       update: chain.update,
     };
 
-    const assertNotBlockedBetween = jest.fn(async () => {
+    const assertNotBlockedBetweenMany = jest.fn(async () => {
       if (opts.blocked) {
         throw new ForbiddenException({
           message: 'You can no longer message this user.',
@@ -118,13 +119,13 @@ describe('ConversationsService.sendMessage — tx serialization (P2-227, run #14
       activities as never,
       notifications as never,
       realtime as never,
-      { assertNotBlockedBetween } as never,
+      { assertNotBlockedBetweenMany } as never,
     );
-    return { service, db, chain, activities, notifications, realtime, assertNotBlockedBetween };
+    return { service, db, chain, activities, notifications, realtime, assertNotBlockedBetweenMany };
   }
 
   it('happy path: inserts inside the tx and returns the message with its sender', async () => {
-    const { service, chain, activities, assertNotBlockedBetween } = makeService({
+    const { service, chain, activities, assertNotBlockedBetweenMany } = makeService({
       inserted: [MESSAGE_ROW],
       others: [{ user_id: 'u2' }],
     });
@@ -134,10 +135,26 @@ describe('ConversationsService.sendMessage — tx serialization (P2-227, run #14
     expect(result.id).toBe('m1');
     expect(result.sender.id).toBe('u1');
     expect(chain.insert).toHaveBeenCalled();
-    // Block check ran inside the tx against the other participant.
-    expect(assertNotBlockedBetween).toHaveBeenCalledWith('u1', 'u2');
+    // Block check ran inside the tx against the other participant (P2-241:
+    // one set-based call carrying ALL other participant ids).
+    expect(assertNotBlockedBetweenMany).toHaveBeenCalledWith('u1', ['u2']);
     // Side effects fire exactly once after commit.
     expect(activities.record).toHaveBeenCalledTimes(1);
+  });
+
+  // P2-241: the block gate is set-based — one call, ALL other participant
+  // ids — so a future group conversation needs no loop and no N+1.
+  it('block gate is set-based: one call carries every other participant id (P2-241)', async () => {
+    const { service, chain, assertNotBlockedBetweenMany } = makeService({
+      inserted: [MESSAGE_ROW],
+      others: [{ user_id: 'u2' }, { user_id: 'u3' }, { user_id: 'u4' }],
+    });
+
+    await service.sendMessage('u1', 'c1', 'hello', 'cid-1');
+
+    expect(assertNotBlockedBetweenMany).toHaveBeenCalledTimes(1);
+    expect(assertNotBlockedBetweenMany).toHaveBeenCalledWith('u1', ['u2', 'u3', 'u4']);
+    expect(chain.insert).toHaveBeenCalled();
   });
 
   it('unknown conversation → NotFoundException before any membership/insert work', async () => {
@@ -217,5 +234,133 @@ describe('ConversationsService.sendMessage — tx serialization (P2-227, run #14
 
     expect(result.id).toBe('m1');
     expect(chain.query.personal_messages.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+// ── P2-241 (Reviewer A run #153): listMessages pagination determinism ──
+// Reference impl: listForUser (window-function total + id tiebreaker).
+// listMessages now matches: ONE query, COUNT(*) OVER() rides the page rows,
+// ORDER BY created_at DESC, id ASC.
+
+describe('ConversationsService.listMessages — pagination (P2-241)', () => {
+  const dialect = new PgDialect();
+
+  function makeRawDb(rows: unknown[]) {
+    const queries: string[] = [];
+    const db = {
+      execute: async (q: unknown) => {
+        queries.push(dialect.sqlToQuery(q as never).sql);
+        return rows;
+      },
+      // assertParticipant's membership probe rides the drizzle builder.
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ id: 'cp1' }],
+          }),
+        }),
+      }),
+    };
+    return { db, queries };
+  }
+
+  const base = {
+    id: 'm2',
+    conversation_id: 'c1',
+    content: 'hi',
+    created_at: new Date('2026-10-01T00:00:00Z'),
+    sender_id: 'u2',
+    sender_name: 'Sara',
+    sender_handle: 'sara',
+    sender_avatar: null,
+    total_count: 57,
+  };
+  // makeService's membership probe routes through select().from(conversation_participants)
+  const svcDeps = {
+    activities: { record: jest.fn(async () => undefined) },
+    notifications: { sendPushToUsers: jest.fn(async () => 0) },
+    realtime: { isUserOnline: jest.fn(() => true) },
+    blocks: { assertNotBlockedBetweenMany: jest.fn(async () => undefined) },
+  };
+
+  it('total comes from the window function on the page rows (no second COUNT query)', async () => {
+    const { db, queries } = makeRawDb([{ ...base }]);
+    const service = new ConversationsService(
+      db as never,
+      svcDeps.activities as never,
+      svcDeps.notifications as never,
+      svcDeps.realtime as never,
+      svcDeps.blocks as never,
+    );
+    const res = await service.listMessages('u1', 'c1', 1, 30);
+    expect(res.total).toBe(57);
+    expect(res.messages).toHaveLength(1);
+    expect(res.hasMore).toBe(true); // offset 0 + 1 row < 57
+    expect(queries).toHaveLength(1); // membership check is drizzle select; only ONE execute
+    expect(queries[0]).toContain('COUNT(*) OVER()');
+    expect(queries[0]).toContain('pm.id ASC');
+  });
+
+  it('rows are returned chronological ascending despite the DESC fetch', async () => {
+    const r1 = { ...base, id: 'm1', created_at: new Date('2026-10-01T00:00:00Z') };
+    const r2 = { ...base, id: 'm2', created_at: new Date('2026-10-01T00:01:00Z') };
+    const { db } = makeRawDb([r2, r1]); // DESC fetch order
+    const service = new ConversationsService(
+      db as never,
+      svcDeps.activities as never,
+      svcDeps.notifications as never,
+      svcDeps.realtime as never,
+      svcDeps.blocks as never,
+    );
+    const res = await service.listMessages('u1', 'c1');
+    expect(res.messages.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  it('empty page: total 0, hasMore false', async () => {
+    const { db } = makeRawDb([]);
+    const service = new ConversationsService(
+      db as never,
+      svcDeps.activities as never,
+      svcDeps.notifications as never,
+      svcDeps.realtime as never,
+      svcDeps.blocks as never,
+    );
+    const res = await service.listMessages('u1', 'c1', 5, 30);
+    expect(res.total).toBe(0);
+    expect(res.messages).toEqual([]);
+    expect(res.hasMore).toBe(false);
+  });
+
+  // PR-Agent r1 (PR #161): a beyond-end page returns no rows, so the window
+  // count never materializes. The service must fall back to one degenerate
+  // COUNT — total 0 is a lie for a conversation that still has messages.
+  it('beyond-end page: falls back to a degenerate COUNT and reports the true total (PR-Agent r1)', async () => {
+    const calls: string[] = [];
+    const db = {
+      execute: async (q: unknown) => {
+        calls.push(dialect.sqlToQuery(q as never).sql);
+        // call 1 = page query (no rows beyond the end), call 2 = fallback COUNT
+        return calls.length === 1 ? [] : [{ total: 57 }];
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ id: 'cp1' }],
+          }),
+        }),
+      }),
+    };
+    const service = new ConversationsService(
+      db as never,
+      svcDeps.activities as never,
+      svcDeps.notifications as never,
+      svcDeps.realtime as never,
+      svcDeps.blocks as never,
+    );
+    const res = await service.listMessages('u1', 'c1', 9, 30);
+    expect(calls).toHaveLength(2);
+    expect(res.total).toBe(57);
+    expect(res.messages).toEqual([]);
+    expect(res.hasMore).toBe(false);
   });
 });

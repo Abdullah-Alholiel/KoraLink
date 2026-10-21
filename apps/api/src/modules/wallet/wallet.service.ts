@@ -4,7 +4,7 @@ import {
   Inject,
   NotFoundException,
 } from '@nestjs/common';
-import { eq, and, desc, sql, count, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, gte, lte, getTableColumns } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -205,23 +205,23 @@ export class WalletService {
     );
 
     const skip = (page - 1) * perPage;
-    const [transactionsData, totalResult] = await Promise.all([
-      this.db
-        .select()
-        .from(transactions)
-        .where(predicate)
-        .orderBy(desc(transactions.created_at))
-        .offset(skip)
-        .limit(perPage),
-      this.db
-        .select({ total: count() })
-        .from(transactions)
-        .where(predicate),
-    ]);
 
-    const total = totalResult[0]?.total ?? 0;
+    // P2-241: single query with COUNT(*) OVER() (listForUser is the
+    // reference impl) instead of a second COUNT scan, plus `id ASC` as the
+    // deterministic tiebreaker so same-timestamp rows can never straddle a
+    // page boundary between fetches. The window count rides the page query,
+    // so total/hasMore still describe the exact filtered set.
+    const rows = await this.db
+      .select({ ...getTableColumns(transactions), total: sql<number>`COUNT(*) OVER()::int` })
+      .from(transactions)
+      .where(predicate)
+      .orderBy(desc(transactions.created_at), asc(transactions.id))
+      .offset(skip)
+      .limit(perPage);
+
+    const total = rows[0]?.total ?? 0;
     const hasMore = skip + perPage < total;
 
-    return { transactions: transactionsData, total, hasMore };
+    return { transactions: rows, total, hasMore };
   }
 }

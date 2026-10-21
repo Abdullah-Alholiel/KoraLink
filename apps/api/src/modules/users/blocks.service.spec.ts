@@ -36,9 +36,10 @@ function rowChain(rows: () => unknown[]) {
 
 function makeFakeDb(opts: { existingUsers: string[]; blocks?: BlockRow[] }) {
   const blocks: BlockRow[] = opts.blocks ?? [];
-  // The service always queries in the context of a (a, b) pair or a single
-  // user; `ctx` is set by the test helpers before each call.
-  const ctx: { a?: string; b?: string; either?: boolean; userId?: string } = {};
+  // The service always queries in the context of a (a, b) pair, a single
+  // user, or an (a, many[]) set; `ctx` is set by the test helpers before
+  // each call.
+  const ctx: { a?: string; b?: string; either?: boolean; userId?: string; many?: string[] } = {};
   let clock = Date.parse('2026-10-01T00:00:00Z');
 
   const db: any = {
@@ -53,6 +54,15 @@ function makeFakeDb(opts: { existingUsers: string[]; blocks?: BlockRow[] }) {
               return blocks
                 .filter((r) => r.blocker_id === ctx.userId)
                 .sort((x, y) => y.created_at.getTime() - x.created_at.getTime());
+            }
+            if (ctx.many) {
+              // assertNotBlockedBetweenMany: ANY-direction over the set —
+              // (sender → any other) OR (any other → sender).
+              return blocks.filter(
+                (r) =>
+                  (r.blocker_id === ctx.a && ctx.many!.includes(r.blocked_id)) ||
+                  (ctx.many!.includes(r.blocker_id) && r.blocked_id === ctx.a),
+              );
             }
             return blocks.filter(
               (r) =>
@@ -123,6 +133,9 @@ function makeBlocks(opts: { existingUsers: string[]; blocks?: BlockRow[] }) {
     list: (userId: string) => (reset(), Object.assign(ctx, { userId }), service.listBlocked(userId)),
     assertBetween: (a: string, b: string) => (
       reset(), Object.assign(ctx, { a, b, either: true }), service.assertNotBlockedBetween(a, b)
+    ),
+    assertBetweenMany: (a: string, others: string[]) => (
+      reset(), Object.assign(ctx, { a, many: others }), service.assertNotBlockedBetweenMany(a, others)
     ),
   };
 }
@@ -207,6 +220,42 @@ describe('BlocksService', () => {
       expect(body.message).toBe('You can no longer message this user.');
     }
   });
+
+  // ── P2-241: set-based block gate (sendMessage with multiple participants) ──
+
+  it('assertNotBlockedBetweenMany: sender blocked a participant → 403', async () => {
+    const h = makeBlocks({ existingUsers: ['u1', 'u2', 'u3', 'u4'] });
+    await h.block('u1', 'u3'); // sender blocked one of the others
+
+    const err = await h.assertBetweenMany('u1', ['u2', 'u3', 'u4']).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(((err as ForbiddenException).getResponse() as { code: string }).code).toBe(
+      BLOCKED_BY_RECIPIENT,
+    );
+  });
+
+  it('assertNotBlockedBetweenMany: a participant blocked the sender → 403 (reverse direction)', async () => {
+    const h = makeBlocks({ existingUsers: ['u1', 'u2', 'u3', 'u4'] });
+    await h.block('u4', 'u1'); // other blocked the sender
+
+    const err = await h.assertBetweenMany('u1', ['u2', 'u3', 'u4']).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+  });
+
+  it('assertNotBlockedBetweenMany: no blocks in the set → passes', async () => {
+    const h = makeBlocks({ existingUsers: ['u1', 'u2', 'u3', 'u9'] });
+    await h.block('u1', 'u9'); // block OUTSIDE the participant set
+
+    await expect(h.assertBetweenMany('u1', ['u2', 'u3'])).resolves.toBeUndefined();
+  });
+
+  it('assertNotBlockedBetweenMany: empty set → passes with no query', async () => {
+    const h = makeBlocks({ existingUsers: ['u1', 'u2'] });
+    await h.block('u1', 'u2');
+
+    // Even with blocks on record, an empty other-participant set is a no-op.
+    await expect(h.assertBetweenMany('u1', [])).resolves.toBeUndefined();
+  });
 });
 
 describe('ConversationsService.sendMessage × blocks (P1-53)', () => {
@@ -222,9 +271,11 @@ describe('ConversationsService.sendMessage × blocks (P1-53)', () => {
 
   function makeConversations() {
     const blocksHarness = makeBlocks({ existingUsers: ['u1', 'u2'] });
-    // Every sendMessage block check is u1 ↔ u2 in either direction.
+    // P2-241: sendMessage now uses the set-based block gate; route it through
+    // the same in-memory block rows so the 403 contract stays end-to-end.
     const blocksService = {
-      assertNotBlockedBetween: (a: string, b: string) => blocksHarness.assertBetween(a, b),
+      assertNotBlockedBetweenMany: (a: string, others: string[]) =>
+        blocksHarness.assertBetweenMany(a, others),
     };
 
     const simple = (rows: unknown[]) => rowChain(() => rows);

@@ -6,7 +6,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { and, eq, desc, or } from 'drizzle-orm';
+import { and, eq, desc, or, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users, user_blocks } from '../../database/schema';
@@ -112,6 +112,34 @@ export class BlocksService {
       )
       .limit(1);
     if (hit) {
+      throw new ForbiddenException({
+        message: 'You can no longer message this user.',
+        code: BLOCKED_BY_RECIPIENT,
+      });
+    }
+  }
+
+  /**
+   * P2-241 (Reviewer A run #153): set-based form of assertNotBlockedBetween —
+   * ONE query covers the sender against EVERY other participant, so the
+   * sendMessage block gate stops being an N-query loop inside the tx when
+   * group conversations land (1:1 today: identical verdict + 403 contract).
+   * The ANY-direction predicate mirrors the pairwise method exactly
+   * ((sender→other) OR (other→sender) for each other).
+   */
+  async assertNotBlockedBetweenMany(senderId: string, otherIds: string[]): Promise<void> {
+    if (otherIds.length === 0) return;
+    const hits = await this.db
+      .select({ blocker_id: user_blocks.blocker_id, blocked_id: user_blocks.blocked_id })
+      .from(user_blocks)
+      .where(
+        or(
+          and(eq(user_blocks.blocker_id, senderId), inArray(user_blocks.blocked_id, otherIds)),
+          and(inArray(user_blocks.blocker_id, otherIds), eq(user_blocks.blocked_id, senderId)),
+        ),
+      )
+      .limit(1);
+    if (hits.length > 0) {
       throw new ForbiddenException({
         message: 'You can no longer message this user.',
         code: BLOCKED_BY_RECIPIENT,

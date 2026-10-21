@@ -62,8 +62,12 @@ export class EmailAuthController {
   }
 
   // ── POST /auth/email/verify-otp ──────────────────────────────────────
+  // P2-241 (Reviewer A run #153): route-level cap — same 3/min/IP as the
+  // phone verify-otp and both send-otp routes (per-key fail lockout in
+  // OtpStoreService remains the primary defense).
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({
     summary: 'Verify email OTP and receive an HttpOnly session cookie',
   })

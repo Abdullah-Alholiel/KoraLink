@@ -231,23 +231,35 @@ export class ConversationsService {
         u.id AS sender_id,
         u.full_name AS sender_name,
         u.handle AS sender_handle,
-        u.avatar_url AS sender_avatar
+        u.avatar_url AS sender_avatar,
+        COUNT(*) OVER()::int AS total_count
       FROM ${personal_messages} pm
       INNER JOIN ${users} u ON u.id = pm.sender_id
       WHERE pm.conversation_id = ${conversationId}::text
-      ORDER BY pm.created_at DESC
+      ORDER BY pm.created_at DESC, pm.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `)) as unknown as RawMessageRow[];
 
-    const [count] = (await this.db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM ${personal_messages}
-      WHERE conversation_id = ${conversationId}::text
-    `)) as unknown as Array<{ total: number }>;
+    // P2-241: authoritative total from the window function (same shape as
+    // listForUser) — the separate COUNT query was a second full scan of the
+    // same rows. `pm.id` breaks same-timestamp ties so rows can never
+    // straddle a page boundary between fetches.
+    let total = rows[0]?.total_count ?? 0;
+    if (rows.length === 0) {
+      // PR-Agent r1 (PR #161): a beyond-end page (stale offset, pruned
+      // messages) returns no rows, so the window count never materializes —
+      // fall back to ONE degenerate COUNT instead of reporting total 0 for
+      // a conversation that still has messages (pre-change truthfulness).
+      const [c] = (await this.db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM ${personal_messages}
+        WHERE conversation_id = ${conversationId}::text
+      `)) as unknown as Array<{ total: number }>;
+      total = c?.total ?? 0;
+    }
 
     // Fetch DESC + reverse → chronological ascending for display.
     const messages = rows.reverse().map((r) => this.mapMessage(r));
-    const total = count?.total ?? 0;
 
     return { messages, total, hasMore: offset + messages.length < total };
   }
@@ -322,9 +334,11 @@ export class ConversationsService {
           ),
         );
       const othersIds = others.map((o) => o.user_id);
-      for (const other of others) {
-        await this.blocksService.assertNotBlockedBetween(userId, other.user_id);
-      }
+      // P2-241 (Reviewer A run #153): ONE set-based block check covering all
+      // other participants — was a per-participant await inside the loop
+      // (N queries in-tx; identical verdict and 403 contract at 1:1, but the
+      // loop would scale linearly if group conversations ever land).
+      await this.blocksService.assertNotBlockedBetweenMany(userId, othersIds);
 
       // Idempotency — a retried send with the same clientMessageId returns the
       // already-persisted message instead of inserting a duplicate.
@@ -533,4 +547,5 @@ interface RawMessageRow {
   sender_name: string | null;
   sender_handle: string | null;
   sender_avatar: string | null;
+  total_count?: number;
 }
