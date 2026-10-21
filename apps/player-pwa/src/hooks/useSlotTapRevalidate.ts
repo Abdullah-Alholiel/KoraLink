@@ -26,7 +26,7 @@
  *    confirm call remains the authoritative gate.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pitchSlotsQueryKey, type PitchSlotApi } from '@/hooks/usePitchSlots';
 
@@ -44,6 +44,11 @@ export function useSlotTapRevalidate(
 ) {
     const queryClient = useQueryClient();
     const [taken, setTaken] = useState(false);
+    // Supersession token: only the LATEST tap's continuation may reconcile.
+    // Without it, a previous tap's in-flight revalidation resolving after a
+    // newer tap would accuse the OLD slot and clear the NEW selection
+    // (PR-Agent r2 MINOR, P2-234).
+    const tapSeq = useRef(0);
 
     /** True when the slot the user tapped is no longer bookable. */
     const checkSlot = useCallback(
@@ -62,6 +67,8 @@ export function useSlotTapRevalidate(
             // moment ago may be free again, so the stale flag must not
             // survive into a new decision.
             setTaken(false);
+            // This tap supersedes any in-flight revalidation.
+            const seq = ++tapSeq.current;
 
             // 0s-latest read: fire the network call first, then reconcile
             // against its result.
@@ -76,6 +83,7 @@ export function useSlotTapRevalidate(
             void queryClient
                 .refetchQueries({ queryKey: key })
                 .then(() => {
+                    if (seq !== tapSeq.current) return; // superseded tap
                     const state =
                         queryClient.getQueryState<PitchSlotApi[]>(key);
                     if (!state || state.dataUpdateCount === countBefore) {

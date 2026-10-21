@@ -41,6 +41,7 @@ const FREE: PitchSlotApi = {
   booked_match_id: null,
 };
 const TAKEN: PitchSlotApi = { ...FREE, is_booked: true };
+const OTHER: PitchSlotApi = { ...FREE, id: 's2', start_time: '20:00:00' };
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -64,7 +65,7 @@ async function seedCache(queryClient: QueryClient, data: PitchSlotApi[]) {
 }
 
 function renderTapRevalidate(
-  wrapper: React.ComponentProps<typeof QueryClientProvider>['children'] extends never ? never : (props: { children: React.ReactNode }) => React.ReactNode,
+  wrapper: (props: { children: React.ReactNode }) => React.ReactNode,
   opts?: { pitchId?: string | null; date?: string | null; isCommitting?: boolean },
 ) {
   const onSelect = vi.fn();
@@ -107,7 +108,7 @@ describe('useSlotTapRevalidate (P2-234)', () => {
   it('keeps the pick when the fresh read still shows the slot free', async () => {
     const { wrapper, queryClient } = createWrapper();
     await seedCache(queryClient, [FREE]);
-    mockFetcher.mockResolvedValue([FREE, { ...FREE, id: 's2' }]);
+    mockFetcher.mockResolvedValue([FREE, OTHER]);
 
     const { result, onTaken, onSelect } = renderTapRevalidate(wrapper);
 
@@ -188,4 +189,15 @@ describe('useSlotTapRevalidate (P2-234)', () => {
     expect(onSelect).not.toHaveBeenCalled();
     expect(mockFetcher).toHaveBeenCalledTimes(1); // only the seed read
   });
+
+  // Note (PR-Agent r2 MINOR — superseded-tap race): the production hook
+  // guards every reconciliation with a per-tap sequence token so a previous
+  // tap's in-flight revalidation can never accuse a newer tap's selection.
+  // That race is not reproducible in jsdom: with no query observers, React
+  // Query suppresses the cache update when a second refetchQueries joins
+  // the same key mid-flight (verified by probe — dataUpdateCount stays at
+  // the seed value), so any attempt to simulate "A's fetch lands after B"
+  // cannot discriminate token vs no-token. The guard is a no-op for every
+  // buildable scenario here (single tap: seq === tapSeq.current), which is
+  // why the suites above stay green with it in place.
 });
