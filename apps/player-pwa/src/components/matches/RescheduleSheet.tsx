@@ -11,13 +11,14 @@
 
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, Check, Clock, X } from 'lucide-react';
+import { AlertCircle, Calendar, Check, Clock, X } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 import DatePicker from '@/components/matches/DatePicker';
 import {
     usePitchSlots,
     type PitchSlotApi,
 } from '@/hooks/usePitchSlots';
+import { useSlotTapRevalidate } from '@/hooks/useSlotTapRevalidate';
 import { dateInRiyadh, todayInRiyadh } from '@/lib/riyadh-time';
 import { resolveDateLocale } from '@/lib/format';
 
@@ -54,6 +55,19 @@ export default function RescheduleSheet({
         isOpen ? slotDate : null,
     );
 
+    /* ── Tap-time revalidation (P2-234) ──
+       Re-reads availability at tap time; if the slot was just booked the
+       pick is cleared and host.errorSlotTaken renders above the list. */
+    const { handleSelect, slotTaken, clearTaken } = useSlotTapRevalidate(
+        isOpen ? pitchId : null,
+        isOpen ? slotDate : null,
+        {
+            onSelect: setSelectedSlot,
+            onTaken: () => setSelectedSlot(null),
+            isCommitting: !!isPending,
+        },
+    );
+
     const freeSlots = useMemo(
         () => (slots ?? []).filter((s) => !s.is_booked && s.id !== currentSlotId),
         [slots, currentSlotId],
@@ -82,6 +96,7 @@ export default function RescheduleSheet({
     const handleDaySelect = (date: Date) => {
         setSlotDate(dateInRiyadh(date));
         setSelectedSlot(null); // a slot id belongs to a day — clear the pick
+        clearTaken(); // the just-booked flag belonged to the previous day
     };
 
     /* Reset the selection whenever the sheet closes so a stale pick can't
@@ -89,6 +104,7 @@ export default function RescheduleSheet({
     const handleClose = () => {
         setSelectedSlot(null);
         setSlotDate(todayInRiyadh());
+        clearTaken();
         onClose();
     };
 
@@ -118,6 +134,25 @@ export default function RescheduleSheet({
                 <p className="text-xs text-gray-400 text-center mb-1 px-5 truncate">
                     {matchTitle}
                 </p>
+
+                {/* P2-234 — the tapped slot was just booked: refuse in place
+                    with the localized specific message (§12 error standard),
+                    and hold the CTA until a still-free slot is chosen. */}
+                {slotTaken && (
+                    <div
+                        role="alert"
+                        data-testid="slot-taken-error"
+                        className="flex items-start gap-2 rounded-xl border border-brand-red/30 bg-brand-red/5 p-3 mx-5 mb-2"
+                    >
+                        <AlertCircle
+                            className="w-4 h-4 text-brand-red flex-shrink-0 mt-0.5"
+                            strokeWidth={2}
+                        />
+                        <p className="text-xs font-semibold text-brand-red">
+                            {t('host.errorSlotTaken')}
+                        </p>
+                    </div>
+                )}
 
                 {/* Day strip — 7 days, TODAY chip included (DatePicker's own
                     i18n); controlled so the active day survives re-renders. */}
@@ -185,7 +220,7 @@ export default function RescheduleSheet({
                                 return (
                                     <button
                                         key={slot.id}
-                                        onClick={() => setSelectedSlot(slot)}
+                                        onClick={() => handleSelect(slot)}
                                         aria-pressed={isSel}
                                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-semibold transition-colors ${
                                             isSel
@@ -206,7 +241,7 @@ export default function RescheduleSheet({
             <div className="px-5 pb-8 pt-3 flex-shrink-0">
                 <button
                     onClick={() => selectedSlot && onConfirm(selectedSlot)}
-                    disabled={!selectedSlot || isPending}
+                    disabled={!selectedSlot || isPending || slotTaken}
                     className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
                 >
                     {isPending ? (
