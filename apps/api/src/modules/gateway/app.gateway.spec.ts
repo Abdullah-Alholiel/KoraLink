@@ -596,6 +596,30 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
       expect(consume).not.toHaveBeenCalled();
     });
 
+    it('hard cap: at MAX_ENTRIES with all entries fresh, the oldest is evicted (never exceeds the bound)', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const cache = gateway['activeUserCache'];
+      const nowSpy = jest.spyOn(Date, 'now');
+      const t0 = 1_700_000_000_000;
+      try {
+        nowSpy.mockReturnValue(t0);
+        // Fill the cache to the cap with distinct fresh users (direct seed =
+        // setup only; the assertion below exercises the real insert path).
+        for (let i = 0; i < 10_000; i += 1) cache.set(`user-${i}`, t0 + 10_000);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        expect(cache.size).toBe(10_000);
+        // The OLDEST seeded entry was evicted for the insert; the fresh
+        // current user sits at the end of the Map's insertion order.
+        expect(cache.has('user-0')).toBe(false);
+        expect(cache.has('user-1')).toBe(true);
+        expect(cache.has('u1')).toBe(true);
+        expect(state.userSelects).toBe(1);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
     it('conv-typing uses the cached gate; send-message does not', async () => {
       const { db, state } = makeCountingDb(active);
       const { gateway } = makeGw(db);

@@ -367,6 +367,14 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         for (const [id, exp] of this.activeUserCache) {
           if (exp <= now) this.activeUserCache.delete(id);
         }
+        // Hard bound (PR-Agent #156 round 2): every entry still fresh → evict
+        // the OLDEST (Map iteration order = insertion order). Worst case the
+        // evicted user's next typing event re-reads the row — the uncached
+        // behavior — and the cache can never exceed ACTIVE_USER_CACHE_MAX_ENTRIES.
+        if (this.activeUserCache.size >= ACTIVE_USER_CACHE_MAX_ENTRIES) {
+          const oldest = this.activeUserCache.keys().next().value;
+          if (oldest !== undefined) this.activeUserCache.delete(oldest);
+        }
       }
       this.activeUserCache.set(userId, now + ACTIVE_USER_CACHE_TTL_MS);
     }
