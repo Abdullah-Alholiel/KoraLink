@@ -34,6 +34,11 @@ const WS_MESSAGE_MAX_LENGTH = 2000;
 /** Parity with the REST DTO cap (@MaxLength(36)) and the varchar(36) client_message_id column. */
 const WS_CLIENT_MESSAGE_ID_MAX_LENGTH = 36;
 
+/** P2-231: TTL of a cached ACTIVE moderation outcome (typing events only). */
+const ACTIVE_USER_CACHE_TTL_MS = 10_000;
+/** P2-231: size at which expired cache entries are purged on insert. */
+const ACTIVE_USER_CACHE_MAX_ENTRIES = 10_000;
+
 /**
  * Normalize the optional clientMessageId socket field: absent/null → null,
  * string → trimmed (empty → null), anything else → WsException. A hostile
@@ -91,6 +96,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
   server: Server;
 
   private readonly logger = new Logger(AppGateway.name);
+  /** P2-231: userId → expiresAtMs of a cached ACTIVE gate outcome (positive-only). */
+  private readonly activeUserCache = new Map<string, number>();
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -295,8 +302,49 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
    * Every state-changing @SubscribeMessage handler calls this right after its
    * `!client.userId` guard, BEFORE rate-limit consumption, membership reads,
    * writes, or broadcasts. A missing row (account hard-removed) blocks too.
+   *
+   * Every call site passes no options (uncached, fresh DB read) EXCEPT the
+   * two typing handlers, which pass `{ cacheable: true }` (P2-231). The call
+   * text stays `await this.requireActiveUser(` so the ws-gate-coverage
+   * tripwire keeps matching every gated handler.
    */
-  private async requireActiveUser(userId: string): Promise<void> {
+  private async requireActiveUser(
+    userId: string,
+    opts: { cacheable: boolean } = { cacheable: false },
+  ): Promise<void> {
+    return this.requireActiveUserCached(userId, opts);
+  }
+
+  /**
+   * P2-231 (run #151): positive-only cache of the moderation gate for
+   * typing-only events (`typing`, `conv-typing` re-emit every ~2.5s per typing
+   * user — one users-table read each was N extra DB hits/sec at scale).
+   *
+   * Only the ACTIVE outcome is cached, for ACTIVE_USER_CACHE_TTL_MS. A banned /
+   * suspended / deleted result or a MISSING row is never cached and throws on
+   * every call, so a hard-removed account never regains write access.
+   *
+   * Moderation-lag tradeoff: a user banned mid-session may keep sending TYPING
+   * signals (read-feel only, no message content) for up to 10s. Message sends,
+   * DMs, joins and read receipts never pass `cacheable: true` — they still hit
+   * the DB on every event.
+   *
+   * Single-process only: a multi-instance deployment would need this cache
+   * disabled or moved to a shared store (Redis) so all nodes agree.
+   */
+  private async requireActiveUserCached(
+    userId: string,
+    opts: { cacheable: boolean },
+  ): Promise<void> {
+    const now = Date.now();
+    if (opts.cacheable) {
+      const expiresAt = this.activeUserCache.get(userId);
+      if (expiresAt !== undefined) {
+        if (expiresAt > now) return;
+        this.activeUserCache.delete(userId);
+      }
+    }
+
     const [user] = await this.db
       .select({
         banned_at: users.banned_at,
@@ -308,7 +356,19 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .limit(1);
 
     if (!user || this.moderationReason(user) !== null) {
+      // Never negative-cache — and drop any stale positive so a later typing
+      // event re-reads the row instead of riding an old allow.
+      this.activeUserCache.delete(userId);
       throw new WsException('Your account can no longer perform this action.');
+    }
+
+    if (opts.cacheable) {
+      if (this.activeUserCache.size >= ACTIVE_USER_CACHE_MAX_ENTRIES) {
+        for (const [id, exp] of this.activeUserCache) {
+          if (exp <= now) this.activeUserCache.delete(id);
+        }
+      }
+      this.activeUserCache.set(userId, now + ACTIVE_USER_CACHE_TTL_MS);
     }
   }
 
@@ -631,7 +691,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     if (!client.userId) throw new WsException('Unauthenticated');
     if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
-    await this.requireActiveUser(client.userId);
+    // P2-231: typing-only → positive-only 10s cache (see requireActiveUserCached).
+    await this.requireActiveUser(client.userId, { cacheable: true });
 
     // Independent bucket — typing bursts must never consume the msg/dm budgets.
     const rl = this.rateLimit.consume(`typing:${client.id}`, client.userId);
@@ -679,7 +740,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     if (!client.userId) throw new WsException('Unauthenticated');
     if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
-    await this.requireActiveUser(client.userId);
+    // P2-231: typing-only → positive-only 10s cache (see requireActiveUserCached).
+    await this.requireActiveUser(client.userId, { cacheable: true });
 
     // Independent bucket — typing bursts must never consume the dm/msg budgets.
     const rl = this.rateLimit.consume(`convtyping:${client.id}`, client.userId);

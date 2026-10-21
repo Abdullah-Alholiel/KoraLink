@@ -487,6 +487,131 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
       gateway.handleLeaveConversation({ conversationId: CONV_ID }, client as never),
     ).resolves.toBeUndefined();
   });
+
+  // ── P2-231 (run #151): positive-only typing cache of the moderation gate ──
+  describe('typing-only active-user cache (P2-231)', () => {
+    /** Wraps makeRoutedDb with a mutable users row + a counter of users-table selects. */
+    function makeCountingDb(initial: Row | null) {
+      const state = { row: initial, userSelects: 0 };
+      const build = () => makeRoutedDb(state.row);
+      const db = {
+        select: (...args: unknown[]) => ({
+          from: (table: unknown) => {
+            if (table === users) state.userSelects += 1;
+            return (build().select as (...a: unknown[]) => { from: (t: unknown) => unknown })(
+              ...args,
+            ).from(table);
+          },
+        }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          const inner = build();
+          return cb({
+            ...inner,
+            select: () => ({
+              from: (table: unknown) => {
+                if (table === users) state.userSelects += 1;
+                return inner.select().from(table);
+              },
+            }),
+          });
+        },
+        get query() {
+          return build().query;
+        },
+        get insert() {
+          return build().insert;
+        },
+        get update() {
+          return build().update;
+        },
+      };
+      return { db, state };
+    }
+
+    it('typing: second handleTyping within TTL does NOT re-read the users table', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway, consume } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+      // A cached allow still consumes the typing bucket on every event.
+      expect(consume).toHaveBeenCalledTimes(2);
+    });
+
+    it('typing: cache expires after 10s and re-reads the row', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const nowSpy = jest.spyOn(Date, 'now');
+      const t0 = 1_700_000_000_000;
+      try {
+        nowSpy.mockReturnValue(t0);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        nowSpy.mockReturnValue(t0 + 10_001);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        expect(state.userSelects).toBe(2);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('positive-only: banned after a cached allow — typing lags ≤10s, send-message throws immediately', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      state.row = BANNED;
+
+      // Documented typing-only lag: within TTL the cached allow still passes.
+      await expect(
+        gateway.handleTyping({ matchId: MATCH_ID }, client as never),
+      ).resolves.toBeUndefined();
+      // The uncached path re-reads every event and rejects at once.
+      await expect(
+        gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+      ).rejects.toThrow(MSG);
+      // …and that deny evicts the stale positive, so typing re-reads and throws too.
+      await expect(
+        gateway.handleTyping({ matchId: MATCH_ID }, client as never),
+      ).rejects.toThrow(MSG);
+    });
+
+    it.each([
+      ['banned', BANNED],
+      ['suspended', SUSPENDED],
+      ['deleted', DELETED],
+      ['missing row', null],
+    ] as const)('never negative-caches: %s typer throws and every retry re-reads the row', async (_l, row) => {
+      const { db, state } = makeCountingDb(row);
+      const { gateway, consume } = makeGw(db);
+      const client = makeClient();
+
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).rejects.toThrow(MSG);
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).rejects.toThrow(MSG);
+      expect(state.userSelects).toBe(2);
+      // A deny (cached or not) never burns rate-limit budget.
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('conv-typing uses the cached gate; send-message does not', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
+      await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+
+      const before = state.userSelects;
+      await gateway.handleMessage({ matchId: MATCH_ID, content: 'a' }, client as never);
+      await gateway.handleMessage({ matchId: MATCH_ID, content: 'b' }, client as never);
+      // Each uncached send re-reads the users row (≥1 read per send).
+      expect(state.userSelects - before).toBeGreaterThanOrEqual(2);
+    });
+  });
 });
 
 
