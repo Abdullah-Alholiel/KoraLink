@@ -244,7 +244,19 @@ export class ConversationsService {
     // listForUser) — the separate COUNT query was a second full scan of the
     // same rows. `pm.id` breaks same-timestamp ties so rows can never
     // straddle a page boundary between fetches.
-    const total = rows[0]?.total_count ?? 0;
+    let total = rows[0]?.total_count ?? 0;
+    if (rows.length === 0) {
+      // PR-Agent r1 (PR #161): a beyond-end page (stale offset, pruned
+      // messages) returns no rows, so the window count never materializes —
+      // fall back to ONE degenerate COUNT instead of reporting total 0 for
+      // a conversation that still has messages (pre-change truthfulness).
+      const [c] = (await this.db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM ${personal_messages}
+        WHERE conversation_id = ${conversationId}::text
+      `)) as unknown as Array<{ total: number }>;
+      total = c?.total ?? 0;
+    }
 
     // Fetch DESC + reverse → chronological ascending for display.
     const messages = rows.reverse().map((r) => this.mapMessage(r));

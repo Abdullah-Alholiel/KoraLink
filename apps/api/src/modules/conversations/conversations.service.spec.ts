@@ -330,4 +330,37 @@ describe('ConversationsService.listMessages — pagination (P2-241)', () => {
     expect(res.messages).toEqual([]);
     expect(res.hasMore).toBe(false);
   });
+
+  // PR-Agent r1 (PR #161): a beyond-end page returns no rows, so the window
+  // count never materializes. The service must fall back to one degenerate
+  // COUNT — total 0 is a lie for a conversation that still has messages.
+  it('beyond-end page: falls back to a degenerate COUNT and reports the true total (PR-Agent r1)', async () => {
+    const calls: string[] = [];
+    const db = {
+      execute: async (q: unknown) => {
+        calls.push(dialect.sqlToQuery(q as never).sql);
+        // call 1 = page query (no rows beyond the end), call 2 = fallback COUNT
+        return calls.length === 1 ? [] : [{ total: 57 }];
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ id: 'cp1' }],
+          }),
+        }),
+      }),
+    };
+    const service = new ConversationsService(
+      db as never,
+      svcDeps.activities as never,
+      svcDeps.notifications as never,
+      svcDeps.realtime as never,
+      svcDeps.blocks as never,
+    );
+    const res = await service.listMessages('u1', 'c1', 9, 30);
+    expect(calls).toHaveLength(2);
+    expect(res.total).toBe(57);
+    expect(res.messages).toEqual([]);
+    expect(res.hasMore).toBe(false);
+  });
 });
