@@ -65,8 +65,14 @@ export class AuthController {
   }
 
   // ── POST /auth/verify-otp ────────────────────────────────────────────────
+  // P2-241 (Reviewer A run #153): route-level cap mirroring send-otp. The
+  // global 60/min alone lets a distributed loop guess 60 codes/min per IP
+  // against a 6-digit space — the same 3/min/IP bound the send path has.
+  // Per-phone lockout (5 fails → 15 min) stays the primary defense; this
+  // bounds the noise per source.
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({
     summary: 'Verify OTP and receive an HttpOnly session cookie',
   })
@@ -151,9 +157,16 @@ export class AuthController {
 
     const token = await this.authService.devLogin(dto.phone, dto.surface);
 
+    const isProd =
+      this.configService.get<string>('NODE_ENV') === 'production';
+
+    // P2-241 (Reviewer A run #153): secure: isProd — same derivation as the
+    // verify-otp cookie above. dev-login only answers when DEV_LOGIN_ENABLED
+    // (default false), so this is dev ergonomics; in prod the cookie must
+    // never ride an insecure connection regardless.
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: false,
+      secure: isProd,
       sameSite: 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',

@@ -59,3 +59,73 @@ describe('AuthController — POST /auth/verify-otp responseToken contract', () =
     expect(cookies['access_token']).toBe(token);
   });
 });
+
+// ── P2-241 (Reviewer A run #153) — verify-otp route throttle + devLogin cookie ──
+
+describe('AuthController — P2-241 route-level throttling + devLogin cookie hardening', () => {
+  // Throttler v6 stores per-route metadata under `THROTTLER:<FIELD>default`
+  // (the `default` named-runner suffix). Asserting the decorator metadata is
+  // the direct pin: the route must carry its own 3-per-60s cap instead of
+  // riding the global 60/min.
+  const LIMIT_KEY = 'THROTTLER:LIMITdefault';
+  const TTL_KEY = 'THROTTLER:TTLdefault';
+
+  function methodOf(name: string): (this: never, ...args: never[]) => unknown {
+    const proto = AuthController.prototype as unknown as Record<
+      string,
+      (this: never, ...args: never[]) => unknown
+    >;
+    const fn = proto[name];
+    if (!fn) throw new Error(`AuthController.${name} missing`);
+    return fn;
+  }
+
+  it('verify-otp carries a route-level 3/min throttle (P2-241)', () => {
+    const verifyOtp = methodOf('verifyOtp');
+    expect(Reflect.getMetadata(LIMIT_KEY, verifyOtp)).toBe(3);
+    expect(Reflect.getMetadata(TTL_KEY, verifyOtp)).toBe(60_000);
+  });
+
+  it('send-otp keeps its route-level 3/min throttle (regression guard)', () => {
+    const sendOtp = methodOf('sendOtp');
+    expect(Reflect.getMetadata(LIMIT_KEY, sendOtp)).toBe(3);
+    expect(Reflect.getMetadata(TTL_KEY, sendOtp)).toBe(60_000);
+  });
+
+  it('dev-login keeps its route-level 3/min throttle (run-3 audit guard)', () => {
+    const devLogin = methodOf('devLogin');
+    expect(Reflect.getMetadata(LIMIT_KEY, devLogin)).toBe(3);
+  });
+
+  it('devLogin cookie is secure:isProd — insecure in dev, secure in production (P2-241)', async () => {
+    const token = 'dev.jwt.token';
+    const makeController = (nodeEnv: string) =>
+      new AuthController(
+        { devLogin: jest.fn().mockResolvedValue(token) } as never,
+        {
+          get: jest.fn((key: string) =>
+            key === 'NODE_ENV' ? nodeEnv : key === 'DEV_LOGIN_ENABLED' ? 'true' : undefined,
+          ),
+        } as never,
+      );
+    const makeRes = () => {
+      const cookieCalls: Array<{ name: string; value: string; opts: Record<string, unknown> }> = [];
+      return {
+        cookie: jest.fn((name: string, value: string, opts: Record<string, unknown>) => {
+          cookieCalls.push({ name, value, opts });
+        }),
+        cookieCalls,
+      };
+    };
+    const dto = { phone: '+966****0001', surface: 'player' } as never;
+
+    const devRes = makeRes();
+    await makeController('development').devLogin(dto, devRes as never);
+    expect(devRes.cookieCalls[0].name).toBe('access_token');
+    expect(devRes.cookieCalls[0].opts).toMatchObject({ httpOnly: true, secure: false });
+
+    const prodRes = makeRes();
+    await makeController('production').devLogin(dto, prodRes as never);
+    expect(prodRes.cookieCalls[0].opts).toMatchObject({ httpOnly: true, secure: true });
+  });
+});

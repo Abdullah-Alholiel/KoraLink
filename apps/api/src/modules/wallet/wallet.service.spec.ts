@@ -192,78 +192,83 @@ describe('isUniqueViolation', () => {
 
 /**
  * P2-119 specs: getHistory optional ISO date range. The range bounds are
- * ANDed onto the user_id predicate (never replacing it) and the count query
- * shares the same predicate so total/hasMore stay truthful.
+ * ANDed onto the user_id predicate so total/hasMore stay truthful.
+ *
+ * P2-241 update: getHistory is now ONE query — COUNT(*) OVER() rides the
+ * page select (listForUser is the reference impl) — so the stub records a
+ * SINGLE predicate per call, and new specs pin the ORDER BY tiebreaker and
+ * the window-function total.
  */
 describe('WalletService getHistory — date range (P2-119)', () => {
   const dialect = new PgDialect();
 
-  /** db stub recording every where() predicate as rendered SQL + params. */
+  /** db stub recording the where() predicate + orderBy as rendered SQL. */
   function makeHistoryDb(rows: unknown[] = [], total = 0) {
     const wheres: { sql: string; params: unknown[] }[] = [];
+    const orders: string[] = [];
     const record = (cond: unknown) => {
       const q = dialect.sqlToQuery(cond as never);
       wheres.push({ sql: q.sql, params: q.params });
     };
     const db = {
-      select: (fields?: unknown) => ({
+      select: () => ({
         from: (_table: unknown) => ({
           where: (cond: unknown) => {
             record(cond);
-            if (fields) return Promise.resolve([{ total }]);
             return {
-              orderBy: () => ({
-                offset: () => ({
-                  limit: async () => rows,
-                }),
-              }),
+              orderBy: (...exprs: unknown[]) => {
+                for (const e of exprs) {
+                  orders.push(dialect.sqlToQuery(e as never).sql);
+                }
+                return {
+                  offset: () => ({
+                    limit: async () =>
+                      rows.map((r) => ({ ...(r as object), total })),
+                  }),
+                };
+              },
             };
           },
         }),
       }),
     };
-    return { db, wheres };
+    return { db, wheres, orders };
   }
 
   const FROM = '2026-09-01T00:00:00.000Z';
   const TO = '2026-09-30T23:59:59.999Z';
 
-  it('no range: only the user_id predicate is applied', async () => {
+  it('no range: only the user_id predicate is applied (single window-count query)', async () => {
     const { db, wheres } = makeHistoryDb();
     const svc = new WalletService(db as never);
     await svc.getHistory('user-1');
-    expect(wheres).toHaveLength(2);
-    for (const w of wheres) {
-      expect(w.sql).toContain('"user_id" = $1');
-      expect(w.sql).not.toContain('>=');
-      expect(w.sql).not.toContain('<=');
-      expect(w.params).toEqual(['user-1']);
-    }
+    expect(wheres).toHaveLength(1); // P2-241: ONE query, not list + COUNT
+    expect(wheres[0].sql).toContain('"user_id" = $1');
+    expect(wheres[0].sql).not.toContain('>=');
+    expect(wheres[0].sql).not.toContain('<=');
+    expect(wheres[0].params).toEqual(['user-1']);
   });
 
-  it('from-only: adds created_at >= from to both queries', async () => {
+  it('from-only: adds created_at >= from', async () => {
     const { db, wheres } = makeHistoryDb();
     const svc = new WalletService(db as never);
     await svc.getHistory('user-1', 1, 20, FROM);
-    expect(wheres).toHaveLength(2);
-    for (const w of wheres) {
-      expect(w.sql).toContain('"created_at" >=');
-      expect(w.sql).not.toContain('<=');
-      expect(w.params).toContain('user-1');
-      expect(w.params).toContainEqual(expect.stringContaining('2026-09-01'));
-    }
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toContain('"created_at" >=');
+    expect(wheres[0].sql).not.toContain('<=');
+    expect(wheres[0].params).toContain('user-1');
+    expect(wheres[0].params).toContainEqual(expect.stringContaining('2026-09-01'));
   });
 
-  it('to-only: adds created_at <= to to both queries', async () => {
+  it('to-only: adds created_at <= to', async () => {
     const { db, wheres } = makeHistoryDb();
     const svc = new WalletService(db as never);
     await svc.getHistory('user-1', 1, 20, undefined, TO);
-    for (const w of wheres) {
-      expect(w.sql).toContain('"created_at" <=');
-      expect(w.sql).not.toContain('>=');
-      expect(w.params).toContain('user-1');
-      expect(w.params).toContainEqual(expect.stringContaining('2026-09-30'));
-    }
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toContain('"created_at" <=');
+    expect(wheres[0].sql).not.toContain('>=');
+    expect(wheres[0].params).toContain('user-1');
+    expect(wheres[0].params).toContainEqual(expect.stringContaining('2026-09-30'));
   });
 
   it('both ordered: applies both bounds and reports filtered total/hasMore', async () => {
@@ -271,11 +276,11 @@ describe('WalletService getHistory — date range (P2-119)', () => {
     const { db, wheres } = makeHistoryDb([row], 25);
     const svc = new WalletService(db as never);
     const res = await svc.getHistory('user-1', 1, 20, FROM, TO);
-    expect(res).toEqual({ transactions: [row], total: 25, hasMore: true });
-    for (const w of wheres) {
-      expect(w.sql).toContain('"created_at" >=');
-      expect(w.sql).toContain('"created_at" <=');
-    }
+    expect(res.total).toBe(25);
+    expect(res.hasMore).toBe(true);
+    expect(res.transactions[0]).toMatchObject(row);
+    expect(wheres[0].sql).toContain('"created_at" >=');
+    expect(wheres[0].sql).toContain('"created_at" <=');
   });
 
   it('both inverted: throws BadRequestException without querying', async () => {
@@ -291,14 +296,40 @@ describe('WalletService getHistory — date range (P2-119)', () => {
     const { db, wheres } = makeHistoryDb();
     const svc = new WalletService(db as never);
     await svc.getHistory('user-1', 2, 10, FROM, TO);
-    expect(wheres).toHaveLength(2);
-    for (const w of wheres) {
-      expect(w.sql).toMatch(/"user_id" = \$1 and .*"created_at" >= .* and .*"created_at" <= /);
-      expect(w.params[0]).toBe('user-1');
-      expect(w.sql).not.toMatch(/\bor\b/);
-    }
-    // list and count share the identical predicate
-    expect(wheres[0]).toEqual(wheres[1]);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toMatch(/"user_id" = \$1 and .*"created_at" >= .* and .*"created_at" <= /);
+    expect(wheres[0].params[0]).toBe('user-1');
+    expect(wheres[0].sql).not.toMatch(/\bor\b/);
+  });
+
+  // ── P2-241: pagination determinism + the window-count total ──
+
+  it('orders by created_at DESC with id ASC tiebreaker (P2-241)', async () => {
+    const { db, orders } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1');
+    expect(orders).toEqual([
+      '"transactions"."created_at" desc',
+      '"transactions"."id" asc',
+    ]);
+  });
+
+  it('total comes from the window function on the page rows (P2-241)', async () => {
+    const rows = [{ id: 'tx-1' }, { id: 'tx-2' }];
+    const { db } = makeHistoryDb(rows, 41);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.total).toBe(41);
+    expect(res.hasMore).toBe(true);
+    expect(res.transactions).toHaveLength(2);
+  });
+
+  it('exactly-full last page: hasMore false from the authoritative total (P2-241)', async () => {
+    const { db } = makeHistoryDb([{ id: 'tx-1' }], 20);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.total).toBe(20);
+    expect(res.hasMore).toBe(false);
   });
 });
 

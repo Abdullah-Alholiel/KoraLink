@@ -33,6 +33,7 @@ import { JoinMatchDto } from './dto/join-match.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { escapeIcsText } from '../../common/security/ics-text';
+import { ParseUuidShapePipe } from '../../common/validation/id-shape';
 
 @ApiTags('matches')
 @ApiCookieAuth('access_token')
@@ -59,7 +60,7 @@ export class MatchesController {
   @Get(':id/calendar')
   @ApiOperation({ summary: 'Download match as ICS calendar file' })
   async getCalendar(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
     @Query('format') format: 'ics' | 'google' = 'ics',
     @Res() res: Response,
@@ -121,7 +122,7 @@ export class MatchesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get full match details including lobby roster' })
   findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
   ) {
     // P0-1: viewer-scoped — chat history is stripped for non-members
@@ -147,7 +148,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Successfully joined the match.' })
   joinMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: JoinMatchDto,
   ) {
     return this.matchesService.joinMatch(user.sub, id, dto?.idempotencyKey);
@@ -159,7 +160,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Successfully left the match.' })
   leaveMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.leaveMatch(user.sub, id);
   }
@@ -169,7 +170,7 @@ export class MatchesController {
   @ApiOperation({ summary: 'Get match chat message history' })
   @ApiOkResponse({ description: 'Paginated chat messages for a match.' })
   getMessages(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
     @Query('before') before?: string,
     @Query('after') after?: string,
@@ -194,7 +195,7 @@ export class MatchesController {
   @ApiCreatedResponse({ description: 'The created message with sender.' })
   sendMessage(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CreateMatchMessageDto,
   ) {
     return this.matchesService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);
@@ -209,7 +210,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Watermark advanced.' })
   markChatRead(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.markChatRead(user.sub, id);
   }
@@ -221,7 +222,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match started successfully.' })
   startMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.startMatch(user.sub, id);
   }
@@ -233,7 +234,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match completed successfully.' })
   completeMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.completeMatch(user.sub, id);
   }
@@ -245,7 +246,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match cancelled successfully.' })
   cancelMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.cancelMatch(user.sub, id);
   }
@@ -259,7 +260,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Fully populated match after the move, plus a reschedule summary block.' })
   rescheduleMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: UpdateMatchScheduleDto,
   ) {
     return this.matchesService.rescheduleMatch(user.sub, id, dto);
@@ -272,7 +273,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Vote recorded successfully.' })
   castVote(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CastVoteDto,
   ) {
     return this.matchesService.castVote(user.sub, id, dto.candidateId);
@@ -284,7 +285,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'POM voting status or winner.' })
   getPomResult(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.getPomResult(id, user.sub);
   }
@@ -296,7 +297,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Attendance updated.' })
   markNoShow(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: MarkNoShowDto,
   ) {
     return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
@@ -308,8 +309,8 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Player removed; fully populated match returned.' })
   removePlayer(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
-    @Param('playerId') playerId: string,
+    @Param('id', ParseUuidShapePipe) id: string,
+    @Param('playerId', ParseUuidShapePipe) playerId: string,
   ) {
     return this.matchesService.removePlayer(user.sub, id, playerId);
   }
@@ -321,7 +322,7 @@ export class MatchesController {
   @ApiCreatedResponse({ description: 'Dispute created.' })
   createDispute(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CreateDisputeDto,
   ) {
     return this.matchesService.createDispute(user.sub, id, dto);
@@ -333,7 +334,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Dispute or null.' })
   findMyDispute(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.findMyDispute(user.sub, id);
   }
