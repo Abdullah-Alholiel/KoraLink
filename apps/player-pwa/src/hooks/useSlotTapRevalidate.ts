@@ -57,6 +57,15 @@ export function useSlotTapRevalidate(
         tapSeq.current += 1;
     }, [pitchId, date]);
 
+    // Commit start invalidates in-flight continuations too: once the parent
+    // mutation is in flight the server call is the authoritative gate — a
+    // late fresh read landing mid-commit must not clear the selection and
+    // stack a second error on top of the request's own result (PR-Agent r4
+    // focus area, P2-234).
+    useEffect(() => {
+        if (opts.isCommitting) tapSeq.current += 1;
+    }, [opts.isCommitting]);
+
     /** True when the slot the user tapped is no longer bookable. */
     const checkSlot = useCallback(
         (slot: PitchSlotApi, fresh: PitchSlotApi[]): boolean => {
