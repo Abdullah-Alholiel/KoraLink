@@ -376,6 +376,10 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
           if (oldest !== undefined) this.activeUserCache.delete(oldest);
         }
       }
+      // Re-insert (delete-then-set) so Map insertion order stays = recency and
+      // the cap eviction always targets the least-recently-seen typing user
+      // (PR-Agent #156 r3 MINOR — a plain set() would keep a stale position).
+      this.activeUserCache.delete(userId);
       this.activeUserCache.set(userId, now + ACTIVE_USER_CACHE_TTL_MS);
     }
   }
