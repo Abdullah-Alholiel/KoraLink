@@ -137,9 +137,11 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     const recordActivity = jest.fn(async () => {
       order.push('post:activity');
     });
-    const sendPush = jest.fn(async () => {
-      order.push('post:push');
-    });
+    const sendPush = jest.fn(
+      async (_users: string[], _payload?: Record<string, unknown>) => {
+        order.push('post:push');
+      },
+    );
 
     const svc = new MatchesService(
       db as never,
@@ -180,7 +182,18 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
         matchId: OVERDUE_KORALINK_ROW.id,
       }),
     );
-    expect(sendPush).toHaveBeenCalledTimes(1);
+    // P2-193 (run #155): TWO pushes now — the roster "cancelled" push plus
+    // the host's pitch-refund push quoting the 200 SAR credit (the row is
+    // koralink-booked, refunded=200). Both post-commit.
+    expect(sendPush).toHaveBeenCalledTimes(2);
+    const refundPush = sendPush.mock.calls.find(
+      (c) => c[1]?.key === 'refund_credited',
+    );
+    expect(refundPush).toBeDefined();
+    expect(refundPush?.[1]?.vars).toMatchObject({
+      title: OVERDUE_KORALINK_ROW.title,
+      amount: '200.00',
+    });
   });
 
   it('never completes an underfilled row even when the net missed it (bulk-guard belt)', async () => {

@@ -419,6 +419,23 @@ export class MatchesService {
           this.logger.log(
             `host_payout_released(auto) match=${m.id} host=${m.host_id} amount_sar=${out.amountSar}`,
           );
+          // P2-193 (run #155): same voice as the manual release — the auto
+          // loop fires while nobody is watching, which is exactly when the
+          // host needs the "your payout landed" signal. Best-effort.
+          try {
+            const [titleRow] = await this.db
+              .select({ title: matches.title })
+              .from(matches)
+              .where(eq(matches.id, m.id))
+              .limit(1);
+            await this.notificationsService.sendPushToUsers([m.host_id], {
+              key: 'payout_released',
+              vars: { title: titleRow?.title ?? 'your match', amount: out.amountSar },
+              data: { type: 'payout-released', matchId: m.id },
+            });
+          } catch (err) {
+            this.logger.error(`payout_released push failed for ${m.id}: ${(err as Error).message}`);
+          }
         }
       } catch (err) {
         this.logger.error(
@@ -810,6 +827,8 @@ export class MatchesService {
     let guardWon = false;
     let releasedSlot = false;
     let refundedSar = 0;
+    // P2-193 (run #155): refunded payers for the post-commit refund pushes.
+    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // Statuses are code-controlled enum literals (never user input), so
       // inlining them as SQL literals is safe. The heal path cancels FROM
@@ -865,6 +884,7 @@ export class MatchesService {
             'REFUND',
             row.id,
           );
+          refundRecipients.push({ userId: p.user_id, amountSar: amt.toFixed(2) });
         }
       }
       if (payers.length > 0) {
@@ -972,6 +992,31 @@ export class MatchesService {
     this.logger.log(
       `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players, refunded=${refundedSar} SAR, slotReleased=${releasedSlot}).`,
     );
+
+    // P2-193 (run #155): refund pushes for auto-cancelled matches — an
+    // overnight auto-cancel previously left unexplained wallet credits.
+    for (const r of refundRecipients) {
+      try {
+        await this.notificationsService.sendPushToUsers([r.userId], {
+          key: 'refund_credited',
+          vars: { title: row.title, amount: r.amountSar },
+          data: { type: 'refund-credited', matchId: row.id },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for ${row.id}/${r.userId}: ${(err as Error).message}`);
+      }
+    }
+    if (refundedSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([row.host_id], {
+          key: 'refund_credited',
+          vars: { title: row.title, amount: refundedSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId: row.id },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited (pitch) push failed for ${row.id}: ${(err as Error).message}`);
+      }
+    }
     return true;
   }
 
@@ -1777,6 +1822,9 @@ export class MatchesService {
       | 'backfilled_refunded'
       | 'forfeited'
       | null;
+    // P2-193 (run #155): the fee snapshot to quote in the leaver's refund push
+    // (null outcome ⇒ no push). Assigned in-tx, read post-commit.
+    let leaveRefundSar: string | null = null;
     await this.db.transaction(async (tx) => {
       // 0. Lock the match row FIRST (P2-49, run #37) — serializes against
       //     concurrent joins/removePlayers so the roster count read below and
@@ -1888,6 +1936,7 @@ export class MatchesService {
             matchId,
           );
           leaveRefundOutcome = 'refunded';
+          leaveRefundSar = feeSar.toFixed(2);
           promoted = await this.waitlist.promoteNextInTx(tx, matchId);
         } else {
           // Inside the window: refund ONLY on a paid backfill.
@@ -1904,6 +1953,7 @@ export class MatchesService {
               matchId,
             );
             leaveRefundOutcome = 'backfilled_refunded';
+            leaveRefundSar = feeSar.toFixed(2);
             promoted = backfill;
           } else {
             // No queue: forfeit to the host (anti-abuse, ToS §refunds).
@@ -1978,6 +2028,11 @@ export class MatchesService {
       }
     }
 
+    // P2-193 (run #155): the leaver's refund gets a push quoting the exact
+    // amount — forfeits deliberately push nothing (ToS-stated anti-abuse;
+    // a "you lost your fee" push is a support-magnet, the leave API response
+    // already carries your_leave_refund='forfeited').
+
     // Return fully populated match with relations (API Contract Rule §2),
     // plus the leaver's refund outcome so the PWA can toast the exact rule
     // that applied (refunded / backfilled_refunded / forfeited / null).
@@ -1987,6 +2042,17 @@ export class MatchesService {
       this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
     } catch (err) {
       this.logger.error(`WS broadcast error on leaveMatch: ${(err as Error).message}`);
+    }
+    if (leaveRefundOutcome && leaveRefundSar) {
+      try {
+        await this.notificationsService.sendPushToUsers([userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: leaveRefundSar },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for leave ${matchId}: ${(err as Error).message}`);
+      }
     }
     return { ...updatedMatch, your_leave_refund: leaveRefundOutcome };
   }
@@ -2979,6 +3045,8 @@ export class MatchesService {
     // Slice 3: host payout outcome captured in-tx, logged after commit.
     // (`as` avoids TS treating the callback assignment as unreachable.)
     let hostPayout = null as { paid: boolean; amountSar: string } | null;
+    // P2-193 (run #155): host id hoisted for the post-commit payout push.
+    let payoutHostId = '';
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -3072,6 +3140,7 @@ export class MatchesService {
           { id: match.id, host_id: match.host_id, price_per_player: match.price_per_player },
           margin,
         );
+        payoutHostId = match.host_id;
       }
     });
 
@@ -3083,6 +3152,17 @@ export class MatchesService {
       this.logger.log(
         `host_payout_released match=${matchId} host=${updatedMatch.host?.id ?? ''} amount_sar=${hostPayout.amountSar}`,
       );
+      // P2-193 (run #155): the host's money lands with a voice — post-commit,
+      // best-effort (a push failure never fails the completion).
+      try {
+        await this.notificationsService.sendPushToUsers([payoutHostId || updatedMatch.host?.id].filter(Boolean) as string[], {
+          key: 'payout_released',
+          vars: { title: updatedMatch.title, amount: hostPayout.amountSar },
+          data: { type: 'payout-released', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`payout_released push failed for ${matchId}: ${(err as Error).message}`);
+      }
     }
     if (queueUserIds.length > 0) {
       try {
@@ -3112,6 +3192,9 @@ export class MatchesService {
     let refundedSar = 0;
     // P1-17: ex-queued players collected in-tx for the post-commit push.
     let queueUserIds: string[] = [];
+    // P2-193 (run #155): refunded payers collected in-tx for the post-commit
+    // refund pushes (money events get a voice — see push-text.ts refund_credited).
+    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // FOR UPDATE row lock — serializes against rescheduleMatch, which moves
       // booking_slot_id between this read and the release below. Without the
@@ -3230,6 +3313,7 @@ export class MatchesService {
             'REFUND',
             matchId,
           );
+          refundRecipients.push({ userId: p.user_id, amountSar: amt.toFixed(2) });
         }
       }
       if (payers.length > 0) {
@@ -3305,6 +3389,32 @@ export class MatchesService {
         });
       } catch (err) {
         this.logger.error(`waitlist_closed push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+
+    // P2-193 (run #155): the money gets a voice — every refunded payer learns
+    // HOW MUCH came back, post-commit, best-effort (never fails the cancel).
+    for (const r of refundRecipients) {
+      try {
+        await this.notificationsService.sendPushToUsers([r.userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: r.amountSar },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for ${matchId}/${r.userId}: ${(err as Error).message}`);
+      }
+    }
+    // Host's pitch-cost refund (koralink bookings) — same voice, same rules.
+    if (refundedSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: refundedSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited (pitch) push failed for ${matchId}: ${(err as Error).message}`);
       }
     }
 
@@ -3823,6 +3933,9 @@ export class MatchesService {
     // P1-17: set inside the tx when a queue head was promoted into the freed
     // spot — drives the post-commit notification.
     let promoted: WaitlistPromotion | null = null;
+    // P2-193 (run #155): fee snapshot for the removed player's refund push.
+    // Re-annotated assignment through a plain let (assigned inside the tx cb).
+    let removedRefundSar = 0;
 
     await this.db.transaction(async (tx) => {
       // Lock the match row FOR UPDATE (P2-49, run #37) — same lock order as
@@ -3888,8 +4001,8 @@ export class MatchesService {
           'REFUND',
           matchId,
         );
+        removedRefundSar = removedFeeSar;
       }
-
       if (match.status === 'Full') {
         // P2-49 (run #36): predicate on the read's premise. A concurrent
         // join flipping Full→Open between our read and this write no longer
@@ -3935,6 +4048,21 @@ export class MatchesService {
       });
     } catch (err) {
       this.logger.error(`removePlayer notification failed for ${matchId}: ${(err as Error).message}`);
+    }
+
+    // P2-193 (run #155): the fee refund gets its own push quoting the exact
+    // amount — player_removed carries no money context, and the credit was
+    // previously silent (P2-193's original complaint).
+    if (removedRefundSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([targetUserId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: removedRefundSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for remove ${matchId}: ${(err as Error).message}`);
+      }
     }
 
     return updatedMatch;

@@ -169,6 +169,9 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
       // P1-17: the waitlist check (empty queue → no-op) runs after the roster
       // notification, before the cancelled-counter log.
       'post:select-roster',
+      // P2-193 (run #155): the refund push follows the roster push — money
+      // events get a voice, still entirely post-commit (never inside the tx).
+      'post:push',
     ]);
     expect(recordActivity).toHaveBeenCalledWith(
       expect.objectContaining({ verb: 'match_auto_cancelled', matchId: EXPIRING_ROW.id }),

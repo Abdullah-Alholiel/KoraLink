@@ -28,7 +28,10 @@ export type PushKey =
   | 'waitlist_promoted'
   | 'waitlist_closed'
   // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
-  | 'payout_paid';
+  | 'payout_paid'
+  // ── Player money flows (P2-193, run #155): wallet credits get a voice ──
+  | 'refund_credited'
+  | 'payout_released';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -51,8 +54,9 @@ export type PushVars = {
   position?: number;
   /** Venue display name (payout_paid only) — embedded as-is. */
   venueName?: string;
-  /** Exact 2dp SAR amount string, e.g. "3150.00" (payout_paid only). Rendered
-   *  through Intl.NumberFormat per locale (ar → Arabic-Indic digits). */
+  /** Exact 2dp SAR amount string, e.g. "3150.00". Rendered through
+   *  Intl.NumberFormat per locale (ar → Arabic-Indic digits + ر.س). Used by
+   *  payout_paid (P1-67), refund_credited + payout_released (P2-193). */
   amount?: string;
 };
 
@@ -275,6 +279,37 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
       title: '💸 تم إرسال الدفعة',
       body: (v) =>
         `${v.venueName ?? 'ملعبك'}: تم إرسال دفعتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} من كورا لينك.`,
+    },
+  },
+  // P2-193 (run #155): wallet credits get a voice. Copy is deliberately NEUTRAL
+  // about WHY the money came back (cancel / auto-cancel / leave-refund /
+  // backfill / host-removal all share one body) — the match deep-link carries
+  // the context. Amount renders through the same per-locale Intl SAR formatter
+  // as payout_paid (one source of truth for money copy).
+  refund_credited: {
+    en: {
+      title: '💸 Money returned',
+      body: (v) =>
+        `${payoutAmount(v.amount, 'en-GB')} was refunded to your wallet — see "${v.title ?? 'your match'}".`,
+    },
+    ar: {
+      title: '💸 تم إرجاع المبلغ',
+      body: (v) =>
+        `تم إرجاع ${payoutAmount(v.amount, 'ar-SA')} إلى محفظتك — راجع "${v.title ?? 'مباراتك'}".`,
+    },
+  },
+  // Host side of the same rule (P2-193): a released player-host payout tells
+  // the host the money landed — previously a log line only.
+  payout_released: {
+    en: {
+      title: '💸 Payout released',
+      body: (v) =>
+        `Your payout of ${payoutAmount(v.amount, 'en-GB')} for "${v.title ?? 'your match'}" is in your wallet.`,
+    },
+    ar: {
+      title: '💸 تم صرف المستحقات',
+      body: (v) =>
+        `تم إيداع مستحقاتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} عن "${v.title ?? 'مباراتك'}" في محفظتك.`,
     },
   },
 };
