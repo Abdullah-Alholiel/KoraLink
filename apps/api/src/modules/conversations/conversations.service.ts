@@ -439,6 +439,30 @@ export class ConversationsService {
     return { ...inserted, sender: await this.fetchSenderView(userId) };
   }
 
+  /**
+   * P2-172 reconcile pre-read shared read-model (P2-230, run #154): ONE copy
+   * of the sender-view lookup used by BOTH the gateway's pre-read ack path
+   * (app.gateway.ts) and sendMessage's winner path — previously two inline
+   * SELECTs had to stay in sync by hand. Returns the ORIGINAL row (with
+   * sender view) when `clientMessageId` was already accepted, else null
+   * (miss → caller falls through to the limiter / insert path).
+   */
+  async findReconcilableMessage(
+    userId: string,
+    conversationId: string,
+    clientMessageId: string,
+  ): Promise<PersonalMessage | null> {
+    const existing = await this.db.query.personal_messages.findFirst({
+      where: and(
+        eq(personal_messages.sender_id, userId),
+        eq(personal_messages.conversation_id, conversationId),
+        eq(personal_messages.client_message_id, clientMessageId),
+      ),
+    });
+    if (!existing) return null;
+    return { ...existing, sender: await this.fetchSenderView(userId) };
+  }
+
   /** Sender view ({ id, full_name, handle, avatar_url }) for message payloads. */
   private async fetchSenderView(userId: string) {
     const [sender] = await this.db

@@ -934,6 +934,9 @@
   },
   "payment": {
     "title": "Checkout",
+    "noMoneyTaken": "No money was taken from your wallet.",
+    "readFullPolicy": "Read full policy",
+    "readLessPolicy": "Show less",
     "selfHostedNotice": "This game is booked and operated fully by its host — not by KoraLink. The host arranges the venue and runs the match. KoraLink is the platform only.",
     "selfHostedNoticeShort": "Booked & operated fully by the host — not KoraLink",
     "playerHostedNotice": "A player hosts and runs this match; KoraLink booked the pitch and will help resolve any venue problem the host cannot solve.",

@@ -17,7 +17,7 @@ import { Inject } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { match_players, match_messages, personal_messages, users } from '../../database/schema';
+import { match_players, match_messages, users } from '../../database/schema';
 import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from '../matches/chat-status.predicate';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -910,28 +910,23 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // SELECT from an authenticated socket. `clientMessageId` here is the
     // normalizeClientMessageId output above (length/type already validated).
     if (clientMessageId) {
-      const existing = await this.db.query.personal_messages.findFirst({
-        where: and(
-          eq(personal_messages.sender_id, client.userId),
-          eq(personal_messages.conversation_id, data.conversationId),
-          eq(personal_messages.client_message_id, clientMessageId),
-        ),
-      });
+      // P2-230 (run #154): the reconcile pre-read now goes through the
+      // service's shared read-model (findReconcilableMessage) — ONE copy of
+      // the "already-accepted → return ORIGINAL row with sender view"
+      // contract, same as the send-message REST path and the winner path in
+      // sendMessage. A miss falls through to the limiter, so spam stays
+      // bounded; the miss lookup is one indexed point SELECT from an
+      // authenticated socket.
+      const existing = await this.conversationsService.findReconcilableMessage(
+        client.userId,
+        data.conversationId,
+        clientMessageId,
+      );
       if (existing) {
-        const [sender] = await this.db
-          .select({
-            id: users.id,
-            full_name: users.full_name,
-            handle: users.handle,
-            avatar_url: users.avatar_url,
-          })
-          .from(users)
-          .where(eq(users.id, client.userId))
-          .limit(1);
         // Sender-scoped reconcile ack (PR-Agent run #148 rule): the room
         // already received this message on first delivery — a room-wide
         // re-broadcast would be a pure amplification surface.
-        client.emit('new-dm', { ...existing, sender });
+        client.emit('new-dm', existing);
         // No activity/push fan-out here: the ORIGINAL send announced it.
         return;
       }

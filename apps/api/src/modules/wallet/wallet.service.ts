@@ -219,7 +219,21 @@ export class WalletService {
       .offset(skip)
       .limit(perPage);
 
-    const total = rows[0]?.total ?? 0;
+    let total = rows[0]?.total ?? 0;
+    if (rows.length === 0) {
+      // Reviewer A (run #154, PR #161 follow-up): a beyond-end page (stale
+      // offset after records were pruned) returns no rows, so the window
+      // count never materializes — fall back to ONE degenerate COUNT instead
+      // of reporting total 0 for a wallet that still has transactions (the
+      // same truthfulness fix conversations.service.ts listMessages got in
+      // PR #161).
+      const [c] = await this.db
+        .select({ total: sql<number>`COUNT(*)::int` })
+        .from(transactions)
+        .where(predicate);
+      total = c?.total ?? 0;
+    }
+
     const hasMore = skip + perPage < total;
 
     return { transactions: rows, total, hasMore };
