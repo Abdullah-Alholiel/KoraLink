@@ -364,3 +364,69 @@ describe('ConversationsService.listMessages — pagination (P2-241)', () => {
     expect(res.hasMore).toBe(false);
   });
 });
+
+// ── P2-230 (run #154): shared reconcile read-model ──────────────────────────
+// ONE copy of the "already-accepted clientMessageId → ORIGINAL row + sender
+// view" lookup, consumed by the gateway's pre-read ack AND sendMessage's
+// winner path. The gateway spec owns the wiring; this pins the CONTRACT.
+describe('ConversationsService.findReconcilableMessage (P2-230)', () => {
+  const users = { id: 'id' };
+  const SENDER_ROW = { id: 'u1', full_name: 'Ali', handle: 'ali', avatar_url: null };
+  function makeFindSvc(findFirst: jest.Mock) {
+    const rowSelect = {
+      from: () => ({
+        where: () => ({ limit: async () => [SENDER_ROW] }),
+      }),
+    };
+    const db: any = {
+      query: { personal_messages: { findFirst } },
+      select: () => rowSelect,
+    };
+    return new ConversationsService(
+      db,
+      { record: jest.fn() } as never,
+      { sendPushToUsers: jest.fn() } as never,
+      { isUserOnline: jest.fn(() => true) } as never,
+      {} as never,
+    );
+  }
+
+  it('hit: returns the ORIGINAL row with its sender view (reconcile ack shape)', async () => {
+    const row = {
+      id: 'm-orig',
+      conversation_id: 'c1',
+      content: 'first',
+      created_at: new Date('2026-10-22T00:00:00Z'),
+      client_message_id: 'cid-1',
+    };
+    const findFirst = jest.fn(async () => row);
+    const svc = makeFindSvc(findFirst);
+    const res = await svc.findReconcilableMessage('u1', 'c1', 'cid-1');
+    expect(res).toEqual({ ...row, sender: SENDER_ROW });
+    expect(findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('miss: returns null (caller falls through to the limiter / insert path)', async () => {
+    const svc = makeFindSvc(jest.fn(async () => undefined));
+    await expect(svc.findReconcilableMessage('u1', 'c1', 'cid-x')).resolves.toBeNull();
+  });
+
+  it('scopes the lookup to sender + conversation + clientMessageId (the unique index)', async () => {
+    let captured: any;
+    const findFirst = jest.fn((args: any) => {
+      captured = args;
+      return Promise.resolve(undefined);
+    });
+    const svc = makeFindSvc(findFirst);
+    await svc.findReconcilableMessage('u1', 'c1', 'cid-1');
+    // drizzle hands findFirst the BUILT where — render it and assert all
+    // three predicates of the (sender, conversation, client_message_id)
+    // unique index are ANDed (the contract the reconcile dedupe leans on).
+    const dialect = new PgDialect();
+    const q = dialect.sqlToQuery(captured.where as never);
+    expect(q.sql).toContain('sender_id');
+    expect(q.sql).toContain('conversation_id');
+    expect(q.sql).toContain('client_message_id');
+    expect(q.params).toEqual(['u1', 'c1', 'cid-1']);
+  });
+});
