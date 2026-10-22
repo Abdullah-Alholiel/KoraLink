@@ -430,7 +430,10 @@ export class MatchesService {
               .limit(1);
             await this.notificationsService.sendPushToUsers([m.host_id], {
               key: 'payout_released',
-              vars: { title: titleRow?.title ?? 'your match', amount: out.amountSar },
+              // Pass title through UNDEFINED when missing — the catalog's
+              // per-locale fallback ('your match' / 'مباراتك') must win over a
+              // hardcoded English default (PR-Agent r1 focus area, run #155).
+              vars: { title: titleRow?.title, amount: out.amountSar },
               data: { type: 'payout-released', matchId: m.id },
             });
           } catch (err) {
