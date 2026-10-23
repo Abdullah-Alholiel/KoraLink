@@ -20,6 +20,8 @@ import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance, formatCount } from '@/lib/format';
 import { isVenueOpenNow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 
 // Run #68 (P2-13 residual) removed the dead "Top Rated" pill when venues.rating
 // was all-zero with no write path. P1-55 (run #117) shipped booking-verified
@@ -302,71 +304,60 @@ function ClubsContent() {
             )}
 
             {/* ── Error ── */}
-            {error && !isLoading && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
-                        <span className="text-brand-red text-2xl">!</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-6 text-center">{t(errorKey(classifyError(error)))}</h3>
-                    <button
-                        onClick={() => refetch()}
-                        className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
-                    >
-                        {t('common.retry')}
-                    </button>
-                </div>
+            {!isLoading && error && (
+                <ErrorState
+                    title={t(errorKey(classifyError(error)))}
+                    onRetry={() => refetch()}
+                    retryLabel={t('common.retry')}
+                />
             )}
 
             {/* ── Empty ── */}
             {!isLoading && !error && filteredVenues.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                        {activeFilter === 'Favorites' ? (
-                            <Heart className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
-                        ) : (
-                            <MapPin className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
-                        )}
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-1">
-                        {/* P2-165 (run #111): a hydrated GUEST on Favorites sees
-                            the sign-in prompt AS the title — the "No favorites
-                            yet" onboarding copy would read as "you have none"
-                            (FAV-13). Signed-in users keep the original copy. */}
-                        {activeFilter === 'Favorites' && isHydrated && !storeUser
+                <EmptyState
+                    icon={activeFilter === 'Favorites' ? Heart : MapPin}
+                    // P2-165 (run #111): a hydrated GUEST on Favorites sees the
+                    // sign-in prompt AS the title — the "No favorites yet"
+                    // onboarding copy would read as "you have none" (FAV-13).
+                    // Signed-in users keep the original copy.
+                    title={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser
                             ? t('clubs.favoritesSignInTitle')
                             : activeFilter === 'Favorites'
                               ? t('clubs.favoritesEmptyTitle')
                               : venues && venues.length > 0
                                 ? t('common.noResults')
-                                : t('clubs.noClubs')}
-                    </h3>
-                    {/* Run #68: split the advice line — "adjust your filters" is
-                        only true when venues exist but none match the filter;
-                        a truly empty table needs the no-clubs copy instead.
-                        P2-161: the Favorites pill gets its own onboarding copy.
-                        Guest favorites swap it for the CTA below (no double
-                        messaging). */}
-                    {!(activeFilter === 'Favorites' && isHydrated && !storeUser) && (
-                        <p className="text-sm text-gray-400 text-center mb-6">
-                            {activeFilter === 'Favorites'
-                                ? t('clubs.favoritesEmptyDesc')
-                                : venues && venues.length > 0
-                                  ? t('clubs.noClubsDescription')
-                                  : t('clubs.noClubsEmpty')}
-                        </p>
-                    )}
-                    {/* P2-165 (run #111): guest CTA — the ids query is
-                        auth-disabled for guests, so the empty state would
-                        otherwise dead-end them (run #110 follow-up). */}
-                    {activeFilter === 'Favorites' && isHydrated && !storeUser && (
-                        <Link
-                            href={`/${locale}/login`}
-                            className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
-                        >
-                            {t('clubs.favoritesSignInCta')}
-                        </Link>
-                    )}
-                </div>
+                                : t('clubs.noClubs')
+                    }
+                    // Run #68: split the advice line — "adjust your filters" is
+                    // only true when venues exist but none match the filter; a
+                    // truly empty table needs the no-clubs copy instead.
+                    // P2-161: the Favorites pill gets its own onboarding copy.
+                    // Guest favorites swap it for the CTA below (no double
+                    // messaging).
+                    description={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser
+                            ? undefined
+                            : activeFilter === 'Favorites'
+                              ? t('clubs.favoritesEmptyDesc')
+                              : venues && venues.length > 0
+                                ? t('clubs.noClubsDescription')
+                                : t('clubs.noClubsEmpty')
+                    }
+                    // P2-165 (run #111): guest CTA — the ids query is
+                    // auth-disabled for guests, so the empty state would
+                    // otherwise dead-end them (run #110 follow-up).
+                    action={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser && (
+                            <Link
+                                href={`/${locale}/login`}
+                                className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+                            >
+                                {t('clubs.favoritesSignInCta')}
+                            </Link>
+                        )
+                    }
+                />
             )}
 
             {/* ── Populated ── */}
