@@ -87,6 +87,7 @@
     "offline": "Offline",
     "dismiss": "Dismiss",
     "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "pushNotConfigured": "Push notifications are not set up on this server yet. Check back later.",
     "permissionDenied": "Notifications are blocked in your browser settings. Re-enable notifications for KoraLink there, then try again.",
     "or": "or"
   },
