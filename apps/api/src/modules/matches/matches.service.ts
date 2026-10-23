@@ -954,42 +954,59 @@ export class MatchesService {
     }
 
     // Notify every roster player (host included) — bell + push.
-    const players = await this.db
-      .select({ user_id: match_players.user_id })
-      .from(match_players)
-      .where(eq(match_players.match_id, row.id));
-    const rosterIds = players.map((p) => p.user_id);
-    if (rosterIds.length > 0) {
-      await this.activitiesService.record({
-        actorId: row.host_id,
-        verb: 'match_auto_cancelled',
-        matchId: row.id,
-        recipients: rosterIds,
-        excludeActor: false,
-      });
-      await this.notificationsService.sendPushToUsers(rosterIds, {
-        key: 'match_cancelled', // P2-8: text localized per subscriber
-        vars: { title: row.title },
-        data: { type: 'match-cancelled', matchId: row.id },
-      });
+    // Post-commit fan-out is best-effort (run #157): a push-provider or
+    // activity-write throw here previously propagated out of the scheduler
+    // tick AFTER the cancel + refunds had fully committed — the money side
+    // is durable, so the notification failure must not surface as an error.
+    try {
+      const players = await this.db
+        .select({ user_id: match_players.user_id })
+        .from(match_players)
+        .where(eq(match_players.match_id, row.id));
+      const rosterIds = players.map((p) => p.user_id);
+      if (rosterIds.length > 0) {
+        await this.activitiesService.record({
+          actorId: row.host_id,
+          verb: 'match_auto_cancelled',
+          matchId: row.id,
+          recipients: rosterIds,
+          excludeActor: false,
+        });
+        await this.notificationsService.sendPushToUsers(rosterIds, {
+          key: 'match_cancelled', // P2-8: text localized per subscriber
+          vars: { title: row.title },
+          data: { type: 'match-cancelled', matchId: row.id },
+        });
+      }
+    } catch (err) {
+      this.logger.error(
+        `auto-cancel roster notification failed for ${row.id}: ${(err as Error).message}`,
+      );
     }
 
     // P1-17: the queue dies with the match — clear it and tell the waiters.
-    const queuedPlayers = await this.db
-      .select({ user_id: match_waitlist.user_id })
-      .from(match_waitlist)
-      .where(eq(match_waitlist.match_id, row.id));
-    if (queuedPlayers.length > 0) {
-      await this.db
-        .delete(match_waitlist)
+    // Same best-effort rule (run #157): the cancel is already committed.
+    try {
+      const queuedPlayers = await this.db
+        .select({ user_id: match_waitlist.user_id })
+        .from(match_waitlist)
         .where(eq(match_waitlist.match_id, row.id));
-      await this.notificationsService.sendPushToUsers(
-        queuedPlayers.map((q) => q.user_id),
-        {
-          key: 'waitlist_closed', // P2-8: text localized per subscriber
-          vars: { title: row.title },
-          data: { type: 'match-cancelled', matchId: row.id },
-        },
+      if (queuedPlayers.length > 0) {
+        await this.db
+          .delete(match_waitlist)
+          .where(eq(match_waitlist.match_id, row.id));
+        await this.notificationsService.sendPushToUsers(
+          queuedPlayers.map((q) => q.user_id),
+          {
+            key: 'waitlist_closed', // P2-8: text localized per subscriber
+            vars: { title: row.title },
+            data: { type: 'match-cancelled', matchId: row.id },
+          },
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `auto-cancel waitlist clear/notify failed for ${row.id}: ${(err as Error).message}`,
       );
     }
     this.logger.log(
@@ -1960,13 +1977,19 @@ export class MatchesService {
             promoted = backfill;
           } else {
             // No queue: forfeit to the host (anti-abuse, ToS §refunds).
+            // ADJUSTMENT, not REFUND (run #157): a forfeit is not money
+            // returned to its payer — typing it REFUND inflated refund-volume
+            // queries and misread the money map. referenceId normalized to a
+            // bare episode id (reference_id consumers join on id columns, not
+            // prefixed labels); the episode stays recoverable via the
+            // host-forfeit-<episode> ledger key.
             await creditWalletTx(
               tx,
               match.host_id,
               feeSar,
               `host-forfeit-${membership.id}`,
-              'REFUND',
-              `forfeit:${membership.id}`,
+              'ADJUSTMENT',
+              membership.id,
             );
             leaveRefundOutcome = 'forfeited';
           }

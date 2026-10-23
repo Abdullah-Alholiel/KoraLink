@@ -122,22 +122,65 @@ export async function creditWalletTx(
 ): Promise<void> {
   if (!(amountSar > 0)) return; // nothing to credit (defensive: free rows)
 
-  await tx.insert(transactions).values({
-    user_id: userId,
-    type: 'CREDIT',
-    amount: amountSar.toFixed(2),
-    reference_type: referenceType,
-    reference_id: referenceId,
-    idempotency_key: idempotencyKey,
-    status: 'Completed',
-  });
-
-  await tx
-    .update(users)
-    .set(
-      withTimestamp({
-        wallet_balance: sql`${users.wallet_balance} + ${amountSar}`,
-      }),
+  // Sequential replay (reviewer A, run #157): the debit twin (chargeMatchFeeTx)
+  // re-selects its idempotency key before writing; the credit side skipped
+  // that pre-check, so a racing second refund caller (e.g. removePlayer vs a
+  // concurrent leaveMatch on the same roster episode) aborted on the UNIQUE
+  // key with a raw 23505 → 500 instead of an idempotent no-op. Mirror it.
+  const [prior] = await tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.idempotency_key, idempotencyKey),
+        eq(transactions.user_id, userId),
+      ),
     )
-    .where(eq(users.id, userId));
+    .limit(1);
+  if (prior) return; // replay: the original credit already stands
+
+  try {
+    // Immutable ledger entry FIRST — the UNIQUE(idempotency_key) is the
+    // concurrency gate for every credit path (refunds, forfeits, payouts).
+    await tx.insert(transactions).values({
+      user_id: userId,
+      type: 'CREDIT',
+      amount: amountSar.toFixed(2),
+      reference_type: referenceType,
+      reference_id: referenceId,
+      idempotency_key: idempotencyKey,
+      status: 'Completed',
+    });
+
+    // Guarded balance increment (reviewer A, run #157): a vanished user row
+    // would previously commit the CREDIT ledger row with zero balance
+    // movement (silent ledger/balance divergence). Mirror chargeMatchFeeTx /
+    // wallet.service.recordTransaction: existence check + returning() read.
+    const [updatedUser] = await tx
+      .update(users)
+      .set(
+        withTimestamp({
+          wallet_balance: sql`${users.wallet_balance} + ${amountSar}`,
+        }),
+      )
+      .where(eq(users.id, userId))
+      .returning({ wallet_balance: users.wallet_balance });
+
+    if (!updatedUser) {
+      // Rolls back the WHOLE caller tx — the ledger row above never commits.
+      throw new BadRequestException('Wallet account not found.');
+    }
+  } catch (err) {
+    // Lost a concurrent same-key race: this tx is aborted by Postgres —
+    // surface 409; the client/user retry resolves via the replay pre-check.
+    if (
+      err &&
+      typeof err === 'object' &&
+      (err as { code?: unknown }).code === '23505' &&
+      !(err instanceof BadRequestException)
+    ) {
+      throw new ConflictException('Concurrent wallet credit detected — retry.');
+    }
+    throw err;
+  }
 }
