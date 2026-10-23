@@ -918,27 +918,22 @@ export class MatchesService {
       }
 
       // Release a koralink slot + refund the host exactly what he was
-      // debited (same semantics as manual cancelMatch).
+      // debited (same semantics as manual cancelMatch). P2-244 (run #158):
+      // the hand-rolled INSERT + unguarded balance UPDATE moved onto
+      // creditWalletTx — the replay pre-check, user-existence guard and
+      // 23505→409 mapping now protect this automated refund exactly like
+      // every other credit path (joiner refunds above, forfeits, payouts).
       if (row.booking_mode === 'koralink' && row.booking_slot_id) {
         const refundSar = moneyToNumber(row.pitch_cost_sar);
         if (refundSar > 0) {
-          await tx
-            .update(users)
-            .set({
-              wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
-              updated_at: new Date(),
-            })
-            .where(eq(users.id, row.host_id));
-
-          await tx.insert(transactions).values({
-            user_id: row.host_id,
-            type: 'CREDIT',
-            amount: refundSar.toString(),
-            reference_type: 'REFUND',
-            reference_id: row.id,
-            idempotency_key: `refund-${row.id}`,
-            status: 'Completed',
-          });
+          await creditWalletTx(
+            tx,
+            row.host_id,
+            refundSar,
+            `refund-${row.id}`,
+            'REFUND',
+            row.id,
+          );
           refundedSar = refundSar;
         }
         await tx
