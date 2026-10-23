@@ -2,9 +2,9 @@
  * ErrorState — the shared "Error" UX state (UI standards §6.3).
  *
  * Presentational only: the caller passes already-localized `title`,
- * `description` and `retryLabel` (this component never imports i18n; the
- * English `title` default is a last-resort fallback). The retry button
- * renders only when `onRetry` is passed.
+ * `description` and `retryLabel` (this component never imports i18n).
+ * The retry button
+ * renders only when both `onRetry` and `retryLabel` are passed.
  */
 
 import { AlertTriangle } from 'lucide-react';
