@@ -10,14 +10,16 @@
 import { AlertTriangle } from 'lucide-react';
 
 export interface ErrorStateProps {
-    title?: string;
+    /** Already-localized title — REQUIRED so the shared component can never render untranslated copy (PR-Agent run-#159). */
+    title: string;
     description?: string;
     onRetry?: () => void;
+    /** Already-localized retry label — the retry button renders only when BOTH onRetry and retryLabel are passed. */
     retryLabel?: string;
 }
 
 export default function ErrorState({
-    title = 'Something went wrong',
+    title,
     description,
     onRetry,
     retryLabel,
@@ -32,7 +34,7 @@ export default function ErrorState({
                 {title}
             </h3>
             {description && <p className="text-sm text-gray-400 text-center mb-6">{description}</p>}
-            {onRetry && (
+            {onRetry && retryLabel && (
                 <button
                     onClick={onRetry}
                     className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
