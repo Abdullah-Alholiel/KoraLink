@@ -68,19 +68,40 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
         from: () => {
           const chain: Record<string, unknown> = {};
           chain.where = () => chain;
+          // P2-244: creditWalletTx's replay pre-select ends in .limit(1).
+          chain.limit = () => chain;
           chain.then = (resolve: (v: unknown) => void) => resolve([]);
           return chain;
         },
       }),
       update: (table: unknown) => ({
-        set: (setArg: Record<string, unknown>) => ({
-          where: () =>
-            record(
-              table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update',
-              table,
-              setArg,
-            ),
-        }),
+        set: (setArg: Record<string, unknown>) => {
+          // P2-244 (run #158): creditWalletTx awaits
+          // `.where(...).returning(...)` (a plain array) — record at
+          // returning() call time with a once-guard; other awaiters
+          // (slot release) record via then.
+          let recorded = false;
+          const op =
+            table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update';
+          const rec = () => {
+            if (!recorded) {
+              recorded = true;
+              record(op, table, setArg);
+            }
+          };
+          return {
+            where: () => ({
+              returning: () => {
+                rec();
+                return [{ wallet_balance: '200.00' }];
+              },
+              then: (resolve: (v: unknown) => void) => {
+                rec();
+                resolve(thenable());
+              },
+            }),
+          };
+        },
       }),
       insert: (table: unknown) => ({
         values: (valuesArg: Record<string, unknown>) => {
@@ -171,7 +192,8 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     // + slot release, one transaction), and it committed BEFORE the bulk
     // complete statement ran.
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(txCalls.map((c) => c.op)).toEqual(['tx:credit', 'tx:ledger', 'tx:slot']);
+    // P2-244 (run #158): ledger-first order inside creditWalletTx.
+    expect(txCalls.map((c) => c.op)).toEqual(['tx:ledger', 'tx:credit', 'tx:slot']);
     expect(order.indexOf('tx:credit')).toBeGreaterThan(-1);
     expect(order.indexOf('bulk:complete')).toBeGreaterThan(order.indexOf('tx:slot'));
     expect(order).toContain('sweep:select');
