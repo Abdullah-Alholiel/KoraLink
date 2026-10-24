@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { Search, Plus, Trophy, AlertTriangle, X } from 'lucide-react';
+import { Search, Plus, Trophy, X } from 'lucide-react';
 import DatePicker from '@/components/matches/DatePicker';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import MatchDateSections from '@/components/matches/MatchDateSections';
 import FilterBar, { type PlayFilters } from '@/components/matches/FilterBar';
 import SuggestionChips from '@/components/search/SuggestionChips';
@@ -240,41 +242,28 @@ export default function PlayPage() {
             {/* 2. Error State — online fetch failures only; offline is the
                 banner below (a failed fetch is not proof of being offline). */}
             {error && !isLoading && isOnline && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
-                        <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-6 text-center">
-                        {t(errorKey(classifyError(error)))}
-                    </h3>
-                    <button
-                        onClick={() => refetch()}
-                        className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
-                    >
-                        {t('common.retry')}
-                    </button>
-                </div>
+                <ErrorState
+                    title={t(errorKey(classifyError(error)))}
+                    onRetry={() => refetch()}
+                    retryLabel={t('common.retry')}
+                />
             )}
 
             {/* 3. Empty State (only when API returns empty array or search has no results) */}
             {!isLoading && !error && filteredMatches.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                        <Trophy className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-1">
-                        {t('play.noMatches')}
-                    </h3>
-                    <p className="text-sm text-gray-400 text-center mb-6">
-                        {t('play.noMatchesDescription')}
-                    </p>
-                    <Link
-                        href={`/${locale}/host`}
-                        className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
-                    >
-                        {t('play.hostMatch')}
-                    </Link>
-                </div>
+                <EmptyState
+                    icon={Trophy}
+                    title={t('play.noMatches')}
+                    description={t('play.noMatchesDescription')}
+                    action={
+                        <Link
+                            href={`/${locale}/host`}
+                            className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+                        >
+                            {t('play.hostMatch')}
+                        </Link>
+                    }
+                />
             )}
 
             {/* 4. Populated State — matches grouped by date, nearest-first within a day */}

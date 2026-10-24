@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
+import { ArrowLeft, Loader2, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useNow } from '@/hooks/useNow';
@@ -95,16 +97,11 @@ export default function MyGamesPage() {
 
         {/* Error */}
         {error && !isLoading && (
-          <div className="flex flex-col items-center py-20 px-8">
-            <AlertTriangle className="w-10 h-10 text-brand-red" strokeWidth={1.5} />
-            <p className="text-sm text-gray-400 mt-3 text-center">{t(errorKey(classifyError(error)))}</p>
-            <button
-              onClick={() => refetch()}
-              className="mt-4 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold active:scale-95 transition-transform"
-            >
-              {t('common.retry')}
-            </button>
-          </div>
+          <ErrorState
+            title={t(errorKey(classifyError(error)))}
+            onRetry={() => refetch()}
+            retryLabel={t('common.retry')}
+          />
         )}
 
         {/* Populated */}
@@ -203,20 +200,18 @@ export default function MyGamesPage() {
 
             {/* Fully Empty */}
             {activeMatches.length === 0 && historyMatches.length === 0 && (
-              <div className="flex flex-col items-center py-20 px-8">
-                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <Play className="w-8 h-8 text-gray-300" strokeWidth={1.5} />
-                </div>
-                <p className="text-sm font-semibold text-brand-black">
-                  {t('myGames.empty')}
-                </p>
-                <Link
-                  href={`/${locale}/play`}
-                  className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
-                >
-                  {t('myGames.emptyCta')}
-                </Link>
-              </div>
+              <EmptyState
+                icon={Play}
+                title={t('myGames.empty')}
+                action={
+                  <Link
+                    href={`/${locale}/play`}
+                    className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
+                  >
+                    {t('myGames.emptyCta')}
+                  </Link>
+                }
+              />
             )}
           </>
         )}

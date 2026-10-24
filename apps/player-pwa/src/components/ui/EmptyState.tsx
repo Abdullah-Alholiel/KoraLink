@@ -18,7 +18,9 @@ export interface EmptyStateProps {
 
 export default function EmptyState({ icon: Icon = MapPin, title, description, action }: EmptyStateProps) {
     return (
-        <div className="flex flex-col items-center justify-center py-20 px-8">
+        // role="status" (Reviewer B, run #160): announces the empty state to
+        // assistive tech, matching the ErrorState contract.
+        <div role="status" className="flex flex-col items-center justify-center py-20 px-8">
             <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                 <Icon className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
             </div>
