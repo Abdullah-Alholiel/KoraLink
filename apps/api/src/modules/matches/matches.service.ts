@@ -399,9 +399,22 @@ export class MatchesService {
       .from(matches)
       .where(and(eq(matches.status, 'Completed'), eq(matches.host_payout_state, 'held')));
 
+    // P2-252-1 (run #161 Reviewer A MINOR): the margin is the same value on
+    // every iteration — read it ONCE above the loop instead of per match.
+    // Best-effort with the constant fallback: a settings outage must not
+    // break the auto-complete scheduler tick (the old per-match try/catch
+    // absorbed this failure; the hoisted read preserves that resilience).
+    let margin = PLATFORM_MARGIN_SAR;
+    try {
+      margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
+    } catch (err) {
+      this.logger.warn(
+        `platform_margin_sar read failed; using default ${PLATFORM_MARGIN_SAR}: ${(err as Error).message}`,
+      );
+    }
+
     for (const m of flippedRows) {
       try {
-        const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
         const out = await this.db.transaction(async (tx) =>
           releaseHostPayoutInTx(
             tx,
