@@ -27,7 +27,7 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
-import { CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
+import { BlackoutSlotsDto, CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { RealtimeService } from '../gateway/realtime.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -1329,6 +1329,69 @@ export class PartnerService {
     this.realtime.broadcastOps('venues');
 
     return { deleted: true };
+  }
+
+  /**
+   * P2-246 (run #161): bulk slot blackout — delete every FREE slot of one
+   * pitch in an inclusive date range (venue maintenance, Ramadan closure).
+   * "Closed" = row deleted, the same semantics as the single-slot deleteSlot;
+   * booked slots are NEVER touched (reported as skippedBooked) — releasing a
+   * booked slot stays the match-cancellation flow's job. Re-generating the
+   * window afterwards recreates the slots (generateSlots).
+   *
+   * Guard parity with generateSlots: pitch access pre-check, then an in-tx
+   * FOR UPDATE lock over the pitch ⋈ venue join so an ownership transfer
+   * committing mid-flight reads as a clean 404. The DELETE itself carries
+   * `is_booked = false` in its predicate (P1-18 pattern) so a booking that
+   * lands between the count and the delete can never remove a sold slot —
+   * the closedInstances count is read from the DELETE's own returning rows.
+   */
+  async blackoutSlots(
+    actorId: string,
+    actorRole: string,
+    pitchId: string,
+    dto: BlackoutSlotsDto,
+  ) {
+    await this.assertPitchAccess(actorId, actorRole, pitchId);
+
+    const result = await this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: pitches.id })
+        .from(pitches)
+        .innerJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(this.pitchOwnerScope(actorId, actorRole, pitchId))
+        .limit(1)
+        .for('update');
+      if (!locked) throw new NotFoundException('Pitch not found.');
+
+      const range = and(
+        eq(pitch_slots.pitch_id, pitchId),
+        gte(pitch_slots.slot_date, dto.from),
+        lte(pitch_slots.slot_date, dto.to),
+      );
+
+      const deleted = await tx
+        .delete(pitch_slots)
+        .where(and(range, eq(pitch_slots.is_booked, false)))
+        .returning({ id: pitch_slots.id });
+
+      const [bookedRow] = await tx
+        .select({ booked: sql<number>`count(*)::int` })
+        .from(pitch_slots)
+        .where(and(range, eq(pitch_slots.is_booked, true)));
+
+      return { closed: deleted.length, skippedBooked: bookedRow?.booked ?? 0 };
+    });
+
+    this.realtime.broadcastOps('venues');
+
+    return {
+      pitchId,
+      from: dto.from,
+      to: dto.to,
+      closedInstances: result.closed,
+      skippedBooked: result.skippedBooked,
+    };
   }
 
   // ── Match visibility (P1-26) ────────────────────────────────────────────────
