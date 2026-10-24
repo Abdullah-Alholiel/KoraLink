@@ -152,7 +152,10 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
     const { join } = require('path') as typeof import('path');
     const src = readFileSync(join(__dirname, 'partner.service.ts'), 'utf8');
     const start = src.indexOf('async blackoutSlots');
-    const body = src.slice(start, src.indexOf('// ── Match visibility', start));
+    expect(start).toBeGreaterThan(-1); // method must exist — else the pin is vacuous
+    const end = src.indexOf('// ── Match visibility', start);
+    expect(end).toBeGreaterThan(start); // end-marker must exist AFTER the method — else slice would span the file and other methods could satisfy the assertions (PR-Agent r1 MINOR)
+    const body = src.slice(start, end);
     expect(body).toContain('eq(pitch_slots.is_booked, false)');
     expect(body).toContain('eq(pitch_slots.is_booked, true)');
     expect(body).toContain("for('update')");
