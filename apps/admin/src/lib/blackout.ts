@@ -30,13 +30,15 @@ export function validateBlackoutRange(from: string, to: string): BlackoutRangeIs
   return null;
 }
 
-export type BlackoutErrorKind = 'range' | 'access' | 'network';
+export type BlackoutErrorKind = 'range' | 'auth' | 'access' | 'server' | 'network';
 
 /** Maps a failed call to a localized-copy bucket — never the raw backend text. */
 export function blackoutErrorKind(e: unknown): BlackoutErrorKind {
   if (e instanceof ApiError) {
     if (e.status === 400) return 'range';
-    if (e.status === 401 || e.status === 403 || e.status === 404) return 'access';
+    if (e.status === 401) return 'auth';
+    if (e.status === 403 || e.status === 404) return 'access';
+    if (e.status === 429 || e.status >= 500) return 'server';
   }
   return 'network';
 }

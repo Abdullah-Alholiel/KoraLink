@@ -61,7 +61,17 @@ export default function BlackoutPanel({ pitchId, onChanged }: BlackoutPanelProps
   }
 
   const failureText =
-    failure === 'range' ? t('failRange') : failure === 'access' ? t('failAccess') : failure === 'network' ? t('failNetwork') : null;
+    failure === 'range'
+      ? t('failRange')
+      : failure === 'auth'
+        ? t('failAuth')
+        : failure === 'access'
+          ? t('failAccess')
+          : failure === 'server'
+            ? t('failServer')
+            : failure === 'network'
+              ? t('failNetwork')
+              : null;
 
   return (
     <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5">

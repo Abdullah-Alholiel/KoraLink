@@ -298,7 +298,9 @@
       "success": "{count, plural, =0 {No free slots in this range — nothing was closed.} one {# slot closed.} other {# slots closed.}}",
       "skippedBooked": "{count, plural, one {# booked slot was left untouched} other {# booked slots were left untouched}} — cancel those matches first if the pitch must be fully closed.",
       "failRange": "The server rejected this date range — it may be invalid or longer than the allowed limit. Check both dates and try again.",
-      "failAccess": "You can't close slots on this pitch — it was not found or isn't linked to your account. Refresh the page; if it persists, contact KoraLink support.",
+      "failAuth": "Your session ended — nothing was closed. Sign in again to continue.",
+    "failServer": "The server had a problem — nothing was closed. Try again in a moment; if it keeps failing, contact support.",
+    "failAccess": "You can't close slots on this pitch — it was not found or isn't linked to your account. Refresh the page; if it persists, contact KoraLink support.",
       "failNetwork": "Couldn't reach the server, so no slots were closed. Check your connection and try again."
     }
   },
