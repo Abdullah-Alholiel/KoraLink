@@ -184,6 +184,9 @@ export interface Settlement {
   paid_at: string | null;
   created_at: string;
   venue_name: string | null;
+  /** P2-250: payout-request provenance — NULL = auto-generated (admin generator / pre-0053 row). */
+  requested_by: string | null;
+  requested_by_name: string | null;
 }
 
 export interface AuditLog {

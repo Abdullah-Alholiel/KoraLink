@@ -604,6 +604,8 @@
     "loadingSettlements": "Loading settlements…",
     "thPeriod": "Period",
     "thPayoutRef": "Payout ref",
+    "thRequestedBy": "Requested by",
+    "requestedByAuto": "Auto-generated",
     "auditTitle": "Audit Log",
     "loadingAudit": "Loading audit log…",
     "thTime": "Time",

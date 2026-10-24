@@ -57,9 +57,15 @@ export class AdminSettlementsService {
       SELECT
         s.id, s.venue_id, s.amount::text AS amount,
         s.period_start, s.period_end, s.status, s.payout_ref, s.paid_at, s.created_at,
+        -- P2-250 (run #160, Reviewer A #159): surface payout-request
+        -- provenance so admins can distinguish partner-requested rows from
+        -- auto-generated ones (P2-C read-model, partner console half shipped
+        -- in PR #148; this is the admin half).
+        s.requested_by, u.full_name AS requested_by_name,
         v.name AS venue_name
       FROM settlements s
       INNER JOIN venues v ON v.id = s.venue_id
+      LEFT JOIN users u ON u.id = s.requested_by
       ${where}
       ORDER BY ${whitelistedOrderBy(
         dto.sortBy,
