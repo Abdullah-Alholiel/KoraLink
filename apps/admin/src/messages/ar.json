@@ -604,6 +604,8 @@
     "loadingSettlements": "جارٍ تحميل التسويات…",
     "thPeriod": "الفترة",
     "thPayoutRef": "مرجع الدفع",
+    "thRequestedBy": "طُلب من",
+    "requestedByAuto": "مُنشأ تلقائياً",
     "auditTitle": "سجل التدقيق",
     "loadingAudit": "جارٍ تحميل سجل التدقيق…",
     "thTime": "الوقت",

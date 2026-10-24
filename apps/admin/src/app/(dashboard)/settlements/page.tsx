@@ -237,6 +237,17 @@ export default function SettlementsPage() {
                   ),
                 },
                 { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
+                {
+                  // P2-250: payout-request provenance — partner name when
+                  // requested, explicit "auto-generated" when NULL (never a
+                  // bare dash: the distinction is the whole point).
+                  label: t('thRequestedBy'),
+                  value: selected.requested_by_name ? (
+                    <span dir="auto">{selected.requested_by_name}</span>
+                  ) : (
+                    t('requestedByAuto')
+                  ),
+                },
               ]
             : []
         }
