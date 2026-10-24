@@ -3366,26 +3366,22 @@ export class MatchesService {
           // Refund the exact pitch cost the host was debited at create.
           // Never derive this from price_per_player — that embeds the
           // platform margin and would over-refund the host.
+          // P2-244b (run #161): the hand-rolled balance UPDATE + ledger
+          // INSERT moved onto creditWalletTx — the replay pre-check,
+          // user-existence guard and 23505→409 mapping now protect this
+          // manual refund exactly like the auto-cancel twin (P2-244) and
+          // every other credit path.
           const refundSar = moneyToNumber(match.pitch_cost_sar);
-          refundedSar = refundSar;
           if (refundSar > 0) {
-            await tx
-              .update(users)
-              .set({
-                wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
-                updated_at: new Date(),
-              })
-              .where(eq(users.id, userId));
-
-            await tx.insert(transactions).values({
-              user_id: userId,
-              type: 'CREDIT',
-              amount: refundSar.toString(),
-              reference_type: 'REFUND',
-              reference_id: matchId,
-              idempotency_key: `refund-${matchId}`,
-              status: 'Completed',
-            });
+            await creditWalletTx(
+              tx,
+              userId,
+              refundSar,
+              `refund-${matchId}`,
+              'REFUND',
+              matchId,
+            );
+            refundedSar = refundSar;
           }
         }
       }
