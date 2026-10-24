@@ -279,6 +279,29 @@
       "managerName": "Manager name",
       "managerPhone": "Manager phone",
       "submitVerification": "Submit verification"
+    },
+    "blackout": {
+      "title": "Close for maintenance",
+      "subtitle": "Close every free slot in a date range. Booked slots are never touched.",
+      "open": "Close dates…",
+      "rangeTitle": "Blackout range",
+      "from": "From",
+      "to": "To (inclusive)",
+      "hint": "Up to {max} days per request. Closed slots can be recreated later with the weekly generator.",
+      "errorOrder": "The end date is before the start date. Pick an end date on or after the start date.",
+      "errorTooLong": "This range is {days} days — the limit is {max}. Shorten the range or split it into several requests.",
+      "submit": "Close free slots",
+      "submitting": "Closing slots…",
+      "confirmTitle": "Close these slots?",
+      "confirmMsg": "Every free slot from {from} to {to} ({days, plural, one {# day} other {# days}}) will be removed and can no longer be booked. Booked slots stay as they are.",
+      "confirmLabel": "Yes, close slots",
+      "success": "{count, plural, =0 {No free slots in this range — nothing was closed.} one {# slot closed.} other {# slots closed.}}",
+      "skippedBooked": "{count, plural, one {# booked slot was left untouched} other {# booked slots were left untouched}} — cancel those matches first if the pitch must be fully closed.",
+      "failRange": "The server rejected this date range — it may be invalid or longer than the allowed limit. Check both dates and try again.",
+      "failAuth": "Your session ended — nothing was closed. Sign in again to continue.",
+    "failServer": "The server had a problem — nothing was closed. Try again in a moment; if it keeps failing, contact support.",
+    "failAccess": "You can't close slots on this pitch — it was not found or isn't linked to your account. Refresh the page; if it persists, contact KoraLink support.",
+      "failNetwork": "Couldn't reach the server, so no slots were closed. Check your connection and try again."
     }
   },
   "slotManager": {
