@@ -25,7 +25,13 @@ export default function ErrorState({
     retryLabel,
 }: ErrorStateProps) {
     return (
-        <div className="flex flex-col items-center justify-center py-20 px-8">
+        // role="status" (Reviewer B, run #160): announces the transition into
+        // the error state. NOTE: role="status" carries an IMPLICIT
+        // aria-live="polite" + aria-atomic (PR-Agent r1, run #160) — the
+        // region announces insertion and in-place content changes. That is the
+        // desired contract for mount/unmount state swaps, but never embed
+        // rapidly-updating copy inside this component.
+        <div role="status" className="flex flex-col items-center justify-center py-20 px-8">
             <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                 <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
             </div>
