@@ -238,12 +238,14 @@ export default function SettlementsPage() {
                 },
                 { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
                 {
-                  // P2-250: payout-request provenance — partner name when
-                  // requested, explicit "auto-generated" when NULL (never a
-                  // bare dash: the distinction is the whole point).
+                  // P2-250 (PR-Agent r2 on PR #170): gate the provenance on
+                  // requested_by ITSELF — a partner-requested row whose user
+                  // row lost/never had a full_name must NOT read as
+                  // "Auto-generated"; fall back to the id, which is still
+                  // proof of a human requester.
                   label: t('thRequestedBy'),
-                  value: selected.requested_by_name ? (
-                    <span dir="auto">{selected.requested_by_name}</span>
+                  value: selected.requested_by ? (
+                    <span dir="auto">{selected.requested_by_name ?? `#${selected.requested_by.slice(0, 8).toUpperCase()}`}</span>
                   ) : (
                     t('requestedByAuto')
                   ),
