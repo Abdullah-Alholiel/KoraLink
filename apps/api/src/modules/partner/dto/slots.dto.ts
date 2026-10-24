@@ -130,6 +130,44 @@ export class SlotWindowQueryDto {
   to: string;
 }
 
+/** Cross-field cap: an inclusive blackout range may span at most 62 days. */
+@ValidatorConstraint({ name: 'blackoutMaxRange', async: false })
+class BlackoutMaxRangeConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const o = args.object as { from?: string; to?: string };
+    if (!isCalendarRealDate(o.from) || !isCalendarRealDate(o.to)) return true;
+    const days = (Date.UTC(...(o.to.split('-').map(Number) as [number, number, number])) -
+      Date.UTC(...(o.from.split('-').map(Number) as [number, number, number]))) / 86_400_000;
+    return days <= 61; // inclusive span ≤ 62 days
+  }
+
+  defaultMessage(): string {
+    return 'blackout range may span at most 62 days';
+  }
+}
+
+/**
+ * P2-246 (run #161): bulk slot blackout — close every FREE slot of one pitch
+ * in a date range with a single call (venue maintenance, Ramadan closure).
+ * Mirrors the single-slot close semantics (deleteSlot): "closed" = row
+ * DELETED; booked slots are NEVER touched here (reported as `skippedBooked`)
+ * — releasing a booked slot stays the match-cancellation flow's job.
+ * Re-generating slots afterwards recreates the window (generateSlots).
+ */
+export class BlackoutSlotsDto {
+  @ApiProperty({ example: '2026-11-01', description: 'Blackout start (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  from: string;
+
+  @ApiProperty({ example: '2026-11-05', description: 'Blackout end (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  @Validate(SlotWindowOrderConstraint)
+  @Validate(BlackoutMaxRangeConstraint)
+  to: string;
+}
+
 export class UpdateVenuePartnerDto {
   @ApiPropertyOptional({ example: 'Olaya Sports Park' })
   @IsOptional()

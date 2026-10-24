@@ -19,7 +19,7 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
-import { CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto, UpdateVenuePartnerDto } from './dto/slots.dto';
+import { BlackoutSlotsDto, CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
 import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
@@ -95,6 +95,20 @@ export class PartnerController {
     @Param('slotId', UuidParamPipe) slotId: string,
   ) {
     return this.partner.deleteSlot(user.sub, user.role, slotId);
+  }
+
+  /**
+   * P2-246 (run #161): bulk slot blackout — delete every FREE slot of the
+   * pitch in the inclusive [from, to] range (maintenance closures). Booked
+   * slots are never touched; the response reports both counts.
+   */
+  @Post('pitches/:id/slots/blackout')
+  blackoutSlots(
+    @CurrentUser() user: { sub: string; role: string },
+    @Param('id', UuidParamPipe) id: string,
+    @Body() dto: BlackoutSlotsDto,
+  ) {
+    return this.partner.blackoutSlots(user.sub, user.role, id, dto);
   }
 
   @Get('pitches')
