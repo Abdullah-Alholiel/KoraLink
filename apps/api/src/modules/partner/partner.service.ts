@@ -1225,6 +1225,12 @@ export class PartnerService {
         }
       }
 
+      // P2-249 (run #160, Reviewer A #159): inspect the error code — the old
+      // blind catch misdiagnosed ANY tx failure (deadlock, serialization,
+      // connection drop) as "slot already exists". Only a 23505 on the
+      // (pitch_id, slot_date, start_time) unique constraint is a conflict;
+      // postgres-js surfaces driver codes on err.cause as well as err (same
+      // dual-surface read as completeProfile, P2-238).
       try {
         const [slot] = await tx
           .insert(pitch_slots)
@@ -1235,8 +1241,15 @@ export class PartnerService {
             end_time: `${dto.end_time}:00`,
           })
           .returning();
+        // Leaf table (no relations to join) — the bare returning row IS the
+        // fully populated shape for this endpoint (P2-249: standardized
+        // deliberately, not an accidental bare-row return).
         return slot;
-      } catch {
+      } catch (err) {
+        const pgCode =
+          (err as { code?: string })?.code ??
+          (err as { cause?: { code?: string } })?.cause?.code;
+        if (pgCode !== '23505') throw err;
         throw new ConflictException('A slot already exists at that date and time.');
       }
     });
