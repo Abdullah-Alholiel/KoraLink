@@ -399,9 +399,12 @@ export class MatchesService {
       .from(matches)
       .where(and(eq(matches.status, 'Completed'), eq(matches.host_payout_state, 'held')));
 
+    // P2-252-1 (run #161 Reviewer A MINOR): the margin is the same value on
+    // every iteration — read it ONCE above the loop instead of per match.
+    const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
+
     for (const m of flippedRows) {
       try {
-        const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
         const out = await this.db.transaction(async (tx) =>
           releaseHostPayoutInTx(
             tx,
