@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminSettlementsService } from './settlements.service';
+import { addDaysToDateString, riyadhDateString } from '../../common/utils/riyadh-date';
 
 /**
  * Data-integrity race guards (P2-9):
@@ -41,7 +43,10 @@ describe('AdminSettlementsService race guards', () => {
       update: jest.fn(() => updateChain(opts.updateRows)),
       execute: jest.fn(async () => opts.executeRows),
       transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
-        cb({ insert: jest.fn(() => insertChain(opts.insertResults)) }),
+        cb({
+          execute: jest.fn(async () => opts.executeRows),
+          insert: jest.fn(() => insertChain(opts.insertResults)),
+        }),
       ),
     };
     const audit = { log: jest.fn(async () => {}) };
@@ -223,5 +228,99 @@ describe('AdminSettlementsService race guards', () => {
     const result = await svc.generatePending('admin-1');
     expect(result.generated).toBe(2);
     expect(audit.log).toHaveBeenCalledTimes(2);
+  });
+
+  // P2-216 (run #163): the revenue SELECT moved INSIDE the tx and the venue
+  // rows are locked ORDER BY id FOR UPDATE before it runs — the check-vs-
+  // insert TOCTOU against the partner payout path is closed at the lock.
+  it('generatePending locks venues (ordered FOR UPDATE) before the in-tx revenue SELECT', async () => {
+    const dialect = new PgDialect();
+    const txSqls: string[] = [];
+    const insertChain = {
+      values: () => insertChain,
+      onConflictDoNothing: () => insertChain,
+      returning: () => [{ id: 's1', venue_id: 'v1', amount: '100.00' }],
+    };
+    const db = {
+      query: { settlements: { findFirst: jest.fn() } },
+      update: jest.fn(),
+      execute: jest.fn(async () => [] as unknown[]),
+      transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          execute: jest.fn(async (q: unknown) => {
+            txSqls.push(dialect.sqlToQuery(q as never).sql);
+            return txSqls.length === 1
+              ? [] // lock select
+              : [{ venue_id: 'v1', amount: '100.00' }]; // revenue select
+          }),
+          insert: jest.fn(() => insertChain),
+        }),
+      ),
+    };
+    const audit = { log: jest.fn(async () => {}) };
+    const svc = new AdminSettlementsService(
+      db as never,
+      audit as never,
+      { getNumber: jest.fn(async () => 7) } as never,
+      { broadcastOps: jest.fn() } as never,
+      { record: jest.fn(async () => {}) } as never,
+      { sendPushToUsers: jest.fn(async () => 0) } as never,
+    );
+
+    const result = await svc.generatePending('admin-1');
+    expect(result.generated).toBe(1);
+    // First tx statement: the ordered venue lock.
+    expect(txSqls[0]).toMatch(/FOR UPDATE/);
+    expect(txSqls[0]).toContain('ORDER BY id');
+    expect(txSqls[0]).toContain('venues');
+    // Second: the revenue SELECT — same money source as the partner path.
+    expect(txSqls[1]).toContain("AT TIME ZONE 'Asia/Riyadh'");
+    expect(txSqls[1]).toContain('NOT EXISTS');
+    expect(txSqls[1]).not.toContain('CURRENT_DATE');
+  });
+
+  it('generatePending period bounds carry the true Riyadh window', async () => {
+    const insertChain: {
+      capturedValues?: { period_start: string; period_end: string };
+      values(v: unknown): unknown;
+      onConflictDoNothing(): unknown;
+      returning(): unknown[];
+    } = {
+      capturedValues: undefined,
+      values(v: unknown) {
+        insertChain.capturedValues = v as { period_start: string; period_end: string };
+        return insertChain;
+      },
+      onConflictDoNothing() {
+        return insertChain;
+      },
+      returning() {
+        return [{ id: 's1', venue_id: 'v1', amount: '100.00' }];
+      },
+    };
+    const db = {
+      query: { settlements: { findFirst: jest.fn() } },
+      update: jest.fn(),
+      execute: jest.fn(async () => [] as unknown[]),
+      transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          execute: jest.fn(async () => [{ venue_id: 'v1', amount: '100.00' }]),
+          insert: jest.fn(() => insertChain),
+        }),
+      ),
+    };
+    const svc = new AdminSettlementsService(
+      db as never,
+      { log: jest.fn(async () => {}) } as never,
+      { getNumber: jest.fn(async () => 7) } as never,
+      { broadcastOps: jest.fn() } as never,
+      { record: jest.fn(async () => {}) } as never,
+      { sendPushToUsers: jest.fn(async () => 0) } as never,
+    );
+    await svc.generatePending('admin-1');
+    const vals = insertChain.capturedValues;
+    expect(vals).toBeDefined();
+    expect(vals!.period_end).toBe(riyadhDateString());
+    expect(vals!.period_start).toBe(addDaysToDateString(vals!.period_end, -7));
   });
 });

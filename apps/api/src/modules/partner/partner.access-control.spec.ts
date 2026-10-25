@@ -123,7 +123,31 @@ function makeService(rows: StubRows) {
     // Raw-SQL path (run #22): getDashboard's weekly-revenue query resolves to
     // a bare rows array (postgres-js). The tests assert venue scoping only,
     // so an empty week trend is fine.
-    execute: async () => [],
+    // Run #163 (P2-216): getEarnings totals are a Postgres SUM aggregate —
+    // emulate it over the stub settlements so the scoped-total assertion
+    // keeps biting through the real query path.
+    execute: async (q?: { queryChunks?: unknown[] }) => {
+      const text = (q?.queryChunks ?? [])
+        .map((c) =>
+          typeof c === 'string'
+            ? c
+            : c && typeof c === 'object' && 'value' in (c as { value?: unknown[] })
+              ? ((c as { value: unknown[] }).value ?? []).join('')
+              : '',
+        )
+        .join(' ');
+      if (text.includes('filter (where status')) {
+        const scoped = (rows.settlements ?? []) as Array<{ status?: string; amount?: string }>;
+        const sum = (status: string) =>
+          scoped
+            .filter((r) => r.status === status)
+            .reduce((acc: number, r) => acc + Number(r.amount ?? '0'), 0);
+        return [
+          { pending: sum('pending').toFixed(2), paid: sum('paid').toFixed(2) },
+        ];
+      }
+      return [];
+    },
     select: () => ({ from: (table: unknown) => chainFor(table) }),
     update: (table: unknown) => ({
       set: () => ({
@@ -190,7 +214,8 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
       });
       const earnings = await service.getEarnings(ADMIN, 'Admin');
       expect(ownerFilterValue(captured.get(venues))).toBeUndefined();
-      expect(earnings.totalPaid).toBe(10);
+      // Run #163 (P2-216): totals are exact-decimal strings from the SQL SUM.
+      expect(earnings.totalPaid).toBe('10.00');
     });
 
     it('scopes an owner to their own venues only', async () => {
@@ -206,7 +231,8 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
       const { service } = makeService({ venues: [otherVenue], settlements: [] });
       const earnings = await service.getEarnings(OWNER, 'VenueOwner');
       // Legacy fields stay byte-compatible; P1-65 adds the zeroed revenue view.
-      expect(earnings).toMatchObject({ settlements: [], totalPending: 0, totalPaid: 0 });
+      // Run #163 (P2-216): totals are the '0.00' string contract on empty scopes.
+      expect(earnings).toMatchObject({ settlements: [], totalPending: '0.00', totalPaid: '0.00' });
       expect(earnings.perVenue).toEqual([]);
       expect(earnings.fourWeekTrend).toHaveLength(4);
       expect(earnings.fourWeekTrend.every((w) => w.revenue === '0.00' && w.bookedCount === 0)).toBe(true);

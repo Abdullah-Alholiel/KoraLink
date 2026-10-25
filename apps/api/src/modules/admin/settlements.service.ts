@@ -9,6 +9,8 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { settlements } from '../../database/schema';
 import { whitelistedOrderBy } from '../../common/utils/sort';
+import { riyadhDateString, addDaysToDateString } from '../../common/utils/riyadh-date';
+import { buildSettlementRevenueQuery } from '../partner/settlement-revenue';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -175,35 +177,37 @@ export class AdminSettlementsService {
    * Generates a `pending` settlement per venue for completed KoraLink-booked
    * matches within the configured payout cadence window. Venues already
    * settled for the window are skipped (no double-payout).
+   *
+   * P2-216 (run #163): the revenue SELECT moved INSIDE the transaction and
+   * the venue rows are locked (ORDER BY id FOR UPDATE) before it runs — the
+   * old flow read the unsettled set on the pooled db OUTSIDE the tx, so a
+   * partner payout request committing between the SELECT and the INSERTs
+   * slipped past the dedupe guard (check-vs-insert TOCTOU against the very
+   * path it must serialize with). Both paths now share ONE money-source
+   * query (modules/partner/settlement-revenue.ts) and one lock order.
    */
   async generatePending(adminId: string, ip?: string) {
     const cadenceDays = await this.settings.getNumber('payout_cadence_days', 7);
-    const windowStart = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000);
-    const windowStartIso = windowStart.toISOString();
+    const riyadhEnd = riyadhDateString();
+    const startDay = addDaysToDateString(riyadhEnd, -cadenceDays);
 
-    const rows = (await this.db.execute(sql`
-      SELECT
-        v.id AS venue_id,
-        COALESCE(SUM(m.pitch_cost_sar), 0)::text AS amount
-      FROM matches m
-      INNER JOIN pitches p ON p.id = m.pitch_id
-      INNER JOIN venues v ON v.id = p.venue_id
-      WHERE m.status = 'Completed'
-        AND m.booking_mode = 'koralink'
-        AND m.scheduled_at >= ${windowStartIso}
-        AND NOT EXISTS (
-          SELECT 1 FROM settlements s
-          WHERE s.venue_id = v.id AND s.period_start >= ${windowStartIso}::date
-        )
-      GROUP BY v.id
-      HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
-    `)) as unknown as Array<{ venue_id: string; amount: string }>;
-
-    const created: Array<Record<string, unknown>> = [];
-    // Insert inside a transaction and rely on the `(venue_id, period_start)`
-    // unique index via `onConflictDoNothing` — concurrent generatePending runs
-    // (or a re-run for an already-settled window) can no longer double-insert.
     const inserted = await this.db.transaction(async (tx) => {
+      // Lock ALL venue rows up-front, in a deterministic order — the same
+      // lock the partner requestPayout tx takes first, so a concurrent
+      // request/generate waits here instead of racing the guard. JOIN-free
+      // IN(subquery) keeps FOR UPDATE legal (no outer-join partition) and
+      // locks ONLY the venue rows (not pitches/matches).
+      await tx.execute(sql`
+        SELECT id FROM venues
+        WHERE id IN (SELECT venue_id FROM pitches)
+        ORDER BY id
+        FOR UPDATE
+      `);
+
+      const rows = (await tx.execute(
+        buildSettlementRevenueQuery({ venueIds: [], cadenceDays, riyadhEnd }),
+      )) as unknown as Array<{ venue_id: string; amount: string }>;
+
       const out: Array<Record<string, unknown>> = [];
       for (const row of rows) {
         // P2-4: row.amount arrives as Postgres' EXACT decimal string (numeric
@@ -215,8 +219,8 @@ export class AdminSettlementsService {
           .values({
             venue_id: row.venue_id,
             amount,
-            period_start: windowStartIso.slice(0, 10),
-            period_end: new Date().toISOString().slice(0, 10),
+            period_start: startDay,
+            period_end: riyadhEnd,
             status: 'pending',
           })
           .onConflictDoNothing()
@@ -227,7 +231,6 @@ export class AdminSettlementsService {
     });
 
     for (const settlement of inserted) {
-      created.push(settlement);
       await this.audit.log({
         adminId,
         action: 'settlement.generate',
@@ -240,6 +243,6 @@ export class AdminSettlementsService {
     }
     this.realtime.broadcastOps('settlements');
 
-    return { generated: created.length, settlements: created };
+    return { generated: inserted.length, settlements: inserted };
   }
 }

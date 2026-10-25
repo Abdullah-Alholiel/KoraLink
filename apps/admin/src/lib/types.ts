@@ -358,8 +358,11 @@ export interface PartnerEarnings {
     requested_by: string | null;
     requested_by_name: string | null;
   }[];
-  totalPending: number;
-  totalPaid: number;
+  // Run #163 (P2-216): totals are Postgres exact decimal strings ('0.00' on
+  // empty scopes) — formatMoney() branches on strings; `?? 0` still guards a
+  // loading-undefined.
+  totalPending: number | string;
+  totalPaid: number | string;
   /** P1-65: 4-week Riyadh window, SQL-aggregated; money as numeric strings. */
   perVenue: PartnerVenueRevenue[];
   fourWeekTrend: PartnerRevenueWeek[];

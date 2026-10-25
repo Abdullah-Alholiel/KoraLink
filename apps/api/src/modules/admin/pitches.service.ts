@@ -10,6 +10,7 @@ import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { PartnerService } from '../partner/partner.service';
+import { riyadhDateString } from '../../common/utils/riyadh-date';
 import { CreateSlotDto, GenerateSlotsDto } from '../partner/dto/slots.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -47,6 +48,11 @@ export class AdminPitchesService {
       ? sql`WHERE ${and(...clauses)!}`
       : sql``;
 
+    // P2-216 (run #163): "upcoming slots" is counted from the Riyadh today —
+    // bare CURRENT_DATE follows the Postgres server timezone and miscounts
+    // the last three hours of every Riyadh day on a UTC server.
+    const todayRiyadh = riyadhDateString();
+
     const rows = (await this.db.execute(sql`
       SELECT
         p.id, p.name, p.size, p.surface_type, p.environment,
@@ -54,9 +60,9 @@ export class AdminPitchesService {
         v.id AS venue_id, v.name AS venue_name, v.city AS venue_city,
         u.id AS owner_id, u.full_name AS owner_name, u.phone AS owner_phone,
         (SELECT COUNT(*)::int FROM pitch_slots ps
-           WHERE ps.pitch_id = p.id AND ps.slot_date >= CURRENT_DATE) AS slots_total,
+           WHERE ps.pitch_id = p.id AND ps.slot_date >= ${todayRiyadh}::date) AS slots_total,
         (SELECT COUNT(*)::int FROM pitch_slots ps
-           WHERE ps.pitch_id = p.id AND ps.slot_date >= CURRENT_DATE AND ps.is_booked) AS slots_booked
+           WHERE ps.pitch_id = p.id AND ps.slot_date >= ${todayRiyadh}::date AND ps.is_booked) AS slots_booked
       FROM pitches p
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN users u ON u.id = v.owner_id

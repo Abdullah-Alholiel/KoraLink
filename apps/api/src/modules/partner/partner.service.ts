@@ -39,40 +39,25 @@ function windowCapacity(startMins: number, endMins: number, dur: number): number
   return endMins > startMins ? Math.floor((endMins - startMins) / dur) : 0;
 }
 
-/** Asia/Riyadh is a fixed UTC+03:00 offset (no DST). */
-const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
-
-/** P2-109: Riyadh calendar date (YYYY-MM-DD) for an instant — never server-local. */
-export function riyadhDateString(nowMs: number = Date.now()): string {
-  return new Date(nowMs + RIYADH_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-/** P2-109: shift a YYYY-MM-DD date string by whole days (pure UTC-midnight arithmetic). */
-export function addDaysToDateString(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-/** P2-109: the 7 Riyadh calendar days ending today, oldest first. */
-export function riyadhTrendDays(nowMs: number = Date.now()): string[] {
-  const today = riyadhDateString(nowMs);
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) days.push(addDaysToDateString(today, -i));
-  return days;
-}
-
-/** P1-65: earnings revenue window = 4 Riyadh weeks (28 days) ending Riyadh-today. */
-export const EARNINGS_TREND_WEEKS = 4;
-
-/** P1-65: the 4 weekly bucket start dates (YYYY-MM-DD), oldest first; the last week ends today. */
-export function riyadhTrendWeeks(nowMs: number = Date.now()): string[] {
-  const today = riyadhDateString(nowMs);
-  const windowStart = addDaysToDateString(today, -(EARNINGS_TREND_WEEKS * 7 - 1));
-  const weeks: string[] = [];
-  for (let i = 0; i < EARNINGS_TREND_WEEKS; i++) weeks.push(addDaysToDateString(windowStart, i * 7));
-  return weeks;
-}
+/** Asia/Riyadh helpers live in common/utils/riyadh-date (P2-216 hex extract).
+ * Re-exported here for spec compat — specs import these from './partner.service'.
+ */
+export {
+  EARNINGS_TREND_WEEKS,
+  RIYADH_OFFSET_MS,
+  addDaysToDateString,
+  riyadhDateString,
+  riyadhTrendDays,
+  riyadhTrendWeeks,
+} from '../../common/utils/riyadh-date';
+import {
+  EARNINGS_TREND_WEEKS,
+  addDaysToDateString,
+  riyadhDateString,
+  riyadhTrendDays,
+  riyadhTrendWeeks,
+} from '../../common/utils/riyadh-date';
+import { buildSettlementRevenueQuery } from './settlement-revenue';
 
 export interface EarningsVenueRevenue {
   venueId: string;
@@ -144,6 +129,11 @@ export class PartnerService {
    * `(venue_id, period_start)` index + onConflictDoNothing close the
    * double-request race; the venue-row FOR UPDATE lock serializes against a
    * concurrent admin `generatePending` window (P2-105 lock idiom).
+   * P2-216 (run #163): window + dedupe guard ride the SHARED
+   * buildSettlementRevenueQuery (./settlement-revenue.ts) — the admin
+   * generator renders the identical SQL, and the venue lock is now ordered
+   * (ORDER BY id FOR UPDATE) so concurrent request/generate runs can never
+   * deadlock on multi-row lock acquisition.
    */
   async requestPayout(
     ownerId: string,
@@ -175,47 +165,40 @@ export class PartnerService {
     const cadenceDays = this.settings
       ? await this.settings.getNumber('payout_cadence_days', 7)
       : 7;
-    const windowStartIso = new Date(
-      Date.now() - cadenceDays * 24 * 60 * 60 * 1000,
-    ).toISOString();
 
     // One tx: lock the partner's venue rows FIRST (blocks a concurrent
     // generate/request window for the same venues until commit), then compute
     // unsettled revenue and insert.
+    // P2-216 (run #163): the lock is deterministic — ORDER BY id BEFORE the
+    // FOR UPDATE — so two concurrent requests (or a partner request + admin
+    // generate) always acquire the venue rows in the same order. Multi-row
+    // locks without a shared order can deadlock.
     const created = await this.db.transaction(async (tx) => {
       const venueRows = (await tx
         .select({ id: venues.id, name: venues.name })
         .from(venues)
         .where(eq(venues.owner_id, ownerId))
+        .orderBy(asc(venues.id))
         .for('update')) as Array<{ id: string; name: string }>;
       if (!venueRows.length) return [] as Array<{ id: string; venueId: string; venueName: string; amount: string; periodStart: string; periodEnd: string; status: string }>;
 
-      const rows = (await tx.execute(sql`
-        SELECT
-          v.id AS venue_id,
-          COALESCE(SUM(m.pitch_cost_sar), 0)::numeric(12,2)::text AS amount
-        FROM venues v
-        INNER JOIN pitches p ON p.venue_id = v.id
-        INNER JOIN matches m ON m.pitch_id = p.id
-        WHERE v.id IN (${sql.join(
-          venueRows.map((v) => sql`${v.id}`),
-          sql`, `,
-        )})
-          AND m.status = 'Completed'
-          AND m.booking_mode = 'koralink'
-          AND m.scheduled_at >= ${windowStartIso}
-          AND m.scheduled_at < ((CURRENT_DATE + 1) AT TIME ZONE 'Asia/Riyadh')
-          AND NOT EXISTS (
-            SELECT 1 FROM settlements s
-            WHERE s.venue_id = v.id
-              AND s.period_start >= ${windowStartIso}::date
-          )
-        GROUP BY v.id
-        HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
-      `)) as unknown as Array<{ venue_id: string; amount: string }>;
+      // P2-216 (run #163): ONE window definition shared with the admin
+      // generator — rolling start instant + Riyadh-day end, computed in JS
+      // (never the DB server's timezone) — and an INTERVAL-OVERLAP dedupe
+      // guard: a past settlement whose window [period_start, period_end]
+      // overlaps [startDay, riyadhEnd] blocks this venue. The old
+      // `period_start >= windowStart` guard missed overlaps when the two
+      // paths keyed different period_start values (UTC vs Riyadh, or a
+      // different cadence read); overlap semantics are axis-agnostic.
+      const riyadhEnd = riyadhDateString();
+
+      const rows = (await tx.execute(buildSettlementRevenueQuery({
+        venueIds: venueRows.map((v) => v.id),
+        cadenceDays,
+        riyadhEnd,
+      }))) as unknown as Array<{ venue_id: string; amount: string }>;
 
       const nameById = new Map(venueRows.map((v) => [v.id, v.name]));
-      const today = riyadhDateString();
       const out: Array<{ id: string; venueId: string; venueName: string; amount: string; periodStart: string; periodEnd: string; status: string }> = [];
       for (const row of rows) {
         // Postgres exact-decimal string — quantized, never a float (P2-4 rule).
@@ -225,8 +208,11 @@ export class PartnerService {
           .values({
             venue_id: row.venue_id,
             amount,
-            period_start: today,
-            period_end: today,
+            // P2-216 (run #163): the request covers [startDay, riyadhEnd] on
+            // the Riyadh axis — stamp the TRUE window, not today twice, so the
+            // overlap guard and console read-model see the real coverage.
+            period_start: addDaysToDateString(riyadhEnd, -cadenceDays),
+            period_end: riyadhEnd,
             status: 'pending',
             // P2-C (run #143): provenance — this row exists because the partner
             // asked for it. NULL stays the auto-generator's signature.
@@ -253,9 +239,19 @@ export class PartnerService {
       throw new BadRequestException('No unsettled revenue available to request.');
     }
 
-    const totalAmount = quantizeMoney2dpString(
-      created.reduce((acc, s) => acc + Number(s.amount), 0).toFixed(2),
-    );
+    // P2-221 (run #163): the response total is a Postgres exact-decimal SUM
+    // over the rows this request created — it never routes the per-row
+    // amounts through binary floats (the old Number() reduce could drift a
+    // cent on large multi-venue sums). Comma-free string → formatMoney-safe.
+    const [totals] = (await this.db.execute(sql`
+      SELECT coalesce(sum(amount), 0)::numeric(12,2)::text AS total
+      FROM settlements
+      WHERE id IN (${sql.join(
+        created.map((s) => sql`${s.id}`),
+        sql`, `,
+      )})
+    `)) as unknown as Array<{ total: string }>;
+    const totalAmount = totals?.total ?? ZERO_MONEY;
 
     // Audit trail: the partner actor is recorded as the settlement's origin
     // (admin actions carry `settlement.generate`; this is the request leg).
@@ -432,6 +428,10 @@ export class PartnerService {
   // ── Dashboard ─────────────────────────────────────────────────────────────
 
   async getDashboard(ownerId: string, actorRole?: string) {
+    // P2-216 (run #163): "today" is the Riyadh calendar day, computed in JS —
+    // bare CURRENT_DATE follows the Postgres server's timezone and drifts the
+    // whole dashboard across 21:00-24:00 UTC (and on any non-Riyadh server).
+    const todayRiyadh = riyadhDateString();
     const owned = await this.db
       .select({ id: venues.id, name: venues.name })
       .from(venues)
@@ -459,7 +459,10 @@ export class PartnerService {
       })
       .from(pitch_slots)
       .where(
-        and(inArray(pitch_slots.pitch_id, pitchIds), eq(pitch_slots.slot_date, sql`CURRENT_DATE`)),
+        and(
+          inArray(pitch_slots.pitch_id, pitchIds),
+          eq(pitch_slots.slot_date, sql`${todayRiyadh}::date`),
+        ),
       );
 
     const [upcoming] = await this.db
@@ -481,7 +484,12 @@ export class PartnerService {
       .where(
         and(
           inArray(matches.pitch_id, pitchIds),
-          sql`date_trunc('day', ${matches.scheduled_at}) = CURRENT_DATE`,
+          // P2-209 (run #163): Riyadh-day axis — both bounds are timestamptz
+          // via the repo's `(date::timestamp AT TIME ZONE 'Asia/Riyadh')`
+          // idiom (a timestamp-vs-timestamptz compare would silently fall
+          // back to the SESSION timezone — the exact drift this removes).
+          sql`${matches.scheduled_at} >= (${todayRiyadh}::date::timestamp AT TIME ZONE 'Asia/Riyadh')
+            AND ${matches.scheduled_at} < (${addDaysToDateString(todayRiyadh, 1)}::date::timestamp AT TIME ZONE 'Asia/Riyadh')`,
         ),
       );
 
@@ -510,7 +518,10 @@ export class PartnerService {
       .leftJoin(pitches, eq(pitch_slots.pitch_id, pitches.id))
       .leftJoin(matches, eq(pitch_slots.booked_match_id, matches.id))
       .where(
-        and(inArray(pitch_slots.pitch_id, pitchIds), eq(pitch_slots.slot_date, sql`CURRENT_DATE`)),
+        and(
+          inArray(pitch_slots.pitch_id, pitchIds),
+          eq(pitch_slots.slot_date, sql`${todayRiyadh}::date`),
+        ),
       )
       .orderBy(pitch_slots.start_time);
 
@@ -787,13 +798,30 @@ export class PartnerService {
     if (!venueIds.length) {
       return {
         settlements: [],
-        totalPending: 0,
-        totalPaid: 0,
+        totalPending: ZERO_MONEY,
+        totalPaid: ZERO_MONEY,
         perVenue: [] as EarningsVenueRevenue[],
         fourWeekTrend: zeroTrendWeeks(trendWeeks),
         utilizationPct: 0,
       };
     }
+
+    // P2-209 residue (run #163): the console totals are a Postgres exact
+    // decimal SUM — the old JS reduce routed every amount through Number()
+    // floats before display (P2-4 violation). One aggregate query, zero row
+    // fetches; empty scopes / zero rows return the '0.00' string contract.
+    const [totals] = (await this.db.execute(sql`
+      SELECT
+        coalesce(sum(amount) filter (where status = 'pending'), 0)::numeric(12,2)::text AS pending,
+        coalesce(sum(amount) filter (where status = 'paid'), 0)::numeric(12,2)::text AS paid
+      FROM settlements
+      WHERE venue_id IN (${sql.join(
+        venueIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+    `)) as unknown as Array<{ pending: string; paid: string }>;
+    const totalPending = totals?.pending ?? ZERO_MONEY;
+    const totalPaid = totals?.paid ?? ZERO_MONEY;
 
     const rows = await this.db
       .select({
@@ -818,13 +846,6 @@ export class PartnerService {
       .leftJoin(users, eq(settlements.requested_by, users.id))
       .where(inArray(settlements.venue_id, venueIds))
       .orderBy(desc(settlements.created_at));
-
-    const totalPending = rows
-      .filter((r) => r.status === 'pending')
-      .reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalPaid = rows
-      .filter((r) => r.status === 'paid')
-      .reduce((sum, r) => sum + Number(r.amount), 0);
 
     const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
     const revenue = await this.getEarningsRevenue(venueIds, pitchIds, trendWeeks, windowStart, windowEnd);
