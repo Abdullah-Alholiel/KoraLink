@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { PartnerService } from './partner.service';
+import { PartnerService, addDaysToDateString, riyadhDateString } from './partner.service';
 
 /**
  * P2-3 contract specs (run #138): partner-initiated payout REQUEST.
@@ -36,6 +36,8 @@ function makeService(
     rawSql: '' as string,
     /** True when the venue SELECT carried a FOR UPDATE row lock. */
     usedForUpdate: false,
+    /** True when the lock was acquired in a deterministic order (P2-216). */
+    orderedLock: false,
     /** True when the insert ran with onConflictDoNothing. */
     conflictDoNothing: false,
   };
@@ -44,11 +46,15 @@ function makeService(
     select: () => ({
       from: () => ({
         where: () => ({
-          // Drizzle `.for('update')` decorates the promise; capture the marker.
-          for: () => {
-            captured.usedForUpdate = true;
-            return Promise.resolve(fx.venueRows);
-          },
+          // P2-216 (run #163): the lock is ORDER BY id FOR UPDATE — the
+          // orderBy level MUST exist before `.for('update')` decorates it.
+          orderBy: () => ({
+            for: () => {
+              captured.usedForUpdate = true;
+              captured.orderedLock = true;
+              return Promise.resolve(fx.venueRows);
+            },
+          }),
         }),
       }),
     }),
@@ -80,6 +86,26 @@ function makeService(
 
   const db = {
     transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    // P2-221 (run #163): requestPayout resolves the response total via a
+    // Postgres SUM outside the tx — emulate it over the inserted rows.
+    // Chunks arrive as drizzle StringChunk objects ({value: [...]}) — extract
+    // their text before matching.
+    execute: async (q: { queryChunks?: unknown[] }) => {
+      const text = (q.queryChunks ?? [])
+        .map((c) =>
+          typeof c === 'string'
+            ? c
+            : c && typeof c === 'object' && 'value' in (c as { value?: unknown[] })
+              ? ((c as { value: unknown[] }).value ?? []).join('')
+              : '',
+        )
+        .join(' ');
+      if (text.includes('sum(amount)')) {
+        const total = inserted.reduce((acc, r) => acc + Number(r.amount), 0);
+        return [{ total: total.toFixed(2) }];
+      }
+      return [];
+    },
   };
 
   const svc = new PartnerService(
@@ -108,18 +134,26 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     expect(res.requested).toBe(2);
     expect(res.totalAmount).toBe('1322.50');
     expect(res.settlements).toHaveLength(2);
+    const day = 24 * 60 * 60 * 1000;
     for (const s of res.settlements) {
       expect(s.status).toBe('pending');
       expect(typeof s.amount).toBe('string');
-      expect(s.periodStart).toBe(s.periodEnd);
+      // P2-216 (run #163): the stamped window is the TRUE coverage window —
+      // periodEnd − periodStart === cadence (7 days), NOT today-stamped twice.
+      const days = Math.round(
+        (Date.parse(`${s.periodEnd}T00:00:00Z`) - Date.parse(`${s.periodStart}T00:00:00Z`)) / day,
+      );
+      expect(days).toBe(7);
       expect(typeof s.venueName).toBe('string');
     }
     // Money never rides the request body — server-derived only.
     expect(inserted).toHaveLength(2);
     expect(inserted.every((r) => r.status === 'pending'));
 
-    // Race guards: FOR UPDATE on the venue rows + conflict-do-nothing insert.
+    // Race guards: FOR UPDATE on the venue rows (ORDERED — P2-216) +
+    // conflict-do-nothing insert.
     expect(captured.usedForUpdate).toBe(true);
+    expect(captured.orderedLock).toBe(true);
     expect(captured.conflictDoNothing).toBe(true);
   });
 
@@ -153,16 +187,70 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     expect(captured.rawSql).toContain('koralink');
     expect(captured.rawSql).toContain('NOT EXISTS');
     expect(captured.rawSql).toContain('settlements');
+    // P2-216 (run #163): the window bounds are parametrized Riyadh dates —
+    // never bare CURRENT_DATE (server-timezone drift) and never a float.
+    expect(captured.rawSql).not.toContain('CURRENT_DATE');
+    expect(captured.rawSql).toContain("AT TIME ZONE 'Asia/Riyadh'");
     // P2-211: the window + dedupe guard ride the payout_cadence_days setting
-    // (mirrors the admin generator) — no 365-day hardcode, and both bound
-    // params are the SAME rolling instant.
+    // (mirrors the admin generator) — no 365-day hardcode.
     expect(captured.rawSql).not.toContain('365 days');
-    const stamps =
-      captured.rawSql.match(/20\d{2}-\d{2}-\d{2}T[\d:]+(\.\d+)?Z?/g) ?? [];
-    expect(stamps.length).toBe(2);
-    const [windowStart, guardStart] = stamps;
-    if (!windowStart || !guardStart) throw new Error('expected two window timestamps in SQL');
-    expect(windowStart).toBe(guardStart);
+  });
+
+  // P2-216 (run #163): the request stamps the TRUE covered window
+  // [riyadhEnd − cadence, riyadhEnd] on the Riyadh axis — the overlap guard
+  // and admin dedupe rely on period bounds carrying real coverage, and the
+  // console read-model shows the partner what window they were paid for.
+  it('stamps the true Riyadh window into period_start/period_end (7-day cadence)', async () => {
+    const { svc, inserted } = makeService({
+      venueRows: [{ id: 'v1', name: 'Riyadh Arena' }],
+      unsettled: [{ venue_id: 'v1', amount: '1234.50' }],
+    });
+    const res = await svc.requestPayout('owner-1', 'VenueOwner');
+    expect(inserted).toHaveLength(1);
+    const start = inserted[0].period_start;
+    const end = inserted[0].period_end;
+    expect(typeof start).toBe('string');
+    expect(typeof end).toBe('string');
+    expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const day = 24 * 60 * 60 * 1000;
+    const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / day);
+    expect(days).toBe(7);
+    // End is today (±1 day slack around a midnight rollover mid-test).
+    const now = riyadhDateString();
+    expect([now, addDaysToDateString(now, -1)]).toContain(end);
+    // Response mirrors the stamped window.
+    expect(res.settlements[0].periodStart).toBe(start);
+    expect(res.settlements[0].periodEnd).toBe(end);
+  });
+
+  // P2-221 (run #163): the response total is a Postgres exact-decimal SUM
+  // over the created rows — the Number() reduce could drift a cent on large
+  // multi-venue sums.
+  it('response total comes from an exact-decimal SQL SUM, never a JS float reduce', async () => {
+    const { svc, captured } = makeService({
+      venueRows: [
+        { id: 'v1', name: 'Riyadh Arena' },
+        { id: 'v2', name: 'Jeddah Court' },
+      ],
+      unsettled: [
+        { venue_id: 'v1', amount: '1234.50' },
+        { venue_id: 'v2', amount: '88.00' },
+      ],
+    });
+    // The totals SELECT rides db.execute (outside the tx) — override with a
+    // spy that still resolves the same emulated SUM the mock db provides, so
+    // the assertion proves the query actually ran.
+    const anySvc = svc as unknown as {
+      db: { execute: (q: unknown) => Promise<unknown[]> };
+    };
+    const inner = anySvc.db.execute.bind(anySvc.db);
+    const spy = jest.fn(async (q: unknown) => inner(q));
+    anySvc.db.execute = spy;
+    const res = await svc.requestPayout('owner-1', 'VenueOwner');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(res.totalAmount).toBe('1322.50');
+    expect(captured.conflictDoNothing).toBe(true);
   });
 
   it('window follows payout_cadence_days — mirrors the admin generator, 7-day fallback', async () => {
@@ -185,18 +273,31 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     await override.svc.requestPayout('owner-1', 'VenueOwner');
     const t1 = Date.now();
 
-    const stampOf = (cap: { rawSql: string }): number => {
-      const s = cap.rawSql.match(/20\d{2}-\d{2}-\d{2}T[\d:]+(\.\d+)?Z?/g) ?? [];
+    // P2-216 (run #163): the window start is a parametrized Riyadh DATE
+    // (riyadhEnd − cadence) — the captured params carry it as 'YYYY-MM-DD'.
+    const startDayOf = (cap: { rawSql: string }): string => {
+      // The first 'YYYY-MM-DD' inline in the rendered text IS the window
+      // start (the fallback literal baked into the captured chunk string).
+      const s = cap.rawSql.match(/20\d{2}-\d{2}-\d{2}/g) ?? [];
       const stamp = s.find(Boolean);
-      if (!stamp) throw new Error('expected a rolling-window timestamp in captured SQL');
-      return Date.parse(stamp.endsWith('Z') ? stamp : `${stamp}Z`);
+      if (!stamp) throw new Error('expected a window-start date in captured SQL');
+      return stamp;
     };
-    const mid = (t0 + t1) / 2;
-    // Fallback window ≈ now-7d (±10 min test-execution slack).
-    expect(Math.abs(stampOf(fallback.captured) - (mid - 7 * day))).toBeLessThan(10 * 60 * 1000);
-    // Override window ≈ now-14d, i.e. strictly older than the fallback window.
-    expect(Math.abs(stampOf(override.captured) - (mid - 14 * day))).toBeLessThan(10 * 60 * 1000);
-    expect(stampOf(override.captured)).toBeLessThan(stampOf(fallback.captured) - 5 * day);
+    const mid = t0 + (t1 - t0) / 2;
+    const midRiyadh = riyadhDateString(mid);
+    // Fallback start ≈ riyadhToday − 7d (±1 day slack for a midnight rollover
+    // between the two runs under test).
+    const expectedFallback = addDaysToDateString(midRiyadh, -7);
+    const gotFallback = startDayOf(fallback.captured);
+    expect(
+      Math.abs(Date.parse(`${gotFallback}T00:00:00Z`) - Date.parse(`${expectedFallback}T00:00:00Z`)),
+    ).toBeLessThan(2 * day);
+    // Override start ≈ riyadhToday − 14d, strictly older than the fallback.
+    const gotOverride = startDayOf(override.captured);
+    expect(gotOverride).toBe(addDaysToDateString(midRiyadh, -14));
+    expect(Date.parse(`${gotOverride}T00:00:00Z`)).toBeLessThan(
+      Date.parse(`${gotFallback}T00:00:00Z`) - 5 * day,
+    );
   });
 
   it('400 with nothing unsettled (zero-revenue venues)', async () => {
@@ -235,7 +336,9 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
         select: () => ({
           from: () => ({
             where: () => ({
-              for: () => Promise.resolve([{ id: 'v1', name: 'A' }]),
+              orderBy: () => ({
+                for: () => Promise.resolve([{ id: 'v1', name: 'A' }]),
+              }),
             }),
           }),
         }),

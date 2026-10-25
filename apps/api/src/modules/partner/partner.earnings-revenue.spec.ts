@@ -25,6 +25,8 @@ interface Fixture {
   venueRows?: VenueRow[];
   weekRows?: WeekRow[];
   slots?: { total: number; booked: number };
+  /** Run #163 (P2-216): the settlement-totals aggregate row. */
+  totals?: { pending: string; paid: string };
 }
 
 function makeService(fx: Fixture) {
@@ -53,6 +55,11 @@ function makeService(fx: Fixture) {
       }
       if (sql.includes('"weekIndex"')) return fx.weekRows ?? [];
       if (sql.includes('FILTER')) return [fx.slots ?? { total: 0, booked: 0 }];
+      // Run #163 (P2-216): the settlement-totals aggregate (lowercase `filter`
+      // + status predicates — disjoint from the slots query's FILTER marker).
+      if (sql.includes('filter (where status')) {
+        return [fx.totals ?? { pending: '0.00', paid: '0.00' }];
+      }
       throw new Error(`unexpected execute: ${sql}`);
     },
   };
@@ -83,13 +90,33 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
     const res = await svc.getEarnings('owner', 'VenueOwner');
     expect(res).toEqual({
       settlements: [],
-      totalPending: 0,
-      totalPaid: 0,
+      // Run #163 (P2-216): totals are exact-decimal strings ('0.00'), never
+      // floats — same money-string contract as every other aggregate here.
+      totalPending: '0.00',
+      totalPaid: '0.00',
       perVenue: [],
       fourWeekTrend: WEEKS.map((weekStart) => ({ weekStart, revenue: '0.00', bookedCount: 0 })),
       utilizationPct: 0,
     });
     expect(executed).toHaveLength(0);
+  });
+
+  it('totals are SQL-aggregated exact strings scoped to the owner venues (no float reduce)', async () => {
+    const { svc, executed } = makeService({
+      venueIds: ['v1', 'v2'],
+      pitchIds: ['p1'],
+      totals: { pending: '1322.50', paid: '480.25' },
+    });
+    const res = await svc.getEarnings('owner', 'VenueOwner');
+    expect(res.totalPending).toBe('1322.50');
+    expect(res.totalPaid).toBe('480.25');
+    const totalsQ = executed.find((q) => q.sql.includes('filter (where status'));
+    expect(totalsQ).toBeDefined();
+    expect(totalsQ!.sql).toContain('::numeric(12,2)::text');
+    expect(totalsQ!.sql).not.toContain('::float');
+    expect(totalsQ!.sql).not.toContain('::uuid');
+    // Scope rides the venue ids — never the whole table.
+    expect(totalsQ!.params).toEqual(expect.arrayContaining(['v1', 'v2']));
   });
 
   it('trend is always 4 zero-filled Riyadh weeks (no holes)', async () => {
@@ -129,7 +156,10 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
     expect(res.fourWeekTrend).toHaveLength(4);
     expect(res.utilizationPct).toBe(0);
     expect(res.perVenue).toHaveLength(1);
-    expect(executed).toHaveLength(1);
+    // Run #163 (P2-216): settlement-totals aggregate + perVenue (no trend,
+    // no utilization — zero pitch-scoped queries).
+    expect(executed).toHaveLength(2);
+    expect(executed.some((q) => q.sql.includes('filter (where status'))).toBe(true);
   });
 
   it('perVenue is ordered by revenue DESC with string money + numeric counts', async () => {
@@ -166,7 +196,9 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
     expect(perVenueQ?.params).toEqual(expect.arrayContaining(['v1', 'v2']));
     expect(perVenueQ?.params).not.toContain('v3');
     // Trend + utilization are pitch-scoped to the owner's pitches only.
-    for (const q of executed.filter((e) => !e.sql.includes('"venueId"'))) {
+    for (const q of executed.filter(
+      (e) => !e.sql.includes('"venueId"') && !e.sql.includes('filter (where status'),
+    )) {
       expect(q.params).toEqual(expect.arrayContaining(['p1', 'p2']));
     }
     // varchar(36) ids — never cast to uuid.
@@ -176,10 +208,14 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
   it('window is the Riyadh 28-day range and excludes cancelled matches', async () => {
     const { svc, executed } = makeService({ venueIds: ['v1'], pitchIds: ['p1'] });
     await svc.getEarnings('owner', 'VenueOwner');
-    for (const q of executed) {
+    // Run #163 (P2-216): the settlement-totals aggregate has no window —
+    // scope the window assertions to the match/slot queries.
+    const windowed = executed.filter((q) => !q.sql.includes('filter (where status'));
+    expect(windowed.length).toBeGreaterThan(0);
+    for (const q of windowed) {
       expect(q.params).toEqual(expect.arrayContaining(['2026-09-14', '2026-10-11']));
     }
-    const matchQueries = executed.filter((q) => !q.sql.includes('FILTER'));
+    const matchQueries = windowed.filter((q) => !q.sql.includes('FILTER'));
     for (const q of matchQueries) {
       expect(q.sql).toContain("<> 'Cancelled'");
       expect(q.sql).toContain('pitch_cost_sar');

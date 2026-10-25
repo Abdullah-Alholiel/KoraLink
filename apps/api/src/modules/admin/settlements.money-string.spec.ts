@@ -37,7 +37,16 @@ describe('money aggregates are exact strings (P2-4)', () => {
         return opts.executeRows ?? [];
       }),
       transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
-        cb({ insert: jest.fn(() => insertChain) }),
+        cb({
+          // P2-216 (run #163): generatePending's revenue SELECT is tx-scoped;
+          // the tx mock renders into the same sqls[] capture so the existing
+          // ::text tripwires keep biting.
+          execute: jest.fn(async (query: unknown) => {
+            sqls.push(dialect.sqlToQuery(query as never).sql);
+            return opts.executeRows ?? [];
+          }),
+          insert: jest.fn(() => insertChain),
+        }),
       ),
     };
     const svc = new AdminSettlementsService(
@@ -61,7 +70,11 @@ describe('money aggregates are exact strings (P2-4)', () => {
   it('TRIPWIRE generatePending(): SUM(pitch_cost_sar) is cast ::text, never ::float', async () => {
     const { svc, sqls } = makeService({});
     await svc.generatePending('admin-1');
-    expect(sqls[0]).toContain(')::text AS amount');
+    // P2-216 (run #163): the revenue SELECT is tx-scoped now — it's captured
+    // alongside the venue lock SELECT; find the money query, not the lock.
+    const revenueSql = sqls.find((s) => s.includes('pitch_cost_sar'));
+    expect(revenueSql).toBeDefined();
+    expect(revenueSql).toContain(')::numeric(12,2)::text AS amount');
     expect(sqls.join('\n')).not.toMatch(/pitch_cost_sar[^)]*::float/i);
   });
 
