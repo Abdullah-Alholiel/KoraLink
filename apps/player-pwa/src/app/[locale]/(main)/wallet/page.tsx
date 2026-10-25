@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { formatMoney } from '@/lib/format';
 import {
     ArrowLeft,
     Plus,
@@ -28,6 +29,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ErrorState from '@/components/ui/ErrorState';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
@@ -84,6 +86,7 @@ function groupTransactionsByDay(
 export default function WalletPage() {
     const router = useRouter();
     const t = useTranslations();
+    const intlLocale = useLocale() as 'ar' | 'en';
     const showToast = useAppStore((s) => s.showToast);
 
     // ── Top-up modal state ──
@@ -103,6 +106,7 @@ export default function WalletPage() {
         data: balanceData,
         isLoading: balanceLoading,
         error: balanceError,
+        refetch: retryBalance,
     } = useWalletBalance();
 
     const {
@@ -243,17 +247,20 @@ export default function WalletPage() {
                         <div className="h-10 w-32 bg-gray-200 rounded-full mx-auto mt-3 animate-pulse" />
                     </>
                 ) : balanceError ? (
-                    <p className="text-sm text-gray-400">{t(errorKey(classifyError(balanceError)))}</p>
+                    <ErrorState
+                        title={t(errorKey(classifyError(balanceError)))}
+                        onRetry={() => void retryBalance()}
+                        retryLabel={t('common.retry')}
+                    />
                 ) : (
                     <>
                         <p className="text-xs text-brand-green font-semibold uppercase tracking-widest">
                             {t('wallet.availableBalance')}
                         </p>
                         <div className="flex items-baseline justify-center gap-2 mt-2">
-                            <span className="text-4xl font-extrabold text-brand-black" dir="ltr">
-                                {balance.toFixed(2)}
+                            <span className="text-4xl font-extrabold text-brand-black">
+                                {formatMoney(balance, intlLocale)}
                             </span>
-                            <span className="text-2xl font-bold text-gray-400">{t('wallet.currency')}</span>
                         </div>
                         {!isOnline && balanceData !== undefined && (
                             <p className="text-[11px] text-gray-400 mt-2" role="status">
@@ -381,10 +388,13 @@ export default function WalletPage() {
                                                             ? 'text-brand-green'
                                                             : 'text-brand-red'
                                                     }`}
-                                                    dir="ltr"
                                                 >
-                                                    {txn.amount.toFixed(2)} ﷼{' '}
-                                                    {txn.type === 'credit' ? '+' : '-'}
+                                                    {formatMoney(
+                                                        txn.type === 'credit'
+                                                            ? txn.amount
+                                                            : -txn.amount,
+                                                        intlLocale,
+                                                    )}
                                                 </span>
                                                 <FileText className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
                                             </div>
