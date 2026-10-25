@@ -18,25 +18,27 @@ file every run (loop skill Phase 5). Close an item by pasting its close-line to 
 
 ## 🔴 Manual owner actions (dashboards I cannot mutate from this session)
 
-### 1. Vercel — kill the ghost "kora-link" project (P2-208) · ~2 min
-- Verified: 8/8 recent deployments BLOCKED, zero successes ever → safe.
-- https://vercel.com/abdullah-alholaiels-projects → **kora-link** → Settings → General → scroll to **Dangerous** → **Disconnect from Git** (preferred non-destructive) → then **Delete Project**.
-- Kills the permanent ❌ "Deployment was blocked" PR check.
+### 1. Vercel — ghost "kora-link" project (P2-208) · RESOLVED ✅ 2026-10-25
+- Owner disconnected Git + paused it (API-verified: link=null). Checks stop firing on new PRs.
+- Project intentionally KEPT (owner choice) — no delete.
 
-### 2. Render — pre-deploy migrate hook (P2-51) · ~3 min · merge-ready ✅ verified by API
-- https://dashboard.render.com → **koralink-api** (srv-dadabif10e5c73e207bg, free tier) → **Settings** → Build & Deploy → **Pre-Deploy Command**: `node scripts/migrate-vps.mjs`
-- Save → Render may prompt to deploy — allow it (this deploy will then run migrations first).
-- ⚠ One follow-up: the Docker runtime image lacks `scripts/` — one `COPY scripts ./scripts` line in the root Dockerfile must ride the promote (queued as promote-package item; without it the pre-deploy command fails until the promoted image lands).
-- Also verified: `autoDeploy` is already OFF — pushes to main never auto-deploy; you deploy manually. Trap contained already; hook is defense-in-depth.
+### 2. Render — pre-deploy migrate hook (P2-51) · CLOSED free-tier lean ✅ 2026-10-25
+- Screenshot confirmed Pre-Deploy Command is PAID-ONLY; owner keeps free tier.
+- Lean posture instead: autoDeploy already OFF (API-verified) + migrate-first runbook
+  (`MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` BEFORE any manual deploy).
+  P2-51 closes as resolved-by-ops; the Dockerfile scripts/ COPY is dropped (not needed).
 
-### 3. Moyasar sandbox account (P0-2 step 1) · ~10 min · free, no CR needed
-- https://dashboard.moyasar.com/register/new → verify → copy `pk_test_…` + `sk_test_…`
-- Add to `/home/ubuntu/.hermes/profiles/koralink/.deploy-tokens` as `MOYASAR_PUBLISHABLE_KEY_TEST` / `MOYASAR_SECRET_KEY_TEST` → tell the agent the NAMES only.
-- Then the factory builds the wallet top-up vertical slice (P3 in strategy doc).
+### 3. Moyasar sandbox keys · DONE ✅ 2026-10-25
+- `MOYASAR_PUBLISHABLE_KEY_TEST` / `MOYASAR_SECRET_KEY_TEST` (and the _LIVE pair the owner
+  added) stored in `.deploy-tokens` (0600). ⚠️ Live keys transited chat — regenerate the live
+  secret in the Moyasar dashboard before go-live.
+- Factory lane unlocked: wallet top-up vertical slice (strategy docs/plans/psp-sandbox-moyasar/).
 
-### 4. Coolify — create MinIO (upload pipeline step 1) · ~5 min · free
-- Coolify UI (local :8000) → New Resource → **Docker Compose empty** (or service) → image `minio/minio` → console command `server /data --console-address ":9001"` → internal port 9000 (console 9001) → bind to the VPS **Tailscale IP only** (100.93.99.24), never 0.0.0.0 → create disk volume `minio-data` → deploy.
-- Then tell the agent "MinIO is up" — factory wires endpoint keys + API + PWA.
+### 4. Coolify — create MinIO (upload pipeline step 1) · DONE ✅ 2026-10-25
+- MinIO turned out to be ARCHIVED (dl.min.io 410s everything, Hub namespace pull-denied).
+- Deployed instead: **SeaweedFS S3** as `koralink-storage.service` (systemd --user, localhost-only,
+  buckets koralink-venues/koralink-avatars, creds in .deploy-tokens as S3_*). E2E verified.
+- No owner action left — factory builds the StorageModule slice next.
 
 ### 5. Neon quota — likely SELF-RESOLVED
 - Counter read ~110 CU-hrs at 14:00Z Oct 25 with compute now 0 and errors stopped 10:00Z → consistent with the monthly reset (project created Sep 25). Next factory run re-checks; if 1C re-fires, the Launch-plan decision returns here.
