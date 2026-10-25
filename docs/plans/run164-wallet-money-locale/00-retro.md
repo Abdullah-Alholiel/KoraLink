@@ -32,7 +32,7 @@ everywhere + a hardcoded currency glyph, while:
   intentional (PWA secondary-text convention, documented run #162).
 
 ## DECISIONS.md Gate-0 read
-No contradiction: the wallet fix ENFORCES the 2026-00-08 EN+AR numerals entry; no design/UX
+No contradiction: the wallet fix ENFORCES the 2026-09-08 EN+AR numerals entry; no design/UX
 decision this run touches a ledger row (drawer side untouched; bell stays feed-only).
 
 ## Full-stack connectivity audit (pick area)
