@@ -425,7 +425,8 @@ export const EMAIL_ACTIVITY_VERBS: ReadonlySet<string> = new Set<MailTemplateKey
   // P1-67 (run #141): partner payout-paid mirror. Log-only until the P1-41
   // email provider keys land, then rides the transactional mirror for free.
   'payout_paid',
-  // Partner email lane (run #165): payout-request receipt mirror (P2-214
-  // expansion). Same log-only-until-keys semantics.
-  'payout_requested',
+  // NOTE (run #165): `payout_requested` is deliberately NOT here — it is a
+  // DIRECT-send template (partner.service calls sendToUsers after the tx);
+  // no ActivityVerb of that name exists, and adding one to this set later
+  // must come with a decision about the choke-point route, not silently.
 ]);
