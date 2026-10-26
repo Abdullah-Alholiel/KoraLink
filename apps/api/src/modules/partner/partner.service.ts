@@ -29,6 +29,9 @@ import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { BlackoutSlotsDto, CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { RealtimeService } from '../gateway/realtime.service';
+import { MailerService } from '../mailer/mailer.service';
+import { Optional } from '@nestjs/common';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -98,6 +101,9 @@ export class PartnerService {
     // Optional for the same reason; SettingsModule is @Global so the real DI
     // graph always provides it. Undefined (legacy specs) → cadence fallback 7.
     private readonly settings?: PlatformSettingsService,
+    // Partner email lane (run #165): optional 5th param, same legacy-spec
+    // pattern. Undefined (tests) → no payout-request email is attempted.
+    @Optional() private readonly mailer?: MailerService,
   ) {}
 
   /** Venue ids an actor may see — Admins scope to ALL venues (support/moderation). */
@@ -270,6 +276,20 @@ export class PartnerService {
     // refresh are the important side effects here. broadcastOps('settlements')
     // so an open HQ Settlements page updates without a manual reload.
     this.realtime.broadcastOps('settlements');
+
+    // Partner email lane (run #165, P2-214 expansion): receipt email to the
+    // partner for the payout THEY just requested. Fire-and-forget AFTER the
+    // committed write + audit + ops broadcast — a mail failure never fails
+    // the request (same best-effort semantics as pay()'s push, P1-67).
+    // Suppression (no verified email / muted / ghost) resolves inside the
+    // mailer; without transport keys it logs-and-skips (log-only mode).
+    if (this.mailer) {
+      this.mailer
+        .sendToUsers([ownerId], 'payout_requested', {}, {})
+        .catch((err: unknown) =>
+          reportFanOutError('partner.payout-request-email', err),
+        );
+    }
 
     return {
       requested: created.length,

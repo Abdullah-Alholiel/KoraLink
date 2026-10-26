@@ -28,6 +28,7 @@ function makeService(
   fx: TxFixture & {
     audit?: { log: (e: unknown) => Promise<void> };
     settings?: { getNumber: (key: string, fallback: number) => Promise<number> };
+    mailer?: { sendToUsers: (ids: string[], t: string, v: unknown, d: unknown) => Promise<unknown> };
   },
 ) {
   const inserted: Inserted[] = [];
@@ -113,6 +114,7 @@ function makeService(
     { broadcastOps: () => {} } as never,
     (fx.audit ?? undefined) as never,
     (fx.settings ?? undefined) as never,
+    (fx.mailer ?? undefined) as never,
   );
   return { svc, inserted, captured };
 }
@@ -352,5 +354,75 @@ describe('P2-3: POST /partner/payout-requests (partner-initiated payout request)
     await expect(svc.requestPayout('owner-1', 'VenueOwner')).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+});
+
+// ── Partner email lane (run #165, P2-214 expansion): payout-request receipt ──
+describe('P2-214: payout-request email receipt', () => {
+  it('successful request emails the requesting partner with the payout_requested template', async () => {
+    const sends: Array<{ ids: string[]; template: string }> = [];
+    const { svc } = makeService({
+      venueRows: [{ id: 'v1', name: 'Riyadh Arena' }],
+      unsettled: [{ venue_id: 'v1', amount: '50.00' }],
+      mailer: {
+        sendToUsers: async (ids, template) => {
+          sends.push({ ids, template });
+          return [];
+        },
+      },
+    });
+
+    await svc.requestPayout('owner-1', 'VenueOwner');
+
+    expect(sends).toHaveLength(1);
+    expect(sends[0].ids).toEqual(['owner-1']);
+    expect(sends[0].template).toBe('payout_requested');
+  });
+
+  it('no email on the 400 paths (nothing unsettled / no venues / admin role)', async () => {
+    const sends: unknown[] = [];
+    const mailer = {
+      sendToUsers: async () => {
+        sends.push(1);
+        return [];
+      },
+    };
+    const empty = makeService({ venueRows: [{ id: 'v1', name: 'A' }], unsettled: [], mailer });
+    await expect(empty.svc.requestPayout('owner-1', 'VenueOwner')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    const noVenues = makeService({ venueRows: [], unsettled: [], mailer });
+    await expect(noVenues.svc.requestPayout('owner-1', 'VenueOwner')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    const admin = makeService({ venueRows: [], unsettled: [], mailer });
+    await expect(admin.svc.requestPayout('admin-1', 'Admin')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(sends).toHaveLength(0);
+  });
+
+  it('rejected email send never fails the request (fire-and-forget contract)', async () => {
+    const { svc } = makeService({
+      venueRows: [{ id: 'v1', name: 'A' }],
+      unsettled: [{ venue_id: 'v1', amount: '50.00' }],
+      mailer: {
+        sendToUsers: async () => {
+          throw new Error('resend 503');
+        },
+      },
+    });
+
+    const res = await svc.requestPayout('owner-1', 'VenueOwner');
+    expect(res.requested).toBe(1);
+  });
+
+  it('legacy 4-arg construction (no mailer) still works — no email attempted', async () => {
+    const { svc } = makeService({
+      venueRows: [{ id: 'v1', name: 'A' }],
+      unsettled: [{ venue_id: 'v1', amount: '50.00' }],
+    });
+    const res = await svc.requestPayout('owner-1', 'VenueOwner');
+    expect(res.requested).toBe(1);
   });
 });
