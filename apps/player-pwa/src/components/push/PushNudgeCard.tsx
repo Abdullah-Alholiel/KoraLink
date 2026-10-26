@@ -147,7 +147,6 @@ export default function PushNudgeCard() {
 
   return (
     <div
-      role="status"
       data-testid="push-nudge-card"
       className="mx-4 mt-3 rounded-2xl border border-brand-green/20 bg-brand-green/5 p-4"
     >
