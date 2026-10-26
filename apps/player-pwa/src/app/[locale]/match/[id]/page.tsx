@@ -1164,7 +1164,12 @@ export default function MatchDetailPage({
             {match && (
                 <ReportDisputeSheet
                     isOpen={showDisputeSheet}
-                    onClose={() => setShowDisputeSheet(false)}
+                    onClose={() => {
+                        setShowDisputeSheet(false);
+                        // PR-Agent r1: a failed submit must not resurface on
+                        // reopen — clear the stale mutation error on close.
+                        if (openDispute.isError) openDispute.reset();
+                    }}
                     matchTitle={match.title}
                     openDispute={
                         myDisputeData && (myDisputeData.status === 'opened' || myDisputeData.status === 'under_review')

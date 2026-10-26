@@ -66,6 +66,10 @@ export default function ReportDisputeSheet({
     const t = useTranslations('dispute');
     // a11y (run #80, P2-101): localized close label.
     const tCommon = useTranslations('common');
+    // Root-scope translator for classified error keys (ERROR_KEYS carries
+    // full paths like "errors.network"; a scoped t would resolve them under
+    // dispute.* — PR-Agent r1 caught exactly that bug in the first draft).
+    const tRoot = useTranslations();
     const [type, setType] = useState<DisputeType | null>(null);
     const [reason, setReason] = useState('');
 
@@ -175,17 +179,18 @@ export default function ReportDisputeSheet({
                             const kind = classifyError(error);
                             // Dispute-refined copy for the two classes this
                             // flow actually produces (400 not-marked /
-                            // 403 non-roster); other kinds use the shared
-                            // errors.* copy verbatim (error-message standard).
-                            const key =
+                            // 403 non-roster) — resolved via the SCOPED t;
+                            // other kinds use the shared errors.* copy
+                            // verbatim via the ROOT t (error-message standard).
+                            const text =
                                 kind === 'validation'
-                                    ? 'dispute.errorValidation'
+                                    ? t('errorValidation')
                                     : kind === 'forbidden'
-                                      ? 'dispute.errorForbidden'
-                                      : errorKey(kind);
+                                      ? t('errorForbidden')
+                                      : tRoot(errorKey(kind));
                             return (
                                 <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2" role="alert">
-                                    {t(key)}
+                                    {text}
                                 </p>
                             );
                         })()}

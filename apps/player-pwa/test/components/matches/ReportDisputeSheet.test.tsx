@@ -100,6 +100,16 @@ describe('ReportDisputeSheet (P1-69)', () => {
         );
     });
 
+    it('RDR-8: a 403 renders the dispute-refined forbidden copy (PR-Agent r1 regression: never a raw key string)', () => {
+        renderSheet({ error: Object.assign(new Error('Forbidden'), { status: 403, name: 'FetchError' }) });
+
+        const text = screen.getByRole('alert').textContent ?? '';
+        expect(text).toBe('Only match players can file a report on this match.');
+        // Raw-key rendering (the r1 bug) would leak the literal path here.
+        expect(text).not.toContain('dispute.');
+        expect(text).not.toContain('errors.');
+    });
+
     it('RDR-4: an open dispute swaps the form for a status card and hides the category picker', () => {
         renderSheet({ openDispute: { type: 'double_booking', status: 'opened' } });
 
