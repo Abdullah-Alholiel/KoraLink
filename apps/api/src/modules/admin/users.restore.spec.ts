@@ -125,6 +125,19 @@ describe('AdminUsersService.restoreByAdmin — P2-47(b) contract (run #167)', ()
     expect(calls.some((c) => c.kind === 'update')).toBe(false);
   });
 
+  it('409 past the erasure deadline — a delayed purge cron must not extend the window (PR-Agent r1)', async () => {
+    // deleted_at 31 days ago: past deleted_at + PDPL_GRACE_DAYS even though
+    // the row was never anonymized (cron delayed/failed).
+    const { service, calls } = makeService({
+      row: {
+        deleted_at: new Date(Date.now() - 31 * 86_400_000),
+        phone: '+966500000009',
+      },
+    });
+    await expect(service.restoreByAdmin(USER_ID, ADMIN_ID)).rejects.toThrow(ConflictException);
+    expect(calls.some((c) => c.kind === 'update')).toBe(false);
+  });
+
   it('audit failure rolls the restore back (one atomic unit)', async () => {
     const { service, rolledBack } = makeService({
       row: { deleted_at: new Date('2026-10-20T00:00:00Z'), phone: '+966500000009' },

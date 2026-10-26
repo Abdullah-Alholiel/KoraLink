@@ -17,7 +17,7 @@ No schema/migration change. No frontend API-shape change (action posts, drawer r
 
 ## Gate 3 — Program design (contract)
 **Endpoint:** `PATCH /api/v1/admin/users/:id/restore` → `200 { message: string }` (fire-and-forget drawer re-read; no populated payload needed).
-**Errors:** 404 unknown id · 400 `{ message: 'Account is not deleted.' }` (living account) · 409 `{ message: 'Account was already restored.' }` (deleted_at nulled between snapshot and call) · 409 `{ message: 'Account was hard-purged; restoration is not possible.' }` (phone LIKE 'purged-%').
+**Errors:** 404 unknown id · 400 `{ message: 'Account is not deleted.' }` (living account, or already restored — one predicate) · 409 `{ message: 'Account was hard-purged; restoration is not possible.' }` (phone LIKE 'purged-%') · 409 `{ message: 'Account is past its erasure deadline; restoration is no longer possible.' }` (deleted_at + PDPL_GRACE_DAYS elapsed — authoritative deadline, immune to purge-cron delay; PR-Agent r1).
 **Service signature:** `async restoreByAdmin(id: string, adminId: string, ip?: string): Promise<{ message: string }>`
 **Race discipline:** status check + write + audit in ONE tx holding the row lock — the double-click loser hits the 409 already-restored branch, never double-writes (flag-reset dedup lesson: idempotency on the mutable state + row lock, not history).
 **TS frontend:** `api.patch(`/admin/users/${id}/restore`)` inside `act()`-style flow with ConfirmDialog; visible when `purgeInfo(u)` reports scheduled (grace window) — hidden for `purged` ghosts.

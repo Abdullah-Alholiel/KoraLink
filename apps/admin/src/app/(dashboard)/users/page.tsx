@@ -160,10 +160,11 @@ export default function UsersPage() {
   }
 
   /**
-   * P2-47(b) (run #167): restore-on-behalf — separate runner (NOT via act()):
-   * keeps the drawer OPEN (the admin sees the row's next state directly in
-   * the table), shows a localized success line, and never leaves the
-   * restore error inside the moderation banner.
+   * P2-47(b) (run #167): restore-on-behalf — separate runner (NOT via act()).
+   * PR-Agent r1: on success the drawer CLOSES (the refreshed table already
+   * shows the row as restored) so the stale snapshot — and with it the
+   * now-invalid Restore button — can never be re-clicked into a confusing
+   * 400. Success/error banners clear on drawer close.
    */
   async function restoreSelected() {
     if (!selected) return;
@@ -175,6 +176,7 @@ export default function UsersPage() {
       await api.patch(`/admin/users/${selected.id}/restore`);
       setRestoreOk(t('restoreSuccess'));
       reload();
+      setSelected(null);
     } catch (e) {
       // API copy is plain (400/409): mirror the act() convention of showing
       // the API reason instead of a generic failure.
@@ -469,7 +471,12 @@ export default function UsersPage() {
               columns={columns}
               rows={rows}
               rowKey={(u) => u.id}
-              onRowClick={(u) => setSelected(u)}
+              onRowClick={(u) => {
+                setSelected(u);
+                // P2-47(b): a fresh row opens with clean action state — the
+                // restore success line never bleeds onto another account.
+                setRestoreOk(null);
+              }}
               empty={<EmptyState message={tc('noData')} />}
               selection={{
                 selectedIds: checkedIds,
@@ -497,7 +504,12 @@ export default function UsersPage() {
 
       <RecordDrawer
         open={!!selected}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          // P2-47(b): the success line belongs to the closed restore flow —
+          // never bleed onto the next opened row.
+          setRestoreOk(null);
+        }}
         page="admin.users"
         title={selected?.full_name ?? t('thUser')}
         recordId={selected?.id}

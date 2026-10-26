@@ -11,6 +11,7 @@ import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase, PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { escapeLikePattern } from '../../common/utils/escape-like';
+import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListUsersDto } from './dto/list-users.dto';
@@ -516,6 +517,17 @@ export class AdminUsersService {
       if (row.phone.startsWith('purged-')) {
         throw new ConflictException(
           'Account was hard-purged; restoration is not possible.',
+        );
+      }
+      // PR-Agent r1 (run #167): the erasure DEADLINE is authoritative, not
+      // purge-cron health — a delayed/failed cron tick must not let an admin
+      // restore an account past its PDPL erasure deadline and cancel the
+      // purge indefinitely. The window matches JwtCookieStrategy's gate
+      // (both derive from PDPL_GRACE_DAYS).
+      const purgeAt = new Date(row.deleted_at).getTime() + PDPL_GRACE_DAYS * 86_400_000;
+      if (Date.now() >= purgeAt) {
+        throw new ConflictException(
+          'Account is past its erasure deadline; restoration is no longer possible.',
         );
       }
 
