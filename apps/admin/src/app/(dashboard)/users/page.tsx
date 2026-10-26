@@ -539,9 +539,26 @@ export default function UsersPage() {
             : []
         }
         actions={
-          selected && userStatus(selected) !== 'deleted' ? (
+          !selected ? undefined : (
             busyId === selected.id ? (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : userStatus(selected) === 'deleted' ? (
+              /* P2-47(b) (run #167): deleted rows get the restore action
+                 ONLY — grace-window ghosts; purged rows show nothing. */
+              (() => {
+                const info = purgeInfo(selected);
+                if (info.purged || info.daysRemaining === undefined) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setConfirmRestore(true)}
+                      className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> {t('restoreAction')}
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 {userStatus(selected) === 'banned' ? (
@@ -578,23 +595,9 @@ export default function UsersPage() {
                     <TimerOff className="h-3.5 w-3.5" /> {t('suspendAction')}
                   </button>
                 )}
-                {/* P2-47(b) (run #167): restore-on-behalf — grace-window
-                    ghosts only (purged rows are irreversible, 409 upstream). */}
-                {(() => {
-                  const info = purgeInfo(selected);
-                  if (info.purged || info.daysRemaining === undefined) return null;
-                  return (
-                    <button
-                      onClick={() => setConfirmRestore(true)}
-                      className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" /> {t('restoreAction')}
-                    </button>
-                  );
-                })()}
               </div>
             )
-          ) : undefined
+          )
         }
       />
 
