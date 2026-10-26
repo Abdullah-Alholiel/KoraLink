@@ -1,25 +1,27 @@
 # Owner Action Queue — KoraLink
 
-**Updated:** 2026-10-26 02:4xZ (run #165). The factory loop REGENERATES this file every
+**Updated:** 2026-10-26 ~12:0xZ (run #166). The factory loop REGENERATES this file every
 run. Close an item by pasting its close-line to the agent.
 
 ## Snapshot
-- Open PRs: **2** — **#178 promote (staging→main, 312 commits)** · #179 merged this run (f1385a2 live on the VPS)
-- Services: api/pwa/admin/storage all green · API health 200 · API error logs clean 5h
-- **P1-52 RE-ARMED**: Neon prod is quota-blocked AGAIN (run-#165 direct probe 01:35Z Oct 26 rejected; 41 Sentry events/24h through 00:00Z Oct 26). The Oct-25 "self-resolved" read was premature.
+- Open PRs: **1** — **#178 promote (staging→main)** — was CONFLICTING, **REPAIRED run #166 (mergeable now)** · PR #180 (P1-69 dispute sheet) merged + LIVE this run (dbcd81c)
+- Services: api/pwa/admin/storage all green · API health 200 · API error logs clean 5h · PWA serves the P1-69 build (chunk marker + EN/AR copy verified on :9450)
+- **P1-52 RE-ARMED**: Neon prod quota-blocked (43 Sentry events/24h through 10:00Z Oct 26, still escalating). Project birthday was Oct-25 — the free reset may already be due; one console visit answers it.
 
 ## 🔴 Blocking actions (in priority order)
 
 ### 1. Neon quota (P1-52) — now ALSO gates the promote PR
 - **What's needed:** raise or reset the Neon plan limit for `solitary-thunder-20087776` (koralink-prod).
-- **Click-path:** console.neon.tech → project **koralink-prod** → Billing/Usage → upgrade plan OR check the free-tier reset window (project created Sep 25 → monthly reset may land ~Oct 25–26; re-check tomorrow if you prefer free).
-- **Why it blocks:** PR #178 (promote, 312 commits) has a HARD pre-merge gate = Neon reachable; merging into a quota-blocked prod DB would ship code whose schema can't be verified/migrated.
-- **Evidence (run #165):** `psql` → `ERROR: Your account or project has exceeded the quota. Upgrade your plan to increase limits.`
+- **Click-path:** console.neon.tech → project **koralink-prod** → Billing/Usage → upgrade plan OR check the free-tier reset window (project created Sep 25 → monthly reset may land ~Oct 25–26; run #166 still saw rejections at 10:00Z Oct 26 — re-check now).
+- **Why it blocks:** PR #178 (promote) has a HARD pre-merge gate = Neon reachable; merging into a quota-blocked prod DB would ship code whose schema can't be verified/migrated.
+- **Evidence (run #166):** Sentry KORALINK-API-1C count 43/24h (was 41), lastSeen 10:00Z Oct 26; 1F push-delete failures ×8 same quota class.
 
 ### 2. Promote PR #178 — merge (T2, your click) once #1 clears
+- **Conflict FIXED run #166:** the PR had gone CONFLICTING (main's Sep-25 squash-promote broke the DAG link); repaired via `-s ours` back-merge (e997cfd, staging tree bit-for-bit unchanged) → **mergeable now**.
 - **Order (lean free-tier runbook, in the PR body):** (a) Neon reachable → (b) apply migrations FIRST from any Neon-resolving machine (your Mac works; the VPS host is DNS-blocked but the factory proved a container route on request):
   `MIGRATE_DATABASE_URL=<neon-url from Render env> node scripts/migrate-vps.mjs`
   (pending: 0052/0053/0054) → (c) merge PR #178 → (d) Render dashboard → Manual deploy → (e) post-release matrix (factory runs it next run if you ping).
+- **New standing step (run #166):** after ANY promote merge, the factory back-merges main→staging with `-s ours` — this conflict class is now closed permanently.
 
 ### 3. Resend transactional-email keys (P1-41 ledger row — unlocks the run-#165 email lane)
 - The partner email lane is BUILT and LIVE in log-only mode (PR #179 f1385a2): payout-request receipts + venue-owner cancellation emails. Without keys every send logs-and-skips.
