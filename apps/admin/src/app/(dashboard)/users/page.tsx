@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Ban, CheckCircle2, Download, Loader2, Search, TimerOff } from 'lucide-react';
+import { Ban, CheckCircle2, Download, Loader2, RotateCcw, Search, TimerOff } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -79,6 +79,10 @@ export default function UsersPage() {
   // ── P2-107: bulk selection state (current page only) ──
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'ban' | 'suspend' | null>(null);
+  // P2-47(b) restore-on-behalf (run #167) — sensitive PDPL action: confirm
+  // step + localized success line (role=status) beside the error banner.
+  const [restoreOk, setRestoreOk] = useState<string | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
 
@@ -154,6 +158,34 @@ export default function UsersPage() {
       setBulkRunning(false);
     }
   }
+
+  /**
+   * P2-47(b) (run #167): restore-on-behalf — separate runner (NOT via act()).
+   * PR-Agent r1: on success the drawer CLOSES (the refreshed table already
+   * shows the row as restored) so the stale snapshot — and with it the
+   * now-invalid Restore button — can never be re-clicked into a confusing
+   * 400. Success/error banners clear on drawer close.
+   */
+  async function restoreSelected() {
+    if (!selected) return;
+    setBusyId(selected.id);
+    setActionError(null);
+    setRestoreOk(null);
+    setConfirmRestore(false);
+    try {
+      await api.patch(`/admin/users/${selected.id}/restore`);
+      setRestoreOk(t('restoreSuccess'));
+      reload();
+      setSelected(null);
+    } catch (e) {
+      // API copy is plain (400/409): mirror the act() convention of showing
+      // the API reason instead of a generic failure.
+      setActionError(e instanceof Error ? e.message : t('restoreFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function clearSelectionIds() {
     setCheckedIds(new Set());
   }
@@ -424,6 +456,11 @@ export default function UsersPage() {
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
+          {restoreOk && (
+            <p role="status" className="mx-8 mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+              {restoreOk}
+            </p>
+          )}
           {actionError && (
             <p role="alert" className="mx-8 mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {t('actionFailed', { error: actionError })}
@@ -434,7 +471,12 @@ export default function UsersPage() {
               columns={columns}
               rows={rows}
               rowKey={(u) => u.id}
-              onRowClick={(u) => setSelected(u)}
+              onRowClick={(u) => {
+                setSelected(u);
+                // P2-47(b): a fresh row opens with clean action state — the
+                // restore success line never bleeds onto another account.
+                setRestoreOk(null);
+              }}
               empty={<EmptyState message={tc('noData')} />}
               selection={{
                 selectedIds: checkedIds,
@@ -462,7 +504,12 @@ export default function UsersPage() {
 
       <RecordDrawer
         open={!!selected}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          // P2-47(b): the success line belongs to the closed restore flow —
+          // never bleed onto the next opened row.
+          setRestoreOk(null);
+        }}
         page="admin.users"
         title={selected?.full_name ?? t('thUser')}
         recordId={selected?.id}
@@ -492,9 +539,26 @@ export default function UsersPage() {
             : []
         }
         actions={
-          selected && userStatus(selected) !== 'deleted' ? (
+          !selected ? undefined : (
             busyId === selected.id ? (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : userStatus(selected) === 'deleted' ? (
+              /* P2-47(b) (run #167): deleted rows get the restore action
+                 ONLY — grace-window ghosts; purged rows show nothing. */
+              (() => {
+                const info = purgeInfo(selected);
+                if (info.purged || info.daysRemaining === undefined) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setConfirmRestore(true)}
+                      className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> {t('restoreAction')}
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 {userStatus(selected) === 'banned' ? (
@@ -533,7 +597,7 @@ export default function UsersPage() {
                 )}
               </div>
             )
-          ) : undefined
+          )
         }
       />
 
@@ -554,6 +618,22 @@ export default function UsersPage() {
         confirmLabel={bulkAction === 'ban' ? t('bulkBan') : t('bulkSuspend')}
         onConfirm={() => bulkAction && runBulk(bulkAction)}
         onClose={() => setBulkAction(null)}
+      />
+
+      {/* ── P2-47(b): restore confirmation — names the account + grace window ── */}
+      <ConfirmDialog
+        open={confirmRestore}
+        title={t('restoreConfirmTitle')}
+        message={
+          selected
+            ? t('restoreConfirmMessage', {
+                name: selected.full_name ?? selected.handle ?? selected.id,
+              })
+            : undefined
+        }
+        confirmLabel={t('restoreAction')}
+        onConfirm={restoreSelected}
+        onClose={() => setConfirmRestore(false)}
       />
     </div>
   );

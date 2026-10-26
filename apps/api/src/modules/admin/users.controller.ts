@@ -54,4 +54,17 @@ export class AdminUsersController {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.users.bulkModerate(dto, adminId, req.ip);
   }
+
+  /**
+   * P2-47(b) (run #167): restore-on-behalf — PATCH /admin/users/:id/restore.
+   * Cancels a scheduled PDPL purge / un-deletes a soft-deleted account
+   * inside its grace window. Contract + guards in users.service.restoreByAdmin.
+   * (`:id` above matches a single segment, so this subpath is unambiguous.)
+   */
+  @Patch(':id/restore')
+  @HttpCode(HttpStatus.OK)
+  restore(@Param('id', UuidParamPipe) id: string, @Req() req: Request) {
+    const adminId = (req as unknown as { user: { sub: string } }).user.sub;
+    return this.users.restoreByAdmin(id, adminId, req.ip);
+  }
 }
