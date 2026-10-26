@@ -49,6 +49,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import Toast from '@/components/layout/Toast';
 import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
+import PushNudgeCard from '@/components/push/PushNudgeCard';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import RescheduleSheet from '@/components/matches/RescheduleSheet';
@@ -210,6 +211,8 @@ export default function MatchDetailPage({
         // would 409 ("already joined"). A refetch picks up the new roster +
         // refreshed wallet balance instead.
         setShowPayment(false);
+        // P2-258: paid booking succeeded — arm the contextual push opt-in.
+        useAppStore.getState().armPushNudge();
         void refetch();
     };
 
@@ -441,6 +444,12 @@ export default function MatchDetailPage({
                                 onOpenAttendance={() => setShowAttendanceSheet(true)}
                                 onOpenAppeal={() => setShowAppealSheet(true)}
                             />
+
+                            {/* 0.5 P2-258: contextual push opt-in — offered only
+                                while a booking-success timestamp is fresh (the
+                                join/paid-join/publish arms + 24h dismissal
+                                cooldown live in the store/card). */}
+                            <PushNudgeCard />
 
                             {/* 1. Game Details */}
                             <div className="mx-5 mt-2">

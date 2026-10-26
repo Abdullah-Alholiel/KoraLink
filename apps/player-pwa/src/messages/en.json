@@ -62,6 +62,8 @@
     "errorDescription": "Couldn't load data. Check your connection.",
     "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
     "pushSubscribeFailed": "We couldn't turn notifications on. Nothing was changed — check your connection and try again.",
+    "pushNudgeSuccess": "Notifications are on — you'll hear about match updates even with the app closed.",
+    "pushPermissionDenied": "Notifications are blocked in your browser settings. Re-enable them there to get match updates.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",
@@ -1278,5 +1280,13 @@
   },
   "realtime": {
     "livePaused": "Live updates paused — reconnecting…"
+  },
+  "pushNudge": {
+    "title": "Never miss a match update",
+    "body": "Turn on notifications so you hear about match changes, waitlist promotions and starting reminders — even with the app closed.",
+    "enable": "Turn on",
+    "enabling": "Turning on…",
+    "notNow": "Not now",
+    "dismiss": "Dismiss"
   }
 }

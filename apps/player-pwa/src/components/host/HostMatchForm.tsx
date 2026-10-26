@@ -13,6 +13,7 @@ import { pitchCostForDuration, pricePerPlayer } from '@/lib/match-pricing';
 import { riyadhISO, parseHostDateParam } from '@/lib/riyadh-time';
 import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall, computeShortfall } from '@/lib/publish-error';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { useAppStore } from '@/store/useAppStore';
 
 import ModeToggle from './ModeToggle';
 import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
@@ -200,6 +201,9 @@ export default function HostMatchForm() {
         createMatch.mutate(payload, {
             onSuccess: (createdMatch) => {
                 setShowWarning(false);
+                // P2-258: the host just published — arm the contextual push
+                // opt-in offer on the match page they land on.
+                useAppStore.getState().armPushNudge();
                 // Replace (not push) — the host form must NOT remain in history.
                 // Back from the match detail returns to where the user came
                 // from (Play/Club), never back to a filled-out form.
