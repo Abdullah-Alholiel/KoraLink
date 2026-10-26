@@ -3448,6 +3448,39 @@ export class MatchesService {
       }
     }
 
+    // Partner email lane (run #165, P2-214 expansion): tell the VENUE OWNER a
+    // match at their venue was cancelled (staff/pitch planning depends on it;
+    // players already get pushes above). One scoped SQL for owner+venue name —
+    // findOne's venue relation deliberately omits owner_id. Best-effort
+    // fire-and-forget: any failure here NEVER fails the cancel (reportFanOut
+    // pattern; the owner email rides the existing match_cancelled_admin
+    // template whose audience is exactly "this match's session was dropped").
+    if (this.mailer && updatedMatch.pitch?.id) {
+      try {
+        const [venueOwner] = (await this.db.execute(sql`
+          SELECT v.owner_id,
+                 v.name AS venue_name
+          FROM pitches p
+          INNER JOIN venues v ON v.id = p.venue_id
+          WHERE p.id = ${updatedMatch.pitch.id}::text
+        `)) as unknown as Array<{ owner_id: string; venue_name: string | null }>;
+        if (venueOwner?.owner_id && venueOwner.owner_id !== userId) {
+          this.mailer
+            .sendToUsers([venueOwner.owner_id], 'match_cancelled_admin', { title: updatedMatch.title }, {
+              matchId,
+              matchTitle: updatedMatch.title,
+              when: riyadhLocal(new Date(updatedMatch.scheduled_at)),
+              where: venueOwner.venue_name ?? undefined,
+            })
+            .catch((err: unknown) =>
+              reportFanOutError('matches.venue-cancel-email', err),
+            );
+        }
+      } catch (err) {
+        reportFanOutError('matches.venue-cancel-resolve', err);
+      }
+    }
+
     return updatedMatch;
   }
 
