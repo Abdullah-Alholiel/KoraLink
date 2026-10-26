@@ -33,8 +33,10 @@ existing MailerModule (P2-214 path-a expansion). This cycle: the API slice.
   email keys). Staging ships log-only; behavior activates when the owner adds keys.
 
 ## Tech debt touched
-- activityVerbEnum gains `payout_requested` (migration 0055, hand-written convention —
-  drizzle-kit generate DEAD on this VPS). Journal tripwires 8/8 required before push.
+- ~~activityVerbEnum gains `payout_requested` (migration 0055)~~ — SUPERSEDED at
+  Gate 3 build time: the shipped design (01-program-design.md) is **NO migration,
+  NO enum change** (direct `MailerService.sendToUsers`; the choke-point route was
+  rejected). Verified against the shipped diff.
 - matches.service gains an OPTIONAL MailerService injection (AuditService optional-param
   pattern reused — legacy spec constructions keep compiling).
 
