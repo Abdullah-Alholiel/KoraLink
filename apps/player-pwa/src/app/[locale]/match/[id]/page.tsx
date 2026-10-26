@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
-import { useAppeal } from '@/hooks/useDisputes';
+import { useAppeal, useOpenDispute, useMyDispute } from '@/hooks/useDisputes';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch, useRescheduleMatch, useJoinWaitlist, useLeaveWaitlist } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
@@ -64,6 +64,7 @@ import AttendanceSheet from '@/components/matches/AttendanceSheet';
 import AttendanceBanner from '@/components/matches/AttendanceBanner';
 import AppealSheet from '@/components/matches/AppealSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
+import ReportDisputeSheet from '@/components/matches/ReportDisputeSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -89,6 +90,7 @@ export default function MatchDetailPage({
     const markNoShow = useMarkNoShow(id);
     const removePlayer = useRemovePlayer(id);
     const appeal = useAppeal(id);
+    const openDispute = useOpenDispute(id);
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
@@ -122,6 +124,7 @@ export default function MatchDetailPage({
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
     const [showAppealSheet, setShowAppealSheet] = useState(false);
+    const [showDisputeSheet, setShowDisputeSheet] = useState(false);
     const [showReportSheet, setShowReportSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
 
@@ -129,6 +132,10 @@ export default function MatchDetailPage({
     const myRosterEntry = match && currentUserId
         ? match.roster.find((p) => p.userId === currentUserId) ?? null
         : null;
+
+    // P1-69: the current user's latest dispute on this match (drives the
+    // dispute sheet's under-review card). Polled only while joined.
+    const { data: myDisputeData } = useMyDispute(id, isJoined);
 
     // Absolute match URL for sharing — computed client-side only (SSR has no
     // window; reading it during render would cause a hydration mismatch).
@@ -451,6 +458,10 @@ export default function MatchDetailPage({
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}
+                                </button>
+                                <span className="text-gray-200">·</span>
+                                <button onClick={() => setShowDisputeSheet(true)} className="text-sm font-semibold text-brand-green">
+                                    {t('dispute.title')}
                                 </button>
                                 <span className="text-gray-200">·</span>
                                 <button onClick={() => setShowReportSheet(true)} className="text-sm font-semibold text-brand-red">
@@ -1146,6 +1157,38 @@ export default function MatchDetailPage({
                     subjectType="match"
                     subjectId={match.id}
                     subjectLabel={match.title}
+                />
+            )}
+
+            {/* Dispute Sheet (P1-69 player origination) */}
+            {match && (
+                <ReportDisputeSheet
+                    isOpen={showDisputeSheet}
+                    onClose={() => {
+                        setShowDisputeSheet(false);
+                        // PR-Agent r1: a failed submit must not resurface on
+                        // reopen — clear the stale mutation error on close.
+                        if (openDispute.isError) openDispute.reset();
+                    }}
+                    matchTitle={match.title}
+                    openDispute={
+                        myDisputeData && (myDisputeData.status === 'opened' || myDisputeData.status === 'under_review')
+                            ? { type: myDisputeData.type, status: myDisputeData.status }
+                            : null
+                    }
+                    isPending={openDispute.isPending}
+                    error={openDispute.isError ? openDispute.error : null}
+                    onSubmit={(type, reason) => {
+                        openDispute.mutate(
+                            { type, ...(reason ? { reason } : {}) },
+                            {
+                                onSuccess: () => {
+                                    setShowDisputeSheet(false);
+                                    showToast(t('dispute.successToast'), 'success');
+                                },
+                            },
+                        );
+                    }}
                 />
             )}
 
