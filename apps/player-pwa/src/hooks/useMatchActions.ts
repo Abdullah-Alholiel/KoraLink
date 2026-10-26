@@ -161,6 +161,9 @@ export function useJoinMatch() {
       // the ledger changed, so wallet caches must refetch.
       queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
       queryClient.invalidateQueries({ queryKey: ['wallet', 'history'] });
+      // P2-258: a booking just succeeded — arm the contextual push opt-in
+      // offer (PushNudgeCard on the match page consumes the timestamp).
+      useAppStore.getState().armPushNudge();
       showToast(tMatch('joinedToast'), 'success');
     },
   });
