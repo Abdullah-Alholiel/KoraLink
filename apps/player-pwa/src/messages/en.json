@@ -1123,6 +1123,28 @@
     "takeAttendanceDesc": "Mark who showed up — protects your spot pricing",
     "done": "Done"
   },
+  "dispute": {
+    "title": "Report a problem",
+    "subtitle": "Tell us what went wrong. An admin will review it and follow up here.",
+    "categoryLabel": "What is this about?",
+    "cat_no_show": "Player marked as no-show",
+    "cat_double_booking": "Pitch was double-booked",
+    "cat_pitch_condition": "Pitch condition problem",
+    "cat_unrecognized_charge": "Unrecognized charge",
+    "cat_other": "Something else",
+    "catNoShowHint": "You can dispute a no-show mark only on matches where you were the one marked.",
+    "reasonLabel": "What happened?",
+    "reasonPlaceholder": "Describe the problem — the more detail, the faster the review…",
+    "submit": "Submit report",
+    "successToast": "Report submitted — the team will review it",
+    "statusOpened": "Report received",
+    "statusUnderReview": "Under review",
+    "statusResolved": "Resolved",
+    "statusRejected": "Rejected",
+    "statusCategory": "Category",
+    "errorValidation": "This report can't be filed this way. If you're disputing a no-show, it must be on a match where you were marked.",
+    "errorForbidden": "Only match players can file a report on this match."
+  },
   "appeal": {
     "title": "Appeal No-Show",
     "subtitle": "Tell us what happened. An admin will review your appeal and the no-show mark can be reversed.",

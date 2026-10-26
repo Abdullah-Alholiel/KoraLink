@@ -4,7 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
 
-// ─── Dispute (no-show appeal) ─────────────────────────
+// ─── Disputes (no-show appeal + player-originated tickets, P1-69) ─────────
+
+/** The five dispute categories (DisputeType enum, schema.ts:142). */
+export type DisputeType = 'no_show' | 'double_booking' | 'pitch_condition' | 'unrecognized_charge' | 'other';
 
 export interface MyDispute {
     id: string;
@@ -42,6 +45,29 @@ export function useAppeal(matchId: string) {
             trackEvent('no_show_appeal_submitted', { match_id: matchId });
         },
         onError: (err) => captureError(err, { scope: 'appeal' }),
+    });
+}
+
+/**
+ * Open a dispute in ANY category (P1-69 player origination) — same endpoint
+ * as useAppeal; the sheet supplies the category. The API only requires an
+ * actual no-show mark for type=no_show; the other four categories are open
+ * to any roster member.
+ */
+export function useOpenDispute(matchId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation<MyDispute, FetchError, { type: DisputeType; reason?: string }>({
+        mutationFn: async ({ type, reason }) =>
+            fetcher<MyDispute>(`/matches/${matchId}/dispute`, {
+                method: 'POST',
+                body: JSON.stringify({ type, ...(reason ? { reason } : {}) }),
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['dispute', matchId] });
+            trackEvent('dispute_opened', { match_id: matchId });
+        },
+        onError: (err) => captureError(err, { scope: 'dispute' }),
     });
 }
 
