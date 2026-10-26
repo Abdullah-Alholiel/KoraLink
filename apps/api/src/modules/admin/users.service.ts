@@ -468,4 +468,77 @@ export class AdminUsersService {
       skipped,
     };
   }
+
+  /**
+   * P2-47(b) (run #167): admin restore-on-behalf — cancel a scheduled PDPL
+   * purge / un-delete a soft-deleted account inside its grace window.
+   * Owner decision 2026-10-25 (option b, full restore-on-behalf).
+   *
+   * Scope: ONLY soft-deleted rows (deleted_at IS NOT NULL, past data intact).
+   * Hard-purged ghosts (phone LIKE 'purged-%') are IRREVERSIBLE — migration
+   * 0031 anonymized their PII; there is nothing left to restore → 409.
+   * Never bulk (PDPL doctrine at bulkModerate). No schema change: the
+   * self-restore token is a client-held JWT; nulling deleted_at removes the
+   * row from purgeExpiredAccounts()' candidate set (`deleted_at <
+   * now() - 30d`), so one verb covers cancel-purge AND restore-on-behalf.
+   *
+   * Race discipline: the state check, the write and the audit entry share ONE
+   * transaction holding the row FOR UPDATE — a concurrent self-restore, admin
+   * restore or purge tick serializes against this tx; the loser gets the
+   * explicit already-restored / purged rejection instead of double-writing.
+   */
+  async restoreByAdmin(
+    id: string,
+    adminId: string,
+    ip?: string,
+  ): Promise<{ message: string }> {
+    await this.db.transaction(async (tx) => {
+      // Lock the target row first — deterministic single-row lock, no cycle
+      // risk (mirrors the update() admin-path lock ordering).
+      const locked = await tx.execute(
+        sql`SELECT deleted_at, phone FROM ${users} WHERE ${users.id} = ${id} FOR UPDATE`,
+      );
+      type LockedRow = { deleted_at: Date | string | null; phone: string };
+      // postgres-js RowList is array-shaped; drizzle node-postgres paths wrap
+      // in { rows } — accept both (matches the findOneOn execute() cast).
+      const lockedRes = locked as unknown as { rows?: LockedRow[] } | LockedRow[];
+      const rows: LockedRow[] = Array.isArray(lockedRes)
+        ? lockedRes
+        : (lockedRes.rows ?? []);
+      const row = rows[0];
+      if (!row) throw new NotFoundException('User not found.');
+
+      if (!row.deleted_at) {
+        // Covers both "never deleted" and "restored a moment ago" (by the
+        // player's own token or another admin) — one predicate, one status.
+        throw new BadRequestException('Account is not deleted.');
+      }
+      if (row.phone.startsWith('purged-')) {
+        throw new ConflictException(
+          'Account was hard-purged; restoration is not possible.',
+        );
+      }
+
+      await tx
+        .update(users)
+        .set(withTimestamp({ deleted_at: null }))
+        .where(eq(users.id, id));
+
+      await this.audit.log(
+        {
+          adminId,
+          action: 'user.restore',
+          entityType: 'user',
+          entityId: id,
+          before: { deleted_at: row.deleted_at },
+          after: { deleted_at: null },
+          ip,
+        },
+        tx,
+      );
+    });
+
+    this.realtime.broadcastOps('users');
+    return { message: 'Account restored.' };
+  }
 }
