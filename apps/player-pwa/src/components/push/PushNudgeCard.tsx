@@ -111,7 +111,18 @@ export default function PushNudgeCard() {
     if (offeredRef.current) return;
     offeredRef.current = true;
     trackEvent('push_nudge_accepted', { surface: 'match-page' });
-    const result: PushSubscribeOutcome = await subscribe();
+    // PR-Agent r2: subscribe() resolves outcomes by contract (errors are
+    // mapped to 'error' inside the hook), but a defensive catch costs
+    // nothing and guarantees feedback + an un-stuck tap guard even if the
+    // hook ever rejects unexpectedly.
+    let result: PushSubscribeOutcome;
+    try {
+      result = await subscribe();
+    } catch {
+      offeredRef.current = false;
+      setOutcome(tCommon('pushSubscribeFailed'));
+      return;
+    }
     if (result === 'ok') {
       setOutcome(tCommon('pushNudgeSuccess'));
       disarmPushNudge();
