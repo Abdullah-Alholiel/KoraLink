@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import React from 'react';
 import PushNudgeCard from '@/components/push/PushNudgeCard';
 import { useAppStore } from '@/store/useAppStore';
 import enMessages from '@/messages/en.json';
+
+// Mirror of the component's offer window (importing the private const would
+// test the fixture against itself; keep the literal in sync).
+const NUDGE_WINDOW_MS = 10 * 60_000;
 
 /**
  * P2-258 (run #167) — contextual push opt-in card:
@@ -154,11 +158,36 @@ describe('PushNudgeCard (P2-258)', () => {
     expect(outcome.textContent).toBe(enMessages.common.pushPermissionDenied);
   });
 
-  it('Turn on while unsupported surfaces the install hint', async () => {
+  it('unsupported browser never renders the offer (dead-end guard)', () => {
     mockPushState = { ...mockPushState, isSupported: false };
     useAppStore.setState({ pushNudgeArmedAt: Date.now() });
     const { container } = renderCard();
-    // Unsupported never renders the card at all — the offer would dead-end.
+    // The card never renders at all — the offer would dead-end.
     expect(container.querySelector('[data-testid="push-nudge-card"]')).toBeNull();
+  });
+
+  it("'not-installed' outcome IS reachable — SW supported but not standalone (iOS browser tab)", async () => {
+    mockSubscribe.mockResolvedValue('not-installed');
+    useAppStore.setState({ pushNudgeArmedAt: Date.now() });
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+    const outcome = await waitFor(() => screen.getByTestId('push-nudge-outcome'));
+    expect(outcome.textContent).toBe(enMessages.common.installRequired);
+  });
+
+  it('auto-hides when the 10-minute window elapses while mounted (PR-Agent r1 timer)', () => {
+    vi.useFakeTimers();
+    try {
+      useAppStore.setState({ pushNudgeArmedAt: Date.now() });
+      renderCard();
+      expect(screen.getByTestId('push-nudge-card')).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(NUDGE_WINDOW_MS + 1_000);
+      });
+      expect(screen.queryByTestId('push-nudge-card')).toBeNull();
+      expect(useAppStore.getState().pushNudgeArmedAt).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

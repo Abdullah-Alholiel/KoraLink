@@ -49,10 +49,20 @@ export default function PushNudgeCard() {
   } = usePushNotifications();
 
   // Expired arm timestamps self-disarm (store does not decay on its own).
+  // PR-Agent r1: a TIMER enforces the window — on a quiescent page no
+  // re-render would ever re-evaluate `expired`, leaving the card visible
+  // past its documented 10 minutes.
   const expired = armedAt !== null && Date.now() - armedAt > NUDGE_WINDOW_MS;
   useEffect(() => {
-    if (expired) disarmPushNudge();
-  }, [expired, disarmPushNudge]);
+    if (expired) {
+      disarmPushNudge();
+      return;
+    }
+    if (armedAt === null) return;
+    const remaining = armedAt + NUDGE_WINDOW_MS - Date.now();
+    const timer = window.setTimeout(() => disarmPushNudge(), Math.max(remaining, 0));
+    return () => window.clearTimeout(timer);
+  }, [armedAt, expired, disarmPushNudge]);
 
   // SSR/hydration: gated chrome renders nothing on the server (per
   // references/hydration-conditional-render); mounted flips after first paint.
@@ -108,6 +118,11 @@ export default function PushNudgeCard() {
       return;
     }
     // Failure: outcome copy per the error standard (what + why + next).
+    // NOTE: 'not-installed' IS reachable here — isSupported only proves the
+    // SW/push APIs exist; subscribe() additionally requires the STANDALONE
+    // display mode (iOS browser tab ⇒ 'not-installed'). Policy: a failed
+    // attempt stays retryable within the armed window (the offer re-shows
+    // on the next mount); only an explicit dismissal starts the 24h cooldown.
     setOutcome(
       result === 'not-installed'
         ? tCommon('installRequired')
