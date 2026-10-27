@@ -160,6 +160,28 @@ describe('P1-41 suppression (run #35)', () => {
     const out = await mailer.recipientsFor(['u1']);
     expect(out).toHaveLength(0);
   });
+
+  // ── P2-264 (run #168): per-recipient locale resolution ────────────────────
+  it('locale "en" → recipient carries en', async () => {
+    const mailer = makeMailer([{ ...VERIFIED, locale: 'en' }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out).toHaveLength(1);
+    expect(out[0].locale).toBe('en');
+  });
+
+  it('locale "ar" → recipient carries ar', async () => {
+    const mailer = makeMailer([{ ...VERIFIED, locale: 'ar' }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out[0].locale).toBe('ar');
+  });
+
+  it('missing/legacy locale (pre-0055 stub shape) → defaults ar (default-protective)', async () => {
+    // VERIFIED has no locale field — mirrors rows read before the column
+    // existed; the ternary must fall through to 'ar', never undefined.
+    const mailer = makeMailer([{ ...VERIFIED }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out[0].locale).toBe('ar');
+  });
 });
 
 describe('P1-41 transport gating (run #35)', () => {
