@@ -51,7 +51,26 @@ beforeEach(() => {
 
 describe('MediaService.uploadVenueImage', () => {
   it('stores + appends the path for the owning partner', async () => {
-    const { db } = makeDb([{ id: 'v1', owner_id: 'u1', images: [] }]);
+    // Atomic-append shape: update().set().where().returning({ images })
+    const update = jest.fn().mockReturnValue({
+      set: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest
+            .fn()
+            .mockResolvedValue([{ images: ['/media/venues/v1/abc.jpg'] }]),
+        }),
+      }),
+    });
+    const db = {
+      select: jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([{ id: 'v1', owner_id: 'u1', images: [] }]),
+          }),
+        }),
+      }),
+      update,
+    };
     (storage.putVenueImage as jest.Mock).mockResolvedValue({
       path: '/media/venues/v1/abc.jpg',
       bytes: 100,
@@ -90,8 +109,25 @@ describe('MediaService.uploadVenueImage', () => {
     expect(storage.putVenueImage).not.toHaveBeenCalled();
   });
 
-  it('rolls the stored object back when the capped UPDATE loses a race', async () => {
-    const { db } = makeDb([{ id: 'v1', owner_id: 'u1', images: [] }], []); // update returns 0 rows
+  it('rolls the stored object back when the venue row vanishes mid-request', async () => {
+    // update().where().returning() resolves [] → venue gone; object must be deleted.
+    const update = jest.fn().mockReturnValue({
+      set: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+    const db = {
+      select: jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([{ id: 'v1', owner_id: 'u1', images: [] }]),
+          }),
+        }),
+      }),
+      update,
+    };
     (storage.putVenueImage as jest.Mock).mockResolvedValue({
       path: '/media/venues/v1/abc.jpg',
       bytes: 100,
@@ -124,30 +160,22 @@ describe('MediaService.uploadVenueImage', () => {
 });
 
 describe('MediaService.removeVenueImage', () => {
-  it('filters the path out and deletes the object', async () => {
+  it('atomically removes the path and deletes the object', async () => {
     const rows = {
-      select: jest
-        .fn()
-        // first call: venue ownership; second call: current images
-        .mockReturnValueOnce({
-          from: jest.fn().mockReturnValue({
-            where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue([{ id: 'v1', owner_id: 'u1' }]),
-            }),
-          }),
-        })
-        .mockReturnValueOnce({
-          from: jest.fn().mockReturnValue({
-            where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue([
-                { images: ['/media/venues/v1/a.jpg', '/media/venues/v1/b.jpg'] },
-              ]),
-            }),
+      select: jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([{ id: 'v1', owner_id: 'u1' }]),
           }),
         }),
+      }),
       update: jest.fn().mockReturnValue({
         set: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(undefined),
+          where: jest.fn().mockReturnValue({
+            returning: jest
+              .fn()
+              .mockResolvedValue([{ images: ['/media/venues/v1/b.jpg'] }]),
+          }),
         }),
       }),
     };
@@ -163,5 +191,14 @@ describe('MediaService.removeVenueImage', () => {
     await expect(
       svc.removeVenueImage('u1', 'Admin', 'v1', '/etc/passwd'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('400s a path from a DIFFERENT venue (tenant isolation, PR-Agent r2)', async () => {
+    const { db } = makeDb([{ id: 'v1', owner_id: 'u1' }]);
+    const svc = new MediaService(db as never, storage);
+    await expect(
+      svc.removeVenueImage('u1', 'VenueOwner', 'v1', '/media/venues/OTHER-VENUE/x.jpg'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(storage.deleteVenueImage).not.toHaveBeenCalled();
   });
 });

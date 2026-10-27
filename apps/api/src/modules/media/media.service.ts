@@ -80,17 +80,30 @@ export class MediaService {
       throw new InternalServerErrorException('Image storage is unavailable — try again shortly.');
     }
 
-    // Append to the venue row. Dedup by path (sha256 key makes a re-upload of
-    // the same bytes a no-op) + cap re-check INSIDE the predicate so a raced
-    // pair cannot push past 6 via the UPDATE itself.
-    const next = [...current.filter((p) => p !== stored.path), stored.path].slice(0, MAX_VENUE_IMAGES);
+    // PR-Agent r4 (run #170): ATOMIC append — the old read-then-write lost
+    // concurrent uploads (two 201s, one silently gone). The array is now
+    // appended SQL-side (`images || '["path"]'::jsonb`) with dedup + cap
+    // evaluated INSIDE the CASE, so racing writers merge instead of overwrite.
     const updated = await this.db
       .update(venues)
-      .set({ images: sql`${jsonbOf(next)}::jsonb`, updated_at: new Date() })
-      .where(and(eq(venues.id, venueId), sql`jsonb_array_length(${venues.images}) < ${MAX_VENUE_IMAGES}`))
-      .returning({ id: venues.id });
+      .set({
+        images: sql`CASE
+          WHEN ${venues.images} @> ${JSON.stringify([stored.path])}::jsonb THEN ${venues.images}
+          WHEN jsonb_array_length(${venues.images}) >= ${MAX_VENUE_IMAGES} THEN ${venues.images}
+          ELSE ${venues.images} || ${JSON.stringify([stored.path])}::jsonb
+        END`,
+        updated_at: new Date(),
+      })
+      .where(eq(venues.id, venueId))
+      .returning({ images: venues.images });
     if (!updated.length) {
-      // Lost a race against the cap — the object is stored but unreferenced.
+      // Venue vanished mid-request — the object is stored but unreferenced.
+      await this.storage.deleteVenueImage(stored.path);
+      throw new BadRequestException('Venue no longer exists.');
+    }
+    const result = Array.isArray(updated[0].images) ? (updated[0].images as string[]) : [];
+    if (!result.includes(stored.path)) {
+      // Cap or dedup said no — the object is stored but unreferenced.
       await this.storage.deleteVenueImage(stored.path);
       throw new BadRequestException(`Venue already has the maximum of ${MAX_VENUE_IMAGES} photos.`);
     }
@@ -129,17 +142,17 @@ export class MediaService {
       throw new BadRequestException('Image path does not belong to this venue.');
     }
 
-    const [row] = await this.db
-      .select({ images: venues.images })
-      .from(venues)
-      .where(eq(venues.id, venueId))
-      .limit(1);
-    const current = Array.isArray(row?.images) ? (row!.images as string[]) : [];
-    const next = current.filter((p) => p !== path);
-    await this.db
+    // PR-Agent r4 (run #170): ATOMIC remove (`images - '["path"]'::jsonb`)
+    // so a remove racing an append cannot resurrect or duplicate entries.
+    const updated = await this.db
       .update(venues)
-      .set({ images: sql`${jsonbOf(next)}::jsonb`, updated_at: new Date() })
-      .where(eq(venues.id, venueId));
+      .set({
+        images: sql`${venues.images} - ${JSON.stringify([path])}::jsonb`,
+        updated_at: new Date(),
+      })
+      .where(eq(venues.id, venueId))
+      .returning({ images: venues.images });
+    const next = Array.isArray(updated[0]?.images) ? (updated[0]!.images as string[]) : [];
     await this.storage.deleteVenueImage(path);
     return next;
   }
