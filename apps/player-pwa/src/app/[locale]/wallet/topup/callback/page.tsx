@@ -22,7 +22,7 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 import { useVerifyTopup } from '@/hooks/useTopup';
-import { TOPUP_INTENT_SESSION_KEY } from '@/lib/topup';
+import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
 
 type Phase = 'verifying' | 'success' | 'failed';
 
@@ -42,9 +42,12 @@ function CallbackInner() {
       typeof window !== 'undefined'
         ? window.sessionStorage.getItem(TOPUP_INTENT_SESSION_KEY)
         : null;
-    window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
 
     if (!paymentId || !intentId) {
+      // PR-Agent r1 MINOR: sessionStorage is NOT cleared here anymore — the
+      // ids survive a refresh so the verify can be retried (a refresh used
+      // to orphan a possibly-charged payment behind missing-context). They
+      // are cleared only after a definitive outcome below.
       captureError(new Error('topup callback missing context'), {
         area: 'wallet-topup-callback',
         hasPaymentId: Boolean(paymentId),
@@ -59,6 +62,8 @@ function CallbackInner() {
       { paymentId, intentId },
       {
         onSuccess: (res) => {
+          window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
+          window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
           setPhase(res.credited || res.alreadyCredited ? 'success' : 'failed');
           trackEvent('topup_callback_result', {
             ok: res.credited || res.alreadyCredited,

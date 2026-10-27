@@ -205,6 +205,18 @@ export class WalletTopupService {
 
     const creditKey = `${TOPUP_KEY_PREFIX}${payment.id}`;
 
+    // PR-Agent r1 CRITICAL (run #169): payment↔intent BINDING. The hosted form
+    // creates the payment with description `wallet-topup:<intentId>`; verify
+    // refuses ANY payment not bound to THIS intent, before any other check —
+    // a leaked/observed paid paymentId can never be claimed into another
+    // user's same-amount intent (and replays can never cross intents).
+    const expectedDescription = `wallet-topup:${intent.id}`;
+    if ((payment.description ?? null) !== expectedDescription) {
+      throw new ConflictException(
+        'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
+      );
+    }
+
     // Sequential replay: this payment already credited (webhook-less retry) —
     // heal the intent flip and return the original outcome, never re-credit.
     const prior = await this.findCreditReplay(userId, creditKey);

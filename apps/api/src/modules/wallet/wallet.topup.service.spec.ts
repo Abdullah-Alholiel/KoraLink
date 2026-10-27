@@ -41,6 +41,7 @@ const PAID_PAYMENT = {
   status: 'paid',
   amount: 5000,
   currency: 'SAR',
+  description: 'wallet-topup:intent-1',
   source: { type: 'creditcard', company: 'mada', message: null },
 };
 
@@ -255,6 +256,11 @@ describe('verifyTopup', () => {
     mockFetch.mockResolvedValue({ ...PAID_PAYMENT, currency: 'USD' });
     const svc = makeService(makeDb(), ENV_ON);
     await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/currency is not SAR/);
+  });
+  it('409 payment_intent_mismatch when the payment is bound to a DIFFERENT intent (PR-Agent r1)', async () => {
+    mockFetch.mockResolvedValue({ ...PAID_PAYMENT, description: 'wallet-topup:other-intent' });
+    const svc = makeService(makeDb(), ENV_ON);
+    await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/payment_intent_mismatch/);
   });
   it('credits in one tx on a matching paid payment and flips the intent', async () => {
     mockFetch.mockResolvedValue(PAID_PAYMENT);

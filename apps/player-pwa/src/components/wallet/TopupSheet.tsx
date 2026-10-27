@@ -32,7 +32,7 @@ import {
   useVerifyTopup,
   type TopupIntentResponse,
 } from '@/hooks/useTopup';
-import { TOPUP_INTENT_SESSION_KEY } from '@/lib/topup';
+import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
 
 /** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract). */
 interface MoyasarFormApi {
@@ -105,6 +105,8 @@ export default function TopupSheet({
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<'form' | 'form-loading' | 'paying'>('form');
+  /** PR-Agent r1 IMPORTANT: a failed verify keeps the charged payment's ids visible with a retry. */
+  const [pendingPayment, setPendingPayment] = useState<{ paymentId: string; intentId: string } | null>(null);
   const intentRef = useRef<TopupIntentResponse | null>(null);
   const formHostRef = useRef<HTMLDivElement | null>(null);
 
@@ -112,9 +114,37 @@ export default function TopupSheet({
     setAmount('');
     setError(null);
     setStage('form');
+    setPendingPayment(null);
     intentRef.current = null;
     if (formHostRef.current) formHostRef.current.innerHTML = '';
   }, []);
+
+  const retryVerify = useCallback(() => {
+    if (!pendingPayment) return;
+    setError(null);
+    verifyTopup.mutate(
+      { paymentId: pendingPayment.paymentId, intentId: pendingPayment.intentId },
+      {
+        onSuccess: (res) => {
+          trackEvent('topup_completed', {
+            amountSar: res.amountSar,
+            alreadyCredited: res.alreadyCredited,
+            via: 'recovery',
+            locale,
+          });
+          window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
+          window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
+          setPendingPayment(null);
+          onCredited?.();
+          onClose();
+        },
+        onError: (err: unknown) => {
+          captureError(err, { area: 'wallet-topup-verify-retry' });
+          setError(t(errorKey(classifyError(err))));
+        },
+      },
+    );
+  }, [locale, onClose, onCredited, pendingPayment, t, verifyTopup]);
 
   useEffect(() => {
     if (!isOpen) reset();
@@ -166,6 +196,12 @@ export default function TopupSheet({
         on_completed: (payment) => {
           if (!intentRef.current) return;
           setStage('paying');
+          // PR-Agent r1 IMPORTANT: a charged payment must never become
+          // unrecoverable. Persist paymentId+intentId BEFORE verifying — if
+          // the verify fails, the recovery block offers an explicit retry
+          // carrying the SAME ids (and a page reload can't lose them).
+          window.sessionStorage.setItem(TOPUP_INTENT_SESSION_KEY, intentRef.current.intent.id);
+          window.sessionStorage.setItem(TOPUP_PAYMENT_SESSION_KEY, payment.id);
           verifyTopup.mutate(
             { paymentId: payment.id, intentId: intentRef.current.intent.id },
             {
@@ -175,11 +211,14 @@ export default function TopupSheet({
                   alreadyCredited: res.alreadyCredited,
                   locale,
                 });
+                window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
+                window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
                 onCredited?.();
                 onClose();
               },
               onError: (err: unknown) => {
                 captureError(err, { area: 'wallet-topup-verify' });
+                setPendingPayment({ paymentId: payment.id, intentId: intentRef.current?.intent.id ?? '' });
                 setError(t(errorKey(classifyError(err))));
                 setStage('paying');
               },
@@ -221,6 +260,21 @@ export default function TopupSheet({
       {!showFormStage && (
         <div className="px-5 pb-2 flex-shrink-0">
           <p className="text-sm text-gray-500 mb-3">{t('wallet.topup.subtitle')}</p>
+
+          {pendingPayment && (
+            <div role="status" className="mb-3 rounded-xl bg-amber-50 px-3 py-2.5">
+              <p className="text-xs font-medium text-amber-800">{t('wallet.topup.recoveryTitle')}</p>
+              <p className="mt-1 text-xs leading-snug text-amber-700">{t('wallet.topup.recoveryBody')}</p>
+              <button
+                type="button"
+                onClick={retryVerify}
+                disabled={verifyTopup.isPending}
+                className="mt-2 w-full rounded-full bg-brand-black py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {t('wallet.topup.recoveryRetry')}
+              </button>
+            </div>
+          )}
 
           {!isOnline && (
             <div role="status" className="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2">

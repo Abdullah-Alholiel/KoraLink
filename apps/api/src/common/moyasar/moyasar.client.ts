@@ -22,6 +22,8 @@ export interface MoyasarPayment {
   /** Smallest currency unit (halalas for SAR). */
   amount: number;
   currency: string;
+  /** Echoed create-time description — the app binds payments to intents via `wallet-topup:<intentId>`. */
+  description?: string | null;
   source?: {
     type?: string;
     company?: string;
