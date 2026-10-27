@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, randomUUID } from 'crypto';
+import * as Sentry from '@sentry/node';
 
 /**
  * Minimal S3 client for the self-hosted SeaweedFS gateway (P1-38, run #170).
@@ -129,7 +130,11 @@ export class StorageService {
       if (res.status !== 200) throw new Error(`storage GET ${res.status}`);
       const body = Buffer.from(await res.arrayBuffer());
       return { body, contentType: res.headers.get('content-type') ?? 'application/octet-stream', length: body.length };
-    } catch {
+    } catch (err) {
+      // PR-Agent r3 MINOR (run #170): a storage outage must not be invisible —
+      // the serve route maps null → 404, so without this capture a SeaweedFS
+      // failure looks like missing photos. Genuine 404s return before this.
+      Sentry.captureException(err, { tags: { scope: 'media.serve' } });
       return null;
     }
   }
