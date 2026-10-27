@@ -1,10 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -71,4 +73,17 @@ export class UpdateVenueAdminDto {
   @IsOptional()
   @IsBoolean()
   closed_day_6?: boolean;
+
+  // P1-38 (run #170): venue photo paths — same contract as the partner DTO.
+  @ApiPropertyOptional({
+    example: ['/media/venues/<venueId>/<sha256>.jpg'],
+    type: [String],
+    description: 'Venue photo paths (max 6, order = display order)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @Matches(/^\/media\/venues\/[A-Za-z0-9/._-]+$/, { each: true })
+  images?: string[];
 }

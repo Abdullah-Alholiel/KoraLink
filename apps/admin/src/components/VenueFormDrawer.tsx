@@ -1,12 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { PartnerVenueRow } from '@/lib/types';
+
+/** Mirrors the API cap (media.service.ts MAX_VENUE_IMAGES). */
+const MAX_IMAGES = 6;
+/** Where the API serves these images from (public media route). */
+const API_ORIGIN =
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1').replace(/\/api\/v1$/, '');
 
 interface VenueFormDrawerProps {
   open: boolean;
@@ -26,6 +32,8 @@ interface VenueFormValues {
   open: string;
   close: string;
   closedDays: boolean[];
+  /** P1-38: photo paths (/media/venues/...) — display order. */
+  images: string[];
 }
 
 const EMPTY: VenueFormValues = {
@@ -36,6 +44,7 @@ const EMPTY: VenueFormValues = {
   open: '8',
   close: '23',
   closedDays: [false, false, false, false, false, false, false],
+  images: [],
 };
 
 /**
@@ -52,6 +61,10 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
   const [errors, setErrors] = useState<{ name?: string; city?: string; address?: string; hours?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // P1-38: photo upload state (edit mode only — a venue id is required by the API).
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -74,6 +87,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
           Boolean(venue.closed_day_5),
           Boolean(venue.closed_day_6),
         ],
+        images: Array.isArray(venue.images) ? (venue.images as string[]) : [],
       });
     }
     setErrors({});
@@ -122,6 +136,8 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
             .filter(Boolean),
           open_hour: openHour,
           close_hour: closeHour,
+          // P1-38: current order after any add/remove (server dedupes + validates).
+          images: values.images,
           ...Object.fromEntries(values.closedDays.map((closed, day) => [`closed_day_${day}`, closed])),
         });
       } else {
@@ -138,6 +154,45 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     } finally {
       setSaving(false);
     }
+  }
+
+  /** P1-38: upload one photo; the API appends the canonical path server-side. */
+  async function handleFilesSelected(files: FileList | null) {
+    if (!venue || !files?.length) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const next = [...values.images];
+      for (const file of Array.from(files)) {
+        if (next.length >= MAX_IMAGES) {
+          setUploadError(t('imagesTooMany'));
+          break;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        const res = await api.upload<{ path: string }>(
+          `/media/venues?venueId=${encodeURIComponent(venue.id)}`,
+          form,
+        );
+        if (res?.path && !next.includes(res.path)) next.push(res.path);
+      }
+      setValues((v) => ({ ...v, images: next }));
+    } catch (e) {
+      // Error standard: what happened + why + what to do next (localized).
+      const status = e instanceof ApiError ? e.status : 0;
+      if (status === 429) setUploadError(t('imagesTooFast'));
+      else if (status === 413 || status === 400) setUploadError(t('imagesBadType'));
+      else if (status === 403) setUploadError(t('imagesForbidden'));
+      else setUploadError(t('imagesUploadFailed'));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  /** P1-38: remove one photo from the form grid (persisted on Save). */
+  function removeImage(path: string) {
+    setValues((v) => ({ ...v, images: v.images.filter((p) => p !== path) }));
   }
 
   return (
@@ -269,6 +324,66 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
                   </label>
                 ))}
               </div>
+            </div>
+
+            {/* P1-38 (run #170): venue photos — upload, grid, remove-on-Save */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="block text-xs font-medium text-gray-700">
+                  {t('images')}{' '}
+                  <span className="text-gray-400">
+                    ({values.images.length}/{MAX_IMAGES})
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || values.images.length >= MAX_IMAGES}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {t('imagesAdd')}
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+                onChange={(e) => void handleFilesSelected(e.target.files)}
+              />
+              {uploadError && (
+                <p role="alert" className="mb-1.5 text-[11px] text-brand-red">
+                  {uploadError}
+                </p>
+              )}
+              <p className="mb-2 text-[11px] text-gray-400">{t('imagesHint')}</p>
+              {values.images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {values.images.map((path) => (
+                    <div key={path} className="group relative overflow-hidden rounded-lg border border-gray-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- API-served dynamic path, plain img keeps CSP simple */}
+                      <img
+                        src={`${API_ORIGIN}${path}`}
+                        alt=""
+                        className="h-20 w-full object-cover"
+                        loading="lazy"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(path)}
+                        aria-label={t('imagesRemove')}
+                        className="absolute end-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                      >
+                        <svg viewBox="0 0 14 14" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 2l10 10M12 2L2 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

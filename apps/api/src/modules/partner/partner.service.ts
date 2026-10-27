@@ -316,6 +316,8 @@ export class PartnerService {
         // P1-25: hours + closed days for the partner venues edit form.
         open_hour: venues.open_hour,
         close_hour: venues.close_hour,
+        // P1-38 (run #170): photo paths for the admin/partner form grid.
+        images: venues.images,
         closed_day_0: venues.closed_day_0,
         closed_day_1: venues.closed_day_1,
         closed_day_2: venues.closed_day_2,
@@ -380,6 +382,12 @@ export class PartnerService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    // P1-38 (run #170): reorder/remove photos. Paths arrive from the form grid
+    // (canonical /media/venues/... strings minted by POST /media/venues);
+    // shape + cap validated in the DTO, deduped here.
+    if (dto.images !== undefined) {
+      updates.images = [...new Set(dto.images)];
+    }
     // P1-25 operating hours (partial update semantics, validated in the DTO;
     // cross-field rule enforced here: close must be after open, 24 = midnight allowed).
     if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
@@ -426,6 +434,7 @@ export class PartnerService {
         owner_id: venues.owner_id,
         open_hour: venues.open_hour,
         close_hour: venues.close_hour,
+        images: venues.images,
         closed_day_0: venues.closed_day_0,
         closed_day_1: venues.closed_day_1,
         closed_day_2: venues.closed_day_2,

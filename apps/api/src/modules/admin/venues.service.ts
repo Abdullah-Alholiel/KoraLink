@@ -53,7 +53,7 @@ export class AdminVenuesService {
     const rows = (await this.db.execute(sql`
       SELECT
         v.id, v.name, v.city, v.address, v.is_approved, v.is_koralink_partner,
-        v.rating_avg, v.rating_count, v.created_at,
+        v.rating_avg, v.rating_count, v.created_at, v.images,
         u.id AS owner_id, COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         COALESCE(vv.status::text, 'pending') AS verification_status
@@ -168,6 +168,10 @@ export class AdminVenuesService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    // P1-38 (run #170): reorder/remove photos (same contract as partner).
+    if (dto.images !== undefined) {
+      updates.images = [...new Set(dto.images)];
+    }
     if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
       const openHour = dto.open_hour ?? Number(before.open_hour ?? 8);
       const closeHour = dto.close_hour ?? Number(before.close_hour ?? 23);

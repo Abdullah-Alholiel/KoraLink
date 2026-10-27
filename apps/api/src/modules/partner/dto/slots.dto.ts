@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -242,4 +243,19 @@ export class UpdateVenuePartnerDto {
   @IsOptional()
   @IsBoolean()
   closed_day_6?: boolean;
+
+  // P1-38 (run #170): venue photo paths — canonical "/media/venues/…" strings
+  // minted by POST /media/venues. Sending the array SETS the order/removal;
+  // omit it to leave photos untouched (partial-update semantics).
+  @ApiPropertyOptional({
+    example: ['/media/venues/<venueId>/<sha256>.jpg'],
+    type: [String],
+    description: 'Venue photo paths (max 6, order = display order)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @Matches(/^\/media\/venues\/[A-Za-z0-9/._-]+$/, { each: true })
+  images?: string[];
 }
