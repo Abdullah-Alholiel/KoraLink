@@ -26,6 +26,9 @@ interface ReportDisputeSheetProps {
     openDispute: { type: string; status: string } | null;
     isPending: boolean;
     error?: FetchError | Error | null;
+    /** P2-263 (run #168): real network state from the parent — an offline tap
+     * must show offline copy, never a raw network error after the fact. */
+    isOffline?: boolean;
     onSubmit: (type: DisputeType, reason: string) => void;
 }
 
@@ -61,6 +64,7 @@ export default function ReportDisputeSheet({
     openDispute,
     isPending,
     error,
+    isOffline = false,
     onSubmit,
 }: ReportDisputeSheetProps) {
     const t = useTranslations('dispute');
@@ -200,9 +204,17 @@ export default function ReportDisputeSheet({
 
             {!openStatus && (
                 <div className="px-5 pb-8 pt-1 flex-shrink-0">
+                    {/* P2-263 (run #168): offline guard — block the submit and
+                        say why BEFORE the tap fails (5-UX-state standard; same
+                        class as the wallet offline surface). */}
+                    {isOffline && (
+                        <p className="text-xs text-gray-500 mb-2 bg-gray-50 rounded-xl px-3 py-2" role="status">
+                            {t('offlineNote')}
+                        </p>
+                    )}
                     <button
                         onClick={submit}
-                        disabled={isPending || !type}
+                        disabled={isPending || !type || isOffline}
                         className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform shadow-[0_4px_20px_rgba(37,65,50,0.3)]"
                     >
                         {isPending && <Loader2 className="w-4 h-4 animate-spin" />}

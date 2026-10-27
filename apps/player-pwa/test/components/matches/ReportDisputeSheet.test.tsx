@@ -49,6 +49,7 @@ const baseProps = {
     openDispute: null as { type: string; status: string } | null,
     isPending: false,
     error: null as Error | null,
+    isOffline: false,
     onSubmit: vi.fn(),
 };
 
@@ -139,5 +140,32 @@ describe('ReportDisputeSheet (P1-69)', () => {
     it('RDR-7: closed sheet renders nothing', () => {
         const { container } = renderSheet({ isOpen: false });
         expect(container.textContent).toBe('');
+    });
+
+    // ── P2-263 (run #168): offline guard ──────────────────────────────────────
+    it('RDR-9: offline shows the localized offline note and disables submit even with a category picked', () => {
+        renderSheet({ isOffline: true });
+
+        // the offline status note is visible (role=status, localized copy)
+        expect(screen.getByRole('status')).toHaveTextContent('offline');
+
+        // pick a category — the button must STILL be disabled while offline
+        fireEvent.click(screen.getByRole('radio', { name: 'Something else' }));
+        expect(
+            (screen.getByRole('button', { name: 'Submit report' }) as HTMLButtonElement)
+                .disabled,
+        ).toBe(true);
+        // and the guard never fired the mutation
+        expect(baseProps.onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('RDR-10: online (default) keeps submit enabled once a category is picked and hides the note', () => {
+        renderSheet({});
+        expect(screen.queryByRole('status')).toBeNull();
+        fireEvent.click(screen.getByRole('radio', { name: 'Something else' }));
+        expect(
+            (screen.getByRole('button', { name: 'Submit report' }) as HTMLButtonElement)
+                .disabled,
+        ).toBe(false);
     });
 });

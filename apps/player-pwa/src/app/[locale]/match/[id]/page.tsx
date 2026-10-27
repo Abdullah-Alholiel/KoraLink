@@ -1187,6 +1187,7 @@ export default function MatchDetailPage({
                     }
                     isPending={openDispute.isPending}
                     error={openDispute.isError ? openDispute.error : null}
+                    isOffline={!isOnline}
                     onSubmit={(type, reason) => {
                         openDispute.mutate(
                             { type, ...(reason ? { reason } : {}) },
