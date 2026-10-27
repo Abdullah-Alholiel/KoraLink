@@ -133,6 +133,7 @@ export class UsersService {
         email: true,
         email_verified_at: true,
         email_muted: true,
+        locale: true,
         quiet_hours_enabled: true,
         quiet_start_hour: true,
         quiet_end_hour: true,
@@ -457,6 +458,7 @@ export class UsersService {
         role: users.role,
         home_lat: users.home_lat,
         home_lng: users.home_lng,
+        locale: users.locale,
       });
 
     if (!updated) {

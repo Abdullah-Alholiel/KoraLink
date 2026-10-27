@@ -222,6 +222,10 @@ export const users = pgTable('users', {
   avatar_url: text('avatar_url'),
   preferred_location: varchar('preferred_location', { length: 255 }),
   preferred_position: varchar('preferred_position', { length: 100 }),
+  // P2-264 (run #168): preferred content locale for transactional email
+  // ('ar' | 'en'). Saudi-market default 'ar' matches the mailer's historical
+  // hardcode; the PWA LanguageToggle syncs it on switch (fire-and-forget).
+  locale: varchar('locale', { length: 5 }).notNull().default('ar'),
   role: userRoleEnum('role').notNull().default('Player'),
   wallet_balance: numeric('wallet_balance', { precision: 12, scale: 2 })
     .notNull()
