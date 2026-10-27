@@ -1145,7 +1145,8 @@
     "statusRejected": "Rejected",
     "statusCategory": "Category",
     "errorValidation": "This report can't be filed this way. If you're disputing a no-show, it must be on a match where you were marked.",
-    "errorForbidden": "Only match players can file a report on this match."
+    "errorForbidden": "Only match players can file a report on this match.",
+    "offlineNote": "You're offline — reconnect to submit your report."
   },
   "appeal": {
     "title": "Appeal No-Show",
