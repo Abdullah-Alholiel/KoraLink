@@ -159,6 +159,7 @@ export class MediaService {
 }
 
 /** Serialize a string[] for inline SQL (jsonb literal, single-quote escaped). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the P2-268 orphan-sweep query builder
 function jsonbOf(arr: string[]): string {
   return JSON.stringify(arr).replace(/'/g, "''");
 }

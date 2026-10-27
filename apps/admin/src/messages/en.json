@@ -530,6 +530,7 @@
     "imagesAdd": "Add photos",
     "imagesRemove": "Remove photo",
     "imagesHint": "JPG, PNG or WebP · up to 5 MB each · max 6 photos. Changes apply when you save.",
+    "imagesCreateHint": "Photos attach after the venue is created — save it first, then reopen to add.",
     "imagesTooMany": "A venue can have at most 6 photos — remove one first.",
     "imagesBadType": "That file was rejected — use JPG, PNG or WebP, max 5 MB.",
     "imagesUploadFailed": "Upload failed — check your connection and try again.",

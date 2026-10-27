@@ -335,7 +335,9 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
               </div>
             </div>
 
-            {/* P1-38 (run #170): venue photos — upload, grid, remove-on-Save */}
+            {/* P1-38 (run #170): venue photos — upload, grid, remove-on-Save.
+                PR-Agent r6 MINOR: upload is EDIT-MODE ONLY (the API requires a
+                venue id); in create mode show the hint instead of a dead button. */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="block text-xs font-medium text-gray-700">
@@ -344,15 +346,17 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
                     ({values.images.length}/{MAX_IMAGES})
                   </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading || values.images.length >= MAX_IMAGES}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                  {t('imagesAdd')}
-                </button>
+                {venue && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || values.images.length >= MAX_IMAGES}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {t('imagesAdd')}
+                  </button>
+                )}
               </div>
               <input
                 ref={fileInputRef}
@@ -367,7 +371,9 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
                   {uploadError}
                 </p>
               )}
-              <p className="mb-2 text-[11px] text-gray-400">{t('imagesHint')}</p>
+              <p className="mb-2 text-[11px] text-gray-400">
+                {venue ? t('imagesHint') : t('imagesCreateHint')}
+              </p>
               {values.images.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {values.images.map((path) => (
