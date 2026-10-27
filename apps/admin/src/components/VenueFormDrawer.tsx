@@ -161,10 +161,14 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     if (!venue || !files?.length) return;
     setUploadError(null);
     setUploading(true);
+    // PR-Agent r2 (run #170): append EACH successful upload to the form state
+    // immediately — a mid-loop failure (e.g. the 10/min throttle) must not
+    // discard files that already landed server-side (the next Save would
+    // silently PATCH them out of venues.images — data loss).
+    let uploaded = 0;
     try {
-      const next = [...values.images];
       for (const file of Array.from(files)) {
-        if (next.length >= MAX_IMAGES) {
+        if (values.images.length + uploaded >= MAX_IMAGES) {
           setUploadError(t('imagesTooMany'));
           break;
         }
@@ -174,11 +178,16 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
           `/media/venues?venueId=${encodeURIComponent(venue.id)}`,
           form,
         );
-        if (res?.path && !next.includes(res.path)) next.push(res.path);
+        if (res?.path) {
+          uploaded += 1;
+          setValues((v) =>
+            v.images.includes(res.path) ? v : { ...v, images: [...v.images, res.path] },
+          );
+        }
       }
-      setValues((v) => ({ ...v, images: next }));
     } catch (e) {
       // Error standard: what happened + why + what to do next (localized).
+      // Partial-success is preserved: uploads that landed stay in the grid.
       const status = e instanceof ApiError ? e.status : 0;
       if (status === 429) setUploadError(t('imagesTooFast'));
       else if (status === 413 || status === 400) setUploadError(t('imagesBadType'));

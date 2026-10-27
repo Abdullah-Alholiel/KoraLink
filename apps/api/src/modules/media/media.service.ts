@@ -121,6 +121,13 @@ export class MediaService {
     if (!this.storage.isManagedVenuePath(path)) {
       throw new BadRequestException('Not a managed venue image path.');
     }
+    // PR-Agent r2 (run #170): scope the delete to THIS venue's key prefix —
+    // the generic managed-prefix check alone would let a partner delete
+    // another venue's stored object by naming its path (tenant isolation).
+    const venuePrefix = `/media/venues/${venueId}/`;
+    if (!path.startsWith(venuePrefix)) {
+      throw new BadRequestException('Image path does not belong to this venue.');
+    }
 
     const [row] = await this.db
       .select({ images: venues.images })

@@ -169,6 +169,7 @@ export class AdminVenuesService {
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
     // P1-38 (run #170): reorder/remove photos (same contract as partner).
+    // Admin is cross-venue by design — paths are only prefix-shape-validated.
     if (dto.images !== undefined) {
       updates.images = [...new Set(dto.images)];
     }

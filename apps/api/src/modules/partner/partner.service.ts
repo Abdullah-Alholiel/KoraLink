@@ -385,7 +385,15 @@ export class PartnerService {
     // P1-38 (run #170): reorder/remove photos. Paths arrive from the form grid
     // (canonical /media/venues/... strings minted by POST /media/venues);
     // shape + cap validated in the DTO, deduped here.
+    // PR-Agent r2 (run #170) tenant-isolation: every incoming path MUST live
+    // under THIS venue's own prefix — a partner cannot graft another venue's
+    // photo paths onto theirs (nor alias another venue's photos).
     if (dto.images !== undefined) {
+      const ownPrefix = `/media/venues/${venueId}/`;
+      const foreign = dto.images.find((p) => !p.startsWith(ownPrefix));
+      if (foreign) {
+        throw new BadRequestException('Image path does not belong to this venue.');
+      }
       updates.images = [...new Set(dto.images)];
     }
     // P1-25 operating hours (partial update semantics, validated in the DTO;
