@@ -167,6 +167,7 @@ export default function TopupSheet({
     }
     setStage('form-loading');
     try {
+      setPendingPayment(null);
       const intentRes = await createIntent.mutateAsync({
         amountSar: parsed,
         idempotencyKey: uuid(),
@@ -257,24 +258,27 @@ export default function TopupSheet({
         </h2>
       </div>
 
+      {/* PR-Agent r2 IMPORTANT: stage-INDEPENDENT recovery — verify failure
+          leaves stage='paying', so the retry block must live outside the
+          stage switch or a charged-but-unverified payment never sees it. */}
+      {pendingPayment && (
+        <div role="status" className="mx-5 mb-3 rounded-xl bg-amber-50 px-3 py-2.5 flex-shrink-0">
+          <p className="text-xs font-medium text-amber-800">{t('wallet.topup.recoveryTitle')}</p>
+          <p className="mt-1 text-xs leading-snug text-amber-700">{t('wallet.topup.recoveryBody')}</p>
+          <button
+            type="button"
+            onClick={retryVerify}
+            disabled={verifyTopup.isPending}
+            className="mt-2 w-full rounded-full bg-brand-black py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {t('wallet.topup.recoveryRetry')}
+          </button>
+        </div>
+      )}
+
       {!showFormStage && (
         <div className="px-5 pb-2 flex-shrink-0">
           <p className="text-sm text-gray-500 mb-3">{t('wallet.topup.subtitle')}</p>
-
-          {pendingPayment && (
-            <div role="status" className="mb-3 rounded-xl bg-amber-50 px-3 py-2.5">
-              <p className="text-xs font-medium text-amber-800">{t('wallet.topup.recoveryTitle')}</p>
-              <p className="mt-1 text-xs leading-snug text-amber-700">{t('wallet.topup.recoveryBody')}</p>
-              <button
-                type="button"
-                onClick={retryVerify}
-                disabled={verifyTopup.isPending}
-                className="mt-2 w-full rounded-full bg-brand-black py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-              >
-                {t('wallet.topup.recoveryRetry')}
-              </button>
-            </div>
-          )}
 
           {!isOnline && (
             <div role="status" className="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2">

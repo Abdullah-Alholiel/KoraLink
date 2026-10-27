@@ -159,4 +159,26 @@ describe('TopupSheet — validation + intent + form host (P0-2)', () => {
             );
         });
     });
+
+    it('recovery retry stays VISIBLE while stage is paying (PR-Agent r2 tripwire)', async () => {
+        renderSheet();
+        const input = screen.getByLabelText("Amount (SAR)");
+        fireEvent.change(input, { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+        const cfg = init.mock.calls[0][0];
+        // The failed-verify path: onError sets pendingPayment while stage stays 'paying'.
+        cfg.on_completed({ id: 'pay_test1234567890', status: 'paid', amount: 5000 });
+        const [, options] = verifyTopupMock.mock.calls[0];
+        options.onError(new Error('verify failed'));
+        // The retry button MUST appear even though stage never returned to 'form'
+        // (state update is async — wait for the re-render, don't assert sync).
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Retry confirmation/i })).toBeTruthy();
+        });
+    });
 });
