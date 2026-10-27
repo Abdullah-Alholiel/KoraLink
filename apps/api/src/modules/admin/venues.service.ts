@@ -168,8 +168,13 @@ export class AdminVenuesService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
-    // P1-38 (run #170): reorder/remove photos (same contract as partner).
-    // Admin is cross-venue by design — paths are only prefix-shape-validated.
+    // P1-38 (run #170): reorder/remove photos. The DTO pattern already pins
+    // each path to /media/venues/<uuid>/…jpg|png|webp (no traversal), which IS
+    // the admin contract: Admin is cross-venue BY DESIGN (HQ reorders/removes
+    // photos on any venue, mirroring admin venue edit authority everywhere
+    // else — partner/venues, disputes, reports). Stored-object GC for paths
+    // removed here happens in the media module's delete path (removeVenueImage
+    // is wired to the storage DELETE); bulk orphan sweep = P2-268 follow-up.
     if (dto.images !== undefined) {
       if (!Array.isArray(dto.images)) {
         throw new BadRequestException('images must be an array of photo paths.');
