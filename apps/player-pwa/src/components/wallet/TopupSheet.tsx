@@ -34,10 +34,13 @@ import {
 } from '@/hooks/useTopup';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
 
-/** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract). */
+/** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract;
+ * the runtime also accepts a live Element for `element` — verified in the
+ * shipped bundle: `!(element instanceof Element)` rejection only fires when
+ * NEITHER a string nor an Element is passed). */
 interface MoyasarFormApi {
   init(config: {
-    element: string;
+    element: string | HTMLElement;
     amount: number;
     currency: string;
     description: string;
@@ -150,6 +153,20 @@ export default function TopupSheet({
     if (!isOpen) reset();
   }, [isOpen, reset]);
 
+  // PR-Agent r3 IMPORTANT: mid-flow close recovery. A late on_completed (or a
+  // verify failure) persists the charged payment's ids to sessionStorage even
+  // when the sheet was closed; on the next open, restore the recovery block
+  // so the charge can be confirmed (success paths clear the keys themselves).
+  useEffect(() => {
+    if (!isOpen) return;
+    const paymentId = window.sessionStorage.getItem(TOPUP_PAYMENT_SESSION_KEY);
+    const intentId = window.sessionStorage.getItem(TOPUP_INTENT_SESSION_KEY);
+    if (paymentId && intentId && !intentRef.current) {
+      setPendingPayment({ paymentId, intentId });
+      setStage('paying');
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOnline && stage !== 'form') setError(t('wallet.topup.offlineNote'));
   }, [isOnline, stage, t]);
@@ -186,7 +203,7 @@ export default function TopupSheet({
       formHostRef.current.appendChild(host);
 
       Moyasar.init({
-        element: host as unknown as string,
+        element: host,
         amount: intentRes.intent.amount_halalas,
         currency: 'SAR',
         description: `wallet-topup:${intentRes.intent.id}`,
@@ -195,16 +212,19 @@ export default function TopupSheet({
         supported_networks: ['visa', 'mastercard', 'mada', 'unionpay'],
         methods: ['creditcard'],
         on_completed: (payment) => {
-          if (!intentRef.current) return;
+          // PR-Agent r3 IMPORTANT: capture the ids in CLOSURE, not via
+          // intentRef — a user closing the sheet mid-'paying' nulls intentRef
+          // (reset()), but a frictionless charge still completes later; the
+          // persist-first write below must still run with the right intent.
+          const closedIntent = intentRef.current;
+          if (!closedIntent) return;
           setStage('paying');
-          // PR-Agent r1 IMPORTANT: a charged payment must never become
-          // unrecoverable. Persist paymentId+intentId BEFORE verifying — if
-          // the verify fails, the recovery block offers an explicit retry
-          // carrying the SAME ids (and a page reload can't lose them).
-          window.sessionStorage.setItem(TOPUP_INTENT_SESSION_KEY, intentRef.current.intent.id);
+          // Persist BEFORE verifying: a charged payment must never become
+          // unrecoverable (recovery block + session survive reloads).
+          window.sessionStorage.setItem(TOPUP_INTENT_SESSION_KEY, closedIntent.intent.id);
           window.sessionStorage.setItem(TOPUP_PAYMENT_SESSION_KEY, payment.id);
           verifyTopup.mutate(
-            { paymentId: payment.id, intentId: intentRef.current.intent.id },
+            { paymentId: payment.id, intentId: closedIntent.intent.id },
             {
               onSuccess: (res) => {
                 trackEvent('topup_completed', {
@@ -214,12 +234,16 @@ export default function TopupSheet({
                 });
                 window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
                 window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
+                setPendingPayment(null);
                 onCredited?.();
                 onClose();
               },
               onError: (err: unknown) => {
                 captureError(err, { area: 'wallet-topup-verify' });
-                setPendingPayment({ paymentId: payment.id, intentId: intentRef.current?.intent.id ?? '' });
+                // The sheet may be closed mid-flow (isOpen=false renders null
+                // but stays mounted) — the restore-on-open effect below picks
+                // the recovery block up from the persisted ids on reopen.
+                setPendingPayment({ paymentId: payment.id, intentId: closedIntent.intent.id });
                 setError(t(errorKey(classifyError(err))));
                 setStage('paying');
               },

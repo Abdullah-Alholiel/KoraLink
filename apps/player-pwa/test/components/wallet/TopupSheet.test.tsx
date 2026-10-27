@@ -86,6 +86,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup();
     document.body.innerHTML = '';
+    window.sessionStorage.clear();
 });
 
 describe('TopupSheet — validation + intent + form host (P0-2)', () => {
