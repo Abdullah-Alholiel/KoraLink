@@ -278,6 +278,9 @@ const nextConfig = {
           "'unsafe-eval'",
           'https://api.mapbox.com',
           'https://cdn.moyasar.com',
+          // P0-2 (run #169): moyasar-payment-form UMD bundle loads at submit
+          // time (hosted form — card data never touches our servers).
+          'https://cdn.jsdelivr.net',
           'https://*.posthog.com',
           // doop design-sync: loads the capture snippet from the internal design canvas
           'https://aa.tail2948f9.ts.net:9460',
@@ -288,6 +291,8 @@ const nextConfig = {
           // nonce pipeline lands; eval is BANNED in prod (verified unused).
           "'unsafe-inline'",
           'https://*.posthog.com',
+          // P0-2 (run #169): Moyasar hosted payment form library (wallet top-up).
+          'https://cdn.jsdelivr.net',
           // doop design-sync: loads the capture snippet from the internal design canvas
           'https://aa.tail2948f9.ts.net:9460',
         ].join(' ');
@@ -301,6 +306,9 @@ const nextConfig = {
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
+      // P0-2 (run #169): the Moyasar form tokenizes card data directly
+      // browser→Moyasar (PCI-minimal) — the XHRs need this allowance.
+      'https://api.moyasar.com',
       // WS: prod allows ONLY wss: (cleartext ws: is dev-only — the API origin
       // is https in every deployed environment, so wss: covers it).
       ...(isDev ? ['ws:'] : []),

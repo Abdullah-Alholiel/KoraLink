@@ -35,6 +35,8 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
 import { downloadTextAsFile } from '@/lib/download';
 import type { Transaction } from '@/types';
+import { useTopupConfig } from '@/hooks/useTopup';
+import TopupSheet from '@/components/wallet/TopupSheet';
 
 function getTransactionIcon(icon: string) {
     switch (icon) {
@@ -118,6 +120,13 @@ export default function WalletPage() {
 
     const topup = useTopupWallet();
     const fetchAllHistory = useFetchAllWalletHistory();
+    // P0-2 (run #169): when the Moyasar top-up is enabled server-side, the
+    // entry modal routes through the hosted-form flow (TopupSheet); the
+    // legacy dummy self-credit modal stays as the flag-off fallback so dev
+    // environments keep their seeding path.
+    const { data: topupConfig } = useTopupConfig();
+    const moyasarEnabled = topupConfig?.enabled === true;
+    const [showTopupSheet, setShowTopupSheet] = useState(false);
 
     const closeExportSheet = () => {
         setShowExportSheet(false);
@@ -274,7 +283,7 @@ export default function WalletPage() {
             {/* ── Action Buttons ───────────────────── */}
             <div className="flex justify-center gap-6 mt-6 px-4">
                 {[
-                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopUpModal(true) },
+                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => (moyasarEnabled ? setShowTopupSheet(true) : setShowTopUpModal(true)) },
                     { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: Download, label: t('wallet.export'), active: false, onClick: () => setShowExportSheet(true) },
@@ -408,7 +417,7 @@ export default function WalletPage() {
                 )}
             </div>
             {/* ══════════════════════════════════════
-                TOP-UP MODAL
+                TOP-UP MODAL (flag-off fallback — dummy self-credit)
             ═══════════════════════════════════ */}
             <BottomSheet open={showTopUpModal} onClose={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }} widthClass="max-w-xl">
                 <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
@@ -459,6 +468,17 @@ export default function WalletPage() {
                     </button>
                 </div>
             </BottomSheet>
+
+            {/* ══════════════════════════════════════
+                TOP-UP SHEET (P0-2 Moyasar hosted form — flag-on path)
+            ═══════════════════════════════════ */}
+            <TopupSheet
+                isOpen={showTopupSheet}
+                onClose={() => setShowTopupSheet(false)}
+                onCredited={() => showToast(t('wallet.topup.successBody'), 'success')}
+                minAmount={topupConfig?.minAmount ?? 5}
+                maxAmount={topupConfig?.maxAmount ?? 2000}
+            />
 
             {/* ══════════════════════════════════════
                 EXPORT SHEET (P2-119)
