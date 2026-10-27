@@ -171,6 +171,9 @@ export class AdminVenuesService {
     // P1-38 (run #170): reorder/remove photos (same contract as partner).
     // Admin is cross-venue by design — paths are only prefix-shape-validated.
     if (dto.images !== undefined) {
+      if (!Array.isArray(dto.images)) {
+        throw new BadRequestException('images must be an array of photo paths.');
+      }
       updates.images = [...new Set(dto.images)];
     }
     if (dto.open_hour !== undefined || dto.close_hour !== undefined) {

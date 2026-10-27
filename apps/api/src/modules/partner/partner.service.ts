@@ -389,6 +389,11 @@ export class PartnerService {
     // under THIS venue's own prefix — a partner cannot graft another venue's
     // photo paths onto theirs (nor alias another venue's photos).
     if (dto.images !== undefined) {
+      // PR-Agent r3 MINOR (run #170): `images: null` passed @IsOptional() and
+      // would silently CLEAR all photos — require a real array here.
+      if (!Array.isArray(dto.images)) {
+        throw new BadRequestException('images must be an array of photo paths.');
+      }
       const ownPrefix = `/media/venues/${venueId}/`;
       const foreign = dto.images.find((p) => !p.startsWith(ownPrefix));
       if (foreign) {

@@ -18,6 +18,9 @@ import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { MAX_UPLOAD_BYTES } from '../../common/storage/storage.service';
 import { MediaService } from './media.service';
 
+/** PR-Agent r3 MINOR (run #170): a malformed venueId must 400, not reach a Drizzle eq() (PG cast error = 500). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Media routes (P1-38 first leg, run #170).
  *
@@ -46,7 +49,9 @@ export class MediaController {
     @UploadedFile() file: Express.Multer['File'] | undefined,
     @Query('venueId') venueId: string,
   ) {
-    if (!venueId) throw new BadRequestException('venueId query parameter is required.');
+    if (!venueId || !UUID_RE.test(venueId)) {
+      throw new BadRequestException('venueId must be a valid venue id.');
+    }
     if (!file?.buffer?.length) {
       throw new BadRequestException('No file uploaded (multipart field "file").');
     }
@@ -63,8 +68,17 @@ export class MediaController {
   @Get('venues/*')
   async serveVenueImage(@Param() params: Record<string, string>, @Res() res: Response): Promise<void> {
     const tail = params['0'] ?? '';
-    const key = decodeURIComponent(tail);
-    if (!key || key.includes('..')) throw new BadRequestException('Bad image path.');
+    // PR-Agent r3 MINORs (run #170): scope decodeURIComponent (a stray % would
+    // throw URIError → 500); reject `..` traversal + pin to the path charset.
+    let key: string;
+    try {
+      key = decodeURIComponent(tail);
+    } catch {
+      throw new BadRequestException('Bad image path encoding.');
+    }
+    if (!key || key.includes('..') || !/^[A-Za-z0-9/._-]+$/.test(key)) {
+      throw new BadRequestException('Bad image path.');
+    }
     // key = "<venueId>/<sha>.<ext>" — the /media/venues prefix is consumed by
     // the route itself (Express 4 wildcard = params[0] tail only).
     const img = await this.media.serveVenueImage(key);

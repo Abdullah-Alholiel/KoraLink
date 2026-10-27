@@ -256,6 +256,9 @@ export class UpdateVenuePartnerDto {
   @IsArray()
   @ArrayMaxSize(6)
   @IsString({ each: true })
-  @Matches(/^\/media\/venues\/[A-Za-z0-9/._-]+$/, { each: true })
+  // PR-Agent r3 MINOR (run #170): segment-level `..` is rejected — a segment
+  // is 1+ chars of [A-Za-z0-9._-] but never exactly ".." (or "."), and the
+  // file segment must end jpg/png/webp.
+  @Matches(/^\/media\/venues\/(?!\.\.?(?:\/|\$))[A-Za-z0-9-]+(?:\/(?!\.\.?(?:\/|\$))[A-Za-z0-9._-]+)*\.(?:jpg|png|webp)$/, { each: true })
   images?: string[];
 }

@@ -84,6 +84,7 @@ export class UpdateVenueAdminDto {
   @IsArray()
   @ArrayMaxSize(6)
   @IsString({ each: true })
-  @Matches(/^\/media\/venues\/[A-Za-z0-9/._-]+$/, { each: true })
+  // Same tightened pattern as the partner DTO (no `..`/`.` segments; jpg/png/webp).
+  @Matches(/^\/media\/venues\/(?!\.\.?(?:\/|\$))[A-Za-z0-9-]+(?:\/(?!\.\.?(?:\/|\$))[A-Za-z0-9._-]+)*\.(?:jpg|png|webp)$/, { each: true })
   images?: string[];
 }
