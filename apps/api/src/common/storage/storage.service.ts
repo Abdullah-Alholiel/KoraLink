@@ -93,8 +93,11 @@ export class StorageService {
   async putVenueImage(venueId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_UPLOAD_BYTES) throw new Error('file too large');
-    // Magic bytes beat the client header (a .jpg-named GIF must not pass).
-    const mime = sniffMime(buf) ?? (ALLOWED_MIME.has(declaredMime ?? '') ? declaredMime! : null);
+    // Magic bytes ONLY (PR-Agent r1 run #170): a client-declared Content-Type
+    // is never trusted — sniff failure = reject, so non-image bytes can never
+    // be stored and served under an image/* content type. (multer's busboy
+    // `fileSize` limit already aborts oversized bodies pre-buffer.)
+    const mime = sniffMime(buf);
     if (!mime || !ALLOWED_MIME.has(mime)) throw new Error('unsupported image type');
 
     const sha = createHash('sha256').update(buf).digest('hex');

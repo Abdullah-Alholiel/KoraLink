@@ -15,6 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
+import { MAX_UPLOAD_BYTES } from '../../common/storage/storage.service';
 import { MediaService } from './media.service';
 
 /**
@@ -35,7 +36,11 @@ export class MediaController {
   @Post('venues')
   @UseGuards(JwtCookieAuthGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  @UseInterceptors(FileInterceptor('file'))
+  // PR-Agent r1 (run #170): without `limits`, multer buffers the WHOLE body in
+  // memory before any size check runs — an authenticated user could exhaust
+  // API memory with an oversized multipart body. fileSize aborts the stream
+  // at 5 MB (busboy-level, pre-buffer); files=1 pins the single-file shape.
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
   uploadVenueImage(
     @CurrentUser() user: { sub: string; role: string },
     @UploadedFile() file: Express.Multer['File'] | undefined,
