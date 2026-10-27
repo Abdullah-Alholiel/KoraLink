@@ -1,46 +1,35 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #168, 2026-10-27)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #170, 2026-10-27 16:3xZ)
 
-Snapshot: open PRs = 1 (the promote PR #178, owner-gated) · services API/PWA/Admin all active · staging @ c5a85c3 · P1-52 Neon quota still the top blocker.
+Snapshot: open PRs = 2 (#178 promote owner-gated + #186 P1-38 venue photos, factory-merge-gated) · services API/PWA/Admin all active · staging @ 556a243 · P1-52 Neon quota still the top blocker · promote gate GREEN again (fonts-fetch flake cured this run).
 
 ## 🔴 Owner actions (blocking)
 
-### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND the new migration 0055's Neon apply)
-- Sentry shows 46 quota events/24h (01:20Z Oct 27; creeping +1-2/run). Direct Neon probes rejected with the quota error.
-- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. **Project birthday was Oct-25 — the free reset may already be due; one console visit answers it.**
-- **Close-line:** "Neon quota cleared" (then factory applies 0055 to Neon and you can merge #178).
+### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
+- Sentry: **49 quota events/24h** (15:0xZ Oct 27; creeping ~+1/run, 15th consecutive watch). NEW this run: the prod push-subscription sweep (1F) is proven to be the SAME quota error — the limit now silently disables prod stale-push cleanup.
+- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
+- **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
-- 324 commits ahead of main · all 11 checks green · MERGEABLE · assembled run #165, conflict-repaired run #166.
-- **Sequence when P1-52 clears:** (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that can reach api.neon.tech, or the container route); **0055_users_locale is NEW since #178 was assembled — rebase/merge staging into the PR branch or merge staging after so 0055 rides it**; (2) you merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
+- **Gate GREEN again** (this run cured a `next/font` fonts-fetch flake with empty-commit retrigger 556a243). ~330 commits ahead of main.
+- **Migrations now riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images, NEW run #170).** Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that can reach api.neon.tech, or the container route); (2) merge staging into #178 or merge #178 after staging so all three ride it; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
 - **Close-line:** "Merged #178 + Render deployed".
 
 ## 🟡 Owner actions (not blocking the factory)
 
-### 3. Resend transactional-email keys (P1-41 ledger row — unlocks the run-#165 email lane)
-- Partner email lane is BUILT and LIVE in log-only mode (PR #179 f1385a2): payout-request receipts + venue-owner cancellation emails. Run #168's locale-aware email (PR #183) rides the same transport — without keys every send logs-and-skips.
-- **What's needed:** `RESEND_API_KEY` + `MAIL_FROM` on the Render API service env (dashboard.render.com → koralink-api → Environment).
-- Owner-only per DECISIONS.md (email keys). **Close-line:** "RESEND keys added on Render".
+### 3. P0-2 sandbox happy-path (post-promote, staging-first)
+- Moyasar wallet top-up is BUILT and LIVE (PR #185, run #169) with the flag OFF. To exercise the real 3DS happy path: flip `WALLET_TOPUP_ENABLED=true` + MOYASAR_*_TEST keys on the API env (staging first), restart, then run one SAR 5.00 top-up with mada test card **4201320111111010** from a real browser (VPS is headless — 3DS frictionless leg can't be done here).
+- **Close-line:** "Topup flag flipped + test top-up done".
 
-### 4. Moyasar live-secret regeneration (pre-go-live only)
-- Sandbox keys staged and working (.deploy-tokens); wallet top-up slice queued (pick-order 4).
-- ⚠️ The LIVE secret transited chat once — regenerate in the Moyasar dashboard before go-live. Not needed for the sandbox slice.
+### 4. Resend transactional-email keys (P1-41 ledger row — unlocks the run-#165 email lane)
+- Partner email lane BUILT and LIVE log-only (PR #179 f1385a2); run #168 locale-aware email (PR #183) rides the same transport.
+- **What's needed:** `RESEND_API_KEY` + `MAIL_FROM` on the Render API service env (dashboard.render.com → koralink-api → Environment). Owner-only per DECISIONS.md (email keys).
+- **Close-line:** "RESEND keys added on Render".
+
+### 5. Moyasar live-secret regeneration (pre-go-live only)
+- Sandbox keys staged and working; ⚠️ the LIVE secret transited chat once — regenerate in the Moyasar dashboard before go-live. Not needed for sandbox.
 - **Close-line:** "Moyasar live secret regenerated".
 
 ## ✅ Closed since last update (no action left)
-- **P2-264 recipient-locale email — BUILT run #168** (PR #183 ac7f933, live-probed): users.locale column + per-recipient mailer resolution + PATCH /users/me + LanguageToggle sync. Migration 0055 on staging; rides the promote (see #2 sequence).
-- **P2-263 dispute offline guard — BUILT run #168** (PR #184 c5a85c3, live): offline note + disabled submit before the tap; EN+AR.
-- **P2-216/209/221 settlement money-path — VERIFIED merged** (PR #176 124f37a, Oct 25; live-probed run #168).
-- **P2-208 ghost Vercel project — holding** (owner disconnected Oct 25; run #168's two new PRs carried zero ghost checks — first-try green, no escapes needed).
-- P2-47(b) restore-on-behalf — BUILT run #167 (PR #181, live-probed).
-- P2-258 push opt-in — BUILT run #167 (PR #182, live).
-- P2-259 bell realtime — closed verified-no-build (already socket-driven).
-- P2-51 Render migrate hook — closed lean (paid-only confirmed; migrate-first runbook standing).
-- P0-2 PSP — Moyasar sandbox keys staged; wallet slice queued (pick-order 4).
-- P1-38+P2-50 storage — SeaweedFS S3 LIVE on the VPS; StorageModule slice queued (pick-order 5).
-- P1-69 dispute origination — BUILT run #166 (PR #180, live).
-
-## 🟢 Factory lanes queued (no owner input needed)
-1. **Moyasar wallet top-up slice** (pick-order 4 — sandbox keys staged, strategy + contract docs verified).
-2. **StorageModule slice** (pick-order 5 — SeaweedFS S3 live on the VPS, plan doc ready).
-3. P1-69 follow-up: signup-time locale capture (out of P2-264's scope by design; auth-DTO touch — small).
-4. P2-260 wallet offline-vs-failed copy (pairs with the error-classify pass when wallet files next change).
+- **Ghost Vercel kora-link check (P2-208): owner fix CONFIRMED holding** — PR #186's first head shows "Skipped - Not affected" instead of the old "Deployment was blocked"; no more escape-merge coin flips needed.
+- **P1-69 dispute origination: PR #180 MERGED 2026-10-26** (verified this run); offline guard from run #168 already on staging.
+- **P2-264 recipient-locale email — BUILT run #168** (PR #183 ac7f933, live-probed): rides the promote (see #2 sequence).
