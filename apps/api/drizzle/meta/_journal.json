@@ -400,6 +400,13 @@
       "breakpoints": true,
       "when": 1792251720864,
       "tag": "0055_users_locale"
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251721864,
+      "tag": "0056_wallet_topup_intents"
     }
   ]
 }

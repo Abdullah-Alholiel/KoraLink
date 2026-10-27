@@ -1174,6 +1174,43 @@ export const settlements = pgTable(
   ],
 );
 
+// P0-2 (run #169): server-pinned Moyasar top-up intents. The wallet service is
+// the table's ONLY writer: intent rows pin user + amount BEFORE the hosted form
+// creates the payment client-side (card data never touches our servers), and
+// verifyTopup credits the wallet ONLY after the payment record fetched from
+// Moyasar matches the intent's amount/currency/owner. idempotency_key is scoped
+// 'topup-intent:<userId>:<uuid>' so a client retry replays the original intent.
+export const wallet_topup_intents = pgTable(
+  'wallet_topup_intents',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    /** Smallest currency unit (halalas, SAR × 100) — matches Moyasar's amounts. */
+    amount_halalas: integer('amount_halalas').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('SAR'),
+    /** 'pending' → 'credited' | 'failed'. Single writer = WalletService. */
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    payment_id: varchar('payment_id', { length: 64 }),
+    idempotency_key: varchar('idempotency_key', { length: 255 })
+      .notNull()
+      .unique(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('wallet_topup_intents_user_created_idx').on(t.user_id, t.created_at),
+    index('wallet_topup_intents_payment_id_idx').on(t.payment_id),
+  ],
+);
+
 export const audit_logs = pgTable(
   'audit_logs',
   {
