@@ -141,7 +141,8 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
         // photos (r8's orphaning scenario). Re-read server truth at Save:
         //   - form removals stay removed (owner intent — removedPathsRef),
         //   - concurrent server APPENDS are preserved (never owner-negative),
-        //   - form order + form adds win; cap overflow trims form adds first.
+        //   - cap overflow: this session's form wins (see the stated rule at
+        //     the merge below).
         // A fresh-read failure falls back to the form state (pre-#171
         // behavior) so the other fields still save.
         let merged = values.images;
@@ -165,6 +166,12 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
             (p): p is string =>
               typeof p === 'string' && !formSet.has(p) && !removedPathsRef.current.has(p),
           );
+          // Cap overflow resolution (PR-Agent r11, run #171 — stated rule):
+          // the cap forces a loser when form+concurrent > 6, and THIS
+          // session's intent wins — form images keep their slots; overflow
+          // trims CONCURRENT appends (the other session can re-add after a
+          // refresh; a form the user explicitly arranged must not silently
+          // reorder or drop its own adds).
           merged = [...values.images, ...concurrent].slice(0, MAX_IMAGES);
         } catch {
           // fall through with the form state — never block Save on this read
@@ -241,7 +248,11 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
       const status = e instanceof ApiError ? e.status : 0;
       const cause = e instanceof ApiError ? e.message : '';
       if (status === 429) setUploadError(t('imagesTooFast'));
-      else if (/exceeds the 5 MB limit/i.test(cause) || status === 413)
+      else if (
+        /exceeds the 5 MB limit/i.test(cause) ||
+        /File too large/i.test(cause) ||
+        status === 413
+      )
         setUploadError(t('imagesTooLarge'));
       else if (/maximum of \d+ photos/i.test(cause)) setUploadError(t('imagesTooMany'));
       else if (/JPEG, PNG or WebP/i.test(cause) || status === 400)
