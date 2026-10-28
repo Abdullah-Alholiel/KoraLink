@@ -1,5 +1,5 @@
 import { MatchesService } from './matches.service';
-import { matches, match_players, disputes } from '../../database/schema';
+import { disputes } from '../../database/schema';
 
 /**
  * P2-195 residual (run #172): findMyDisputes — cross-match mine-list for the
@@ -12,7 +12,6 @@ describe('MatchesService.findMyDisputes (P2-195 residual, run #172)', () => {
 
   function makeDb(opts: {
     disputeRows?: unknown[];
-    fromTable?: unknown;
   }) {
     const db: any = {
       select: () => ({
