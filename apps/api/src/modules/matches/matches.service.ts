@@ -4349,6 +4349,63 @@ export class MatchesService {
     };
   }
 
+  /**
+   * P2-195 residual (run #172): cross-match "my disputes" mine-list for the
+   * player Reports surface. LEFT JOIN matches so a deleted match (match_id is
+   * nullable, onDelete: set null) yields null title/date instead of dropping
+   * the dispute row. Single 50-row cap page — per-player dispute volume is
+   * low; reports keeps its own paged envelope.
+   */
+  async findMyDisputes(userId: string): Promise<
+    Array<{
+      id: string;
+      type: string;
+      status: 'opened' | 'under_review' | 'resolved' | 'rejected';
+      decision: string | null;
+      has_appealed: boolean;
+      created_at: Date;
+      updated_at: Date;
+      match_title: string | null;
+      match_scheduled_at: Date | null;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: disputes.id,
+        type: disputes.type,
+        status: disputes.status,
+        decision: disputes.decision,
+        evidence: disputes.evidence,
+        created_at: disputes.created_at,
+        updated_at: disputes.updated_at,
+        match_title: matches.title,
+        match_scheduled_at: matches.scheduled_at,
+      })
+      .from(disputes)
+      .leftJoin(matches, eq(disputes.match_id, matches.id))
+      .where(eq(disputes.reporter_id, userId))
+      .orderBy(sql`${disputes.created_at} DESC`)
+      .limit(50);
+
+    return rows.map((dispute) => {
+      const evidence = Array.isArray(dispute.evidence) ? dispute.evidence : [];
+      const hasAppealed = evidence.some(
+        (e) => (e as { action?: string }).action === 'appeal',
+      );
+      return {
+        id: dispute.id,
+        type: dispute.type,
+        status: dispute.status,
+        decision: dispute.decision,
+        has_appealed: hasAppealed,
+        created_at: dispute.created_at,
+        updated_at: dispute.updated_at,
+        match_title: dispute.match_title,
+        match_scheduled_at: dispute.match_scheduled_at,
+      };
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Player of the Match — Voting & Results
   // ─────────────────────────────────────────────────────────────────────────
