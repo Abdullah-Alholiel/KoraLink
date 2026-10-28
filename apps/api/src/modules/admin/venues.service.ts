@@ -53,7 +53,7 @@ export class AdminVenuesService {
     const rows = (await this.db.execute(sql`
       SELECT
         v.id, v.name, v.city, v.address, v.is_approved, v.is_koralink_partner,
-        v.rating_avg, v.rating_count, v.created_at,
+        v.rating_avg, v.rating_count, v.created_at, v.images,
         u.id AS owner_id, COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         COALESCE(vv.status::text, 'pending') AS verification_status
@@ -168,6 +168,19 @@ export class AdminVenuesService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    // P1-38 (run #170): reorder/remove photos. The DTO pattern already pins
+    // each path to /media/venues/<uuid>/…jpg|png|webp (no traversal), which IS
+    // the admin contract: Admin is cross-venue BY DESIGN (HQ reorders/removes
+    // photos on any venue, mirroring admin venue edit authority everywhere
+    // else — partner/venues, disputes, reports). Stored-object GC for paths
+    // removed here happens in the media module's delete path (removeVenueImage
+    // is wired to the storage DELETE); bulk orphan sweep = P2-268 follow-up.
+    if (dto.images !== undefined) {
+      if (!Array.isArray(dto.images)) {
+        throw new BadRequestException('images must be an array of photo paths.');
+      }
+      updates.images = [...new Set(dto.images)];
+    }
     if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
       const openHour = dto.open_hour ?? Number(before.open_hour ?? 8);
       const closeHour = dto.close_hour ?? Number(before.close_hour ?? 23);

@@ -344,6 +344,11 @@ export const venues = pgTable(
     closed_day_5: boolean('closed_day_5').notNull().default(false),
     closed_day_6: boolean('closed_day_6').notNull().default(false),
     location: geography('location'),
+    // P1-38 first leg (run #170): venue photo paths — array of
+    // "/media/venues/<venueId>/<sha256>.<ext>" strings served by the public
+    // media route; uploaded via POST /media/venues (auth, owner-or-admin,
+    // ≤5MB jpeg/png/webp). Mirrors pitches.images / amenities json convention.
+    images: json('images').notNull().default(sql`'[]'::jsonb`),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -295,6 +295,8 @@ export interface PartnerVenueRow {
   closed_day_4?: boolean;
   closed_day_5?: boolean;
   closed_day_6?: boolean;
+  /** P1-38: venue photo paths (/media/venues/...), display order. */
+  images?: unknown;
 }
 
 export interface PartnerSlot {

@@ -299,8 +299,8 @@
       "skippedBooked": "{count, plural, one {# booked slot was left untouched} other {# booked slots were left untouched}} — cancel those matches first if the pitch must be fully closed.",
       "failRange": "The server rejected this date range — it may be invalid or longer than the allowed limit. Check both dates and try again.",
       "failAuth": "Your session ended — nothing was closed. Sign in again to continue.",
-    "failServer": "The server had a problem — nothing was closed. Try again in a moment; if it keeps failing, contact support.",
-    "failAccess": "You can't close slots on this pitch — it was not found or isn't linked to your account. Refresh the page; if it persists, contact KoraLink support.",
+      "failServer": "The server had a problem — nothing was closed. Try again in a moment; if it keeps failing, contact support.",
+      "failAccess": "You can't close slots on this pitch — it was not found or isn't linked to your account. Refresh the page; if it persists, contact KoraLink support.",
       "failNetwork": "Couldn't reach the server, so no slots were closed. Check your connection and try again."
     }
   },
@@ -526,6 +526,17 @@
     "fldCloseHour": "Closes",
     "fldClosedDays": "Closed days",
     "saved": "Venue saved",
+    "images": "Photos",
+    "imagesAdd": "Add photos",
+    "imagesRemove": "Remove photo",
+    "imagesHint": "JPG, PNG or WebP · up to 5 MB each · max 6 photos. Changes apply when you save.",
+    "imagesCreateHint": "Photos attach after the venue is created — save it first, then reopen to add.",
+    "imagesTooMany": "A venue can have at most 6 photos — remove one first.",
+    "imagesBadType": "That file type was rejected — use JPG, PNG or WebP. If the photo is over 5 MB, pick a smaller file.",
+    "imagesTooLarge": "That photo is over the 5 MB limit — pick a smaller file.",
+    "imagesUploadFailed": "Upload failed — check your connection and try again.",
+    "imagesForbidden": "You can only add photos to your own venues.",
+    "imagesTooFast": "Too many uploads in a row — wait a minute and try again.",
     "failed": "Could not save the venue"
   },
   "pitchForm": {
