@@ -24,6 +24,10 @@ export function mediaUrl(path: string | undefined | null): string | null {
   const origin = (process.env.NEXT_PUBLIC_API_URL ?? '')
     .replace(/\/+$/, '')
     .replace(/\/api\/v1$/, '');
+  // PR-Agent r2 (run #187): an unset/empty NEXT_PUBLIC_API_URL must not
+  // silently degrade to PWA-relative URLs (pointless 404s that mask the
+  // misconfiguration) — no origin, no renderable URL (fallback state).
+  if (!origin) return null;
   return `${origin}${path}`;
 }
 

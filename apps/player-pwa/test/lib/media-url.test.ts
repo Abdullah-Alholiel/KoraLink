@@ -45,6 +45,17 @@ describe('firstVenueImage', () => {
     ).toBe(url('/media/venues/v1/a.jpg'));
   });
 
+  it('returns null (not a PWA-relative URL) when the API env is unset (PR-Agent r2)', () => {
+    const saved = process.env.NEXT_PUBLIC_API_URL;
+    delete process.env.NEXT_PUBLIC_API_URL;
+    try {
+      expect(mediaUrl('/media/venues/v1/a.jpg')).toBeNull();
+      expect(firstVenueImage(['/media/venues/v1/a.jpg'])).toBeNull();
+    } finally {
+      process.env.NEXT_PUBLIC_API_URL = saved;
+    }
+  });
+
   it('skips foreign entries and finds the first managed one', () => {
     expect(firstVenueImage(['https://evil.example/x.jpg', '/media/venues/v1/ok.jpg'])).toBe(
       url('/media/venues/v1/ok.jpg'),
