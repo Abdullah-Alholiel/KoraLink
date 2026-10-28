@@ -33,6 +33,10 @@ export interface VenueApi {
   // (NOT NULL DEFAULT 0 per migration 0048; 0 count = no approved reviews).
   rating_avg?: number;
   rating_count?: number;
+  // P2-269 (run #171): managed photo paths (/media/venues/...) — jsonb NOT
+  // NULL DEFAULT '[]' (migration 0057); render via lib/media-url helpers
+  // with letter-avatar fallback. Optional keeps stub VenueApi objects valid.
+  images?: string[];
 }
 
 export interface PitchApi {

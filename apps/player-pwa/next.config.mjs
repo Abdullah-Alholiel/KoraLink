@@ -346,7 +346,10 @@ const nextConfig = {
               // (dead — zero mapbox code/deps; evidence in the connectSrc block
               // comment above). inline styles stay (Tailwind runtime styles).
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              // P2-269 (run #171): img-src += API origin — venue photos are
+              // served cross-origin by the media route (:8443) while the PWA
+              // runs on :9450; same derivation connect-src already uses.
+              `img-src 'self' data: blob: ${apiOrigin}`,
               `connect-src ${connectSrc}`,
               "worker-src 'self' blob:",
               "font-src 'self' data:",

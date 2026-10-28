@@ -125,6 +125,10 @@ export interface NearbyVenueRow {
   // DEFAULT 0 per migration 0048 — 0/0 means "no approved reviews yet").
   rating_avg: number;
   rating_count: number;
+  // P2-269 (run #171): managed photo paths (/media/venues/<venueId>/<sha>.<ext>)
+  // — migration 0057 jsonb NOT NULL DEFAULT '[]'; consumed by the PWA as
+  // card/hero cover images with letter-avatar/stadium fallbacks.
+  images: unknown;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -216,7 +220,8 @@ export class VenuesService {
         v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
         v.closed_day_4, v.closed_day_5, v.closed_day_6,
         v.rating_avg::float8 AS rating_avg,
-        v.rating_count::int AS rating_count
+        v.rating_count::int AS rating_count,
+        v.images
       FROM venues v
       LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
@@ -380,7 +385,8 @@ export class VenuesService {
         v.open_hour::int,
         v.close_hour::int,
         v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
-        v.closed_day_4, v.closed_day_5, v.closed_day_6
+        v.closed_day_4, v.closed_day_5, v.closed_day_6,
+        v.images
       FROM venue_favorites vf
       INNER JOIN venues v ON v.id = vf.venue_id
       LEFT JOIN users u ON u.id = v.owner_id
