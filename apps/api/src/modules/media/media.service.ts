@@ -142,12 +142,16 @@ export class MediaService {
       throw new BadRequestException('Image path does not belong to this venue.');
     }
 
-    // PR-Agent r4 (run #170): ATOMIC remove (`images - '["path"]'::jsonb`)
-    // so a remove racing an append cannot resurrect or duplicate entries.
+    // PR-Agent r4 (run #170): ATOMIC remove so a remove racing an append
+    // cannot resurrect or duplicate entries.
+    // PR-Agent r10 (run #171, live-PG-verified): `jsonb - jsonb` DOES NOT
+    // EXIST as an operator — the r4 cast form 500s at runtime. `jsonb - text`
+    // deletes the matching string element and keeps atomicity (verified on
+    // the staging DB: `'"[\"a\",\"b\"]"'::jsonb - 'a'` → `["b"]`).
     const updated = await this.db
       .update(venues)
       .set({
-        images: sql`${venues.images} - ${JSON.stringify([path])}::jsonb`,
+        images: sql`${venues.images} - ${path}`,
         updated_at: new Date(),
       })
       .where(eq(venues.id, venueId))
