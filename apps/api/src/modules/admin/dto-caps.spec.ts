@@ -106,6 +106,34 @@ describe('ResolveDisputeDto (run #94 cap contract)', () => {
     expect(validateSync(overNote).some((e) => e.property === 'internalNote')).toBe(true);
   });
 
+  // P1-29 (run #173): refund amount is money — >2dp, ≤0, and absurd caps are
+  // rejected at the DTO wall before any service code runs.
+  it('accepts a 2dp refundAmountSar and rejects 3dp / zero / negative', () => {
+    const ok = plainToInstance(ResolveDisputeDto, {
+      outcome: 'resolved',
+      refundAmountSar: 37.5,
+    });
+    expect(validateSync(ok)).toHaveLength(0);
+
+    const threeDp = plainToInstance(ResolveDisputeDto, {
+      outcome: 'resolved',
+      refundAmountSar: 1.234,
+    });
+    expect(validateSync(threeDp).some((e) => e.property === 'refundAmountSar')).toBe(true);
+
+    const zero = plainToInstance(ResolveDisputeDto, {
+      outcome: 'resolved',
+      refundAmountSar: 0,
+    });
+    expect(validateSync(zero).some((e) => e.property === 'refundAmountSar')).toBe(true);
+
+    const negative = plainToInstance(ResolveDisputeDto, {
+      outcome: 'resolved',
+      refundAmountSar: -5,
+    });
+    expect(validateSync(negative).some((e) => e.property === 'refundAmountSar')).toBe(true);
+  });
+
   it('source-pins both @MaxLength(1000) caps', () => {
     const src = dtoSrc('resolve-dispute.dto.ts');
     expect(src.match(/@MaxLength\(1000\)/g)?.length).toBe(2);

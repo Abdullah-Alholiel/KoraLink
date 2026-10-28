@@ -61,6 +61,8 @@ export default function DisputeDetailPage() {
   const [outcome, setOutcome] = useState<'resolved' | 'rejected'>('resolved');
   const [decision, setDecision] = useState('');
   const [internalNote, setInternalNote] = useState('');
+  // P1-29 (run #173): optional wallet refund credited on resolve (SAR).
+  const [refundAmount, setRefundAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -95,10 +97,22 @@ export default function DisputeDetailPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      await api.post(`/admin/disputes/${id}/resolve`, { outcome, decision, internalNote });
+      // P1-29: refund rides the resolve body only when outcome=resolved AND
+      // a positive amount is entered — the API validates and rejects a
+      // refund on a rejected outcome server-side too.
+      const refundSar = outcome === 'resolved' ? parseFloat(refundAmount) : NaN;
+      await api.post(`/admin/disputes/${id}/resolve`, {
+        outcome,
+        decision,
+        internalNote,
+        ...(outcome === 'resolved' && Number.isFinite(refundSar) && refundSar > 0
+          ? { refundAmountSar: refundSar }
+          : {}),
+      });
       reload();
       setDecision('');
       setInternalNote('');
+      setRefundAmount('');
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t('failed'));
     } finally {
@@ -420,6 +434,26 @@ export default function DisputeDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={2}
                 />
+                {outcome === 'resolved' && (
+                  <div>
+                    <label
+                      htmlFor="refund-amount"
+                      className="mb-1 block text-xs font-medium text-gray-600"
+                    >
+                      {t('refundAmount')}
+                    </label>
+                    <input
+                      id="refund-amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      placeholder={t('refundAmountHint')}
+                      className="w-full rounded-lg border border-gray-300 p-2 text-sm"
+                    />
+                  </div>
+                )}
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={resolve}
