@@ -188,9 +188,18 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     } catch (e) {
       // Error standard: what happened + why + what to do next (localized).
       // Partial-success is preserved: uploads that landed stay in the grid.
+      // PR-Agent r8 (run #171): a 400 is NOT always a type problem — the
+      // backend also 400s on the 6-photo cap and the 5 MB size limit with
+      // stable literal messages (media.service.ts), and 413 is always size.
+      // Route on the API cause (ApiError.message), never blame the type.
       const status = e instanceof ApiError ? e.status : 0;
+      const cause = e instanceof ApiError ? e.message : '';
       if (status === 429) setUploadError(t('imagesTooFast'));
-      else if (status === 413 || status === 400) setUploadError(t('imagesBadType'));
+      else if (/exceeds the 5 MB limit/i.test(cause) || status === 413)
+        setUploadError(t('imagesTooLarge'));
+      else if (/maximum of \d+ photos/i.test(cause)) setUploadError(t('imagesTooMany'));
+      else if (/JPEG, PNG or WebP/i.test(cause) || status === 400)
+        setUploadError(t('imagesBadType'));
       else if (status === 403) setUploadError(t('imagesForbidden'));
       else setUploadError(t('imagesUploadFailed'));
     } finally {
