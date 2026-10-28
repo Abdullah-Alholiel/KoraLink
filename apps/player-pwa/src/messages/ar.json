@@ -1251,6 +1251,9 @@
     "emptyBody": "لم تقدم أي بلاغ. يمكنك الإبلاغ عن لاعب أو مباراة أو منشأة إذا خالفت القواعد.",
     "outcomeToggle": "نتيجة المراجعة",
     "loadMore": "تحميل المزيد",
+    "disputesTitle": "نزاعاتي",
+    "disputesEmpty": "لا توجد نزاعات",
+    "disputesMatchDeleted": "المباراة لم تعد موجودة",
     "resolvedAt": "تمت المراجعة {date}",
     "subjectType": {
       "user": "لاعب",

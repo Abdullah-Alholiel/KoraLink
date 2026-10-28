@@ -55,6 +55,15 @@ export class MatchesController {
     return this.matchesService.findNearby(dto, user.sub);
   }
 
+  // ── GET /matches/my-disputes — Current user's filed disputes (all matches) ──
+  // MUST be declared BEFORE `@Get(':id')` so "my-disputes" never parses as an id.
+  @Get('my-disputes')
+  @ApiOperation({ summary: "List the current user's disputes across all matches (newest first, 50-row cap)." })
+  @ApiOkResponse({ description: 'Dispute list with match context.' })
+  findMyDisputes(@CurrentUser() user: { sub: string }) {
+    return this.matchesService.findMyDisputes(user.sub);
+  }
+
   // ── GET /matches/:id/calendar — ICS file download ─────────────────────
   // Must come BEFORE `:id` to avoid route collision
   @Get(':id/calendar')

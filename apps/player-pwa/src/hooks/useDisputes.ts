@@ -30,6 +30,31 @@ export function useMyDispute(matchId: string, enabled = true) {
     });
 }
 
+/** One row of the cross-match mine-list (P2-195 residual, run #172). */
+export interface MyDisputeListRow extends MyDispute {
+    /** Null when the underlying match was deleted (LEFT JOIN miss). */
+    match_title: string | null;
+    match_scheduled_at: string | null;
+}
+
+/**
+ * All disputes the current user filed, across every match (GET /matches/my-disputes,
+ * newest first, 50-row cap) — the player dispute-tracking surface on the Reports page.
+ */
+export function useMyDisputes() {
+    const query = useQuery<MyDisputeListRow[], FetchError>({
+        queryKey: ['disputes', 'mine'],
+        queryFn: () => fetcher<MyDisputeListRow[]>('/matches/my-disputes'),
+        staleTime: 30_000,
+    });
+    return {
+        disputes: query.data ?? [],
+        isLoading: query.isLoading,
+        error: query.error,
+        refetch: query.refetch,
+    };
+}
+
 /** Open a no-show appeal (POST /matches/:id/dispute). */
 export function useAppeal(matchId: string) {
     const queryClient = useQueryClient();
