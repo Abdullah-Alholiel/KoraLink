@@ -65,9 +65,15 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // PR-Agent r8 (run #171): paths the user EXPLICITLY removed this session.
+  // The Save-time stale-state merge treats these as owner intent (stay
+  // removed) while still preserving photos OTHER sessions appended since
+  // the drawer opened (appends are never owner-negative).
+  const removedPathsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
+    removedPathsRef.current = new Set();
     if (!venue) {
       setValues(EMPTY);
     } else {
@@ -124,6 +130,41 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     setSaveError(null);
     try {
       if (venue) {
+        // PR-Agent r8 (run #171) stale-state overwrite guard: the form loaded
+        // at drawer-open; other sessions (partner console, a second admin, a
+        // just-landed upload) may have APPENDED to venues.images since.
+        // Patching values.images verbatim would silently dereference those
+        // photos (r8's orphaning scenario). Re-read server truth at Save:
+        //   - form removals stay removed (owner intent — removedPathsRef),
+        //   - concurrent server APPENDS are preserved (never owner-negative),
+        //   - form order + form adds win; cap overflow trims form adds first.
+        // A fresh-read failure falls back to the form state (pre-#171
+        // behavior) so the other fields still save.
+        let merged = values.images;
+        try {
+          const fresh = await api.get<unknown>(
+            endpointBase === '/admin' ? `/admin/venues/${venue.id}` : '/partner/venues',
+          );
+          let serverImages: unknown[] = [];
+          if (endpointBase === '/admin') {
+            const row = fresh as { images?: unknown } | null;
+            serverImages = Array.isArray(row?.images) ? (row.images as unknown[]) : [];
+          } else {
+            const list = Array.isArray(fresh)
+              ? (fresh as Array<{ id: string; images?: unknown }>)
+              : [];
+            const row = list.find((v) => v.id === venue.id);
+            serverImages = Array.isArray(row?.images) ? (row.images as unknown[]) : [];
+          }
+          const formSet = new Set(values.images);
+          const concurrent = serverImages.filter(
+            (p): p is string =>
+              typeof p === 'string' && !formSet.has(p) && !removedPathsRef.current.has(p),
+          );
+          merged = [...values.images, ...concurrent].slice(0, MAX_IMAGES);
+        } catch {
+          // fall through with the form state — never block Save on this read
+        }
         const openHour = Number(values.open);
         const closeHour = Number(values.close);
         await api.patch(`${endpointBase}/venues/${venue.id}`, {
@@ -136,8 +177,9 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
             .filter(Boolean),
           open_hour: openHour,
           close_hour: closeHour,
-          // P1-38: current order after any add/remove (server dedupes + validates).
-          images: values.images,
+          // P1-38: merged at Save (see stale-state guard above; server
+          // dedupes + validates).
+          images: merged,
           ...Object.fromEntries(values.closedDays.map((closed, day) => [`closed_day_${day}`, closed])),
         });
       } else {
@@ -210,6 +252,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
 
   /** P1-38: remove one photo from the form grid (persisted on Save). */
   function removeImage(path: string) {
+    removedPathsRef.current.add(path);
     setValues((v) => ({ ...v, images: v.images.filter((p) => p !== path) }));
   }
 
