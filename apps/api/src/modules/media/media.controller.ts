@@ -65,6 +65,11 @@ export class MediaController {
   // Express 4 / path-to-regexp v0 (Nest 10): a bare `*` wildcard puts the
   // whole tail in req.params[0] — the named `*path` form only works on
   // Express 5 (probed live 2026-10-27: `*path` mapped but never matched).
+  // PR-Agent r9 (run #171): the GET is a byte-streaming proxy read against
+  // SeaweedFS (up to 5 MB per hit) — the global 60/min APP_GUARD alone is
+  // too loose for unauthenticated bandwidth amplification; images are
+  // immutable + browser-cached (1y), so 60/min/IP costs real users nothing.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Get('venues/*')
   async serveVenueImage(@Param() params: Record<string, string>, @Res() res: Response): Promise<void> {
     const tail = params['0'] ?? '';

@@ -12,7 +12,11 @@ import type { PartnerVenueRow } from '@/lib/types';
 const MAX_IMAGES = 6;
 /** Where the API serves these images from (public media route). */
 const API_ORIGIN =
-  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1').replace(/\/api\/v1$/, '');
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1')
+    // PR-Agent r9 (run #171): a trailing-slash env value would survive the
+    // suffix strip and produce `…/api/v1//media/...` srcs — normalize first.
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v1$/, '');
 
 interface VenueFormDrawerProps {
   open: boolean;
