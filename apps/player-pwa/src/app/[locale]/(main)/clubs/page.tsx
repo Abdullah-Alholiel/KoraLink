@@ -22,6 +22,7 @@ import { isVenueOpenNow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
+import { firstVenueImage } from '@/lib/media-url';
 
 // Run #68 (P2-13 residual) removed the dead "Top Rated" pill when venues.rating
 // was all-zero with no write path. P1-55 (run #117) shipped booking-verified
@@ -114,6 +115,12 @@ function ClubsContent() {
     const showToast = useAppStore((s) => s.showToast);
     const isHydrated = useAppStore((s) => s.isHydrated);
     const storeUser = useAppStore((s) => s.user);
+
+    // ── P2-269: venue photos (run #171) ───────────────────────────────────
+    // firstVenueImage resolves the managed media URL (null = no photo);
+    // ids whose <img> failed to load fall back to the letter avatar for the
+    // rest of the session (offline flips, deleted objects, storage blips).
+    const [brokenPhotos, setBrokenPhotos] = useState<Set<string>>(new Set());
 
     // Pills filter the (already server-searched) fetched set client-side, then
     // Nearby applies a stable ascending distance sort — null/missing distance
@@ -363,7 +370,13 @@ function ClubsContent() {
             {/* ── Populated ── */}
             {!isLoading && !error && filteredVenues.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
-                    {filteredVenues.map((venue) => (
+                    {filteredVenues.map((venue) => {
+                        // P2-269: per-card photo URL (managed path → API
+                        // origin); broken loads degrade to the letter avatar.
+                        const photoUrl = brokenPhotos.has(venue.id)
+                            ? null
+                            : firstVenueImage(venue.images);
+                        return (
                         <div
                             key={venue.id}
                             className="relative bg-white rounded-2xl shadow-card animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
@@ -418,12 +431,25 @@ function ClubsContent() {
                                 className="block p-4"
                             >
                             <div className="flex items-start justify-between gap-3">
-                                {/* Venue avatar */}
-                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-lg font-bold text-brand-green">
-                                        {venue.name.charAt(0).toUpperCase()}
-                                    </span>
-                                </div>
+                                {/* Venue avatar — P2-269: venue photo when it
+                                    has one (managed path via mediaUrl), letter
+                                    avatar fallback otherwise + on load error. */}
+                                {photoUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- cross-origin API-served path; plain img keeps CSP + next/image optimizer out of the media route
+                                    <img
+                                        src={photoUrl}
+                                        alt={venue.name}
+                                        loading="lazy"
+                                        onError={() => setBrokenPhotos((s) => new Set(s).add(venue.id))}
+                                        className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 bg-gray-100"
+                                    />
+                                ) : (
+                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-lg font-bold text-brand-green">
+                                            {venue.name.charAt(0).toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
@@ -537,7 +563,8 @@ function ClubsContent() {
                             </div>
                             </Link>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

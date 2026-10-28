@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
+import { firstVenueImage } from '@/lib/media-url';
 import {
     useVenueFavoriteIds,
     useVenueFavoriteToggle,
@@ -121,6 +122,11 @@ export default function ClubPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  // ── P2-269: hero photo (run #171) — venue's first managed image; a load
+  // failure degrades to the stadium art for the rest of the session ──
+  const [heroBroken, setHeroBroken] = useState(false);
+  const heroPhotoUrl = heroBroken ? null : firstVenueImage(venue?.images);
+
   // Use Asia/Riyadh local day (NOT UTC) — same as the Play feed's dateInRiyadh.
   const dateStr = selectedDate ? dateInRiyadh(selectedDate) : null;
 
@@ -208,15 +214,25 @@ export default function ClubPage() {
 
         {venue && (
           <>
-            {/* ════ HERO — Stadium Background ════ */}
+            {/* ════ HERO — venue photo (P2-269) with stadium-art fallback ════ */}
             <div className="relative h-48 overflow-hidden">
-              <Image
-                src="/images/stadium-bg.png"
-                alt={venue.name}
-                fill
-                className="object-cover"
-                priority
-              />
+              {heroPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- cross-origin API-served path; plain img keeps CSP + next/image optimizer out of the media route
+                <img
+                  src={heroPhotoUrl}
+                  alt={venue.name}
+                  onError={() => setHeroBroken(true)}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <Image
+                  src="/images/stadium-bg.png"
+                  alt={venue.name}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
 
               {/* ── P2-161: favorite heart on the hero (run #109) ── */}
