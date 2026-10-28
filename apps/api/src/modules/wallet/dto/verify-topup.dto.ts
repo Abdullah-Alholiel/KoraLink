@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, Matches } from 'class-validator';
 
 export class VerifyTopupDto {
   @ApiProperty({
@@ -15,7 +15,9 @@ export class VerifyTopupDto {
     description: 'KoraLink top-up intent id this payment belongs to',
     example: 'b1e2c3d4-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
   })
-  @IsNotEmpty()
-  @IsString()
+  // Reviewer A run-#173 MINOR: intent ids are varchar(36) UUIDs — validate
+  // the SHAPE at the DTO wall (matches intent creation's contract; the
+  // ownership join in the service stays the real authorization).
+  @IsUUID()
   intentId!: string;
 }

@@ -237,7 +237,7 @@ export class WalletTopupService {
       );
     }
     if (payment.currency !== 'SAR') {
-      throw new ConflictException('amount_mismatch: payment currency is not SAR');
+      throw new ConflictException('currency_mismatch: payment currency is not SAR');
     }
     if (payment.amount !== intent.amount_halalas) {
       throw new ConflictException(
