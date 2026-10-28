@@ -1,17 +1,17 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #171, 2026-10-28 03:2xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #173, 2026-10-28 16:3xZ)
 
-Snapshot: open PRs = **1** (#178 promote owner-gated) · services API/PWA/Admin all active · staging @ `57b46ca` (runs #171+#172) · **P1-52 Neon quota ACCELERATED (53 events/24h, +4 in 2 days) — top blocker, owner billing** · shipped run #172: dispute tracking surface (#189), EmptyState/ErrorState adoption messages+wallet (#188), P2-270 dangling refs cleaned.
+Snapshot: open PRs = **1** (#178 promote owner-gated) · services API/PWA/Admin all active · staging @ `5b30ae5` (runs #171–#173) · **P1-52 Neon quota creep continues (54 events/24h, +1 since run #172) — top blocker, owner billing** · shipped run #173: dispute refunds with live money-path E2E (#190), Moyasar verify polish (#191).
 
 ## 🔴 Owner actions (blocking)
 
 ### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **51 quota events/24h** (00:0xZ Oct 28; creeping +2 this run, 16th consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup.
+- Sentry: **54 quota events/24h** (15:00Z Oct 28; +1 since run #172 — creep continues below the 60 flag threshold, 20th consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup.
 - **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
 - **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
-- **Run #172 (Oct 28): count now 53 events/24h (+4 in 2 days — the creep ACCELERATED from ~+1/run). Prod push-sweep also still failing (1F, 10/24h). Owner billing step unchanged and URGENT.**
+- **Run #173 (Oct 28 15:4xZ): 54/24h (+1 in ~5h). If ≥60/24h the factory flags it data-loss-adjacent. Owner billing step unchanged and URGENT.**
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
-- Gate GREEN. **~335 commits ahead of main** (venue-photo pipeline rides it: #186 + #187 + PR-Agent-hardened media stack).
+- Gate GREEN. **~337 commits ahead of main** (venue-photo pipeline + dispute refunds + Moyasar polish ride it: #186/#187/#189/#190/#191).
 - **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images).** Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that reaches api.neon.tech, or the container route); (2) YOU merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
 - **Close-line:** "Merged #178 + Render deployed".
 
