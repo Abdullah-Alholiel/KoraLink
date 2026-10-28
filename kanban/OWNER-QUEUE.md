@@ -1,6 +1,6 @@
 # OWNER QUEUE — Abdullah's one-stop action list (refreshed run #171, 2026-10-28 03:2xZ)
 
-Snapshot: open PRs = **1** (#178 promote owner-gated — #186/#187 both factory-merged this run) · services API/PWA/Admin all active · staging @ `4c63ab6` · **P1-52 Neon quota still the top blocker (51 events/24h)** · venue-photo pipeline COMPLETE end-to-end (admin upload → player display, live-verified).
+Snapshot: open PRs = **1** (#178 promote owner-gated) · services API/PWA/Admin all active · staging @ `57b46ca` (runs #171+#172) · **P1-52 Neon quota ACCELERATED (53 events/24h, +4 in 2 days) — top blocker, owner billing** · shipped run #172: dispute tracking surface (#189), EmptyState/ErrorState adoption messages+wallet (#188), P2-270 dangling refs cleaned.
 
 ## 🔴 Owner actions (blocking)
 
@@ -8,6 +8,7 @@ Snapshot: open PRs = **1** (#178 promote owner-gated — #186/#187 both factory-
 - Sentry: **51 quota events/24h** (00:0xZ Oct 28; creeping +2 this run, 16th consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup.
 - **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
 - **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
+- **Run #172 (Oct 28): count now 53 events/24h (+4 in 2 days — the creep ACCELERATED from ~+1/run). Prod push-sweep also still failing (1F, 10/24h). Owner billing step unchanged and URGENT.**
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
 - Gate GREEN. **~335 commits ahead of main** (venue-photo pipeline rides it: #186 + #187 + PR-Agent-hardened media stack).
@@ -31,9 +32,8 @@ Snapshot: open PRs = **1** (#178 promote owner-gated — #186/#187 both factory-
 
 ## 🟢 Optional (say one line and the factory does it)
 
-### 6. P2-270 — clean 2 dangling venue-photo refs on staging (NEW run #171)
-- Found by live E2E: Malqa Ladies Arena + Olaya Sports Park reference a SeaweedFS object deleted by run #170's own E2E cleanup (cleanup raced its append). Users never see it (photo falls back to the letter avatar), but the refs are dead.
-- **Close-line:** "clean it" → next run PATCHes both rows to `[]` in ~10 minutes.
+### 6. ~~P2-270~~ DONE (run #172) — dangling venue-photo refs cleaned
+- Run #172 PATCHed both rows to `[]` and verified 0/4 venues carry dead refs. No action needed.
 
 ### 7. Try the venue-photo pipeline yourself (staging, no factory needed)
 - Admin console → Venues → edit any venue → Add photos (≤6, JPG/PNG/WebP ≤5MB) → Save → open the clubs page / venue detail in the PWA: your photos now render on cards and the hero. (This already works — Abdullah's earlier test uploads are the 2 real photos on staging.)
