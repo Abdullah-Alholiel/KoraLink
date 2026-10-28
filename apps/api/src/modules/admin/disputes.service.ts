@@ -10,7 +10,8 @@ import { SQL, and, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as Sentry from '@sentry/node';
 import * as schema from '../../database/schema';
-import { disputes, dispute_messages, match_players, users } from '../../database/schema';
+import { disputes, dispute_messages, match_players, transactions, users } from '../../database/schema';
+import { moneyToNumber } from '../../common/utils/money';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListDisputesDto } from './dto/list-disputes.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
@@ -251,19 +252,44 @@ export class AdminDisputesService {
       // P1-29: wallet refund to the reporter — same tx as the decision, so a
       // failed credit rolls back the resolution and vice versa. Guarded by
       // outcome==='resolved' (a rejected dispute never moves money) and
-      // validated in the DTO (>0, ≤2dp, ≤999999). One decision per dispute
-      // (guarded UPDATE above) → the per-dispute key can never double-fire;
-      // creditWalletTx's replay pre-check makes even a hypothetical retry a
-      // no-op. Ledger reference: the match when known, else the dispute row.
+      // validated in the DTO (>0, ≤2dp, ≤999999).
+      //
+      // REOPEN-RE-RESOLVE CONTRACT (PR-Agent r1 IMPORTANT, run #173): reopen
+      // resets status, so a second resolve CAN legally pass the guarded
+      // UPDATE with the SAME fixed key `dispute-refund-<id>`. The prior
+      // ledger row (keyed per dispute) then wins creditWalletTx's replay
+      // pre-check — so the case record must reflect the ORIGINAL refunded
+      // amount, not the new request. Re-read the committed ledger inside the
+      // tx and compare: same amount → legitimate re-resolve, echo it; different
+      // amount → 409 (a paid refund is immutable — corrections go through a
+      // manual ADJUSTMENT, not a silent key overwrite).
       if (dto.outcome === 'resolved' && dto.refundAmountSar !== undefined) {
-        await creditWalletTx(
-          tx,
-          before.reporter_id,
-          dto.refundAmountSar,
-          `dispute-refund-${id}`,
-          'REFUND',
-          before.match_id ?? id,
-        );
+        const [existing] = await tx
+          .select({ amount: transactions.amount })
+          .from(transactions)
+          .where(eq(transactions.idempotency_key, `dispute-refund-${id}`))
+          .limit(1);
+
+        if (existing && moneyToNumber(existing.amount) !== dto.refundAmountSar) {
+          throw new ConflictException(
+            `This dispute already refunded SAR ${moneyToNumber(existing.amount).toFixed(2)} — ` +
+              'a different amount cannot be issued on re-resolve. Issue any correction as a separate manual adjustment.',
+          );
+        }
+
+        if (!existing) {
+          await creditWalletTx(
+            tx,
+            before.reporter_id,
+            dto.refundAmountSar,
+            `dispute-refund-${id}`,
+            'REFUND',
+            before.match_id ?? id,
+          );
+        }
+        // Either freshly credited, or a same-amount re-resolve replaying the
+        // original credit — `refundedSar` now records the TRUE committed
+        // total for the evidence entry and log line.
         refundedSar = dto.refundAmountSar;
       }
     });

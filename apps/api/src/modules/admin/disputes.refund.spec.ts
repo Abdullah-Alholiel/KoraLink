@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AdminDisputesService } from './disputes.service';
 import { creditWalletTx } from '../matches/match-fees';
 
@@ -41,7 +41,10 @@ describe('AdminDisputesService — P1-29 dispute refund (run #173)', () => {
     findOne?: jest.Mock;
     updateRows: unknown[];
     evidenceRow?: { id: string; evidence: unknown[] } | null;
-    selectThrows?: boolean;
+    /** Evidence-append (disputes) SELECT throws AFTER the credit committed. */
+    evidenceThrows?: boolean;
+    /** Committed ledger row for the dispute-refund key (reopen→re-resolve pre-read). */
+    ledgerRow?: Array<{ amount: string }>;
   }) {
     const findOne =
       opts.findOne ??
@@ -56,18 +59,35 @@ describe('AdminDisputesService — P1-29 dispute refund (run #173)', () => {
 
     const tx: any = {
       update: jest.fn(() => updateChain(opts.updateRows)),
-      // Evidence append: SELECT … FOR UPDATE returns the locked row.
-      select: opts.selectThrows
-        ? jest.fn(() => {
-            throw new Error('evidence append db failure');
-          })
-        : jest.fn(() => ({
-            from: () => ({
-              where: () => ({
-                for: async () => [opts.evidenceRow ?? { id: DISPUTE_ID, evidence: [] }],
-              }),
-            }),
-          })),
+      // Two select shapes share the spy:
+      //  - ledger pre-read (transactions): .from().where().limit() → rows
+      //  - evidence append (disputes):    .from().where().for()  → locked row
+      select:
+        opts.evidenceThrows
+          ? jest.fn((_cols: unknown, table?: unknown) => ({
+              from: (tbl: unknown) => {
+                if (nameOf(tbl) === 'transactions') {
+                  return { where: () => ({ limit: async () => opts.ledgerRow ?? [] }) };
+                }
+                throw new Error('evidence append db failure');
+              },
+            }))
+          : jest.fn((_cols: unknown, table?: unknown) => ({
+              from: (tbl: unknown) => {
+                const isLedger = nameOf(tbl) === 'transactions';
+                return {
+                  where: () => ({
+                    ...(isLedger
+                      ? { limit: async () => opts.ledgerRow ?? [] }
+                      : {
+                          for: async () => [
+                            opts.evidenceRow ?? { id: DISPUTE_ID, evidence: [] },
+                          ],
+                        }),
+                  }),
+                };
+              },
+            })),
     };
     const db = {
       query: { disputes: {}, dispute_messages: {} },
@@ -171,8 +191,28 @@ describe('AdminDisputesService — P1-29 dispute refund (run #173)', () => {
     ).rejects.toThrow('wallet ledger failure');
   });
 
+  it('reopen→re-resolve with the SAME amount: replays the original credit, no second ledger write', async () => {
+    const { svc } = makeService({
+      updateRows: [{ id: DISPUTE_ID }],
+      ledgerRow: [{ amount: '20.00' }],
+    });
+    await svc.resolve(DISPUTE_ID, { outcome: 'resolved', refundAmountSar: 20 }, 'admin1');
+    expect(mockedCredit).not.toHaveBeenCalled(); // replay — original stands
+  });
+
+  it('reopen→re-resolve with a DIFFERENT amount: 409, paid refund is immutable', async () => {
+    const { svc } = makeService({
+      updateRows: [{ id: DISPUTE_ID }],
+      ledgerRow: [{ amount: '20.00' }],
+    });
+    await expect(
+      svc.resolve(DISPUTE_ID, { outcome: 'resolved', refundAmountSar: 35 }, 'admin1'),
+    ).rejects.toThrow(ConflictException);
+    expect(mockedCredit).not.toHaveBeenCalled();
+  });
+
   it('evidence-append failure AFTER commit does not fail the resolution (best-effort record)', async () => {
-    const { svc } = makeService({ updateRows: [{ id: DISPUTE_ID }], selectThrows: true });
+    const { svc } = makeService({ updateRows: [{ id: DISPUTE_ID }], evidenceThrows: true });
     const after = await svc.resolve(
       DISPUTE_ID,
       { outcome: 'resolved', refundAmountSar: 20 },

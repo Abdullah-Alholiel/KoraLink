@@ -98,8 +98,9 @@ export default function DisputeDetailPage() {
     setSaveError(null);
     try {
       // P1-29: refund rides the resolve body only when outcome=resolved AND
-      // a positive amount is entered — the API validates and rejects a
-      // refund on a rejected outcome server-side too.
+      // a positive amount is entered — the API silently IGNORES a refund on a
+      // rejected outcome (per the run-#173 contract; validated DTO amount,
+      // never credited), so this is belt-and-braces rather than an error path.
       const refundSar = outcome === 'resolved' ? parseFloat(refundAmount) : NaN;
       await api.post(`/admin/disputes/${id}/resolve`, {
         outcome,
