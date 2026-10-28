@@ -252,10 +252,10 @@ describe('verifyTopup', () => {
     const svc = makeService(makeDb(), ENV_ON);
     await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/amount_mismatch/);
   });
-  it('409 amount_mismatch when the currency is not SAR', async () => {
+  it('409 currency_mismatch when the currency is not SAR', async () => {
     mockFetch.mockResolvedValue({ ...PAID_PAYMENT, currency: 'USD' });
     const svc = makeService(makeDb(), ENV_ON);
-    await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/currency is not SAR/);
+    await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/currency_mismatch/);
   });
   it('409 payment_intent_mismatch when the payment is bound to a DIFFERENT intent (PR-Agent r1)', async () => {
     mockFetch.mockResolvedValue({ ...PAID_PAYMENT, description: 'wallet-topup:other-intent' });
