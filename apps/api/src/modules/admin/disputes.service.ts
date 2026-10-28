@@ -10,10 +10,12 @@ import { SQL, and, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as Sentry from '@sentry/node';
 import * as schema from '../../database/schema';
-import { disputes, dispute_messages, match_players, users } from '../../database/schema';
+import { disputes, dispute_messages, match_players, transactions, users } from '../../database/schema';
+import { moneyToNumber } from '../../common/utils/money';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListDisputesDto } from './dto/list-disputes.dto';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
+import { creditWalletTx } from '../matches/match-fees';
 import { UpdateDisputeDto } from './dto/update-dispute.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
@@ -183,10 +185,23 @@ export class AdminDisputesService {
       throw new BadRequestException('This dispute has already been decided.');
     }
 
+    // P1-29: set inside the tx ONLY when a refund actually credited; drives
+    // the post-commit evidence append + log without re-deriving from the DTO
+    // (the tx may have rolled back on an unrelated path). Numeric sentinel
+    // (0 = no refund) matches the cancelMatch precedent — TS closure
+    // narrowing turns a `number | null` start value into `never` at the
+    // post-tx read.
+    let refundedSar = 0;
+
     // Apply the real-world effect of the decision — the whole point of a
     // dispute. A won no-show appeal reverses the player's no-show mark and
     // restores their standing no-show count. Other dispute types can add their
     // own effects (refunds, penalty reversals) as those flows are built.
+    //
+    // P1-29 (run #173): a refund-amount decision IS such an effect — the
+    // credit rides this SAME tx via creditWalletTx (per-dispute idempotency
+    // key `dispute-refund-<id>`; the guarded status UPDATE below runs FIRST,
+    // so the loser of a resolve race throws before any money moves).
     //
     // ATOMICITY (Review run #24, was CRITICAL): the side effect and the status
     // flip used to run as two independent transactions — a mid-sequence
@@ -233,7 +248,70 @@ export class AdminDisputesService {
           )
           .where(eq(users.id, before.reporter_id));
       }
+
+      // P1-29: wallet refund to the reporter — same tx as the decision, so a
+      // failed credit rolls back the resolution and vice versa. Guarded by
+      // outcome==='resolved' (a rejected dispute never moves money) and
+      // validated in the DTO (>0, ≤2dp, ≤999999).
+      //
+      // REOPEN-RE-RESOLVE CONTRACT (PR-Agent r1 IMPORTANT, run #173): reopen
+      // resets status, so a second resolve CAN legally pass the guarded
+      // UPDATE with the SAME fixed key `dispute-refund-<id>`. The prior
+      // ledger row (keyed per dispute) then wins creditWalletTx's replay
+      // pre-check — so the case record must reflect the ORIGINAL refunded
+      // amount, not the new request. Re-read the committed ledger inside the
+      // tx and compare: same amount → legitimate re-resolve, echo it; different
+      // amount → 409 (a paid refund is immutable — corrections go through a
+      // manual ADJUSTMENT, not a silent key overwrite).
+      if (dto.outcome === 'resolved' && dto.refundAmountSar !== undefined) {
+        const [existing] = await tx
+          .select({ amount: transactions.amount })
+          .from(transactions)
+          .where(eq(transactions.idempotency_key, `dispute-refund-${id}`))
+          .limit(1);
+
+        if (existing && moneyToNumber(existing.amount) !== dto.refundAmountSar) {
+          throw new ConflictException(
+            `This dispute already refunded SAR ${moneyToNumber(existing.amount).toFixed(2)} — ` +
+              'a different amount cannot be issued on re-resolve. Issue any correction as a separate manual adjustment.',
+          );
+        }
+
+        if (!existing) {
+          await creditWalletTx(
+            tx,
+            before.reporter_id,
+            dto.refundAmountSar,
+            `dispute-refund-${id}`,
+            'REFUND',
+            before.match_id ?? id,
+          );
+        }
+        // Either freshly credited, or a same-amount re-resolve replaying the
+        // original credit — `refundedSar` now records the TRUE committed
+        // total for the evidence entry and log line.
+        refundedSar = dto.refundAmountSar;
+      }
     });
+
+    // Evidence history (P1-29): the refund is part of the case record, so the
+    // audit trail lives on the dispute itself — admins reading the case later
+    // see HOW MUCH was compensated without opening the ledger. Best-effort:
+    // the money already moved atomically; a failed evidence append must not
+    // fail the resolution (same class as the notify fan-out below).
+    if (refundedSar > 0) {
+      try {
+        await this.appendDisputeEvidenceAtomically(id, {
+          action: 'refund',
+          reason: `refund_amount_sar=${refundedSar.toFixed(2)}`,
+          at: new Date().toISOString(),
+        });
+      } catch (err) {
+        this.logger.error(`dispute refund evidence append failed for ${id}: ${(err as Error).message}`);
+        Sentry.captureException(err, { tags: { scope: 'admin.disputes.refund-evidence' } });
+      }
+      this.logger.log(`dispute ${id} resolved with wallet refund SAR ${refundedSar.toFixed(2)}`);
+    }
 
     const after = await this.findOne(id);
     await this.auditSafe(adminId, 'dispute.resolve', id, before, after, ip);
@@ -548,5 +626,38 @@ export class AdminDisputesService {
       this.logger.error(`audit.log failed after ${action} on ${entityId}: ${(err as Error).message}`);
       Sentry.captureException(err, { tags: { scope: 'admin.disputes.audit' } });
     }
+  }
+
+  /**
+   * P1-29 (run #173): append a post-DECISION evidence entry (the refund record)
+   * with a FOR UPDATE row lock — ported from matches.service's
+   * appendDisputeEvidenceAtomically with ONE deliberate delta: NO status
+   * predicate. The refund entry lands on a just-resolved row (the matches
+   * variant guards open disputes for player appeals), and a status predicate
+   * here would 409 every legitimate refund record.
+   */
+  private async appendDisputeEvidenceAtomically(
+    disputeId: string,
+    entry: { action: string; reason: string; at: string },
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: disputes.id, evidence: disputes.evidence })
+        .from(disputes)
+        .where(eq(disputes.id, disputeId))
+        .for('update');
+
+      if (!locked) {
+        throw new NotFoundException('Dispute not found.');
+      }
+
+      const evidence = Array.isArray(locked.evidence) ? [...locked.evidence] : [];
+      evidence.push(entry);
+
+      await tx
+        .update(disputes)
+        .set({ evidence: evidence as never })
+        .where(eq(disputes.id, disputeId));
+    });
   }
 }
