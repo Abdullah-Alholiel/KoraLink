@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -125,6 +125,12 @@ export default function ClubPage() {
   // ── P2-269: hero photo (run #171) — venue's first managed image; a load
   // failure degrades to the stadium art for the rest of the session ──
   const [heroBroken, setHeroBroken] = useState(false);
+  // PR-Agent r1 (run #171): reset when the venue changes — client-side
+  // navigation reuses this component instance (dynamic route), so a stale
+  // heroBroken would keep venue B on stadium art though it has a photo.
+  useEffect(() => {
+    setHeroBroken(false);
+  }, [venue?.id]);
   const heroPhotoUrl = heroBroken ? null : firstVenueImage(venue?.images);
 
   // Use Asia/Riyadh local day (NOT UTC) — same as the Play feed's dateInRiyadh.
