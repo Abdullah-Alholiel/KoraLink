@@ -30,6 +30,7 @@ import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ErrorState from '@/components/ui/ErrorState';
+import EmptyState from '@/components/ui/EmptyState';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
@@ -353,19 +354,13 @@ export default function WalletPage() {
                     </div>
                 )}
 
-                {/* Empty state (API returned no transactions) */}
+                {/* Empty state (API returned no transactions) — shared component (P2-247 adoption, run #172) */}
                 {!historyLoading && !historyError && historyData && transactions.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12">
-                        <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                            <Wallet className="w-7 h-7 text-gray-300" strokeWidth={1.5} />
-                        </div>
-                        <h3 className="text-base font-bold text-brand-black mb-1">
-                            {t('wallet.noTransactions')}
-                        </h3>
-                        <p className="text-sm text-gray-400 text-center">
-                            {t('wallet.noTransactionsDescription')}
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={Wallet}
+                        title={t('wallet.noTransactions')}
+                        description={t('wallet.noTransactionsDescription')}
+                    />
                 )}
 
                 {/* Populated state — grouped transactions */}
