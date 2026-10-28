@@ -1,17 +1,17 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #170, 2026-10-27 16:3xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #171, 2026-10-28 03:2xZ)
 
-Snapshot: open PRs = 2 (#178 promote owner-gated + #186 P1-38 venue photos, factory-merge-gated) · services API/PWA/Admin all active · staging @ 556a243 · P1-52 Neon quota still the top blocker · promote gate GREEN again (fonts-fetch flake cured this run).
+Snapshot: open PRs = **1** (#178 promote owner-gated — #186/#187 both factory-merged this run) · services API/PWA/Admin all active · staging @ `4c63ab6` · **P1-52 Neon quota still the top blocker (51 events/24h)** · venue-photo pipeline COMPLETE end-to-end (admin upload → player display, live-verified).
 
 ## 🔴 Owner actions (blocking)
 
 ### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **49 quota events/24h** (15:0xZ Oct 27; creeping ~+1/run, 15th consecutive watch). NEW this run: the prod push-subscription sweep (1F) is proven to be the SAME quota error — the limit now silently disables prod stale-push cleanup.
+- Sentry: **51 quota events/24h** (00:0xZ Oct 28; creeping +2 this run, 16th consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup.
 - **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
 - **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
-- **Gate GREEN again** (this run cured a `next/font` fonts-fetch flake with empty-commit retrigger 556a243). ~330 commits ahead of main.
-- **Migrations now riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images, NEW run #170).** Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that can reach api.neon.tech, or the container route); (2) merge staging into #178 or merge #178 after staging so all three ride it; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
+- Gate GREEN. **~335 commits ahead of main** (venue-photo pipeline rides it: #186 + #187 + PR-Agent-hardened media stack).
+- **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images).** Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that reaches api.neon.tech, or the container route); (2) YOU merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
 - **Close-line:** "Merged #178 + Render deployed".
 
 ## 🟡 Owner actions (not blocking the factory)
@@ -29,7 +29,11 @@ Snapshot: open PRs = 2 (#178 promote owner-gated + #186 P1-38 venue photos, fact
 - Sandbox keys staged and working; ⚠️ the LIVE secret transited chat once — regenerate in the Moyasar dashboard before go-live. Not needed for sandbox.
 - **Close-line:** "Moyasar live secret regenerated".
 
-## ✅ Closed since last update (no action left)
-- **Ghost Vercel kora-link check (P2-208): owner fix CONFIRMED holding** — PR #186's first head shows "Skipped - Not affected" instead of the old "Deployment was blocked"; no more escape-merge coin flips needed.
-- **P1-69 dispute origination: PR #180 MERGED 2026-10-26** (verified this run); offline guard from run #168 already on staging.
-- **P2-264 recipient-locale email — BUILT run #168** (PR #183 ac7f933, live-probed): rides the promote (see #2 sequence).
+## 🟢 Optional (say one line and the factory does it)
+
+### 6. P2-270 — clean 2 dangling venue-photo refs on staging (NEW run #171)
+- Found by live E2E: Malqa Ladies Arena + Olaya Sports Park reference a SeaweedFS object deleted by run #170's own E2E cleanup (cleanup raced its append). Users never see it (photo falls back to the letter avatar), but the refs are dead.
+- **Close-line:** "clean it" → next run PATCHes both rows to `[]` in ~10 minutes.
+
+### 7. Try the venue-photo pipeline yourself (staging, no factory needed)
+- Admin console → Venues → edit any venue → Add photos (≤6, JPG/PNG/WebP ≤5MB) → Save → open the clubs page / venue detail in the PWA: your photos now render on cards and the hero. (This already works — Abdullah's earlier test uploads are the 2 real photos on staging.)
