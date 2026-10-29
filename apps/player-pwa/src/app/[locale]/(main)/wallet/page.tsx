@@ -36,7 +36,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
 import { downloadTextAsFile } from '@/lib/download';
 import type { Transaction } from '@/types';
-import { useTopupConfig } from '@/hooks/useTopup';
+import { useTopupConfig, useLatestTopupIntent } from '@/hooks/useTopup';
 import TopupSheet from '@/components/wallet/TopupSheet';
 
 function getTransactionIcon(icon: string) {
@@ -127,6 +127,15 @@ export default function WalletPage() {
     // environments keep their seeding path.
     const { data: topupConfig } = useTopupConfig();
     const moyasarEnabled = topupConfig?.enabled === true;
+    // P2-279 (run #176): newest top-up attempt — the player-visible trace of
+    // an attempt that never landed (failed 3DS / abandoned verify). The card
+    // renders ONLY for a pending attempt; credited attempts already show as
+    // ledger transactions below.
+    const { data: latestTopup } = useLatestTopupIntent({
+        enabled: moyasarEnabled,
+    });
+    const pendingTopup =
+        latestTopup?.intent?.status === 'pending' ? latestTopup.intent : null;
     const [showTopupSheet, setShowTopupSheet] = useState(false);
 
     const closeExportSheet = () => {
@@ -280,6 +289,36 @@ export default function WalletPage() {
                     </>
                 )}
             </div>
+
+            {/* ── P2-279: last top-up attempt (pending only) ── */}
+            {pendingTopup && (
+                <div
+                    className="mx-4 mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-4"
+                    role="status"
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-amber-900">
+                                {t('wallet.topup.lastAttemptPendingTitle')}
+                            </p>
+                            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                                {t('wallet.topup.lastAttemptPendingBody', {
+                                    amount: formatMoney(
+                                        pendingTopup.amountSar,
+                                        intlLocale
+                                    ),
+                                })}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setShowTopupSheet(true)}
+                            className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white active:scale-95 transition-transform"
+                        >
+                            {t('wallet.topup.lastAttemptRetry')}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Action Buttons ───────────────────── */}
             <div className="flex justify-center gap-6 mt-6 px-4">

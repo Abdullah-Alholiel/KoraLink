@@ -78,6 +78,17 @@ export class WalletController {
     return this.topupService.getTopupConfig();
   }
 
+  // ── GET /wallet/topup/latest ─────────────────────────────────
+  // P2-279 (run #176): the newest top-up attempt for the caller — the
+  // player-visible trace of an attempt that never landed (failed 3DS,
+  // abandoned verify). Reports state only; never interprets charge/refund.
+  @Get('topup/latest')
+  @ApiOperation({ summary: 'Newest wallet top-up attempt for the caller' })
+  @ApiOkResponse({ description: 'Latest intent (or null when none).' })
+  async getLatestTopupIntent(@CurrentUser() user: { sub: string }) {
+    return this.topupService.getLatestIntent(user.sub);
+  }
+
   // ── POST /wallet/topup/intent ────────────────────────────────
   // P0-2 (run #169): pins user + amount server-side BEFORE the hosted form
   // creates the payment client-side. Idempotent per (user, idempotencyKey).
