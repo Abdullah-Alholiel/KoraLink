@@ -736,6 +736,7 @@
         "failedTitle": "Top-up failed",
         "notPaid": "The payment was not completed — no money was taken. You can try again anytime.",
         "amountMismatch": "The paid amount does not match your top-up request — no money was credited. Please start a new top-up.",
+        "callbackChargedDeclined": "This payment was declined before it could be added to your wallet. Your bank will return the money automatically — please start a new top-up.",
         "offlineNote": "You're offline — reconnect to top up your wallet.",
         "configUnavailable": "Top-up is being set up. Please try again later.",
         "callbackVerifying": "Confirming your payment…",

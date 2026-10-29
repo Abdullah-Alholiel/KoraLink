@@ -22,6 +22,7 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 import { useVerifyTopup } from '@/hooks/useTopup';
+import { topupCallbackMessageKey } from '@/lib/topup-callback-messages';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
 
 type Phase = 'verifying' | 'success' | 'failed';
@@ -32,6 +33,9 @@ function CallbackInner() {
   const searchParams = useSearchParams();
   const verifyTopup = useVerifyTopup();
   const [phase, setPhase] = useState<Phase>('verifying');
+  // P2-276: failure copy varies by the API verify-rejection code — a charged
+  // amount/currency mismatch must NOT say "no money was taken".
+  const [failedKey, setFailedKey] = useState<string>('wallet.topup.callbackRetry');
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -54,6 +58,10 @@ function CallbackInner() {
         hasIntentId: Boolean(intentId),
       });
       setPhase('failed');
+      // PR-Agent r1: missing context = charge state UNKNOWABLE (a param-stripped
+      // redirect can follow a successful charge) — the retry/auto-refund copy is
+      // the truthful choice, never "no money was taken".
+      setFailedKey('wallet.topup.callbackRetry');
       trackEvent('topup_callback_result', { ok: false, reason: 'missing-context' });
       return;
     }
@@ -73,8 +81,18 @@ function CallbackInner() {
         },
         onError: (err: unknown) => {
           captureError(err, { area: 'wallet-topup-callback' });
+          // P2-276: the API 409 body carries a stable code prefix — map it to
+          // money-truthful localized copy (charged vs not-charged vs unknown).
+          const messageKey = topupCallbackMessageKey(err);
+          setFailedKey(messageKey);
           setPhase('failed');
-          trackEvent('topup_callback_result', { ok: false, reason: 'verify-error' });
+          // PR-Agent r2: carry the mapped bucket into analytics so prod can
+          // split charged-declined vs not-charged vs unknown failures.
+          trackEvent('topup_callback_result', {
+            ok: false,
+            reason: 'verify-error',
+            failureKey: messageKey,
+          });
         },
       },
     );
@@ -108,7 +126,7 @@ function CallbackInner() {
           <div role="status">
             <XCircle className="w-12 h-12 text-red-500 mx-auto" aria-hidden />
             <p className="mt-4 text-base font-bold text-brand-black">{t('wallet.topup.callbackFailed')}</p>
-            <p className="mt-1 text-sm text-gray-500">{t('wallet.topup.notPaid')}</p>
+            <p className="mt-1 text-sm text-gray-500">{t(failedKey)}</p>
             <button
               type="button"
               onClick={() => router.replace('/wallet')}
