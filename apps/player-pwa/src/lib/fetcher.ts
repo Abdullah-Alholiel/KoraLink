@@ -89,6 +89,14 @@ export async function fetcher<T>(
     path.startsWith('http') ? path : `${apiBase}${path}`
   );
 
+  // P2-278 (run #176, Hunt R4-1): the Bearer token must only ever leave the
+  // device for KoraLink's own API origin. Absolute-URL callers pointing at a
+  // foreign origin get NO Authorization header — so one compromised/buggy call
+  // site can no longer exfiltrate the localStorage JWT cross-origin.
+  // `credentials: 'include'` stays unconditional: the browser (not this file)
+  // enforces the cookie same-site policy, and prod is cookie-only (P2-240).
+  const isApiOrigin = url.origin === new URL(apiBase).origin;
+
   if (params) {
     Object.entries(params).forEach(([key, value]) =>
       url.searchParams.set(key, value)
@@ -99,19 +107,23 @@ export async function fetcher<T>(
 
   // Cross-origin dev via Tailscale: SameSite=Lax cookies are not forwarded,
   // so attach the JWT as a Bearer token when one is stored (dev-login).
+  // P2-278: ONLY for requests that target the API origin (see isApiOrigin).
   const sessionToken =
     typeof window !== 'undefined'
       ? localStorage.getItem(TOKEN_KEY)
       : null;
   // P0-6 (run #30): /users/me/restore falls back to the PDPL restore-token
   // Bearer when the session token is absent (after soft-delete logout).
+  // The restore path always targets the API, so it passes the origin gate.
   const token = getBearerForRequest(path, sessionToken);
 
   const response = await fetch(url.toString(), {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        ...(token && isApiOrigin
+                                ? { Authorization: `Bearer ${token}` }
+                                : {}),
       ...customHeaders,
     },
     ...restOptions,
