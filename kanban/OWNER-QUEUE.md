@@ -1,14 +1,14 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #173, 2026-10-28 16:3xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #174, 2026-10-29 01:4xZ)
 
-Snapshot: open PRs = **1** (#178 promote owner-gated) · services API/PWA/Admin all active · staging @ `5b30ae5` (runs #171–#173) · **P1-52 Neon quota creep continues (54 events/24h, +1 since run #172) — top blocker, owner billing** · shipped run #173: dispute refunds with live money-path E2E (#190), Moyasar verify polish (#191).
+Snapshot: open PRs = **2** (#178 promote owner-gated + #192 refund-UX in CI) · services API/PWA/Admin all active · staging @ `1ceb508` (run #173 docs) · **P1-52 Neon quota creep continues (56 events/24h, +2 since run #173) — top blocker, owner billing** · shipped run #174: refund-input UX hardening (PR #192).
 
 ## 🔴 Owner actions (blocking)
 
 ### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **54 quota events/24h** (15:00Z Oct 28; +1 since run #172 — creep continues below the 60 flag threshold, 20th consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup.
+- Sentry: **56 quota events/24h** (00:00Z Oct 29; +2 since run #173 — creep continues below the 60 flag threshold, 21st consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup (10 events/24h, no new since Oct 28 03:07Z).
 - **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
 - **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
-- **Run #173 (Oct 28 15:4xZ): 54/24h (+1 in ~5h). If ≥60/24h the factory flags it data-loss-adjacent. Owner billing step unchanged and URGENT.**
+- **Run #174 (Oct 29 01:0xZ): 56/24h (+2). If ≥60/24h the factory flags it data-loss-adjacent. Owner billing step unchanged and URGENT.**
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
 - Gate GREEN. **~337 commits ahead of main** (venue-photo pipeline + dispute refunds + Moyasar polish ride it: #186/#187/#189/#190/#191).
