@@ -83,9 +83,16 @@ function CallbackInner() {
           captureError(err, { area: 'wallet-topup-callback' });
           // P2-276: the API 409 body carries a stable code prefix — map it to
           // money-truthful localized copy (charged vs not-charged vs unknown).
-          setFailedKey(topupCallbackMessageKey(err));
+          const messageKey = topupCallbackMessageKey(err);
+          setFailedKey(messageKey);
           setPhase('failed');
-          trackEvent('topup_callback_result', { ok: false, reason: 'verify-error' });
+          // PR-Agent r2: carry the mapped bucket into analytics so prod can
+          // split charged-declined vs not-charged vs unknown failures.
+          trackEvent('topup_callback_result', {
+            ok: false,
+            reason: 'verify-error',
+            failureKey: messageKey,
+          });
         },
       },
     );
