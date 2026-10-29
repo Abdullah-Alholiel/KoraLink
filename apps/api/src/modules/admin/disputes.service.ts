@@ -185,6 +185,17 @@ export class AdminDisputesService {
       throw new BadRequestException('This dispute has already been decided.');
     }
 
+    // P2-273 (run #174, Reviewer A MINOR 1): a refund is a money INTENT — the
+    // API must never silently drop it. A refundAmountSar on outcome=rejected
+    // is a client bug (the console only sends the field on resolved), so
+    // reject it loudly (400) instead of ignoring it and resolving with no
+    // credit (the pre-run-#174 contract silently ignored the field).
+    if (dto.outcome === 'rejected' && dto.refundAmountSar !== undefined) {
+      throw new BadRequestException(
+        'refundAmountSar is only allowed when outcome is resolved.',
+      );
+    }
+
     // P1-29: set inside the tx ONLY when a refund actually credited; drives
     // the post-commit evidence append + log without re-deriving from the DTO
     // (the tx may have rolled back on an unrelated path). Numeric sentinel

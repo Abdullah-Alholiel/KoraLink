@@ -36,7 +36,9 @@ export class ResolveDisputeDto {
   @ApiPropertyOptional({
     description:
       'Wallet refund credited to the reporter (SAR, >0, ≤2dp) when outcome=resolved. ' +
-      'Rides the resolve transaction; idempotent per dispute (one refund per case).',
+      'Rides the resolve transaction; idempotent per dispute (one refund per case). ' +
+      'Run #174 (P2-273): a refund paired with outcome=rejected is now a 400 — the API ' +
+      'never silently drops money intent (Reviewer A run-#174 MINOR 1).',
     example: 37,
     minimum: 0.01,
     maximum: 999999,

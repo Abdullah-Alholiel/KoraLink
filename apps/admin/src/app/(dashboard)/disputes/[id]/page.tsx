@@ -63,6 +63,10 @@ export default function DisputeDetailPage() {
   const [internalNote, setInternalNote] = useState('');
   // P1-29 (run #173): optional wallet refund credited on resolve (SAR).
   const [refundAmount, setRefundAmount] = useState('');
+  // P2-273 (run #174): inline gate — a non-empty but unparseable/≤0 refund
+  // entry blocks submit instead of being silently dropped (Reviewer A MINOR 2:
+  // the admin must never believe a refund was issued when it was not).
+  const [refundInvalid, setRefundInvalid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -96,11 +100,22 @@ export default function DisputeDetailPage() {
   async function resolve() {
     setSaving(true);
     setSaveError(null);
+    // P2-273: validate BEFORE any request — non-empty but unparseable (parseFloat
+    // NaN) or non-positive input must BLOCK with a visible error, never be
+    // silently omitted from the payload (pre-run-#174 behavior).
+    if (outcome === 'resolved' && refundAmount.trim() !== '') {
+      const refundSar = parseFloat(refundAmount);
+      if (!Number.isFinite(refundSar) || refundSar <= 0) {
+        setRefundInvalid(true);
+        setSaving(false);
+        return;
+      }
+    }
+    setRefundInvalid(false);
     try {
-      // P1-29: refund rides the resolve body only when outcome=resolved AND
-      // a positive amount is entered — the API silently IGNORES a refund on a
-      // rejected outcome (per the run-#173 contract; validated DTO amount,
-      // never credited), so this is belt-and-braces rather than an error path.
+      // P1-29: refund rides the resolve body only when outcome=resolved AND a
+      // positive amount is entered (validated above — the API now 400s a
+      // refund on a rejected outcome, run-#174 contract).
       const refundSar = outcome === 'resolved' ? parseFloat(refundAmount) : NaN;
       await api.post(`/admin/disputes/${id}/resolve`, {
         outcome,
@@ -448,11 +463,20 @@ export default function DisputeDetailPage() {
                       type="number"
                       min="0.01"
                       step="0.01"
+                      aria-invalid={refundInvalid}
                       value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
+                      onChange={(e) => {
+                        setRefundAmount(e.target.value);
+                        if (refundInvalid) setRefundInvalid(false);
+                      }}
                       placeholder={t('refundAmountHint')}
                       className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                     />
+                    {refundInvalid && (
+                      <p role="status" className="mt-1 text-sm text-brand-red">
+                        {t('refundInvalid')}
+                      </p>
+                    )}
                   </div>
                 )}
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}

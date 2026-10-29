@@ -131,15 +131,15 @@ describe('AdminDisputesService — P1-29 dispute refund (run #173)', () => {
     );
   });
 
-  it('rejected + refundAmountSar: NO money moves, no refund evidence', async () => {
+  it('rejected + refundAmountSar: 400 BEFORE any tx — money intent is never silently dropped (P2-273, run #174)', async () => {
     const { svc, tx } = makeService({ updateRows: [{ id: DISPUTE_ID }] });
-    await svc.resolve(
-      DISPUTE_ID,
-      { outcome: 'rejected', refundAmountSar: 50 },
-      'admin1',
-    );
+    await expect(
+      svc.resolve(DISPUTE_ID, { outcome: 'rejected', refundAmountSar: 50 }, 'admin1'),
+    ).rejects.toThrow(BadRequestException);
+    // The guard fires BEFORE the transaction: no status flip, no credit, no
+    // ledger pre-read — nothing half-applied.
+    expect(tx.update).not.toHaveBeenCalled();
     expect(mockedCredit).not.toHaveBeenCalled();
-    // no evidence select chain either (no refund entry attempted)
     expect(tx.select).not.toHaveBeenCalled();
   });
 
