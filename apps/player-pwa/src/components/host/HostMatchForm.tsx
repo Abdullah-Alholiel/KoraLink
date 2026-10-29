@@ -19,7 +19,7 @@ import {
     type HostDraft,
 } from '@/lib/host-draft';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore, selectUser } from '@/store/useAppStore';
 
 import ModeToggle from './ModeToggle';
 import MatchDetailsForm, {
@@ -144,9 +144,20 @@ export default function HostMatchForm() {
     // values re-applied). Venue/pitch/slot are deliberately NOT restored
     // (booking intent goes stale — see host-draft.ts).
     const [draftRestored, setDraftRestored] = useState<HostDraft | null>(null);
+    // Owner binding (PR-Agent run-#196 r3 MINOR): the draft replays ONLY for
+    // the session that authored it — on a shared device the next user's
+    // /host must never inherit another player's pre-filled match. The store
+    // rehydrates async, so the restore keys on the HYDRATED id (runs once
+    // the id exists; a null id no-ops). Mirrors the offline chat queue's
+    // userId rule (koralink-frontend-patterns §offline-queue).
+    const storeUser = useAppStore(selectUser);
+    const currentUserId = storeUser?.id ?? '';
+    const draftRestoreAppliedRef = useRef(false);
     useEffect(() => {
-        const d = loadHostDraft();
+        if (draftRestoreAppliedRef.current || !currentUserId) return;
+        const d = loadHostDraft(currentUserId);
         if (!d) return;
+        draftRestoreAppliedRef.current = true;
         setTitle(d.title);
         // Component-side re-check against the LIVE option lists: if the lib
         // mirrors ever drift, an out-of-union value would light up no chip.
@@ -166,9 +177,9 @@ export default function HostMatchForm() {
         if (d.duration !== duration) setDuration(d.duration);
         if (d.visibility === 'private') setVisibility('private');
         setDraftRestored(d);
-        // Mount-only by design: the draft is a mount-time snapshot.
+        // Mount-lifetime restore: re-runs only while the id is still absent.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [currentUserId]);
     // Hosting-terms consent (cycle player-host-responsibility): reset per
     // publish attempt; the publish button stays disabled until accepted and
     // the flag is sent to the API, which independently rejects booking
@@ -189,8 +200,9 @@ export default function HostMatchForm() {
             draftSaveArmedRef.current = true;
             return;
         }
-        saveHostDraft({ title, matchType, genderRule, date, time, duration, visibility });
-    }, [title, matchType, genderRule, date, time, duration, visibility]);
+        if (!currentUserId) return;
+        saveHostDraft({ userId: currentUserId, title, matchType, genderRule, date, time, duration, visibility });
+    }, [currentUserId, title, matchType, genderRule, date, time, duration, visibility]);
 
     // Derive pitch cost from the selected pitch's hourly rate, prorated by
     // duration (mirrors the server's authoritative calculation — the server

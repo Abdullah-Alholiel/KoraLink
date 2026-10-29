@@ -24,8 +24,8 @@ describe('P2-281 M-3 host draft recovery (structure)', () => {
     expect(FORM).toContain('clearHostDraft');
   });
 
-  it('restore is a POST-HYDRATION effect, declared before the save effect (ordering pins)', () => {
-    const restoreIdx = FORM.indexOf('const d = loadHostDraft()');
+  it('restore is a POST-HYDRATION, owner-scoped effect, declared before the save effect', () => {
+    const restoreIdx = FORM.indexOf('const d = loadHostDraft(currentUserId)');
     const saveIdx = FORM.indexOf('draftSaveArmedRef');
     expect(restoreIdx).toBeGreaterThan(-1);
     expect(saveIdx).toBeGreaterThan(restoreIdx);
@@ -33,16 +33,20 @@ describe('P2-281 M-3 host draft recovery (structure)', () => {
     // a render-path setState diverges server HTML from hydration render
     // (the /host route is server-rendered on demand, `ƒ (Dynamic)`).
     expect(FORM).not.toContain('const draftRef = useRef(loadHostDraft())');
+    // PR-Agent run-#196 r3: the draft is owner-scoped — replays only for
+    // the session that authored it (shared-device leak guard).
+    expect(FORM).toContain('loadHostDraft(currentUserId)');
+    expect(FORM).toContain('userId: currentUserId');
   });
 
-  it('restore honors fresh ?date= intent and is mount-only', () => {
+  it('restore honors fresh ?date= intent and is mount-lifetime', () => {
     expect(FORM).toContain('if (!dateFromQuery) setDate(d.date);');
-    expect(FORM).toMatch(/eslint-disable-next-line react-hooks\/exhaustive-deps\n    \}, \[\]\);/);
+    expect(FORM).toMatch(/eslint-disable-next-line react-hooks\/exhaustive-deps\n    \}, \[currentUserId\]\);/);
   });
 
-  it('save-effect persists ALL shared fields', () => {
+  it('save-effect persists ALL shared fields (owner-stamped)', () => {
     expect(FORM).toContain(
-      'saveHostDraft({ title, matchType, genderRule, date, time, duration, visibility })',
+      'saveHostDraft({ userId: currentUserId, title, matchType, genderRule, date, time, duration, visibility })',
     );
   });
 

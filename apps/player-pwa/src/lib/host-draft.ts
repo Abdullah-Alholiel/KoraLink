@@ -34,6 +34,13 @@ export type HostDraftGender = (typeof HOST_DRAFT_GENDERS)[number];
 export type HostDraftMatchType = (typeof HOST_DRAFT_MATCH_TYPES)[number];
 
 export interface HostDraft {
+  /**
+   * Owner binding (PR-Agent run-#196 r3 MINOR, mirrors the offline chat
+   * queue's owner rule): the draft replays ONLY for the session that
+   * authored it — on a shared device the next user's /host must never
+   * inherit another player's pre-filled match.
+   */
+  userId: string;
   title: string;
   matchType: HostDraftMatchType;
   genderRule: HostDraftGender;
@@ -47,8 +54,6 @@ export interface HostDraft {
   savedAt: number;
 }
 
-export type HostDraftInput = Omit<HostDraft, 'savedAt'>;
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
 
@@ -57,6 +62,9 @@ function isValidDraft(value: unknown): value is HostDraft {
   if (typeof value !== 'object' || value === null) return false;
   const d = value as Record<string, unknown>;
   return (
+    typeof d.userId === 'string' &&
+    d.userId.length > 0 &&
+    d.userId.length <= 128 &&
     typeof d.title === 'string' &&
     d.title.length <= 255 &&
     (HOST_DRAFT_MATCH_TYPES as readonly string[]).includes(String(d.matchType)) &&
@@ -72,14 +80,16 @@ function isValidDraft(value: unknown): value is HostDraft {
   );
 }
 
-/** Read + validate the draft. Corrupt / stale / shape-invalid → null. */
-export function loadHostDraft(now: number = Date.now()): HostDraft | null {
+/** Read + validate the draft for `userId`. Corrupt / stale / foreign → null. */
+export function loadHostDraft(userId: string, now: number = Date.now()): HostDraft | null {
   if (typeof window === 'undefined') return null;
+  if (!userId) return null;
   try {
     const raw = window.localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!isValidDraft(parsed)) return null;
+    if (parsed.userId !== userId) return null;
     if (now - parsed.savedAt > HOST_DRAFT_MAX_AGE_MS) return null;
     // An all-empty draft is not a draft.
     if (!parsed.title && !parsed.date && !parsed.time) return null;
@@ -90,9 +100,13 @@ export function loadHostDraft(now: number = Date.now()): HostDraft | null {
   }
 }
 
-/** Persist the current fields. Best-effort — storage failures are silent. */
-export function saveHostDraft(draft: HostDraftInput, now: number = Date.now()): void {
+/** Persist the current fields for `userId`. Best-effort — storage failures are silent. */
+export function saveHostDraft(
+  draft: Omit<HostDraft, 'savedAt'>,
+  now: number = Date.now(),
+): void {
   if (typeof window === 'undefined') return;
+  if (!draft.userId) return;
   try {
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, savedAt: now }));
   } catch {
