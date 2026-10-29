@@ -353,7 +353,11 @@ export default function MatchChat({
 
               {group.messages.map((msg) => {
                 const isMine = msg.user_id === currentUserId;
-                const avatarInitial = (msg.user?.full_name ?? 'P').charAt(0).toUpperCase();
+                // PR-Agent run-#196 r2 MINOR: localized fallback for unnamed
+                // senders (chatSheet.typingPlayer = "Player"/"لاعب") — the
+                // avatar initial derives from it too ('P' / 'ل').
+                const senderFallback = t('chatSheet.typingPlayer');
+                const avatarInitial = (msg.user?.full_name ?? senderFallback).charAt(0).toUpperCase();
                 const timeStr = new Date(msg.created_at).toLocaleTimeString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), {
                   hour: 'numeric',
                   minute: '2-digit',
@@ -408,7 +412,7 @@ export default function MatchChat({
                       {/* Sender name (in group chats, show for others) */}
                       {!isMine && (
                         <p className="text-[10px] font-semibold text-brand-green mb-0.5">
-                          {msg.user?.full_name ?? msg.user?.handle ?? 'Player'}
+                          {msg.user?.full_name ?? msg.user?.handle ?? senderFallback}
                         </p>
                       )}
                       <p className={`text-sm leading-relaxed ${isMine ? 'text-white' : 'text-gray-700'}`}>
