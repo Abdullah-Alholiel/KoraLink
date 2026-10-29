@@ -100,12 +100,20 @@ export default function DisputeDetailPage() {
   async function resolve() {
     setSaving(true);
     setSaveError(null);
-    // P2-273: validate BEFORE any request — non-empty but unparseable (parseFloat
-    // NaN) or non-positive input must BLOCK with a visible error, never be
+    // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
+    // (min 0.01, max 999999, ≤2dp — PR-Agent r1 #192) so EVERY invalid entry
+    // gets the localized inline error instead of an untranslated English 400
+    // via saveError. Non-parseable (parseFloat NaN) input must also never be
     // silently omitted from the payload (pre-run-#174 behavior).
     if (outcome === 'resolved' && refundAmount.trim() !== '') {
       const refundSar = parseFloat(refundAmount);
-      if (!Number.isFinite(refundSar) || refundSar <= 0) {
+      const tooManyDp = /^\d*\.\d{3,}$/.test(refundAmount.trim());
+      if (
+        !Number.isFinite(refundSar) ||
+        refundSar < 0.01 ||
+        refundSar > 999999 ||
+        tooManyDp
+      ) {
         setRefundInvalid(true);
         setSaving(false);
         return;

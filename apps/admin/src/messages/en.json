@@ -458,7 +458,7 @@
     "rejectBtn": "Reject",
     "refundAmount": "Refund amount (SAR)",
     "refundAmountHint": "e.g. 37.50 — credited to the player's wallet on resolve",
-    "refundInvalid": "Enter a valid refund amount greater than 0 (e.g. 37.50) — empty means no refund.",
+    "refundInvalid": "Enter a refund amount between 0.01 and 999999 with up to 2 decimals (e.g. 37.50) — empty means no refund.",
     "decisionPh": "Decision, e.g. “Uphold penalty (win for host)”",
     "notePh": "Internal note (admins only)",
     "submit": "Submit decision",
