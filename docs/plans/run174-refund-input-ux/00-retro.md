@@ -35,7 +35,8 @@ components.
 
 **API contract delta (exact):**
 - `POST /admin/disputes/:id/resolve` with `{outcome:'rejected', refundAmountSar: 5}` → **400**
-  `{"message": ["refundAmountSar is only allowed when outcome is resolved"], "error":"Bad Request","statusCode":400}`.
+  `{"message": "refundAmountSar is only allowed when outcome is resolved.", "error":"Bad Request","statusCode":400}`
+  (BadRequestException(string) → Nest emits `message` as a STRING, not an array — verified r2 #192).
 - All existing valid shapes unchanged (resolved+amount, resolved without amount, rejected without
   amount). Reopen→re-resolve ledger contract untouched.
 

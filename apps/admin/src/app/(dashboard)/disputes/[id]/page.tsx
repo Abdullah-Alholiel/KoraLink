@@ -103,17 +103,16 @@ export default function DisputeDetailPage() {
     // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
     // (min 0.01, max 999999, ≤2dp — PR-Agent r1 #192) so EVERY invalid entry
     // gets the localized inline error instead of an untranslated English 400
-    // via saveError. Non-parseable (parseFloat NaN) input must also never be
-    // silently omitted from the payload (pre-run-#174 behavior).
+    // via saveError. PR-Agent r2 #192: the input is type="text" +
+    // inputMode="decimal" (a type="number" field reports sanitized '' for
+    // comma decimals / Arabic-Indic digits, which would bypass this gate and
+    // silently drop the refund intent again) — so the RAW text always arrives
+    // here and this full-format predicate is the single source of truth:
+    // ASCII digits only, optional dot, ≤2 decimals, 0.01–999999.
     if (outcome === 'resolved' && refundAmount.trim() !== '') {
+      const valid = /^\d{1,6}(\.\d{1,2})?$/.test(refundAmount.trim());
       const refundSar = parseFloat(refundAmount);
-      const tooManyDp = /^\d*\.\d{3,}$/.test(refundAmount.trim());
-      if (
-        !Number.isFinite(refundSar) ||
-        refundSar < 0.01 ||
-        refundSar > 999999 ||
-        tooManyDp
-      ) {
+      if (!valid || !Number.isFinite(refundSar) || refundSar < 0.01 || refundSar > 999999) {
         setRefundInvalid(true);
         setSaving(false);
         return;
@@ -468,9 +467,8 @@ export default function DisputeDetailPage() {
                     </label>
                     <input
                       id="refund-amount"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       aria-invalid={refundInvalid}
                       value={refundAmount}
                       onChange={(e) => {
