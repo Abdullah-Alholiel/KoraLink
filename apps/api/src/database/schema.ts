@@ -1211,7 +1211,8 @@ export const wallet_topup_intents = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index('wallet_topup_intents_user_created_idx').on(t.user_id, t.created_at),
+    // DESC matches the live index (0056 raw SQL + pg_indexes) — keep in sync.
+    index('wallet_topup_intents_user_created_idx').on(t.user_id, t.created_at.desc()),
     index('wallet_topup_intents_payment_id_idx').on(t.payment_id),
   ],
 );
