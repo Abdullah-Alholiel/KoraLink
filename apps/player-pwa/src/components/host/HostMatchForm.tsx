@@ -152,12 +152,15 @@ export default function HostMatchForm() {
     // userId rule (koralink-frontend-patterns §offline-queue).
     const storeUser = useAppStore(selectUser);
     const currentUserId = storeUser?.id ?? '';
-    const draftRestoreAppliedRef = useRef(false);
+    // Latch is PER-USER (PR-Agent run-#196 r4 MINOR): a session-global flag
+    // would never restore a second account's draft on a kept-alive instance.
+    // Each distinct user id gets exactly one restore attempt.
+    const draftRestoreAppliedForRef = useRef<string | null>(null);
     useEffect(() => {
-        if (draftRestoreAppliedRef.current || !currentUserId) return;
+        if (!currentUserId || draftRestoreAppliedForRef.current === currentUserId) return;
+        draftRestoreAppliedForRef.current = currentUserId;
         const d = loadHostDraft(currentUserId);
         if (!d) return;
-        draftRestoreAppliedRef.current = true;
         setTitle(d.title);
         // Component-side re-check against the LIVE option lists: if the lib
         // mirrors ever drift, an out-of-union value would light up no chip.
