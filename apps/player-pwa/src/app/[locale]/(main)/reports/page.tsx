@@ -9,6 +9,7 @@ import { useMyReports, type MyReportApi } from '@/hooks/useReports';
 import { useMyDisputes } from '@/hooks/useDisputes';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { reportLifecycleKey, disputeLifecycleKey } from '@/lib/lifecycle';
 
 /** P2-23 (run #17): "My Reports" — reporters see their reports and outcomes. */
 
@@ -135,6 +136,15 @@ export default function ReportsPage() {
                 </span>
               </div>
 
+              {/* P2-281 M-4: plain-language lifecycle line — what the state
+                  means for the player (chip alone was jargon-only). */}
+              {(() => {
+                const lifecycleKey = reportLifecycleKey(r.status);
+                return lifecycleKey ? (
+                  <p className="text-xs text-gray-500 mt-2">{t(lifecycleKey)}</p>
+                ) : null;
+              })()}
+
               <p className="text-xs text-gray-600 mt-2 line-clamp-2">{r.reason}</p>
 
               {r.status !== 'open' && r.status !== 'reviewing' && (
@@ -228,6 +238,14 @@ export default function ReportsPage() {
                     )}
                   </span>
                 </div>
+                {/* P2-281 M-4: plain-language lifecycle line for disputes too
+                    (shares the reports.lifecycle keys — same player meaning). */}
+                {(() => {
+                  const lifecycleKey = disputeLifecycleKey(d.status);
+                  return lifecycleKey ? (
+                    <p className="text-xs text-gray-500 mt-2">{t(lifecycleKey)}</p>
+                  ) : null;
+                })()}
                 {d.decision && (
                   <div className="mt-2 rounded-xl bg-gray-50 p-3">
                     <p className="text-xs text-gray-700">{d.decision}</p>

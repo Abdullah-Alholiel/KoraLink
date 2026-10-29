@@ -18,7 +18,7 @@ import {
 } from '@/hooks/useVenueFavorites';
 import { useLocation } from '@/providers/LocationProvider';
 import { formatDistance, formatCount } from '@/lib/format';
-import { isVenueOpenNow } from '@/lib/venue-hours';
+import { isVenueOpenNow, venueTodayHours, formatVenueHoursWindow } from '@/lib/venue-hours';
 import { useAppStore } from '@/store/useAppStore';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
@@ -478,6 +478,15 @@ function ClubsContent() {
                                         </div>
                                         {(() => {
                                             const openNow = isVenueOpenNow(venue);
+                                            // P2-281 M-1: under "Available Now" the card
+                                            // also shows TODAY's pitch hours — players
+                                            // booking late slots need the closing time
+                                            // without a detour to the detail page. Only
+                                            // the open state carries it (closed venues
+                                            // have no slot to book today).
+                                            const todayHours = openNow && activeFilter === 'Available Now'
+                                                ? venueTodayHours(venue)
+                                                : null;
                                             return (
                                                 <span
                                                     role="status"
@@ -487,7 +496,11 @@ function ClubsContent() {
                                                             : 'text-gray-500 bg-gray-100'
                                                     }`}
                                                 >
-                                                    {openNow ? t('clubs.openNow') : t('clubs.closed')}
+                                                    {openNow
+                                                        ? todayHours
+                                                            ? formatVenueHoursWindow(todayHours, locale === 'ar' ? 'ar' : 'en', t)
+                                                            : t('clubs.openNow')
+                                                        : t('clubs.closed')}
                                                 </span>
                                             );
                                         })()}

@@ -23,6 +23,13 @@ vi.mock('@/hooks/useMessages', () => ({
   type: { MatchMessage: {} },
 }));
 
+// P2-281 M-2: ChatSheet's expand affordance navigates via useRouter.
+const routerPushMock = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn(), back: vi.fn() }),
+  usePathname: () => '/en/match/test-match-id',
+}));
+
 // Mock useAppStore (ChatSheet reads current user for message authorship)
 vi.mock('@/store/useAppStore', () => ({
   useAppStore: vi.fn(() => ({ id: 'user-1', full_name: 'Test User' })),
@@ -369,5 +376,22 @@ describe('ChatSheet', () => {
     const dialogTitle = await screen.findByText('Report this message');
     expect(dialogTitle).toBeTruthy();
     expect(screen.getByText('Lobby message')).toBeTruthy();
+  });
+
+  // ── P2-281 M-2: expand affordance ────────────────────────────────────
+  it('CS-11: "Open full thread" closes the sheet and routes to /match/[id]/chat', () => {
+    const onClose = vi.fn();
+    renderWithProviders(<ChatSheet {...baseProps} onClose={onClose} />);
+
+    fireEvent.click(screen.getByTestId('chat-expand'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(routerPushMock).toHaveBeenCalledWith('/en/match/test-match-id/chat');
+  });
+
+  it('CS-12: renders the MatchChat body (shared surface — header + composer)', () => {
+    renderWithProviders(<ChatSheet {...baseProps} />);
+    expect(screen.getByText('Friday Night 5v5')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Type a message...')).toBeTruthy();
   });
 });

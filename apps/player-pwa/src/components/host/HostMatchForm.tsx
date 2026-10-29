@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
+import { ArrowLeft, MapPin, ChevronRight, AlertTriangle, Shield, History } from 'lucide-react';
 import { useCreateMatch } from '@/hooks/useMatches';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useVenue, type VenueApi, type PitchApi } from '@/hooks/useVenues';
@@ -12,11 +12,23 @@ import OfflineBanner from '@/components/layout/OfflineBanner';
 import { pitchCostForDuration, pricePerPlayer } from '@/lib/match-pricing';
 import { riyadhISO, parseHostDateParam } from '@/lib/riyadh-time';
 import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall, computeShortfall } from '@/lib/publish-error';
+import {
+    loadHostDraft,
+    saveHostDraft,
+    clearHostDraft,
+    type HostDraft,
+} from '@/lib/host-draft';
 import { trackEvent } from '@/providers/ObservabilityProvider';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore, selectUser } from '@/store/useAppStore';
 
 import ModeToggle from './ModeToggle';
-import MatchDetailsForm, { type Format, type GenderRule, type MatchTypeValue } from './MatchDetailsForm';
+import MatchDetailsForm, {
+    type Format,
+    type GenderRule,
+    type MatchTypeValue,
+    GENDER_OPTIONS,
+    MATCH_TYPES,
+} from './MatchDetailsForm';
 import VenuePickerSheet from './VenuePickerSheet';
 import PitchSelector from './PitchSelector';
 import SlotPicker from './SlotPicker';
@@ -119,6 +131,58 @@ export default function HostMatchForm() {
     };
     const [date, setDate] = useState(dateFromQuery ?? '');
     const [time, setTime] = useState('');
+
+    // ── P2-281 M-3: local draft recovery ────────────────────────────────
+    // Restore runs in a POST-HYDRATION effect (PR-Agent run-#196 r1): a
+    // render-path restore diverged the server HTML (no draft — localStorage
+    // is client-only) from the client's hydration render (draft restored →
+    // banner + filled fields), logging a hydration error on direct /host
+    // landings. Post-hydration costs one extra render, zero mismatch.
+    // Declared BEFORE the save effect below so the restore's setStates beat
+    // the first snapshot; the armed-ref then suppresses that pre-restore
+    // save pass exactly once. StrictMode double-invoke is idempotent (same
+    // values re-applied). Venue/pitch/slot are deliberately NOT restored
+    // (booking intent goes stale — see host-draft.ts).
+    const [draftRestored, setDraftRestored] = useState<HostDraft | null>(null);
+    // Owner binding (PR-Agent run-#196 r3 MINOR): the draft replays ONLY for
+    // the session that authored it — on a shared device the next user's
+    // /host must never inherit another player's pre-filled match. The store
+    // rehydrates async, so the restore keys on the HYDRATED id (runs once
+    // the id exists; a null id no-ops). Mirrors the offline chat queue's
+    // userId rule (koralink-frontend-patterns §offline-queue).
+    const storeUser = useAppStore(selectUser);
+    const currentUserId = storeUser?.id ?? '';
+    // Latch is PER-USER (PR-Agent run-#196 r4 MINOR): a session-global flag
+    // would never restore a second account's draft on a kept-alive instance.
+    // Each distinct user id gets exactly one restore attempt.
+    const draftRestoreAppliedForRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!currentUserId || draftRestoreAppliedForRef.current === currentUserId) return;
+        draftRestoreAppliedForRef.current = currentUserId;
+        const d = loadHostDraft(currentUserId);
+        if (!d) return;
+        setTitle(d.title);
+        // Component-side re-check against the LIVE option lists: if the lib
+        // mirrors ever drift, an out-of-union value would light up no chip.
+        setMatchType(
+            MATCH_TYPES.includes(d.matchType as MatchTypeValue)
+                ? (d.matchType as MatchTypeValue)
+                : 'Casual',
+        );
+        setGenderRule(
+            GENDER_OPTIONS.includes(d.genderRule as GenderRule)
+                ? (d.genderRule as GenderRule)
+                : 'Men Only',
+        );
+        // Fresh intent wins: a club-calendar ?date= beats the draft's date.
+        if (!dateFromQuery) setDate(d.date);
+        if (d.time) setTime(d.time);
+        if (d.duration !== duration) setDuration(d.duration);
+        if (d.visibility === 'private') setVisibility('private');
+        setDraftRestored(d);
+        // Mount-lifetime restore: re-runs only while the id is still absent.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUserId]);
     // Hosting-terms consent (cycle player-host-responsibility): reset per
     // publish attempt; the publish button stays disabled until accepted and
     // the flag is sent to the API, which independently rejects booking
@@ -127,6 +191,21 @@ export default function HostMatchForm() {
     useEffect(() => {
         if (!showWarning) setHostingConsent(false);
     }, [showWarning]);
+
+    // ── P2-281 M-3: persist the shared text fields on every change ──────
+    // The restore effect (declared above) runs FIRST on mount, so the first
+    // pass here carries the pre-restore closure values — suppressed once,
+    // then armed. After the restore's setStates re-run this effect, storage
+    // converges to the restored state; every later user change re-saves.
+    const draftSaveArmedRef = useRef(false);
+    useEffect(() => {
+        if (!draftSaveArmedRef.current) {
+            draftSaveArmedRef.current = true;
+            return;
+        }
+        if (!currentUserId) return;
+        saveHostDraft({ userId: currentUserId, title, matchType, genderRule, date, time, duration, visibility });
+    }, [currentUserId, title, matchType, genderRule, date, time, duration, visibility]);
 
     // Derive pitch cost from the selected pitch's hourly rate, prorated by
     // duration (mirrors the server's authoritative calculation — the server
@@ -201,6 +280,8 @@ export default function HostMatchForm() {
         createMatch.mutate(payload, {
             onSuccess: (createdMatch) => {
                 setShowWarning(false);
+                // P2-281 M-3: the match exists — the draft's job is done.
+                clearHostDraft();
                 // P2-258: the host just published — arm the contextual push
                 // opt-in offer on the match page they land on.
                 useAppStore.getState().armPushNudge();
@@ -293,6 +374,37 @@ export default function HostMatchForm() {
                 VISIBILITY (public / private) — shared by both modes
             ═══════════════════════════════════ */}
             <VisibilityToggle value={visibility} onChange={setVisibility} />
+
+            {/* ── P2-281 M-3: draft-restored banner ──────────────────── */}
+            {draftRestored && (
+                <div
+                    role="status"
+                    data-testid="host-draft-restored"
+                    className="mx-4 mt-3 rounded-xl bg-brand-green/5 border border-brand-green/20 px-4 py-3 flex items-center gap-3"
+                >
+                    <History className="w-4 h-4 text-brand-green flex-shrink-0" strokeWidth={2} />
+                    <p className="flex-1 text-xs text-gray-600">
+                        {t('host.draftRestored')}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            clearHostDraft();
+                            setDraftRestored(null);
+                            setTitle('');
+                            setMatchType('Casual');
+                            setGenderRule('Men Only');
+                            if (!dateFromQuery) setDate('');
+                            setTime('');
+                            setDuration(60);
+                            setVisibility('public');
+                        }}
+                        className="text-xs font-bold text-brand-red flex-shrink-0 active:scale-95 transition-transform"
+                    >
+                        {t('host.draftDiscard')}
+                    </button>
+                </div>
+            )}
 
             {/* ══════════════════════════════════════
                 SCROLLABLE BODY
