@@ -1,39 +1,38 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #174, 2026-10-29 01:4xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #175, 2026-10-29 12:1xZ)
 
-Snapshot: open PRs = **2** (#178 promote owner-gated + #192 refund-UX in CI) · services API/PWA/Admin all active · staging @ `1ceb508` (run #173 docs) · **P1-52 Neon quota creep continues (56 events/24h, +2 since run #173) — top blocker, owner billing** · shipped run #174: refund-input UX hardening (PR #192).
+Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `d3f83f3` (PR #193 merged + LIVE) · **P1-52 Neon quota 58 events/24h — top blocker, owner billing** · shipped run #175: drizzle snapshot-chain repair (P2-275) + money-truthful topup callback errors (P2-276).
 
 ## 🔴 Owner actions (blocking)
 
-### 1. P1-52 — Neon quota exhausted (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **56 quota events/24h** (00:00Z Oct 29; +2 since run #173 — creep continues below the 60 flag threshold, 21st consecutive watch). The prod push-subscription sweep (1F) is the SAME quota error — the limit silently disables prod stale-push cleanup (10 events/24h, no new since Oct 28 03:07Z).
-- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset window. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
-- **Close-line:** "Neon quota cleared" (then factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
-- **Run #174 (Oct 29 01:0xZ): 56/24h (+2). If ≥60/24h the factory flags it data-loss-adjacent. Owner billing step unchanged and URGENT.**
+### 1. P1-52 — Neon quota (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
+- Sentry: **58 quota events/24h** (re-pull 10:20Z Oct 29; +2 since run #174 — still under the 60 flag-line, 20th consecutive watch run). The prod push-subscription sweep (1F, 11/24h) is the SAME quota error — the limit silently disables prod stale-push cleanup.
+- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
+- **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
-- Gate GREEN. **~337 commits ahead of main** (venue-photo pipeline + dispute refunds + Moyasar polish ride it: #186/#187/#189/#190/#191).
-- **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images).** Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` (from a network that reaches api.neon.tech, or the container route); (2) YOU merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
+- Gate GREEN, ~343 commits ahead of main. **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images).**
+- Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs`; (2) YOU merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
 - **Close-line:** "Merged #178 + Render deployed".
 
 ## 🟡 Owner actions (not blocking the factory)
 
 ### 3. P0-2 sandbox happy-path (post-promote, staging-first)
-- Moyasar wallet top-up is BUILT and LIVE (PR #185, run #169) with the flag OFF. To exercise the real 3DS happy path: flip `WALLET_TOPUP_ENABLED=true` + MOYASAR_*_TEST keys on the API env (staging first), restart, then run one SAR 5.00 top-up with mada test card **4201320111111010** from a real browser (VPS is headless — 3DS frictionless leg can't be done here).
+- Moyasar wallet top-up is BUILT and LIVE (flag OFF). This run also made the failure copy money-truthful: a charged-but-declined payment now says the bank will auto-refund it, instead of claiming "no money was taken" (P2-276). To exercise the real 3DS happy path: flip `WALLET_TOPUP_ENABLED=true` + MOYASAR_*_TEST keys on the API env (staging first), restart, then run one SAR 5.00 top-up with mada test card **4201320111111010** from a real browser.
 - **Close-line:** "Topup flag flipped + test top-up done".
 
-### 4. Resend transactional-email keys (P1-41 ledger row — unlocks the run-#165 email lane)
-- Partner email lane BUILT and LIVE log-only (PR #179 f1385a2); run #168 locale-aware email (PR #183) rides the same transport.
-- **What's needed:** `RESEND_API_KEY` + `MAIL_FROM` on the Render API service env (dashboard.render.com → koralink-api → Environment). Owner-only per DECISIONS.md (email keys).
+### 4. Resend transactional-email keys (P1-41 — unlocks the run-#165 email lane)
+- Partner email lane BUILT and LIVE log-only. **What's needed:** `RESEND_API_KEY` + `MAIL_FROM` on the Render API service env. Owner-only per DECISIONS.md.
 - **Close-line:** "RESEND keys added on Render".
 
 ### 5. Moyasar live-secret regeneration (pre-go-live only)
-- Sandbox keys staged and working; ⚠️ the LIVE secret transited chat once — regenerate in the Moyasar dashboard before go-live. Not needed for sandbox.
+- The LIVE secret transited chat once — regenerate in the Moyasar dashboard before go-live. Not needed for sandbox.
 - **Close-line:** "Moyasar live secret regenerated".
 
-## 🟢 Optional (say one line and the factory does it)
+### 6. NEW (run #175 finding — product call, NOT buildable without you): player wallet withdrawal path
+- Reviewer B P1: players can top up and receive refunds as wallet balance, but there is NO way to withdraw — every credited SAR is locked in-app. For a KSA booking product this is go-live-blocker-class (consumer expectation). Building it needs your product call (payout rail via Moyasar Transfers? bank IBAN payout? minimum balance?) before any Gate cycle.
+- **Close-line:** one line naming the rail (e.g. "withdrawals = Moyasar transfers to card, min SAR 50") and the factory opens the Gate cycle.
 
-### 6. ~~P2-270~~ DONE (run #172) — dangling venue-photo refs cleaned
-- Run #172 PATCHed both rows to `[]` and verified 0/4 venues carry dead refs. No action needed.
+## 🟢 Optional
 
 ### 7. Try the venue-photo pipeline yourself (staging, no factory needed)
-- Admin console → Venues → edit any venue → Add photos (≤6, JPG/PNG/WebP ≤5MB) → Save → open the clubs page / venue detail in the PWA: your photos now render on cards and the hero. (This already works — Abdullah's earlier test uploads are the 2 real photos on staging.)
+- Admin console → Venues → edit any venue → Add photos (≤6, JPG/PNG/WebP ≤5MB) → Save → open the clubs page / venue detail in the PWA.
