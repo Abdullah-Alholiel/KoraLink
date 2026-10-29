@@ -107,11 +107,18 @@ export default function DisputeDetailPage() {
     // inputMode="decimal" (a type="number" field reports sanitized '' for
     // comma decimals / Arabic-Indic digits, which would bypass this gate and
     // silently drop the refund intent again) — so the RAW text always arrives
-    // here and this full-format predicate is the single source of truth:
-    // ASCII digits only, optional dot, ≤2 decimals, 0.01–999999.
-    if (outcome === 'resolved' && refundAmount.trim() !== '') {
-      const valid = /^\d{1,6}(\.\d{1,2})?$/.test(refundAmount.trim());
-      const refundSar = parseFloat(refundAmount);
+    // here. PR-Agent r3 #192: Arabic-Indic digits (٣٧٫٥٠) are NORMALIZED to
+    // ASCII before validating AND the same normalized value feeds the payload —
+    // the console is EN+AR first-class and inputMode=decimal surfaces native
+    // digits on Arabic keyboards.
+    const normalizedRefund = refundAmount
+      .trim()
+      .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/\u066b/g, '.');
+    if (outcome === 'resolved' && normalizedRefund !== '') {
+      const valid = /^\d{1,6}(\.\d{1,2})?$/.test(normalizedRefund);
+      const refundSar = parseFloat(normalizedRefund);
       if (!valid || !Number.isFinite(refundSar) || refundSar < 0.01 || refundSar > 999999) {
         setRefundInvalid(true);
         setSaving(false);
@@ -121,9 +128,10 @@ export default function DisputeDetailPage() {
     setRefundInvalid(false);
     try {
       // P1-29: refund rides the resolve body only when outcome=resolved AND a
-      // positive amount is entered (validated above — the API now 400s a
-      // refund on a rejected outcome, run-#174 contract).
-      const refundSar = outcome === 'resolved' ? parseFloat(refundAmount) : NaN;
+      // positive amount is entered (validated above against the normalized
+      // value — the API now 400s a refund on a rejected outcome, run-#174
+      // contract).
+      const refundSar = outcome === 'resolved' ? parseFloat(normalizedRefund) : NaN;
       await api.post(`/admin/disputes/${id}/resolve`, {
         outcome,
         decision,
