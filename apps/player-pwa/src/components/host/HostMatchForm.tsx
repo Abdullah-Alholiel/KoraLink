@@ -133,17 +133,20 @@ export default function HostMatchForm() {
     const [time, setTime] = useState('');
 
     // ── P2-281 M-3: local draft recovery ────────────────────────────────
-    // Runs during the FIRST render, before any effect — the save-effect
-    // (declared below) can never snapshot the pre-restore defaults.
-    // `loadHostDraft` is null on the server (SSR-safe) and shape/age
-    // validated in the lib. `draftRestored` holds the banner; the ref cap
-    // makes the restore exactly-once even if React StrictMode re-renders.
+    // Restore runs in a POST-HYDRATION effect (PR-Agent run-#196 r1): a
+    // render-path restore diverged the server HTML (no draft — localStorage
+    // is client-only) from the client's hydration render (draft restored →
+    // banner + filled fields), logging a hydration error on direct /host
+    // landings. Post-hydration costs one extra render, zero mismatch.
+    // Declared BEFORE the save effect below so the restore's setStates beat
+    // the first snapshot; the armed-ref then suppresses that pre-restore
+    // save pass exactly once. StrictMode double-invoke is idempotent (same
+    // values re-applied). Venue/pitch/slot are deliberately NOT restored
+    // (booking intent goes stale — see host-draft.ts).
     const [draftRestored, setDraftRestored] = useState<HostDraft | null>(null);
-    const draftRestoreAppliedRef = useRef(false);
-    const draftRef = useRef(loadHostDraft());
-    if (draftRef.current && !draftRestoreAppliedRef.current) {
-        draftRestoreAppliedRef.current = true;
-        const d = draftRef.current;
+    useEffect(() => {
+        const d = loadHostDraft();
+        if (!d) return;
         setTitle(d.title);
         // Component-side re-check against the LIVE option lists: if the lib
         // mirrors ever drift, an out-of-union value would light up no chip.
@@ -163,7 +166,9 @@ export default function HostMatchForm() {
         if (d.duration !== duration) setDuration(d.duration);
         if (d.visibility === 'private') setVisibility('private');
         setDraftRestored(d);
-    }
+        // Mount-only by design: the draft is a mount-time snapshot.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // Hosting-terms consent (cycle player-host-responsibility): reset per
     // publish attempt; the publish button stays disabled until accepted and
     // the flag is sent to the API, which independently rejects booking
@@ -174,12 +179,11 @@ export default function HostMatchForm() {
     }, [showWarning]);
 
     // ── P2-281 M-3: persist the shared text fields on every change ──────
-    // The restore above runs BEFORE this effect's first pass, so the first
-    // snapshot is already the restored state. When a draft WAS restored the
-    // first pass is suppressed (it would only re-write identical values);
-    // the user's next real change re-arms it. Venue/pitch/slot are
-    // deliberately NOT persisted (booking intent goes stale — see host-draft.ts).
-    const draftSaveArmedRef = useRef(!draftRef.current);
+    // The restore effect (declared above) runs FIRST on mount, so the first
+    // pass here carries the pre-restore closure values — suppressed once,
+    // then armed. After the restore's setStates re-run this effect, storage
+    // converges to the restored state; every later user change re-saves.
+    const draftSaveArmedRef = useRef(false);
     useEffect(() => {
         if (!draftSaveArmedRef.current) {
             draftSaveArmedRef.current = true;

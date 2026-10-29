@@ -24,16 +24,20 @@ describe('P2-281 M-3 host draft recovery (structure)', () => {
     expect(FORM).toContain('clearHostDraft');
   });
 
-  it('restore block is declared BEFORE the save effect (ordering pins)', () => {
-    const restoreIdx = FORM.indexOf('draftRestoreAppliedRef.current = true;');
+  it('restore is a POST-HYDRATION effect, declared before the save effect (ordering pins)', () => {
+    const restoreIdx = FORM.indexOf('const d = loadHostDraft()');
     const saveIdx = FORM.indexOf('draftSaveArmedRef');
     expect(restoreIdx).toBeGreaterThan(-1);
     expect(saveIdx).toBeGreaterThan(restoreIdx);
+    // PR-Agent run-#196 r1: restore must NOT run in the render path —
+    // a render-path setState diverges server HTML from hydration render
+    // (the /host route is server-rendered on demand, `ƒ (Dynamic)`).
+    expect(FORM).not.toContain('const draftRef = useRef(loadHostDraft())');
   });
 
-  it('restore is exactly-once (ref cap) and fresh ?date= beats the draft', () => {
-    expect(FORM).toContain('if (draftRef.current && !draftRestoreAppliedRef.current)');
+  it('restore honors fresh ?date= intent and is mount-only', () => {
     expect(FORM).toContain('if (!dateFromQuery) setDate(d.date);');
+    expect(FORM).toMatch(/eslint-disable-next-line react-hooks\/exhaustive-deps\n    \}, \[\]\);/);
   });
 
   it('save-effect persists ALL shared fields', () => {
