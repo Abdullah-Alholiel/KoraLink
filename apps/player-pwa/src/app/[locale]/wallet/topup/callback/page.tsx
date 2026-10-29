@@ -58,7 +58,10 @@ function CallbackInner() {
         hasIntentId: Boolean(intentId),
       });
       setPhase('failed');
-      setFailedKey('wallet.topup.notPaid');
+      // PR-Agent r1: missing context = charge state UNKNOWABLE (a param-stripped
+      // redirect can follow a successful charge) — the retry/auto-refund copy is
+      // the truthful choice, never "no money was taken".
+      setFailedKey('wallet.topup.callbackRetry');
       trackEvent('topup_callback_result', { ok: false, reason: 'missing-context' });
       return;
     }

@@ -19,8 +19,10 @@
 const VERIFY_CODE_KEYS: Array<{ prefix: string; key: string }> = [
   // Charged-but-declined-by-KoraLink: the money LEFT the player's account —
   // never say "no money was taken" (bank auto-refund applies instead).
-  { prefix: 'amount_mismatch', key: 'wallet.topup.callbackAmountMismatch' },
-  { prefix: 'currency_mismatch', key: 'wallet.topup.callbackAmountMismatch' },
+  { prefix: 'amount_mismatch', key: 'wallet.topup.callbackChargedDeclined' },
+  // PR-Agent r1: the shared charged-declined copy makes NO claim about the
+  // amount (a currency_mismatch charge may match the amount exactly).
+  { prefix: 'currency_mismatch', key: 'wallet.topup.callbackChargedDeclined' },
   // Not charged / not ours: the safe generic "no money was taken" copy holds.
   { prefix: 'payment_intent_mismatch', key: 'wallet.topup.notPaid' },
   { prefix: 'payment_not_paid', key: 'wallet.topup.notPaid' },

@@ -15,7 +15,7 @@ describe('topupCallbackMessageKey — P2-276 (run #175)', () => {
           'amount_mismatch: payment 5000 halalas != intent 2000 halalas — no money was credited',
         ),
       ),
-    ).toBe('wallet.topup.callbackAmountMismatch');
+    ).toBe('wallet.topup.callbackChargedDeclined');
   });
 
   it('currency_mismatch maps to the charged copy too', () => {
@@ -23,7 +23,7 @@ describe('topupCallbackMessageKey — P2-276 (run #175)', () => {
       topupCallbackMessageKey(
         errWithMessage('currency_mismatch: payment currency is not SAR'),
       ),
-    ).toBe('wallet.topup.callbackAmountMismatch');
+    ).toBe('wallet.topup.callbackChargedDeclined');
   });
 
   it('payment_not_paid maps to the safe not-charged copy', () => {
