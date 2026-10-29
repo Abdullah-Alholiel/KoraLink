@@ -11,7 +11,7 @@
  */
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, sql, desc } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import * as schema from '../../database/schema';
@@ -54,6 +54,17 @@ export interface VerifyTopupResult {
   balance: string;
   paymentId: string;
   amountSar: number;
+}
+
+/** P2-279 (run #176): wire shape for the newest top-up attempt read. */
+export interface LatestTopupIntent {
+  id: string;
+  /** Exact SAR amount pinned at intent create (halalas / 100). */
+  amountSar: number;
+  /** 'pending' = unconfirmed (verify never ran or failed); 'credited' = landed. */
+  status: 'pending' | 'credited';
+  /** ISO-8601 wire timestamp. */
+  createdAt: string;
 }
 
 const SAR_TO_HALALAS = 100;
@@ -102,6 +113,34 @@ export class WalletTopupService {
         : null,
       minAmount: MIN_TOPUP_SAR,
       maxAmount: MAX_TOPUP_SAR,
+    };
+  }
+
+  /**
+   * P2-279 (run #176): GET /wallet/topup/latest — the newest top-up attempt
+   * for the caller. A failed/unconfirmed 3DS attempt leaves the row PENDING
+   * forever (there is no 'failed' writer), so this read is the only
+   * player-visible trace of an attempt that never landed. Money-truth: the
+   * endpoint REPORTS state, it never interprets charge/refund outcomes.
+   * Reads user_id + created_at DESC LIMIT 1 — covered by
+   * wallet_topup_intents_user_created_idx (0056).
+   */
+  async getLatestIntent(userId: string): Promise<{ intent: LatestTopupIntent | null }> {
+    const [row] = await this.db
+      .select()
+      .from(wallet_topup_intents)
+      .where(eq(wallet_topup_intents.user_id, userId))
+      .orderBy(desc(wallet_topup_intents.created_at))
+      .limit(1);
+    if (!row) return { intent: null };
+    const intent = row as TopupIntentRow;
+    return {
+      intent: {
+        id: intent.id,
+        amountSar: intent.amount_halalas / SAR_TO_HALALAS,
+        status: intent.status === 'credited' ? 'credited' : 'pending',
+        createdAt: intent.created_at.toISOString(),
+      },
     };
   }
 
