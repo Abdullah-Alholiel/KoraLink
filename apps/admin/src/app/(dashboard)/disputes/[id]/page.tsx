@@ -63,6 +63,10 @@ export default function DisputeDetailPage() {
   const [internalNote, setInternalNote] = useState('');
   // P1-29 (run #173): optional wallet refund credited on resolve (SAR).
   const [refundAmount, setRefundAmount] = useState('');
+  // P2-273 (run #174): inline gate — a non-empty but unparseable/≤0 refund
+  // entry blocks submit instead of being silently dropped (Reviewer A MINOR 2:
+  // the admin must never believe a refund was issued when it was not).
+  const [refundInvalid, setRefundInvalid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -96,12 +100,38 @@ export default function DisputeDetailPage() {
   async function resolve() {
     setSaving(true);
     setSaveError(null);
+    // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
+    // (min 0.01, max 999999, ≤2dp — PR-Agent r1 #192) so EVERY invalid entry
+    // gets the localized inline error instead of an untranslated English 400
+    // via saveError. PR-Agent r2 #192: the input is type="text" +
+    // inputMode="decimal" (a type="number" field reports sanitized '' for
+    // comma decimals / Arabic-Indic digits, which would bypass this gate and
+    // silently drop the refund intent again) — so the RAW text always arrives
+    // here. PR-Agent r3 #192: Arabic-Indic digits (٣٧٫٥٠) are NORMALIZED to
+    // ASCII before validating AND the same normalized value feeds the payload —
+    // the console is EN+AR first-class and inputMode=decimal surfaces native
+    // digits on Arabic keyboards.
+    const normalizedRefund = refundAmount
+      .trim()
+      .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/\u066b/g, '.');
+    if (outcome === 'resolved' && normalizedRefund !== '') {
+      const valid = /^\d{1,6}(\.\d{1,2})?$/.test(normalizedRefund);
+      const refundSar = parseFloat(normalizedRefund);
+      if (!valid || !Number.isFinite(refundSar) || refundSar < 0.01 || refundSar > 999999) {
+        setRefundInvalid(true);
+        setSaving(false);
+        return;
+      }
+    }
+    setRefundInvalid(false);
     try {
-      // P1-29: refund rides the resolve body only when outcome=resolved AND
-      // a positive amount is entered — the API silently IGNORES a refund on a
-      // rejected outcome (per the run-#173 contract; validated DTO amount,
-      // never credited), so this is belt-and-braces rather than an error path.
-      const refundSar = outcome === 'resolved' ? parseFloat(refundAmount) : NaN;
+      // P1-29: refund rides the resolve body only when outcome=resolved AND a
+      // positive amount is entered (validated above against the normalized
+      // value — the API now 400s a refund on a rejected outcome, run-#174
+      // contract).
+      const refundSar = outcome === 'resolved' ? parseFloat(normalizedRefund) : NaN;
       await api.post(`/admin/disputes/${id}/resolve`, {
         outcome,
         decision,
@@ -445,14 +475,22 @@ export default function DisputeDetailPage() {
                     </label>
                     <input
                       id="refund-amount"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      aria-invalid={refundInvalid}
                       value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
+                      onChange={(e) => {
+                        setRefundAmount(e.target.value);
+                        if (refundInvalid) setRefundInvalid(false);
+                      }}
                       placeholder={t('refundAmountHint')}
                       className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                     />
+                    {refundInvalid && (
+                      <p role="status" className="mt-1 text-sm text-brand-red">
+                        {t('refundInvalid')}
+                      </p>
+                    )}
                   </div>
                 )}
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
