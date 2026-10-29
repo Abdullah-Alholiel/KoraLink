@@ -7,6 +7,8 @@
 
 export const RIYADH_TIME_ZONE = 'Asia/Riyadh';
 
+import { resolveDateLocale, type AppLocale } from '@/lib/format';
+
 export interface VenueHours {
   open_hour?: number;
   close_hour?: number;
@@ -73,4 +75,41 @@ export function isVenueOpenNow(v: VenueHours, now: Date = new Date()): boolean {
   const openHour = v.open_hour ?? 0;
   const closeHour = v.close_hour ?? 24;
   return openHour <= hour && hour < closeHour;
+}
+
+/**
+ * P2-281 M-1: the venue's hours for TODAY (Riyadh), or null when the venue
+ * is closed today. Shares isVenueOpenNow's closed-day source of truth so
+ * the card hint can never disagree with the badge.
+ */
+export function venueTodayHours(
+  v: VenueHours,
+  now: Date = new Date(),
+): { openHour: number; closeHour: number } | null {
+  const closed = v[`closed_day_${riyadhDayOfWeek(now)}` as keyof VenueHours] === true;
+  if (closed) return null;
+  return { openHour: v.open_hour ?? 0, closeHour: v.close_hour ?? 24 };
+}
+
+/** "7" → "7 AM" (en) / "٧ ص" (ar). Hour-only — venues open on whole hours. */
+export function formatHourLabel(hour: number, locale: AppLocale): string {
+  const h = ((hour % 24) + 24) % 24;
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  if (locale === 'ar') {
+    const period = h < 12 ? 'ص' : 'م';
+    return `${new Intl.NumberFormat(resolveDateLocale(locale)).format(h12)} ${period}`;
+  }
+  return `${h12} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** Today's window as a localized label: "Open 7 AM – 12 AM" / "مفتوح ٧ ص – ١٢ م". */
+export function formatVenueHoursWindow(
+  hours: { openHour: number; closeHour: number },
+  locale: AppLocale,
+  t: (key: string, values?: Record<string, string>) => string,
+): string {
+  return t('clubs.hoursWindow', {
+    open: formatHourLabel(hours.openHour, locale),
+    close: formatHourLabel(hours.closeHour, locale),
+  });
 }

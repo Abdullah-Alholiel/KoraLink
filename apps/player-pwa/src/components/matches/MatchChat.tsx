@@ -1,0 +1,572 @@
+'use client';
+
+import { useState, useRef, useEffect, Fragment } from 'react';
+import { Loader2, MessageSquare, AlertTriangle, AlertCircle, X, Send, Wifi, WifiOff, MoreVertical, Clock, ArrowLeft, Maximize2 } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
+import { useMatchChat } from '@/hooks/useMessages';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import type { MatchMessage } from '@/hooks/useMessages';
+import { useAppStore, selectUser } from '@/store/useAppStore';
+import { uuid } from '@/lib/uuid';
+import { resolveDateLocale, formatCount, type AppLocale } from '@/lib/format';
+import { useNow } from '@/hooks/useNow';
+import { classifyError, errorKey, type ErrorKind } from '@/lib/error-classify';
+import ReportSheet from '@/components/matches/ReportSheet';
+
+/**
+ * P2-281 M-2 — the shared match-lobby chat surface.
+ *
+ * ONE body, TWO destinations:
+ *  - `variant="sheet"` → ChatSheet's BottomSheet (quick peek from match page).
+ *  - `variant="page"`  → /match/[id]/chat full-thread route (long threads).
+ *
+ * The sheet variant renders the "Open full thread" affordance in its header;
+ * the page variant swaps the X for a back arrow and drops the BottomSheet
+ * min-height in favor of the standard flex column (min-h-0 scroller).
+ * Logic (hook wiring, grouping, optimistic send, offline queue, reports) is
+ * byte-identical across variants — extracted verbatim from ChatSheet so the
+ * two surfaces cannot drift.
+ */
+
+interface MatchChatProps {
+    matchId: string;
+    matchTitle: string;
+    variant: 'sheet' | 'page';
+    /** Sheet: closes the BottomSheet. Page: navigates back. */
+    onRequestClose: () => void;
+    /** Sheet-only: expands to the full-thread route (page variant ignores it). */
+    onExpand?: () => void;
+}
+
+// ── Date grouping helpers ──────────────────────────
+
+function getDateGroup(dateStr: string, now: Date): string {
+  const d = new Date(dateStr);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((msgDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === -1) return 'yesterday';
+  if (diffDays < -1) return 'older';
+  return 'today';
+}
+
+function groupMessages(
+  messages: MatchMessage[],
+  t: (key: string) => string,
+  locale: string,
+  nowMs: number,
+) {
+  const groups: { label: string; messages: MatchMessage[] }[] = [];
+  // Hydration-safe clock (run #50, P2-59): `now` passed in from the
+  // component's useNow() — null pre-mount buckets everything "older"
+  // identically on both sides. Previously a render-path new Date().
+  const now = new Date(nowMs);
+
+  for (const msg of messages) {
+    const group = getDateGroup(msg.created_at, now);
+    const label =
+      group === 'today' ? t('messages.today') :
+      group === 'yesterday' ? t('messages.yesterday') :
+      new Date(msg.created_at).toLocaleDateString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), { month: 'short', day: 'numeric' });
+
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.messages.push(msg);
+    } else {
+      groups.push({ label, messages: [msg] });
+    }
+  }
+  return groups;
+}
+
+// ── Component ──────────────────────────────────────
+
+export default function MatchChat({
+    matchId,
+    matchTitle,
+    variant,
+    onRequestClose,
+    onExpand,
+}: MatchChatProps) {
+  const t = useTranslations();
+  const locale = useLocale() as AppLocale;
+  const user = useAppStore(selectUser);
+  const currentUserId = user?.id;
+
+  const {
+    messages,
+    isLoading,
+    error,
+    refetch,
+    isConnected,
+    sendMessage,
+    retryMessage,
+    hasMore,
+    isLoadingOlder,
+    loadOlder,
+    typingUserIds,
+    emitTyping,
+    // P2-196 (run #132): reconnect-backfill marker — divider above the first
+    // message that arrived while the socket was down; tappable to dismiss.
+    missedMarker,
+    dismissMissedMarker,
+  } = useMatchChat(
+    matchId,
+    (err) => setChatNoticeKind(classifyError(err)),
+    // Fires when a send is parked offline — show the "will send" toast.
+    // Closure over setQueuedToast is safe: it runs on a later event, after
+    // the component body has fully executed (no TDZ at call time).
+    {
+      onQueued: () => {
+        setQueuedToast(true);
+      },
+    },
+  );
+  // P2-172: offline awareness for the queued-send affordance (banner +
+  // queued marker toast). SSR-safe: defaults true until the client effect.
+  const isOnline = useOnlineStatus();
+
+  const [input, setInput] = useState('');
+  // P2-111 (run #81): why the last send failed — the classified ErrorKind,
+  // rendered via errors.* (what happened + why + what to do next). A
+  // transient failure clears when the user types again; a chat-closed
+  // failure is permanent for this match, so the notice stays and the
+  // composer locks (an ended match does not reopen).
+  const [chatNoticeKind, setChatNoticeKind] = useState<ErrorKind | null>(null);
+  const chatClosedLocked = chatNoticeKind === 'chatClosed';
+  // P1-31 parity (run #53): report an abusive RECEIVED lobby message — same
+  // pattern as the DM conversation surface (messages/[id]/page.tsx).
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  // P2-172: fires once per offline send ("will send when back online").
+  const queuedToastShownRef = useRef(false);
+  const [queuedToast, setQueuedToast] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // P2-99: resolve a typer's display name from the merged message view;
+  // falls back to a localized "player" word when the user hasn't spoken yet
+  // (or their profile name is null).
+  const resolveTypingName = (userId: string): string =>
+    messages.find((msg) => msg.user_id === userId)?.user.full_name ||
+    t('chatSheet.typingPlayer');
+
+  // ── Auto-scroll to bottom on NEW messages ──
+  // P1-3 (run #65): keyed on the LAST message id, not the list length —
+  // prepending an older page (load-older) must NOT yank the user to the
+  // bottom; only a genuinely new latest message should scroll.
+  // (P2-87 rider, run #67: extracted the expression to a variable so the
+  // dep array is statically checkable — clears the --max-warnings 0 CI rule.)
+  const lastMessageId =
+    messages.length > 0 ? messages[messages.length - 1].id : '';
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [lastMessageId]);
+
+  // ── Focus input on mount ──
+  // Both variants mount only when visible (sheet children mount at open;
+  // the page route mounts on navigation), so a mount effect covers both.
+  useEffect(() => {
+    const delay = variant === 'sheet' ? 300 : 100;
+    const timer = setTimeout(() => inputRef.current?.focus(), delay);
+    return () => clearTimeout(timer);
+  }, [variant]);
+
+  // ── P2-172: "will send when back online" toast after an offline send ──
+  // Shows once per offline send; auto-dismisses. Declared BEFORE the early
+  // return (hook order stays stable regardless of isOpen).
+  useEffect(() => {
+    if (!queuedToast) return;
+    if (queuedToastShownRef.current) {
+      setQueuedToast(false);
+      return;
+    }
+    queuedToastShownRef.current = true;
+    const timer = setTimeout(() => {
+      setQueuedToast(false);
+      queuedToastShownRef.current = false;
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [queuedToast]);
+
+  // Hydration-safe wall clock (P2-59, run #50): null pre-mount → 0 buckets
+  // all messages "older" on the first render, identical on both sides; the
+  // device clock takes over from the first effect onward.
+  const nowMs = useNow() ?? 0;
+
+  const grouped = groupMessages(messages, t, locale, nowMs);
+
+  const handleSend = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    sendMessage.mutate({ content: trimmed, clientMessageId: uuid() });
+    setInput('');
+  };
+
+  const handleRetry = (msg: MatchMessage) => {
+    if (msg.client_message_id) {
+      retryMessage(msg.client_message_id, msg.content);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const isSheet = variant === 'sheet';
+
+  return (
+    <>
+        {/* Header — sheet: X + expand affordance; page: back arrow */}
+        <div
+            className={`flex items-center justify-between px-5 pb-3 flex-shrink-0 border-b border-gray-50 bg-white ${
+                isSheet ? '' : 'pt-[var(--top-safe-inset)]'
+            }`}
+        >
+            {!isSheet && (
+                <button
+                    onClick={onRequestClose}
+                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 flex-shrink-0 active:scale-95 transition-transform"
+                    aria-label={t('common.back')}
+                >
+                    <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
+                </button>
+            )}
+            <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold text-brand-black truncate">
+                    {matchTitle}
+                </h2>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                    {isConnected ? (
+                        <>
+                            <Wifi className="w-3 h-3 text-brand-green" strokeWidth={2.5} />
+                            <span className="text-[10px] text-brand-green font-medium">{t('messages.online')}</span>
+                        </>
+                    ) : (
+                        <>
+                            <WifiOff className="w-3 h-3 text-gray-400" strokeWidth={2} />
+                            <span className="text-[10px] text-gray-400">{t('messages.offline')}</span>
+                        </>
+                    )}
+                </div>
+            </div>
+            {/* P2-281 M-2: expand affordance — long threads get the full-page
+                route instead of being trapped in the sheet. Sheet-only. */}
+            {isSheet && onExpand && (
+                <button
+                    type="button"
+                    onClick={onExpand}
+                    data-testid="chat-expand"
+                    className="flex items-center gap-1 text-xs font-bold text-brand-green bg-brand-green/10 rounded-full px-3 py-1.5 flex-shrink-0 active:scale-95 transition-transform ml-2"
+                >
+                    <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
+                    <span className="whitespace-nowrap">{t('chatSheet.openFullThread')}</span>
+                </button>
+            )}
+            {isSheet && (
+                <button
+                    onClick={onRequestClose}
+                    className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
+                    aria-label={t('common.close')}
+                >
+                    <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
+                </button>
+            )}
+        </div>
+
+        {/* Messages area — sheet keeps its BottomSheet min-height; the page
+            variant is the flex-column scroller (single-scroller standard). */}
+        <div className={`flex-1 overflow-y-auto scroll-container bg-gray-50/50 ${isSheet ? 'min-h-[200px]' : 'min-h-0'}`}>
+          {/* P1-3 (run #65): load-older affordance — scrollback past the
+              newest-50 window. Hidden while the initial history loads. */}
+          {!isLoading && hasMore && (
+            <div className="flex justify-center py-3">
+              <button
+                onClick={() => loadOlder()}
+                disabled={isLoadingOlder}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-green active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {isLoadingOlder && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} />
+                )}
+                {t('chatSheet.loadOlder')}
+              </button>
+            </div>
+          )}
+          {/* Loading */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-brand-green animate-spin" strokeWidth={2} />
+            </div>
+          )}
+
+          {/* Error */}
+          {error && !isLoading && (
+            <div className="flex flex-col items-center justify-center py-12 px-6">
+              <div className="w-14 h-14 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
+                <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
+              </div>
+              <p className="text-sm text-gray-400 text-center mb-4">
+                {t(errorKey(classifyError(error)))}
+              </p>
+              <button
+                onClick={() => refetch()}
+                className="bg-brand-green text-white px-5 py-2 rounded-full text-sm font-bold active:scale-95 transition-transform"
+              >
+                {t('common.retry')}
+              </button>
+            </div>
+          )}
+
+          {/* Empty */}
+          {!isLoading && !error && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 px-6">
+              <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mb-4">
+                <MessageSquare className="w-8 h-8 text-brand-green/50" strokeWidth={1.5} />
+              </div>
+              <h3 className="text-base font-bold text-brand-black mb-1">
+                {t('chatSheet.emptyTitle')}
+              </h3>
+              <p className="text-sm text-gray-400 text-center max-w-[240px]">
+                {t('chatSheet.emptyDescription')}
+              </p>
+            </div>
+          )}
+
+          {/* Populated — grouped messages */}
+          {!isLoading && !error && grouped.map((group) => (
+            <div key={group.label}>
+              {/* Date divider */}
+              <div className="flex items-center justify-center py-4">
+                <div className="bg-gray-200/60 rounded-full px-3 py-0.5">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                    {group.label}
+                  </span>
+                </div>
+              </div>
+
+              {group.messages.map((msg) => {
+                const isMine = msg.user_id === currentUserId;
+                const avatarInitial = (msg.user?.full_name ?? 'P').charAt(0).toUpperCase();
+                const timeStr = new Date(msg.created_at).toLocaleTimeString(resolveDateLocale(locale === 'ar' ? 'ar' : 'en'), {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                });
+
+                return (
+                  <Fragment key={msg.id}>
+                    {/* P2-196 (run #132): "new while you were away" divider —
+                        rendered once, above the first message that arrived
+                        during a socket gap. Tappable to dismiss. */}
+                    {missedMarker?.firstId === msg.id && (
+                      <button
+                        type="button"
+                        onClick={dismissMissedMarker}
+                        aria-label={t('messages.newWhileAway', {
+                          count: formatCount(missedMarker.count, locale),
+                        })}
+                        className="w-full flex items-center gap-2 px-4 py-2"
+                      >
+                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                        <span className="text-[10px] font-semibold text-brand-green bg-brand-green/10 rounded-full px-3 py-0.5 whitespace-nowrap">
+                          {t('messages.newWhileAway', {
+                            count: formatCount(missedMarker.count, locale),
+                          })}
+                        </span>
+                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                      </button>
+                    )}
+                    <div
+                    className={`flex items-end gap-2 px-4 py-1.5 ${
+                      isMine ? 'flex-row-reverse' : 'flex-row'
+                    }`}
+                  >
+                    {/* Avatar (hidden for own messages) */}
+                    {!isMine && (
+                      <div className="w-7 h-7 rounded-full bg-brand-green/20 flex items-center justify-center flex-shrink-0 mb-0.5">
+                        <span className="text-[10px] font-bold text-brand-green">
+                          {avatarInitial}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Bubble */}
+                    <div
+                      className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl ${
+                        isMine
+                          ? 'bg-brand-green text-white rounded-br-md'
+                          : 'bg-white shadow-sm border border-gray-100 rounded-bl-md'
+                      }`}
+                    >
+                      {/* Sender name (in group chats, show for others) */}
+                      {!isMine && (
+                        <p className="text-[10px] font-semibold text-brand-green mb-0.5">
+                          {msg.user?.full_name ?? msg.user?.handle ?? 'Player'}
+                        </p>
+                      )}
+                      <p className={`text-sm leading-relaxed ${isMine ? 'text-white' : 'text-gray-700'}`}>
+                        {msg.content}
+                      </p>
+                    </div>
+
+                    {/* Time + delivery status */}
+                    <span className={`flex items-center gap-1 flex-shrink-0 mb-0.5 ${isMine ? 'text-end' : ''}`}>
+                      <span className="text-[9px] text-gray-400">{timeStr}</span>
+                      {isMine && msg.status === 'sending' && (
+                        <Loader2 className="w-3 h-3 animate-spin text-gray-400" strokeWidth={2} />
+                      )}
+                      {isMine && msg.status === 'queued' && (
+                        // P2-172: parked offline — will deliver on reconnect.
+                        <span
+                          className="flex items-center gap-0.5 text-gray-400"
+                          title={t('messages.queuedOffline')}
+                          aria-label={t('messages.queuedOffline')}
+                        >
+                          <Clock className="w-3 h-3" strokeWidth={2} />
+                        </span>
+                      )}
+                      {isMine && msg.status === 'failed' && (
+                        <button
+                          onClick={() => handleRetry(msg)}
+                          className="flex items-center justify-center"
+                          aria-label={`${t('messages.failedToSend')} — ${t('messages.tapToRetry')}`}
+                          title={t('messages.tapToRetry')}
+                        >
+                          <AlertCircle className="w-4 h-4 text-brand-red" strokeWidth={2} />
+                        </button>
+                      )}
+                      {!isMine && (
+                        // P1-31 parity: report an abusive received lobby message.
+                        <button
+                          onClick={() => setReportTargetId(msg.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all"
+                          aria-label={t('report.chatMessage')}
+                        >
+                          <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  </Fragment>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* P2-99: typing indicator strip (above the input row) */}
+        {typingUserIds.size > 0 && (
+          <div
+            role="status"
+            className="px-4 pt-2 pb-1 text-xs text-gray-500 flex-shrink-0 bg-white"
+          >
+            {typingUserIds.size === 1
+              ? t('chatSheet.typingOne', {
+                  name: resolveTypingName([...typingUserIds][0]),
+                })
+              : typingUserIds.size === 2
+                ? t('chatSheet.typingTwo', {
+                    name1: resolveTypingName([...typingUserIds][0]),
+                    name2: resolveTypingName([...typingUserIds][1]),
+                  })
+                : t('chatSheet.typingMany')}
+          </div>
+        )}
+
+        {/* P2-111 (run #81): send-failure notice — what happened + what to do
+            next, localized from the API's stable code. role=status so assistive
+            tech announces it without stealing focus. */}
+        {chatNoticeKind && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-brand-red/10 text-brand-red flex-shrink-0"
+          >
+            {t(errorKey(chatNoticeKind))}
+          </div>
+        )}
+
+        {/* P2-172: offline notice above the composer — queued sends deliver
+            automatically on reconnect (read-only affordance, role=status). */}
+        {!isOnline && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-gray-100 text-gray-600 flex items-center gap-1.5 flex-shrink-0"
+          >
+            <WifiOff className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+            <span>{t('messages.offlineQueuedBanner')}</span>
+          </div>
+        )}
+
+        {/* P2-172: queued-send confirmation toast (info, auto-dismisses). */}
+        {queuedToast && (
+          <div
+            role="status"
+            className="px-4 py-2 text-xs bg-brand-green/10 text-brand-green flex items-center gap-1.5 flex-shrink-0"
+          >
+            <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+            <span>{t('messages.queuedOffline')}</span>
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="flex items-center gap-2 px-4 py-3 pb-safe border-t border-gray-100 flex-shrink-0 bg-white">
+          <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2.5 border border-gray-100 focus-within:border-brand-green focus-within:bg-white transition-colors">
+            <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.5} />
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              disabled={chatClosedLocked}
+              onChange={(e) => {
+                setInput(e.target.value);
+                // P2-111: a new attempt clears a transient failure notice
+                // (a chat-closed notice is permanent — see chatClosedLocked).
+                setChatNoticeKind((prev) => (prev === 'chatClosed' ? prev : null));
+                // P2-99: typing ping — throttled to 1 emit / 3s inside the hook.
+                if (e.target.value) emitTyping();
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={t('chatSheet.sendPlaceholder')}
+              maxLength={500}
+              className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+            />
+            {input.length > 0 && (
+              <span className="text-[10px] text-gray-400 flex-shrink-0">{input.length}/500</span>
+            )}
+          </div>
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || chatClosedLocked}
+            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
+              input.trim()
+                ? 'bg-brand-green text-white shadow-[0_4px_12px_rgba(37,65,50,0.3)]'
+                : 'bg-gray-200 text-gray-400'
+            }`}
+            aria-label={t('messages.send')}
+          >
+            <Send className="w-4 h-4" strokeWidth={1.5} />
+          </button>
+        </div>
+
+        {/* P1-31 parity: report sheet for a received lobby message. */}
+        <ReportSheet
+          open={reportTargetId !== null}
+          onClose={() => setReportTargetId(null)}
+          subjectType="message"
+          subjectId={reportTargetId ?? ''}
+          subjectLabel={t('report.chatMessage')}
+          title={t('report.messageSheetTitle')}
+        />
+    </>
+  );
+}
