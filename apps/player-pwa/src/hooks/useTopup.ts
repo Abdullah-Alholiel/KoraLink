@@ -51,12 +51,19 @@ export function useTopupConfig() {
 }
 
 export function useCreateTopupIntent() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { amountSar: number; idempotencyKey: string }) =>
       fetcher<TopupIntentResponse>('/wallet/topup/intent', {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    // P2-279 (PR-Agent r1 on PR #195): a NEW intent becomes the newest
+    // attempt — refetch so the wallet's pending card shows THIS attempt's
+    // amount, not the previous one's (stale until refocus without this).
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'topup-latest'] });
+    },
   });
 }
 
