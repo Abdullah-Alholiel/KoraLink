@@ -662,6 +662,8 @@
     "thPayoutRef": "مرجع الدفع",
     "thRequestedBy": "طُلب من",
     "requestedByAuto": "مُنشأ تلقائياً",
+    "thPaidAt": "تاريخ الدفع",
+    "thPaidBy": "بواسطة الدفع",
     "auditTitle": "سجل التدقيق",
     "loadingAudit": "جارٍ تحميل سجل التدقيق…",
     "thTime": "الوقت",

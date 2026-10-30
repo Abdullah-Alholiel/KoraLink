@@ -188,6 +188,19 @@ export default function SettlementsPage() {
             value: (s: Settlement) => `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
           },
           { key: 'payoutRef', header: t('thPayoutRef'), value: (s: Settlement) => s.payout_ref ?? '' },
+          // P2-286: finance reconciliation columns (run #179) — when it was
+          // paid + payout-request provenance (same rule as the drawer: a
+          // partner-requested row shows the name or short id, never a
+          // misleading "Auto-generated"; auto rows say exactly that).
+          { key: 'paidAt', header: t('thPaidAt'), value: (s: Settlement) => csvDate(s.paid_at) },
+          {
+            key: 'paidBy',
+            header: t('thPaidBy'),
+            value: (s: Settlement) =>
+              s.requested_by
+                ? (s.requested_by_name ?? `#${s.requested_by.slice(0, 8).toUpperCase()}`)
+                : t('requestedByAuto'),
+          },
           { key: 'id', header: t('thId') },
         ],
         rows: allRows,

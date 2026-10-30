@@ -662,6 +662,8 @@
     "thPayoutRef": "Payout ref",
     "thRequestedBy": "Requested by",
     "requestedByAuto": "Auto-generated",
+    "thPaidAt": "Paid at",
+    "thPaidBy": "Paid by",
     "auditTitle": "Audit Log",
     "loadingAudit": "Loading audit log…",
     "thTime": "Time",
