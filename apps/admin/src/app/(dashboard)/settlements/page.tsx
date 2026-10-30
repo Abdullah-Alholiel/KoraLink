@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Loader2, Send } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
@@ -39,10 +39,19 @@ export default function SettlementsPage() {
   // spinner reset, and the operator got zero feedback. Failures now map to
   // localized buckets by HTTP status (BlackoutPanel pattern); raw backend
   // text is never rendered.
-  const [payFailure, setPayFailure] = useState<'auth' | 'access' | 'server' | 'network' | null>(null);
-  const [generateFailure, setGenerateFailure] = useState<'auth' | 'access' | 'server' | 'network' | null>(null);
+  const [payFailure, setPayFailure] = useState<MoneyActionFailure | null>(null);
+  const [generateFailure, setGenerateFailure] = useState<MoneyActionFailure | null>(null);
   const [paySeq, setPaySeq] = useState(0);
   const [generateSeq, setGenerateSeq] = useState(0);
+
+  // P2-267 (PR-Agent r1): failure alerts are scoped to the drawer session —
+  // a failed pay on one settlement must never render inside another
+  // settlement's drawer. Clear both failure states whenever the selection
+  // changes or the drawer closes.
+  useEffect(() => {
+    setPayFailure(null);
+    setGenerateFailure(null);
+  }, [selected?.id, selected === null]);
 
   const sortParts = sort ? sort.split(':') : null;
   const sortField = sortParts?.[0] ?? '';
@@ -54,6 +63,20 @@ export default function SettlementsPage() {
   if (sortDir) qs.set('dir', sortDir);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<SettlementsResponse>(`/admin/settlements?${qs.toString()}`);
+
+  // P2-267 (PR-Agent r1): shared ApiError→bucket mapping for both money
+  // actions. 409 = another operator already acted (conflict), NOT a network
+  // problem — it gets its own bucket so the copy doesn't invite pointless
+  // retries.
+  type MoneyActionFailure = 'auth' | 'access' | 'conflict' | 'server' | 'network';
+  function moneyActionFailure(err: unknown): MoneyActionFailure {
+    const status = err instanceof ApiError ? err.status : 0;
+    if (status === 401) return 'auth';
+    if (status === 403 || status === 404) return 'access';
+    if (status === 409) return 'conflict';
+    if (status === 429 || status >= 500) return 'server';
+    return 'network';
+  }
 
   async function pay(id: string) {
     setBusyId(id);
@@ -67,13 +90,7 @@ export default function SettlementsPage() {
       // P2-267: surface the failure — never an unhandled rejection. Sentry
       // sees it through the api-client hook; PostHog gets the operator event.
       trackEvent('admin_settlement_pay_failed', { page: 'admin.settlements' });
-      const status = err instanceof ApiError ? err.status : 0;
-      setPayFailure(
-        status === 401 ? 'auth'
-          : status === 403 || status === 404 ? 'access'
-            : status === 429 || status >= 500 ? 'server'
-              : 'network',
-      );
+      setPayFailure(moneyActionFailure(err));
       setPaySeq((s) => s + 1);
     } finally {
       setBusyId(null);
@@ -89,13 +106,7 @@ export default function SettlementsPage() {
       trackEvent('admin_settlement_generate_success', { page: 'admin.settlements' });
     } catch (err) {
       trackEvent('admin_settlement_generate_failed', { page: 'admin.settlements' });
-      const status = err instanceof ApiError ? err.status : 0;
-      setGenerateFailure(
-        status === 401 ? 'auth'
-          : status === 403 || status === 404 ? 'access'
-            : status === 429 || status >= 500 ? 'server'
-              : 'network',
-      );
+      setGenerateFailure(moneyActionFailure(err));
       setGenerateSeq((s) => s + 1);
     } finally {
       setGenerating(false);
@@ -238,8 +249,9 @@ export default function SettlementsPage() {
       <p role="alert" key={`gen-${generateSeq}`} className="mx-8 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" style={{ display: generateFailure ? undefined : 'none' }}>
         {generateFailure === 'auth' ? t('generateFailedAuth')
           : generateFailure === 'access' ? t('generateFailedAccess')
-            : generateFailure === 'server' ? t('generateFailedServer')
-              : t('generateFailedNetwork')}
+            : generateFailure === 'conflict' ? t('generateFailedConflict')
+              : generateFailure === 'server' ? t('generateFailedServer')
+                : t('generateFailedNetwork')}
       </p>
 
       {loading ? (
@@ -308,8 +320,9 @@ export default function SettlementsPage() {
                 <p role="alert" key={`pay-${paySeq}`} className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
                   {payFailure === 'auth' ? t('payFailedAuth')
                     : payFailure === 'access' ? t('payFailedAccess')
-                      : payFailure === 'server' ? t('payFailedServer')
-                        : t('payFailedNetwork')}
+                      : payFailure === 'conflict' ? t('payFailedConflict')
+                        : payFailure === 'server' ? t('payFailedServer')
+                          : t('payFailedNetwork')}
                 </p>
               )}
               {busyId === selected.id ? (

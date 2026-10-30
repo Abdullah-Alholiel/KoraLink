@@ -643,6 +643,8 @@
     "typeDebit": "Debit",
     "typeCredit": "Credit",
     "settlementsTitle": "Settlements",
+    "generateFailedConflict": "Could not generate payouts — another admin already generated or changed these settlements. Refresh the list.",
+    "payFailedConflict": "Could not mark as paid — this settlement was already paid or changed by another admin. Refresh the list.",
     "generateFailedAuth": "Could not generate payouts — your session expired. Sign in and try again.",
     "generateFailedAccess": "Could not generate payouts — you do not have access to this action.",
     "generateFailedServer": "Could not generate payouts — the server is busy or failed. Try again in a moment.",
