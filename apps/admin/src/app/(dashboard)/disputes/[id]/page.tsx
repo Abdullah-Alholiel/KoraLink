@@ -40,15 +40,23 @@ const CLOSED = new Set(['resolved', 'rejected']);
 
 // P2-283: ApiError→bucket mapping for the dispute actions (settlements
 // moneyActionFailure pattern); raw backend text is never rendered. Unlike
-// settlements, 400 joins 409 as 'conflict': the service answers a state race
-// ("already been decided", "Only decided disputes can be reopened") with 400,
-// which must not read as a network problem.
-type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'server' | 'network';
+// settlements, 400 needs a message check (PR-Agent r1 #199): the service
+// answers a state race ("already been decided", "Only decided disputes can
+// be reopened") with 400 → 'conflict', while every OTHER 400 is payload
+// validation (e.g. an over-long note) → 'invalid', so the admin gets
+// "check your entries" instead of a refresh loop.
+type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'invalid' | 'server' | 'network';
 function disputeActionFailure(err: unknown): DisputeActionFailure {
-  const status = err instanceof ApiError ? err.status : 0;
+  if (!(err instanceof ApiError)) return 'network';
+  const status = err.status;
   if (status === 401) return 'auth';
   if (status === 403 || status === 404) return 'access';
-  if (status === 400 || status === 409) return 'conflict';
+  if (status === 409) return 'conflict';
+  if (status === 400) {
+    return /already been decided|Only decided disputes can be reopened/.test(err.message)
+      ? 'conflict'
+      : 'invalid';
+  }
   if (status === 429 || status >= 500) return 'server';
   return 'network';
 }
@@ -97,8 +105,9 @@ export default function DisputeDetailPage() {
     return failure === 'auth' ? t('disputeFailedAuth')
       : failure === 'access' ? t('disputeFailedAccess')
         : failure === 'conflict' ? t('disputeFailedConflict')
-          : failure === 'server' ? t('disputeFailedServer')
-            : t('disputeFailedNetwork');
+          : failure === 'invalid' ? t('disputeFailedInvalid')
+            : failure === 'server' ? t('disputeFailedServer')
+              : t('disputeFailedNetwork');
   }
 
   async function sendReply() {
