@@ -57,6 +57,8 @@ function makeDb(overrides: {
   insertIntentReturning?: unknown[];
   txInsertReturning?: unknown[];
   txUpdateUserReturning?: unknown[];
+  /** P2-282: rows returned by the in-tx intent flip (empty = lost the race). */
+  txUpdateIntentReturning?: unknown[];
   insertThrowsUnique?: boolean;
 } = {}) {
   const o = {
@@ -67,6 +69,7 @@ function makeDb(overrides: {
     insertIntentReturning: [{ ...INTENT_ROW }],
     txInsertReturning: [{ amount: '50.00', id: 'tx-1' }],
     txUpdateUserReturning: [{ id: 'user-1', wallet_balance: '150.00' }],
+    txUpdateIntentReturning: [{ id: 'intent-1' }],
     insertThrowsUnique: false,
     ...overrides,
   };
@@ -114,22 +117,33 @@ function makeDb(overrides: {
         where: () => ({}),
       }),
     }),
-    transaction: jest.fn(async (fn: (tx: never) => unknown) =>
-      fn({
+    /** Ledger rows inserted by tx callbacks that COMMITTED (rolled-back ones are dropped). */
+    committedLedgerInserts: [] as unknown[],
+    transaction: jest.fn(async function (this: { committedLedgerInserts: unknown[] }, fn: (tx: never) => unknown) {
+      const pending: unknown[] = [];
+      const result = await fn({
         insert: () => ({
-          values: () => ({
-            returning: async () => o.txInsertReturning,
+          values: (v: unknown) => ({
+            returning: async () => {
+              pending.push(v);
+              return o.txInsertReturning;
+            },
           }),
         }),
-        update: () => ({
+        update: (table: unknown) => ({
           set: () => ({
             where: () => ({
-              returning: async () => o.txUpdateUserReturning,
+              returning: async () =>
+                'amount_halalas' in ((table as Record<string, unknown>) ?? {})
+                  ? o.txUpdateIntentReturning
+                  : o.txUpdateUserReturning,
             }) as never,
           }),
         }),
-      } as never),
-    ),
+      } as never);
+      this.committedLedgerInserts.push(...pending);
+      return result;
+    }),
   };
 }
 
@@ -281,5 +295,53 @@ describe('verifyTopup', () => {
     expect(res.alreadyCredited).toBe(true);
     expect(res.credited).toBe(false);
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyTopup — P2-282 one intent, one payment', () => {
+  const CREDITED_INTENT = { ...INTENT_ROW, status: 'credited', payment_id: 'pay_test1234567890' };
+
+  it('409 topup_already_credited for a DIFFERENT paid payment on a credited intent — no ledger row', async () => {
+    mockFetch.mockResolvedValue({ ...PAID_PAYMENT, id: 'pay_second0987654321' });
+    const db = makeDb({ intentRows: [CREDITED_INTENT] });
+    const svc = makeService(db, ENV_ON);
+    const err = await svc.verifyTopup('user-1', { paymentId: 'pay_second0987654321', intentId: 'intent-1' }).catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).message).toBe(
+      'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(db.committedLedgerInserts).toHaveLength(0);
+  });
+
+  it('replays alreadyCredited for the SAME payment on a credited intent (no re-credit)', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({
+      intentRows: [CREDITED_INTENT],
+      txRows: [{ amount: '50.00', user_id: 'user-1', idempotency_key: 'topup:pay_test1234567890' }],
+    });
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.verifyTopup('user-1', { paymentId: 'pay_test1234567890', intentId: 'intent-1' });
+    expect(res).toEqual({
+      credited: false,
+      alreadyCredited: true,
+      balance: '150.00',
+      paymentId: 'pay_test1234567890',
+      amountSar: 50,
+    });
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rolls back and 409s topup_intent_race when the in-tx intent flip matches zero rows', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({ txUpdateIntentReturning: [] });
+    const svc = makeService(db, ENV_ON);
+    const err = await svc.verifyTopup('user-1', { paymentId: 'pay_test1234567890', intentId: 'intent-1' }).catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).message).toBe(
+      'topup_intent_race: intent state changed during verify — transaction rolled back',
+    );
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(db.committedLedgerInserts).toHaveLength(0);
   });
 });

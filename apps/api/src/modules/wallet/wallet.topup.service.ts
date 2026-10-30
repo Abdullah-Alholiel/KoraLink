@@ -123,14 +123,15 @@ export class WalletTopupService {
    * player-visible trace of an attempt that never landed. Money-truth: the
    * endpoint REPORTS state, it never interprets charge/refund outcomes.
    * Reads user_id + created_at DESC LIMIT 1 — covered by
-   * wallet_topup_intents_user_created_idx (0056).
+   * wallet_topup_intents_user_created_idx (0056). P2-282: id DESC tiebreak so
+   * two same-instant intents resolve deterministically.
    */
   async getLatestIntent(userId: string): Promise<{ intent: LatestTopupIntent | null }> {
     const [row] = await this.db
       .select()
       .from(wallet_topup_intents)
       .where(eq(wallet_topup_intents.user_id, userId))
-      .orderBy(desc(wallet_topup_intents.created_at))
+      .orderBy(desc(wallet_topup_intents.created_at), desc(wallet_topup_intents.id))
       .limit(1);
     if (!row) return { intent: null };
     const intent = row as TopupIntentRow;
@@ -244,6 +245,28 @@ export class WalletTopupService {
 
     const creditKey = `${TOPUP_KEY_PREFIX}${payment.id}`;
 
+    // P2-282: an intent completes with exactly ONE payment. Once credited, only
+    // a replay of the SAME payment is served; a second, different paid payment
+    // bound to this intent is refused (never a second, untracked credit).
+    if (intent.status === 'credited') {
+      if (payment.id !== intent.payment_id) {
+        throw new ConflictException(
+          'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
+        );
+      }
+      const replay = await this.findCreditReplay(userId, creditKey);
+      if (replay) {
+        await this.flipIntentCredited(intent.id, payment.id);
+        return {
+          credited: false,
+          alreadyCredited: true,
+          balance: replay.wallet_balance,
+          paymentId: payment.id,
+          amountSar: moneyToNumber(replay.ledgerEntry.amount),
+        };
+      }
+    }
+
     // PR-Agent r1 CRITICAL (run #169): payment↔intent BINDING. The hosted form
     // creates the payment with description `wallet-topup:<intentId>`; verify
     // refuses ANY payment not bound to THIS intent, before any other check —
@@ -314,10 +337,18 @@ export class WalletTopupService {
 
         // 3. Intent flip rides the SAME tx as the credit (Gate 3 contract) —
         //    a credited wallet can never leave a pending intent behind.
-        await tx
+        //    P2-282: zero rows = the intent was credited by another payment
+        //    mid-verify — throw so the credit above rolls back.
+        const flipped = await tx
           .update(wallet_topup_intents)
           .set(withTimestamp({ status: 'credited', payment_id: payment.id }))
-          .where(and(eq(wallet_topup_intents.id, intent.id), eq(wallet_topup_intents.status, 'pending')));
+          .where(and(eq(wallet_topup_intents.id, intent.id), eq(wallet_topup_intents.status, 'pending')))
+          .returning({ id: wallet_topup_intents.id });
+        if (flipped.length === 0) {
+          throw new ConflictException(
+            'topup_intent_race: intent state changed during verify — transaction rolled back',
+          );
+        }
 
         return {
           credited: true,

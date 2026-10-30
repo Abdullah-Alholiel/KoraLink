@@ -7,6 +7,8 @@
  * is this newest-intent read. Money-truth: the endpoint reports state, it
  * never interprets charge/refund outcomes.
  */
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 import { WalletTopupService, sarToHalalas } from './wallet.topup.service';
 
 const INTENT_ROW = {
@@ -25,7 +27,7 @@ const INTENT_ROW = {
 function makeDb(overrides: {
   latestRow?: unknown;
   empty?: boolean;
-  captured?: { wherePred?: unknown; orderByArg?: unknown; limitArg?: unknown };
+  captured?: { wherePred?: unknown; orderByArg?: unknown; orderByArgs?: unknown[]; limitArg?: unknown };
 } = {}) {
   const o = {
     latestRow: INTENT_ROW,
@@ -46,8 +48,11 @@ function makeDb(overrides: {
         where: (pred: unknown) => {
           if (o.captured) o.captured.wherePred = pred;
           return {
-            orderBy: (arg: unknown) => {
-              if (o.captured) o.captured.orderByArg = arg;
+            orderBy: (...args: unknown[]) => {
+              if (o.captured) {
+                o.captured.orderByArg = args[0];
+                o.captured.orderByArgs = args;
+              }
               return {
                 limit: (n: number) => {
                   if (o.captured) o.captured.limitArg = n;
@@ -105,6 +110,18 @@ describe('P2-279 — getLatestIntent', () => {
     expect(captured.wherePred).toBeDefined();
     expect(captured.orderByArg).toBeDefined();
     expect(captured.limitArg).toBe(1);
+  });
+
+  it('P2-282: orders by created_at DESC, id DESC (deterministic same-instant tiebreak)', async () => {
+    const captured: { orderByArgs?: unknown[] } = {};
+    const svc = makeService(makeDb({ captured }));
+    await svc.getLatestIntent('user-1');
+    const dialect = new PgDialect();
+    const rendered = (captured.orderByArgs ?? []).map((a) => dialect.sqlToQuery(a as SQL).sql);
+    expect(rendered).toEqual([
+      '"wallet_topup_intents"."created_at" desc',
+      '"wallet_topup_intents"."id" desc',
+    ]);
   });
 
   it('serializes createdAt to ISO for the wire (no Date leaks)', async () => {
