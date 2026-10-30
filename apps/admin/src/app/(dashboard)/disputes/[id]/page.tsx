@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, ApiError, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -37,6 +37,21 @@ function parseEvidence(evidence: unknown): { action?: string; reason?: string; a
 }
 
 const CLOSED = new Set(['resolved', 'rejected']);
+
+// P2-283: ApiError→bucket mapping for the dispute actions (settlements
+// moneyActionFailure pattern); raw backend text is never rendered. Unlike
+// settlements, 400 joins 409 as 'conflict': the service answers a state race
+// ("already been decided", "Only decided disputes can be reopened") with 400,
+// which must not read as a network problem.
+type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'server' | 'network';
+function disputeActionFailure(err: unknown): DisputeActionFailure {
+  const status = err instanceof ApiError ? err.status : 0;
+  if (status === 401) return 'auth';
+  if (status === 403 || status === 404) return 'access';
+  if (status === 400 || status === 409) return 'conflict';
+  if (status === 429 || status >= 500) return 'server';
+  return 'network';
+}
 
 export default function DisputeDetailPage() {
   const t = useTranslations('adminDisputes');
@@ -69,11 +84,22 @@ export default function DisputeDetailPage() {
   const [refundInvalid, setRefundInvalid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSeq, setSaveSeq] = useState(0);
 
   // ── Admin reply on the dispute thread (P2-2, run #24) ──
   const [reply, setReply] = useState('');
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [replySeq, setReplySeq] = useState(0);
+
+  function failureCopy(err: unknown): string {
+    const failure = disputeActionFailure(err);
+    return failure === 'auth' ? t('disputeFailedAuth')
+      : failure === 'access' ? t('disputeFailedAccess')
+        : failure === 'conflict' ? t('disputeFailedConflict')
+          : failure === 'server' ? t('disputeFailedServer')
+            : t('disputeFailedNetwork');
+  }
 
   async function sendReply() {
     const content = reply.trim();
@@ -85,7 +111,8 @@ export default function DisputeDetailPage() {
       reload();
       setReply('');
     } catch (e) {
-      setReplyError(e instanceof Error ? e.message : t('replyFailed'));
+      setReplyError(failureCopy(e));
+      setReplySeq((s) => s + 1);
     } finally {
       setReplySending(false);
     }
@@ -145,7 +172,8 @@ export default function DisputeDetailPage() {
       setInternalNote('');
       setRefundAmount('');
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(failureCopy(e));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
     }
@@ -158,7 +186,8 @@ export default function DisputeDetailPage() {
       await api.post(`/admin/disputes/${id}/reopen`);
       reload();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(failureCopy(e));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
       setConfirmReopen(false);
@@ -177,6 +206,7 @@ export default function DisputeDetailPage() {
       setEditing(false);
       reload();
     } catch (e) {
+      setSaveSeq((s) => s + 1);
       if (isStaleEditError(e)) {
         // P2-192: another admin saved while this editor was open. Keep the
         // editor OPEN (the typed draft is not lost), say what happened +
@@ -185,7 +215,7 @@ export default function DisputeDetailPage() {
         setSaveError(tc('editStale'));
         reload();
       } else {
-        setSaveError(e instanceof Error ? e.message : t('failed'));
+        setSaveError(failureCopy(e));
       }
     } finally {
       setSaving(false);
@@ -355,7 +385,7 @@ export default function DisputeDetailPage() {
                 maxLength={2000}
                 className="w-full rounded-lg border border-gray-300 p-2 text-sm"
               />
-              {replyError && <p className="mt-2 text-sm text-brand-red">{replyError}</p>}
+              {replyError && <p role="alert" key={`reply-${replySeq}`} className="mt-2 text-sm text-brand-red">{replyError}</p>}
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-gray-400">{reply.length}/2000</span>
                 <button
@@ -391,7 +421,7 @@ export default function DisputeDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={2}
                 />
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setEditing(false)}
@@ -429,7 +459,7 @@ export default function DisputeDetailPage() {
                     <Pencil className="h-4 w-4" /> {t('editOutcome')}
                   </button>
                 </div>
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
               </div>
             ) : canResolve ? (
               <div className="space-y-3">
@@ -493,7 +523,7 @@ export default function DisputeDetailPage() {
                     )}
                   </div>
                 )}
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={resolve}
                   disabled={saving}
