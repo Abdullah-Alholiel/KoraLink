@@ -33,6 +33,12 @@ export default function SettlementsPage() {
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // P2-284 (run #179): single-venue generate scope — '' = all venues.
+  const [generateVenue, setGenerateVenue] = useState('');
+  // Venue options for the scope picker (names only; small list).
+  const { data: venuesData } = useLiveAdminData<{ venues: Array<{ id: string; name: string }> }>(
+    '/admin/venues?perPage=100',
+  );
   const [selected, setSelected] = useState<Settlement | null>(null);
   // P2-267: pay()/generate() previously had try/finally with NO catch — a
   // failed POST rejected unhandled, the drawer stayed open with only a
@@ -101,7 +107,9 @@ export default function SettlementsPage() {
     setGenerating(true);
     setGenerateFailure(null);
     try {
-      await api.post('/admin/settlements/generate');
+      // P2-284: optional single-venue scope; '' = the all-venues run.
+      await api.post(`/admin/settlements/generate${generateVenue ? `?venueId=${encodeURIComponent(generateVenue)}` : ''}`);
+      setGenerateVenue('');
       reload();
       trackEvent('admin_settlement_generate_success', { page: 'admin.settlements' });
     } catch (err) {
@@ -232,6 +240,21 @@ export default function SettlementsPage() {
           <option value="failed">{ts('failed')}</option>
         </select>
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
+        {/* P2-284 (run #179): optional generate scope — pick one venue to
+            settle just that batch member; '' = all venues (default). */}
+        <select
+          aria-label={t('generateScopeLabel')}
+          value={generateVenue}
+          onChange={(e) => setGenerateVenue(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('generateScopeAll')}</option>
+          {(venuesData?.venues ?? []).map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={onExport}

@@ -1,5 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 import { AdminSettlementsService } from './settlements.service';
 import { addDaysToDateString, riyadhDateString } from '../../common/utils/riyadh-date';
 
@@ -322,5 +323,96 @@ describe('AdminSettlementsService race guards', () => {
     expect(vals).toBeDefined();
     expect(vals!.period_end).toBe(riyadhDateString());
     expect(vals!.period_start).toBe(addDaysToDateString(vals!.period_end, -7));
+  });
+
+  // ── P2-284 (run #179): optional single-venue generate scope ──────────
+  // generatePending(adminId, ip, venueId): 404 on unknown/pitch-less venue
+  // BEFORE any tx; the scoped run locks just that venue row and passes the
+  // explicit id to the revenue query; the all-venues default is unchanged.
+
+  function makeScopedService(opts: {
+    precheckRows: unknown[];
+    executeRows: unknown[];
+    insertResults: unknown[][];
+  }) {
+    const insertChain: any = {
+      values: () => insertChain,
+      onConflictDoNothing: () => insertChain,
+      returning: () => (opts.insertResults.length ? opts.insertResults.shift()! : []),
+    };
+    const txExecute = jest.fn(async () => opts.executeRows);
+    const db = {
+      query: { settlements: { findFirst: jest.fn() } },
+      update: jest.fn(),
+      // call 1 (when a venueId is given) = the pre-tx existence check; tx
+      // execute = the FOR UPDATE lock + the revenue query.
+      execute: jest.fn(async () => opts.precheckRows),
+      transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          execute: txExecute,
+          insert: jest.fn(() => insertChain),
+        }),
+      ),
+    };
+    const svc = new AdminSettlementsService(
+      db as never,
+      { log: jest.fn(async () => {}) } as never,
+      { getNumber: jest.fn(async () => 7) } as never,
+      { broadcastOps: jest.fn() } as never,
+      { record: jest.fn(async () => {}) } as never,
+      { sendPushToUsers: jest.fn(async () => 0) } as never,
+    );
+    return { svc, db, txExecute };
+  }
+
+  it('generatePending(venueId) 404s BEFORE the tx for an unknown or pitch-less venue', async () => {
+    const { svc, db } = makeScopedService({
+      precheckRows: [],
+      executeRows: [],
+      insertResults: [],
+    });
+
+    await expect(
+      svc.generatePending('admin-1', undefined, '00000000-0000-0000-0000-000000000004'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('generatePending(venueId) locks ONLY that venue and passes the explicit id to the revenue query', async () => {
+    const VENUE = '11111111-1111-1111-1111-111111111111';
+    const { svc, txExecute } = makeScopedService({
+      precheckRows: [{ id: VENUE }],
+      executeRows: [{ venue_id: VENUE, amount: '120.00' }],
+      insertResults: [[{ id: 's9', venue_id: VENUE, amount: '120.00' }]],
+    });
+
+    const result = await svc.generatePending('admin-1', undefined, VENUE);
+    expect(result.generated).toBe(1);
+
+    const [lockSql] = (txExecute as jest.Mock).mock.calls[0] as unknown as [SQL];
+    const rendered = new PgDialect().sqlToQuery(lockSql).sql;
+    // Scoped lock: no IN(subquery) full-venue lock; the bound venue id rides
+    // a placeholder (rendered SQL keeps the $? placeholders of PgDialect).
+    expect(rendered).toContain('FOR UPDATE');
+    expect(rendered).not.toContain('IN (SELECT venue_id FROM pitches)');
+
+    const [revenueSql] = (txExecute as jest.Mock).mock.calls[1] as unknown as [SQL];
+    const revenueRendered = new PgDialect().sqlToQuery(revenueSql).sql;
+    expect(revenueRendered).toContain(' v.id IN ');
+  });
+
+  it('generatePending without venueId keeps the ALL-venues lock + revenue scope', async () => {
+    const { svc, txExecute } = makeScopedService({
+      precheckRows: [{ id: 'ignored' }], // unused: no pre-tx check without scope
+      executeRows: [{ venue_id: 'v1', amount: '100.00' }],
+      insertResults: [[{ id: 's1', venue_id: 'v1', amount: '100.00' }]],
+    });
+
+    await svc.generatePending('admin-1');
+    expect((txExecute as jest.Mock).mock.calls.length).toBe(2);
+    const [lockSql] = (txExecute as jest.Mock).mock.calls[0] as unknown as [SQL];
+    expect(new PgDialect().sqlToQuery(lockSql).sql).toContain(
+      'IN (SELECT venue_id FROM pitches)',
+    );
   });
 });

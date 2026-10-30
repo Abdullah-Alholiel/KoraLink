@@ -186,26 +186,50 @@ export class AdminSettlementsService {
    * path it must serialize with). Both paths now share ONE money-source
    * query (modules/partner/settlement-revenue.ts) and one lock order.
    */
-  async generatePending(adminId: string, ip?: string) {
+  async generatePending(adminId: string, ip?: string, venueId?: string) {
+    // P2-284 (run #179): optional single-venue scope. The scoped run locks and
+    // settles ONE venue so an off batch member can be settled/re-run without
+    // touching (or being blocked by) the rest. Unknown or pitch-less venues
+    // 404 BEFORE any tx opens. The revenue query receives the explicit id —
+    // the empty list (all-venues default) semantics are unchanged.
+    if (venueId !== undefined) {
+      const [venue] = (await this.db.execute(sql`
+        SELECT v.id
+        FROM venues v
+        INNER JOIN pitches p ON p.venue_id = v.id
+        WHERE v.id = ${venueId}
+        LIMIT 1
+      `)) as unknown as Array<{ id: string }>;
+      if (!venue) throw new NotFoundException('venue not found or has no pitches');
+    }
+
     const cadenceDays = await this.settings.getNumber('payout_cadence_days', 7);
     const riyadhEnd = riyadhDateString();
     const startDay = addDaysToDateString(riyadhEnd, -cadenceDays);
 
     const inserted = await this.db.transaction(async (tx) => {
-      // Lock ALL venue rows up-front, in a deterministic order — the same
-      // lock the partner requestPayout tx takes first, so a concurrent
+      // Lock the scope's venue rows up-front, in a deterministic order — the
+      // same lock the partner requestPayout tx takes first, so a concurrent
       // request/generate waits here instead of racing the guard. JOIN-free
       // IN(subquery) keeps FOR UPDATE legal (no outer-join partition) and
       // locks ONLY the venue rows (not pitches/matches).
-      await tx.execute(sql`
+      await tx.execute(
+        venueId !== undefined
+          ? sql`SELECT id FROM venues WHERE id = ${venueId} ORDER BY id FOR UPDATE`
+          : sql`
         SELECT id FROM venues
         WHERE id IN (SELECT venue_id FROM pitches)
         ORDER BY id
         FOR UPDATE
-      `);
+      `,
+      );
 
       const rows = (await tx.execute(
-        buildSettlementRevenueQuery({ venueIds: [], cadenceDays, riyadhEnd }),
+        buildSettlementRevenueQuery({
+          venueIds: venueId !== undefined ? [venueId] : [],
+          cadenceDays,
+          riyadhEnd,
+        }),
       )) as unknown as Array<{ venue_id: string; amount: string }>;
 
       const out: Array<Record<string, unknown>> = [];
