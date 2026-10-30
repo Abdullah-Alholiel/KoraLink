@@ -44,13 +44,13 @@ export default function SettlementsPage() {
   const [paySeq, setPaySeq] = useState(0);
   const [generateSeq, setGenerateSeq] = useState(0);
 
-  // P2-267 (PR-Agent r1): failure alerts are scoped to the drawer session —
-  // a failed pay on one settlement must never render inside another
-  // settlement's drawer. Clear both failure states whenever the selection
-  // changes or the drawer closes.
+  // P2-267 (PR-Agent r1): pay-failure alerts are scoped to the drawer
+  // session — a failed pay on one settlement must never render inside
+  // another settlement's drawer. generateFailure is PAGE-scoped (toolbar
+  // alert), so it deliberately survives drawer open/close; it resets only
+  // when generate() itself re-runs (PR-Agent r2).
   useEffect(() => {
     setPayFailure(null);
-    setGenerateFailure(null);
   }, [selected?.id, selected === null]);
 
   const sortParts = sort ? sort.split(':') : null;
