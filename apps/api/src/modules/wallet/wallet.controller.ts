@@ -72,6 +72,7 @@ export class WalletController {
   // baking the publishable key into the client bundle (NEXT_PUBLIC_* trap) —
   // the key is served per-request to authenticated users only.
   @Get('topup/config')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({ summary: 'Top-up availability + client form config' })
   @ApiOkResponse({ description: 'Flag, publishable key (or null), amount bounds.' })
   async getTopupConfig() {
@@ -83,6 +84,7 @@ export class WalletController {
   // player-visible trace of an attempt that never landed (failed 3DS,
   // abandoned verify). Reports state only; never interprets charge/refund.
   @Get('topup/latest')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({ summary: 'Newest wallet top-up attempt for the caller' })
   @ApiOkResponse({ description: 'Latest intent (or null when none).' })
   async getLatestTopupIntent(@CurrentUser() user: { sub: string }) {
