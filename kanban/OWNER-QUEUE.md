@@ -1,6 +1,6 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #178, 2026-10-30 11:1xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #179, 2026-10-30 16:3xZ)
 
-Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `e2094bc` (PR #199 P2-283 merged + LIVE) · **P1-52 Neon quota: true rate 5/24h, flat (chronic free-tier quota — metric corrected run #177) · shipped run #178: disputes drawer localized failure alerts (P2-283, live)** · hex baseline folded 323.
+Snapshot: open PRs = **2** (#178 promote, owner-gated · #202 P2-284 settlement scoping — checks green-pending, factory merges in run #180) · services API/PWA/Admin all active · staging @ `ad18405` (**shipped run #179: settlements CSV paidAt/paidBy columns (P2-286) + top-up pending-card self-resolve polling (P2-287) — both merged AND live on the VPS**) · **P1-52 Neon quota: 0 events in this 24h window (chronic free-tier quota — owner billing action unchanged) · hex baseline 323**.
 
 ## 🔴 Owner actions (blocking)
 
