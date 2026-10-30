@@ -106,6 +106,10 @@ export interface LatestTopupIntentResponse {
  * page renders an unconfirmed-attempt card only when status === 'pending'
  * (credited attempts already appear as ledger transactions; there is no
  * 'failed' writer — a stuck attempt stays pending).
+ *
+ * P2-287: polls while pending so the card self-resolves once the attempt is
+ * credited; keeps polling in the background because 3DS confirmations land
+ * while the tab is hidden.
  */
 export function useLatestTopupIntent(params?: { enabled?: boolean }) {
   const { enabled = true } = params ?? {};
@@ -115,5 +119,9 @@ export function useLatestTopupIntent(params?: { enabled?: boolean }) {
     staleTime: 30_000,
     retry: false,
     enabled,
+    refetchInterval: (query) =>
+      query.state.data?.intent?.status === 'pending' ? 10_000 : false,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 }

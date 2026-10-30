@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import {
   useLatestTopupIntent,
@@ -90,5 +90,86 @@ describe('useLatestTopupIntent (P2-279)', () => {
     // simplest observable: verify resolves and onSuccess ran without throw.
     await result.current.mutateAsync({ paymentId: 'pay_1', intentId: 'intent-1' });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+});
+
+// P2-287 (run #178): a pending attempt polls until credited so the card
+// self-resolves without user action.
+describe('useLatestTopupIntent polling (P2-287)', () => {
+  const CREDITED_INTENT = {
+    intent: { ...PENDING_INTENT.intent, status: 'credited' },
+  };
+
+  // Advance inside act so query results flush into the hook; advancing by 0
+  // settles the initial fetch.
+  const advance = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+
+  beforeEach(() => {
+    mockFetcher.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  });
+
+  it('refetches every 10s without user action while status is pending', async () => {
+    mockFetcher.mockResolvedValue(PENDING_INTENT);
+    renderHook(() => useLatestTopupIntent(), { wrapper: createWrapper() });
+    await advance(0);
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+    await advance(9_999);
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+    await advance(1);
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
+    expect(mockFetcher).toHaveBeenLastCalledWith('/wallet/topup/latest');
+
+    await advance(10_000);
+    expect(mockFetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps polling while the tab is hidden (3DS confirmations land there)', async () => {
+    mockFetcher.mockResolvedValue(PENDING_INTENT);
+    renderHook(() => useLatestTopupIntent(), { wrapper: createWrapper() });
+    await advance(0);
+
+    focusManager.setFocused(false);
+    await advance(10_000);
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops polling once the attempt is credited', async () => {
+    mockFetcher.mockResolvedValueOnce(PENDING_INTENT);
+    mockFetcher.mockResolvedValue(CREDITED_INTENT);
+    const { result } = renderHook(() => useLatestTopupIntent(), {
+      wrapper: createWrapper(),
+    });
+    await advance(0);
+    expect(result.current.data).toEqual(PENDING_INTENT);
+
+    // The extra 1ms runs the notify timer the poll's settled fetch schedules:
+    // fake timers bump a 0ms timer set during a tick to 1ms.
+    await advance(10_001);
+    expect(result.current.data).toEqual(CREDITED_INTENT);
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
+
+    await advance(60_000);
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not poll when there is no attempt', async () => {
+    mockFetcher.mockResolvedValue({ intent: null });
+    renderHook(() => useLatestTopupIntent(), { wrapper: createWrapper() });
+    await advance(0);
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+    await advance(60_000);
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
   });
 });
