@@ -664,6 +664,8 @@
     "requestedByAuto": "Auto-generated",
     "thPaidAt": "Paid at",
     "thPaidBy": "Paid by",
+    "generateScopeLabel": "Generate scope",
+    "generateScopeAll": "All venues (batch)",
     "auditTitle": "Audit Log",
     "loadingAudit": "Loading audit log…",
     "thTime": "Time",

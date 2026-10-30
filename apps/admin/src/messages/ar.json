@@ -664,6 +664,8 @@
     "requestedByAuto": "مُنشأ تلقائياً",
     "thPaidAt": "تاريخ الدفع",
     "thPaidBy": "بواسطة الدفع",
+    "generateScopeLabel": "نطاق التوليد",
+    "generateScopeAll": "كل المنشآت (دفعة)",
     "auditTitle": "سجل التدقيق",
     "loadingAudit": "جارٍ تحميل سجل التدقيق…",
     "thTime": "الوقت",

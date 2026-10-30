@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { GenerateSettlementsDto } from './dto/generate-settlements.dto';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AdminSettlementsService } from './settlements.service';
 import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
@@ -35,8 +36,8 @@ export class AdminSettlementsController {
   }
 
   @Post('generate')
-  generate(@Req() req: Request) {
+  generate(@Query() dto: GenerateSettlementsDto, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
-    return this.settlements.generatePending(adminId, req.ip);
+    return this.settlements.generatePending(adminId, req.ip, dto.venueId);
   }
 }
