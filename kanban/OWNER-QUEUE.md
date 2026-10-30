@@ -1,12 +1,12 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #175, 2026-10-29 12:1xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #177, 2026-10-30 02:5xZ)
 
-Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `5280efc` (PRs #194+#195 merged + LIVE) · **P1-52 Neon quota 59 events/24h — AT the 60 flag-line, owner billing** · shipped run #176: fetcher Bearer origin allowlist (P2-278) + wallet last-top-up-attempt card (P2-279, unconfirmed attempts no longer invisible).
+Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `1082a99` (PRs #197+#198 merged + LIVE) · **P1-52 Neon quota RE-BASELINED: true rate 5 events/24h (prior runs mis-read the lifetime count as /24h — trend FLAT, not escalating; chronic free-tier quota remains) · shipped run #177: topup verify one-intent-one-payment guard (P2-282) + settlements pay/generate failure alerts (P2-267). PR #196 (P2-281) was YOUR build — verified live by the factory.
 
 ## 🔴 Owner actions (blocking)
 
-### 1. P1-52 — Neon quota (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **59 quota events/24h (re-pull 15:5xZ Oct 29, run #176; +1 since run #175 — AT the 60 flag-line; 21st consecutive watch run). The prod push-subscription sweep (1F, 11/24h) is the SAME quota error — the limit silently disables prod stale-push cleanup.**
-- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
+### 1. P1-52 — Neon free-tier quota (chronic; BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
+- **Run #177 RE-BASELINE: prior factory reports said "59-61 events/24h, escalating, AT the flag-line" — that was a METRIC ERROR (the Sentry issue's lifetime count, not the 24h rate). The true rate is 5 events/24h (~hourly, flat since Sep 24).** The quota problem is real but CHRONIC, not escalating — and it never actually crossed the 60 line. 1F (prod push-sweep) is the same class, now ~1/24h.
+- **What's needed (unchanged):** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset (project birthday Oct-25 — the free reset may already be due; one console visit answers it).
 - **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
@@ -31,6 +31,11 @@ Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin
 ### 6. NEW (run #175 finding — product call, NOT buildable without you): player wallet withdrawal path
 - Reviewer B P1: players can top up and receive refunds as wallet balance, but there is NO way to withdraw — every credited SAR is locked in-app. For a KSA booking product this is go-live-blocker-class (consumer expectation). Building it needs your product call (payout rail via Moyasar Transfers? bank IBAN payout? minimum balance?) before any Gate cycle.
 - **Close-line:** one line naming the rail (e.g. "withdrawals = Moyasar transfers to card, min SAR 50") and the factory opens the Gate cycle.
+
+### 6b. NEW (run #177 — product call): DIRECT venue/pitch booking surface
+- Reviewer B (run #177) flagged: a player can browse venues + open slots but cannot BOOK a court directly — monetization is match-host-only (pitches.controller has GET slots only; no bookings table). This is the product's biggest scope hole, not a defect.
+- **What's needed:** your product call — is direct booking on the roadmap (P0-scale new module: bookings table + partner calendar + payment leg) or is match-hosting the intended only path for now?
+- **Close-line:** "Booking: yes, plan it" / "Booking: match-host-only for now".
 
 ## 🟢 Optional
 
