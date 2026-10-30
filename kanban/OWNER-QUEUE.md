@@ -1,6 +1,6 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #177, 2026-10-30 02:5xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #178, 2026-10-30 11:1xZ)
 
-Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `1082a99` (PRs #197+#198 merged + LIVE) · **P1-52 Neon quota RE-BASELINED: true rate 5 events/24h (prior runs mis-read the lifetime count as /24h — trend FLAT, not escalating; chronic free-tier quota remains) · shipped run #177: topup verify one-intent-one-payment guard (P2-282) + settlements pay/generate failure alerts (P2-267). PR #196 (P2-281) was YOUR build — verified live by the factory.
+Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `e2094bc` (PR #199 P2-283 merged + LIVE) · **P1-52 Neon quota: true rate 5/24h, flat (chronic free-tier quota — metric corrected run #177) · shipped run #178: disputes drawer localized failure alerts (P2-283, live)** · hex baseline folded 323.
 
 ## 🔴 Owner actions (blocking)
 
@@ -36,6 +36,10 @@ Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin
 - Reviewer B (run #177) flagged: a player can browse venues + open slots but cannot BOOK a court directly — monetization is match-host-only (pitches.controller has GET slots only; no bookings table). This is the product's biggest scope hole, not a defect.
 - **What's needed:** your product call — is direct booking on the roadmap (P0-scale new module: bookings table + partner calendar + payment leg) or is match-hosting the intended only path for now?
 - **Close-line:** "Booking: yes, plan it" / "Booking: match-host-only for now".
+
+### 6c. NEW (run #178 — policy call, money-adjacent): settlement void/cancel path (P2-285)
+- Admin settlements have NO void/cancel — a duplicate or erroneous settlement row can only be fixed via direct DB access (list/findOne/pay/generate is the whole API surface; lifecycle strictly pending→paid). Before the factory builds anything: does a void path exist in your ops mental model (void while pending only, audit-trailed, never after paid)? Or is "pay carefully + CSV for reconciliation" the intended workflow for now?
+- **Close-line:** "Void: yes, pending-only + audit" (factory opens the Gate cycle) / "No void path needed".
 
 ## 🟢 Optional
 
