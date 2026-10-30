@@ -1,11 +1,11 @@
 # OWNER QUEUE — Abdullah's one-stop action list (refreshed run #175, 2026-10-29 12:1xZ)
 
-Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `d3f83f3` (PR #193 merged + LIVE) · **P1-52 Neon quota 58 events/24h — top blocker, owner billing** · shipped run #175: drizzle snapshot-chain repair (P2-275) + money-truthful topup callback errors (P2-276).
+Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `5280efc` (PRs #194+#195 merged + LIVE) · **P1-52 Neon quota 59 events/24h — AT the 60 flag-line, owner billing** · shipped run #176: fetcher Bearer origin allowlist (P2-278) + wallet last-top-up-attempt card (P2-279, unconfirmed attempts no longer invisible).
 
 ## 🔴 Owner actions (blocking)
 
 ### 1. P1-52 — Neon quota (BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- Sentry: **58 quota events/24h** (re-pull 10:20Z Oct 29; +2 since run #174 — still under the 60 flag-line, 20th consecutive watch run). The prod push-subscription sweep (1F, 11/24h) is the SAME quota error — the limit silently disables prod stale-push cleanup.
+- Sentry: **59 quota events/24h (re-pull 15:5xZ Oct 29, run #176; +1 since run #175 — AT the 60 flag-line; 21st consecutive watch run). The prod push-subscription sweep (1F, 11/24h) is the SAME quota error — the limit silently disables prod stale-push cleanup.**
 - **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset. Project birthday Oct-25 — the free reset may already be due; one console visit answers it.
 - **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
