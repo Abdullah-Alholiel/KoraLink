@@ -16,7 +16,7 @@ describe('fetcher FormData (multipart) support', () => {
 
   beforeEach(() => {
     calls = [];
-    localStorage.removeItem('koralink_auth_token');
+    localStorage.removeItem('koralink_token');
     global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), init: init ?? {} });
       return new Response(JSON.stringify({ ok: true }), {

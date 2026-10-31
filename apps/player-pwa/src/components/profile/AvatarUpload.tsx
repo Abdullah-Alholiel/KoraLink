@@ -99,15 +99,11 @@ export default function AvatarUpload({
                     style={{ height: size, width: size }}
                 >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={
-                            avatarUrl.includes('?')
-                                ? avatarUrl
-                                : `${avatarUrl}?v=${Date.now()}`
-                        }
-                        alt={fullName}
-                        className="h-full w-full object-cover"
-                    />
+                    {/* PR-Agent r1 (run #181): no Date.now() cache-bust — avatar
+                        paths are sha256-keyed IMMUTABLE objects (a new photo is a
+                        new path), so a re-render must re-use the same URL; the
+                        render-path clock also diverged SSR vs hydration. */}
+                    <img src={avatarUrl} alt={fullName} className="h-full w-full object-cover" />
                 </div>
             ) : (
                 <div
