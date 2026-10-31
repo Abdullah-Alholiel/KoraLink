@@ -729,6 +729,7 @@
         "recoveryBody": "Your card may have been charged but we couldn't confirm it yet. Retry the confirmation — you won't be charged twice.",
         "recoveryRetry": "Retry confirmation",
         "quickAmounts": "Quick amounts",
+        "amountHint": "Min SAR {min} · Max SAR {max}",
         "payWithCard": "Continue to card payment",
         "secureNote": "Payments are processed securely by Moyasar. Your card details never reach KoraLink.",
         "processing": "Preparing secure payment…",

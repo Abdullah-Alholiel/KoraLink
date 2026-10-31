@@ -518,7 +518,9 @@ export default function WalletPage() {
                     </div>
 
                     <p className="text-xs text-gray-400 mb-4">
-                        {t('wallet.topup.invalidAmount', {
+                        {/* P2-289 (run #180): dedicated hint key (PR-Agent r1 MINOR)
+                            — the error key showed the identical sentence twice. */}
+                        {t('wallet.topup.amountHint', {
                             min: topupConfig?.minAmount ?? 5,
                             max: topupConfig?.maxAmount ?? 2000,
                         })}
