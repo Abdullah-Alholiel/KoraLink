@@ -17,6 +17,16 @@
 export const TOPUP_QUICK_AMOUNTS: readonly number[] = [25, 50, 100, 200];
 
 /**
+ * Presets filtered to the server-config bounds (PR-Agent r2 MINOR, run #180):
+ * a chip the validator would reject must never render — if the config ever
+ * narrows its bounds (e.g. max 150), out-of-range presets drop out instead
+ * of rendering as guaranteed-failure buttons.
+ */
+export function presetsWithinBounds(min: number, max: number): readonly number[] {
+    return TOPUP_QUICK_AMOUNTS.filter((qa) => qa >= min && qa <= max);
+}
+
+/**
  * Validate a user-entered top-up amount against the config bounds.
  *
  * @param raw    the raw input string (may be '', non-numeric, or '12.5.3')

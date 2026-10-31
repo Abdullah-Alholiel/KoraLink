@@ -36,7 +36,7 @@ import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup
 // P2-289 (run #180): presets + validation live in the SHARED domain module —
 // one source of truth across both top-up surfaces (this sheet + the legacy
 // dummy sheet in wallet/page.tsx).
-import { TOPUP_QUICK_AMOUNTS, validateTopupAmount } from '@/lib/topup-amount';
+import { presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
 
 /** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract;
  * the runtime also accepts a live Element for `element` — verified in the
@@ -334,7 +334,7 @@ export default function TopupSheet({
           />
 
           <div className="flex gap-2 mt-2.5" role="group" aria-label={t('wallet.topup.quickAmounts')}>
-            {TOPUP_QUICK_AMOUNTS.map((qa) => (
+            {presetsWithinBounds(minAmount, maxAmount).map((qa) => (
               <button
                 key={qa}
                 type="button"

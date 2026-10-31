@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TOPUP_QUICK_AMOUNTS, validateTopupAmount } from '@/lib/topup-amount';
+import { TOPUP_QUICK_AMOUNTS, presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
 
 /**
  * P2-289 (run #180) — shared top-up amount domain tripwire.
@@ -21,6 +21,13 @@ describe('TOPUP_QUICK_AMOUNTS', () => {
 
     it('is ascending and starts at 25', () => {
         expect(TOPUP_QUICK_AMOUNTS).toEqual([25, 50, 100, 200]);
+    });
+
+    it('presetsWithinBounds drops chips outside config bounds (PR-Agent r2)', () => {
+        expect(presetsWithinBounds(5, 2000)).toEqual([25, 50, 100, 200]);
+        expect(presetsWithinBounds(30, 2000)).toEqual([50, 100, 200]);
+        expect(presetsWithinBounds(5, 150)).toEqual([25, 50, 100]);
+        expect(presetsWithinBounds(300, 2000)).toEqual([]);
     });
 });
 

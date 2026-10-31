@@ -38,7 +38,10 @@ import { downloadTextAsFile } from '@/lib/download';
 // P2-289 (run #180): shared top-up amount domain — presets + config-driven
 // validation (the legacy sheet previously hardcoded a SAR-10 minimum while
 // the API/config minimum is 5).
-import { TOPUP_QUICK_AMOUNTS, validateTopupAmount } from '@/lib/topup-amount';
+import {
+    presetsWithinBounds,
+    validateTopupAmount,
+} from '@/lib/topup-amount';
 import type { Transaction } from '@/types';
 import { useTopupConfig, useLatestTopupIntent } from '@/hooks/useTopup';
 import TopupSheet from '@/components/wallet/TopupSheet';
@@ -488,7 +491,10 @@ export default function WalletPage() {
                         digits route through formatCount (Arabic-Indic for AR;
                         Reviewer B run-#180 design-lens). */}
                     <div className="mb-3 flex gap-2" role="group" aria-label={t('wallet.topup.quickAmounts')}>
-                        {TOPUP_QUICK_AMOUNTS.map((qa) => (
+                        {presetsWithinBounds(
+                            topupConfig?.minAmount ?? 5,
+                            topupConfig?.maxAmount ?? 2000,
+                        ).map((qa) => (
                             <button
                                 key={qa}
                                 type="button"
