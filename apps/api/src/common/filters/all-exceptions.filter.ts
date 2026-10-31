@@ -42,8 +42,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let multerMessage: string | null = null;
     if (isMulter) {
       if (multerCode === 'LIMIT_FILE_SIZE') {
+        // PR-Agent r3 (run #181): route-agnostic copy — this global filter also
+        // serves the venue-photo route (5 MB cap), so the message must not
+        // name avatars. The per-route services still add specific copy for
+        // errors that reach their handlers.
         httpStatus = HttpStatus.PAYLOAD_TOO_LARGE;
-        multerMessage = 'Avatar exceeds the 2 MB limit.';
+        multerMessage = 'Upload exceeds the size limit.';
       } else {
         httpStatus = HttpStatus.BAD_REQUEST;
         multerMessage = 'Bad multipart upload.';
