@@ -14,6 +14,7 @@ const CONTROLLERS = [
   'admin/metrics.controller.ts',
   'admin/pitches.controller.ts',
   'admin/reports.controller.ts',
+  'admin/reviews.controller.ts',
   'admin/settings.controller.ts',
   'admin/settlements.controller.ts',
   'admin/transactions.controller.ts',

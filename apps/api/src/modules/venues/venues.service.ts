@@ -542,9 +542,11 @@ export class VenuesService {
         .set({ rating_avg: Number(agg.average), rating_count: agg.count })
         .where(eq(venues.id, venueId));
 
+      // P2-291: hidden_at is moderation state — never echoed to the author.
+      const { hidden_at: _hiddenAt, ...review } = row;
       return {
         review: {
-          ...row,
+          ...review,
           rating: Number(row.rating),
         },
         venueRating: { average: Number(agg.average), count: agg.count },
@@ -586,6 +588,7 @@ export class VenuesService {
       FROM venue_reviews vr
       LEFT JOIN users u ON u.id = vr.user_id
       WHERE vr.venue_id = ${venueId}
+        AND vr.hidden_at IS NULL
       ORDER BY vr.updated_at DESC
       LIMIT 20
     `);

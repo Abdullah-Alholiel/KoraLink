@@ -173,6 +173,25 @@ export interface AdminTransaction {
   user_phone: string | null;
 }
 
+export interface VenueReview {
+  id: string;
+  venue_id: string;
+  venue_name: string;
+  user_id: string;
+  author_name: string | null;
+  rating: number;
+  comment: string | null;
+  hidden_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Row returned by every /admin/venue-reviews mutation. */
+export type VenueReviewMutation = Pick<
+  VenueReview,
+  'id' | 'venue_id' | 'user_id' | 'rating' | 'comment' | 'hidden_at' | 'updated_at'
+>;
+
 export interface Settlement {
   id: string;
   venue_id: string;

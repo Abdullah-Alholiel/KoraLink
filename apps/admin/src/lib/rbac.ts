@@ -16,6 +16,7 @@ export type ConsoleSection =
   | 'pitches'
   | 'disputes'
   | 'reports'
+  | 'reviews'
   | 'transactions'
   | 'settlements'
   | 'settings'
@@ -37,6 +38,7 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
     'pitches',
     'disputes',
     'reports',
+    'reviews',
     'transactions',
     'settlements',
     'settings',
@@ -74,6 +76,7 @@ export function sectionForPath(pathname: string): ConsoleSection | null {
     'pitches',
     'disputes',
     'reports',
+    'reviews',
     'transactions',
     'settlements',
     'settings',
