@@ -1,18 +1,18 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #181, 2026-10-31 12:5xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #182, 2026-10-31 16:2xZ)
 
-Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `ea8c2ab` · **P1-52 Neon quota: 68 events/24h — still OVER the ≥60 flag (owner billing action unchanged) · hex baseline 335/64** · **NEW: avatar uploads LIVE on staging (flag ON) — try it on your profile page**.
+Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin all active · staging @ `8391831` · **P1-52 Neon quota: 69 events/24h (run #182 reading) — THIRD window ≥60; run #181's escalation trigger fired: treat as a HARD BLOCK on the promote until cleared** · hex baseline 337/66 · **NEW: venue-review moderation LIVE — try it in the admin console (/reviews)**.
 
 ## 🔴 Owner actions (blocking)
 
-### 1. P1-52 — Neon free-tier quota (chronic; BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- **Run #181 reading: 68 events/24h (was 66). Two windows in a row over the flag — the monthly reset has not landed.** The daily push_subscriptions cleanup failure (13×/24h) is the SAME quota error, deduped here.
-- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or verify the monthly free reset (project birthday Oct-25).
-- **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
+### 1. P1-52 — Neon free-tier quota (CHRONIC — ESCALATED run #182: hard-block recommendation)
+- **Three consecutive windows ≥60 (66 → 68 → 69 events/24h; the monthly reset did NOT land). The daily push_subscriptions cleanup failure (13×/24h) is the SAME quota error.** Run #181's escalation trigger (≥60 persisting across windows) has fired: this is now recommended as a HARD BLOCK on promote #178 until cleared — a promote-merge during quota exhaustion risks failed post-merge migrations on Neon.
+- **What's needed:** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or verify the monthly free reset (project birthday Oct-25 — already passed without relief).
+- **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057+0058 to Neon and #178 becomes mergeable).
 
-### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
-- Gate GREEN, ~362 commits ahead of main. **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images).**
+### 2. PR #178 — promote staging → main (T2 gate, YOUR merge — HARD-BLOCKED by item 1)
+- Gate GREEN, ~366 commits ahead of main. **Migrations riding it: 0055 (users.locale) + 0056 (wallet_topup_intents) + 0057 (venues.images) + 0058 (venue_reviews.hidden_at — new this run).**
 - Sequence when P1-52 clears: (1) Neon migrations FIRST: `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs`; (2) YOU merge #178; (3) YOU trigger the Render deploy manually (autoDeploy OFF); factory runs the post-promote matrix on request.
-- **Prod note (new this run):** add `AVATAR_UPLOAD_ENABLED=true` + `S3_BUCKET_AVATARS=koralink-avatars` + the S3_* pair to the Render API env when the promote lands (avatar uploads are live on staging, flag OFF = clean 403 so nothing breaks without it).
+- **Prod note:** add `AVATAR_UPLOAD_ENABLED=true` + `S3_BUCKET_AVATARS=koralink-avatars` + the S3_* pair to the Render API env when the promote lands (avatar uploads live on staging; flag OFF = clean 403 so nothing breaks without it).
 - **Close-line:** "Merged #178 + Render deployed".
 
 ## 🟡 Owner actions (not blocking the factory)
@@ -37,11 +37,16 @@ Snapshot: open PRs = **1** (#178 promote, owner-gated) · services API/PWA/Admin
 - **6c. Settlement void/cancel policy (P2-285):** admin settlements have NO void path; a duplicate/erroneous row needs direct DB today. Void-while-pending-only + audit trail? Or "pay carefully + CSV" for now?
   **Close-line:** "Void: yes, pending-only + audit" / "No void path needed".
 - **6d. Recurring-match series identity (run #121):** 8 weekly instances are independent matches; a cancelled week does not propagate. Product-shape call needed.
+- **6e. NEW (P2-297, run #182): venue rating aggregates vs moderation** — hiding/deleting a review currently does NOT recompute `venues.rating_avg`/`rating_count`. Policy call: should hidden reviews keep counting toward the public average? (a) recompute excluding hidden, (b) keep counting (hide = order-only), (c) recompute only on delete.
+  **Close-line:** one letter (a/b/c) + any nuance.
 
 ## 🟢 Optional
 
-### 7. Try the NEW avatar upload yourself (staging — LIVE since run #181)
-- Open the PWA profile page → camera badge on your avatar (bottom-right) → pick a photo (≤2 MB JPEG/PNG/WebP) → toast "Profile photo updated" + avatar swaps in. Public serve route: `/media/avatars/...`, immutable-cached.
+### 7. Try the NEW venue-review moderation (staging — LIVE since run #182)
+- Admin console → **Reviews** (new sidebar item) → any review → drawer: **Hide / Restore / Delete** (delete asks confirm). Hidden reviews vanish from the venue page immediately and every action is audit-logged (Audit page shows `venue_review` entries).
 
-### 8. Try the venue-photo pipeline (staging, no factory needed)
+### 8. Try the avatar upload yourself (staging — LIVE since run #181)
+- PWA profile page → camera badge → pick a photo (≤2 MB JPEG/PNG/WebP). **Run #182 polish: oversized photos now rejected instantly client-side; a disabled feature shows its own message.**
+
+### 9. Try the venue-photo pipeline (staging, no factory needed)
 - Admin console → Venues → edit any venue → Add photos (≤6, JPG/PNG/WebP ≤5MB) → Save → open the clubs page / venue detail in the PWA.
