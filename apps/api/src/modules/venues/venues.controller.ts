@@ -1,5 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards, Body } from '@nestjs/common';
 import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -94,7 +95,11 @@ export class VenuesController {
   // UPSERTs (one review per user per venue). NOTE: declared ABOVE
   // GET /venues/:id is not required (different method), but the reviews
   // surface stays grouped with the favorites surface it mirrors.
+  // Run #181 (Reviewer A I-3): abuse-sensitive write — 5/min/IP on top of
+  // the global cap. Booking-verified precondition already limits WHO can
+  // write; this limits HOW OFTEN.
   @Post(':id/reviews')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @HttpCode(201)
   @ApiOperation({ summary: 'Submit a booking-verified review (re-submit updates your review)' })
   @ApiCreatedResponse({

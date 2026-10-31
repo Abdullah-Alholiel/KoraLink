@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  InternalServerErrorException,
   UnauthorizedException,
   Optional,
   Logger,
@@ -27,6 +28,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
+import { MediaService } from '../media/media.service';
 import { otpMatches } from '../../common/security/otp-compare';
 import { UnifonicService } from '../auth/unifonic.service';
 
@@ -60,6 +62,9 @@ export class UsersService {
     // ergonomic and trailing-optionals TS-valid).
     @Optional() private readonly otpStore?: OtpStoreService,
     @Optional() private readonly unifonic?: UnifonicService,
+    // P2-50 (run #181): avatar storage/persistence seam. Optional marker keeps
+    // the direct-test construction pattern (spec stubs) working.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /**
@@ -148,6 +153,23 @@ export class UsersService {
     const pom_count = await this.getPomCount(userId);
 
     return { ...user, pom_count };
+  }
+
+  /**
+   * P2-50 (run #181): avatar upload. The controller gates the feature flag;
+   * storage + persistence live in MediaService (same module that owns venue
+   * images — one upload/serve seam, one error-mapping style). This delegation
+   * keeps the users controller's constructor dependency on its own service.
+   */
+  async uploadAvatar(
+    userId: string,
+    file: { buffer: Buffer; size: number; mimetype?: string },
+  ): Promise<{ avatarUrl: string }> {
+    if (!this.media) {
+      // MediaModule is always imported (app.module) — this is a test-only guard.
+      throw new InternalServerErrorException('Media service unavailable.');
+    }
+    return this.media.uploadAvatar(userId, file);
   }
 
   /**
@@ -1100,10 +1122,45 @@ export class UsersService {
       );
     }
 
-    await this.db
+    // Run #181 (Reviewer A I-1): the age check above runs on an UNLOCKED read —
+    // a concurrent deleteMyAccount() between that read and this UPDATE could
+    // resurrect an account that just re-entered the deletion window. The clear
+    // is therefore a guarded conditional write (same status-predicate discipline
+    // as every other lifecycle transition in this codebase): it only fires while
+    // the row is STILL deleted. 0 rows = the race happened → re-read and map.
+    const restored = await this.db
       .update(users)
       .set(withTimestamp({ deleted_at: null }))
-      .where(eq(users.id, userId));
+      .where(and(eq(users.id, userId), isNotNull(users.deleted_at)))
+      .returning({ deleted_at: users.deleted_at });
+
+    if (!restored.length) {
+      // Someone cleared (or never had) deleted_at after our read — or the row
+      // was deleted again in between. Distinguish idempotent no-op from a
+      // genuine re-deletion race.
+      const [current] = await this.db
+        .select({ deleted_at: users.deleted_at })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!current) {
+        throw new NotFoundException('User not found.');
+      }
+      if (!current.deleted_at) {
+        // Idempotent no-op — the user is already active.
+        return this.getProfile(userId);
+      }
+      // deleted again mid-restore: recompute the window honestly.
+      const reAgeMs = Date.now() - current.deleted_at.getTime();
+      if (reAgeMs > PDPL_GRACE_DAYS * 86_400_000) {
+        throw new BadRequestException(
+          'Restore window expired. The account is permanently scheduled for deletion.',
+        );
+      }
+      throw new ConflictException(
+        'Account was deleted again during restore — ask the player to restore once more.',
+      );
+    }
 
     // Re-read populated profile OUTSIDE the update (contract §2).
     return this.getProfile(userId);

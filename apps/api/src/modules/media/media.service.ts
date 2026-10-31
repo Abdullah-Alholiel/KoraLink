@@ -1,11 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as Sentry from '@sentry/node';
 import * as schema from '../../database/schema';
-import { venues } from '../../database/schema';
-import { StorageService, MAX_UPLOAD_BYTES } from '../../common/storage/storage.service';
+import { users, venues } from '../../database/schema';
+import { StorageService, MAX_UPLOAD_BYTES, MAX_AVATAR_BYTES } from '../../common/storage/storage.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -118,6 +118,98 @@ export class MediaService {
     const s3key = key.startsWith('venues/') ? key : `venues/${key}`;
     if (!this.storage.isManagedVenuePath(`/media/${s3key}`)) return null;
     return this.storage.getVenueImage(`/media/${s3key}`);
+  }
+
+  // ── Avatars (P2-50, run #181) ─────────────────────────────────────────────
+
+  /**
+   * Store a player avatar and persist it on the user row in ONE flow.
+   * The users row is the source of truth (same rule as venue images): the
+   * previous object is deleted best-effort AFTER the write lands, so a crash
+   * can orphan an old object but never lose the new reference.
+   * Error mapping mirrors uploadVenueImage (typed messages → 4xx/5xx).
+   */
+  async uploadAvatar(
+    userId: string,
+    file: { buffer: Buffer; size: number; mimetype?: string },
+  ): Promise<{ avatarUrl: string }> {
+    if (!file || !file.buffer || !file.buffer.length) {
+      throw new BadRequestException('No file uploaded (multipart field "file").');
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      throw new BadRequestException('Avatar exceeds the 2 MB limit.');
+    }
+
+    const current = await this.getCurrentUserAvatar(userId);
+    if (current === undefined) throw new NotFoundException('User not found.');
+
+    let stored: { path: string; bytes: number; mime: string };
+    try {
+      stored = await this.storage.putAvatar(userId, file.buffer, file.mimetype);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('avatars bucket not configured')) {
+        throw new ServiceUnavailableException('Avatar storage is not configured.');
+      }
+      if (msg.includes('unsupported image type')) {
+        throw new BadRequestException('Only JPEG, PNG or WebP images are accepted.');
+      }
+      if (msg.includes('too large')) {
+        throw new BadRequestException('Avatar exceeds the 2 MB limit.');
+      }
+      Sentry.captureException(err, { tags: { scope: 'media.avatarUpload' } });
+      throw new InternalServerErrorException('Image storage is unavailable — try again shortly.');
+    }
+
+    const updated = await this.setUserAvatar(userId, stored.path);
+    if (!updated) {
+      // User vanished mid-request (PDPL purge race) — the object is stored
+      // but unreferenced; clean it up and surface 404.
+      await this.storage.deleteAvatar(stored.path);
+      throw new NotFoundException('User not found.');
+    }
+
+    // Best-effort cleanup of the PREVIOUS object — only when it was a managed
+    // avatar path of THIS user (cross-user deletes are structurally impossible:
+    // the prefix check + putAvatar's userId-keyed paths pin ownership).
+    if (
+      current &&
+      current !== stored.path &&
+      this.storage.isManagedAvatarPath(current) &&
+      current.startsWith(`/media/avatars/${userId}/`)
+    ) {
+      await this.storage.deleteAvatar(current);
+    }
+
+    return { avatarUrl: stored.path };
+  }
+
+  /** Read a stored avatar (public serve route; avatar-bucket-pinned). */
+  async serveAvatar(key: string): Promise<{ body: Buffer; contentType: string } | null> {
+    const s3key = key.startsWith('avatars/') ? key : `avatars/${key}`;
+    if (!this.storage.isManagedAvatarPath(`/media/${s3key}`)) return null;
+    const img = await this.storage.getAvatar(`/media/${s3key}`);
+    return img ? { body: img.body, contentType: img.contentType } : null;
+  }
+
+  /** Current avatar_url of a user, or null when missing/unset; null-null = no user. */
+  private async getCurrentUserAvatar(userId: string): Promise<string | null | undefined> {
+    const [row] = await this.db
+      .select({ avatar_url: users.avatar_url })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row ? row.avatar_url : undefined;
+  }
+
+  /** Guarded avatar write; returns false when the user row vanished (purge race). */
+  private async setUserAvatar(userId: string, path: string): Promise<boolean> {
+    const updated = await this.db
+      .update(users)
+      .set({ avatar_url: path })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id });
+    return updated.length > 0;
   }
 
   /** Remove a path from the venue's array (admin/partner form delete button). */

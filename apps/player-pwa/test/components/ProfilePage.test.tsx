@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 import ProfilePage from '@/app/[locale]/(main)/profile/page';
 import {
@@ -95,11 +96,19 @@ const refetchStats = vi.fn();
 const refetchWallet = vi.fn();
 const prefsMutate = vi.fn();
 
+// P2-50 (run #181): AvatarUpload (child of the page) calls useQueryClient —
+// wrap every render in a QueryClientProvider (the wrapper-level fix; the
+// hooks-mock route can't cover a component-internal hook).
 function renderPage() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
     return render(
-        <NextIntlClientProvider messages={enMessages} locale="en">
-            <ProfilePage />
-        </NextIntlClientProvider>,
+        <QueryClientProvider client={queryClient}>
+            <NextIntlClientProvider messages={enMessages} locale="en">
+                <ProfilePage />
+            </NextIntlClientProvider>
+        </QueryClientProvider>,
     );
 }
 

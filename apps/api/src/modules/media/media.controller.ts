@@ -96,4 +96,33 @@ export class MediaController {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.end(img.body);
   }
+
+  // ── GET /media/avatars/* — PUBLIC avatar serve (P2-50, run #181) ──────────
+  // Mirrors the venues serve: immutable 1y cache, nosniff, avatar-bucket-pinned
+  // inside StorageService (a /media/avatars key can never read the venues
+  // bucket or vice versa). 60/min/IP — avatars render in lists, so the cap
+  // must tolerate feed-level fan-out.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @Get('avatars/*')
+  async serveAvatar(@Param() params: Record<string, string>, @Res() res: Response): Promise<void> {
+    const tail = params['0'] ?? '';
+    let key: string;
+    try {
+      key = decodeURIComponent(tail);
+    } catch {
+      throw new BadRequestException('Bad image path encoding.');
+    }
+    if (!key || key.includes('..') || !/^[A-Za-z0-9/._-]+$/.test(key)) {
+      throw new BadRequestException('Bad image path.');
+    }
+    const img = await this.media.serveAvatar(key);
+    if (!img) {
+      res.status(404).json({ message: 'Image not found.' });
+      return;
+    }
+    res.setHeader('Content-Type', img.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(img.body);
+  }
 }

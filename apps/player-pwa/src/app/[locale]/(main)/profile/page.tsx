@@ -47,6 +47,7 @@ import EmailSection from '@/components/profile/EmailSection';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import AvatarUpload from '@/components/profile/AvatarUpload';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 // P2-133 (run #104): MenuItem extracted to a shared component so the Settings
 // hub reuses the exact same row (Reviewer A: extract, don't extend the 775-line
@@ -190,7 +191,6 @@ export default function ProfilePage() {
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
     const handle = apiUser?.handle ?? storeUser?.handle ?? '@guest';
     const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
-    const avatarInitial = fullName.charAt(0).toUpperCase();
 
     return (
         <div className="pb-4">
@@ -232,26 +232,14 @@ export default function ProfilePage() {
                         (Abdullah: standardise headers; no bells outside the Feed) */}
                     <AppBar light />
 
-                    {/* Identity row: avatar + name + white edit pill */}
+                    {/* Identity row: avatar + name + white edit pill.
+                        P2-50 (run #181): AvatarUpload owns the avatar visual
+                        + camera-badge upload (was render-only initials). */}
                     <div className="mt-6 flex items-center gap-4">
-                        <div className="relative flex-shrink-0">
-                            {avatarUrl ? (
-                                <div className="h-[84px] w-[84px] overflow-hidden rounded-full border-2 border-white/40">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={avatarUrl}
-                                        alt={fullName}
-                                        className="h-full w-full object-cover"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex h-[84px] w-[84px] items-center justify-center rounded-full border-2 border-white/40 bg-brand-green-deep/60">
-                                    <span className="text-3xl font-bold text-white/90">
-                                        {avatarInitial}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                        <AvatarUpload
+                            avatarUrl={avatarUrl}
+                            fullName={fullName}
+                        />
                         <div className="min-w-0 flex-1">
                             <h1 className="truncate text-[21px] font-bold leading-tight">{fullName}</h1>
                             <p className="mt-0.5 text-[13px] text-white/60" dir="ltr">{handle}</p>
