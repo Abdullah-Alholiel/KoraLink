@@ -26,6 +26,8 @@ const MIME_EXT: Record<string, string> = {
 };
 /** 5 MB — venue photos, not originals. */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** 2 MB — avatars are small square photos; the client downscale target. */
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 /** Magic-byte sniffing — never trust the client-declared Content-Type. */
 function sniffMime(buf: Buffer): string | null {
@@ -59,6 +61,7 @@ export interface StoredObject {
 export class StorageService {
   private readonly endpoint: string; // http://127.0.0.1:8333
   private readonly bucket: string;
+  private readonly avatarBucket: string;
   private readonly accessKey: string;
   private readonly secretKey: string;
   private readonly region: string;
@@ -76,6 +79,15 @@ export class StorageService {
         'Storage env incomplete: S3_BUCKET_VENUES / S3_ACCESS_KEY / S3_SECRET_KEY are required (see docs/plans/upload-pipeline-vps/00-plan.md).',
       );
     }
+    // Avatars live in a SECOND bucket (P2-50, run #181). OPTIONAL at boot so a
+    // Render/Vercel deploy without the key still serves venues; the avatar
+    // endpoints map the empty bucket to a typed 503 instead of crashing boot.
+    this.avatarBucket = config.get<string>('S3_BUCKET_AVATARS') ?? '';
+  }
+
+  /** True when the avatars bucket is configured (else avatar routes 503). */
+  get avatarConfigured(): boolean {
+    return this.avatarBucket.length > 0;
   }
 
   /** True when the caller may serve from this module's bucket (path-prefix defense). */
@@ -147,6 +159,74 @@ export class StorageService {
       await this.sigv4Request('DELETE', `/${this.bucket}/${s3key}`, null, {});
     } catch {
       // Orphan cleanup is best-effort; the object is unreferenced either way.
+    }
+  }
+
+  // ── Avatars (P2-50, run #181) — second bucket, same zero-dep SigV4 client ──
+
+  /** True when the caller may touch this module's avatar bucket (path-prefix defense). */
+  isManagedAvatarPath(path: string): boolean {
+    return (
+      path.startsWith('/media/avatars/') &&
+      /^[A-Za-z0-9/._-]+$/.test(path.slice('/media/'.length)) &&
+      !path.includes('..')
+    );
+  }
+
+  /**
+   * Store an uploaded avatar. Returns the canonical /media/avatars/... path.
+   * Throws Error('avatars bucket not configured') / Error('unsupported image
+   * type') / Error('file too large') / storage PUT errors — the caller maps them.
+   */
+  async putAvatar(userId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
+    if (!this.avatarBucket) throw new Error('avatars bucket not configured');
+    void declaredMime; // never trusted — magic bytes only (same rule as venues)
+    if (!buf.length) throw new Error('empty body');
+    if (buf.length > MAX_AVATAR_BYTES) throw new Error('file too large');
+    const mime = sniffMime(buf);
+    if (!mime || !ALLOWED_MIME.has(mime)) throw new Error('unsupported image type');
+
+    const sha = createHash('sha256').update(buf).digest('hex');
+    const ext = MIME_EXT[mime];
+    const key = `avatars/${userId}/${sha}.${ext}`;
+    const res = await this.sigv4Request('PUT', `/${this.avatarBucket}/${key}`, buf, {
+      'Content-Type': mime,
+    });
+    if (res.status !== 200) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`storage PUT ${res.status}: ${detail.slice(0, 200)}`);
+    }
+    return { path: `/media/${key}`, bytes: buf.length, mime };
+  }
+
+  /** Fetch a managed avatar's bytes (public serve route backing; avatar-bucket-pinned). */
+  async getAvatar(
+    key: string,
+  ): Promise<{ body: Buffer; contentType: string; length: number } | null> {
+    if (!this.avatarBucket) return null;
+    const s3key = key.replace(/^\/media\//, '');
+    if (!s3key.startsWith('avatars/') || s3key.includes('..')) return null;
+    try {
+      const res = await this.sigv4Request('GET', `/${this.avatarBucket}/${s3key}`, null, {});
+      if (res.status === 404) return null;
+      if (res.status !== 200) throw new Error(`storage GET ${res.status}`);
+      const body = Buffer.from(await res.arrayBuffer());
+      return { body, contentType: res.headers.get('content-type') ?? 'application/octet-stream', length: body.length };
+    } catch (err) {
+      Sentry.captureException(err, { tags: { scope: 'media.avatarServe' } });
+      return null;
+    }
+  }
+
+  /** Best-effort delete of a PREVIOUS avatar object (same-user prefix enforced upstream). */
+  async deleteAvatar(path: string): Promise<void> {
+    if (!this.avatarBucket) return;
+    const s3key = path.replace(/^\/media\//, '');
+    if (!s3key.startsWith('avatars/') || s3key.includes('..')) return;
+    try {
+      await this.sigv4Request('DELETE', `/${this.avatarBucket}/${s3key}`, null, {});
+    } catch {
+      // Orphan cleanup is best-effort.
     }
   }
 

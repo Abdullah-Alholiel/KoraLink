@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -10,9 +11,12 @@ import {
   Res,
   Req,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import {
@@ -20,6 +24,7 @@ import {
   ApiOperation,
   ApiOkResponse,
   ApiBadRequestResponse,
+  ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
@@ -30,13 +35,19 @@ import { RequestPhoneChangeDto } from './dto/request-phone-change.dto';
 import { VerifyPhoneChangeDto } from './dto/verify-phone-change.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { MAX_AVATAR_BYTES } from '../../common/storage/storage.service';
+import { ConfigService } from '@nestjs/config';
+import { ForbiddenException } from '@nestjs/common';
 
 @ApiTags('users')
 @ApiCookieAuth('access_token')
 @UseGuards(JwtCookieAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // ── GET /users/search?q= — Search users ──────────────────
   // Must be defined BEFORE `:id` routes to avoid collision
@@ -96,6 +107,46 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  // ── POST /users/me/avatar — P2-50 (run #181) ─────────────────────────────
+  // Multipart avatar upload. The STORAGE piece lives in MediaService (same
+  // module that owns venue images); the flag gate rides the controller so an
+  // unconfigured deployment rejects before any multipart parsing cost.
+  // Explicit env flag (AVATAR_UPLOAD_ENABLED) — never a NODE_ENV string gate
+  // (P0-7 class). 5/min/IP on top of the global cap.
+  @Post('me/avatar')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  // Same multer posture as the venue route (PR-Agent r1, run #170): fileSize
+  // aborts the stream at 2 MB pre-buffer; files=1 pins the single-file shape.
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } }))
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Upload my avatar (2 MB max; JPEG/PNG/WebP; feature-flagged)' })
+  @ApiCreatedResponse({
+    description: '{ avatarUrl } — the canonical /media/avatars/... path.',
+    schema: {
+      type: 'object',
+      properties: { avatarUrl: { type: 'string', example: '/media/avatars/<uid>/<sha256>.jpg' } },
+    },
+  })
+  uploadAvatar(
+    @CurrentUser() user: { sub: string },
+    @UploadedFile() file: Express.Multer['File'] | undefined,
+  ) {
+    // P0-7 posture: explicit opt-in flag, default OFF — never a NODE_ENV gate.
+    const isEnabled =
+      this.configService.get<string>('AVATAR_UPLOAD_ENABLED') === 'true';
+    if (!isEnabled) {
+      throw new ForbiddenException('Avatar upload is not enabled.');
+    }
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('No file uploaded (multipart field "file").');
+    }
+    return this.usersService.uploadAvatar(user.sub, {
+      buffer: file.buffer,
+      size: file.size,
+      mimetype: file.mimetype,
+    });
   }
 
   // ── PATCH /users/me/push-preferences — P1-20 (run #13) + P0-5 (run #28) ──

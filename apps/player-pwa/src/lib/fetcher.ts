@@ -117,10 +117,18 @@ export async function fetcher<T>(
   // The restore path always targets the API, so it passes the origin gate.
   const token = getBearerForRequest(path, sessionToken);
 
+  // P2-50 (run #181): a FormData body is a multipart upload — the browser must
+  // set Content-Type itself (it carries the boundary). The default JSON header
+  // would corrupt the multipart body, so it is omitted for FormData requests.
+  const isFormData =
+    typeof restOptions.body !== 'undefined' &&
+    typeof FormData !== 'undefined' &&
+    restOptions.body instanceof FormData;
+
   const response = await fetch(url.toString(), {
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
                         ...(token && isApiOrigin
                                 ? { Authorization: `Bearer ${token}` }
                                 : {}),
