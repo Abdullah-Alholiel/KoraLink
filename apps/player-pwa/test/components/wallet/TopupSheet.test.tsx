@@ -89,6 +89,25 @@ afterEach(() => {
     window.sessionStorage.clear();
 });
 
+describe('TopupSheet — preset chips (P2-289, run #180)', () => {
+    it('renders the 4 shared presets and fills the input on click', () => {
+        renderSheet();
+        const chips = screen.getAllByRole('button', { name: '25' });
+        expect(chips.length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByRole('button', { name: '50' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '100' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '200' })).toBeTruthy();
+        // Chips are announced as a named group with pressed state (a11y).
+        expect(screen.getByRole('group', { name: 'Quick amounts' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '50' }));
+        const input = screen.getByLabelText('Amount (SAR)') as HTMLInputElement;
+        expect(input.value).toBe('50');
+        // The chip is marked pressed once selected.
+        expect((screen.getByRole('button', { name: '50' }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true');
+        expect(createIntentMock).not.toHaveBeenCalled();
+    });
+});
+
 describe('TopupSheet — validation + intent + form host (P0-2)', () => {
     it('rejects an amount below the config minimum without creating an intent', async () => {
         renderSheet({ minAmount: 5 });

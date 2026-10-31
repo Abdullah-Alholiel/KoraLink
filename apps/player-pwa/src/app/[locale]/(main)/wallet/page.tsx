@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatCount } from '@/lib/format';
 import {
     ArrowLeft,
     Plus,
@@ -35,6 +35,13 @@ import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
 import { downloadTextAsFile } from '@/lib/download';
+// P2-289 (run #180): shared top-up amount domain — presets + config-driven
+// validation (the legacy sheet previously hardcoded a SAR-10 minimum while
+// the API/config minimum is 5).
+import {
+    presetsWithinBounds,
+    validateTopupAmount,
+} from '@/lib/topup-amount';
 import type { Transaction } from '@/types';
 import { useTopupConfig, useLatestTopupIntent } from '@/hooks/useTopup';
 import TopupSheet from '@/components/wallet/TopupSheet';
@@ -185,18 +192,25 @@ export default function WalletPage() {
 
     const handleTopUpSubmit = () => {
         setTopUpError('');
-        const amount = Number(topUpAmount);
-        if (!topUpAmount || isNaN(amount) || amount <= 0) {
+        // P2-289 (run #180): bounds come from the SERVER config (GET
+        // /wallet/topup/config), not hardcoded client values — fixes the
+        // SAR-10-vs-5 contract drift and adds the missing max check.
+        const minSar = topupConfig?.minAmount ?? 5;
+        const maxSar = topupConfig?.maxAmount ?? 2000;
+        const verdict = validateTopupAmount(topUpAmount, minSar, maxSar);
+        if (verdict === 'empty' || verdict === 'invalid') {
             setTopUpError(t('wallet.invalidAmount'));
             return;
         }
-        if (amount < 10) {
-            setTopUpError(t('wallet.minTopUp'));
+        if (verdict === 'belowMin' || verdict === 'aboveMax') {
+            setTopUpError(
+                t('wallet.topup.invalidAmount', { min: minSar, max: maxSar }),
+            );
             return;
         }
         topup.mutate(
             {
-                amount,
+                amount: Number(topUpAmount),
                 idempotencyKey: `topup-${uuid()}`,
             },
             {
@@ -471,6 +485,31 @@ export default function WalletPage() {
                     </div>
 
                     <p className="text-xs text-gray-400 mb-3">{t('wallet.topUpAmount')}</p>
+
+                    {/* P2-289 (run #180): preset chips — same 4 presets as the
+                        Moyasar TopupSheet (shared TOPUP_QUICK_AMOUNTS). Chip
+                        digits route through formatCount (Arabic-Indic for AR;
+                        Reviewer B run-#180 design-lens). */}
+                    <div className="mb-3 flex gap-2" role="group" aria-label={t('wallet.topup.quickAmounts')}>
+                        {presetsWithinBounds(
+                            topupConfig?.minAmount ?? 5,
+                            topupConfig?.maxAmount ?? 2000,
+                        ).map((qa) => (
+                            <button
+                                key={qa}
+                                type="button"
+                                aria-pressed={topUpAmount === String(qa)}
+                                onClick={() => {
+                                    setTopUpAmount(String(qa));
+                                    setTopUpError('');
+                                }}
+                                className="flex-1 rounded-full border border-gray-200 py-2 text-sm font-medium text-brand-black hover:bg-gray-50 aria-pressed:bg-brand-black aria-pressed:text-white"
+                            >
+                                {formatCount(qa, intlLocale)}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-gray-100 px-4 py-3.5 mb-3 focus-within:border-brand-green transition-colors">
                         <span className="text-sm font-bold text-gray-500" dir="ltr">SAR</span>
                         <input
@@ -484,7 +523,14 @@ export default function WalletPage() {
                         />
                     </div>
 
-                    <p className="text-xs text-gray-400 mb-4">{t('wallet.minTopUp')}</p>
+                    <p className="text-xs text-gray-400 mb-4">
+                        {/* P2-289 (run #180): dedicated hint key (PR-Agent r1 MINOR)
+                            — the error key showed the identical sentence twice. */}
+                        {t('wallet.topup.amountHint', {
+                            min: topupConfig?.minAmount ?? 5,
+                            max: topupConfig?.maxAmount ?? 2000,
+                        })}
+                    </p>
 
                     {topUpError && (
                         <p className="text-sm text-brand-red mb-3 text-center">{topUpError}</p>
