@@ -719,7 +719,6 @@
     "noTransactions": "لا توجد معاملات بعد",
     "noTransactionsDescription": "ستظهر سجل معاملاتك هنا.",
     "topUpAmount": "مبلغ الشحن",
-    "minTopUp": "الحد الأدنى ١٠ ر.س",
     "topupDisabled": "الإيداع في المحفظة غير متاح مؤقتاً. يرجى المحاولة لاحقاً.",
     "topup": {
         "title": "إيداع في المحفظة",

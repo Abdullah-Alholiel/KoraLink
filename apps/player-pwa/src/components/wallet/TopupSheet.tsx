@@ -33,6 +33,10 @@ import {
   type TopupIntentResponse,
 } from '@/hooks/useTopup';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
+// P2-289 (run #180): presets + validation live in the SHARED domain module —
+// one source of truth across both top-up surfaces (this sheet + the legacy
+// dummy sheet in wallet/page.tsx).
+import { TOPUP_QUICK_AMOUNTS, validateTopupAmount } from '@/lib/topup-amount';
 
 /** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract;
  * the runtime also accepts a live Element for `element` — verified in the
@@ -59,7 +63,8 @@ declare global {
 }
 
 const FORM_CDN = 'https://cdn.jsdelivr.net/npm/moyasar-payment-form@2.3.0/dist/moyasar.umd.min.js';
-const QUICK_AMOUNTS = [5, 10, 20, 50] as const;
+// P2-289 (run #180): moved to lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS) —
+// shared with the legacy dummy sheet so both surfaces offer the same presets.
 
 function loadMoyasarScript(): Promise<MoyasarFormApi> {
   return new Promise((resolve, reject) => {
@@ -178,7 +183,9 @@ export default function TopupSheet({
       return;
     }
     const parsed = Number(amount);
-    if (!amount || Number.isNaN(parsed) || parsed < minAmount || parsed > maxAmount) {
+    // P2-289 (run #180): shared validator — same verdict semantics as the
+    // legacy sheet; any non-ok verdict shows the interpolated bounds copy.
+    if (validateTopupAmount(amount, minAmount, maxAmount) !== 'ok') {
       setError(t('wallet.topup.invalidAmount', { min: minAmount, max: maxAmount }));
       return;
     }
@@ -327,7 +334,7 @@ export default function TopupSheet({
           />
 
           <div className="flex gap-2 mt-2.5" role="group" aria-label={t('wallet.topup.quickAmounts')}>
-            {QUICK_AMOUNTS.map((qa) => (
+            {TOPUP_QUICK_AMOUNTS.map((qa) => (
               <button
                 key={qa}
                 type="button"

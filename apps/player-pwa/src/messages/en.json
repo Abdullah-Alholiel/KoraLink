@@ -719,7 +719,6 @@
     "noTransactions": "No transactions yet",
     "noTransactionsDescription": "Your transaction history will appear here.",
     "topUpAmount": "Top Up Amount",
-    "minTopUp": "Minimum SAR 10",
     "topupDisabled": "Wallet top-up is temporarily unavailable. Please try again later.",
     "topup": {
         "title": "Top up wallet",
