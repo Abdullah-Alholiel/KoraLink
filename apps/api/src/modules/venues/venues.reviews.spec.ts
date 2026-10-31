@@ -1,4 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { VenuesService } from './venues.service';
 import { venues } from '../../database/schema';
 
@@ -270,6 +271,14 @@ describe('P1-55 venue reviews', () => {
     expect(page.average).toBe(4.5);
     expect(page.count).toBe(2);
     expect(page.can_review).toBe(true);
+  });
+
+  it('P2-291: public listing SQL excludes hidden reviews', async () => {
+    const db = makeDb({ venues: [{ id: VENUE }], proofMatchId: null, reviews: [] });
+    const svc = makeService(db);
+    await svc.listVenueReviews(USER, VENUE);
+    const listing = new PgDialect().sqlToQuery(db.execute.mock.calls[0][0]).sql;
+    expect(listing).toContain('vr.hidden_at IS NULL');
   });
 
   it('listing 404s an unknown venue', async () => {

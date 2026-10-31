@@ -965,6 +965,8 @@ export const venue_reviews = pgTable(
     match_id: varchar('match_id', { length: 36 }).notNull(),
     rating: smallint('rating').notNull(),
     comment: varchar('comment', { length: 500 }),
+    // P2-291: admin moderation — non-NULL = hidden from the public list.
+    hidden_at: timestamp('hidden_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

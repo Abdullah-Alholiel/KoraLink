@@ -32,6 +32,7 @@ const ENTITY_TYPES = [
   'transaction',
   'user',
   'venue',
+  'venue_review',
 ] as const;
 
 export default function AuditPage() {

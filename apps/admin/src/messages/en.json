@@ -93,7 +93,8 @@
     "closeMenu": "Close menu",
     "rolePartner": "Partner",
     "roleHq": "HQ",
-    "pitches": "Pitches"
+    "pitches": "Pitches",
+    "reviews": "Reviews"
   },
   "language": {
     "label": "Language",
@@ -846,5 +847,42 @@
     "suspendPreset720h": "30 days",
     "suspendCancel": "Cancel",
     "na": "—"
+  },
+  "reviews": {
+    "title": "Venue reviews",
+    "subtitle": "Hide, restore or delete player reviews of venues",
+    "filterVenue": "Filter by venue",
+    "allVenues": "All venues",
+    "filterStatus": "Filter by visibility",
+    "allStatuses": "Visible and hidden",
+    "visible": "Visible",
+    "hidden": "Hidden",
+    "thVenue": "Venue",
+    "thAuthor": "Author",
+    "thRating": "Rating",
+    "thExcerpt": "Review",
+    "thStatus": "Status",
+    "thUpdated": "Updated",
+    "thCreated": "Posted",
+    "thHiddenAt": "Hidden on",
+    "thComment": "Full comment",
+    "ratingValue": "{rating} out of 5",
+    "noComment": "No comment",
+    "loading": "Loading reviews…",
+    "empty": "No reviews yet. They appear here once players review a venue.",
+    "emptyFiltered": "No reviews match these filters. Change the venue or visibility filter.",
+    "hide": "Hide",
+    "restore": "Restore",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete this review?",
+    "deleteConfirmMessage": "The review is removed permanently and cannot be restored. To take it off the venue page but keep it, hide it instead.",
+    "hideFailed": "Couldn't hide this review.",
+    "restoreFailed": "Couldn't restore this review.",
+    "deleteFailed": "Couldn't delete this review.",
+    "reasonAuth": "Your session has expired. Sign in again, then retry.",
+    "reasonAccess": "Your account doesn't have permission for this. Ask an HQ admin for access.",
+    "reasonGone": "It no longer exists. Close this panel and check the refreshed list.",
+    "reasonServer": "The server couldn't complete the request. Wait a moment, then try again.",
+    "reasonNetwork": "The server couldn't be reached. Check your connection, then try again."
   }
 }
