@@ -48,6 +48,14 @@ export default function AvatarUpload({
             showToast(to('offline'), 'error');
             return;
         }
+        // P2-296 (run #182): client-side size gate — mirrors the server's
+        // MAX_AVATAR_BYTES (2 MB, apps/api/src/common/storage/storage.service.ts:30)
+        // so an oversized phone photo fails instantly instead of uploading
+        // fully just to draw a 413 (wasted cellular upload).
+        if (file.size > 2 * 1024 * 1024) {
+            showToast(t('avatarTooLarge'), 'error');
+            return;
+        }
         setUploading(true);
         try {
             const fd = new FormData();
@@ -74,7 +82,12 @@ export default function AvatarUpload({
                 clearAuthToken();
                 showToast(te('unauthorized'), 'error');
             } else if (status === 403) {
-                showToast(t('avatarFailed'), 'error');
+                // P2-296 (run #182): 403 from this endpoint means the upload
+                // feature is flag-disabled server-side ("Avatar upload is not
+                // enabled.", users.controller.ts) — NOT a connection failure.
+                // Distinct copy per the error-message standard (what happened
+                // + why + what next).
+                showToast(t('avatarDisabled'), 'error');
             } else if (status === 400 && /2 MB|exceeds/i.test(msg)) {
                 showToast(t('avatarTooLarge'), 'error');
             } else if (status === 400 && /JPEG, PNG or WebP/i.test(msg)) {
