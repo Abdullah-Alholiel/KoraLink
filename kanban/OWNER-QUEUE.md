@@ -1,12 +1,12 @@
-# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #179, 2026-10-30 16:3xZ)
+# OWNER QUEUE — Abdullah's one-stop action list (refreshed run #180, 2026-10-31 02:1xZ)
 
-Snapshot: open PRs = **2** (#178 promote, owner-gated · #202 P2-284 settlement scoping — checks green-pending, factory merges in run #180) · services API/PWA/Admin all active · staging @ `ad18405` (**shipped run #179: settlements CSV paidAt/paidBy columns (P2-286) + top-up pending-card self-resolve polling (P2-287) — both merged AND live on the VPS**) · **P1-52 Neon quota: 0 events in this 24h window (chronic free-tier quota — owner billing action unchanged) · hex baseline 323**.
+Snapshot: open PRs = **3** (#178 promote, owner-gated · #203 P2-289 top-up amount UX + #204 P2-248 metrics throttle — factory merges when checks green) · services API/PWA/Admin all active · staging @ `aeb8478` · **P1-52 Neon quota: 66 events/24h — CROSSED the ≥60 flag (still the same chronic free-tier class; owner billing action unchanged) · hex baseline 324/64**.
 
 ## 🔴 Owner actions (blocking)
 
 ### 1. P1-52 — Neon free-tier quota (chronic; BLOCKS: promote PR #178 AND Neon applies for 0055+0056+0057)
-- **Run #177 RE-BASELINE: prior factory reports said "59-61 events/24h, escalating, AT the flag-line" — that was a METRIC ERROR (the Sentry issue's lifetime count, not the 24h rate). The true rate is 5 events/24h (~hourly, flat since Sep 24).** The quota problem is real but CHRONIC, not escalating — and it never actually crossed the 60 line. 1F (prod push-sweep) is the same class, now ~1/24h.
-- **What's needed (unchanged):** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or wait for the monthly reset (project birthday Oct-25 — the free reset may already be due; one console visit answers it).
+- **Run #180 reading: 66 events/24h — first time OVER the ≥60 flag line (run-#177's re-baseline said 5/24h flat; this window is materially worse — the monthly reset may not have landed). Also deduped into this item: the daily push_subscriptions cleanup delete failing 12×/24h — its Sentry event detail is the SAME PostgresError quota message, not a separate bug.**
+- **What's needed (unchanged):** console.neon.tech → koralink-prod (solitary-thunder-20087776) → Billing/Usage → upgrade, or check whether the monthly free reset landed (project birthday Oct-25).
 - **Close-line:** "Neon quota cleared" (then the factory applies 0055+0056+0057 to Neon and #178 becomes mergeable).
 
 ### 2. PR #178 — promote staging → main (T2 gate, YOUR merge)
