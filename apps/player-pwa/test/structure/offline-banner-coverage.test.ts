@@ -27,6 +27,9 @@ const REQUIRED_SURFACES: Record<string, string> = {
   'match/[id]/page.tsx': 'roster + join/booking CTAs — offline state must never read as live',
   'clubs/[id]/page.tsx': 'club profile + match list (run #52)',
   '(main)/my-games/page.tsx': 'upcoming games + decision data (pinned run #54 — was wired but unpinned)',
+  '(main)/play/page.tsx': 'discovery feed — banner gated on real network state, not on any fetch error (run #92)',
+  '(main)/wallet/page.tsx': 'money surface — offline must never read as live; balance carries a stale-cache note (run #92, P2-129)',
+  '(main)/settings/page.tsx': 'settings hub (P2-133, run #104) — links surface carries the same staleness signal',
 };
 
 describe('offline staleness signal coverage (run #53)', () => {

@@ -15,6 +15,7 @@ import { ListReportsDto } from './dto/list-reports.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { AdminReportsService } from './reports.service';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/reports')
 @UseGuards(AdminAuthGuard)
@@ -27,13 +28,13 @@ export class AdminReportsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.reports.findOne(id);
   }
 
   @Post(':id/resolve')
   resolve(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: ResolveReportDto,
     @Req() req: Request,
   ) {
@@ -42,14 +43,14 @@ export class AdminReportsController {
   }
 
   @Post(':id/reopen')
-  reopen(@Param('id') id: string, @Req() req: Request) {
+  reopen(@Param('id', UuidParamPipe) id: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.reports.reopen(id, adminId, req.ip);
   }
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdateReportDto,
     @Req() req: Request,
   ) {

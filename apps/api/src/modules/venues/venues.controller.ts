@@ -1,14 +1,19 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards, Body } from '@nestjs/common';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
+  ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 
 import { VenuesService } from './venues.service';
 import { GetVenuesDto } from './dto/get-venues.dto';
+import { CreateVenueReviewDto } from './dto/create-venue-review.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('venues')
 @ApiCookieAuth('access_token')
@@ -44,11 +49,85 @@ export class VenuesController {
     return this.venuesService.findNearby(dto);
   }
 
+  // ── GET /venues/favorites — the caller's saved venues (P2-161, run #109) ─
+  // MUST stay ABOVE GET /venues/:id or "favorites" is captured as :id (same
+  // rule as /suggestions above).
+  @Get('favorites')
+  @ApiOperation({ summary: 'List the authenticated user\'s favorite venues' })
+  @ApiOkResponse({ description: 'Favorite venues, newest-first (findNearby row shape).' })
+  listFavorites(@CurrentUser() user: { sub: string }) {
+    return this.venuesService.listFavoriteVenues(user.sub);
+  }
+
+  // ── GET /venues/favorites/ids — heart-state id set (P2-161) ─────────────
+  // Two segments, so :id cannot shadow it, but declared here to keep the
+  // favorites surface together.
+  @Get('favorites/ids')
+  @ApiOperation({ summary: 'List the authenticated user\'s favorited venue ids (newest-first)' })
+  @ApiOkResponse({ description: 'Array of venue ids.' })
+  listFavoriteIds(@CurrentUser() user: { sub: string }) {
+    return this.venuesService.listFavoriteIds(user.sub);
+  }
+
+  // ── POST /venues/:id/favorite — idempotent save (P2-161) ────────────────
+  @Post(':id/favorite')
+  @ApiOperation({ summary: 'Favorite a venue (idempotent)' })
+  @ApiOkResponse({
+    description: '{ favorited: true, created } — created=true only when newly inserted.',
+  })
+  addFavorite(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.addFavorite(user.sub, id);
+  }
+
+  // ── DELETE /venues/:id/favorite — idempotent unsave (P2-161) ────────────
+  @Delete(':id/favorite')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Unfavorite a venue (idempotent, never 404s on a missing row)' })
+  @ApiOkResponse({
+    description: '{ favorited: false, removed } — removed=true only when a row was deleted.',
+  })
+  removeFavorite(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.removeFavorite(user.sub, id);
+  }
+
+  // ── POST /venues/:id/reviews — booking-verified review (P1-55) ──────────
+  // 403 unless the caller has ≥1 Completed match at this venue; re-submit
+  // UPSERTs (one review per user per venue). NOTE: declared ABOVE
+  // GET /venues/:id is not required (different method), but the reviews
+  // surface stays grouped with the favorites surface it mirrors.
+  // Run #181 (Reviewer A I-3): abuse-sensitive write — 5/min/IP on top of
+  // the global cap. Booking-verified precondition already limits WHO can
+  // write; this limits HOW OFTEN.
+  @Post(':id/reviews')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Submit a booking-verified review (re-submit updates your review)' })
+  @ApiCreatedResponse({
+    description: '{ review, venueRating: { average, count } } — aggregates fresh from the write tx.',
+  })
+  submitReview(
+    @Param('id', UuidParamPipe) id: string,
+    @CurrentUser() user: { sub: string },
+    @Body() dto: CreateVenueReviewDto,
+  ) {
+    return this.venuesService.submitVenueReview(user.sub, id, dto.rating, dto.comment ?? null);
+  }
+
+  // ── GET /venues/:id/reviews — public reviews page (P1-55) ───────────────
+  @Get(':id/reviews')
+  @ApiOperation({ summary: 'Latest 20 reviews + aggregates + whether the caller may review' })
+  @ApiOkResponse({
+    description: '{ reviews[], average, count, can_review }.',
+  })
+  listReviews(@Param('id', UuidParamPipe) id: string, @CurrentUser() user: { sub: string }) {
+    return this.venuesService.listVenueReviews(user.sub, id);
+  }
+
   // ── GET /venues/:id — Venue details ───────────────────────────────────
   @Get(':id')
   @ApiOperation({ summary: 'Get full venue details including pitches' })
   @ApiOkResponse({ description: 'Venue details with pitches.' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.venuesService.findOne(id);
   }
 }

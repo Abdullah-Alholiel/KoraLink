@@ -86,7 +86,10 @@ describe('CSP script-src shape (P2-42 tripwire, pins next.config.mjs)', () => {
   });
 
   it('style-src and img-src drop the dead mapbox entries (run #73)', () => {
-    expect(source).toContain("\"img-src 'self' data: blob:\"");
+    // P2-269 (run #171): img-src now derives the API origin (venue photos
+    // are cross-origin :8443 media-route responses); the mapbox absence
+    // stays pinned.
+    expect(source).toContain("`img-src 'self' data: blob: ${apiOrigin}`");
     expect(source).not.toContain('*.mapbox.com');
   });
 

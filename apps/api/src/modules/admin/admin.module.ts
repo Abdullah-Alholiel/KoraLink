@@ -7,6 +7,7 @@ import { AdminUsersController } from './users.controller';
 import { AdminVenuesService } from './venues.service';
 import { AdminVenuesController } from './venues.controller';
 import { AdminDisputesService } from './disputes.service';
+import { DisputesScheduler } from './disputes.scheduler';
 import { AdminDisputesController } from './disputes.controller';
 import { AdminReportsService } from './reports.service';
 import { AdminReportsController } from './reports.controller';
@@ -21,6 +22,8 @@ import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
 import { AdminPitchesService } from './pitches.service';
 import { AdminPitchesController, AdminSlotsController } from './pitches.controller';
+import { AdminReviewsService } from './reviews.service';
+import { AdminReviewsController } from './reviews.controller';
 import { MatchesModule } from '../matches/matches.module';
 import { PartnerModule } from '../partner/partner.module';
 import { GatewayModule } from '../gateway/gateway.module';
@@ -42,6 +45,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminMatchesController,
     AdminPitchesController,
     AdminSlotsController,
+    AdminReviewsController,
   ],
   providers: [
     AuditService,
@@ -49,12 +53,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminUsersService,
     AdminVenuesService,
     AdminDisputesService,
+    DisputesScheduler,
     AdminReportsService,
     AdminTransactionsService,
     AdminSettlementsService,
     AdminSettingsService,
     AdminMatchesService,
     AdminPitchesService,
+    AdminReviewsService,
   ],
   exports: [AuditService],
 })

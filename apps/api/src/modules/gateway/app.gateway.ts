@@ -18,14 +18,51 @@ import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { match_players, match_messages, users } from '../../database/schema';
+import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from '../matches/chat-status.predicate';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from './realtime.service';
 import { WsRateLimitService } from './rate-limit.service';
+import { UUID_SHAPE } from '../../common/validation/id-shape';
+import { wsAllowRequest, extractHandshakeOrigin, setWsAllowedOriginsProvider } from '../../common/utils/ws-origin';
+import { originAllowed } from '../../common/utils/cors-origin';
 
 /** Parity with the REST message DTOs (@MaxLength(2000)). */
 const WS_MESSAGE_MAX_LENGTH = 2000;
+
+/** Parity with the REST DTO cap (@MaxLength(36)) and the varchar(36) client_message_id column. */
+const WS_CLIENT_MESSAGE_ID_MAX_LENGTH = 36;
+
+/** P2-231: TTL of a cached ACTIVE moderation outcome (typing events only). */
+const ACTIVE_USER_CACHE_TTL_MS = 10_000;
+/** P2-231: size at which expired cache entries are purged on insert. */
+const ACTIVE_USER_CACHE_MAX_ENTRIES = 10_000;
+
+/**
+ * Normalize the optional clientMessageId socket field: absent/null → null,
+ * string → trimmed (empty → null), anything else → WsException. A hostile
+ * payload can carry a number/object here; without the typeof guard the
+ * `.trim()` call would throw a raw TypeError at the handler instead of a
+ * clean validation error (PR-Agent minor, run #78).
+ */
+function normalizeClientMessageId(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') {
+    throw new WsException('clientMessageId must be a string.');
+  }
+  const trimmed = v.trim();
+  return trimmed || null;
+}
+
+/**
+ * Room ids arrive as raw socket payloads and become room names (`match:<id>`,
+ * `conv:<id>`) and query params. WS handlers get no class-validator pass, so
+ * reject anything that is not UUID-shaped before it reaches a room or the DB.
+ */
+function isUuidShape(v: unknown): boolean {
+  return typeof v === 'string' && UUID_SHAPE.test(v);
+}
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -37,12 +74,20 @@ type DB = PostgresJsDatabase<typeof schema>;
 @WebSocketGateway({
   cors: {
     origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Origins are validated at connect time using ConfigService inside the class.
-      // This factory approach is used because static decorator values cannot read
-      // runtime config; actual origin check happens in handleConnection.
+      // P2-185 (run #133): origins are rejected pre-upgrade by `allowRequest`
+      // below; this factory only controls the CORS reflection header. Real
+      // origin enforcement lives in ws-origin.ts (allowRequest) + the
+      // defense-in-depth re-check in handleConnection.
       callback(null, true);
     },
     credentials: true,
+  },
+  // P2-185 (run #133): reject unlisted browser origins BEFORE the engine.io
+  // upgrade completes — previously every probe paid a full handshake+disconnect
+  // cycle before handleConnection's post-connect check fired. Non-browser
+  // requests (no Origin header) pass through; provider failures fail CLOSED.
+  allowRequest: (req: { headers?: Record<string, string | string[] | undefined> }, callback: (err: Error | null, allow?: boolean) => void) => {
+    callback(null, wsAllowRequest(req));
   },
   namespace: '/lobby',
 })
@@ -51,6 +96,8 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
   server: Server;
 
   private readonly logger = new Logger(AppGateway.name);
+  /** P2-231: userId → expiresAtMs of a cached ACTIVE gate outcome (positive-only). */
+  private readonly activeUserCache = new Map<string, number>();
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -63,6 +110,26 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     private readonly rateLimit: WsRateLimitService,
   ) {}
 
+  onModuleInit(): void {
+    // P2-185 (run #133): the decorator context has no DI, so the allowRequest
+    // hook reads the allowlist through this module-level provider. Config is
+    // read LIVE per request (env edits + restarts propagate without a rebuild
+    // beyond the process restart itself).
+    setWsAllowedOriginsProvider(() => {
+      const playerUrls = this.config
+        .get<string>('PLAYER_URL', 'http://localhost:3000')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const adminUrls = this.config
+        .get<string>('ADMIN_URL', 'http://localhost:3002')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return [...playerUrls, ...adminUrls];
+    });
+  }
+
   afterInit(): void {
     this.realtime.registerServer(this.server);
     this.logger.log('Gateway initialised — realtime server registered');
@@ -72,7 +139,6 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
     // Validate origin against the configured whitelist.
-    const origin = client.handshake.headers?.origin;
     const playerUrls = this.config
       .get<string>('PLAYER_URL', 'http://localhost:3000')
       .split(',')
@@ -93,9 +159,15 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // Tighten: ALWAYS reject unlisted origins. Listing PLAYER_URL / ADMIN_URL
     // for any new local interface is a one-env-var change; loosening at the
     // gateway is a privilege-escalation surface we don't need.
-    if (origin && !allowedOrigins.includes(origin)) {
+    // P2-185 (run #133): defense-in-depth layer — allowRequest now rejects
+    // pre-upgrade; this post-connect check stays as a second gate and moves
+    // onto originAllowed() so BOTH layers share the normalize rule.
+    const handshakeOrigin = extractHandshakeOrigin({
+      headers: client.handshake.headers as Record<string, string | string[] | undefined>,
+    });
+    if (handshakeOrigin && !originAllowed(handshakeOrigin, allowedOrigins)) {
       this.logger.warn(
-        `WS connection from unlisted origin "${origin}" rejected (allowlist: ${allowedOrigins.join(', ')})`,
+        `WS connection from unlisted origin "${handshakeOrigin}" rejected (allowlist: ${allowedOrigins.join(', ')})`,
       );
       client.disconnect(true);
       return;
@@ -111,9 +183,25 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
 
       if (!token) throw new Error('No token');
 
-      const payload = this.jwt.verify<{ sub: string; role?: string }>(token, {
+      const payload = this.jwt.verify<{ sub: string; role?: string; purpose?: string }>(token, {
         secret: this.config.getOrThrow<string>('JWT_SECRET'),
       });
+
+      // P1-68 (run #153, Reviewer A): a `purpose:'restore'` JWT is a one-shot
+      // account-recovery credential, NOT a session token. REST rejects a spent
+      // restore token on every route (jwt-cookie.strategy.ts — "This restore
+      // token has already been used"), but this handshake only checked the
+      // signature + moderation state, so a restore token that had already
+      // restored its account (deleted_at NULL) opened a FULL socket session
+      // for up to 7 days — chat, DMs, and the ops room for a staff account.
+      // Mirror the REST replay guard: purpose tokens never open sockets.
+      if (payload.purpose === 'restore') {
+        this.logger.warn(
+          `WS connection rejected: restore token used as session (account ${payload.sub})`,
+        );
+        client.disconnect(true);
+        return;
+      }
 
       // Re-read the user row so moderation actions (ban/suspend) and role
       // changes apply IMMEDIATELY on the socket — a JWT can outlive them.
@@ -230,8 +318,49 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
    * Every state-changing @SubscribeMessage handler calls this right after its
    * `!client.userId` guard, BEFORE rate-limit consumption, membership reads,
    * writes, or broadcasts. A missing row (account hard-removed) blocks too.
+   *
+   * Every call site passes no options (uncached, fresh DB read) EXCEPT the
+   * two typing handlers, which pass `{ cacheable: true }` (P2-231). The call
+   * text stays `await this.requireActiveUser(` so the ws-gate-coverage
+   * tripwire keeps matching every gated handler.
    */
-  private async requireActiveUser(userId: string): Promise<void> {
+  private async requireActiveUser(
+    userId: string,
+    opts: { cacheable: boolean } = { cacheable: false },
+  ): Promise<void> {
+    return this.requireActiveUserCached(userId, opts);
+  }
+
+  /**
+   * P2-231 (run #151): positive-only cache of the moderation gate for
+   * typing-only events (`typing`, `conv-typing` re-emit every ~2.5s per typing
+   * user — one users-table read each was N extra DB hits/sec at scale).
+   *
+   * Only the ACTIVE outcome is cached, for ACTIVE_USER_CACHE_TTL_MS. A banned /
+   * suspended / deleted result or a MISSING row is never cached and throws on
+   * every call, so a hard-removed account never regains write access.
+   *
+   * Moderation-lag tradeoff: a user banned mid-session may keep sending TYPING
+   * signals (read-feel only, no message content) for up to 10s. Message sends,
+   * DMs, joins and read receipts never pass `cacheable: true` — they still hit
+   * the DB on every event.
+   *
+   * Single-process only: a multi-instance deployment would need this cache
+   * disabled or moved to a shared store (Redis) so all nodes agree.
+   */
+  private async requireActiveUserCached(
+    userId: string,
+    opts: { cacheable: boolean },
+  ): Promise<void> {
+    const now = Date.now();
+    if (opts.cacheable) {
+      const expiresAt = this.activeUserCache.get(userId);
+      if (expiresAt !== undefined) {
+        if (expiresAt > now) return;
+        this.activeUserCache.delete(userId);
+      }
+    }
+
     const [user] = await this.db
       .select({
         banned_at: users.banned_at,
@@ -243,7 +372,31 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .limit(1);
 
     if (!user || this.moderationReason(user) !== null) {
+      // Never negative-cache — and drop any stale positive so a later typing
+      // event re-reads the row instead of riding an old allow.
+      this.activeUserCache.delete(userId);
       throw new WsException('Your account can no longer perform this action.');
+    }
+
+    if (opts.cacheable) {
+      if (this.activeUserCache.size >= ACTIVE_USER_CACHE_MAX_ENTRIES) {
+        for (const [id, exp] of this.activeUserCache) {
+          if (exp <= now) this.activeUserCache.delete(id);
+        }
+        // Hard bound (PR-Agent #156 round 2): every entry still fresh → evict
+        // the OLDEST (Map iteration order = insertion order). Worst case the
+        // evicted user's next typing event re-reads the row — the uncached
+        // behavior — and the cache can never exceed ACTIVE_USER_CACHE_MAX_ENTRIES.
+        if (this.activeUserCache.size >= ACTIVE_USER_CACHE_MAX_ENTRIES) {
+          const oldest = this.activeUserCache.keys().next().value;
+          if (oldest !== undefined) this.activeUserCache.delete(oldest);
+        }
+      }
+      // Re-insert (delete-then-set) so Map insertion order stays = recency and
+      // the cap eviction always targets the least-recently-seen typing user
+      // (PR-Agent #156 r3 MINOR — a plain set() would keep a stale position).
+      this.activeUserCache.delete(userId);
+      this.activeUserCache.set(userId, now + ACTIVE_USER_CACHE_TTL_MS);
     }
   }
 
@@ -266,6 +419,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -300,6 +454,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 gate parity (merged from realtime-singleton lane): leave is a
     // mutating membership op — same moderation gate as join-lobby.
     await this.requireActiveUser(client.userId);
@@ -314,76 +469,162 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    // Narrowed once for use inside the tx callback (TS drops property
+    // narrowing across async closure boundaries).
+    const userId: string = client.userId;
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
-    const clientMessageId = data.clientMessageId?.trim() || null;
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
+    // Cap before the DB: an oversized id would surface a raw Postgres
+    // 'value too long' error, leaking column internals to the client.
+    if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
+      throw new WsException(
+        `clientMessageId must be at most ${WS_CLIENT_MESSAGE_ID_MAX_LENGTH} characters.`,
+      );
+    }
 
     // Parity with the REST DTO: reject oversized payloads before any DB work.
     if (content.length > WS_MESSAGE_MAX_LENGTH) {
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
-    // P1-42 (run #36): per-socket flood control. Keyed per connection — each
-    // connection paid a full authenticated handshake, and reconnect-to-refill
-    // costs an expensive, logged handshake per round.
-    const rl = this.rateLimit.consume(`msg:${client.id}`);
-    if (!rl.allowed) {
-      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
-    }
-
-    // Only match members may post to the lobby.
-    const [membership] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        and(
-          eq(match_players.match_id, data.matchId),
-          eq(match_players.user_id, client.userId),
-        ),
-      )
-      .limit(1);
-
-    if (!membership) throw new WsException('You are not a member of this match.');
-
-    // Idempotency — a retried send with the same clientMessageId returns the
-    // already-persisted message instead of inserting a duplicate.
-    let messageRow: typeof match_messages.$inferSelect | undefined;
+    // P2-172 reconcile pre-read (run #148, PR-Agent review follow-up on the
+    // P2-220-twin): checked BEFORE the rate limiter so a retried send whose
+    // clientMessageId was already accepted returns the ORIGINAL row even if
+    // the match has since gone terminal or the replay storm exhausted the
+    // bucket — the message WAS accepted when sent, so reconciliation is a
+    // read, not a send, and must never surface as chat-closed or rate-limited
+    // (either would flip a delivered bubble to failed in the offline queue).
+    // Same order as the REST path (matches.service.ts: idempotency pre-read
+    // → tx → guard → insert). A miss falls through to the limiter, so spam
+    // stays bounded; the miss lookup is one indexed point SELECT from an
+    // authenticated socket.
     if (clientMessageId) {
-      messageRow = await this.db.query.match_messages.findFirst({
+      const existing = await this.db.query.match_messages.findFirst({
         where: and(
-          eq(match_messages.user_id, client.userId),
+          eq(match_messages.user_id, userId),
           eq(match_messages.match_id, data.matchId),
           eq(match_messages.client_message_id, clientMessageId),
         ),
       });
+      if (existing) {
+        const [user] = await this.db
+          .select({
+            id: users.id,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+          })
+          .from(users)
+          .where(eq(users.id, client.userId))
+          .limit(1);
+        const message = { ...existing, user };
+        // Reconcile ack goes ONLY to the sender's socket (PR-Agent run #148
+        // IMPORTANT): everyone else already received this message on first
+        // delivery, so a room-wide re-broadcast is a pure amplification
+        // surface — an authenticated member flooding send-message with an
+        // accepted clientMessageId would fan every emit to the whole room
+        // with no rate limit. Sender-scoped, a flood only echoes to the
+        // attacker's own socket; the P2-172 offline queue reconciles off
+        // this sender-side ack (its own echoed sends still broadcast).
+        client.emit('new-message', message);
+        // No not-viewing fan-out here (bell + web push): the ORIGINAL send
+        // already announced this message; re-fanning would double-notify.
+        return;
+      }
     }
 
-    if (!messageRow) {
-      const [insertedMessage] = await this.db
+    // P1-42 (run #36) + run #78: per-socket bucket AND a per-user cross-socket
+    // bucket — reconnecting no longer refills the budget.
+    const rl = this.rateLimit.consume(`msg:${client.id}`, client.userId);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
+
+    // Only match members may post to the lobby. P2-220-twin (run #147): the
+    // membership + chat-closed checks used to run as independent statements
+    // beside the INSERT, so a match could flip terminal between the check and
+    // the write and one WS message landed in a just-closed chat. Everything
+    // below shares ONE transaction with a `SELECT … FOR UPDATE` on the match
+    // row — the same serialization the REST sendMessage path has used since
+    // P2-220 (run #146, matches.service.ts) — so the state the predicate reads
+    // is the state the INSERT writes under. Also fixes a latent WS bug: an
+    // unknown matchId used to skip the closed-chat guard and die on the FK as
+    // a raw server error; it now rejects with a clean not-found message.
+    const txResult = await this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({
+          status: schema.matches.status,
+          scheduled_at: schema.matches.scheduled_at,
+          duration_mins: schema.matches.duration_mins,
+        })
+        .from(schema.matches)
+        .where(eq(schema.matches.id, data.matchId))
+        .for('update');
+      if (!locked) {
+        throw new WsException(`Match ${data.matchId} not found.`);
+      }
+
+      const [membership] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          and(
+            eq(match_players.match_id, data.matchId),
+            eq(match_players.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!membership) throw new WsException('You are not a member of this match.');
+
+      // P2-111 (run #81): terminal/expired matches stop accepting lobby
+      // messages — shared predicate with the REST sendMessage path, now
+      // evaluated against the LOCKED row.
+      if (isChatClosed(locked)) {
+        const err = new WsException(
+          'This match has ended — the lobby chat is closed.',
+        ) as WsException & { code?: string };
+        err.code = CHAT_CLOSED_ERROR_CODE;
+        throw err;
+      }
+
+      // Concurrent retry won the unique-index race
+      // (match_messages_client_msg_uidx) while we were between the pre-read
+      // and the INSERT. With a clientMessageId: return the sentinel so the
+      // winner re-read below reconciles to the original row (P2-172 contract).
+      // WITHOUT one there is nothing to reconcile — reject cleanly instead of
+      // emitting a garbage `{...undefined}` payload (REST-side 409 parity).
+      const [insertedMessage] = await tx
         .insert(match_messages)
         .values({
           match_id: data.matchId,
-          user_id: client.userId,
+          user_id: userId,
           content,
           client_message_id: clientMessageId,
         })
         .onConflictDoNothing()
         .returning();
-      messageRow = insertedMessage;
-      // Concurrent retry won the race (unique index match_messages_client_msg_uidx):
-      // re-read the winner's row instead of raising a unique-violation 500.
-      if (!messageRow && clientMessageId) {
-        messageRow = await this.db.query.match_messages.findFirst({
-          where: and(
-            eq(match_messages.user_id, client.userId),
-            eq(match_messages.match_id, data.matchId),
-            eq(match_messages.client_message_id, clientMessageId),
-          ),
-        });
-      }
+      return { insertedMessage };
+    });
+
+    let messageRow: typeof match_messages.$inferSelect | undefined =
+      txResult.insertedMessage;
+
+    if (!messageRow && clientMessageId) {
+      messageRow = await this.db.query.match_messages.findFirst({
+        where: and(
+          eq(match_messages.user_id, userId),
+          eq(match_messages.match_id, data.matchId),
+          eq(match_messages.client_message_id, clientMessageId),
+        ),
+      });
+    }
+    if (!messageRow) {
+      throw new WsException('Message send conflicted; retry.');
     }
 
     const [user] = await this.db
@@ -476,11 +717,13 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
-    await this.requireActiveUser(client.userId);
+    // P2-231: typing-only → positive-only 10s cache (see requireActiveUserCached).
+    await this.requireActiveUser(client.userId, { cacheable: true });
 
     // Independent bucket — typing bursts must never consume the msg/dm budgets.
-    const rl = this.rateLimit.consume(`typing:${client.id}`);
+    const rl = this.rateLimit.consume(`typing:${client.id}`, client.userId);
     if (!rl.allowed) {
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }
@@ -504,6 +747,50 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       .emit('typing', { matchId: data.matchId, userId: client.userId });
   }
 
+  // ── DM typing indicator (P2-225, run #149) ────────────────────────────────
+
+  /**
+   * Relays "user is typing" to a personal conversation room (`conv:<id>`).
+   * Mirrors the match-lobby `typing` handler (P2-99): deliberately stateless —
+   * no DB write, no persistence; the client re-emits every ~2.5s while typing
+   * and receivers expire the signal after ~4s of silence.
+   *
+   * Guard chain (ws-gate-coverage tripwire + P2-74 proportionality): the
+   * moderation gate FIRST, then an independent typing bucket (never consumes
+   * the dm/msg budget), then a PARTICIPANT proof — a socket that never joined
+   * `conv:<id>` could otherwise target any room it can name.
+   */
+  @SubscribeMessage('conv-typing')
+  async handleConvTyping(
+    @MessageBody() data: { conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): Promise<void> {
+    if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
+    // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
+    // P2-231: typing-only → positive-only 10s cache (see requireActiveUserCached).
+    await this.requireActiveUser(client.userId, { cacheable: true });
+
+    // Independent bucket — typing bursts must never consume the dm/msg budgets.
+    const rl = this.rateLimit.consume(`convtyping:${client.id}`, client.userId);
+    if (!rl.allowed) {
+      throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
+    }
+
+    const isParticipant = await this.conversationsService.isParticipant(
+      client.userId,
+      data.conversationId,
+    );
+    if (!isParticipant) {
+      throw new WsException('You are not a participant in this conversation.');
+    }
+
+    // Everyone in the conversation EXCEPT the typer (client.to semantics).
+    client
+      .to(`conv:${data.conversationId}`)
+      .emit('conv-typing', { conversationId: data.conversationId, userId: client.userId });
+  }
+
   // ── Join a conversation (DM room) ────────────────────────────────────────
 
   @SubscribeMessage('join-conversation')
@@ -512,6 +799,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -536,6 +824,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -562,6 +851,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.matchId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
 
@@ -590,19 +880,61 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     @ConnectedSocket() client: AuthenticatedSocket,
   ): Promise<void> {
     if (!client.userId) throw new WsException('Unauthenticated');
+    if (!isUuidShape(data.conversationId)) throw new WsException('Invalid id format.');
     // P1-48 (run #57): mid-session moderation gate (see requireActiveUser).
     await this.requireActiveUser(client.userId);
     if (!data.content?.trim()) throw new WsException('Message cannot be empty.');
 
     const content = data.content.trim();
+    // Same cap as send-message (REST send-message.dto.ts parity) — the service
+    // trims again itself, so only the length check lives here.
+    const clientMessageId = normalizeClientMessageId(data.clientMessageId);
+    if (clientMessageId && clientMessageId.length > WS_CLIENT_MESSAGE_ID_MAX_LENGTH) {
+      throw new WsException(
+        `clientMessageId must be at most ${WS_CLIENT_MESSAGE_ID_MAX_LENGTH} characters.`,
+      );
+    }
 
     // REST DTO parity: same 2000-char cap the conversations REST endpoint enforces.
     if (content.length > WS_MESSAGE_MAX_LENGTH) {
       throw new WsException(`Message is too long (max ${WS_MESSAGE_MAX_LENGTH} characters).`);
     }
 
-    // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM budget.
-    const rl = this.rateLimit.consume(`dm:${client.id}`);
+    // P2-227 (run #149): P2-172 reconcile pre-read BEFORE the rate limiter —
+    // same contract as send-message (run #148): a retried DM whose
+    // clientMessageId was already accepted returns the ORIGINAL row even if a
+    // replay storm exhausted the bucket — reconcile is a read, not a send, and
+    // must never surface as "Rate limit exceeded" (that would flip a delivered
+    // bubble to failed in the P2-224 offline queue). A miss falls through to
+    // the limiter, so spam stays bounded; the miss lookup is one indexed point
+    // SELECT from an authenticated socket. `clientMessageId` here is the
+    // normalizeClientMessageId output above (length/type already validated).
+    if (clientMessageId) {
+      // P2-230 (run #154): the reconcile pre-read now goes through the
+      // service's shared read-model (findReconcilableMessage) — ONE copy of
+      // the "already-accepted → return ORIGINAL row with sender view"
+      // contract, same as the send-message REST path and the winner path in
+      // sendMessage. A miss falls through to the limiter, so spam stays
+      // bounded; the miss lookup is one indexed point SELECT from an
+      // authenticated socket.
+      const existing = await this.conversationsService.findReconcilableMessage(
+        client.userId,
+        data.conversationId,
+        clientMessageId,
+      );
+      if (existing) {
+        // Sender-scoped reconcile ack (PR-Agent run #148 rule): the room
+        // already received this message on first delivery — a room-wide
+        // re-broadcast would be a pure amplification surface.
+        client.emit('new-dm', existing);
+        // No activity/push fan-out here: the ORIGINAL send announced it.
+        return;
+      }
+    }
+
+    // P1-42 (run #36): independent DM bucket — lobby traffic never consumes DM
+    // budget. Run #78: plus the per-user cross-socket DM bucket.
+    const rl = this.rateLimit.consume(`dm:${client.id}`, client.userId);
     if (!rl.allowed) {
       throw new WsException(`Rate limit exceeded. Try again in ${rl.retryAfterSec}s.`);
     }

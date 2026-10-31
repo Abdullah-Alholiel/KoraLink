@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import {
@@ -14,7 +13,6 @@ import {
     Shield,
     FileText,
     BookOpen,
-    ChevronRight,
     Bell,
     BellOff,
     MessageCircle,
@@ -26,6 +24,8 @@ import {
     Pencil,
     Gamepad2,
     BellRing,
+    Settings,
+    Heart,
 } from 'lucide-react';
 import { selectUser, selectIsAuth, useAppStore } from '@/store/useAppStore';
 import { useUserStats, useUserProfile, useUpdatePushPreferences, useSoftDeleteAccount, useExportMyData, type PushPreferences, type PushPreferencesInput } from '@/hooks/useUser';
@@ -35,7 +35,9 @@ import {
     type PushSubscribeOutcome,
 } from '@/hooks/usePushNotifications';
 import { clearAuthToken } from '@/lib/fetcher';
+import { getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { formatCount, formatMoney } from '@/lib/format';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { downloadJsonAsFile } from '@/lib/download';
 import SignOutConfirmSheet from '@/components/profile/SignOutConfirmSheet';
@@ -45,59 +47,13 @@ import EmailSection from '@/components/profile/EmailSection';
 import FlatSectionLabel from '@/components/profile/FlatSectionLabel';
 import AppBar from '@/components/layout/AppBar';
 import OfflineBanner from '@/components/layout/OfflineBanner';
+import AvatarUpload from '@/components/profile/AvatarUpload';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-
-interface MenuItemProps {
-    icon: React.ReactNode;
-    label: string;
-    endText?: string;
-    danger?: boolean;
-    href?: string;
-    onClick?: () => void;
-}
-
-function MenuItem({ icon, label, endText, danger, href, onClick }: MenuItemProps) {
-    const content = (
-        <>
-            <div className={`w-5 h-5 flex-shrink-0 ${danger ? 'text-brand-red' : 'text-brand-green'}`}>
-                {icon}
-            </div>
-            <span
-                className={`flex-1 text-start text-sm font-medium ${
-                    danger ? 'text-brand-red' : 'text-brand-black'
-                }`}
-            >
-                {label}
-            </span>
-            {endText && (
-                <span className="text-sm font-semibold text-gray-500" dir="ltr">
-                    {endText}
-                </span>
-            )}
-            {!danger && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 rtl:rotate-180" strokeWidth={1.5} />}
-        </>
-    );
-
-    // Flat-list row (sketches/004-profile-redesign V2): hairline separators via
-    // sibling selectors live on the parent; rows themselves are borderless and
-    // carry generous 44pt+ tap height (px-6 py-3.5).
-    const className =
-        'w-full flex items-center gap-3.5 px-6 py-3.5 hover:bg-gray-50 transition-colors';
-
-    if (href) {
-        return (
-            <Link href={href} className={className}>
-                {content}
-            </Link>
-        );
-    }
-
-    return (
-        <button onClick={onClick} className={className}>
-            {content}
-        </button>
-    );
-}
+// P2-133 (run #104): MenuItem extracted to a shared component so the Settings
+// hub reuses the exact same row (Reviewer A: extract, don't extend the 775-line
+// profile page). Exact move — props/classes/render identical to the old inline
+// definition (profile/page.tsx:51-101).
+import MenuItem from '@/components/profile/MenuItem';
 
 /** Uppercase micro-label that opens each flat section — shared component. */
 
@@ -114,6 +70,15 @@ export default function ProfilePage() {
     // between server and client, causing DOM tree divergence.
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
+
+    // RUN-#84 (Reviewer A hydration minor): seed the scheduled-purge date
+    // post-mount — a render-path `new Date()` diverges server/client across a
+    // day boundary (same class as the run-#40/#49/#50 useNow() fixes).
+    useEffect(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        setPurgeDate(d.toISOString());
+    }, []);
 
     // P0.5 (run #28): show a one-line hint when the user taps "subscribe"
     // but the PWA isn't installed (iOS contract — push only works in
@@ -133,6 +98,9 @@ export default function ProfilePage() {
     const [signOutPending, setSignOutPending] = useState(false);
     const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    // Scheduled-purge date (now + 30d) — null-seeded, set in an effect below
+    // (hydration-safe; render-path `new Date()` diverges server/client).
+    const [purgeDate, setPurgeDate] = useState<string | null>(null);
     const [exportPending, setExportPending] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
 
@@ -172,13 +140,16 @@ export default function ProfilePage() {
     const walletErrorMsg = walletError
         ? (walletError.status === 0
             ? t('common.offline')
-            : t('common.error'))
+            : t(errorKey(classifyError(walletError))))
         : null;
     const displayBalance = walletData?.balance ?? (walletErrorMsg ? null : 0);
+    // Run #112 (A-2): locale-aware money for the wallet row (formatMoney,
+    // P2-128 convention) — hoisted hook call (Rules of Hooks).
+    const intlLocale = useLocale() as 'ar' | 'en';
     const {
         isSubscribed, isSubscribing, isUnsubscribing, isSupported,
         subscribe, unsubscribe,
-    } = usePushNotifications(useLocale());
+    } = usePushNotifications(intlLocale);
 
     // ── Push delivery preferences (P1-20) ──
     const updatePrefs = useUpdatePushPreferences();
@@ -220,7 +191,6 @@ export default function ProfilePage() {
     const fullName = apiUser?.full_name ?? storeUser?.fullName ?? t('profile.guestName');
     const handle = apiUser?.handle ?? storeUser?.handle ?? '@guest';
     const avatarUrl = apiUser?.avatar_url ?? storeUser?.avatarUrl;
-    const avatarInitial = fullName.charAt(0).toUpperCase();
 
     return (
         <div className="pb-4">
@@ -262,26 +232,14 @@ export default function ProfilePage() {
                         (Abdullah: standardise headers; no bells outside the Feed) */}
                     <AppBar light />
 
-                    {/* Identity row: avatar + name + white edit pill */}
+                    {/* Identity row: avatar + name + white edit pill.
+                        P2-50 (run #181): AvatarUpload owns the avatar visual
+                        + camera-badge upload (was render-only initials). */}
                     <div className="mt-6 flex items-center gap-4">
-                        <div className="relative flex-shrink-0">
-                            {avatarUrl ? (
-                                <div className="h-[84px] w-[84px] overflow-hidden rounded-full border-2 border-white/40">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={avatarUrl}
-                                        alt={fullName}
-                                        className="h-full w-full object-cover"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex h-[84px] w-[84px] items-center justify-center rounded-full border-2 border-white/40 bg-brand-green-deep/60">
-                                    <span className="text-3xl font-bold text-white/90">
-                                        {avatarInitial}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                        <AvatarUpload
+                            avatarUrl={avatarUrl}
+                            fullName={fullName}
+                        />
                         <div className="min-w-0 flex-1">
                             <h1 className="truncate text-[21px] font-bold leading-tight">{fullName}</h1>
                             <p className="mt-0.5 text-[13px] text-white/60" dir="ltr">{handle}</p>
@@ -319,7 +277,7 @@ export default function ProfilePage() {
                                 </>
                             ) : statsError ? (
                                 <div className="flex-1 py-2 text-center">
-                                    <p className="text-sm text-white/70">{t('common.error')}</p>
+                                    <p className="text-sm text-white/70">{t(errorKey(classifyError(statsError)))}</p>
                                     <button
                                         type="button"
                                         onClick={() => refetchStats()}
@@ -331,7 +289,7 @@ export default function ProfilePage() {
                             ) : (
                                 <>
                                     <div className="flex-1 py-3.5 text-center">
-                                        <p className="text-xl font-extrabold leading-none">{stats?.games_played ?? 0}</p>
+                                        <p className="text-xl font-extrabold leading-none">{formatCount(stats?.games_played ?? 0, intlLocale)}</p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.gamesPlayed')}
                                         </p>
@@ -340,7 +298,7 @@ export default function ProfilePage() {
                                     <div className="flex-1 py-3.5 text-center">
                                         <p className="flex items-center justify-center gap-1 text-xl font-extrabold leading-none">
                                             <Trophy className="h-4 w-4 text-amber-300" strokeWidth={2} />
-                                            <span dir="ltr">{apiUser?.pom_count ?? 0}</span>
+                                            <span dir="ltr">{formatCount(apiUser?.pom_count ?? 0, intlLocale)}</span>
                                         </p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.pomCount')}
@@ -348,7 +306,7 @@ export default function ProfilePage() {
                                     </div>
                                     <div className="w-px bg-white/15" />
                                     <div className="flex-1 py-3.5 text-center">
-                                        <p className="text-xl font-extrabold leading-none">{stats?.karma_score ?? 0}</p>
+                                        <p className="text-xl font-extrabold leading-none">{formatCount(stats?.karma_score ?? 0, intlLocale)}</p>
                                         <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/60">
                                             {t('profile.karma')}
                                         </p>
@@ -363,6 +321,15 @@ export default function ProfilePage() {
             {/* ── PLAYING ──────────────────────────────── */}
             <FlatSectionLabel label={t('profile.sectionPlaying')} />
             <div>
+                {/* P2-133 (run #104): entry point to the Settings hub. The
+                    hub links every preference (push, language, data rights,
+                    sign-out); this row is what makes it discoverable. */}
+                <MenuItem
+                    icon={<Settings className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('settings.title')}
+                    href={`/${locale}/settings`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<User className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.personalInfo')}
@@ -373,6 +340,16 @@ export default function ProfilePage() {
                     icon={<Gamepad2 className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.myGames')}
                     href={`/${locale}/my-games`}
+                />
+                <div className="h-px bg-gray-100 ms-[60px]" />
+                {/* P2-165 (run #111): favorites entry point — the clubs-page
+                    pill is the only discoverable surface otherwise; this row
+                    deep-links to the Favorites filter (single source of state,
+                    P2-133 pattern: linked sub-surface, never duplicated). */}
+                <MenuItem
+                    icon={<Heart className="h-5 w-5" strokeWidth={1.5} />}
+                    label={t('profile.myFavorites')}
+                    href={`/${locale}/clubs?tab=favorites`}
                 />
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
@@ -391,7 +368,10 @@ export default function ProfilePage() {
                     endText={
                         displayBalance === null
                             ? '—'
-                            : `SAR ${displayBalance.toFixed(2)}`
+                            : // Run #112 (A-2): formatMoney (P2-128 convention) —
+                              // Arabic users get Arabic-Indic digits + ر.س, en
+                              // keeps the historical "SAR 123.45" shape.
+                              formatMoney(displayBalance, intlLocale)
                     }
                     href={walletErrorMsg ? undefined : `/${locale}/wallet`}
                     onClick={walletErrorMsg ? () => refetchWallet() : undefined}
@@ -422,10 +402,17 @@ export default function ProfilePage() {
                     </span>
                     <LanguageToggle size="md" ariaLabel={t('profile.language')} />
                 </div>
-                {mounted && isSupported && (
-                    <>
-                        <div className="h-px bg-gray-100 ms-[60px]" />
-                        <MenuItem
+                {/* PR-Agent r1 (run #104): the anchor div must exist at SSR
+                    time — deep links from the Settings hub land here BEFORE
+                    hydration effects run, and the element must also exist on
+                    browsers without Push support. The conditional CONTENT
+                    stays gated inside; the always-rendered wrapper carries
+                    the id + scroll-mt. */}
+                <div id="notifications" className="scroll-mt-24">
+                    {mounted && isSupported && (
+                        <>
+                            <div className="h-px bg-gray-100 ms-[60px]" />
+                            <MenuItem
                             icon={
                                 isSubscribing || isUnsubscribing ? (
                                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
@@ -464,8 +451,11 @@ export default function ProfilePage() {
                                 setSubscribeHint(null);
                                 subscribe().then((outcome) => {
                                     if (
+                                        // P1-66 (run #135): 'not-configured'
+                                        // = no VAPID key deployed.
                                         (outcome === 'not-installed' ||
-                                            outcome === 'permission-denied') &&
+                                            outcome === 'permission-denied' ||
+                                            outcome === 'not-configured') &&
                                         !isSubscribed
                                     ) {
                                         setSubscribeHint(outcome);
@@ -485,7 +475,9 @@ export default function ProfilePage() {
                             >
                                 {subscribeHint === 'permission-denied'
                                     ? t('common.permissionDenied')
-                                    : t('common.installRequired')}
+                                    : subscribeHint === 'not-configured'
+                                      ? t('common.pushNotConfigured')
+                                      : t('common.installRequired')}
                             </p>
                         )}
                         {mounted && isSubscribed && (
@@ -615,8 +607,9 @@ export default function ProfilePage() {
                                 </div>
                             </>
                         )}
-                    </>
-                )}
+                        </>
+                    )}
+                </div>
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
                     icon={<Headphones className="h-5 w-5" strokeWidth={1.5} />}
@@ -632,7 +625,11 @@ export default function ProfilePage() {
             </div>
 
             {/* ── ACCOUNT (P0-6, run #29: export + delete are auth-gated) ── */}
-            <FlatSectionLabel label={t('profile.sectionAccount')} />
+            {/* P2-133 (run #104): anchor target for the Settings hub's
+                data + sign-out links. scroll-mt clears the sticky header. */}
+            <div id="account" className="scroll-mt-24">
+                <FlatSectionLabel label={t('profile.sectionAccount')} />
+            </div>
             <div>
                 {isAuthenticated && (
                     <>
@@ -708,11 +705,17 @@ export default function ProfilePage() {
                 onConfirm={async () => {
                     setSignOutPending(true);
                     // Brief delay so the spinner is visible; the action
-                    // itself is local (Zustand clear + cookie clear + 
+                    // itself is local (Zustand clear + cookie clear +
                     // navigate). A future run could add a tracking call.
                     await new Promise((r) => setTimeout(r, 200));
                     logout();
                     clearAuthToken();
+                    // RUN-#84 (Reviewer A IMPORTANT): the cache purge inside
+                    // clearAuthToken is fire-and-forget — await it BEFORE the
+                    // hard navigation, or the redirect can abort in-flight
+                    // caches.delete() microtasks and leave this user's caches
+                    // readable on a shared device.
+                    await getLastRuntimeCachePurge();
                     setSignOutSheetOpen(false);
                     window.location.href = `/${locale}/login`;
                 }}
@@ -725,14 +728,11 @@ export default function ProfilePage() {
                 }}
                 isPending={softDelete.isPending}
                 errorMessage={deleteError ?? (softDelete.error ? t(errorKey(classifyError(softDelete.error))) : null)}
-                // Scheduled-purge date: now() + 30 days. We compute it
-                // here so the warning shows the EXACT date the user is
-                // agreeing to, before the API call lands.
-                purgeDate={(() => {
-                    const d = new Date();
-                    d.setDate(d.getDate() + 30);
-                    return d.toISOString();
-                })()}
+                // Scheduled-purge date: now() + 30 days. RUN-#84 (Reviewer A
+                // MINOR→fixed): seeded null + set in an effect (useNow house
+                // pattern) — a render-path `new Date()` is a hydration
+                // hazard across a day boundary on an SSR'd client component.
+                purgeDate={purgeDate ?? undefined}
                 onConfirm={async () => {
                     setDeleteError(null);
                     try {
@@ -745,6 +745,9 @@ export default function ProfilePage() {
                         // explicit clear avoids a 401 flash.
                         logout();
                         clearAuthToken();
+                        // RUN-#84: await the SW cache purge before the hard
+                        // redirect (race fix, same class as sign-out above).
+                        await getLastRuntimeCachePurge();
                         window.location.href = `/${locale}/login`;
                     } catch {
                         setDeleteError(t('errors.unknown'));

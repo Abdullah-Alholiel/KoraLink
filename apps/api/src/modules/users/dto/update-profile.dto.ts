@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsNumber, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -48,4 +48,12 @@ export class UpdateProfileDto {
   @Min(-180)
   @Max(180)
   home_lng?: number;
+
+  @ApiPropertyOptional({
+    description: 'Preferred content locale for transactional email',
+    enum: ['ar', 'en'],
+  })
+  @IsOptional()
+  @IsIn(['ar', 'en'])
+  locale?: 'ar' | 'en';
 }

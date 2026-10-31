@@ -160,6 +160,28 @@ describe('P1-41 suppression (run #35)', () => {
     const out = await mailer.recipientsFor(['u1']);
     expect(out).toHaveLength(0);
   });
+
+  // ── P2-264 (run #168): per-recipient locale resolution ────────────────────
+  it('locale "en" → recipient carries en', async () => {
+    const mailer = makeMailer([{ ...VERIFIED, locale: 'en' }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out).toHaveLength(1);
+    expect(out[0].locale).toBe('en');
+  });
+
+  it('locale "ar" → recipient carries ar', async () => {
+    const mailer = makeMailer([{ ...VERIFIED, locale: 'ar' }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out[0].locale).toBe('ar');
+  });
+
+  it('missing/legacy locale (pre-0055 stub shape) → defaults ar (default-protective)', async () => {
+    // VERIFIED has no locale field — mirrors rows read before the column
+    // existed; the ternary must fall through to 'ar', never undefined.
+    const mailer = makeMailer([{ ...VERIFIED }]);
+    const out = await mailer.recipientsFor(['u1']);
+    expect(out[0].locale).toBe('ar');
+  });
 });
 
 describe('P1-41 transport gating (run #35)', () => {
@@ -231,7 +253,7 @@ describe('P1-41 deliver() render hardening (run #36, Reviewer A)', () => {
     // Configured transport so deliver() reaches renderEmail; fetch stubbed to
     // success — the ONLY failure source is the poisoned details object.
     const svc = makeMailer([], { RESEND_API_KEY: 'k', MAIL_FROM: 'KoraLink <no-reply@koralink.app>' });
-    const deliver = (svc as unknown as { deliver: Function }).deliver.bind(svc);
+    const deliver = (svc as unknown as { deliver: (...args: unknown[]) => unknown }).deliver.bind(svc);
     const realFetch = global.fetch;
     global.fetch = (async () =>
       new Response(JSON.stringify({ id: 'x' }), { status: 200 })) as unknown as typeof fetch;

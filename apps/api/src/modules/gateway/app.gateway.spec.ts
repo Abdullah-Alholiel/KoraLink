@@ -1,5 +1,9 @@
 import { AppGateway } from './app.gateway';
-import { users } from '../../database/schema';
+import { users, match_players, matches } from '../../database/schema';
+
+/** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
+const MATCH_ID = '11111111-1111-4111-8111-111111111111';
+const CONV_ID = '22222222-2222-4222-8222-222222222222';
 
 /**
  * Unit tests for `handleConnection` moderation enforcement (run #6).
@@ -31,7 +35,10 @@ function makeDb(rows: UserRow[]) {
   };
 }
 
-function makeGateway(dbRows: UserRow[], payload: { sub: string; role?: string }) {
+function makeGateway(
+  dbRows: UserRow[],
+  payload: { sub: string; role?: string; purpose?: string },
+) {
   const gateway = new AppGateway(
     makeDb(dbRows) as never,
     { verify: () => payload } as never,
@@ -122,6 +129,48 @@ describe('AppGateway.handleConnection — moderation enforcement', () => {
 
     expect(client.role).toBe('Player');
     expect(client.joined).toEqual(['user:u1']); // no 'ops'
+  });
+
+  it('rejects a spent restore-purpose token before any user lookup (P1-68, run #153)', async () => {
+    // A restore JWT that already restored its account: REST 403s it on every
+    // route (jwt-cookie.strategy replay guard); the WS handshake must refuse
+    // it just as strictly instead of opening a full 7-day session.
+    const gateway = makeGateway(
+      [{ id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null }],
+      { sub: 'u1', role: 'Player', purpose: 'restore' },
+    );
+    const client = makeClient();
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(disconnect).toHaveBeenCalledWith(true);
+    expect(client.userId).toBeUndefined();
+    expect(client.joined).toEqual([]);
+  });
+
+  it('rejects a restore-purpose token even when the DB row still looks deleted', async () => {
+    // Defense in depth: the purpose check fires before the deleted_at branch.
+    const gateway = makeGateway(
+      [
+        {
+          id: 'u1',
+          role: 'Player',
+          banned_at: null,
+          suspended_until: null,
+          deleted_at: new Date(),
+        },
+      ],
+      { sub: 'u1', role: 'Player', purpose: 'restore' },
+    );
+    const client = makeClient();
+    const disconnect = jest.spyOn(client, 'disconnect');
+
+    await gateway.handleConnection(client as never);
+
+    expect(disconnect).toHaveBeenCalledWith(true);
+    expect(client.userId).toBeUndefined();
+    expect(client.joined).toEqual([]);
   });
 
   it('rejects a banned user before joining any room', async () => {
@@ -290,22 +339,58 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
 
   const active: Row = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null };
 
+  /** P2-111 (run #81): matches row served to the send-message predicate.
+   * Default = a live future match (chat open) so every pre-existing case
+   * behaves exactly as before. Null = match row missing entirely. */
+  type MatchRow = { status: string; scheduled_at: Date; duration_mins: number };
+  const FUTURE_MATCH: MatchRow = {
+    status: 'Open',
+    scheduled_at: new Date(Date.now() + 3_600_000),
+    duration_mins: 90,
+  };
+
   /** DB stub routed by table: `users` selects return userRow (null = missing row),
-   * `match_players` selects return the membership row; insert → returning. */
-  function makeRoutedDb(userRow: Row | null, membership: Array<{ id: string }> = [{ id: 'mp-1' }]) {
-    return {
+   * `match_players` selects return the membership row, `matches` returns matchRow
+   * (P2-111 chat predicate); insert → returning. */
+  function makeRoutedDb(
+    userRow: Row | null,
+    membership: Array<{ id: string }> = [{ id: 'mp-1' }],
+    matchRow: MatchRow | null = FUTURE_MATCH,
+  ) {
+    // P2-220-twin (run #147): handleMessage now runs its checks + INSERT inside
+    // a transaction with `.for('update')` on the matches row — the stub routes
+    // the tx callback to the same table-aware chain.
+    const routedChain = {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            limit: async () => (table === users ? (userRow ? [userRow] : []) : membership),
+            limit: async () =>
+              table === users
+                ? userRow
+                  ? [userRow]
+                  : []
+                : table === match_players
+                  ? membership
+                  : table === matches
+                    ? matchRow
+                      ? [matchRow]
+                      : []
+                    : [],
+            for: async () =>
+              table === matches ? (matchRow ? [matchRow] : []) : [],
           }),
         }),
       }),
+    };
+    // The tx callback must see the SAME surface as the outer db stub —
+    // select/query/insert/update all live on one object (tx.insert is called).
+    const chain = {
+      ...routedChain,
       query: { match_messages: { findFirst: async () => undefined } },
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: 'msg-1', match_id: 'm1', user_id: 'u1', content: 'hi' }],
+            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
           }),
         }),
       }),
@@ -314,6 +399,10 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
           where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
         }),
       }),
+    };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
     };
   }
 
@@ -328,7 +417,10 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
           throw new Error(`config key not stubbed: ${k}`);
         },
       } as never,
-      { isParticipant: jest.fn(async () => true) } as never,
+      {
+        isParticipant: jest.fn(async () => true),
+        findReconcilableMessage: jest.fn(async () => null),
+      } as never,
       { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
       {} as never,
       {} as never,
@@ -357,7 +449,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const client = makeClient();
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'still here' }, client as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'still here' }, client as never),
     ).rejects.toThrow(MSG);
     expect(consume).not.toHaveBeenCalled();
   });
@@ -366,7 +458,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(SUSPENDED));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -374,7 +466,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(DELETED));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -382,7 +474,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(null));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'hi' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -390,7 +482,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(active));
 
     await expect(
-      gateway.handleMessage({ matchId: 'm1', content: 'glhf' }, makeClient() as never),
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'glhf' }, makeClient() as never),
     ).resolves.toBeUndefined();
   });
 
@@ -398,7 +490,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleDm({ conversationId: 'c1', content: 'hi' }, makeClient() as never),
+      gateway.handleDm({ conversationId: CONV_ID, content: 'hi' }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -406,7 +498,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleJoinLobby({ matchId: 'm1' }, makeClient() as never),
+      gateway.handleJoinLobby({ matchId: MATCH_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -414,7 +506,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway, isParticipant } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleJoinConversation({ conversationId: 'c1' }, makeClient() as never),
+      gateway.handleJoinConversation({ conversationId: CONV_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
     expect(isParticipant).not.toHaveBeenCalled();
   });
@@ -423,7 +515,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleMarkRead({ conversationId: 'c1' }, makeClient() as never),
+      gateway.handleMarkRead({ conversationId: CONV_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -431,7 +523,7 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const { gateway } = makeGw(makeRoutedDb(BANNED));
 
     await expect(
-      gateway.handleMarkChatRead({ matchId: 'm1' }, makeClient() as never),
+      gateway.handleMarkChatRead({ matchId: MATCH_ID }, makeClient() as never),
     ).rejects.toThrow(MSG);
   });
 
@@ -440,8 +532,727 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     const client = makeClient();
 
     await expect(
-      gateway.handleLeaveConversation({ conversationId: 'c1' }, client as never),
+      gateway.handleLeaveConversation({ conversationId: CONV_ID }, client as never),
     ).resolves.toBeUndefined();
+  });
+
+  // ── P2-231 (run #151): positive-only typing cache of the moderation gate ──
+  describe('typing-only active-user cache (P2-231)', () => {
+    /** Wraps makeRoutedDb with a mutable users row + a counter of users-table selects. */
+    function makeCountingDb(initial: Row | null) {
+      const state = { row: initial, userSelects: 0 };
+      const build = () => makeRoutedDb(state.row);
+      const db = {
+        select: (...args: unknown[]) => ({
+          from: (table: unknown) => {
+            if (table === users) state.userSelects += 1;
+            return (build().select as (...a: unknown[]) => { from: (t: unknown) => unknown })(
+              ...args,
+            ).from(table);
+          },
+        }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          const inner = build();
+          return cb({
+            ...inner,
+            select: () => ({
+              from: (table: unknown) => {
+                if (table === users) state.userSelects += 1;
+                return inner.select().from(table);
+              },
+            }),
+          });
+        },
+        get query() {
+          return build().query;
+        },
+        get insert() {
+          return build().insert;
+        },
+        get update() {
+          return build().update;
+        },
+      };
+      return { db, state };
+    }
+
+    it('typing: second handleTyping within TTL does NOT re-read the users table', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway, consume } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+      // A cached allow still consumes the typing bucket on every event.
+      expect(consume).toHaveBeenCalledTimes(2);
+    });
+
+    it('typing: cache expires after 10s and re-reads the row', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const nowSpy = jest.spyOn(Date, 'now');
+      const t0 = 1_700_000_000_000;
+      try {
+        nowSpy.mockReturnValue(t0);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        nowSpy.mockReturnValue(t0 + 10_001);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        expect(state.userSelects).toBe(2);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('positive-only: banned after a cached allow — typing lags ≤10s, send-message throws immediately', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+      state.row = BANNED;
+
+      // Documented typing-only lag: within TTL the cached allow still passes.
+      await expect(
+        gateway.handleTyping({ matchId: MATCH_ID }, client as never),
+      ).resolves.toBeUndefined();
+      // The uncached path re-reads every event and rejects at once.
+      await expect(
+        gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+      ).rejects.toThrow(MSG);
+      // …and that deny evicts the stale positive, so typing re-reads and throws too.
+      await expect(
+        gateway.handleTyping({ matchId: MATCH_ID }, client as never),
+      ).rejects.toThrow(MSG);
+    });
+
+    it.each([
+      ['banned', BANNED],
+      ['suspended', SUSPENDED],
+      ['deleted', DELETED],
+      ['missing row', null],
+    ] as const)('never negative-caches: %s typer throws and every retry re-reads the row', async (_l, row) => {
+      const { db, state } = makeCountingDb(row);
+      const { gateway, consume } = makeGw(db);
+      const client = makeClient();
+
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).rejects.toThrow(MSG);
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).rejects.toThrow(MSG);
+      expect(state.userSelects).toBe(2);
+      // A deny (cached or not) never burns rate-limit budget.
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('hard cap: at MAX_ENTRIES with all entries fresh, the oldest is evicted (never exceeds the bound)', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const cache = gateway['activeUserCache'];
+      const nowSpy = jest.spyOn(Date, 'now');
+      const t0 = 1_700_000_000_000;
+      try {
+        nowSpy.mockReturnValue(t0);
+        // Fill the cache to the cap with distinct fresh users (direct seed =
+        // setup only; the assertion below exercises the real insert path).
+        for (let i = 0; i < 10_000; i += 1) cache.set(`user-${i}`, t0 + 10_000);
+        await gateway.handleTyping({ matchId: MATCH_ID }, makeClient() as never);
+        expect(cache.size).toBe(10_000);
+        // The OLDEST seeded entry was evicted for the insert; the fresh
+        // current user sits at the end of the Map's insertion order.
+        expect(cache.has('user-0')).toBe(false);
+        expect(cache.has('user-1')).toBe(true);
+        expect(cache.has('u1')).toBe(true);
+        expect(state.userSelects).toBe(1);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('conv-typing uses the cached gate; send-message does not', async () => {
+      const { db, state } = makeCountingDb(active);
+      const { gateway } = makeGw(db);
+      const client = makeClient();
+
+      await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
+      await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
+      expect(state.userSelects).toBe(1);
+
+      const before = state.userSelects;
+      await gateway.handleMessage({ matchId: MATCH_ID, content: 'a' }, client as never);
+      await gateway.handleMessage({ matchId: MATCH_ID, content: 'b' }, client as never);
+      // Each uncached send re-reads the users row (≥1 read per send).
+      expect(state.userSelects - before).toBeGreaterThanOrEqual(2);
+    });
   });
 });
 
+
+// ── run #78: WS input hardening — room-id shape + clientMessageId cap ───────
+// WS payloads get no class-validator pass, so the gateway enforces the same
+// shape rules as the REST DTOs: UUID-shaped room ids (they become room names
+// and query params) and a 36-char clientMessageId (varchar(36) column — an
+// oversized value would otherwise leak a raw Postgres 'value too long' error).
+
+describe('AppGateway WS input hardening (run #78)', () => {
+  const clean = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null };
+
+  function makeGw() {
+    const db = (() => {
+      // P2-220-twin (run #147): table-routed chain with .for('update') support,
+      // shared by the tx callback via transaction().
+      const routedChain = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              // P2-111: the send-message path also reads the matches row for
+              // the chat predicate — serve a live future match (chat open).
+              limit: async () =>
+                table === users
+                  ? [clean]
+                  : table === matches
+                    ? [
+                        {
+                          status: 'Open',
+                          scheduled_at: new Date(Date.now() + 3_600_000),
+                          duration_mins: 90,
+                        },
+                      ]
+                    : [{ id: 'mp-1' }],
+              for: async () =>
+                table === matches
+                  ? [
+                      {
+                        status: 'Open',
+                        scheduled_at: new Date(Date.now() + 3_600_000),
+                        duration_mins: 90,
+                      },
+                    ]
+                  : [],
+            }),
+          }),
+        }),
+      };
+    // The tx callback must see the SAME surface as the outer db stub. Run
+    // #149: `query.personal_messages` serves the send-dm P2-172 reconcile
+    // pre-read (always-empty here — reconcile tests live in the tx spec).
+    const chain = {
+      ...routedChain,
+      query: {
+        match_messages: { findFirst: async () => undefined },
+        personal_messages: { findFirst: async () => undefined },
+      },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+    };
+  })();
+    const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
+    const sendMessage = jest.fn(async () => ({ id: 'dm-1' }));
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true, markRead: async () => undefined, sendMessage, findReconcilableMessage: async () => null } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { consume, release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return { gateway, consume, sendMessage };
+  }
+
+  function makeClient() {
+    return {
+      id: 'sock-1',
+      userId: 'u1',
+      to: () => ({ emit: () => undefined }),
+      join: jest.fn(async () => undefined),
+      leave: jest.fn(async () => undefined),
+    };
+  }
+
+  const LONG_ID = 'x'.repeat(37);
+  const BAD_ID = 'not-a-uuid';
+  const ID_MSG = 'Invalid id format.';
+  const CMID_MSG = 'clientMessageId must be at most 36 characters.';
+
+  describe('clientMessageId length cap', () => {
+    it('send-message: rejects a clientMessageId longer than 36 chars before any budget/DB work', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: LONG_ID },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(CMID_MSG);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('send-dm: rejects a clientMessageId longer than 36 chars before the service call', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: LONG_ID },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(CMID_MSG);
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('send-dm: rejects a non-string clientMessageId (wrong-typed payload) with a clean WsException, not a TypeError', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: 12345 as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('send-message: rejects a non-string clientMessageId the same way (pre-existing pattern also normalized)', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: { x: 1 } as unknown as string },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow('clientMessageId must be a string.');
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('accepts a 36-char (UUID) clientMessageId, and trims surrounding whitespace before measuring', async () => {
+      const { gateway, sendMessage } = makeGw();
+      await expect(
+        gateway.handleMessage(
+          { matchId: MATCH_ID, content: 'hi', clientMessageId: ` ${CONV_ID} ` },
+          makeClient() as never,
+        ),
+      ).resolves.toBeUndefined();
+      await expect(
+        gateway.handleDm(
+          { conversationId: CONV_ID, content: 'hi', clientMessageId: MATCH_ID },
+          makeClient() as never,
+        ),
+      ).resolves.toBeUndefined();
+      expect(sendMessage).toHaveBeenCalledWith('u1', CONV_ID, 'hi', MATCH_ID);
+    });
+  });
+
+  describe('room-id shape validation', () => {
+    it('join-lobby rejects a non-UUID matchId (never joins a room)', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleJoinLobby({ matchId: BAD_ID }, client as never)).rejects.toThrow(ID_MSG);
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('leave-lobby rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleLeaveLobby({ matchId: 'match:*' }, client as never)).rejects.toThrow(ID_MSG);
+      expect(client.leave).not.toHaveBeenCalled();
+    });
+
+    it('typing rejects a non-UUID matchId before consuming budget', async () => {
+      const { gateway, consume } = makeGw();
+      await expect(gateway.handleTyping({ matchId: BAD_ID }, makeClient() as never)).rejects.toThrow(ID_MSG);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('mark-chat-read rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMarkChatRead({ matchId: '' }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('join-conversation rejects a non-UUID conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleJoinConversation({ conversationId: BAD_ID }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('mark-read rejects a non-UUID conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMarkRead({ conversationId: `${CONV_ID}x` }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('send-message rejects a non-UUID matchId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleMessage({ matchId: BAD_ID, content: 'hi' }, makeClient() as never),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('send-dm rejects a non-string conversationId', async () => {
+      const { gateway } = makeGw();
+      await expect(
+        gateway.handleDm(
+          { conversationId: 42 as unknown as string, content: 'hi' },
+          makeClient() as never,
+        ),
+      ).rejects.toThrow(ID_MSG);
+    });
+
+    it('happy path: valid UUID ids pass (join-lobby, leave-lobby, typing, join-conversation, mark-read, mark-chat-read)', async () => {
+      const { gateway } = makeGw();
+      const client = makeClient();
+      await expect(gateway.handleJoinLobby({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      expect(client.join).toHaveBeenCalledWith(`match:${MATCH_ID}`);
+      await expect(gateway.handleTyping({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      await expect(gateway.handleMarkChatRead({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+      await expect(
+        gateway.handleJoinConversation({ conversationId: CONV_ID }, client as never),
+      ).resolves.toBeUndefined();
+      await expect(gateway.handleMarkRead({ conversationId: CONV_ID }, client as never)).resolves.toBeUndefined();
+      await expect(gateway.handleLeaveLobby({ matchId: MATCH_ID }, client as never)).resolves.toBeUndefined();
+    });
+  });
+
+  it('rate-limit call sites pass the user id for the cross-socket bucket', async () => {
+    const { gateway, consume } = makeGw();
+    const client = makeClient();
+    await gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never);
+    await gateway.handleDm({ conversationId: CONV_ID, content: 'hi' }, client as never);
+    await gateway.handleTyping({ matchId: MATCH_ID }, client as never);
+    await gateway.handleConvTyping({ conversationId: CONV_ID }, client as never);
+    expect(consume.mock.calls).toEqual([
+      ['msg:sock-1', 'u1'],
+      ['dm:sock-1', 'u1'],
+      ['typing:sock-1', 'u1'],
+      ['convtyping:sock-1', 'u1'],
+    ]);
+  });
+
+  // ── P2-111 (run #81): terminal-status chat predicate on the WS surface ────
+  describe('send-message chat predicate (P2-111)', () => {
+    /** Stub serving a matches row with the given status/clock for the predicate. */
+    function makeGwWithMatch(matchRow: unknown) {
+      // P2-220-twin (run #147): handleMessage runs inside db.transaction with
+      // `.for('update')` on the matches row — the tx callback shares this chain.
+      const routedChain = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: async () =>
+                table === users
+                  ? [clean]
+                  : table === matches
+                    ? matchRow
+                      ? [matchRow]
+                      : []
+                    : [{ id: 'mp-1' }],
+              for: async () => (table === matches ? (matchRow ? [matchRow] : []) : []),
+            }),
+          }),
+        }),
+      };
+      // The tx callback must see the SAME surface as the outer db stub.
+      const chain = {
+        ...routedChain,
+        query: { match_messages: { findFirst: async () => undefined } },
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+            }),
+          }),
+        }),
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+          }),
+        }),
+      };
+      const db = {
+        ...chain,
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+      };
+    const consume = jest.fn(() => ({ allowed: true, retryAfterSec: 0 }));
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true, findReconcilableMessage: async () => null } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { consume, release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return { gateway };
+  }
+
+  const future = { status: 'Open', scheduled_at: new Date(Date.now() + 3_600_000), duration_mins: 90 };
+  const longPast = { status: 'Open', scheduled_at: new Date(Date.now() - 6 * 3_600_000), duration_mins: 90 };
+
+  it('accepts a message for a live future match', async () => {
+    const { gateway } = makeGwWithMatch(future);
+    const client = makeClient();
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+    ).resolves.toBeUndefined();
+  });
+
+  it('accepts an InProgress match past its end (overtime stays open)', async () => {
+    const { gateway } = makeGwWithMatch({ ...longPast, status: 'InProgress' });
+    const client = makeClient();
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, client as never),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a message for a Completed match', async () => {
+    const { gateway } = makeGwWithMatch({ ...future, status: 'Completed' });
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow('lobby chat is closed');
+  });
+
+  it('rejects a message for an Open match long past its end', async () => {
+    const { gateway } = makeGwWithMatch(longPast);
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient() as never),
+    ).rejects.toThrow('lobby chat is closed');
+  });
+});
+
+// ── P2-220-twin (run #147): serialize WS send-message against status flips ──
+describe('send-message tx serialization (P2-220-twin, run #147)', () => {
+  const clean = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null, deleted_at: null };
+  const future = { status: 'Open', scheduled_at: new Date(Date.now() + 3_600_000), duration_mins: 90 };
+
+  /** DB stub whose behavior is fully injectable per test. */
+  function makeDbStub(opts: {
+    matchRow?: unknown;
+    insertReturns?: unknown[];
+    conflictWinner?: unknown;
+    /** Run #148: result of the FIRST findFirst call (the P2-172 reconcile
+     * pre-read). Defaults to undefined (no prior message); later calls return
+     * conflictWinner (the in-tx lost-race re-read). */
+    preReadResult?: unknown;
+  }) {
+    // Default to a live future match so only tests that need a missing row /
+    // closed status pass matchRow explicitly.
+    const matchRow = 'matchRow' in opts ? opts.matchRow : future;
+    const routedChain = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () =>
+              table === users ? [clean] : table === matches ? (matchRow ? [matchRow] : []) : [{ id: 'mp-1' }],
+            for: async () => (table === matches ? (matchRow ? [matchRow] : []) : []),
+          }),
+        }),
+      }),
+    };
+    // Call-count-aware findFirst: call 1 = reconcile pre-read (before the tx),
+    // call 2 = the in-tx lost-race re-read after onConflictDoNothing returned
+    // nothing. With preReadResult absent the pre-read sees no prior message.
+    let findFirstCall = 0;
+    const findFirstResults: unknown[] =
+      'preReadResult' in opts ? [opts.preReadResult, opts.conflictWinner] : [undefined, opts.conflictWinner];
+    // The tx callback must see the SAME surface as the outer db stub.
+    const chain = {
+      ...routedChain,
+      query: {
+        match_messages: {
+          findFirst: async () => findFirstResults[Math.min(findFirstCall++, findFirstResults.length - 1)],
+        },
+      },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => opts.insertReturns ?? [{ id: 'msg-1', match_id: MATCH_ID, user_id: 'u1', content: 'hi' }],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: 'mp-1' }] }),
+        }),
+      }),
+    };
+    return {
+      ...chain,
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(chain),
+    };
+  }
+
+  function makeGw2(db: unknown) {
+    const gateway = new AppGateway(
+      db as never,
+      {} as never,
+      { get: (_k: string, def?: string) => def } as never,
+      { isParticipant: async () => true, findReconcilableMessage: async () => null } as never,
+      { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
+      {} as never,
+      {} as never,
+      { consume: () => ({ allowed: true, retryAfterSec: 0 }), release: () => undefined } as never,
+    );
+    gateway.server = { to: () => ({ emit: () => undefined }) } as never;
+    return gateway;
+  }
+
+  function makeClient2() {
+    return {
+      id: 'sock-1',
+      userId: 'u1',
+      to: () => ({ emit: () => undefined }),
+      // Run #148: the P2-172 reconcile ack emits to the SENDER's socket.
+      emit: () => undefined,
+    };
+  }
+
+  it('inserts inside the transaction (race window closed: checks + INSERT share the tx)', async () => {
+    let sawForUpdate = false;
+    const db = makeDbStub({});
+    // Wrap the tx stub so we can observe the chain the callback actually used.
+    // The OUTER chain's insert is a tripwire: if a regression ever moves the
+    // INSERT outside the transaction (Reviewer A run #147), this test fails
+    // on the stray outer insert instead of passing silently.
+    (db as { insert: unknown }).insert = () => {
+      throw new Error('insert must run inside the transaction, not on the outer db');
+    };
+    (db as { transaction: unknown }).transaction = async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [future],
+              for: () => {
+                sawForUpdate = true;
+                return Promise.resolve([future]);
+              },
+            }),
+          }),
+        }),
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: 'msg-1' }],
+            }),
+          }),
+        }),
+      });
+    const gateway = makeGw2(db);
+    await gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never);
+    expect(sawForUpdate).toBe(true);
+  });
+
+  it('unknown matchId → clean not-found rejection (was: FK server error)', async () => {
+    const gateway = makeGw2(makeDbStub({ matchRow: null }));
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('not found');
+  });
+
+  it('lost idempotency race WITHOUT clientMessageId → clean conflict rejection (was: garbage emit)', async () => {
+    const gateway = makeGw2(makeDbStub({ insertReturns: [] }));
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('Message send conflicted; retry.');
+  });
+
+  it('lost idempotency race WITH clientMessageId → reconciles to the winner row (P2-172 contract)', async () => {
+    const winner = { id: 'msg-orig', match_id: MATCH_ID, user_id: 'u1', content: 'first' };
+    const gateway = makeGw2(makeDbStub({ insertReturns: [], conflictWinner: winner }));
+    const client = { ...makeClient2(), to: () => ({ emit: (ev: string, payload: unknown) => undefined }) };
+    // Capture the emitted payload via the room broadcast.
+    let emitted: unknown;
+    (gateway as { server: unknown }).server = {
+      to: () => ({ emit: (_ev: string, payload: unknown) => { emitted = payload; } }),
+    } as never;
+    await gateway.handleMessage(
+      { matchId: MATCH_ID, content: 'second try', clientMessageId: 'cmid-1' },
+      client as never,
+    );
+    expect(emitted).toMatchObject({ id: 'msg-orig', content: 'first' });
+  });
+
+  // Run #148 (PR-Agent follow-up): a retried send whose clientMessageId was
+  // ALREADY accepted must reconcile to the original row even after the match
+  // went terminal — reconcile happens BEFORE the closed-chat guard (REST
+  // parity), so the offline-queue replay never surfaces a false chat-closed.
+  // The reconcile ack is SENDER-SCOPED (client.emit, not room broadcast).
+  it('terminal-flip retry WITH clientMessageId → reconciles to the original row BEFORE the closed-chat guard', async () => {
+    const original = { id: 'msg-accepted', match_id: MATCH_ID, user_id: 'u1', content: 'sent while open' };
+    const gateway = makeGw2(makeDbStub({ matchRow: { ...future, status: 'Completed' }, preReadResult: original }));
+    let emittedToSender: unknown;
+    const client = {
+      ...makeClient2(),
+      emit: (ev: string, payload: unknown) => {
+        if (ev === 'new-message') emittedToSender = payload;
+      },
+    };
+    let roomBroadcasts = 0;
+    (gateway as { server: unknown }).server = {
+      to: () => ({ emit: () => {
+        roomBroadcasts += 1;
+      } }),
+    } as never;
+    await expect(
+      gateway.handleMessage(
+        { matchId: MATCH_ID, content: 'sent while open', clientMessageId: 'cmid-offline-1' },
+        client as never,
+      ),
+    ).resolves.toBeUndefined();
+    expect(emittedToSender).toMatchObject({ id: 'msg-accepted', content: 'sent while open' });
+    // Sender-scoped: NO room-wide re-broadcast on the reconcile path
+    // (PR-Agent run #148 — amplification surface on a clientMessageId flood).
+    expect(roomBroadcasts).toBe(0);
+  });
+
+  it('closed chat evaluated against the LOCKED row inside the tx (status flip cannot slip in)', async () => {
+    let forUpdateCalledBeforeInsert = false;
+    let insertCalled = false;
+    const db = makeDbStub({ matchRow: { ...future, status: 'Completed' } });
+    (db as { transaction: unknown }).transaction = async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ ...future, status: 'Completed' }],
+              for: () => {
+                forUpdateCalledBeforeInsert = !insertCalled;
+                return Promise.resolve([{ ...future, status: 'Completed' }]);
+              },
+            }),
+          }),
+        }),
+        insert: () => {
+          insertCalled = true;
+          return {
+            values: () => ({
+              onConflictDoNothing: () => ({ returning: async () => [] }),
+            }),
+          };
+        },
+      });
+    const gateway = makeGw2(db);
+    await expect(
+      gateway.handleMessage({ matchId: MATCH_ID, content: 'hi' }, makeClient2() as never),
+    ).rejects.toThrow('lobby chat is closed');
+    expect(forUpdateCalledBeforeInsert).toBe(true);
+    expect(insertCalled).toBe(false);
+  });
+});
+});

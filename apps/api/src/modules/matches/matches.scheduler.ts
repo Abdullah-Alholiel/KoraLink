@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import * as Sentry from '@sentry/node';
 import { MatchesService } from './matches.service';
 
 /**
@@ -31,6 +32,7 @@ export class MatchesScheduler {
       }
     } catch (err) {
       this.logger.error(`autoCompletePastMatches tick failed: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'matches.scheduler.auto-complete' } });
     }
   }
 
@@ -40,6 +42,7 @@ export class MatchesScheduler {
       await this.matchesService.finalizePomVoting();
     } catch (err) {
       this.logger.error(`finalizePomVoting tick failed: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'matches.scheduler.pom-finalize' } });
     }
   }
 
@@ -49,6 +52,7 @@ export class MatchesScheduler {
       await this.matchesService.sendMatchStartReminders();
     } catch (err) {
       this.logger.error(`sendMatchStartReminders tick failed: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'matches.scheduler.reminders' } });
     }
   }
 
@@ -58,6 +62,7 @@ export class MatchesScheduler {
       await this.matchesService.checkMinPlayers();
     } catch (err) {
       this.logger.error(`checkMinPlayers tick failed: ${(err as Error).message}`);
+      Sentry.captureException(err, { tags: { scope: 'matches.scheduler.min-players' } });
     }
   }
 }

@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  InternalServerErrorException,
   UnauthorizedException,
   Optional,
   Logger,
@@ -14,6 +15,8 @@ import {
 import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import { randomInt } from 'node:crypto';
 import * as Sentry from '@sentry/node';
+import { escapeLikePattern } from '../../common/utils/escape-like';
+import { reportFanOutError } from '../../common/utils/fanout';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +28,7 @@ import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
+import { MediaService } from '../media/media.service';
 import { otpMatches } from '../../common/security/otp-compare';
 import { UnifonicService } from '../auth/unifonic.service';
 
@@ -58,6 +62,9 @@ export class UsersService {
     // ergonomic and trailing-optionals TS-valid).
     @Optional() private readonly otpStore?: OtpStoreService,
     @Optional() private readonly unifonic?: UnifonicService,
+    // P2-50 (run #181): avatar storage/persistence seam. Optional marker keeps
+    // the direct-test construction pattern (spec stubs) working.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /**
@@ -131,6 +138,7 @@ export class UsersService {
         email: true,
         email_verified_at: true,
         email_muted: true,
+        locale: true,
         quiet_hours_enabled: true,
         quiet_start_hour: true,
         quiet_end_hour: true,
@@ -145,6 +153,23 @@ export class UsersService {
     const pom_count = await this.getPomCount(userId);
 
     return { ...user, pom_count };
+  }
+
+  /**
+   * P2-50 (run #181): avatar upload. The controller gates the feature flag;
+   * storage + persistence live in MediaService (same module that owns venue
+   * images — one upload/serve seam, one error-mapping style). This delegation
+   * keeps the users controller's constructor dependency on its own service.
+   */
+  async uploadAvatar(
+    userId: string,
+    file: { buffer: Buffer; size: number; mimetype?: string },
+  ): Promise<{ avatarUrl: string }> {
+    if (!this.media) {
+      // MediaModule is always imported (app.module) — this is a test-only guard.
+      throw new InternalServerErrorException('Media service unavailable.');
+    }
+    return this.media.uploadAvatar(userId, file);
   }
 
   /**
@@ -231,15 +256,24 @@ export class UsersService {
         m.host_payout_state AS host_payout_state,
         v.name AS venue_name,
         v.city AS venue_city,
-        COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at
+        COALESCE(m.completed_at, m.scheduled_at + (COALESCE(m.duration_mins, 60) * INTERVAL '1 minute')) + INTERVAL '24 hours' AS voting_closes_at,
+        -- P1-51 (run #116): POTM outcome for History rows. The winner is set by
+        -- finalizePomVoting (single top vote); a tie/no-vote finish stamps
+        -- pom_announced_at with pom_winner_id NULL. potm_decided = the window
+        -- resolved either way, so the card can stop showing vote affordances.
+        m.pom_winner_id AS potm_winner_id,
+        u2.full_name AS potm_winner_name,
+        u2.avatar_url AS potm_winner_avatar,
+        (m.pom_winner_id IS NOT NULL OR m.pom_announced_at IS NOT NULL) AS potm_decided
       FROM match_players my
       INNER JOIN matches m ON m.id = my.match_id
       INNER JOIN users u ON u.id = m.host_id
+      LEFT JOIN users u2 ON u2.id = m.pom_winner_id
       INNER JOIN pitches p ON p.id = m.pitch_id
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN match_players mp2 ON mp2.match_id = m.id
       WHERE my.user_id = ${userId}
-      GROUP BY m.id, u.id, p.id, v.id
+      GROUP BY m.id, u.id, u2.id, p.id, v.id
       ORDER BY
         -- Upcoming/active matches first (scheduled today or later)
         CASE WHEN m.status IN ('Open', 'Full', 'InProgress') AND m.scheduled_at >= date_trunc('day', NOW()) THEN 0
@@ -280,6 +314,10 @@ export class UsersService {
       venue_name: string;
       venue_city: string;
       voting_closes_at: Date;
+      potm_winner_id: string | null;
+      potm_winner_name: string | null;
+      potm_winner_avatar: string | null;
+      potm_decided: boolean;
     }>;
   }
 
@@ -442,6 +480,7 @@ export class UsersService {
         role: users.role,
         home_lat: users.home_lat,
         home_lng: users.home_lng,
+        locale: users.locale,
       });
 
     if (!updated) {
@@ -558,13 +597,16 @@ export class UsersService {
     }
 
     // ── Shared abuse caps (identical semantics to auth sendOtp) ──
+    // P2-194: single-read gate (see auth.service sendOtp comment).
     const otp = this.otp();
-    if (await otp.isCooldownActive(newPhone)) {
+    const cooldownRemaining = await otp.getCooldownRemaining(newPhone);
+    if (cooldownRemaining > 0) {
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter: cooldownRemaining,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -919,7 +961,7 @@ export class UsersService {
       return [];
     }
 
-    const q = `%${query.trim()}%`;
+    const q = '%' + escapeLikePattern(query.trim()) + '%';
     return this.db
       .select({
         id: users.id,
@@ -933,7 +975,7 @@ export class UsersService {
         and(
           isNull(users.deleted_at),
           isNull(users.banned_at),
-          sql`(${users.full_name} ILIKE ${q} OR ${users.handle} ILIKE ${q})`,
+          sql`(${users.full_name} ILIKE ${q} ESCAPE '\\' OR ${users.handle} ILIKE ${q} ESCAPE '\\')`,
         ),
       )
       .limit(20);
@@ -1021,7 +1063,10 @@ export class UsersService {
     if (this.mailer) {
       this.mailer
         .sendToUsers([userId], 'account_deletion')
-        .catch(() => undefined);
+        // P2-169 (run #115): logged + Sentry'd, not swallowed.
+        .catch((err: unknown) =>
+          reportFanOutError('users.deletion-email', err),
+        );
     }
 
     const restore_token = this.jwt.sign(
@@ -1077,10 +1122,45 @@ export class UsersService {
       );
     }
 
-    await this.db
+    // Run #181 (Reviewer A I-1): the age check above runs on an UNLOCKED read —
+    // a concurrent deleteMyAccount() between that read and this UPDATE could
+    // resurrect an account that just re-entered the deletion window. The clear
+    // is therefore a guarded conditional write (same status-predicate discipline
+    // as every other lifecycle transition in this codebase): it only fires while
+    // the row is STILL deleted. 0 rows = the race happened → re-read and map.
+    const restored = await this.db
       .update(users)
       .set(withTimestamp({ deleted_at: null }))
-      .where(eq(users.id, userId));
+      .where(and(eq(users.id, userId), isNotNull(users.deleted_at)))
+      .returning({ deleted_at: users.deleted_at });
+
+    if (!restored.length) {
+      // Someone cleared (or never had) deleted_at after our read — or the row
+      // was deleted again in between. Distinguish idempotent no-op from a
+      // genuine re-deletion race.
+      const [current] = await this.db
+        .select({ deleted_at: users.deleted_at })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!current) {
+        throw new NotFoundException('User not found.');
+      }
+      if (!current.deleted_at) {
+        // Idempotent no-op — the user is already active.
+        return this.getProfile(userId);
+      }
+      // deleted again mid-restore: recompute the window honestly.
+      const reAgeMs = Date.now() - current.deleted_at.getTime();
+      if (reAgeMs > PDPL_GRACE_DAYS * 86_400_000) {
+        throw new BadRequestException(
+          'Restore window expired. The account is permanently scheduled for deletion.',
+        );
+      }
+      throw new ConflictException(
+        'Account was deleted again during restore — ask the player to restore once more.',
+      );
+    }
 
     // Re-read populated profile OUTSIDE the update (contract §2).
     return this.getProfile(userId);

@@ -4,14 +4,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Loader2, AlertTriangle, Play } from 'lucide-react';
+import { classifyError, errorKey } from '@/lib/error-classify';
+import { ArrowLeft, Loader2, Play } from 'lucide-react';
 import MatchCard from '@/components/matches/MatchCard';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useNow } from '@/hooks/useNow';
 import { useMyMatches, useUserStats } from '@/hooks/useUser';
 import { adaptMatchList, isPotmVotingOpen } from '@/lib/api-adapter';
 import { selectUser, useAppStore } from '@/store/useAppStore';
+import { formatCount } from '@/lib/format';
 
 /** True while POTM voting is still open — uses the authoritative API deadline
  *  when present, falling back to the coarse scheduled-end estimate otherwise.
@@ -43,7 +47,9 @@ export default function MyGamesPage() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useUserStats();
   const storeUser = useAppStore(selectUser);
   const now = useNow();
-  const matches = matchesApi ? adaptMatchList(matchesApi, storeUser?.id) : [];
+  const matches = matchesApi
+    ? adaptMatchList(matchesApi, storeUser?.id, locale === 'ar' ? 'ar' : 'en')
+    : [];
 
   const activeMatches = matches.filter((m) =>
     // Active = joinable OR played within the POTM voting window (24h after
@@ -67,7 +73,7 @@ export default function MyGamesPage() {
           onClick={() => router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
         >
-          <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+          <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
         </button>
         <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
           {t('myGames.title')}
@@ -91,16 +97,11 @@ export default function MyGamesPage() {
 
         {/* Error */}
         {error && !isLoading && (
-          <div className="flex flex-col items-center py-20 px-8">
-            <AlertTriangle className="w-10 h-10 text-brand-red" strokeWidth={1.5} />
-            <p className="text-sm text-gray-400 mt-3">{t('common.error')}</p>
-            <button
-              onClick={() => refetch()}
-              className="mt-4 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold active:scale-95 transition-transform"
-            >
-              {t('common.retry')}
-            </button>
-          </div>
+          <ErrorState
+            title={t(errorKey(classifyError(error)))}
+            onRetry={() => refetch()}
+            retryLabel={t('common.retry')}
+          />
         )}
 
         {/* Populated */}
@@ -152,14 +153,14 @@ export default function MyGamesPage() {
               ) : !statsError && stats ? (
                 <div className="bg-white rounded-2xl shadow-card px-2 py-4 flex">
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.games_played ?? 0}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{formatCount(stats.games_played ?? 0, locale === 'ar' ? 'ar' : 'en')}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsPlayed')}
                     </p>
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div className="flex-1 py-0.5 text-center">
-                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{stats.matches_hosted ?? 0}</p>
+                    <p className="text-xl font-extrabold leading-none text-brand-black tabular-nums" dir="ltr">{formatCount(stats.matches_hosted ?? 0, locale === 'ar' ? 'ar' : 'en')}</p>
                     <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       {t('myGames.statsHosted')}
                     </p>
@@ -199,20 +200,18 @@ export default function MyGamesPage() {
 
             {/* Fully Empty */}
             {activeMatches.length === 0 && historyMatches.length === 0 && (
-              <div className="flex flex-col items-center py-20 px-8">
-                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <Play className="w-8 h-8 text-gray-300" strokeWidth={1.5} />
-                </div>
-                <p className="text-sm font-semibold text-brand-black">
-                  {t('myGames.empty')}
-                </p>
-                <Link
-                  href={`/${locale}/play`}
-                  className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
-                >
-                  {t('myGames.emptyCta')}
-                </Link>
-              </div>
+              <EmptyState
+                icon={Play}
+                title={t('myGames.empty')}
+                action={
+                  <Link
+                    href={`/${locale}/play`}
+                    className="mt-3 bg-brand-green text-white px-6 py-2.5 rounded-full text-sm font-bold"
+                  >
+                    {t('myGames.emptyCta')}
+                  </Link>
+                }
+              />
             )}
           </>
         )}

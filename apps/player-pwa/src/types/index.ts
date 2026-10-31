@@ -63,6 +63,11 @@ export interface Match {
     isUserHost?: boolean;
     /** True if the current user has already cast a POTM vote for this match. */
     hasVotedPotm?: boolean;
+    /** P1-51 (run #116): POTM outcome for History rows — populated only by the
+     *  my-matches endpoint; undefined/null elsewhere. */
+    potmWinnerName?: string | null;
+    potmWinnerAvatar?: string | null;
+    potmDecided?: boolean;
     /** True when the match is invite-link only (visibility = 'private'). */
     isPrivate?: boolean;
     /** koralink matches occupy a bookable pitch slot — enables host reschedule. */

@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
-import { Ban, Loader2, Pencil } from 'lucide-react';
+import { Ban, Download, Loader2, Pencil } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -18,6 +18,8 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import MatchEditDrawer from '@/components/MatchEditDrawer';
+import { csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
 type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
@@ -122,6 +124,37 @@ export default function MatchesPage() {
     }
   }
 
+  const rows = data?.matches ?? [];
+  const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
+
+
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<MatchesResponse, AdminMatch>({
+      url: `/admin/matches?${qs.toString()}`,
+      rowKey: 'matches',
+      build: (allRows) => ({
+        columns: [
+          { key: 'match', header: t('thMatch'), value: (m: AdminMatch) => m.title ?? '' },
+          { key: 'venue', header: t('thVenue'), value: (m: AdminMatch) => m.venue_name ?? '' },
+          { key: 'pitch', header: t('thPitch'), value: (m: AdminMatch) => m.pitch_name ?? '' },
+          { key: 'status', header: t('thStatus'), value: (m: AdminMatch) => m.status },
+          { key: 'scheduled', header: t('thScheduled'), value: (m: AdminMatch) => csvDate(m.scheduled_at) },
+          { key: 'host', header: t('thHost'), value: (m: AdminMatch) => m.host_name ?? '' },
+          { key: 'price', header: t('thPrice'), value: (m: AdminMatch) => String(m.price_per_player ?? 0) },
+          { key: 'spots', header: t('thSpots'), value: (m: AdminMatch) => `${m.spots_filled ?? 0}/${m.max_players ?? 0}` },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-matches',
+        timestamp: new Date(),
+      }),
+    });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.matches', rows: exported });
+  }
+
   return (
     <div>
       <PageHeader title={t('matchesTitle')} subtitle={t('matchesSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
@@ -144,7 +177,21 @@ export default function MatchesPage() {
           <option value="Cancelled">{ts('cancelled')}</option>
         </select>
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportMatches')}
+        </button>
       </div>
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingMatches')}</div>

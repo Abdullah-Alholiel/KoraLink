@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, Clock, Shield, MapPin } from 'lucide-react';
-import { todayInRiyadh } from '@/lib/api-adapter';
+import { todayInRiyadh } from '@/lib/riyadh-time';
 import { formatShortDate, formatShortTime, riyadhDateFromYMD } from '@/lib/format';
 import type { AppLocale } from '@/lib/format';
 import DateTimeOverlayInput from '@/components/host/DateTimeOverlayInput';

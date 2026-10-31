@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq, and, inArray, lt } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -246,7 +246,7 @@ export class NotificationsService {
       | {
           title: string;
           body: string;
-          data: { type: string; matchId?: string; conversationId?: string };
+          data: { type: string; matchId?: string; conversationId?: string; reportId?: string };
           // P0-5 (run #28): the inline form now carries an optional
           // `category` so the per-category mute gate can drop a chat
           // push for a user who has muted `chat`. Omitting the field is
@@ -257,7 +257,7 @@ export class NotificationsService {
         }
       // P2-8 (run #24): semantic-key form — text is rendered per-subscription
       // from push-text.ts using the subscription's stored locale.
-      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string } },
+      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string; reportId?: string } },
   ): Promise<number> {
     if (!this.vapidConfigured || userIds.length === 0) {
       return 0;
@@ -409,10 +409,40 @@ export class NotificationsService {
     );
 
     // Never let an unexpected (non-send) failure crash a caller mid-fan-out.
+    // P2-125: rejected tasks were debug-only (invisible). Warn the FIRST
+    // rejection (details) and keep the rest at debug — a systemic provider
+    // outage rejects every task, so per-task warns would flood the log; the
+    // ONE aggregated Sentry capture below carries rejected_count/total.
+    let firstRejection: unknown;
+    let rejectedCount = 0;
+    const reasonSamples = new Set<string>();
     for (const r of results) {
       if (r.status === 'rejected') {
-        this.logger.debug(`Push fan-out task failed: ${(r.reason as Error)?.message}`);
+        rejectedCount += 1;
+        if (rejectedCount === 1) {
+          firstRejection = r.reason;
+          this.logger.warn(
+            `Push fan-out task failed (1/${results.length}): ${(r.reason as Error)?.message ?? String(r.reason)}`,
+          );
+        } else {
+          this.logger.debug(
+            `Push fan-out task failed: ${(r.reason as Error)?.message ?? String(r.reason)}`,
+          );
+        }
+        if (reasonSamples.size < 3) {
+          reasonSamples.add((r.reason as Error)?.message ?? String(r.reason));
+        }
       }
+    }
+    if (rejectedCount > 0) {
+      Sentry.captureException(firstRejection, {
+        tags: { scope: 'notifications.push-fanout' },
+        extra: {
+          rejected_count: rejectedCount,
+          total: results.length,
+          rejection_samples: [...reasonSamples],
+        },
+      });
     }
     return sent;
   }

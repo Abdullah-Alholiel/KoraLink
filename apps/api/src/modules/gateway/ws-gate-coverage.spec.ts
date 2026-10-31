@@ -39,6 +39,7 @@ const EXPECTED_EVENTS = [
   'send-dm',
   'leave-conversation',
   'typing',
+  'conv-typing',
 ];
 
 interface HandlerChunk {

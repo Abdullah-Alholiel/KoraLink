@@ -1,18 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { Wallet } from 'lucide-react';
+import { Download, Gauge, TrendingUp, Wallet, HandCoins } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { api } from '@/lib/api';
 import LoadError from '@/components/LoadError';
-import type { PartnerEarnings } from '@/lib/types';
-import { formatDate, formatMoney } from '@/lib/utils';
+import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
+import { formatDate, formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
+import WeeklyTrendChart from '@/components/WeeklyTrendChart';
+import {
+  buildCsvExport,
+  csvAmount,
+  csvDate,
+  csvFilename,
+  type CsvExportFile,
+} from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+import * as Sentry from '@sentry/nextjs';
 
 interface PartnerSettlement {
   id: string;
@@ -23,12 +36,153 @@ interface PartnerSettlement {
   status: string;
   payout_ref?: string | null;
   created_at: string;
+  /** P2-C (run #143): payout-request provenance (null = auto-generated). */
+  requested_by?: string | null;
+  requested_by_name?: string | null;
 }
 
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
+  const ef = useExportFeedback();
+
+  // ── P2-3: partner-initiated payout request ─────────────────────────────
+  const [confirming, setConfirming] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestNote, setRequestNote] = useState<string | null>(null);
+
+  async function onRequestPayout() {
+    setConfirming(false);
+    setRequesting(true);
+    setRequestError(null);
+    try {
+      const res = await api.post<{
+        requested: number;
+        totalAmount: string;
+        settlements: Array<{ venueName: string; amount: string }>;
+      }>('/partner/payout-requests', {});
+      // P2-D (run #143): the note states EXACTLY what was requested — venue
+      // + amount per line, then the total — not just a count.
+      const venueLines = res.settlements
+        .map((s) => t('payoutRequestedVenue', { venue: s.venueName, amount: formatMoney(s.amount) }))
+        .join(' · ');
+      setRequestNote(
+        `${t('payoutRequestedNote', { count: res.requested, amount: formatMoney(res.totalAmount) })} ${venueLines}`,
+      );
+      trackEvent('partner_payout_request', { page: 'partner.earnings', requested: res.requested, total: res.totalAmount });
+      reload();
+    } catch (e) {
+      // Error-message standard: what happened + why + what to do next.
+      const msg = e instanceof Error ? e.message : t('payoutErrorFallback');
+      setRequestError(msg);
+      trackEvent('partner_payout_request_error', { page: 'partner.earnings' });
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  // P2-178: one CSV with two sections — per-venue revenue, then settlements.
+  function buildEarningsCsv(earnings: PartnerEarnings): CsvExportFile {
+    const timestamp = new Date();
+    const revenue = buildCsvExport({
+      columns: [
+        { key: 'venue', header: t('thVenue') },
+        { key: 'bookings', header: t('thBookings') },
+        { key: 'revenue', header: t('thRevenue') },
+      ],
+      rows: (earnings.perVenue ?? []).map((v) => ({
+        venue: v.venueName || '',
+        bookings: v.bookedCount,
+        revenue: csvAmount(v.revenue),
+      })),
+      filePrefix: 'koralink-partner-revenue',
+      timestamp,
+    });
+    const settlements = buildCsvExport({
+      columns: [
+        { key: 'venue', header: t('thVenue') },
+        { key: 'amount', header: t('thAmount') },
+        { key: 'status', header: t('thStatus') },
+        { key: 'period', header: t('thPeriod') },
+        { key: 'payoutRef', header: t('thPayoutRef') },
+        { key: 'created', header: t('thCreated') },
+      ],
+      rows: (earnings.settlements ?? []).map((s) => ({
+        venue: s.venue_name ?? '',
+        amount: csvAmount(s.amount),
+        status: s.status,
+        period: `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
+        payoutRef: s.payout_ref ?? '',
+        created: csvDate(s.created_at),
+      })),
+      filePrefix: 'koralink-partner-settlements',
+      timestamp,
+    });
+    // Section A keeps the file's only BOM; strip B's. buildCsvExport already
+    // ends each section with CRLF (csv-export.ts), so the sections join
+    // cleanly — no extra separator needed (PR-Agent r1 IMPORTANT refuted:
+    // it assumed no trailing newline; csv-export.ts:77 emits one).
+    return {
+      filename: csvFilename('koralink-partner-earnings', timestamp),
+      content: revenue.content + settlements.content.replace(/^\uFEFF/, ''),
+    };
+  }
+
+  async function onExport() {
+    if (!data) return;
+    const rowCount = (data.perVenue?.length ?? 0) + (data.settlements?.length ?? 0);
+    if (rowCount === 0) return;
+    // Build inside the same failure envelope as runPrebuilt: a formatter
+    // throw during generation must reach Sentry + the error note, not the
+    // console (PR-Agent r1 MINOR).
+    try {
+      ef.runPrebuilt(buildEarningsCsv(data), rowCount);
+      trackEvent('admin_csv_export', { page: 'partner.earnings', rows: rowCount });
+    } catch (e) {
+      Sentry.captureException(e, { tags: { area: 'admin-csv-export' } });
+      trackEvent('admin_csv_export_error', { page: 'partner.earnings' });
+      ef.reportError();
+    }
+  }
+
+  const exportDisabled =
+    loading || !!error || ef.exporting || (data?.perVenue?.length ?? 0) + (data?.settlements?.length ?? 0) === 0;
+
+  // P1-65: revenue overview — server-aggregated over the 4-week Riyadh window.
+  const fourWeekTrend = data?.fourWeekTrend ?? [];
+  const fourWeekRevenue = fourWeekTrend.reduce((sum, w) => sum + Number(w.revenue), 0);
+  const trendPoints = fourWeekTrend.map((w) => ({
+    date: w.weekStart,
+    bookedSlots: w.bookedCount,
+    revenue: Number(w.revenue),
+  }));
+
+  const venueColumns: ColumnDef<PartnerVenueRevenue>[] = [
+    {
+      key: 'venue',
+      header: t('thVenue'),
+      role: 'identity',
+      render: (v) => <span className="font-medium text-gray-900">{v.venueName || '—'}</span>,
+    },
+    {
+      key: 'bookings',
+      header: t('thBookings'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (v) => v.bookedCount,
+    },
+    {
+      key: 'revenue',
+      header: t('thRevenue'),
+      role: 'value',
+      align: 'end',
+      tabular: true,
+      render: (v) => formatMoney(v.revenue),
+    },
+  ];
 
   const columns: ColumnDef<PartnerSettlement>[] = [
     {
@@ -49,7 +203,19 @@ export default function PartnerEarningsPage() {
       key: 'status',
       header: t('thStatus'),
       role: 'meta',
-      render: (s) => <StatusBadge status={s.status} />,
+      // P2-C (run #143): a partner-requested settlement carries a "requested"
+      // chip next to its status — the partner sees at a glance which rows came
+      // from their own payout requests vs the admin auto-generator.
+      render: (s) => (
+        <span className="inline-flex items-center gap-1.5">
+          <StatusBadge status={s.status} />
+          {s.requested_by && (
+            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+              {t('requestedChip')}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'period',
@@ -78,7 +244,26 @@ export default function PartnerEarningsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<LiveBadge live={live} stale={stale} />} />
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exportDisabled}
+              aria-label={t('exportEarnings')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {t('exportEarnings')}
+            </button>
+            <LiveBadge live={live} stale={stale} />
+          </div>
+        }
+      />
+      <ExportFeedbackNote feedback={ef} />
 
       <div className="space-y-6 p-8">
         {loading ? (
@@ -87,9 +272,71 @@ export default function PartnerEarningsPage() {
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (
           <>
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">{t('revenueOverviewTitle')}</h2>
+                <p className="mt-1 text-xs text-gray-500">{t('revenueOverviewSubtitle')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
+                <MetricCard label={t('fourWeekRevenue')} value={formatMoney(fourWeekRevenue)} icon={TrendingUp} />
+                <MetricCard
+                  label={t('utilization')}
+                  value={formatPercent((data?.utilizationPct ?? 0) / 100)}
+                  icon={Gauge}
+                />
+              </div>
+              <WeeklyTrendChart data={trendPoints} />
+              <div>
+                <h3 className="mb-4 text-sm font-semibold text-gray-900">{t('perVenueTitle')}</h3>
+                <DataTable
+                  columns={venueColumns}
+                  rows={data?.perVenue ?? []}
+                  rowKey={(v) => v.venueId}
+                  empty={<p className="px-4 py-10 text-sm text-gray-400">{t('noRevenueData')}</p>}
+                />
+              </div>
+            </section>
+
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
               <MetricCard label={t('totalPending')} value={formatMoney(data?.totalPending ?? 0)} icon={Wallet} />
               <MetricCard label={t('totalPaid')} value={formatMoney(data?.totalPaid ?? 0)} icon={Wallet} />
+            </div>
+
+            {/* ── P2-3: payout request action + 5 UX states ─────────────── */}
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{t('payoutCtaTitle')}</p>
+                  <p className="text-xs text-gray-500">{t('payoutCtaSubtitle')}</p>
+                </div>
+                <button
+                  type="button"
+                  role="button"
+                  aria-busy={requesting}
+                  disabled={requesting || loading || !!error}
+                  onClick={() => setConfirming(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {requesting ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  ) : (
+                    <HandCoins className="h-3.5 w-3.5" />
+                  )}
+                  {requesting ? t('payoutRequesting') : t('payoutRequestCta')}
+                </button>
+              </div>
+              {/* Success note (role=status) */}
+              {requestNote && (
+                <p role="status" className="mt-2 text-xs font-medium text-emerald-700">
+                  {requestNote}
+                </p>
+              )}
+              {/* Error note (role=alert) — what happened + why + what next */}
+              {requestError && (
+                <p role="alert" className="mt-2 text-xs font-medium text-red-600">
+                  {t('payoutErrorPrefix')} {requestError}
+                </p>
+              )}
             </div>
 
             <div>
@@ -105,6 +352,16 @@ export default function PartnerEarningsPage() {
           </>
         )}
       </div>
+
+      {/* ── P2-3: request confirmation — names the action + that HQ pays it ── */}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={onRequestPayout}
+        title={t('payoutConfirmTitle')}
+        message={t('payoutConfirmBody')}
+        confirmLabel={t('payoutRequestCta')}
+      />
 
       <RecordDrawer
         open={!!selected}
@@ -127,6 +384,14 @@ export default function PartnerEarningsPage() {
                   ),
                 },
                 { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
+                {
+                  // P2-C (run #143): requester identity in the detail drawer —
+                  // the partner name for requested rows, auto for the rest.
+                  label: t('requestedBy'),
+                  value:
+                    selected.requested_by_name ??
+                    (selected.requested_by ? <span dir="ltr">{selected.requested_by}</span> : t('autoOrigin')),
+                },
                 { label: t('thCreated'), value: <span dir="ltr">{formatDate(selected.created_at)}</span> },
               ]
             : []

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, X } from 'lucide-react';
 import { useRestoreAccount } from '@/hooks/useUser';
@@ -29,10 +29,20 @@ export default function RestoreAccountBanner({ purgeAt, onRestored, onDismissed 
     const t = useTranslations();
     const restore = useRestoreAccount();
     const [dismissed, setDismissed] = useState(false);
+    // P2-131 (run #91): hydration-safe mount-time timestamp. A null seed
+    // avoids reading Date.now() during render (server/client mismatch class);
+    // the body line renders without the day count until the effect fires.
+    const [now, setNow] = useState<number | null>(null);
+
+    useEffect(() => {
+        setNow(Date.now());
+    }, []);
 
     if (dismissed) return null;
 
-    const daysLeft = Math.max(0, Math.ceil((new Date(purgeAt).getTime() - Date.now()) / 86_400_000));
+    const daysLeft = now === null
+        ? null
+        : Math.max(0, Math.ceil((new Date(purgeAt).getTime() - now) / 86_400_000));
     const errorMsg = restore.error?.message ?? null;
 
     const handleRestore = async () => {
@@ -56,7 +66,9 @@ export default function RestoreAccountBanner({ purgeAt, onRestored, onDismissed 
                         {t('profile.restoreAccount.title')}
                     </p>
                     <p className="text-xs text-amber-700 mt-1">
-                        {t('profile.restoreAccount.body', { days: daysLeft })}
+                        {daysLeft === null
+                            ? t('profile.restoreAccount.body', { days: '-' })
+                            : t('profile.restoreAccount.body', { days: daysLeft })}
                     </p>
                     {errorMsg && (
                         <p className="text-xs text-brand-red mt-2">

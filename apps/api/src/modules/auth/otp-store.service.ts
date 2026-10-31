@@ -17,6 +17,9 @@ const keys = {
   day: (phone: string) => `otp:day:${phone}`,
   ip_day: (ip: string) => `otp:ip_day:${ip}`,
   fails: (phone: string) => `otp:fails:${phone}`,
+  // P2-198 (run #131): absolute lockout deadline — powers the retryAfter on
+  // the verify lockout 429 (same contract as the P2-194 send cooldown).
+  failsDeadline: (phone: string) => `otp:fails_deadline:${phone}`,
   // P1-19 (run #44): phone-change flow — separate namespace so a login OTP
   // can never verify a phone change (and vice versa).
   changeOtp: (phone: string) => `${OTP_PREFIX}change:${phone}`,
@@ -57,8 +60,31 @@ export class OtpStoreService {
     return !!(await this.cache.get(keys.cooldown(phone)));
   }
 
+  /**
+   * Seconds left on the resend cooldown, 0 when none is active (P2-194).
+   * The cooldown value is the absolute deadline (epoch ms) — cache TTL does
+   * the expiry, the stored deadline gives the client an honest countdown.
+   * Legacy entries (pre-P2-194 runs stored the string '1') parse to a bogus
+   * deadline; those conservatively report the full cooldown.
+   */
+  async getCooldownRemaining(phone: string): Promise<number> {
+    const raw = await this.cache.get(keys.cooldown(phone));
+    if (raw === undefined || raw === null) return 0;
+    const deadline = typeof raw === 'number' ? raw : Number(raw);
+    // Legacy marker (pre-P2-194 runs stored '1'): no deadline info exists, so
+    // report the full cooldown — the key may have been set up to 60s ago.
+    if (!Number.isFinite(deadline) || deadline < 1e12) return OTP_COOLDOWN_MS / 1000;
+    // A real deadline that already passed (clock skew between app nodes while
+    // the Redis TTL still holds the key) → report 0, not the cooldown: the
+    // deadline is the truth for when sends resume, and the window is
+    // sub-second. (PR-Agent run #129 MINOR.)
+    const remainingSec = Math.ceil((deadline - Date.now()) / 1000);
+    if (remainingSec <= 0) return 0;
+    return Math.min(remainingSec, OTP_COOLDOWN_MS / 1000);
+  }
+
   async setCooldown(phone: string): Promise<void> {
-    await this.cache.set(keys.cooldown(phone), '1', OTP_COOLDOWN_MS);
+    await this.cache.set(keys.cooldown(phone), Date.now() + OTP_COOLDOWN_MS, OTP_COOLDOWN_MS);
   }
 
   // ── Daily SMS cap ───────────────────────────────────────────────────────
@@ -98,11 +124,40 @@ export class OtpStoreService {
   async incrementFail(phone: string): Promise<number> {
     const next = ((await this.cache.get<number>(keys.fails(phone))) ?? 0) + 1;
     await this.cache.set(keys.fails(phone), next, OTP_LOCKOUT_MS);
+    // P2-198: arming the deadline at the limit gives getLockoutRemaining an
+    // honest epoch to count down from (the fails counter alone carries no
+    // time info — its TTL slides on every wrong attempt).
+    if (next >= OTP_FAIL_LIMIT) await this.armLockout(phone);
     return next;
   }
 
   async resetFails(phone: string): Promise<void> {
     await this.cache.del(keys.fails(phone));
+    await this.cache.del(keys.failsDeadline(phone));
+  }
+
+  // ── Verify lockout countdown (P2-198) ───────────────────────────────────
+  // Same deadline-in-the-value pattern as getCooldownRemaining: cache TTL
+  // does the expiry, the stored absolute epoch gives the client an honest
+  // countdown. Unarmed/legacy entries report 0 (the caller falls back to the
+  // generic rate-limited copy).
+
+  async armLockout(phone: string): Promise<void> {
+    await this.cache.set(
+      keys.failsDeadline(phone),
+      Date.now() + OTP_LOCKOUT_MS,
+      OTP_LOCKOUT_MS,
+    );
+  }
+
+  async getLockoutRemaining(phone: string): Promise<number> {
+    const raw = await this.cache.get(keys.failsDeadline(phone));
+    if (raw === undefined || raw === null) return 0;
+    const deadline = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(deadline) || deadline < 1e12) return 0;
+    const remainingSec = Math.ceil((deadline - Date.now()) / 1000);
+    if (remainingSec <= 0) return 0;
+    return Math.min(remainingSec, OTP_LOCKOUT_MS / 1000);
   }
 
   // ── Phone-change flow OTP (P1-19, run #44) ───────────────────────────────

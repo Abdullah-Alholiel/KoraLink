@@ -5,6 +5,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Match, Transaction, OrganizerInfo, RosterPlayer, Comment } from '@/types';
+import { dateInRiyadh } from '@/lib/riyadh-time';
+import { POTM_VOTING_WINDOW_HOURS } from '@/lib/match-pricing';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // API Raw Types (snake_case, matches what the backend returns)
@@ -40,6 +42,13 @@ export interface NearbyMatchApi {
   last_message?: string | null;
   /** Authoritative POTM voting deadline from the API (effective completion + 24h). */
   voting_closes_at?: string | Date | null;
+  /** P1-51 (run #116): POTM outcome for History rows — set by finalizePomVoting.
+   *  potm_winner_* NULL until a winner is announced; potm_decided true once the
+   *  window resolved (winner OR tie/no-vote stamp). */
+  potm_winner_id?: string | null;
+  potm_winner_name?: string | null;
+  potm_winner_avatar?: string | null;
+  potm_decided?: boolean;
   /** Player-host responsibility fields (0040): flat feed/my-matches SQL columns. */
   booking_mode?: 'koralink' | 'self';
   is_player_hosted?: boolean;
@@ -159,96 +168,45 @@ function toNum(v: string | number): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function fmtTime(d: Date): string {
-  return d.toLocaleTimeString('en-US', {
+import type { AppLocale } from '@/lib/format';
+
+/**
+ * P2-rider (run #133): clock-time rendering follows the active locale —
+ * ar → "٧:٠٠ م" (Gregorian-pinned, Arabic-Indic digits), en → byte-identical
+ * legacy "7:00 PM" (explicit en-US keeps the uppercase AM/PM; en-GB renders
+ * lowercase in some ICU builds). Default 'en' keeps existing direct callers
+ * (tests, non-locale surfaces) byte-for-byte; hooks thread the real locale.
+ */
+function fmtTime(d: Date, locale: AppLocale = 'en'): string {
+  return d.toLocaleTimeString(locale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   });
 }
 
-/** Formats a date as YYYY-MM-DD in Asia/Riyadh — the app's display timezone
- *  (set in i18n/request.ts). Using the UTC ISO date instead would mislabel
- *  matches that start before 03:00 Riyadh time. */
-export function dateInRiyadh(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Riyadh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
+// ── Domain-pure helpers (P2-153 hex fold, run #124) ────────────────────────
+// The Riyadh-time + pricing/POTM helpers moved to domain modules so UI
+// components never import the adapter; these re-exports keep every existing
+// hook/test import working. New code: import from '@/lib/riyadh-time' /
+// '@/lib/match-pricing' directly.
+export {
+  dateInRiyadh,
+  todayInRiyadh,
+  riyadhISO,
+  parseHostDateParam,
+} from '@/lib/riyadh-time';
+export {
+  POTM_VOTING_WINDOW_HOURS,
+  PLATFORM_MARGIN_SAR,
+  round2,
+  pitchCostForDuration,
+  pricePerPlayer,
+  isPotmVotingOpen,
+} from '@/lib/match-pricing';
 
-/** Today's date (YYYY-MM-DD) in Asia/Riyadh — pair with dateInRiyadh(). */
-export function todayInRiyadh(): string {
-  return dateInRiyadh(new Date());
-}
-
-/** Build an ISO timestamp from a Riyadh-local "YYYY-MM-DD" date and "HH:MM"
- *  time. Riyadh is UTC+3 with no DST, so the offset is constant. The host form
- *  must use this (not `new Date(`${date}T${time}`)`) so kick-off is stored
- *  correctly regardless of the device's local timezone. */
-export function riyadhISO(date: string, time: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  const asUTC = Date.UTC(y, m - 1, d, hh - 3, mm);
-  return new Date(asUTC).toISOString();
-}
-
-/** Validate a `?date=` query param for the host form (e.g. passed from the
- *  club calendar). Accepts only YYYY-MM-DD strings that are today-or-later in
- *  Asia/Riyadh; anything else (garbage, past dates) is ignored → null, so a
- *  bad param never blocks or corrupts the form. */
-export function parseHostDateParam(
-  raw: string | null | undefined,
-  today: string = todayInRiyadh(),
-): string | null {
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  // ISO dates compare chronologically as strings.
-  return raw >= today ? raw : null;
-}
-
-/** POTM voting window length — must mirror MatchesService.VOTING_WINDOW_HOURS. */
-export const POTM_VOTING_WINDOW_HOURS = 24;
-
-/** Platform margin (SAR) added per player on top of the raw pitch-cost share.
- *  MUST mirror MatchesService.PLATFORM_MARGIN_SAR — pinned by test/lib/pricing.test.ts. */
-export const PLATFORM_MARGIN_SAR = 5;
-
-/** Round a SAR amount up to 2 decimal places (money-safe, never rounds down). */
-export const round2 = (n: number): number => Math.ceil(n * 100) / 100;
-
-/** Pitch cost prorated from the pitch hourly rate (mirrors the server). */
-export function pitchCostForDuration(hourlyRate: number, durationMins: number): number {
-  return round2(hourlyRate * durationMins / 60);
-}
-
-/** Per-player price mirroring MatchesService.calculatePricePerPlayer. */
-export function pricePerPlayer(pitchCostSar: number, maxPlayers: number): number {
-  if (maxPlayers < 2) return pitchCostSar;
-  return round2(pitchCostSar / (maxPlayers - 1) + PLATFORM_MARGIN_SAR);
-}
-
-/** True while the POTM voting window (match end + 24h) is open. When `now`
- *  is omitted the live `Date.now()` is used (server contexts + tests); UI
- *  render paths MUST pass the hydration-safe `useNow()` value instead —
- *  a raw render-path clock SSRs a different answer than the device
- *  (Reviewer A CRITICAL, run #40; `null` = pre-mount = optimistic open,
- *  the API re-validates authoritatively on submit). */
-export function isPotmVotingOpen(
-  scheduledAt?: string,
-  durationMins = 60,
-  now?: number | null,
-): boolean {
-  if (!scheduledAt) return false;
-  const endMs = new Date(scheduledAt).getTime() + durationMins * 60_000;
-  const closesAtMs = endMs + POTM_VOTING_WINDOW_HOURS * 60 * 60_000;
-  if (now === null) return true; // pre-mount: optimistic open
-  return (now ?? Date.now()) < closesAtMs;
-}
-
-function fmtEnd(scheduled: Date, durationMins: number): string {
-  return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000));
+function fmtEnd(scheduled: Date, durationMins: number, locale: AppLocale = 'en'): string {
+  return fmtTime(new Date(scheduled.getTime() + durationMins * 60_000), locale);
 }
 
 function mapGender(rule: string): 'men' | 'women' | 'mixed' {
@@ -336,7 +294,11 @@ export function buildComments(messages: MatchMessageApi[]): Comment[] {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** Adapts a NearbyMatchApi row → frontend Match (sparse fields from feed query) */
-export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): Match {
+export function adaptNearbyMatch(
+  row: NearbyMatchApi,
+  currentUserId?: string,
+  locale: AppLocale = 'en',
+): Match {
   const scheduled = new Date(row.scheduled_at);
   const durationMins = row.duration_mins ?? 60;
   const startMs = scheduled.getTime();
@@ -358,8 +320,8 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
       avatarUrl: row.host_avatar ?? '',
     },
     date: dateInRiyadh(scheduled),
-    time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, durationMins),
+    time: fmtTime(scheduled, locale),
+    endTime: fmtEnd(scheduled, durationMins, locale),
     scheduledAt: scheduled.toISOString(),
     endsAt: new Date(endMs).toISOString(),
     votingClosesAt: row.voting_closes_at
@@ -384,6 +346,11 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
     isJoined: row.is_joined,
     isUserHost: currentUserId ? row.host_id === currentUserId : false,
     hasVotedPotm: row.has_voted ?? false,
+    // P1-51 (run #116): POTM outcome for History rows (undefined on other feeds
+    // — the fields are optional and only my-matches SQL ships them today).
+    potmWinnerName: row.potm_winner_name ?? null,
+    potmWinnerAvatar: row.potm_winner_avatar ?? null,
+    potmDecided: row.potm_decided ?? false,
     distanceM: row.distance_m ?? null,
     isPrivate: row.visibility === 'private',
     // Player-host responsibility (0040): mode-aware labeling source of truth.
@@ -402,6 +369,7 @@ export function adaptNearbyMatch(row: NearbyMatchApi, currentUserId?: string): M
 export function adaptMatchDetail(
   detail: MatchDetailApi,
   currentUserId?: string,
+  locale: AppLocale = 'en',
 ): Match {
   const scheduled = new Date(detail.scheduled_at);
   const duration = detail.duration_mins ?? 60;
@@ -424,8 +392,8 @@ export function adaptMatchDetail(
     hostId: detail.host_id,
     organizer: buildOrganizer(detail.host),
     date: dateInRiyadh(scheduled),
-    time: fmtTime(scheduled),
-    endTime: fmtEnd(scheduled, duration),
+    time: fmtTime(scheduled, locale),
+    endTime: fmtEnd(scheduled, duration, locale),
     scheduledAt: scheduled.toISOString(),
     endsAt: new Date(endMs).toISOString(),
     votingClosesAt: new Date(
@@ -472,14 +440,21 @@ export function adaptMatchDetail(
 }
 
 /** Adapts many NearbyMatchApi rows → Match[] */
-export function adaptMatchList(rows: NearbyMatchApi[], currentUserId?: string): Match[] {
-  return rows.map(row => adaptNearbyMatch(row, currentUserId));
+export function adaptMatchList(
+  rows: NearbyMatchApi[],
+  currentUserId?: string,
+  locale: AppLocale = 'en',
+): Match[] {
+  return rows.map((row) => adaptNearbyMatch(row, currentUserId, locale));
 }
 
 // ── Wallet Adapters ──────────────────────────────────────────────────────────
 
 /** Adapts a raw transaction row → frontend Transaction */
-export function adaptTransaction(row: TransactionApi): Transaction {
+export function adaptTransaction(
+  row: TransactionApi,
+  locale: AppLocale = 'en',
+): Transaction {
   const amount = toNum(row.amount);
   const category = mapTransactionCategory(row.reference_type);
   const type = mapTransactionType(row.type);
@@ -488,7 +463,7 @@ export function adaptTransaction(row: TransactionApi): Transaction {
 
   // Build human-readable title and description
   const title = buildTransactionTitle(row.reference_type, row.reference_id);
-  const description = buildTransactionDescription(status, row.created_at);
+  const description = buildTransactionDescription(status, row.created_at, locale);
 
   return {
     id: row.id,
@@ -504,8 +479,8 @@ export function adaptTransaction(row: TransactionApi): Transaction {
 }
 
 /** Adapts many TransactionApi rows → Transaction[] */
-export function adaptTransactionList(rows: TransactionApi[]): Transaction[] {
-  return rows.map(adaptTransaction);
+export function adaptTransactionList(rows: TransactionApi[], locale: AppLocale = 'en'): Transaction[] {
+  return rows.map((row) => adaptTransaction(row, locale));
 }
 
 /** Parses wallet balance from string to number */
@@ -528,9 +503,10 @@ function buildTransactionTitle(ref: string, refId: string | null): string {
 function buildTransactionDescription(
   status: 'pending' | 'completed' | 'failed',
   createdAt: string,
+  locale: AppLocale = 'en',
 ): string {
   const date = new Date(createdAt);
-  const timeStr = date.toLocaleTimeString('en-US', {
+  const timeStr = date.toLocaleTimeString(locale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,

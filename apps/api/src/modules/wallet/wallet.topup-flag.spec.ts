@@ -20,12 +20,19 @@ describe('WalletController.topup gate (P0-7 — explicit feature flag, NOT NODE_
     const walletService = {
       recordTransaction: jest.fn().mockResolvedValue({ ok: true }),
     } as unknown as WalletService;
+    // P0-2 (run #169): the controller now also carries WalletTopupService —
+    // stubbed here; the intent/verify flag behavior has its own specs.
+    const topupService = {
+      getTopupConfig: jest.fn().mockReturnValue({ enabled: false, publishableKey: null, minAmount: 5, maxAmount: 2000 }),
+      createTopupIntent: jest.fn(),
+      verifyTopup: jest.fn(),
+    } as any;
     const configService = {
       get: jest.fn().mockImplementation((key: string) =>
         key === 'WALLET_TOPUP_ENABLED' ? flagValue : undefined,
       ),
     } as any;
-    const controller = new WalletController(walletService, configService);
+    const controller = new WalletController(walletService, configService, topupService);
     return { controller, walletService, configService };
   }
 

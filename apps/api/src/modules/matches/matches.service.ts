@@ -10,14 +10,35 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { eq, sql, and, inArray, isNull, lt, or } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, gt, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
+import {
+  centsFromMoneyString,
+  centsToMoneyString,
+  moneyToNumber,
+} from '../../common/utils/money';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 /** round to 2 d.p. (halves away from zero) for money amounts. */
 function roundMoney2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Derive the pitch cost from an hourly rate WITHOUT routing the rate through
+ * a raw parseFloat float path (P2-168, run #115): the rate is normalized to
+ * an exact 2dp decimal string first, then the arithmetic runs on exact
+ * integer cents. `hourly_rate` is numeric(10,2) — every valid value is
+ * exactly representable at 2dp, so cents math is exact by construction.
+ */
+export function pitchCostFromHourlyRate(hourlyRate: string | number | null | undefined, durationMins: number): number {
+  const cents = Math.round(
+    (centsFromMoneyString(hourlyRate) * durationMins) / 60,
+  );
+  return cents / 100;
 }
 
 /**
@@ -137,6 +158,7 @@ import {
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from './chat-status.predicate';
 import { WalletService } from '../wallet/wallet.service';
 import { chargeMatchFeeTx, creditWalletTx } from './match-fees';
 import { REFUND_WINDOW_HOURS } from '../../common/constants';
@@ -377,9 +399,22 @@ export class MatchesService {
       .from(matches)
       .where(and(eq(matches.status, 'Completed'), eq(matches.host_payout_state, 'held')));
 
+    // P2-252-1 (run #161 Reviewer A MINOR): the margin is the same value on
+    // every iteration — read it ONCE above the loop instead of per match.
+    // Best-effort with the constant fallback: a settings outage must not
+    // break the auto-complete scheduler tick (the old per-match try/catch
+    // absorbed this failure; the hoisted read preserves that resilience).
+    let margin = PLATFORM_MARGIN_SAR;
+    try {
+      margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
+    } catch (err) {
+      this.logger.warn(
+        `platform_margin_sar read failed; using default ${PLATFORM_MARGIN_SAR}: ${(err as Error).message}`,
+      );
+    }
+
     for (const m of flippedRows) {
       try {
-        const margin = await this.settings.getNumber('platform_margin_sar', PLATFORM_MARGIN_SAR);
         const out = await this.db.transaction(async (tx) =>
           releaseHostPayoutInTx(
             tx,
@@ -397,6 +432,26 @@ export class MatchesService {
           this.logger.log(
             `host_payout_released(auto) match=${m.id} host=${m.host_id} amount_sar=${out.amountSar}`,
           );
+          // P2-193 (run #155): same voice as the manual release — the auto
+          // loop fires while nobody is watching, which is exactly when the
+          // host needs the "your payout landed" signal. Best-effort.
+          try {
+            const [titleRow] = await this.db
+              .select({ title: matches.title })
+              .from(matches)
+              .where(eq(matches.id, m.id))
+              .limit(1);
+            await this.notificationsService.sendPushToUsers([m.host_id], {
+              key: 'payout_released',
+              // Pass title through UNDEFINED when missing — the catalog's
+              // per-locale fallback ('your match' / 'مباراتك') must win over a
+              // hardcoded English default (PR-Agent r1 focus area, run #155).
+              vars: { title: titleRow?.title, amount: out.amountSar },
+              data: { type: 'payout-released', matchId: m.id },
+            });
+          } catch (err) {
+            this.logger.error(`payout_released push failed for ${m.id}: ${(err as Error).message}`);
+          }
         }
       } catch (err) {
         this.logger.error(
@@ -423,8 +478,10 @@ export class MatchesService {
    * 24h voting window has closed and whose winner was never announced.
    *
    * Idempotent: guarded by `pom_winner_id IS NULL AND pom_announced_at IS NULL`,
-   * and `announcePomWinner` itself no-ops once announced. Tie → earliest vote
-   * wins (POTM invariant: winner must be a roster member, not a no-show).
+   * and `announcePomWinner` itself no-ops once announced.
+   * Tie at the top (or zero votes): NO winner is announced — voting is closed
+   * by stamping `pom_announced_at` so the match drops out of the per-tick
+   * scan (votes cannot change after the window closes).
    *
    * @returns number of matches finalized this tick.
    */
@@ -593,7 +650,10 @@ export class MatchesService {
                     when: riyadhLocal(kickoff),
                   },
                 )
-                .catch(() => undefined);
+                // P2-169 (run #115): logged + Sentry'd, not swallowed.
+                .catch((err: unknown) =>
+                  reportFanOutError('matches.reminder-email', err),
+                );
             }
           }
 
@@ -783,6 +843,8 @@ export class MatchesService {
     let guardWon = false;
     let releasedSlot = false;
     let refundedSar = 0;
+    // P2-193 (run #155): refunded payers for the post-commit refund pushes.
+    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // Statuses are code-controlled enum literals (never user input), so
       // inlining them as SQL literals is safe. The heal path cancels FROM
@@ -838,6 +900,7 @@ export class MatchesService {
             'REFUND',
             row.id,
           );
+          refundRecipients.push({ userId: p.user_id, amountSar: amt.toFixed(2) });
         }
       }
       if (payers.length > 0) {
@@ -868,27 +931,22 @@ export class MatchesService {
       }
 
       // Release a koralink slot + refund the host exactly what he was
-      // debited (same semantics as manual cancelMatch).
+      // debited (same semantics as manual cancelMatch). P2-244 (run #158):
+      // the hand-rolled INSERT + unguarded balance UPDATE moved onto
+      // creditWalletTx — the replay pre-check, user-existence guard and
+      // 23505→409 mapping now protect this automated refund exactly like
+      // every other credit path (joiner refunds above, forfeits, payouts).
       if (row.booking_mode === 'koralink' && row.booking_slot_id) {
-        const refundSar = row.pitch_cost_sar ? parseFloat(row.pitch_cost_sar) : 0;
+        const refundSar = moneyToNumber(row.pitch_cost_sar);
         if (refundSar > 0) {
-          await tx
-            .update(users)
-            .set({
-              wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
-              updated_at: new Date(),
-            })
-            .where(eq(users.id, row.host_id));
-
-          await tx.insert(transactions).values({
-            user_id: row.host_id,
-            type: 'CREDIT',
-            amount: refundSar.toString(),
-            reference_type: 'REFUND',
-            reference_id: row.id,
-            idempotency_key: `refund-${row.id}`,
-            status: 'Completed',
-          });
+          await creditWalletTx(
+            tx,
+            row.host_id,
+            refundSar,
+            `refund-${row.id}`,
+            'REFUND',
+            row.id,
+          );
           refundedSar = refundSar;
         }
         await tx
@@ -904,47 +962,89 @@ export class MatchesService {
     }
 
     // Notify every roster player (host included) — bell + push.
-    const players = await this.db
-      .select({ user_id: match_players.user_id })
-      .from(match_players)
-      .where(eq(match_players.match_id, row.id));
-    const rosterIds = players.map((p) => p.user_id);
-    if (rosterIds.length > 0) {
-      await this.activitiesService.record({
-        actorId: row.host_id,
-        verb: 'match_auto_cancelled',
-        matchId: row.id,
-        recipients: rosterIds,
-        excludeActor: false,
-      });
-      await this.notificationsService.sendPushToUsers(rosterIds, {
-        key: 'match_cancelled', // P2-8: text localized per subscriber
-        vars: { title: row.title },
-        data: { type: 'match-cancelled', matchId: row.id },
-      });
+    // Post-commit fan-out is best-effort (run #157): a push-provider or
+    // activity-write throw here previously propagated out of the scheduler
+    // tick AFTER the cancel + refunds had fully committed — the money side
+    // is durable, so the notification failure must not surface as an error.
+    try {
+      const players = await this.db
+        .select({ user_id: match_players.user_id })
+        .from(match_players)
+        .where(eq(match_players.match_id, row.id));
+      const rosterIds = players.map((p) => p.user_id);
+      if (rosterIds.length > 0) {
+        await this.activitiesService.record({
+          actorId: row.host_id,
+          verb: 'match_auto_cancelled',
+          matchId: row.id,
+          recipients: rosterIds,
+          excludeActor: false,
+        });
+        await this.notificationsService.sendPushToUsers(rosterIds, {
+          key: 'match_cancelled', // P2-8: text localized per subscriber
+          vars: { title: row.title },
+          data: { type: 'match-cancelled', matchId: row.id },
+        });
+      }
+    } catch (err) {
+      this.logger.error(
+        `auto-cancel roster notification failed for ${row.id}: ${(err as Error).message}`,
+      );
     }
 
     // P1-17: the queue dies with the match — clear it and tell the waiters.
-    const queuedPlayers = await this.db
-      .select({ user_id: match_waitlist.user_id })
-      .from(match_waitlist)
-      .where(eq(match_waitlist.match_id, row.id));
-    if (queuedPlayers.length > 0) {
-      await this.db
-        .delete(match_waitlist)
+    // Same best-effort rule (run #157): the cancel is already committed.
+    try {
+      const queuedPlayers = await this.db
+        .select({ user_id: match_waitlist.user_id })
+        .from(match_waitlist)
         .where(eq(match_waitlist.match_id, row.id));
-      await this.notificationsService.sendPushToUsers(
-        queuedPlayers.map((q) => q.user_id),
-        {
-          key: 'waitlist_closed', // P2-8: text localized per subscriber
-          vars: { title: row.title },
-          data: { type: 'match-cancelled', matchId: row.id },
-        },
+      if (queuedPlayers.length > 0) {
+        await this.db
+          .delete(match_waitlist)
+          .where(eq(match_waitlist.match_id, row.id));
+        await this.notificationsService.sendPushToUsers(
+          queuedPlayers.map((q) => q.user_id),
+          {
+            key: 'waitlist_closed', // P2-8: text localized per subscriber
+            vars: { title: row.title },
+            data: { type: 'match-cancelled', matchId: row.id },
+          },
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `auto-cancel waitlist clear/notify failed for ${row.id}: ${(err as Error).message}`,
       );
     }
     this.logger.log(
       `Auto-cancelled underfilled match ${row.id} (${row.total_players}/${row.min_players} players, refunded=${refundedSar} SAR, slotReleased=${releasedSlot}).`,
     );
+
+    // P2-193 (run #155): refund pushes for auto-cancelled matches — an
+    // overnight auto-cancel previously left unexplained wallet credits.
+    for (const r of refundRecipients) {
+      try {
+        await this.notificationsService.sendPushToUsers([r.userId], {
+          key: 'refund_credited',
+          vars: { title: row.title, amount: r.amountSar },
+          data: { type: 'refund-credited', matchId: row.id },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for ${row.id}/${r.userId}: ${(err as Error).message}`);
+      }
+    }
+    if (refundedSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([row.host_id], {
+          key: 'refund_credited',
+          vars: { title: row.title, amount: refundedSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId: row.id },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited (pitch) push failed for ${row.id}: ${(err as Error).message}`);
+      }
+    }
     return true;
   }
 
@@ -1214,7 +1314,7 @@ export class MatchesService {
     // neighborhoods from. Additive AND, never short-circuits other filters.
     const neighborhoodTerm = neighborhood?.trim();
     const neighborhoodClause = neighborhoodTerm
-      ? sql`AND v.address ILIKE ${'%' + neighborhoodTerm + '%'}`
+      ? sql`AND v.address ILIKE ${'%' + escapeLikePattern(neighborhoodTerm) + '%'} ESCAPE '\\'`
       : sql``;
 
     // db.execute returns rows typed as Record<string,unknown>[] for raw SQL;
@@ -1724,7 +1824,10 @@ export class MatchesService {
         matchId,
         recipients: participants.map((p) => p.user_id),
       })
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.joined-activity', err),
+      );
 
     return { updatedMatch, join: joinResult };
   }
@@ -1747,6 +1850,9 @@ export class MatchesService {
       | 'backfilled_refunded'
       | 'forfeited'
       | null;
+    // P2-193 (run #155): the fee snapshot to quote in the leaver's refund push
+    // (null outcome ⇒ no push). Assigned in-tx, read post-commit.
+    let leaveRefundSar: string | null = null;
     await this.db.transaction(async (tx) => {
       // 0. Lock the match row FIRST (P2-49, run #37) — serializes against
       //     concurrent joins/removePlayers so the roster count read below and
@@ -1858,6 +1964,7 @@ export class MatchesService {
             matchId,
           );
           leaveRefundOutcome = 'refunded';
+          leaveRefundSar = feeSar.toFixed(2);
           promoted = await this.waitlist.promoteNextInTx(tx, matchId);
         } else {
           // Inside the window: refund ONLY on a paid backfill.
@@ -1874,16 +1981,23 @@ export class MatchesService {
               matchId,
             );
             leaveRefundOutcome = 'backfilled_refunded';
+            leaveRefundSar = feeSar.toFixed(2);
             promoted = backfill;
           } else {
             // No queue: forfeit to the host (anti-abuse, ToS §refunds).
+            // ADJUSTMENT, not REFUND (run #157): a forfeit is not money
+            // returned to its payer — typing it REFUND inflated refund-volume
+            // queries and misread the money map. referenceId normalized to a
+            // bare episode id (reference_id consumers join on id columns, not
+            // prefixed labels); the episode stays recoverable via the
+            // host-forfeit-<episode> ledger key.
             await creditWalletTx(
               tx,
               match.host_id,
               feeSar,
               `host-forfeit-${membership.id}`,
-              'REFUND',
-              `forfeit:${membership.id}`,
+              'ADJUSTMENT',
+              membership.id,
             );
             leaveRefundOutcome = 'forfeited';
           }
@@ -1948,6 +2062,11 @@ export class MatchesService {
       }
     }
 
+    // P2-193 (run #155): the leaver's refund gets a push quoting the exact
+    // amount — forfeits deliberately push nothing (ToS-stated anti-abuse;
+    // a "you lost your fee" push is a support-magnet, the leave API response
+    // already carries your_leave_refund='forfeited').
+
     // Return fully populated match with relations (API Contract Rule §2),
     // plus the leaver's refund outcome so the PWA can toast the exact rule
     // that applied (refunded / backfilled_refunded / forfeited / null).
@@ -1957,6 +2076,17 @@ export class MatchesService {
       this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
     } catch (err) {
       this.logger.error(`WS broadcast error on leaveMatch: ${(err as Error).message}`);
+    }
+    if (leaveRefundOutcome && leaveRefundSar) {
+      try {
+        await this.notificationsService.sendPushToUsers([userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: leaveRefundSar },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for leave ${matchId}: ${(err as Error).message}`);
+      }
     }
     return { ...updatedMatch, your_leave_refund: leaveRefundOutcome };
   }
@@ -1982,6 +2112,8 @@ export class MatchesService {
       // Player-host responsibility: mandatory acceptance of the hosting terms
       // (responsibility split + payout-on-completion + refund policy).
       acceptedHostingTerms?: boolean;
+      // P1-64: create N weekly instances (koralink only). Omit or 1 = single.
+      repeat_weeks?: number;
     },
   ) {
     // Consent gate (cycle player-host-responsibility): NO booking without the
@@ -1991,6 +2123,13 @@ export class MatchesService {
       throw new BadRequestException(
         'Hosting terms must be accepted before booking.',
       );
+    }
+
+    // P1-64: recurring matches reuse KoraLink-managed pitch_slots — a
+    // self-booked host has no slots for us to reserve on later weeks.
+    const repeatWeeks = dto.repeat_weeks ?? 1;
+    if ((dto.booking_mode ?? 'koralink') === 'self' && repeatWeeks > 1) {
+      throw new BadRequestException('Recurring matches require KoraLink booking.');
     }
 
     // Validate pitch exists and fetch venue location + hourly rate.
@@ -2023,8 +2162,11 @@ export class MatchesService {
     // default: an omitted booking_mode means KoraLink books the pitch.
     const bookingMode = dto.booking_mode ?? 'koralink';
     const visibility = dto.visibility ?? 'public';
-    const pitchCostSar = round2(
-      parseFloat(pitch.hourlyRate) * dto.duration_mins / 60,
+    // P2-168 (run #115): exact-cents derivation on create too — same helper
+    // as the reschedule path so both write paths share one money rule.
+    const pitchCostSar = pitchCostFromHourlyRate(
+      pitch.hourlyRate,
+      dto.duration_mins,
     );
     const pricePerPlayer = await this.calculatePricePerPlayer(
       pitchCostSar,
@@ -2049,6 +2191,19 @@ export class MatchesService {
     const hostPayoutState: (typeof schema.hostPayoutStateEnum.enumValues)[number] =
       isPlayerHosted && pricePerPlayer > 0 ? 'held' : 'not_applicable';
 
+    if (bookingMode === 'koralink' && repeatWeeks > 1) {
+      return this.createRecurringMatches(hostId, dto, repeatWeeks, {
+        pitchLocation: pitch.venueLocation,
+        capacity,
+        minPlayers,
+        pitchCostSar,
+        pricePerPlayer,
+        isPlayerHosted,
+        hostPayoutState,
+        visibility,
+      });
+    }
+
     const created = await this.db.transaction(async (tx) => {
       // ── Atomic slot booking (koralink mode) ────────────────────
       if (bookingMode === 'koralink') {
@@ -2057,13 +2212,22 @@ export class MatchesService {
         }
 
         const [slot] = await tx.execute(sql`
-          SELECT id, is_booked, slot_date, start_time FROM pitch_slots
+          SELECT id, is_booked, slot_date, start_time, pitch_id FROM pitch_slots
           WHERE id = ${dto.booking_slot_id}::text
           FOR UPDATE
-        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string }];
+        `) as unknown as [{ id: string; is_booked: boolean; slot_date: string; start_time: string; pitch_id: string }];
 
         if (!slot) {
           throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+        }
+
+        // P2-174 (PR-Agent, run #120): the slot MUST belong to the pitch being
+        // priced — same financial-integrity guard as createRecurringMatches
+        // and rescheduleMatch. Without it a crafted payload pairs pitch B's
+        // slot id with pitch A's derived hourly rate, booking A's inventory
+        // at the wrong price and stamping a corrupt cross-pitch booking_slot_id.
+        if (slot.pitch_id !== dto.pitch_id) {
+          throw new BadRequestException('Slot does not belong to this pitch.');
         }
 
         if (slot.is_booked) {
@@ -2216,8 +2380,245 @@ export class MatchesService {
           matchId: created.id,
           recipients: followers.map((f) => f.follower_id),
         })
-        .catch(() => undefined);
+        // P2-169 (run #115): logged + Sentry'd, not swallowed.
+        .catch((err: unknown) =>
+          reportFanOutError('matches.created-activity', err),
+        );
     }
+
+    return fullMatch;
+  }
+
+  /**
+   * P1-64 — recurring matches. Books the anchor slot plus the same pitch +
+   * start_time on each of the next N-1 weeks, all-or-nothing in ONE
+   * transaction: every slot is locked, re-verified, booked, and debited
+   * (per-slot ledger key) exactly like the single koralink path. Returns the
+   * FIRST instance (unchanged response shape); later instances surface in
+   * My Games.
+   */
+  private async createRecurringMatches(
+    hostId: string,
+    dto: {
+      pitch_id: string;
+      title: string;
+      match_type: typeof schema.matchTypeEnum.enumValues[number];
+      gender_rule: typeof schema.genderRuleEnum.enumValues[number];
+      duration_mins: number;
+      booking_slot_id?: string;
+    },
+    repeatWeeks: number,
+    ctx: {
+      pitchLocation: unknown;
+      capacity: number;
+      minPlayers: number;
+      pitchCostSar: number;
+      pricePerPlayer: number;
+      isPlayerHosted: boolean;
+      hostPayoutState: (typeof schema.hostPayoutStateEnum.enumValues)[number];
+      visibility: 'public' | 'private';
+    },
+  ) {
+    if (!dto.booking_slot_id) {
+      throw new BadRequestException('booking_slot_id is required for koralink mode');
+    }
+
+    type SlotRow = { id: string; slot_date: string; start_time: string; is_booked: boolean };
+
+    // PR-Agent r2: under raw postgres-js parsers a PG DATE arrives as a JS
+    // Date (UTC midnight of the calendar date). Through the app's drizzle
+    // session it is the plain "YYYY-MM-DD" string (verified live run #120),
+    // but keep this type-agnostic so a driver/parser change can never 500
+    // the week math. Both forms collapse to the same date key.
+    const asDateKey = (v: unknown): string =>
+      v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+
+    // a. Anchor slot — the pitch + start_time every weekly repeat must match.
+    const [anchor] = (await this.db.execute(sql`
+   SELECT id, pitch_id, slot_date, start_time FROM pitch_slots
+   WHERE id = ${dto.booking_slot_id}::text
+ `)) as unknown as [{ id: string; pitch_id: string; slot_date: string; start_time: string } | undefined];
+ if (!anchor) {
+   throw new NotFoundException(`Slot ${dto.booking_slot_id} not found`);
+ }
+
+ // PR-Agent (run #120): the anchor slot MUST belong to the pitch being
+ // priced — otherwise a crafted payload books pitch A's weekly inventory
+ // at pitch B's derived hourly rate (financial mismatch + corrupt
+ // cross-pitch booking_slot_id references).
+ if (anchor.pitch_id !== dto.pitch_id) {
+   throw new BadRequestException('Slot does not belong to this pitch.');
+ }
+
+    // b. Target dates — UTC-safe arithmetic on the Riyadh-local date string.
+    const anchorDate = asDateKey(anchor.slot_date);
+    const dates = [anchorDate];
+    for (let w = 1; w < repeatWeeks; w++) {
+      const d = new Date(anchorDate + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 7 * w);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+
+    // c. ONE candidates query for all N dates (anchor included).
+    const candidates = (await this.db.execute(sql`
+      SELECT id, slot_date, start_time, is_booked FROM pitch_slots
+      WHERE pitch_id = ${anchor.pitch_id}::text
+        AND start_time = ${anchor.start_time}::time
+        AND slot_date IN (${sql.join(dates.map((d) => sql`${d}::date`), sql`, `)})
+    `)) as unknown as SlotRow[];
+
+    // Same strictly-future guard as the single path (getPitchSlots mirror).
+    const isFuture = (slot: SlotRow) => {
+      const todayKey = riyadhDateKey();
+      const slotDate = asDateKey(slot.slot_date);
+      const startMin = String(slot.start_time).slice(0, 5);
+      return slotDate > todayKey || (slotDate === todayKey && startMin > riyadhTimeNow());
+    };
+
+    // d. Resolve every week IN DATE ORDER — first failure names its date.
+    const resolved: SlotRow[] = [];
+    for (const date of dates) {
+      const candidate = candidates.find((c) => asDateKey(c.slot_date) === date);
+      if (!candidate) {
+        throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
+      }
+      if (candidate.is_booked) {
+        throw new ConflictException(`Slot on ${date} is already booked.`);
+      }
+      if (!isFuture(candidate)) {
+        throw new BadRequestException(`Slot on ${date} has already started.`);
+      }
+      resolved.push(candidate);
+    }
+
+    const { pitchCostSar } = ctx;
+
+    // e. One transaction: lock all N, re-verify inside the lock, then book.
+    const createdIds = await this.db.transaction(async (tx) => {
+      const locked = (await tx.execute(sql`
+        SELECT id, slot_date, start_time, is_booked FROM pitch_slots
+        WHERE id IN (${sql.join(resolved.map((r) => sql`${r.id}::text`), sql`, `)})
+        ORDER BY id
+        FOR UPDATE
+      `)) as unknown as SlotRow[];
+
+      for (const r of resolved) {
+        const date = asDateKey(r.slot_date);
+        const slot = locked.find((l) => l.id === r.id);
+        if (!slot) {
+          throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
+        }
+        if (slot.is_booked) {
+          throw new ConflictException(`Slot on ${date} is already booked.`);
+        }
+        if (!isFuture(slot)) {
+          throw new BadRequestException(`Slot on ${date} has already started.`);
+        }
+      }
+
+      const ids: string[] = [];
+      for (const [weekIdx, slot] of resolved.entries()) {
+        const slotDate = asDateKey(slot.slot_date);
+        const [match] = await tx
+          .insert(matches)
+          .values({
+            host_id: hostId,
+            pitch_id: dto.pitch_id,
+            title: dto.title,
+            match_type: dto.match_type,
+            gender_rule: dto.gender_rule,
+            scheduled_at: new Date(`${slotDate}T${String(slot.start_time).slice(0, 5)}:00+03:00`),
+            duration_mins: dto.duration_mins,
+            price_per_player: ctx.pricePerPlayer.toString(),
+            pitch_cost_sar: pitchCostSar.toString(),
+            max_players: ctx.capacity,
+            min_players: ctx.minPlayers,
+            is_player_hosted: ctx.isPlayerHosted,
+            host_payout_state: ctx.hostPayoutState,
+            host_accepted_terms_at: new Date(),
+            status: 'Open',
+            visibility: ctx.visibility,
+            booking_mode: 'koralink',
+            booking_slot_id: slot.id,
+            ...(ctx.pitchLocation ? { location: ctx.pitchLocation as typeof matches.$inferInsert.location } : {}),
+          })
+          .returning();
+
+        await tx
+          .update(pitch_slots)
+          .set(withTimestamp({ is_booked: true, booked_match_id: match.id }))
+          .where(eq(pitch_slots.id, slot.id));
+
+        // Same guarded debit as the single path — the predicate lives in
+        // the UPDATE so concurrent bookings can never overdraw the wallet.
+        if (pitchCostSar > 0) {
+          const deducted = await tx
+            .update(users)
+            .set({
+              wallet_balance: sql`${users.wallet_balance} - ${pitchCostSar.toString()}`,
+              updated_at: new Date(),
+            })
+            .where(
+              and(
+                eq(users.id, hostId),
+                sql`${users.wallet_balance} >= ${pitchCostSar.toString()}`,
+              ),
+            )
+            .returning({ wallet_balance: users.wallet_balance });
+
+          if (deducted.length === 0) {
+            // In-tx re-read sees prior weeks' debits, but the throw ROLLS THE
+            // WHOLE TX BACK — the host's real balance after this failure is
+            // balance minus nothing (all debits undo). Post-rollback re-read
+            // for the honest figure; best-effort (row could be gone).
+            const balanceAfterRollback = await this.db
+              .select({ wallet_balance: users.wallet_balance })
+              .from(users)
+              .where(eq(users.id, hostId))
+              .limit(1);
+
+            this.logger.warn(
+              `koralink_wallet_insufficient hostId=${hostId} requiredPerWeek=${pitchCostSar} weeks=${repeatWeeks} slotId=${slot.id}`,
+              MatchesService.name,
+            );
+
+            throw new BadRequestException(
+              `Insufficient wallet balance for ${repeatWeeks} weekly bookings. ` +
+                `Required: SAR ${(pitchCostSar * repeatWeeks).toFixed(2)} (${pitchCostSar.toFixed(2)}/week × ${repeatWeeks}; week ${weekIdx + 1} failed), ` +
+                `Available: SAR ${parseFloat(balanceAfterRollback[0]?.wallet_balance ?? '0').toFixed(2)}`,
+            );
+          }
+
+          await tx.insert(schema.transactions).values({
+            user_id: hostId,
+            type: 'DEBIT',
+            amount: pitchCostSar.toString(),
+            reference_type: 'PITCH_BOOKING',
+            reference_id: slot.id,
+            idempotency_key: `slot-booking-${slot.id}`,
+            status: 'Completed',
+          });
+        }
+
+        await tx.insert(schema.match_players).values({
+          match_id: match.id,
+          user_id: hostId,
+          is_host: true,
+          team: 'Home',
+        });
+
+        ids.push(match.id);
+      }
+      return ids;
+    });
+
+    // f. Response shape unchanged — the client navigates to the first one.
+    const fullMatch = await this.findOne(createdIds[0]);
+
+    this.logger.log(
+      `recurring_matches_created count=${repeatWeeks} hostId=${hostId} totalCostSar=${(pitchCostSar * repeatWeeks).toFixed(2)}`,
+      MatchesService.name,
+    );
 
     return fullMatch;
   }
@@ -2295,7 +2696,7 @@ export class MatchesService {
   async getMessages(
     matchId: string,
     viewerId?: string,
-    opts: { before?: string; limit?: number } = {},
+    opts: { before?: string; after?: string; limit?: number } = {},
   ) {
     // Access control (P0-1): chat history is members-only, mirroring the WS
     // gateway's join-lobby/send-message membership enforcement. Internal
@@ -2312,30 +2713,62 @@ export class MatchesService {
     // Clamp: hard bounds keep arbitrary limit values from dumping the table.
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50) || 50, 1), 100);
     const before = opts.before?.trim() || undefined;
+    const after = opts.after?.trim() || undefined;
 
-    if (before) {
+    // P2-196 (run #132): the reconnect backfill direction. `after` mirrors
+    // the `before` anchor semantics exactly — unknown or cross-match cursor
+    // → 404 (no silent empty page, no cross-match leak); composite keyset
+    // strictly newer in (created_at, id); ASC output. Both cursors at once
+    // is a client bug → clean 400 (single-direction anchor reads only).
+    if (before && after) {
+      throw new BadRequestException(
+        'Use either before or after, not both.',
+      );
+    }
+
+    const cursor = before ?? after;
+    if (cursor) {
+      // PR-Agent r2 (run #132): reject non-UUID-shaped cursors BEFORE the PK
+      // read — same contract as the WS gateway's isUuidShape gate. Belt and
+      // braces: the column is varchar(36) (no uuid cast today), but the
+      // shape guard pins the 404 contract against any future column-type
+      // drift and keeps forged query params out of the DB entirely.
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor)) {
+        throw new NotFoundException('Unknown message cursor.');
+      }
       // The cursor is a PK read; validating it (existence + same-match)
       // turns a forged cursor into a clean 404 instead of a silent
       // cross-match leak or an empty page.
       const anchor = await this.db.query.match_messages.findFirst({
-        where: eq(match_messages.id, before),
+        where: eq(match_messages.id, cursor),
         columns: { id: true, match_id: true, created_at: true },
       });
       if (!anchor || anchor.match_id !== matchId) {
         throw new NotFoundException('Unknown message cursor.');
       }
 
+      // Keyset comparator flips with the direction: `before` pages strictly
+      // OLDER than the anchor, `after` pages strictly NEWER.
+      const newerThanAnchor = after !== undefined;
+
       return this.db.query.match_messages.findMany({
         where: and(
           eq(match_messages.match_id, matchId),
-          // Composite keyset: strictly before the anchor in (created_at, id).
-          or(
-            lt(match_messages.created_at, anchor.created_at),
-            and(
-              eq(match_messages.created_at, anchor.created_at),
-              lt(match_messages.id, anchor.id),
-            ),
-          ),
+          newerThanAnchor
+            ? or(
+                gt(match_messages.created_at, anchor.created_at),
+                and(
+                  eq(match_messages.created_at, anchor.created_at),
+                  gt(match_messages.id, anchor.id),
+                ),
+              )
+            : or(
+                lt(match_messages.created_at, anchor.created_at),
+                and(
+                  eq(match_messages.created_at, anchor.created_at),
+                  lt(match_messages.id, anchor.id),
+                ),
+              ),
         ),
         orderBy: (msg, { asc }) => [asc(msg.created_at), asc(msg.id)],
         limit,
@@ -2419,24 +2852,12 @@ export class MatchesService {
       throw new BadRequestException('Message cannot be empty.');
     }
 
-    // Only match members may post to the lobby.
-    const [membership] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        and(
-          eq(match_players.match_id, matchId),
-          eq(match_players.user_id, userId),
-        ),
-      )
-      .limit(1);
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this match.');
-    }
-
     const clientMessageIdValue = clientMessageId?.trim() || null;
 
     // Idempotency — retried sends return the existing message, no duplicate.
+    // Checked BEFORE the chat-closed guard so a terminal-race retry still
+    // reconciles to the original row (P2-172 offline-queue contract) instead
+    // of surfacing a 403 for a message that was accepted when sent.
     if (clientMessageIdValue) {
       const existing = await this.db.query.match_messages.findFirst({
         where: and(
@@ -2458,59 +2879,109 @@ export class MatchesService {
       if (existing) return existing;
     }
 
-    const [inserted] = await this.db
-      .insert(match_messages)
-      .values({
-        match_id: matchId,
-        user_id: userId,
-        content: trimmed,
-        client_message_id: clientMessageIdValue,
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    // Concurrent retry won the race (unique index match_messages_client_msg_uidx
-    // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
-    // return the row the winner inserted instead of raising a unique-violation 500.
-    if (!inserted) {
-      if (!clientMessageIdValue) {
-        // Lost the unique-key race without an idempotency key — surface
-        // a 409 so the caller retries the send.
-        throw new ConflictException('Message send conflicted; retry.');
+    // P2-220 (run #146): the membership + chat-closed checks used to run as
+    // independent statements beside the INSERT, so a match could flip
+    // terminal between the check and the write and one message landed in a
+    // just-closed chat. Everything below now shares ONE transaction with a
+    // `SELECT … FOR UPDATE` on the match row — the same serialization the
+    // host status transitions (complete/cancel) and the dispute-evidence
+    // append already use — so the state the predicate reads is the state the
+    // INSERT writes under. Also fixes a latent bug: an unknown matchId used
+    // to skip the closed-chat guard and die on the FK as a 500; it now 404s.
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+          duration_mins: matches.duration_mins,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .for('update');
+      if (!locked) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
       }
-      const existing = await this.db.query.match_messages.findFirst({
-        where: and(
-          eq(match_messages.user_id, userId),
-          eq(match_messages.match_id, matchId),
-          eq(match_messages.client_message_id, clientMessageIdValue),
-        ),
-        with: {
-          user: {
-            columns: {
-              id: true,
-              full_name: true,
-              handle: true,
-              avatar_url: true,
+
+      // Only match members may post to the lobby.
+      const [membership] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          and(
+            eq(match_players.match_id, matchId),
+            eq(match_players.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!membership) {
+        throw new ForbiddenException('You are not a member of this match.');
+      }
+
+      // P2-111 (run #81): a terminal (or expired non-in-progress) match no
+      // longer accepts lobby messages. Stable machine code → PWA localized
+      // copy (P1-47 pattern). Shared predicate with the WS send-message path,
+      // now evaluated against the LOCKED row.
+      if (isChatClosed(locked)) {
+        throw new ForbiddenException({
+          message: 'This match has ended — the lobby chat is closed.',
+          code: CHAT_CLOSED_ERROR_CODE,
+        });
+      }
+
+      const [inserted] = await tx
+        .insert(match_messages)
+        .values({
+          match_id: matchId,
+          user_id: userId,
+          content: trimmed,
+          client_message_id: clientMessageIdValue,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // Concurrent retry won the race (unique index match_messages_client_msg_uidx
+      // on (user_id, match_id, client_message_id) WHERE client_message_id IS NOT NULL):
+      // return the row the winner inserted instead of raising a unique-violation 500.
+      if (!inserted) {
+        if (!clientMessageIdValue) {
+          // Lost the unique-key race without an idempotency key — surface
+          // a 409 so the caller retries the send.
+          throw new ConflictException('Message send conflicted; retry.');
+        }
+        const existing = await this.db.query.match_messages.findFirst({
+          where: and(
+            eq(match_messages.user_id, userId),
+            eq(match_messages.match_id, matchId),
+            eq(match_messages.client_message_id, clientMessageIdValue),
+          ),
+          with: {
+            user: {
+              columns: {
+                id: true,
+                full_name: true,
+                handle: true,
+                avatar_url: true,
+              },
             },
           },
-        },
-      });
-      if (existing) return existing;
-      throw new ConflictException('Message send conflicted; retry.');
-    }
+        });
+        if (existing) return existing;
+        throw new ConflictException('Message send conflicted; retry.');
+      }
 
-    const [user] = await this.db
-      .select({
-        id: users.id,
-        full_name: users.full_name,
-        handle: users.handle,
-        avatar_url: users.avatar_url,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+      const [user] = await this.db
+        .select({
+          id: users.id,
+          full_name: users.full_name,
+          handle: users.handle,
+          avatar_url: users.avatar_url,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
 
-    return { ...inserted, user };
+      return { ...inserted, user };
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2570,10 +3041,23 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const started = await tx
         .update(matches)
         .set(withTimestamp({ status: 'InProgress' }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): status predicate in the UPDATE
+        // itself. The FOR UPDATE + in-tx check above is the primary guard;
+        // this makes the statement safe even if the check is ever refactored
+        // away (race between check and write can never corrupt state).
+        .where(
+          and(eq(matches.id, matchId), eq(matches.status, 'Full')),
+        )
+        .returning({ id: matches.id });
+
+      if (started.length === 0) {
+        throw new ConflictException(
+          'Match is no longer in a startable state (expected Full).',
+        );
+      }
     });
 
     // Return fully populated match with relations (API Contract Rule §2)
@@ -2595,6 +3079,8 @@ export class MatchesService {
     // Slice 3: host payout outcome captured in-tx, logged after commit.
     // (`as` avoids TS treating the callback assignment as unreachable.)
     let hostPayout = null as { paid: boolean; amountSar: string } | null;
+    // P2-193 (run #155): host id hoisted for the post-commit payout push.
+    let payoutHostId = '';
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -2638,10 +3124,22 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const completed = await tx
         .update(matches)
         .set(withTimestamp({ status: 'Completed', completed_at: new Date() }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): predicate + conflict guard, same
+        // pattern as startMatch — the race loser throws before any side effect
+        // (waitlist clear, payout flip) is applied.
+        .where(
+          and(eq(matches.id, matchId), eq(matches.status, 'InProgress')),
+        )
+        .returning({ id: matches.id });
+
+      if (completed.length === 0) {
+        throw new ConflictException(
+          'Match is no longer completable (expected InProgress).',
+        );
+      }
 
       // P1-17: a completed match can never seat its queue — clear it and
       // remember who was waiting for the post-commit notification.
@@ -2676,6 +3174,7 @@ export class MatchesService {
           { id: match.id, host_id: match.host_id, price_per_player: match.price_per_player },
           margin,
         );
+        payoutHostId = match.host_id;
       }
     });
 
@@ -2687,6 +3186,17 @@ export class MatchesService {
       this.logger.log(
         `host_payout_released match=${matchId} host=${updatedMatch.host?.id ?? ''} amount_sar=${hostPayout.amountSar}`,
       );
+      // P2-193 (run #155): the host's money lands with a voice — post-commit,
+      // best-effort (a push failure never fails the completion).
+      try {
+        await this.notificationsService.sendPushToUsers([payoutHostId || updatedMatch.host?.id].filter(Boolean) as string[], {
+          key: 'payout_released',
+          vars: { title: updatedMatch.title, amount: hostPayout.amountSar },
+          data: { type: 'payout-released', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`payout_released push failed for ${matchId}: ${(err as Error).message}`);
+      }
     }
     if (queueUserIds.length > 0) {
       try {
@@ -2716,6 +3226,9 @@ export class MatchesService {
     let refundedSar = 0;
     // P1-17: ex-queued players collected in-tx for the post-commit push.
     let queueUserIds: string[] = [];
+    // P2-193 (run #155): refunded payers collected in-tx for the post-commit
+    // refund pushes (money events get a voice — see push-text.ts refund_credited).
+    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // FOR UPDATE row lock — serializes against rescheduleMatch, which moves
       // booking_slot_id between this read and the release below. Without the
@@ -2756,10 +3269,26 @@ export class MatchesService {
         );
       }
 
-      await tx
+      const cancelled = await tx
         .update(matches)
         .set(withTimestamp({ status: 'Cancelled' }))
-        .where(eq(matches.id, matchId));
+        // P2-140 (belt-and-braces, run #126): predicate + conflict guard, same
+        // pattern as start/complete — a cancel losing a concurrent transition
+        // throws before any side effect (waitlist clear, refund sweep, payout
+        // flip) is applied.
+        .where(
+          and(
+            eq(matches.id, matchId),
+            inArray(matches.status, ['Open', 'Full', 'InProgress']),
+          ),
+        )
+        .returning({ id: matches.id });
+
+      if (cancelled.length === 0) {
+        throw new ConflictException(
+          'Match is no longer cancellable (expected Open, Full, or InProgress).',
+        );
+      }
 
       // P1-17: a cancelled match can never seat its queue — clear it and
       // notify the waiters after commit.
@@ -2818,6 +3347,7 @@ export class MatchesService {
             'REFUND',
             matchId,
           );
+          refundRecipients.push({ userId: p.user_id, amountSar: amt.toFixed(2) });
         }
       }
       if (payers.length > 0) {
@@ -2849,28 +3379,22 @@ export class MatchesService {
           // Refund the exact pitch cost the host was debited at create.
           // Never derive this from price_per_player — that embeds the
           // platform margin and would over-refund the host.
-          const refundSar = match.pitch_cost_sar
-            ? parseFloat(match.pitch_cost_sar)
-            : 0;
-          refundedSar = refundSar;
+          // P2-244b (run #161): the hand-rolled balance UPDATE + ledger
+          // INSERT moved onto creditWalletTx — the replay pre-check,
+          // user-existence guard and 23505→409 mapping now protect this
+          // manual refund exactly like the auto-cancel twin (P2-244) and
+          // every other credit path.
+          const refundSar = moneyToNumber(match.pitch_cost_sar);
           if (refundSar > 0) {
-            await tx
-              .update(users)
-              .set({
-                wallet_balance: sql`${users.wallet_balance} + ${refundSar.toString()}`,
-                updated_at: new Date(),
-              })
-              .where(eq(users.id, userId));
-
-            await tx.insert(transactions).values({
-              user_id: userId,
-              type: 'CREDIT',
-              amount: refundSar.toString(),
-              reference_type: 'REFUND',
-              reference_id: matchId,
-              idempotency_key: `refund-${matchId}`,
-              status: 'Completed',
-            });
+            await creditWalletTx(
+              tx,
+              userId,
+              refundSar,
+              `refund-${matchId}`,
+              'REFUND',
+              matchId,
+            );
+            refundedSar = refundSar;
           }
         }
       }
@@ -2895,6 +3419,65 @@ export class MatchesService {
         });
       } catch (err) {
         this.logger.error(`waitlist_closed push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+
+    // P2-193 (run #155): the money gets a voice — every refunded payer learns
+    // HOW MUCH came back, post-commit, best-effort (never fails the cancel).
+    for (const r of refundRecipients) {
+      try {
+        await this.notificationsService.sendPushToUsers([r.userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: r.amountSar },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for ${matchId}/${r.userId}: ${(err as Error).message}`);
+      }
+    }
+    // Host's pitch-cost refund (koralink bookings) — same voice, same rules.
+    if (refundedSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([userId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: refundedSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited (pitch) push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+
+    // Partner email lane (run #165, P2-214 expansion): tell the VENUE OWNER a
+    // match at their venue was cancelled (staff/pitch planning depends on it;
+    // players already get pushes above). One scoped SQL for owner+venue name —
+    // findOne's venue relation deliberately omits owner_id. Best-effort
+    // fire-and-forget: any failure here NEVER fails the cancel (reportFanOut
+    // pattern; the owner email rides the existing match_cancelled_admin
+    // template whose audience is exactly "this match's session was dropped").
+    if (this.mailer && updatedMatch.pitch?.id) {
+      try {
+        const [venueOwner] = (await this.db.execute(sql`
+          SELECT v.owner_id,
+                 v.name AS venue_name
+          FROM pitches p
+          INNER JOIN venues v ON v.id = p.venue_id
+          WHERE p.id = ${updatedMatch.pitch.id}::text
+        `)) as unknown as Array<{ owner_id: string; venue_name: string | null }>;
+        if (venueOwner?.owner_id && venueOwner.owner_id !== userId) {
+          this.mailer
+            .sendToUsers([venueOwner.owner_id], 'match_cancelled_admin', { title: updatedMatch.title }, {
+              matchId,
+              matchTitle: updatedMatch.title,
+              when: riyadhLocal(new Date(updatedMatch.scheduled_at)),
+              where: venueOwner.venue_name ?? undefined,
+            })
+            .catch((err: unknown) =>
+              reportFanOutError('matches.venue-cancel-email', err),
+            );
+        }
+      } catch (err) {
+        reportFanOutError('matches.venue-cancel-resolve', err);
       }
     }
 
@@ -3026,7 +3609,11 @@ export class MatchesService {
       }
 
       // ── 3. Money: refund old cost, charge new cost, net the wallet ────
-      const oldCost = match.pitch_cost_sar ? parseFloat(match.pitch_cost_sar) : 0;
+      // P2-168 (run #115): exact-cents derivation — the hourly rate is
+      // normalized to an exact 2dp string and the math runs on integer
+      // cents (see pitchCostFromHourlyRate). No float passes between the
+      // rate read and the persisted cost.
+      const oldCost = moneyToNumber(match.pitch_cost_sar);
       const [pitch] = await tx
         .select({ hourly_rate: pitches.hourly_rate })
         .from(pitches)
@@ -3035,7 +3622,7 @@ export class MatchesService {
       if (!pitch) {
         throw new NotFoundException(`Pitch ${match.pitch_id} not found.`);
       }
-      const newCost = round2(parseFloat(String(pitch.hourly_rate)) * (newDuration / 60));
+      const newCost = pitchCostFromHourlyRate(pitch.hourly_rate, newDuration);
 
       walletDeltaSar = round2(newCost - oldCost);
 
@@ -3077,26 +3664,78 @@ export class MatchesService {
 
       // Net wallet movement with a balance floor (a reschedule may cost MORE
       // if the new slot is longer / pricier — the host must cover it).
+      //
+      // Run #105 (Reviewer A IMPORTANT, P2-41 fix class): the floor is
+      // enforced INSIDE the UPDATE (`wallet_balance >= delta` predicate) so
+      // the database arbitrates concurrent debits on the same host — the old
+      // shape read the balance unlocked (check-then-act), letting a race
+      // drive the balance negative. The users row is also read .for('update')
+      // first, serializing the floor read against concurrent debits and
+      // matching the join/leave/remove lock discipline (reschedule holds the
+      // match + slot locks BEFORE the users lock; cancelMatch takes the same
+      // match lock before its users touch — no new lock cycle).
       if (walletDeltaSar !== 0) {
         const [wallet] = await tx
           .select({ wallet_balance: users.wallet_balance })
           .from(users)
           .where(eq(users.id, userId))
-          .limit(1);
+          .limit(1)
+          .for('update');
 
-        if (walletDeltaSar > 0 && (!wallet || parseFloat(wallet.wallet_balance) < walletDeltaSar)) {
+        // P2-168 (run #115): floor comparison + error amounts on exact
+        // integer cents (moneyToNumber/centsFromMoneyString) — the required
+        // figure can never drift a fils from the value the guarded UPDATE
+        // actually enforces.
+        if (
+          walletDeltaSar > 0 &&
+          (!wallet ||
+            centsFromMoneyString(wallet.wallet_balance) <
+              centsFromMoneyString(walletDeltaSar))
+        ) {
           throw new BadRequestException(
-            `Insufficient wallet balance for the reschedule. Required: SAR ${walletDeltaSar.toFixed(2)}, Available: SAR ${parseFloat(wallet?.wallet_balance ?? '0').toFixed(2)}`,
+            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(wallet?.wallet_balance))}`,
           );
         }
 
-        await tx
+        // Guarded increment when charging (delta > 0): zero rows updated =
+        // a concurrent debit drained the balance between the lock read and
+        // this statement (possible only via another tx that didn't wait on
+        // our lock — i.e. never under READ COMMITTED with the row lock held,
+        // kept as defense-in-depth per the P2-41 pattern). Re-read for the
+        // error message, warn, and roll the whole reschedule back.
+        const floorPredicate =
+          walletDeltaSar > 0
+            ? and(
+                eq(users.id, userId),
+                sql`${users.wallet_balance} >= ${walletDeltaSar.toString()}`,
+              )
+            : eq(users.id, userId);
+
+        const updated = await tx
           .update(users)
           .set({
             wallet_balance: sql`${users.wallet_balance} + ${walletDeltaSar.toString()}`,
             updated_at: new Date(),
           })
-          .where(eq(users.id, userId));
+          .where(floorPredicate)
+          .returning({ wallet_balance: users.wallet_balance });
+
+        if (updated.length === 0) {
+          const [user] = await tx
+            .select({ wallet_balance: users.wallet_balance })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+
+          this.logger.warn(
+            `reschedule_wallet_insufficient hostId=${userId} required=${walletDeltaSar} matchId=${matchId}`,
+            MatchesService.name,
+          );
+
+          throw new BadRequestException(
+            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(user?.wallet_balance))}`,
+          );
+        }
       }
 
       // ── 4. Update the match row (server-authoritative pricing mirror) ──
@@ -3178,7 +3817,10 @@ export class MatchesService {
         })
         .from(matches)
         .where(eq(matches.id, matchId))
-        .limit(1);
+        .limit(1)
+        // P2-118: lock the match row so a concurrent status flip
+        // (completeMatch / cancel) can't interleave with the attendance write.
+        .for('update');
 
       if (!match) {
         throw new NotFoundException(`Match ${matchId} not found.`);
@@ -3354,6 +3996,9 @@ export class MatchesService {
     // P1-17: set inside the tx when a queue head was promoted into the freed
     // spot — drives the post-commit notification.
     let promoted: WaitlistPromotion | null = null;
+    // P2-193 (run #155): fee snapshot for the removed player's refund push.
+    // Re-annotated assignment through a plain let (assigned inside the tx cb).
+    let removedRefundSar = 0;
 
     await this.db.transaction(async (tx) => {
       // Lock the match row FOR UPDATE (P2-49, run #37) — same lock order as
@@ -3419,8 +4064,8 @@ export class MatchesService {
           'REFUND',
           matchId,
         );
+        removedRefundSar = removedFeeSar;
       }
-
       if (match.status === 'Full') {
         // P2-49 (run #36): predicate on the read's premise. A concurrent
         // join flipping Full→Open between our read and this write no longer
@@ -3466,6 +4111,21 @@ export class MatchesService {
       });
     } catch (err) {
       this.logger.error(`removePlayer notification failed for ${matchId}: ${(err as Error).message}`);
+    }
+
+    // P2-193 (run #155): the fee refund gets its own push quoting the exact
+    // amount — player_removed carries no money context, and the credit was
+    // previously silent (P2-193's original complaint).
+    if (removedRefundSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([targetUserId], {
+          key: 'refund_credited',
+          vars: { title: updatedMatch.title, amount: removedRefundSar.toFixed(2) },
+          data: { type: 'refund-credited', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`refund_credited push failed for remove ${matchId}: ${(err as Error).message}`);
+      }
     }
 
     return updatedMatch;
@@ -3531,24 +4191,19 @@ export class MatchesService {
 
     // Attach the player's appeal as evidence on an existing open/reviewing
     // dispute (e.g. the host's mark already auto-opened it) rather than
-    // creating a duplicate row.
-    const attachAppeal = async (disputeId: string, existingEvidence: unknown) => {
-      const evidence = Array.isArray(existingEvidence) ? [...existingEvidence] : [];
-      evidence.push({
-        action: 'appeal',
-        reason: dto.reason ?? '(no reason provided)',
-        at: new Date().toISOString(),
-      });
-      const [updated] = await this.db
-        .update(disputes)
-        .set({ evidence: evidence as never })
-        .where(eq(disputes.id, disputeId))
-        .returning();
-      return toMyDispute(updated);
-    };
+    // creating a duplicate row. The append runs under a row lock (P2-139) so
+    // concurrent appeals / an admin close cannot drop either side's evidence.
+    const attachAppeal = async (disputeId: string) =>
+      toMyDispute(
+        await this.appendDisputeEvidenceAtomically(disputeId, {
+          action: 'appeal',
+          reason: dto.reason ?? '(no reason provided)',
+          at: new Date().toISOString(),
+        }),
+      );
 
     const [existing] = await this.db
-      .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
+      .select({ id: disputes.id, status: disputes.status })
       .from(disputes)
       .where(
         and(
@@ -3561,7 +4216,7 @@ export class MatchesService {
       .limit(1);
 
     if (existing) {
-      return attachAppeal(existing.id, existing.evidence);
+      return attachAppeal(existing.id);
     }
 
     // Insert guarded by the partial unique index `disputes_open_uidx` on
@@ -3585,7 +4240,7 @@ export class MatchesService {
       // A concurrent appeal won the race — re-read the winner's row and attach
       // this appeal as evidence instead of duplicating the dispute.
       const [winner] = await this.db
-        .select({ id: disputes.id, evidence: disputes.evidence })
+        .select({ id: disputes.id })
         .from(disputes)
         .where(
           and(
@@ -3598,7 +4253,7 @@ export class MatchesService {
         .limit(1);
 
       if (winner) {
-        return attachAppeal(winner.id, winner.evidence);
+        return attachAppeal(winner.id);
       }
       throw new ConflictException('Dispute conflicted; retry.');
     }
@@ -3610,6 +4265,48 @@ export class MatchesService {
     }
 
     return toMyDispute(created);
+  }
+
+  /**
+   * P2-139: append one evidence entry to an OPEN dispute without a lost
+   * update. The previous read → JS push → unguarded UPDATE let two concurrent
+   * appeals (or an appeal racing an admin close) silently drop one side's
+   * evidence. Now the read is `SELECT … FOR UPDATE` inside a tx, the array is
+   * built from the LOCKED row, and the UPDATE is status-predicated so a
+   * dispute closed under us is never written to.
+   */
+  private async appendDisputeEvidenceAtomically(
+    disputeId: string,
+    entry: { action: string; reason: string; at: string },
+  ): Promise<typeof disputes.$inferSelect> {
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: disputes.id, status: disputes.status, evidence: disputes.evidence })
+        .from(disputes)
+        .where(eq(disputes.id, disputeId))
+        .for('update');
+
+      if (!locked) {
+        throw new NotFoundException('Dispute not found.');
+      }
+      if (locked.status !== 'opened' && locked.status !== 'under_review') {
+        throw new ConflictException('Dispute is no longer open.');
+      }
+
+      const evidence = Array.isArray(locked.evidence) ? [...locked.evidence] : [];
+      evidence.push(entry);
+
+      const [updated] = await tx
+        .update(disputes)
+        .set({ evidence: evidence as never })
+        .where(and(eq(disputes.id, disputeId), inArray(disputes.status, ['opened', 'under_review'])))
+        .returning();
+
+      if (!updated) {
+        throw new ConflictException('Dispute is no longer open.');
+      }
+      return updated;
+    });
   }
 
   /**
@@ -3652,6 +4349,63 @@ export class MatchesService {
     };
   }
 
+  /**
+   * P2-195 residual (run #172): cross-match "my disputes" mine-list for the
+   * player Reports surface. LEFT JOIN matches so a deleted match (match_id is
+   * nullable, onDelete: set null) yields null title/date instead of dropping
+   * the dispute row. Single 50-row cap page — per-player dispute volume is
+   * low; reports keeps its own paged envelope.
+   */
+  async findMyDisputes(userId: string): Promise<
+    Array<{
+      id: string;
+      type: string;
+      status: 'opened' | 'under_review' | 'resolved' | 'rejected';
+      decision: string | null;
+      has_appealed: boolean;
+      created_at: Date;
+      updated_at: Date;
+      match_title: string | null;
+      match_scheduled_at: Date | null;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: disputes.id,
+        type: disputes.type,
+        status: disputes.status,
+        decision: disputes.decision,
+        evidence: disputes.evidence,
+        created_at: disputes.created_at,
+        updated_at: disputes.updated_at,
+        match_title: matches.title,
+        match_scheduled_at: matches.scheduled_at,
+      })
+      .from(disputes)
+      .leftJoin(matches, eq(disputes.match_id, matches.id))
+      .where(eq(disputes.reporter_id, userId))
+      .orderBy(sql`${disputes.created_at} DESC`)
+      .limit(50);
+
+    return rows.map((dispute) => {
+      const evidence = Array.isArray(dispute.evidence) ? dispute.evidence : [];
+      const hasAppealed = evidence.some(
+        (e) => (e as { action?: string }).action === 'appeal',
+      );
+      return {
+        id: dispute.id,
+        type: dispute.type,
+        status: dispute.status,
+        decision: dispute.decision,
+        has_appealed: hasAppealed,
+        created_at: dispute.created_at,
+        updated_at: dispute.updated_at,
+        match_title: dispute.match_title,
+        match_scheduled_at: dispute.match_scheduled_at,
+      };
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Player of the Match — Voting & Results
   // ─────────────────────────────────────────────────────────────────────────
@@ -3679,86 +4433,100 @@ export class MatchesService {
       throw new BadRequestException('You cannot vote for yourself.');
     }
 
-    const [match] = await this.db
-      .select({
-        id: matches.id,
-        status: matches.status,
-        scheduled_at: matches.scheduled_at,
-        duration_mins: matches.duration_mins,
-        completed_at: matches.completed_at,
-      })
-      .from(matches)
-      .where(eq(matches.id, matchId))
-      .limit(1);
+    // P2-118: the match read, state/window checks, roster checks and the
+    // upsert run in one transaction against a FOR UPDATE-locked match row, so
+    // a concurrent completeMatch / markNoShow can't admit a stale-state vote.
+    await this.db.transaction(async (tx) => {
+      const [match] = await tx
+        .select({
+          id: matches.id,
+          status: matches.status,
+          scheduled_at: matches.scheduled_at,
+          duration_mins: matches.duration_mins,
+          completed_at: matches.completed_at,
+        })
+        .from(matches)
+        .where(eq(matches.id, matchId))
+        .limit(1)
+        .for('update');
 
-    if (!match) {
-      throw new NotFoundException(`Match ${matchId} not found.`);
-    }
+      if (!match) {
+        throw new NotFoundException(`Match ${matchId} not found.`);
+      }
 
-    if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
-      throw new BadRequestException(
-        `Voting is only available for completed matches. Current status: "${match.status}".`,
-      );
-    }
+      const assertVotingOpen = () => {
+        if (MatchesService.resolveEffectiveStatus(match) !== 'Completed') {
+          throw new BadRequestException(
+            `Voting is only available for completed matches. Current status: "${match.status}".`,
+          );
+        }
 
-    // Check voting window (based on effective completion time — handles a
-    // past-due match whose completed_at has not yet been persisted).
-    const votingClosesAt = new Date(
-      MatchesService.effectiveCompletedAt(match).getTime() +
-        MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
-    );
-    if (new Date() > votingClosesAt) {
-      throw new BadRequestException('The voting window has closed.');
-    }
+        // Check voting window (based on effective completion time — handles a
+        // past-due match whose completed_at has not yet been persisted).
+        const votingClosesAt = new Date(
+          MatchesService.effectiveCompletedAt(match).getTime() +
+            MatchesService.VOTING_WINDOW_HOURS * 60 * 60 * 1000,
+        );
+        if (new Date() > votingClosesAt) {
+          throw new BadRequestException('The voting window has closed.');
+        }
+      };
 
-    // Verify voter attended the match (is in roster and not a no-show)
-    const [voterPlayer] = await this.db
-      .select({ id: match_players.id, no_show: match_players.no_show })
-      .from(match_players)
-      .where(
-        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${voterId}`,
-      )
-      .limit(1);
+      assertVotingOpen();
 
-    if (!voterPlayer) {
-      throw new BadRequestException(
-        'You did not attend this match, so you cannot vote.',
-      );
-    }
+      // Verify voter attended the match (is in roster and not a no-show)
+      const [voterPlayer] = await tx
+        .select({ id: match_players.id, no_show: match_players.no_show })
+        .from(match_players)
+        .where(
+          sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${voterId}`,
+        )
+        .limit(1);
 
-    if (voterPlayer.no_show) {
-      throw new BadRequestException(
-        'Players who did not show up cannot vote.',
-      );
-    }
+      if (!voterPlayer) {
+        throw new BadRequestException(
+          'You did not attend this match, so you cannot vote.',
+        );
+      }
 
-    // Verify candidate also attended (is in roster, not no-show)
-    const [candidatePlayer] = await this.db
-      .select({ id: match_players.id })
-      .from(match_players)
-      .where(
-        sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${candidateId} AND ${match_players.no_show} = false`,
-      )
-      .limit(1);
+      if (voterPlayer.no_show) {
+        throw new BadRequestException(
+          'Players who did not show up cannot vote.',
+        );
+      }
 
-    if (!candidatePlayer) {
-      throw new BadRequestException(
-        'The selected player did not attend this match.',
-      );
-    }
+      // Verify candidate also attended (is in roster, not no-show)
+      const [candidatePlayer] = await tx
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(
+          sql`${match_players.match_id} = ${matchId} AND ${match_players.user_id} = ${candidateId} AND ${match_players.no_show} = false`,
+        )
+        .limit(1);
 
-    // Upsert the vote (unique constraint on match_id + voter_id)
-    await this.db
-      .insert(match_votes)
-      .values({
-        match_id: matchId,
-        voter_id: voterId,
-        candidate_id: candidateId,
-      })
-      .onConflictDoUpdate({
-        target: [match_votes.match_id, match_votes.voter_id],
-        set: { candidate_id: candidateId, created_at: new Date() },
-      });
+      if (!candidatePlayer) {
+        throw new BadRequestException(
+          'The selected player did not attend this match.',
+        );
+      }
+
+      // Re-assert state + window immediately before the write (the window
+      // can close while the roster checks run).
+      assertVotingOpen();
+
+      // Upsert the vote (unique constraint on match_id + voter_id)
+      await tx
+        .insert(match_votes)
+        .values({
+          match_id: matchId,
+          voter_id: voterId,
+          candidate_id: candidateId,
+        })
+        .onConflictDoUpdate({
+          target: [match_votes.match_id, match_votes.voter_id],
+          set: { candidate_id: candidateId, created_at: new Date() },
+        });
+    });
 
     // P2-5 (run #38): populated match contract (API Contract Rule §2) — every
     // mutation returns the fully populated match. `votedFor` + `message` are
@@ -3981,7 +4749,10 @@ export class MatchesService {
     // Web-push to attendees (fire-and-forget, config-gated).
     this.notificationsService
       .sendPomDecidedNotification(matchId, payload)
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.pom-push', err),
+      );
 
     // Fan out "pom_decided" to match participants (including the winner).
     const participants = await this.db
@@ -3997,7 +4768,10 @@ export class MatchesService {
         recipients: participants.map((p) => p.user_id),
         excludeActor: false,
       })
-      .catch(() => undefined);
+      // P2-169 (run #115): logged + Sentry'd, not swallowed.
+      .catch((err: unknown) =>
+        reportFanOutError('matches.pom-activity', err),
+      );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

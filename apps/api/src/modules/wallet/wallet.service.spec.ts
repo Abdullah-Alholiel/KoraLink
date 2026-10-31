@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { WalletService, isUniqueViolation } from './wallet.service';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { transactions, users } from '../../database/schema';
 
 /**
@@ -186,6 +187,232 @@ describe('isUniqueViolation', () => {
     ).toBe(false);
     expect(isUniqueViolation(null, 'x')).toBe(false);
     expect(isUniqueViolation('23505', 'x')).toBe(false);
+  });
+});
+
+/**
+ * P2-119 specs: getHistory optional ISO date range. The range bounds are
+ * ANDed onto the user_id predicate so total/hasMore stay truthful.
+ *
+ * P2-241 update: getHistory is now ONE query — COUNT(*) OVER() rides the
+ * page select (listForUser is the reference impl) — so the stub records a
+ * SINGLE predicate per call, and new specs pin the ORDER BY tiebreaker and
+ * the window-function total.
+ */
+describe('WalletService getHistory — date range (P2-119)', () => {
+  const dialect = new PgDialect();
+
+  /**
+   * db stub recording the where() predicate + orderBy as rendered SQL.
+   * Reviewer A run #154: when the page comes back EMPTY the service now runs
+   * a fallback degenerate COUNT — the stub models it as a thenable on the
+   * same where() result (drizzle builders are thenable), resolving
+   * `{ total: countTotal }`; `countCalls` records how often it fired.
+   */
+  function makeHistoryDb(rows: unknown[] = [], total = 0, countTotal = 0) {
+    const wheres: { sql: string; params: unknown[] }[] = [];
+    const orders: string[] = [];
+    let countCalls = 0;
+    const record = (cond: unknown) => {
+      const q = dialect.sqlToQuery(cond as never);
+      wheres.push({ sql: q.sql, params: q.params });
+    };
+    const db = {
+      select: () => ({
+        from: (_table: unknown) => ({
+          where: (cond: unknown) => {
+            record(cond);
+            return {
+              orderBy: (...exprs: unknown[]) => {
+                for (const e of exprs) {
+                  orders.push(dialect.sqlToQuery(e as never).sql);
+                }
+                return {
+                  offset: () => ({
+                    limit: async () =>
+                      rows.map((r) => ({ ...(r as object), total })),
+                  }),
+                };
+              },
+              // degenerate COUNT path (no orderBy chain): direct thenable
+              then: (
+                res: (v: Array<{ total: number }>) => void,
+              ) => {
+                countCalls += 1;
+                res([{ total: countTotal }]);
+                return Promise.resolve();
+              },
+            };
+          },
+        }),
+      }),
+    };
+    return { db, wheres, orders, countCalls: () => countCalls };
+  }
+
+  const FROM = '2026-09-01T00:00:00.000Z';
+  const TO = '2026-09-30T23:59:59.999Z';
+
+  it('no range: only the user_id predicate is applied (single window-count query)', async () => {
+    const { db, wheres } = makeHistoryDb([{ id: 'tx-1' }], 1);
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1');
+    expect(wheres).toHaveLength(1); // P2-241: ONE query, not list + COUNT
+    expect(wheres[0].sql).toContain('"user_id" = $1');
+    expect(wheres[0].sql).not.toContain('>=');
+    expect(wheres[0].sql).not.toContain('<=');
+    expect(wheres[0].params).toEqual(['user-1']);
+  });
+
+  it('from-only: adds created_at >= from', async () => {
+    const { db, wheres } = makeHistoryDb([{ id: 'tx-1' }], 1);
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 1, 20, FROM);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toContain('"created_at" >=');
+    expect(wheres[0].sql).not.toContain('<=');
+    expect(wheres[0].params).toContain('user-1');
+    expect(wheres[0].params).toContainEqual(expect.stringContaining('2026-09-01'));
+  });
+
+  it('to-only: adds created_at <= to', async () => {
+    const { db, wheres } = makeHistoryDb([{ id: 'tx-1' }], 1);
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 1, 20, undefined, TO);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toContain('"created_at" <=');
+    expect(wheres[0].sql).not.toContain('>=');
+    expect(wheres[0].params).toContain('user-1');
+    expect(wheres[0].params).toContainEqual(expect.stringContaining('2026-09-30'));
+  });
+
+  it('both ordered: applies both bounds and reports filtered total/hasMore', async () => {
+    const row = { id: 'tx-1', user_id: 'user-1' };
+    const { db, wheres } = makeHistoryDb([row], 25);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20, FROM, TO);
+    expect(res.total).toBe(25);
+    expect(res.hasMore).toBe(true);
+    expect(res.transactions[0]).toMatchObject(row);
+    expect(wheres[0].sql).toContain('"created_at" >=');
+    expect(wheres[0].sql).toContain('"created_at" <=');
+  });
+
+  it('both inverted: throws BadRequestException without querying', async () => {
+    const { db, wheres } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await expect(svc.getHistory('user-1', 1, 20, TO, FROM)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(wheres).toHaveLength(0);
+  });
+
+  it('predicate additivity: user_id is still ANDed when a range is present', async () => {
+    const { db, wheres } = makeHistoryDb([{ id: 'tx-1' }], 1);
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1', 2, 10, FROM, TO);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].sql).toMatch(/"user_id" = \$1 and .*"created_at" >= .* and .*"created_at" <= /);
+    expect(wheres[0].params[0]).toBe('user-1');
+    expect(wheres[0].sql).not.toMatch(/\bor\b/);
+  });
+
+  // ── P2-241: pagination determinism + the window-count total ──
+
+  it('orders by created_at DESC with id ASC tiebreaker (P2-241)', async () => {
+    const { db, orders } = makeHistoryDb();
+    const svc = new WalletService(db as never);
+    await svc.getHistory('user-1');
+    expect(orders).toEqual([
+      '"transactions"."created_at" desc',
+      '"transactions"."id" asc',
+    ]);
+  });
+
+  it('total comes from the window function on the page rows (P2-241)', async () => {
+    const rows = [{ id: 'tx-1' }, { id: 'tx-2' }];
+    const { db } = makeHistoryDb(rows, 41);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.total).toBe(41);
+    expect(res.hasMore).toBe(true);
+    expect(res.transactions).toHaveLength(2);
+  });
+
+  it('exactly-full last page: hasMore false from the authoritative total (P2-241)', async () => {
+    const { db } = makeHistoryDb([{ id: 'tx-1' }], 20);
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.total).toBe(20);
+    expect(res.hasMore).toBe(false);
+  });
+
+  // ── Reviewer A run #154: beyond-end page must not report total 0 ──
+
+  it('beyond-end page: falls back to a degenerate COUNT (total stays truthful)', async () => {
+    // Page 99 returns no rows → COUNT(*) OVER() never materializes →
+    // the service must run the fallback COUNT against the SAME predicate.
+    let countCalls = 0;
+    const db = {
+      select: (projection?: Record<string, unknown>) => ({
+        from: (_table: unknown) => ({
+          where: (cond: unknown) => {
+            const q = dialect.sqlToQuery(cond as never);
+            // The fallback selects only `total` — assert BOTH queries carry
+            // the identical user predicate so the fallback counts the same
+            // filtered set.
+            expect(q.sql).toContain('"user_id" = $1');
+            expect(q.params).toEqual(['user-1']);
+            return {
+              orderBy: (..._exprs: unknown[]) => ({
+                offset: () => ({
+                  limit: async () => [] as unknown[],
+                }),
+              }),
+              // no orderBy chain (degenerate COUNT) — direct await-able
+              ...(projection && 'total' in projection
+                ? { then: (res: (v: Array<{ total: number }>) => void) => { countCalls += 1; res([{ total: 37 }]); return Promise.resolve(); } }
+                : {}),
+            };
+          },
+        }),
+      }),
+    };
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 99, 20);
+    expect(res.transactions).toHaveLength(0);
+    expect(res.total).toBe(37); // NOT 0 — the wallet still has 37 transactions
+    expect(res.hasMore).toBe(false);
+    expect(countCalls).toBe(1);
+  });
+
+  it('normal page: NO fallback COUNT runs (window total only, single query)', async () => {
+    let countCalls = 0;
+    const rows = [{ id: 'tx-1' }];
+    const db = {
+      select: (projection?: Record<string, unknown>) => ({
+        from: (_table: unknown) => ({
+          where: (cond: unknown) => {
+            const q = dialect.sqlToQuery(cond as never);
+            expect(q.sql).toContain('"user_id" = $1');
+            return {
+              orderBy: () => ({
+                offset: () => ({
+                  limit: async () => rows.map((r) => ({ ...r, total: 5 })),
+                }),
+              }),
+              ...(projection && 'total' in projection
+                ? { then: () => { countCalls += 1; return Promise.resolve(); } }
+                : {}),
+            };
+          },
+        }),
+      }),
+    };
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.total).toBe(5);
+    expect(countCalls).toBe(0); // fallback never fires on a normal page
   });
 });
 

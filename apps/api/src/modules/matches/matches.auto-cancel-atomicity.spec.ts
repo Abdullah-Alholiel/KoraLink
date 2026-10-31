@@ -59,7 +59,13 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
    * `INTERVAL '60 minutes'` predicate) resolves the row under test.
    */
   function makeService(
-    opts: { expiringRow?: unknown; refundFails?: boolean; guardRowCount?: number } = {},
+    opts: {
+      expiringRow?: unknown;
+      refundFails?: boolean;
+      guardRowCount?: number;
+      vanishedUser?: boolean;
+      raceConflict?: boolean;
+    } = {},
   ) {
     const txCalls: CapturedCall[] = [];
     const order: string[] = [];
@@ -79,24 +85,54 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
         from: () => {
           const chain: Record<string, unknown> = {};
           chain.where = () => chain;
+          // P2-244: creditWalletTx's replay pre-select ends in .limit(1).
+          chain.limit = () => chain;
           chain.then = (resolve: (v: unknown) => void) => resolve([]);
           return chain;
         },
       }),
       update: (table: unknown) => ({
-        set: (setArg: Record<string, unknown>) => ({
-          where: () =>
-            record(
-              table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update',
-              table,
-              setArg,
-            ),
-        }),
+        set: (setArg: Record<string, unknown>) => {
+          // P2-244 (run #158): creditWalletTx awaits
+          // `.where(...).returning(...)` (a plain array — the then-based
+          // recorder never fired on that path), so record at returning()
+          // call time with a once-guard; non-returning awaiters (the slot
+          // release) still record via then.
+          let recorded = false;
+          const op =
+            table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update';
+          const rec = () => {
+            if (!recorded) {
+              recorded = true;
+              record(op, table, setArg);
+            }
+          };
+          return {
+            where: () => ({
+              returning: () => {
+                rec();
+                if (opts.vanishedUser && table === users) return [];
+                return [{ wallet_balance: '120.00' }];
+              },
+              then: (resolve: (v: unknown) => void) => {
+                rec();
+                resolve(thenable());
+              },
+            }),
+          };
+        },
       }),
       insert: (table: unknown) => ({
         values: (valuesArg: Record<string, unknown>) => {
           txCalls.push({ op: 'tx:ledger', table, valuesArg });
           order.push('tx:ledger');
+          if (opts.raceConflict) {
+            const e = new Error(
+              'duplicate key value violates unique constraint "transactions_idempotency_key_unique"',
+            );
+            (e as { code?: string }).code = '23505';
+            throw e;
+          }
           if (opts.refundFails) {
             throw new Error('ledger insert failed (simulated outage)');
           }
@@ -158,10 +194,13 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
     expect(db.transaction).toHaveBeenCalledTimes(1);
     // All money/slot statements ran on the tx, in canonical order, and the
     // roster notification only fired after the transaction committed.
-    expect(txCalls.map((c) => c.op)).toEqual(['tx:credit', 'tx:ledger', 'tx:slot']);
+    // P2-244 (run #158): creditWalletTx inserts the IMMUTABLE ledger row
+    // FIRST (the UNIQUE key is the concurrency gate), then the guarded
+    // balance increment — so the recorded order is ledger → credit.
+    expect(txCalls.map((c) => c.op)).toEqual(['tx:ledger', 'tx:credit', 'tx:slot']);
     expect(order).toEqual([
-      'tx:credit',
       'tx:ledger',
+      'tx:credit',
       'tx:slot',
       'post:select-roster',
       'post:activity',
@@ -169,6 +208,9 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
       // P1-17: the waitlist check (empty queue → no-op) runs after the roster
       // notification, before the cancelled-counter log.
       'post:select-roster',
+      // P2-193 (run #155): the refund push follows the roster push — money
+      // events get a voice, still entirely post-commit (never inside the tx).
+      'post:push',
     ]);
     expect(recordActivity).toHaveBeenCalledWith(
       expect.objectContaining({ verb: 'match_auto_cancelled', matchId: EXPIRING_ROW.id }),
@@ -184,13 +226,13 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
     expect(credit.table).toBe(users);
     expect(credit.setArg?.wallet_balance).toBeDefined(); // sql increment fragment
     expect(credit.setArg?.updated_at).toBeInstanceOf(Date);
-
     const ledger = txCalls.find((c) => c.op === 'tx:ledger')!;
     expect(ledger.table).toBe(transactions);
     expect(ledger.valuesArg).toMatchObject({
       user_id: 'host-1',
       type: 'CREDIT',
-      amount: '120',
+      // P2-244 (run #158): creditWalletTx persists amounts via toFixed(2).
+      amount: '120.00',
       reference_type: 'REFUND',
       reference_id: 'match-1',
       idempotency_key: 'refund-match-1',
@@ -201,6 +243,36 @@ describe('MatchesService.checkMinPlayers Pass 2 — atomic auto-cancel', () => {
     expect(slot.table).toBe(pitch_slots);
     expect(slot.setArg?.is_booked).toBe(false);
     expect(slot.setArg?.booked_match_id).toBeNull();
+  });
+
+  it('P2-244: vanished host user row → whole cancellation rolls back, nobody notified (clean 400, no partial credit)', async () => {
+    const { svc, txCalls, recordActivity, sendPush } = makeService({ vanishedUser: true });
+
+    const result = await svc.checkMinPlayers(); // catch logs; tx rolled back inside
+
+    // The refund failure must abort BEFORE the slot release and before any
+    // post-commit fan-out: cancelled=0, only the ledger insert + the failed
+    // guarded credit ran (tx rolls back — nothing durable), roster never
+    // told "cancelled".
+    expect(result.cancelled).toBe(0);
+    expect(txCalls.map((c) => c.op)).toEqual(['tx:ledger', 'tx:credit']);
+    expect(recordActivity).not.toHaveBeenCalled();
+    expect(sendPush).not.toHaveBeenCalled();
+  });
+
+  it('P2-244: concurrent same-key refund race (23505) → cancellation rolls back with a clean 409, never a raw 500', async () => {
+    const { svc, txCalls, recordActivity, sendPush } = makeService({ raceConflict: true });
+
+    const result = await svc.checkMinPlayers();
+
+    // The replay pre-check passed (no prior row), the ledger INSERT hit the
+    // UNIQUE key — creditWalletTx maps it to ConflictException and the caller
+    // tx rolls back; the retry resolves via the pre-check (idempotent no-op).
+    // The guarded balance UPDATE never ran (insert throws first).
+    expect(result.cancelled).toBe(0);
+    expect(txCalls.map((c) => c.op)).toEqual(['tx:ledger']);
+    expect(recordActivity).not.toHaveBeenCalled();
+    expect(sendPush).not.toHaveBeenCalled();
   });
 
   it('rolls the whole cancellation back when the refund fails — no "cancelled" notice to the roster', async () => {

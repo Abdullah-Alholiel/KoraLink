@@ -14,6 +14,7 @@ import {
   index,
   uniqueIndex,
   smallint,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -120,7 +121,9 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'venue_ownership_added',
   'venue_ownership_removed',
   // ── Account security (P1-19 phone change) ──
-  'phone_changed'
+  'phone_changed',
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  'payout_paid'
 ]);
 
 export const bookingModeEnum = pgEnum('BookingMode', ['koralink', 'self']);
@@ -219,6 +222,10 @@ export const users = pgTable('users', {
   avatar_url: text('avatar_url'),
   preferred_location: varchar('preferred_location', { length: 255 }),
   preferred_position: varchar('preferred_position', { length: 100 }),
+  // P2-264 (run #168): preferred content locale for transactional email
+  // ('ar' | 'en'). Saudi-market default 'ar' matches the mailer's historical
+  // hardcode; the PWA LanguageToggle syncs it on switch (fire-and-forget).
+  locale: varchar('locale', { length: 5 }).notNull().default('ar'),
   role: userRoleEnum('role').notNull().default('Player'),
   wallet_balance: numeric('wallet_balance', { precision: 12, scale: 2 })
     .notNull()
@@ -318,7 +325,10 @@ export const venues = pgTable(
     city: varchar('city', { length: 100 }).notNull(),
     address: text('address').notNull(),
     amenities: json('amenities').notNull().default(sql`'[]'::json`),
-    rating: doublePrecision('rating').notNull().default(0),
+    // P1-55: aggregates maintained by the review-submit tx (venues.service
+    // submitVenueReview) — never written elsewhere; avg is PG round(AVG,1).
+    rating_avg: doublePrecision('rating_avg').notNull().default(0),
+    rating_count: integer('rating_count').notNull().default(0),
     is_approved: boolean('is_approved').notNull().default(false),
     is_koralink_partner: boolean('is_koralink_partner').notNull().default(false),
     // P1-25 venue operating hours — Riyadh-local wall clock, 24h ints.
@@ -334,6 +344,11 @@ export const venues = pgTable(
     closed_day_5: boolean('closed_day_5').notNull().default(false),
     closed_day_6: boolean('closed_day_6').notNull().default(false),
     location: geography('location'),
+    // P1-38 first leg (run #170): venue photo paths — array of
+    // "/media/venues/<venueId>/<sha256>.<ext>" strings served by the public
+    // media route; uploaded via POST /media/venues (auth, owner-or-admin,
+    // ≤5MB jpeg/png/webp). Mirrors pitches.images / amenities json convention.
+    images: json('images').notNull().default(sql`'[]'::jsonb`),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -655,6 +670,9 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const venuesRelations = relations(venues, ({ one, many }) => ({
   owner: one(users, { fields: [venues.owner_id], references: [users.id] }),
   pitches: many(pitches),
+  // P1-55: booking-verified reviews feed the aggregates; no relational
+  // consumer yet (reviews read via raw-SQL latest-first listing).
+  reviews: many(venue_reviews),
 }));
 
 export const pitchesRelations = relations(pitches, ({ one, many }) => ({
@@ -880,6 +898,89 @@ export const follows = pgTable(
   ],
 );
 
+// P1-53: user blocks — a block in either direction prevents DMs between the
+// pair. Composite PK (blocker_id, blocked_id) makes block idempotent; the
+// blocked_id index serves the reverse-direction check. Self-block is rejected
+// by the user_blocks_no_self CHECK (migration 0045) and in BlocksService.
+export const user_blocks = pgTable(
+  'user_blocks',
+  {
+    blocker_id: varchar('blocker_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    blocked_id: varchar('blocked_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'user_blocks_pk', columns: [t.blocker_id, t.blocked_id] }),
+    index('user_blocks_blocked_id_idx').on(t.blocked_id),
+  ],
+);
+
+// P2-161: venue favorites (wishlist). Composite PK (user_id, venue_id) makes
+// favorite idempotent and serves the per-user listing lookup; venue_id index
+// serves cascade + future per-venue counts. Favorites are directional and
+// private to the user — no social surface reads them.
+export const venue_favorites = pgTable(
+  'venue_favorites',
+  {
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'venue_favorites_pk', columns: [t.user_id, t.venue_id] }),
+    index('venue_favorites_venue_id_idx').on(t.venue_id),
+  ],
+);
+
+// P1-55: booking-verified venue reviews. UNIQUE(venue_id,user_id) = one
+// review per user per venue (re-submit upserts → latest wins). match_id is a
+// PROOF ID ONLY (the verified Completed booking it derives from), stored
+// WITHOUT an FK: matches purge/cancel flows must never cascade-delete
+// historical reviews (P2-47 pending decision). rating CHECK lives in the
+// migration (drizzle has no CHECK API here).
+export const venue_reviews = pgTable(
+  'venue_reviews',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    venue_id: varchar('venue_id', { length: 36 })
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    match_id: varchar('match_id', { length: 36 }).notNull(),
+    rating: smallint('rating').notNull(),
+    comment: varchar('comment', { length: 500 }),
+    // P2-291: admin moderation — non-NULL = hidden from the public list.
+    hidden_at: timestamp('hidden_at', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('venue_reviews_venue_user_idx').on(t.venue_id, t.user_id),
+    index('venue_reviews_venue_updated_idx').on(t.venue_id, t.updated_at),
+  ],
+);
+
 export const activities = pgTable(
   'activities',
   {
@@ -958,6 +1059,14 @@ export const disputes = pgTable(
     }),
     internal_note: text('internal_note'),
     policy_ref: text('policy_ref'),
+    // P1-63 (run #118): set by the daily admin SLA sweep when an
+    // open/under_review dispute passes the 7-day window; informational flag
+    // for the admin queue (no money-path coupling, no auto-resolution).
+    sla_escalated: boolean('sla_escalated').notNull().default(false),
+    // P2-192 (run #130): optimistic-edit token. Bumped only by the guarded
+    // admin update() so a second admin editing the same decision/note gets a
+    // 409 instead of a silent last-write-wins. Read paths just echo it.
+    version: integer('version').notNull().default(1),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1054,6 +1163,11 @@ export const settlements = pgTable(
     period_end: date('period_end').notNull(),
     status: settlementStatusEnum('status').notNull().default('pending'),
     payout_ref: varchar('payout_ref', { length: 255 }),
+    // P2-C (run #143): WHO requested this settlement. NULL = auto-generated by
+    // the admin generator / SLA sweep; set = the partner actor on
+    // POST /partner/payout-requests. Provenance read-model only — pay() and
+    // the money sweep never branch on it (P0-2 stays the money authority).
+    requested_by: varchar('requested_by', { length: 36 }).references(() => users.id),
     paid_at: timestamp('paid_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -1064,6 +1178,44 @@ export const settlements = pgTable(
     // P2-9: one pending/paid settlement per venue per period — closes the
     // generatePending double-insert race under concurrency.
     uniqueIndex('settlements_venue_period_uidx').on(t.venue_id, t.period_start),
+  ],
+);
+
+// P0-2 (run #169): server-pinned Moyasar top-up intents. The wallet service is
+// the table's ONLY writer: intent rows pin user + amount BEFORE the hosted form
+// creates the payment client-side (card data never touches our servers), and
+// verifyTopup credits the wallet ONLY after the payment record fetched from
+// Moyasar matches the intent's amount/currency/owner. idempotency_key is scoped
+// 'topup-intent:<userId>:<uuid>' so a client retry replays the original intent.
+export const wallet_topup_intents = pgTable(
+  'wallet_topup_intents',
+  {
+    id: varchar('id', { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    user_id: varchar('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    /** Smallest currency unit (halalas, SAR × 100) — matches Moyasar's amounts. */
+    amount_halalas: integer('amount_halalas').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('SAR'),
+    /** 'pending' → 'credited' | 'failed'. Single writer = WalletService. */
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    payment_id: varchar('payment_id', { length: 64 }),
+    idempotency_key: varchar('idempotency_key', { length: 255 })
+      .notNull()
+      .unique(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // DESC matches the live index (0056 raw SQL + pg_indexes) — keep in sync.
+    index('wallet_topup_intents_user_created_idx').on(t.user_id, t.created_at.desc()),
+    index('wallet_topup_intents_payment_id_idx').on(t.payment_id),
   ],
 );
 
@@ -1111,6 +1263,8 @@ export const reports = pgTable(
       onDelete: 'set null',
     }),
     resolved_at: timestamp('resolved_at', { withTimezone: true }),
+    // P2-192 (run #130): optimistic-edit token — see disputes.version comment.
+    version: integer('version').notNull().default(1),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

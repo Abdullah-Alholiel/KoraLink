@@ -11,16 +11,21 @@
     "conflict": "That change was just made by someone else. Refresh and try again.",
     "validation": "Some details are missing or invalid. Review them and try again.",
     "rateLimited": "Too many attempts. Wait a moment and try again.",
+    "rateLimitedRetryIn": "{seconds, plural, one {Too many attempts. Try again in 1 second.} other {Too many attempts. Try again in # seconds.}}",
     "server": "Our servers hit a snag — your data is safe. Try again in a moment.",
     "unknown": "That didn't work. Try again — if it keeps failing, check your connection.",
     "walletTopupFailed": "Your top-up didn't go through — no money was taken. Please try again.",
     "walletPayFailed": "Your payment didn't go through — no money was taken. Please check your wallet balance and try again.",
+    "exportFailed": "Couldn't export your transactions.",
+    "exportFailedDetail": "Check your connection and try again.",
     "joinFailed": "Couldn't join the match — it may be full or closed. Refresh and try again.",
     "leaveFailed": "Couldn't leave the match. Check your connection and try again.",
     "cancelFailed": "Couldn't cancel the match. Try again — players have not been notified.",
     "startFailed": "Couldn't start the match. Try again in a moment.",
     "completeFailed": "Couldn't complete the match. Try again in a moment.",
     "rescheduleFailed": "Couldn't reschedule — the slot may have been taken. Pick a different slot.",
+    "rescheduleWalletShortfall": "Reschedule needs SAR {amount} more in your wallet.",
+    "rescheduleWalletDetail": "No money was taken and the match kept its original time. Top up your wallet, then reschedule.",
     "waitlistJoinFailed": "Couldn't join the waitlist — it may already be open or you may be in it. Refresh and try.",
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
@@ -28,7 +33,12 @@
     "genericRetry": "Try again",
     "banned": "Your account has been banned. If you think this is a mistake, contact support.",
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
-    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue."
+    "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue.",
+    "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going.",
+    "blockedByRecipient": "You can't message this user anymore. One of you blocked the other. You can unblock them from their profile.",
+    "blockFailed": "Couldn't block this user. Check your connection and try again.",
+    "unblockFailed": "Couldn't unblock this user. Check your connection and try again.",
+    "favoriteFailed": "Couldn't update your favorites — nothing was changed. Check your connection and try again."
   },
   "offline": {
     "backToPage": "Back to the page",
@@ -52,6 +62,8 @@
     "errorDescription": "Couldn't load data. Check your connection.",
     "pushUnsubscribeFailed": "We couldn't turn notifications off — you may still receive pushes. Check your connection and try again.",
     "pushSubscribeFailed": "We couldn't turn notifications on. Nothing was changed — check your connection and try again.",
+    "pushNudgeSuccess": "Notifications are on — you'll hear about match updates even with the app closed.",
+    "pushPermissionDenied": "Notifications are blocked in your browser settings. Re-enable them there to get match updates.",
     "retry": "Try Again",
     "retryConnection": "Retry connection",
     "noInternet": "No internet connection",
@@ -77,6 +89,7 @@
     "offline": "Offline",
     "dismiss": "Dismiss",
     "installRequired": "Add KoraLink to your home screen to enable push notifications.",
+    "pushNotConfigured": "Push notifications are not set up on this server yet. Check back later.",
     "permissionDenied": "Notifications are blocked in your browser settings. Re-enable notifications for KoraLink there, then try again.",
     "or": "or"
   },
@@ -213,7 +226,9 @@
     "votePotm": "Vote POTM",
     "potmVoted": "POTM voted",
     "potmBadge": "POTM",
-    "fullWaitlist": "FULL · {count} waiting"
+    "fullWaitlist": "FULL · {count} waiting",
+    "potmWinner": "POTM: {name}",
+    "potmNoWinner": "Voting ended — no winner"
   },
   "waitlist": {
     "joinCta": "Join Waitlist",
@@ -300,7 +315,12 @@
     "copyInviteLink": "Share invite link",
     "inviteShareText": "You're invited to a private KoraLink match!",
     "joinToChat": "Join the match to see and send messages.",
-    "reschedule": "Reschedule"
+    "reschedule": "Reschedule",
+    "shareText": "⚽ {title}\n{date} at {time}\n📍 {venue}\n💸 {price}",
+    "heroShareText": "{title} — {date} {time} @ {venue}",
+    "shareAria": "Share match",
+    "whatsAppShareAria": "Share match invite on WhatsApp",
+    "whatsAppShareText": "⚽ Join me for \"{title}\" on {date} at {time}!\n📍 {venue}\n💸 {price}\n{url}\n\nJoin on KoraLink!"
   },
   "cancelMatch": {
     "title": "Cancel Match?",
@@ -312,7 +332,8 @@
     "title": "Reschedule Match",
     "pickDay": "Pick a day",
     "noSlots": "No free slots on the selected day. Try another day.",
-    "confirm": "Move Match"
+    "confirm": "Move Match",
+    "success": "Match rescheduled. Players will be notified."
   },
   "emergencyCancel": {
     "title": "Emergency Match Cancellation",
@@ -330,6 +351,11 @@
     "stay": "Stay"
   },
   "gameDetails": {
+    "joinedToast": "Successfully joined the match! 🎉",
+    "leftToast": "You left the match.",
+    "cancelledToast": "Match cancelled. Players will be notified.",
+    "startedToast": "Match started! ⚽",
+    "completedToast": "Match completed! Vote for Player of the Match.",
     "date": "Date",
     "time": "Time",
     "price": "Price",
@@ -386,6 +412,8 @@
     "matchTitle": "Match Title",
     "matchTitlePlaceholder": "e.g. Friday Night 7v7",
     "matchTitleValidation": "Title must be at least 3 characters",
+    "draftRestored": "We restored your unfinished match setup so you can pick up where you left off.",
+    "draftDiscard": "Discard",
     "matchType": "Match Type",
     "matchTypeCasual": "Casual",
     "matchTypeCompetitive": "Competitive",
@@ -456,7 +484,15 @@
     "errorSlotStarted": "This slot already started. Pick an upcoming slot and try again.",
     "slotsLoading": "Loading available slots…",
     "slotsError": "Couldn't load available slots. Check your connection.",
-    "slotsRetry": "Try Again"
+    "slotsRetry": "Try Again",
+    "slotsOffline": "You're offline — slots can't load right now. Reconnect to pick a time.",
+    "repeat": {
+      "once": "Once",
+      "weekly2": "Weekly ×2",
+      "weekly4": "Weekly ×4",
+      "weekly6": "Weekly ×6",
+      "weekly8": "Weekly ×8"
+    }
   },
   "hostOnboarding": {
     "skip": "Skip",
@@ -601,6 +637,12 @@
     "changePhoneSave": "Change",
     "changePhoneCancel": "Cancel",
     "guestName": "Guest",
+    "avatarChange": "Change profile photo",
+    "avatarUpdated": "Profile photo updated",
+    "avatarTooLarge": "That photo is over 2 MB — pick a smaller one and try again",
+    "avatarInvalidType": "Only JPEG, PNG or WebP photos are supported",
+    "avatarFailed": "Couldn't update your photo — check your connection and try again",
+    "avatarDisabled": "Photo uploads are turned off right now — they'll be back soon",
     "wallet": "Wallet",
     "myGames": "My Games",
     "pomCount": "POTM",
@@ -666,21 +708,54 @@
       "body": "Your account will be permanently deleted in {days} day(s). Tap Restore to keep your account active.",
       "restore": "Restore",
       "dismiss": "Hide for now"
-    }
+    },
+    "blockUser": "Block",
+    "unblockUser": "Unblock",
+    "confirmBlock": "Tap again to confirm block",
+    "myFavorites": "My favorite clubs"
   },
   "wallet": {
     "title": "Wallet",
     "balance": "Balance",
     "availableBalance": "Available Balance",
     "topUp": "Top Up",
+    "closeModal": "Close dialog",
     "withdraw": "Withdraw",
     "transactions": "Transactions",
     "noTransactions": "No transactions yet",
     "noTransactionsDescription": "Your transaction history will appear here.",
     "topUpAmount": "Top Up Amount",
-    "minTopUp": "Minimum SAR 10",
     "topupDisabled": "Wallet top-up is temporarily unavailable. Please try again later.",
-    "pay": "Pay",
+    "topup": {
+        "title": "Top up wallet",
+        "subtitle": "Add money to your wallet with your mada, Visa or Mastercard card.",
+        "amountLabel": "Amount (SAR)",
+        "invalidAmount": "Amount must be at least SAR {min} and at most SAR {max}.",
+        "recoveryTitle": "Payment confirmation pending",
+        "recoveryBody": "Your card may have been charged but we couldn't confirm it yet. Retry the confirmation — you won't be charged twice.",
+        "recoveryRetry": "Retry confirmation",
+        "quickAmounts": "Quick amounts",
+        "amountHint": "Min SAR {min} · Max SAR {max}",
+        "payWithCard": "Continue to card payment",
+        "secureNote": "Payments are processed securely by Moyasar. Your card details never reach KoraLink.",
+        "processing": "Preparing secure payment…",
+        "successTitle": "Top-up successful",
+        "successBody": "Money added to your wallet.",
+        "failedTitle": "Top-up failed",
+        "notPaid": "The payment was not completed — no money was taken. You can try again anytime.",
+        "amountMismatch": "The paid amount does not match your top-up request — no money was credited. Please start a new top-up.",
+        "callbackChargedDeclined": "This payment was declined before it could be added to your wallet. Your bank will return the money automatically — please start a new top-up.",
+        "offlineNote": "You're offline — reconnect to top up your wallet.",
+        "configUnavailable": "Top-up is being set up. Please try again later.",
+        "callbackVerifying": "Confirming your payment…",
+        "callbackSuccess": "Top-up successful",
+        "callbackFailed": "We couldn't confirm this payment",
+        "callbackRetry": "If money left your account it will be refunded by your bank automatically. You can retry from the wallet.",
+        "lastAttemptPendingTitle": "Top-up not completed",
+        "lastAttemptPendingBody": "Your last top-up attempt of {amount} didn’t finish — nothing has been added to your wallet. If your bank shows a charge, contact support.",
+        "lastAttemptRetry": "Try again",
+        "backToWallet": "Back to wallet"
+    },    "pay": "Pay",
     "amount": "Amount",
     "date": "Date",
     "status": "Status",
@@ -694,13 +769,22 @@
       "store_purchase": "Store Purchase",
       "withdrawal": "Withdrawal"
     },
-    "currency": "SAR",
     "cards": "Cards",
     "today": "Today",
     "yesterday": "Yesterday",
     "earlier": "Earlier",
     "invalidAmount": "Please enter a valid amount",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "export": "Export",
+    "exportTitle": "Export transactions",
+    "exportFrom": "From",
+    "exportTo": "To",
+    "exportCsv": "Export CSV",
+    "exportEmpty": "No transactions in this date range — nothing to export.",
+    "exportSuccess": "Your transactions file has been downloaded.",
+    "exportTooMany": "Your history has more than 2,000 transactions in this range — pick a shorter date range and export again.",
+    "exportInvalidRange": "The start date must be on or before the end date.",
+    "offlineBalanceNote": "Balance shown from cache — reconnect for the live number."
   },
   "searchSuggestions": {
     "title": "Search by area",
@@ -738,12 +822,25 @@
     "location": "Location",
     "openNow": "Open Now",
     "closed": "Closed",
+    "hoursWindow": "Open {open} – {close}",
     "pitches": "pitches",
     "address": "Address",
     "openInMaps": "Open in Maps",
     "hours": "Hours",
     "perHour": "hour",
     "amenities": "Amenities",
+    "amenity": {
+      "changing_rooms": "Changing rooms",
+      "parking": "Parking",
+      "water_cooler": "Water cooler",
+      "gym": "Gym",
+      "prayer_room": "Prayer room",
+      "cafe": "Cafe",
+      "floodlights": "Floodlights",
+      "indoor": "Indoor",
+      "wifi": "Wi-Fi",
+      "unknown": "Amenity"
+    },
     "availablePitches": "Pitches",
     "venues": "venues",
     "venue": "Venue",
@@ -758,21 +855,54 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "hostHere": "Host a Match Here",
-    "error": "Failed to load venue"
+    "error": "Failed to load venue",
+    "favorites": "Favorites",
+    "favoritesEmptyTitle": "No favorites yet",
+    "favoritesEmptyDesc": "Tap the heart on any club to save it here.",
+    "favoriteAdd": "Add to favorites",
+    "favoriteRemove": "Remove from favorites",
+    "favoritesError": "Couldn't load your favorites.",
+    "favoritesSignInTitle": "Sign in to save your favorite clubs",
+    "favoritesSignInCta": "Sign in",
+    "reviewsTitle": "Reviews",
+    "reviewCount": "{count, plural, =0 {No reviews yet} one {# review} other {# reviews}}",
+    "reviewsEmpty": "No reviews yet — completed a game here? Be the first to review it.",
+    "reviewsError": "Couldn't load the reviews.",
+    "reviewsSignInHint": "Played here? Sign in to share your experience.",
+    "reviewsSignInCta": "Sign in",
+    "reviewWrite": "Review",
+    "reviewEdit": "Edit review",
+    "reviewWriteA11y": "Write a review",
+    "reviewEditA11y": "Edit your review",
+    "reviewWriteTitle": "Rate this venue",
+    "reviewEditTitle": "Update your review",
+    "reviewVerifiedNote": "Only players who completed a game at this venue can review it.",
+    "reviewRatingA11y": "Your star rating",
+    "reviewStarA11y": "{count, plural, one {# star} other {# stars}}",
+    "reviewCommentA11y": "Review text (optional)",
+    "reviewPlaceholder": "How were the pitches, lights, and service?",
+    "reviewSubmit": "Submit review",
+    "reviewThanks": "Review submitted. Thanks for helping other players!",
+    "reviewNotAllowed": "You can review a venue only after completing a game there. No review was saved.",
+    "reviewMine": "Yours",
+    "reviewAnonymous": "Player"
   },
   "messages": {
     "title": "Messages",
     "activeDiscussions": "Active Discussions",
     "directMessages": "Direct Messages",
     "noMessages": "No messages yet",
-    "noMessagesDescription": "Join a match to start chatting with players.",
     "noMessagesYet": "No messages yet",
+    "newWhileAway": "New while you were away: {count}",
     "typeMessage": "Type a message…",
+    "offlineCachedHistory": "You're offline — showing your recent messages. Reconnect to load new ones.",
     "startFailed": "Couldn't start the chat. Check your connection and try again.",
     "send": "Send",
     "sending": "Sending…",
     "failedToSend": "Not sent",
     "tapToRetry": "Tap to retry",
+    "queuedOffline": "Will send when back online",
+    "offlineQueuedBanner": "You're offline — new messages will send automatically when you reconnect.",
     "online": "Online",
     "offline": "Offline",
     "lastSeen": "Last seen",
@@ -837,10 +967,14 @@
     "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
-    "playerRemoved": "{name} removed you from a match"
+    "playerRemoved": "{name} removed you from a match",
+    "payoutPaid": "KoraLink sent your venue payout"
   },
   "payment": {
     "title": "Checkout",
+    "noMoneyTaken": "No money was taken from your wallet.",
+    "readFullPolicy": "Read full policy",
+    "readLessPolicy": "Show less",
     "selfHostedNotice": "This game is booked and operated fully by its host — not by KoraLink. The host arranges the venue and runs the match. KoraLink is the platform only.",
     "selfHostedNoticeShort": "Booked & operated fully by the host — not KoraLink",
     "playerHostedNotice": "A player hosts and runs this match; KoraLink booked the pitch and will help resolve any venue problem the host cannot solve.",
@@ -853,7 +987,6 @@
     "topUpToJoin": "Top up to join",
     "total": "Total",
     "payWithWallet": "Pay with Wallet",
-    "payWithCard": "Pay with Card",
     "paymentSuccess": "Payment successful!",
     "paymentFailed": "Payment failed. Please try again.",
     "processing": "Processing…",
@@ -907,6 +1040,7 @@
     "sendError": "Failed to send. Tap to retry.",
     "comingSoon": "Chat coming soon",
     "loadOlder": "Load earlier messages",
+    "openFullThread": "Open full thread",
     "typingOne": "{} is typing…",
     "typingTwo": "{} and {} are typing…",
     "typingMany": "Several players are typing…",
@@ -1015,7 +1149,8 @@
     "hostUnderfilledNudge": "Your match still needs more players — invite them before kick-off",
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
-    "playerRemoved": "{name} removed you from a match"
+    "playerRemoved": "{name} removed you from a match",
+    "payoutPaid": "Your venue payout has been sent"
   },
   "attendance": {
     "title": "Attendance",
@@ -1027,6 +1162,29 @@
     "takeAttendance": "Take Attendance",
     "takeAttendanceDesc": "Mark who showed up — protects your spot pricing",
     "done": "Done"
+  },
+  "dispute": {
+    "title": "Report a problem",
+    "subtitle": "Tell us what went wrong. An admin will review it and follow up here.",
+    "categoryLabel": "What is this about?",
+    "cat_no_show": "Player marked as no-show",
+    "cat_double_booking": "Pitch was double-booked",
+    "cat_pitch_condition": "Pitch condition problem",
+    "cat_unrecognized_charge": "Unrecognized charge",
+    "cat_other": "Something else",
+    "catNoShowHint": "You can dispute a no-show mark only on matches where you were the one marked.",
+    "reasonLabel": "What happened?",
+    "reasonPlaceholder": "Describe the problem — the more detail, the faster the review…",
+    "submit": "Submit report",
+    "successToast": "Report submitted — the team will review it",
+    "statusOpened": "Report received",
+    "statusUnderReview": "Under review",
+    "statusResolved": "Resolved",
+    "statusRejected": "Rejected",
+    "statusCategory": "Category",
+    "errorValidation": "This report can't be filed this way. If you're disputing a no-show, it must be on a match where you were marked.",
+    "errorForbidden": "Only match players can file a report on this match.",
+    "offlineNote": "You're offline — reconnect to submit your report."
   },
   "appeal": {
     "title": "Appeal No-Show",
@@ -1059,6 +1217,10 @@
     "messageSheetTitle": "Report this message"
   },
   "pwa": {
+    "updateReadyTitle": "Update ready",
+    "updateReadyBody": "A new version is installed in the background. Reload to use it.",
+    "updateReload": "Reload now",
+    "updateLater": "Later",
     "install": {
       "title": "Install KoraLink",
       "bodyDesktop": "Get the full-screen app experience — installs in seconds.",
@@ -1103,7 +1265,20 @@
     "emptyBody": "You have not reported anything. Report a player, match, or venue if something breaks the rules.",
     "outcomeToggle": "Moderation outcome",
     "loadMore": "Load More",
+    "disputesTitle": "My Disputes",
+    "disputesEmpty": "No disputes filed",
+    "disputesMatchDeleted": "Match no longer exists",
     "resolvedAt": "Reviewed {date}",
+    "lifecycle": {
+      "open": "Received. Our moderation team will take a look and update this page.",
+      "reviewing": "Under review — moderators are looking into it. You'll see the outcome here.",
+      "resolved": "Resolved. Action was taken based on your report — thanks for helping keep the community safe.",
+      "dismissed": "Reviewed and closed without action — the content didn't break the rules.",
+      "opened": "Filed. A moderator will review it and post the outcome here.",
+      "underReview": "Under review by our team — no action needed from you; the outcome will appear here.",
+      "disputeResolved": "Resolved — any refund owed to you has already been credited to your wallet.",
+      "rejected": "Reviewed and declined — no refund was issued for this case."
+    },
     "subjectType": {
       "user": "Player",
       "match": "Match",
@@ -1116,6 +1291,12 @@
       "resolved": "Resolved",
       "dismissed": "Dismissed"
     }
+  },
+  "routeError": {
+    "title": "Something went wrong",
+    "description": "This section couldn't load. The rest of the app still works.",
+    "details": "Error details",
+    "pageDescription": "An unexpected error occurred. Try refreshing the page."
   },
   "promos": {
     "label": "Promotions",
@@ -1133,5 +1314,31 @@
       "sub": "Venues and clubs near you.",
       "cta": "Explore"
     }
+  },
+  "blocks": {
+    "blockSuccess": "User blocked",
+    "unblockSuccess": "User unblocked"
+  },
+  "settings": {
+    "title": "Settings",
+    "sectionNotifications": "Notifications",
+    "sectionData": "My data",
+    "sectionLegal": "Privacy & legal",
+    "sectionAccount": "Account",
+    "notifications": "Push notification settings",
+    "hostGuide": "Host guide",
+    "language": "Language",
+    "dataNote": "Export downloads a JSON copy of your data. Deleting your account schedules removal after a 30-day grace window."
+  },
+  "realtime": {
+    "livePaused": "Live updates paused — reconnecting…"
+  },
+  "pushNudge": {
+    "title": "Never miss a match update",
+    "body": "Turn on notifications so you hear about match changes, waitlist promotions and starting reminders — even with the app closed.",
+    "enable": "Turn on",
+    "enabling": "Turning on…",
+    "notNow": "Not now",
+    "dismiss": "Dismiss"
   }
 }

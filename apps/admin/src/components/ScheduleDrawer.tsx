@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import BlackoutPanel from '@/components/BlackoutPanel';
 import Drawer from '@/components/Drawer';
 import SlotManager from '@/components/SlotManager';
 import type { PartnerSlot } from '@/lib/types';
@@ -35,6 +36,8 @@ export default function ScheduleDrawer({
   const t = useTranslations('schedule');
   return (
     <Drawer open={open} onClose={onClose} title={t('manageTitle', { name: pitchName })} size="lg">
+      {/* Bulk blackout endpoint is partner-scoped (P2-246) — admin surface omits it. */}
+      {endpointBase === '/partner' && pitchId && <BlackoutPanel pitchId={pitchId} onChanged={onChanged} />}
       <SlotManager
         pitchId={pitchId}
         pitchName={pitchName}

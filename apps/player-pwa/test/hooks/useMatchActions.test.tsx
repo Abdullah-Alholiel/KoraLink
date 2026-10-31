@@ -9,6 +9,7 @@ import {
   optimisticallyLeave,
   useJoinMatch,
   useLeaveMatch,
+  useRescheduleMatch,
 } from '@/hooks/useMatchActions';
 import { useAppStore } from '@/store/useAppStore';
 import enMessages from '@/messages/en.json';
@@ -254,5 +255,53 @@ describe('useLeaveMatch', () => {
       d.resolve({});
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+});
+
+describe('useRescheduleMatch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStore.setState({ user: testUser });
+  });
+
+  it('shows the wallet-shortfall toast — not the generic slot-taken copy — when the API 400s with Required/Available amounts', async () => {
+    const { wrapper } = createWrapper();
+    // Exact message shape emitted by run #105's guarded reschedule floor
+    // (matches.service.ts reschedule_wallet_insufficient path).
+    mockFetcher.mockRejectedValueOnce(
+      new Error(
+        'Insufficient wallet balance for the reschedule. Required: SAR 375.00, Available: SAR 120.00',
+      ),
+    );
+
+    const { result } = renderHook(() => useRescheduleMatch(), { wrapper });
+    act(() => {
+      result.current.mutate({ matchId: 'm1', bookingSlotId: 'slot-2' });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const toast = useAppStore.getState().toast;
+    expect(toast?.type).toBe('error');
+    // shortfall 375.00 - 120.00 = 255.00 → interpolated into the localized copy
+    expect(toast?.message).toBe('Reschedule needs SAR 255.00 more in your wallet.');
+    expect(toast?.message).not.toContain(enMessages.errors.rescheduleFailed);
+    expect(toast?.meta?.detail).toBe(
+      'No money was taken and the match kept its original time. Top up your wallet, then reschedule.',
+    );
+  });
+
+  it('keeps the generic reschedule copy for every other failure cause', async () => {
+    const { wrapper } = createWrapper();
+    mockFetcher.mockRejectedValueOnce(new Error('This slot has already been booked'));
+
+    const { result } = renderHook(() => useRescheduleMatch(), { wrapper });
+    act(() => {
+      result.current.mutate({ matchId: 'm1', bookingSlotId: 'slot-2' });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const toast = useAppStore.getState().toast;
+    expect(toast?.type).toBe('error');
+    expect(toast?.message).toBe(enMessages.errors.rescheduleFailed);
   });
 });

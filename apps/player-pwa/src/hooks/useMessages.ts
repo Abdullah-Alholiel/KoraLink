@@ -4,16 +4,321 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import {
   adaptDiscussionList,
   type DiscussionsApiResponse,
 } from '@/lib/discussion-adapter';
 import type { Discussion } from '@/types';
+import { trackEvent } from '@/providers/ObservabilityProvider';
+
+// ─── P2-172 (run #144): offline chat-send queue ───────────────────────────
+// A message composed while offline is parked in a persisted module-level
+// queue and replayed automatically on reconnect through the SAME idempotent
+// send path (client_message_id — the server dedupes replays). Money actions
+// (join/booking) are deliberately NOT queued: their server side is a fee
+// debit, and queueing money moves without an owner decision is out of scope
+// (see docs/plans/offline-chat-queue/00-retro.md Gate 1).
+
+export type MessageStatus = 'sending' | 'sent' | 'failed' | 'queued';
+
+/** Marker error — never shown to users; the onError branch intercepts it. */
+export class OfflineSendSignal extends Error {
+  constructor() {
+    super('offline: queued for replay');
+    this.name = 'OfflineSendSignal';
+  }
+}
+
+export interface QueuedChatMessage {
+  matchId: string;
+  content: string;
+  clientMessageId: string;
+  queuedAt: string;
+  /**
+   * P2-226: set when the server PERMANENTLY rejected the send (4xx except
+   * 401/408/429/5xx — 401 is recoverable via re-auth). A retired entry is
+   * never re-POSTed by the flusher; it stays queued so the open sheet can
+   * render it as failed (tap-to-retry re-enqueues a fresh entry).
+   */
+  retiredAt?: string;
+  /** Owner binding — entries replay ONLY under the session that authored them. */
+  userId: string;
+}
+
+const OFFLINE_QUEUE_KEY = 'kl.offlineChatQueue.v1';
+
+function isNetworkOnline(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine !== false;
+}
+
+function readOfflineQueue(): QueuedChatMessage[] {
+  if (typeof window === 'undefined') return offlineQueue;
+  try {
+    const raw = window.localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return offlineQueue;
+    const parsed = JSON.parse(raw) as QueuedChatMessage[];
+    if (!Array.isArray(parsed)) return offlineQueue;
+    // Module memory is authoritative within a session; storage seeds it.
+    if (offlineQueue.length === 0 && parsed.length > 0) offlineQueue = parsed;
+    // Hygiene runs on every read — stale entries age out even when the
+    // storage copy is never re-seeded from (memory already held them).
+    pruneOfflineQueue();
+    return offlineQueue;
+  } catch {
+    return offlineQueue;
+  }
+}
+
+function persistOfflineQueue(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
+  } catch {
+    // Private mode / quota — degrade to in-memory queue for this session.
+  }
+}
+
+let offlineQueue: QueuedChatMessage[] = [];
+
+/**
+ * Queue hygiene (run #145, Reviewer A on #144):
+ * - OFFLINE_QUEUE_TTL_MS — entries older than this are pruned. A message
+ *   parked for a chat that has since closed on the server would otherwise
+ *   replay-fail on every flush cycle forever, and localStorage would grow
+ *   without bound across abandoned chats.
+ * - OFFLINE_QUEUE_MAX — hard cap on parked entries. Enqueue drops the
+ *   OLDEST entries past the cap (FIFO backlog: the newest are the ones the
+ *   user still expects to deliver). localStorage is a bounded resource; an
+ *   unbounded backlog eventually throws QuotaExceededError, which
+ *   persistOfflineQueue swallows — silently degrading the queue to
+ *   in-memory-only for the session.
+ */
+const OFFLINE_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const OFFLINE_QUEUE_MAX = 50;
+
+/** Drop TTL-expired entries (and cap overflow) from the in-memory queue. */
+function pruneOfflineQueue(nowMs: number = Date.now()): void {
+  if (offlineQueue.length === 0) return;
+  const cutoff = nowMs - OFFLINE_QUEUE_TTL_MS;
+  const kept = offlineQueue.filter((m) => {
+    const ts = Date.parse(m.queuedAt);
+    // Undateable entry (malformed queuedAt): keep — never destroy what we
+    // cannot date; the owner-binding guard still blocks its replay.
+    return Number.isNaN(ts) ? true : ts >= cutoff;
+  });
+  const capped =
+    kept.length > OFFLINE_QUEUE_MAX
+      ? kept.slice(kept.length - OFFLINE_QUEUE_MAX)
+      : kept;
+  if (capped.length !== offlineQueue.length) {
+    offlineQueue = capped;
+    persistOfflineQueue();
+  }
+}
+
+/** Park a message for replay. Returns false when the id is already queued. */
+function enqueueOfflineMessage(entry: QueuedChatMessage): boolean {
+  readOfflineQueue(); // also runs TTL/cap hygiene before the insert
+  if (offlineQueue.some((m) => m.clientMessageId === entry.clientMessageId)) {
+    return false;
+  }
+  offlineQueue.push(entry);
+  // Hard cap (FIFO): drop the OLDEST entries past the cap — the newest are
+  // the ones the user still expects to deliver. After the push, keep the
+  // last OFFLINE_QUEUE_MAX entries (the incoming one is the last).
+  if (offlineQueue.length > OFFLINE_QUEUE_MAX) {
+    offlineQueue = offlineQueue.slice(offlineQueue.length - OFFLINE_QUEUE_MAX);
+  }
+  persistOfflineQueue();
+  return true;
+}
+
+/**
+ * P2-226 r2: mark an entry TERMINALLY failed (permanent 4xx rejection) —
+ * the flusher never re-POSTs it, but it stays queued so the open sheet
+ * can render it as failed and the badge keeps counting it (visible trace).
+ */
+function markChatRetired(clientMessageId: string): void {
+  readOfflineQueue();
+  const entry = offlineQueue.find((m) => m.clientMessageId === clientMessageId);
+  if (entry && !entry.retiredAt) {
+    entry.retiredAt = new Date().toISOString();
+    persistOfflineQueue();
+  }
+}
+
+/** Remove a delivered entry (any delivery path: REST response, WS echo, flush). */
+function discardOfflineMessage(clientMessageId: string): void {
+  readOfflineQueue();
+  const next = offlineQueue.filter((m) => m.clientMessageId !== clientMessageId);
+  if (next.length !== offlineQueue.length) {
+    offlineQueue = next;
+    persistOfflineQueue();
+  }
+}
+
+function getQueuedEntriesForMatch(matchId: string, userId?: string): QueuedChatMessage[] {
+  readOfflineQueue();
+  return offlineQueue.filter(
+    (m) => m.matchId === matchId && (!userId || m.userId === userId),
+  );
+}
+
+function getOfflineQueueCount(matchId?: string, userId?: string): number {
+  readOfflineQueue();
+  return offlineQueue.filter(
+    (m) =>
+      (!matchId || m.matchId === matchId) && (!userId || m.userId === userId),
+  ).length;
+}
+
+// ── Flush plumbing ────────────────────────────────────────────────────────
+// Flusher lives at MODULE level (a queued message must deliver even after
+// the sheet that wrote it unmounts — e.g. the user navigates away while
+// offline). Open sheets subscribe and reconcile deliveries into their view.
+
+type FlushListener = (
+  message: MatchMessage | null,
+  failedEntry?: QueuedChatMessage,
+  /** P2-226: true when the entry was RETIRED (permanent 4xx) — no replay. */
+  terminal?: boolean,
+) => void;
+const flushListeners = new Set<FlushListener>();
+
+/** Subscribe to delivered flush messages (open sheets reconcile their view). */
+export function registerOfflineFlushListener(fn: FlushListener): () => void {
+  flushListeners.add(fn);
+  return () => flushListeners.delete(fn);
+}
+
+let flushing = false;
+
+/**
+ * P2-226: a PERMANENT server rejection (match chat gone → 404, not a member →
+ * 403, …) can never succeed on replay. 408 (timeout) and 429 (rate limit) are
+ * retry-later; 5xx and non-HTTP errors (network TypeError) are transient.
+ */
+function isTerminalChatSendError(err: unknown): boolean {
+  if (!(err instanceof FetchError)) return false;
+  const { status } = err;
+  // P2-226 r2 (PR-Agent #155): 401 is RECOVERABLE — the fetcher treats a 401
+  // on authed surfaces as an expired token and bounces to re-auth; retiring
+  // the message would permanently lose recoverable content.
+  if (status === 401) return false;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** Replay the queue oldest-first through the idempotent REST send path. */
+export async function flushOfflineQueue(): Promise<void> {
+  if (flushing || !isNetworkOnline()) return;
+  // Owner binding (PR-Agent #149): an entry replays ONLY under the session
+  // that authored it — a queued message must never be sent (or shown) under
+  // another account on a shared device. No logged-in user → no replay.
+  const currentUserId = useAppStore.getState().user?.id;
+  if (!currentUserId) return;
+  flushing = true;
+  try {
+    // Re-read each iteration: deliveries remove entries while we iterate.
+    for (const entry of [...readOfflineQueue()]) {
+      if (!isNetworkOnline()) break; // signal dropped mid-flush — stop, stay queued
+      if (entry.userId !== currentUserId) continue; // another account's message
+      if (entry.retiredAt) continue; // P2-226 r2: terminally failed — never replayed
+      try {
+        const delivered = await fetcher<MatchMessage | undefined>(
+          `/matches/${entry.matchId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: entry.content,
+              clientMessageId: entry.clientMessageId,
+            }),
+          },
+        );
+        discardOfflineMessage(entry.clientMessageId);
+        const message =
+          delivered && 'id' in delivered
+            ? delivered
+            : ({
+                // WS echo may have beaten the REST response — fabricate the
+                // minimum shape; reconcile dedupes on client_message_id.
+                id: `flushed-${entry.clientMessageId}`,
+                match_id: entry.matchId,
+                user_id: entry.userId,
+                content: entry.content,
+                created_at: new Date().toISOString(),
+                user: (() => {
+                  const u = useAppStore.getState().user;
+                  return {
+                    id: entry.userId,
+                    full_name: u?.fullName ?? null,
+                    handle: u?.handle ?? null,
+                    avatar_url: u?.avatarUrl ?? null,
+                  };
+                })(),
+                client_message_id: entry.clientMessageId,
+              } as MatchMessage);
+        for (const fn of flushListeners) fn(message);
+        trackEvent('chat_offline_queue_flushed');
+      } catch (err) {
+        if (isTerminalChatSendError(err)) {
+          // P2-226 r2 (PR-Agent #155): RETAIN the entry with a retiredAt
+          // marker instead of discarding — the poll stops re-POSTing it, the
+          // badge keeps counting it (visible trace), and the open sheet
+          // renders it failed (tap-to-retry re-enqueues a fresh entry).
+          markChatRetired(entry.clientMessageId);
+          for (const fn of flushListeners) fn(null, entry, true);
+          continue;
+        }
+        // Still failing transiently (server unreachable / 401 / 408 / 429 /
+        // 5xx) — leave queued, tell open sheets (bubble flips to FAILED +
+        // tap-to-retry), and CONTINUE: one failing entry must never
+        // head-of-line-block healthy entries behind it (PR-Agent #149).
+        // Each flush cycle attempts each entry once.
+        for (const fn of flushListeners) fn(null, entry);
+      }
+    }
+  } finally {
+    flushing = false;
+  }
+}
+
+let watcherStarted = false;
+
+/**
+ * Idempotently arm the reconnect flusher: `online` event + a short
+ * rising-edge poll (some browsers/page-restores restore without firing the
+ * event). Re-armed by every offline send; safe to call repeatedly.
+ */
+export function startOfflineQueueWatcher(): void {
+  if (watcherStarted || typeof window === 'undefined') return;
+  watcherStarted = true;
+  window.addEventListener('online', () => {
+    void flushOfflineQueue();
+  });
+  window.setInterval(() => {
+    if (isNetworkOnline() && getOfflineQueueCount() > 0) {
+      void flushOfflineQueue();
+    }
+  }, 5_000);
+}
+
+/** Test-only: reset queue + flush state between spec cases. */
+export function __resetOfflineChatQueueForTests(): void {
+  offlineQueue = [];
+  flushing = false;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(OFFLINE_QUEUE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 // ─── Types ────────────────────────────────────────────
-
-export type MessageStatus = 'sending' | 'sent' | 'failed';
 
 export interface MatchMessage {
   id: string;
@@ -90,6 +395,12 @@ export function useDiscussions() {
       return allPages.length + 1;
     },
     maxPages: 10,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const discussions = useMemo(
@@ -152,11 +463,28 @@ function mergeMessages(
  * never duplicates rows. When the no-cursor probe returns fewer than the
  * page size the whole history is known-finite (hasMore=false without an
  * extra request — the probe already over-fetched by one).
+ *
+ * P2-196 (run #132): on every socket RE-connect the hook backfills the gap
+ * (`after`-cursor fetch for messages missed while disconnected) and exposes
+ * `missedMarker` + `dismissMissedMarker` so the sheet can show a
+ * "new while you were away" divider above the first missed message.
  */
 const CHAT_PAGE_SIZE = 50;
 
-export function useMatchChat(matchId: string | null) {
+export function useMatchChat(
+  matchId: string | null,
+  // P2-111 (run #81): the WS-echo send path has no error channel (the emit
+  // just never resolves), so the REST fallback's FetchError is the only
+  // carrier of WHY a send failed — e.g. the chat-closed code on a finished
+  // match. The sheet turns it into authored, localized copy (P1-47 pattern).
+  onSendError?: (err: FetchError) => void,
+  // P2-172 (run #144): fired when a send is parked in the offline queue —
+  // the sheet surfaces an info toast ("will send when back online").
+  opts?: { onQueued?: () => void },
+) {
   const queryClient = useQueryClient();
+  const onQueuedRef = useRef<(() => void) | undefined>(undefined);
+  onQueuedRef.current = opts?.onQueued;
   const currentUser = useAppStore(selectUser);
   const rt = getRealtime();
   // P2-99 (run #75 lint fix): the typing own-echo filter and the socket
@@ -170,6 +498,26 @@ export function useMatchChat(matchId: string | null) {
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Reconnect backfill (P2-196, run #132) ────────────────────────────────
+  // A socket drop between "connected" moments silently loses room fan-out.
+  // On every RE-connect (not the first connect — the initial REST history
+  // probe already covers that), the hook pages the server for messages
+  // STRICTLY NEWER than the newest server message we hold (`after` keyset,
+  // the P1-3 direction added server-side this run) and reconciles them in.
+  // Messages that are genuinely new (ids never seen) arm the "new while you
+  // were away" marker the sheet renders above the first missed message.
+  const [missedMarker, setMissedMarker] = useState<{ count: number; firstId: string } | null>(
+    null,
+  );
+  const hadServerMessagesRef = useRef(false);
+  const lastServerIdRef = useRef<string | null>(null);
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const backfillInFlightRef = useRef(false);
+  // Latch: the FIRST connect of a subscription is covered by the initial
+  // REST history probe — backfilling it would replay the same window. Only
+  // SUBSEQUENT connects (real reconnects) page the server.
+  const firstConnectDoneRef = useRef(false);
 
   // ── Typing indicator (P2-99, run #74) ─────────────────────────────────────
   // userIds currently typing in this lobby; 4s TTL per signal (server relays
@@ -269,6 +617,85 @@ export function useMatchChat(matchId: string | null) {
     [queryClient, matchId],
   );
 
+  // ── Reconnect backfill fetcher (P2-196, run #132) ────────────────────────
+  // Fired by the socket effect's `connect` handler on every RE-connect.
+  // Pages the server for messages strictly newer than the newest server
+  // message we already hold (`after` keyset — matches.service.ts getMessages
+  // P2-196 direction) and reconciles them in. Ids never seen before arm the
+  // "new while you were away" marker (cleared by a send or via the sheet).
+  const backfillAfterReconnect = useCallback(async () => {
+    if (!matchId || backfillInFlightRef.current) return;
+    // First connect: the initial REST history probe already covers this
+    // window — backfilling here would just replay the same page. The latch
+    // flips on the first connect; later connects (real reconnects) pass.
+    if (!firstConnectDoneRef.current) {
+      firstConnectDoneRef.current = true;
+      return;
+    }
+    if (!hadServerMessagesRef.current || !lastServerIdRef.current) return;
+    backfillInFlightRef.current = true;
+    try {
+      // PR-Agent (run #132): one 100-row page would strand the rest of a
+      // >100-message gap permanently (loadOlder pages OLDER than the oldest
+      // displayed message, never into a middle hole). Continue from the last
+      // fetched id until a short page (gap exhausted), 10-page safety cap —
+      // a cap hit degrades to partial backfill; the next reconnect continues
+      // from the NEW newest-known id, so nothing is permanently lost.
+      let cursor: string = lastServerIdRef.current;
+      let freshCount = 0;
+      let freshFirstId: string | null = null;
+      for (let page = 0; page < 10; page += 1) {
+        const batch = await fetcher<MatchMessage[]>(
+          `/matches/${matchId}/messages?after=${encodeURIComponent(cursor)}&limit=100`,
+          { method: 'GET' },
+        );
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        // Snapshot BEFORE reconciling: reconcile feeds these rows into
+        // state, and the known-ids effect only runs after the next render —
+        // knownIdsRef stays stable across the whole loop.
+        for (const m of batch) {
+          if (!knownIdsRef.current.has(m.id)) {
+            freshCount += 1;
+            if (!freshFirstId) freshFirstId = m.id;
+          }
+          reconcile(m);
+        }
+        if (batch.length < 100) break; // gap exhausted
+        cursor = batch[batch.length - 1].id;
+      }
+      if (freshCount > 0 && freshFirstId) {
+        setMissedMarker({ count: freshCount, firstId: freshFirstId });
+      }
+    } catch {
+      // Silent: a failed backfill must not boot the user out of a recovered
+      // session — the next reconnect retries (same posture as loadOlder).
+    } finally {
+      backfillInFlightRef.current = false;
+    }
+  }, [matchId, reconcile]);
+
+  // Track server-message ids seen (marker freshness + backfill cursor).
+  // Runs after every merged-view change; refs are written here, never in
+  // render. The newest cursor follows the (created_at, id) keyset order.
+  useEffect(() => {
+    let last: MatchMessage | null = null;
+    for (const m of messages) {
+      if (m.id.startsWith('local-')) continue;
+      knownIdsRef.current.add(m.id);
+      if (
+        !last ||
+        m.created_at > last.created_at ||
+        (m.created_at === last.created_at && m.id > last.id)
+      ) {
+        last = m;
+      }
+    }
+    if (last) {
+      hadServerMessagesRef.current = true;
+      lastServerIdRef.current = last.id;
+    }
+  });
+
   // Socket.IO subscription (real-time) — shared client (Slice 2).
   useEffect(() => {
     if (!matchId) return;
@@ -286,6 +713,10 @@ export function useMatchChat(matchId: string | null) {
 
     const onConnect = () => {
       setIsConnected(true);
+      // P2-196: a RE-connect may have missed room fan-out — page the server
+      // for everything newer than our newest known message. No-op on the
+      // first connect (guard inside).
+      void backfillAfterReconnect();
     };
     const onDisconnect = () => setIsConnected(false);
     const onNewMessage = (payload: unknown) => {
@@ -337,6 +768,13 @@ export function useMatchChat(matchId: string | null) {
       setLocalMessages([]);
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
+      // P2-196: reset the reconnect-backfill cursors + marker on unmount or
+      // match switch — a new lobby starts from the fresh history probe.
+      hadServerMessagesRef.current = false;
+      lastServerIdRef.current = null;
+      knownIdsRef.current = new Set();
+      firstConnectDoneRef.current = false;
+      setMissedMarker(null);
       // P2-99: clear all typing expiry timers + state on unmount/switch.
       // `typingTimers` is the SAME Map instance as typingTimersRef.current —
       // the captured alias satisfies react-hooks/exhaustive-deps (run #75)
@@ -345,7 +783,10 @@ export function useMatchChat(matchId: string | null) {
       typingTimers.clear();
       setTypingUserIds(new Set());
     };
-  }, [matchId, reconcile, rt, currentUserId]);
+    // backfillAfterReconnect is a stable useCallback dep of the reconnect
+    // wiring above; the cleanup only touches refs/state — listed to satisfy
+    // exhaustive-deps without changing teardown behavior (run #133 lint gate).
+  }, [matchId, reconcile, rt, currentUserId, backfillAfterReconnect]);
 
   // ── Read watermark (P2-58, run #50) ──────────────────────────────────────
   // While the sheet is open, advance the caller's match-chat read watermark
@@ -405,6 +846,10 @@ export function useMatchChat(matchId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
+      // P2-172: an offline send never reaches the wire — the onError branch
+      // parks it in the persisted queue; flushOfflineQueue replays it with
+      // the SAME clientMessageId on reconnect (server dedupes replays).
+      if (!isNetworkOnline()) throw new OfflineSendSignal();
       if (rt.isConnected()) {
         rt.emit('send-message', { matchId, content, clientMessageId });
         // Authoritative message arrives via the `new-message` echo.
@@ -417,6 +862,9 @@ export function useMatchChat(matchId: string | null) {
       });
     },
     onMutate: ({ content, clientMessageId }) => {
+      // P2-196: composing a message means the user has seen the backfilled
+      // window — clear the "new while you were away" marker.
+      setMissedMarker(null);
       const optimistic: MatchMessage = {
         id: `local-${clientMessageId}`,
         match_id: matchId ?? '',
@@ -458,12 +906,68 @@ export function useMatchChat(matchId: string | null) {
       ackTimersRef.current.set(clientMessageId, timer);
     },
     onSuccess: (data, { clientMessageId }) => {
+      // P2-172: any successful delivery (including a manual retry of a
+      // flush-failed message) retires the queue entry — retry is the
+      // user-driven escape hatch from a failed flush.
+      discardOfflineMessage(clientMessageId);
       // REST fallback returns the created message directly → reconcile it.
       if (data && 'id' in data && data.client_message_id === clientMessageId) {
         reconcile(data);
       }
     },
-    onError: (_err, { clientMessageId }) => {
+    onError: (err, { content, clientMessageId }) => {
+      // P2-172: offline send — park the message in the persisted queue and
+      // keep the bubble in a `queued` state (no failure UX, no error copy).
+      // The flusher replays it with the SAME clientMessageId on reconnect.
+      // Content comes from the mutation VARIABLES (not state — the optimistic
+      // append is not guaranteed visible in this closure yet).
+      if (err instanceof OfflineSendSignal) {
+        // Orphan guard (run #145, Reviewer A on #144): an entry parked with
+        // no owner can never replay (the flusher bails without a user) nor
+        // backfill (view mapping filters on currentUserId) — it would sit
+        // as a dead bubble forever. Fail LOUDLY instead: real failure UX,
+        // the user can retry once logged back in.
+        if (!currentUserId) {
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m,
+            ),
+          );
+          const timer = ackTimersRef.current.get(clientMessageId);
+          if (timer) {
+            clearTimeout(timer);
+            ackTimersRef.current.delete(clientMessageId);
+          }
+          return;
+        }
+        enqueueOfflineMessage({
+          matchId: matchId ?? '',
+          content: content,
+          clientMessageId: clientMessageId,
+          queuedAt: new Date().toISOString(),
+          // Owner binding (PR-Agent #149): entries replay only under the
+          // authoring session — never under a different account.
+          userId: currentUserId,
+        });
+        // Stand down the 10s ack timer (armed in onMutate for WS-echo
+        // timeouts): a parked bubble waits for RECONNECT, not an echo —
+        // left running it silently flipped queued → failed after 10s while
+        // the message was still safely queued (run #145 finding). The
+        // flusher owns queued → sent/failed transitions from here.
+        const queuedTimer = ackTimersRef.current.get(clientMessageId);
+        if (queuedTimer) {
+          clearTimeout(queuedTimer);
+          ackTimersRef.current.delete(clientMessageId);
+        }
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.client_message_id === clientMessageId ? { ...m, status: 'queued' } : m,
+          ),
+        );
+        startOfflineQueueWatcher();
+        onQueuedRef.current?.();
+        return;
+      }
       setLocalMessages((prev) =>
         prev.map((m) =>
           m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m,
@@ -474,6 +978,9 @@ export function useMatchChat(matchId: string | null) {
         clearTimeout(timer);
         ackTimersRef.current.delete(clientMessageId);
       }
+      // P2-111: surface the failure reason (what happened + why) — authored
+      // and localized by the sheet from the stable API code.
+      if (onSendError && err instanceof FetchError) onSendError(err);
     },
   });
 
@@ -499,7 +1006,96 @@ export function useMatchChat(matchId: string | null) {
 
   // P1-3: merged view = paged older history + authoritative newest window +
   // locally-appended (optimistic/real-time) messages.
-  const messages = mergeMessages([...olderMessages, ...history], localMessages);
+  // P2-172: messages queued OFFLINE in a PREVIOUS session (page closed before
+  // reconnect) backfill into the view as `queued` so they never vanish; the
+  // flusher delivers them and reconcile swaps in the server message.
+  const queuedForMatch: MatchMessage[] =
+    matchId && currentUserId
+      ? getQueuedEntriesForMatch(matchId, currentUserId)
+        .filter(
+          (q) =>
+            !localMessages.some((m) => m.client_message_id === q.clientMessageId) &&
+            !history.some((m) => m.client_message_id === q.clientMessageId),
+        )
+        .map((q) => ({
+          id: `queued-${q.clientMessageId}`,
+          match_id: q.matchId,
+          user_id: currentUser?.id ?? '',
+          content: q.content,
+          created_at: q.queuedAt,
+          user: {
+            id: currentUser?.id ?? '',
+            full_name: currentUser?.fullName ?? null,
+            handle: currentUser?.handle ?? null,
+            avatar_url: currentUser?.avatarUrl ?? null,
+          },
+          client_message_id: q.clientMessageId,
+          status: (q.retiredAt ? 'failed' : 'queued') as 'failed' | 'queued',
+        }))
+    : [];
+  const messages = mergeMessages(
+    [...olderMessages, ...history],
+    [...localMessages, ...queuedForMatch],
+  );
+
+  // P2-172: arm the module flusher once per session (idempotent) so this
+  // sheet's queued messages deliver on reconnect even if it stays mounted.
+  useEffect(() => {
+    startOfflineQueueWatcher();
+  }, []);
+
+  // P2-172: while this sheet is open, a flush delivery for ANY match
+  // reconciles into the local view (dedup on client_message_id) so the
+  // bubble flips queued → sent without a refetch. A delivery for an entry
+  // this sheet renders via queuedForMatch (previous-session backfill) is
+  // APPENDED to localMessages — otherwise discarding the queue entry would
+  // make the delivered bubble vanish (PR-Agent #149). A flush FAILURE flips
+  // the bubble to `failed` (red + tap-to-retry) — never a stuck spinner.
+  // matchId is read through a ref: the subscription is mounted once for the
+  // hook's lifetime, and matchId never changes while the sheet is open.
+  const matchIdRef = useRef(matchId);
+  matchIdRef.current = matchId;
+  useEffect(
+    () =>
+      registerOfflineFlushListener((message, failedEntry) => {
+        if (message) {
+          setLocalMessages((prev) => {
+            if (!message.client_message_id) return prev;
+            const index = prev.findIndex(
+              (m) => m.client_message_id === message.client_message_id,
+            );
+            if (index >= 0) {
+              const next = [...prev];
+              next[index] = { ...message, status: 'sent' };
+              return next;
+            }
+            // Backfilled (previous-session) entry: persist the delivery —
+            // but ONLY for this sheet's match (the flusher fans out for
+            // every match; a foreign delivery must not land in this view).
+            if (message.match_id === matchIdRef.current) {
+              return [...prev, { ...message, status: 'sent' }];
+            }
+            return prev;
+          });
+          return;
+        }
+        if (failedEntry) {
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.client_message_id === failedEntry.clientMessageId
+                ? { ...m, status: 'failed' }
+                : m,
+            ),
+          );
+          // P2-226 r2: a RETIRED entry is NOT discarded — it stays queued,
+          // so entries that were never in localMessages (previous-session
+          // backfill) keep rendering through `queuedForMatch`, which now
+          // maps retired entries to `failed`. No silent vanishing, no
+          // double-render.
+        }
+      }),
+    [],
+  );
 
   // Batched read-mark: any newly-seen message authored by someone else marks
   // the chat read (ONE watermark write per batch — never per message). Uses
@@ -531,5 +1127,14 @@ export function useMatchChat(matchId: string | null) {
     // P2-99 typing surface
     typingUserIds,
     emitTyping,
+    // P2-196 reconnect-backfill surface
+    missedMarker,
+    dismissMissedMarker: useCallback(() => setMissedMarker(null), []),
+    // P2-172 offline-queue surface: THIS user's entries still parked for
+    // THIS match in the persisted queue (the authoritative retry backlog).
+    queuedCount:
+      matchId && currentUserId
+        ? getOfflineQueueCount(matchId, currentUserId)
+        : 0,
   };
 }

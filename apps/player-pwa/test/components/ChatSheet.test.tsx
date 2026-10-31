@@ -23,6 +23,13 @@ vi.mock('@/hooks/useMessages', () => ({
   type: { MatchMessage: {} },
 }));
 
+// P2-281 M-2: ChatSheet's expand affordance navigates via useRouter.
+const routerPushMock = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn(), back: vi.fn() }),
+  usePathname: () => '/en/match/test-match-id',
+}));
+
 // Mock useAppStore (ChatSheet reads current user for message authorship)
 vi.mock('@/store/useAppStore', () => ({
   useAppStore: vi.fn(() => ({ id: 'user-1', full_name: 'Test User' })),
@@ -177,8 +184,9 @@ describe('ChatSheet', () => {
 
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.getByText('Yesterday')).toBeTruthy();
-    // The 2020 message renders under a plain localized date, not "Today".
-    expect(screen.getByText('Jan 1')).toBeTruthy();
+    // The 2020 message renders under a plain localized date, not "Today" —
+    // via resolveDateLocale (P2-189), so EN is the canonical en-GB "1 Jan".
+    expect(screen.getByText('1 Jan')).toBeTruthy();
   });
 
   it('CS-3c: null clock (SSR/first-render posture) does not crash and recovers to real-clock labels (P2-59)', () => {
@@ -368,5 +376,22 @@ describe('ChatSheet', () => {
     const dialogTitle = await screen.findByText('Report this message');
     expect(dialogTitle).toBeTruthy();
     expect(screen.getByText('Lobby message')).toBeTruthy();
+  });
+
+  // ── P2-281 M-2: expand affordance ────────────────────────────────────
+  it('CS-11: "Open full thread" closes the sheet and routes to /match/[id]/chat', () => {
+    const onClose = vi.fn();
+    renderWithProviders(<ChatSheet {...baseProps} onClose={onClose} />);
+
+    fireEvent.click(screen.getByTestId('chat-expand'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(routerPushMock).toHaveBeenCalledWith('/en/match/test-match-id/chat');
+  });
+
+  it('CS-12: renders the MatchChat body (shared surface — header + composer)', () => {
+    renderWithProviders(<ChatSheet {...baseProps} />);
+    expect(screen.getByText('Friday Night 5v5')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Type a message...')).toBeTruthy();
   });
 });

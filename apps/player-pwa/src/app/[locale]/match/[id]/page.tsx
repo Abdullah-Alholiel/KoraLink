@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import Image from 'next/image';
 import {
     ArrowLeft,
@@ -27,13 +28,13 @@ import {
 } from 'lucide-react';
 import { useMatch } from '@/hooks/useMatches';
 import { useMarkNoShow, useRemovePlayer } from '@/hooks/useMatches';
-import { useAppeal } from '@/hooks/useDisputes';
+import { useAppeal, useOpenDispute, useMyDispute } from '@/hooks/useDisputes';
 import { useJoinMatch, useLeaveMatch, useCancelMatch, useStartMatch, useCompleteMatch, useRescheduleMatch, useJoinWaitlist, useLeaveWaitlist } from '@/hooks/useMatchActions';
 import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
 import { shareOrCopy } from '@/lib/share';
-import { formatClockTime, type AppLocale } from '@/lib/format';
+import { formatClockTime, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
 import {
     matchHasStarted,
     matchHasEnded,
@@ -48,6 +49,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import Toast from '@/components/layout/Toast';
 import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
+import PushNudgeCard from '@/components/push/PushNudgeCard';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import RescheduleSheet from '@/components/matches/RescheduleSheet';
@@ -63,6 +65,7 @@ import AttendanceSheet from '@/components/matches/AttendanceSheet';
 import AttendanceBanner from '@/components/matches/AttendanceBanner';
 import AppealSheet from '@/components/matches/AppealSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
+import ReportDisputeSheet from '@/components/matches/ReportDisputeSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -88,6 +91,7 @@ export default function MatchDetailPage({
     const markNoShow = useMarkNoShow(id);
     const removePlayer = useRemovePlayer(id);
     const appeal = useAppeal(id);
+    const openDispute = useOpenDispute(id);
     const { data: walletData } = useWalletBalance();
     const walletBalance = Number(walletData?.balance ?? 0);
 
@@ -121,6 +125,7 @@ export default function MatchDetailPage({
     const [showOngoingJoinSheet, setShowOngoingJoinSheet] = useState(false);
     const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
     const [showAppealSheet, setShowAppealSheet] = useState(false);
+    const [showDisputeSheet, setShowDisputeSheet] = useState(false);
     const [showReportSheet, setShowReportSheet] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<import('@/types').RosterPlayer | null>(null);
 
@@ -128,6 +133,10 @@ export default function MatchDetailPage({
     const myRosterEntry = match && currentUserId
         ? match.roster.find((p) => p.userId === currentUserId) ?? null
         : null;
+
+    // P1-69: the current user's latest dispute on this match (drives the
+    // dispute sheet's under-review card). Polled only while joined.
+    const { data: myDisputeData } = useMyDispute(id, isJoined);
 
     // Absolute match URL for sharing — computed client-side only (SSR has no
     // window; reading it during render would cause a hydration mismatch).
@@ -202,7 +211,24 @@ export default function MatchDetailPage({
         // would 409 ("already joined"). A refetch picks up the new roster +
         // refreshed wallet balance instead.
         setShowPayment(false);
+        // P2-258: paid booking succeeded — arm the contextual push opt-in.
+        useAppStore.getState().armPushNudge();
         void refetch();
+    };
+
+    /* ── Share-text params (P2-189): date/time/price through the locale
+     * formatters (Gregorian + Arabic-Indic digits for AR) instead of the
+     * adapter's fixed-EN `match.date`/`match.time` strings. */
+    const shareParams = (m: NonNullable<typeof match>) => {
+        const appLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
+        const scheduled = m.scheduledAt ? new Date(m.scheduledAt) : null;
+        return {
+            title: m.title,
+            date: scheduled ? formatShortDate(scheduled, appLocale) : m.date,
+            time: scheduled ? formatClockTime(scheduled, appLocale) : m.time,
+            venue: m.venueName,
+            price: m.price === 0 ? t('gameDetails.free') : formatMoney(m.price, appLocale),
+        };
     };
 
     /* ── Universal share / copy (works on HTTP origins + iOS PWA) ──
@@ -213,9 +239,7 @@ export default function MatchDetailPage({
      * execCommand, and reports the honest outcome. */
     const handleShareMatch = async (opts?: { text?: string; url?: string; context: string }) => {
         if (!match) return;
-        const shareText =
-            opts?.text ??
-            `⚽ ${match.title}\n${match.date} at ${match.time}\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}`;
+        const shareText = opts?.text ?? t('matchDetail.shareText', shareParams(match));
         const url = opts?.url ?? (typeof window !== 'undefined' ? window.location.href : '');
 
         const outcome = await shareOrCopy({ title: match.title, text: shareText, url });
@@ -252,12 +276,9 @@ export default function MatchDetailPage({
                         <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
                             <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
                         </div>
-                        <h3 className="text-lg font-bold text-brand-black mb-1">
-                            {t('common.error')}
+                        <h3 className="text-lg font-bold text-brand-black mb-6">
+                            {t(errorKey(classifyError(error)))}
                         </h3>
-                        <p className="text-sm text-gray-400 text-center mb-6">
-                            {t('common.errorDescription')}
-                        </p>
                         <button
                             onClick={() => refetch()}
                             className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
@@ -302,15 +323,16 @@ export default function MatchDetailPage({
                             onClick={() => router.back()}
                             className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
                         >
-                            <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
+                            <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            aria-label={isJoined ? t('common.messages') : t('matchDetail.shareAria')}
                             onClick={() => {
                                 if (isJoined) {
                                     setShowChatSheet(true);
                                 } else {
                                     handleShareMatch({
-                                        text: `${match.title} — ${match.date} ${match.time} @ ${match.venueName}`,
+                                        text: t('matchDetail.heroShareText', shareParams(match)),
                                         context: 'hero',
                                     });
                                 }
@@ -423,6 +445,12 @@ export default function MatchDetailPage({
                                 onOpenAppeal={() => setShowAppealSheet(true)}
                             />
 
+                            {/* 0.5 P2-258: contextual push opt-in — offered only
+                                while a booking-success timestamp is fresh (the
+                                join/paid-join/publish arms + 24h dismissal
+                                cooldown live in the store/card). */}
+                            <PushNudgeCard />
+
                             {/* 1. Game Details */}
                             <div className="mx-5 mt-2">
                                 <GameDetails
@@ -439,6 +467,10 @@ export default function MatchDetailPage({
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}
+                                </button>
+                                <span className="text-gray-200">·</span>
+                                <button onClick={() => setShowDisputeSheet(true)} className="text-sm font-semibold text-brand-green">
+                                    {t('dispute.title')}
                                 </button>
                                 <span className="text-gray-200">·</span>
                                 <button onClick={() => setShowReportSheet(true)} className="text-sm font-semibold text-brand-red">
@@ -718,10 +750,11 @@ export default function MatchDetailPage({
                             <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
-                                        `⚽ Join me for "${match.title}" on ${match.date} at ${match.time}!\n📍 ${match.venueName}\n💸 ${match.price} ${match.currency}\n${shareUrl}\n\nJoin on KoraLink!`
+                                        t('matchDetail.whatsAppShareText', { ...shareParams(match), url: shareUrl })
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    aria-label={t('matchDetail.whatsAppShareAria')}
                                     className="block bg-brand-green rounded-2xl py-3.5 px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(37,65,50,0.4)] active:scale-[0.98] transition-transform cursor-pointer"
                                 >
                                     <div className="flex items-center gap-2">
@@ -954,7 +987,7 @@ export default function MatchDetailPage({
                                     <div
                                         data-testid="waitlist-queued-state"
                                         className="
-                                            w-full py-3 pl-4 pr-2.5 rounded-2xl bg-[#E9ECEA] border border-brand-green
+                                            w-full py-3 pl-4 pr-2.5 rounded-2xl bg-brand-bg border border-brand-green
                                             flex items-center justify-between gap-3
                                         "
                                     >
@@ -1077,6 +1110,7 @@ export default function MatchDetailPage({
                 matchLocation={match.venueName}
                 matchId={match.id}
                 price={match.price}
+                currency={match.currency}
                 walletBalance={walletBalance}
                 isPlayerHosted={match.isPlayerHosted}
                 bookingMode={match.bookingMode}
@@ -1132,6 +1166,39 @@ export default function MatchDetailPage({
                     subjectType="match"
                     subjectId={match.id}
                     subjectLabel={match.title}
+                />
+            )}
+
+            {/* Dispute Sheet (P1-69 player origination) */}
+            {match && (
+                <ReportDisputeSheet
+                    isOpen={showDisputeSheet}
+                    onClose={() => {
+                        setShowDisputeSheet(false);
+                        // PR-Agent r1: a failed submit must not resurface on
+                        // reopen — clear the stale mutation error on close.
+                        if (openDispute.isError) openDispute.reset();
+                    }}
+                    matchTitle={match.title}
+                    openDispute={
+                        myDisputeData && (myDisputeData.status === 'opened' || myDisputeData.status === 'under_review')
+                            ? { type: myDisputeData.type, status: myDisputeData.status }
+                            : null
+                    }
+                    isPending={openDispute.isPending}
+                    error={openDispute.isError ? openDispute.error : null}
+                    isOffline={!isOnline}
+                    onSubmit={(type, reason) => {
+                        openDispute.mutate(
+                            { type, ...(reason ? { reason } : {}) },
+                            {
+                                onSuccess: () => {
+                                    setShowDisputeSheet(false);
+                                    showToast(t('dispute.successToast'), 'success');
+                                },
+                            },
+                        );
+                    }}
                 />
             )}
 

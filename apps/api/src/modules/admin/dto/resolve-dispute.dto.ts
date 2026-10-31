@@ -1,5 +1,16 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+} from '@nestjs/swagger';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class ResolveDisputeDto {
   @ApiProperty({ enum: ['resolved', 'rejected'] })
@@ -11,10 +22,33 @@ export class ResolveDisputeDto {
   })
   @IsOptional()
   @IsString()
+  // Run #94 (P2-136): persisted verbatim — capped like every other free-text
+  // DTO (VenueDecisionDto.note class: unbounded audit payloads).
+  @MaxLength(1000)
   decision?: string;
 
   @ApiPropertyOptional({ description: 'Internal note, visible to admins only' })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   internalNote?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Wallet refund credited to the reporter (SAR, >0, ≤2dp) when outcome=resolved. ' +
+      'Rides the resolve transaction; idempotent per dispute (one refund per case). ' +
+      'Run #174 (P2-273): a refund paired with outcome=rejected is now a 400 — the API ' +
+      'never silently drops money intent (Reviewer A run-#174 MINOR 1).',
+    example: 37,
+    minimum: 0.01,
+    maximum: 999999,
+  })
+  @IsOptional()
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'refundAmountSar must be a number with at most 2 decimal places' },
+  )
+  @Min(0.01)
+  @Max(999999)
+  refundAmountSar?: number;
 }

@@ -1,5 +1,5 @@
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { HttpException, HttpStatus, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
@@ -11,6 +11,12 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { assertBootstrapSecrets } from './common/security/bootstrap-secrets';
+import { resolveTrustProxyConfig } from './common/security/trust-proxy';
+import {
+  corsDenyMessage,
+  isSentryDroppedCorsProbe,
+  originAllowed,
+} from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
@@ -43,6 +49,19 @@ async function bootstrap(): Promise<void> {
   const port = configService.get<number>('PORT', 3001);
   const cookieSecret = configService.get<string>('COOKIE_SECRET', 'change-me');
 
+  // ── Trust proxy (audit run-1 api-auth:per-ip-cap-proxy-trust, run #105) ────
+  // Without it, req.ip = the ingress proxy's address: the per-IP OTP caps
+  // (50/day daily cap + 3/min send-otp throttle) collapse into ONE shared
+  // bucket behind the proxy and admin audit logs record the proxy IP. Opt-in
+  // via TRUST_PROXY (unset = current behavior; '1' = single ingress hop;
+  // 'true' = full XFF chain). Boot-fails on garbage per P0-3 doctrine.
+  // See common/security/trust-proxy.ts. INestApplication does not expose
+  // Express `set` — go through the underlying adapter instance.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', resolveTrustProxyConfig(configService.get<string>('TRUST_PROXY')));
+
   // ── Sentry error tracking (env-gated — no-op without SENTRY_DSN) ────────
   const sentryDsn = configService.get<string>('SENTRY_DSN', '');
   if (sentryDsn) {
@@ -51,6 +70,18 @@ async function bootstrap(): Promise<void> {
       environment: configService.get('NODE_ENV', 'development'),
       tracesSampleRate: 0.1,
       beforeSend(event) {
+        // P2-110 (run #137): CORS probe denials are classified at deny time
+        // (cors-origin.ts isProbeShapedOrigin → `CORS_PROBE_BLOCKED:` message)
+        // and dropped HERE — Sentry's express instrumentation captures the
+        // HttpException before the AllExceptionsFilter's >=500 rule, so
+        // ignoreErrors is inert for these (proven empirically against
+        // @sentry/node 10.70: both Glob and RegExp ignoreErrors forms let the
+        // event through; beforeSend → null drops exactly the classified event).
+        // Verified live: recording-transport probe = 1 of 2 events sent.
+        const excVal = event?.exception?.values?.[0]?.value;
+        if (isSentryDroppedCorsProbe(excVal)) {
+          return null;
+        }
         // Strip PII before it leaves the box. `sendDefaultPii` is false, but
         // headers (Authorization) and body data (phone) can still leak.
         const req = event.request;
@@ -92,13 +123,30 @@ async function bootstrap(): Promise<void> {
   // Never widen this with a NODE_ENV check — an attacker on the same Tailscale
   // network with a misconfigured .env (NODE_ENV unset) would then be able to
   // make credentialed cross-origin requests from any origin.
+  // P2-201 (run #131): origins normalized (trailing-slash env misconfigs no
+  // longer 500 every cross-origin call) and denials throw an HttpException
+  // with status 403 — a bare Error reached the filter as an unclassified
+  // exception and rendered a misleading 500 for what is a policy refusal.
+  // The deny MUST stay a thrown error: `callback(null, false)` makes the cors
+  // middleware `next()` WITHOUT CORS headers, letting the request execute
+  // routes (side effects!) while only the browser hides the response.
   const allowedOrigins = [...playerUrls, ...adminUrls];
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (originAllowed(origin, allowedOrigins)) {
         return callback(null, true);
       }
-      callback(new Error(`CORS origin not allowed: ${origin}`));
+      // P2-110 (run #137): denied origins are CLASSIFIED, not silenced. Probe-
+      // shaped origins (RFC 2606 reserved TLDs, known scanner payload hosts)
+      // get a `CORS_PROBE_BLOCKED:` message that main.ts's Sentry beforeSend
+      // drops — scanner noise (130 events/24h) stops burying real errors. Any
+      // OTHER denied origin keeps the original message and STILL captures: a
+      // denied infra-shaped origin (Tailscale IP, LAN host, real domain) is a
+      // deployment misconfiguration worth a Sentry event. The deny MUST keep
+      // throwing either way (P2-201): `callback(null, false)` would let the
+      // request execute routes (side effects!) while only the browser hides
+      // the response.
+      callback(new HttpException(corsDenyMessage(origin), HttpStatus.FORBIDDEN));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],

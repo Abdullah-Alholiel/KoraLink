@@ -45,6 +45,39 @@ export function formatShortDate(date: Date, locale: AppLocale): string {
 }
 
 /**
+ * Money in the active locale (P2-128, run #93) — "SAR 150.00" (en) /
+ * "‏١٥٠٫٠٠ ر.س.‏" (ar: Arabic-Indic digits). Numeric DB columns arrive as
+ * strings; callers pass the number. En output is the historical fixed
+ * `en-GB`/`en-US` currency shape, so existing tests and UI copy stay
+ * byte-identical.
+ */
+export function formatMoney(value: number, locale: AppLocale): string {
+  return numberFormat(locale, {
+    style: 'currency',
+    currency: 'SAR',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/**
+ * Count in the active locale (run #112, Reviewer-B design-lens finding):
+ * "3" (en) / "٣" (ar, Arabic-Indic digits). Route ALL bare count renders
+ * (venues found, pitch counts, players joined) through this — a bare `{n}`
+ * in JSX emits Latin digits for AR users (BlockedCard header documents the
+ * numeral convention). Grouping follows the locale (en "1,234", ar "١٬٢٣٤").
+ *
+ * Null/undefined/non-finite return '' — matching the bare JSX interpolation
+ * this helper replaced (PR-Agent r1 on the counts PR: Intl coerces null to
+ * "0" and undefined to "NaN"; the old render showed nothing, and a missing
+ * count should keep hiding, not claim "0 pitches"). COUNT() SQL never
+ * returns NULL, so this is a behavior-preserving guard, not a live path.
+ */
+export function formatCount(n: number, locale: AppLocale): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '';
+  return numberFormat(locale).format(n);
+}
+
+/**
  * Parses the app's `YYYY-MM-DD` date strings as RIYADH calendar dates —
  * TZ-proof: anchored at 09:00Z (= 12:00 Riyadh), so the Riyadh wall date of
  * the returned instant equals the string from any device timezone. Mirrors

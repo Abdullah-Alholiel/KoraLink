@@ -96,6 +96,7 @@ export class MailerService {
         deleted_at: users.deleted_at,
         email_verified_at: users.email_verified_at,
         email_muted: users.email_muted,
+        locale: users.locale,
       })
       .from(users)
       .where(inArray(users.id, userIds));
@@ -106,7 +107,15 @@ export class MailerService {
       if (!r.email_verified_at) continue;
       if (r.email_muted) continue;
       if (r.deleted_at) continue; // PDPL ghosts are never addressed
-      out.push({ userId: r.id, email: r.email, locale: 'ar' }); // Saudi market default (plan §Gate 2)
+      // P2-264 (run #168): per-recipient locale from users.locale. The column
+      // is NOT NULL DEFAULT 'ar' (Saudi market default, matching the historical
+      // hardcode); the ternary is default-protective against any unexpected
+      // value (e.g. a pre-0055 row patched by hand).
+      out.push({
+        userId: r.id,
+        email: r.email,
+        locale: r.locale === 'en' ? 'en' : 'ar',
+      });
     }
     return out;
   }
@@ -159,7 +168,11 @@ export class MailerService {
     template: Extract<MailTemplateKey, 'welcome_verify' | 'email_verify'>,
   ): Promise<SendOutcome> {
     const [row] = await this.db
-      .select({ deleted_at: users.deleted_at, email_muted: users.email_muted })
+      .select({
+        deleted_at: users.deleted_at,
+        email_muted: users.email_muted,
+        locale: users.locale,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -170,7 +183,13 @@ export class MailerService {
       return { userId, status: 'skipped', reason: 'muted' };
     }
     return this.deliver(
-      { userId, email: to, locale: 'ar' },
+      {
+        userId,
+        email: to,
+        // P2-264 (run #168): resolve from users.locale (NOT NULL default 'ar'),
+        // same default-protective rule as recipientsFor().
+        locale: row.locale === 'en' ? 'en' : 'ar',
+      },
       template,
       { verifyUrl },
       {},

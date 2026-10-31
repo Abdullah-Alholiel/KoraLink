@@ -24,12 +24,22 @@ import { AppGateway } from '../gateway/app.gateway';
 const USER_ID = 'user-live-1';
 
 function makeDb() {
+  // P2-141: update() now does the post-write re-read through findOneOn(id,
+  // this.db), which needs the query builder's select()/execute() surface.
   return {
     update: () => ({
       set: () => ({
         where: () => Promise.resolve(),
       }),
     }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => Promise.resolve([{ id: USER_ID, role: 'Player' }]),
+        }),
+      }),
+    }),
+    execute: async () => [{ matchesPlayed: 0, totalSpent: '0' }] as unknown,
   };
 }
 
@@ -54,14 +64,14 @@ async function makeService(afterOverrides: Record<string, unknown> = {}) {
     banned_at: null,
     suspended_until: null,
   };
-  // findOne is called twice per update(): `before` (pre-write read) then
-  // `after` (post-write re-read). The after call returns the override row so
-  // each test simulates the committed post-write state.
-  let call = 0;
-  jest.spyOn(svc, 'findOne').mockImplementation((async () => {
-    call += 1;
-    return call === 1 ? cleanRow : { ...cleanRow, ...afterOverrides };
-  }) as never);
+  // P2-141: update() now reads `before` via findOne() and `after` via the
+  // private findOneOn(). We stub both so each test can simulate the
+  // committed post-write state via afterOverrides (the post-write-keyed
+  // disconnect gate reads `after`, not the request delta).
+  jest.spyOn(svc, 'findOne').mockResolvedValue(cleanRow as never);
+  jest
+    .spyOn(svc as never, 'findOneOn')
+    .mockResolvedValue({ ...cleanRow, ...afterOverrides } as never);
   return { svc, disconnectUser };
 }
 

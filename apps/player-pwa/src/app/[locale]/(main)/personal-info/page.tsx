@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import { ArrowLeft, ChevronDown, Loader2, Pencil } from 'lucide-react';
 import { useUserProfile, useUserStats, useUpdateProfile } from '@/hooks/useUser';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
@@ -72,8 +73,8 @@ export default function PersonalInfoPage() {
           setEditing(false);
           showToast(t('profile.profileUpdated'), 'success');
         },
-        onError: () => {
-          showToast(t('common.error'), 'error');
+        onError: (err) => {
+          showToast(t(errorKey(classifyError(err))), 'error');
         },
       },
     );
@@ -138,7 +139,7 @@ export default function PersonalInfoPage() {
       {/* Error */}
       {error && !isLoading && (
         <div className="flex flex-col items-center px-8 py-20">
-          <p className="text-sm text-gray-400">{t('common.error')}</p>
+          <p className="text-sm text-gray-400">{t(errorKey(classifyError(error)))}</p>
           <button
             onClick={() => refetch()}
             className="mt-4 text-sm font-bold text-brand-green active:scale-95 transition-transform"

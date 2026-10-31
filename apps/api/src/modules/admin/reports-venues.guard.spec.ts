@@ -31,6 +31,19 @@ describe('AdminReports/Venues — status-predicated decision guards (run #34)', 
         }),
       }),
     });
+    const txSelect = () => ({
+      from: () => ({
+        where: () => ({
+          for: () =>
+            Promise.resolve([
+              {
+                id: 'r1',
+                status: 'resolved',
+              },
+            ]),
+        }),
+      }),
+    });
     const db = {
       update: () => ({
         set: () => ({
@@ -44,7 +57,11 @@ describe('AdminReports/Venues — status-predicated decision guards (run #34)', 
       }),
       transaction: async (fn: (tx: typeof db) => Promise<unknown>) => {
         // Inside the tx, `update` resolves per-test via the flag below.
-        return fn({ ...db, update: (t: unknown) => (t === 'GUARDED' ? txUpdate(true) : txUpdate(false)) } as never);
+        return fn({
+          ...db,
+          select: txSelect,
+          update: (t: unknown) => (t === 'GUARDED' ? txUpdate(true) : txUpdate(false)),
+        } as never);
       },
       _updateCalls: updateCalls,
     };

@@ -2,8 +2,11 @@ import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { UsersScheduler } from './users.scheduler';
+import { BlocksService } from './blocks.service';
+import { BlocksController } from './blocks.controller';
 import { AuthModule } from '../auth/auth.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { MediaModule } from '../media/media.module';
 
 @Module({
   // P0-6 (run #29): AuthModule is imported for JwtService + ConfigService
@@ -15,9 +18,15 @@ import { MailerModule } from '../mailer/mailer.module';
   // `@Cron('0 */5 * * *')` decorator registers the 5h hard-purge tick.
   // NestJS auto-instantiates providers with `providedIn`-style DI, and
   // the ScheduleModule is already global (root app.module.ts).
-  imports: [AuthModule, MailerModule],
-  controllers: [UsersController],
-  providers: [UsersService, UsersScheduler],
-  exports: [UsersService],
+  //
+  // P2-50 (run #181): MediaModule is imported for the avatar upload seam
+  // (MediaModule exports MediaService; StorageModule is @Global beneath it).
+  imports: [AuthModule, MailerModule, MediaModule],
+  //
+  // P1-53: BlocksService is exported so ConversationsModule can refuse DMs
+  // across a block (sendMessage → assertNotBlockedBetween).
+  controllers: [UsersController, BlocksController],
+  providers: [UsersService, UsersScheduler, BlocksService],
+  exports: [UsersService, BlocksService],
 })
 export class UsersModule {}
