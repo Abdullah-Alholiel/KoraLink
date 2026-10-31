@@ -30,10 +30,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request & { id?: string; user?: { sub?: string } }>();
     const response = ctx.getResponse();
 
-    const httpStatus =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    // PR-Agent r2 (run #181): multer's fileSize/files limits abort the
+    // multipart stream BEFORE the route handler — a plain MulterError is not
+    // an HttpException and used to fall through to a 500 + Sentry event for
+    // what is a client mistake. Runtime identity via Error.name (multer's
+    // class sets name='MulterError'); LIMIT_FILE_SIZE → 413 with a friendly
+    // message, any other multer rejection → 400 malformed upload.
+    const isMulter = exception instanceof Error && exception.name === 'MulterError';
+    const multerCode = isMulter ? ((exception as { code?: string }).code ?? '') : null;
+    let httpStatus: number;
+    let multerMessage: string | null = null;
+    if (isMulter) {
+      if (multerCode === 'LIMIT_FILE_SIZE') {
+        httpStatus = HttpStatus.PAYLOAD_TOO_LARGE;
+        multerMessage = 'Avatar exceeds the 2 MB limit.';
+      } else {
+        httpStatus = HttpStatus.BAD_REQUEST;
+        multerMessage = 'Bad multipart upload.';
+      }
+    } else if (exception instanceof HttpException) {
+      httpStatus = exception.getStatus();
+    } else {
+      httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+    }
 
     // Only report server errors (5xx) and unexpected errors to Sentry. Expected
     // 4xx client/business rejections (validation, auth, not-found, forbidden,
@@ -60,7 +79,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const responseBody =
       exception instanceof HttpException
         ? exception.getResponse()
-        : { statusCode: httpStatus, message: 'Internal server error' };
+        : multerMessage
+          ? { statusCode: httpStatus, message: multerMessage }
+          : { statusCode: httpStatus, message: 'Internal server error' };
 
     httpAdapter.reply(response, responseBody, httpStatus);
   }
