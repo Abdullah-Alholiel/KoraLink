@@ -79,6 +79,11 @@ export default function AvatarUpload({
                 showToast(t('avatarTooLarge'), 'error');
             } else if (status === 400 && /JPEG, PNG or WebP/i.test(msg)) {
                 showToast(t('avatarInvalidType'), 'error');
+            } else if (status === 413 || /size limit/i.test(msg)) {
+                // PR-Agent r4 (run #181): multer aborts pre-handler and the global
+                // filter answers 413 "Upload exceeds the size limit." — same
+                // user-facing meaning as the 400 branch: the photo is too big.
+                showToast(t('avatarTooLarge'), 'error');
             } else if (status === 0) {
                 showToast(to('offline'), 'error');
             } else {
