@@ -10,21 +10,11 @@
 
 ## Active owner actions
 
-### 1. Promote PR #178 merge + deploy (owner-only, P0)
-- **What:** Merge staging→main, but **prod Neon is currently an EMPTY database** (0 tables, 0 migrations). Merging without migrating first = total prod outage.
-- **Exact steps:**
-  1. Apply full migration chain to prod Neon:
-     ```bash
-     cd /home/ubuntu/projects/koralink/apps/api
-     export MIGRATE_DATABASE_URL="postgresql://neondb_owner:<pwd>@ep-wispy-shadow-b57jdyv4.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require"
-     node scripts/migrate-vps.mjs
-     ```
-     Verify: `SELECT max(idx) FROM drizzle.__drizzle_migrations` returns **59**.
-  2. In Render dashboard → `koralink-api` → Settings → confirm `DATABASE_URL` points to `ep-wispy-shadow-b57jdyv4` (new prod Neon), NOT the old `ep-snowy-river` demo endpoint.
-  3. Set Render pre-deploy hook: `node scripts/migrate-vps.mjs` (repo-root workdir) — closes P2-51 permanently.
-  4. GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2.
-  5. Post-merge matrix: `/api/v1/health` 200, Vercel prod bundles chunk-grep clean, Sentry release visible.
-- **Deadline:** No hard deadline, but do not merge before step 1.
+### 1. Promote PR #178 merge (owner-only, remaining step)
+- **Status (2026-11-03):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Earlier "empty prod" alarm = probe of the wrong project (PG18 experiment, now renamed locally). NOTHING blocks the merge technically.
+- **Your one click:** GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2. Then `/api/v1/health` 200.
+- **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
+- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment; download a backup (P1-18) or ask the factory to automate daily pg_dump.
 
 ### 2. P2-285 — settlements void/cancel policy
 - **What:** Should duplicate/erroneous settlement rows be voidable? If yes: void-while-pending-only? Audit trail? Never-after-paid?
