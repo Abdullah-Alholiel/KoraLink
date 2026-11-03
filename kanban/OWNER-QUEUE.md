@@ -2,17 +2,29 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main)
-- Commits ahead of main: 368 (last promote 2026-09-25)
-- Pending migrations for next promote: 0055, 0056, 0057, 0058
+- Commits ahead of main: **369** (last promote 2026-09-25)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations)
+- Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
 - Services: API/PWA/Admin UP; Kong DOWN
-- Neon quota storm: RESOLVED (0/48h) — promote #178 no longer quota-blocked.
+- Factory loop status: **RESTORED 2026-11-03** — provider tiers standardized (zai → Claude Opus 5.5 CLI → opencode GO), dead OpenCode key renewed, watchdog now escalates consecutive failed fires. Runs resume at next scheduled slot.
 
 ## Active owner actions
 
-### 1. Promote PR #178 merge + deploy (owner-only)
-- **What:** Merge the staging→main promote PR, then run Neon migrations BEFORE Render deploy.
-- **Click path:** GitHub → KoraLink PR #178 → Squash merge → console.neon.tech → `solitary-thunder-20087776` → run `MIGRATE_DATABASE_URL=<neon-url> node scripts/migrate-vps.mjs` → Render dashboard → manual deploy.
-- **Deadline:** No hard deadline, but the runbook says merge only after Neon migrations.
+### 1. Promote PR #178 merge + deploy (owner-only, P0)
+- **What:** Merge staging→main, but **prod Neon is currently an EMPTY database** (0 tables, 0 migrations). Merging without migrating first = total prod outage.
+- **Exact steps:**
+  1. Apply full migration chain to prod Neon:
+     ```bash
+     cd /home/ubuntu/projects/koralink/apps/api
+     export MIGRATE_DATABASE_URL="postgresql://neondb_owner:<pwd>@ep-wispy-shadow-b57jdyv4.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require"
+     node scripts/migrate-vps.mjs
+     ```
+     Verify: `SELECT max(idx) FROM drizzle.__drizzle_migrations` returns **59**.
+  2. In Render dashboard → `koralink-api` → Settings → confirm `DATABASE_URL` points to `ep-wispy-shadow-b57jdyv4` (new prod Neon), NOT the old `ep-snowy-river` demo endpoint.
+  3. Set Render pre-deploy hook: `node scripts/migrate-vps.mjs` (repo-root workdir) — closes P2-51 permanently.
+  4. GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2.
+  5. Post-merge matrix: `/api/v1/health` 200, Vercel prod bundles chunk-grep clean, Sentry release visible.
+- **Deadline:** No hard deadline, but do not merge before step 1.
 
 ### 2. P2-285 — settlements void/cancel policy
 - **What:** Should duplicate/erroneous settlement rows be voidable? If yes: void-while-pending-only? Audit trail? Never-after-paid?
@@ -55,4 +67,4 @@
 - **Deadline:** Before building any recurring-match editing/cancellation logic.
 
 ## Closed since last run
-- **P1-52 (Neon quota):** RESOLVED run #183 — 0 events/48h, promote #178 unblocked.
+- **P1-52 (Neon quota):** RESOLVED 2026-11-03 — direct prod Neon connect OK, no quota error.
