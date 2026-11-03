@@ -1,0 +1,1378 @@
+{
+  "questions": [
+    {
+      "id": "nw-flow-fault-path",
+      "sec": "Automation",
+      "topic": "Flow: fault paths keep the save",
+      "stem": "Cloud Kicks has an after-save [[t|record-triggered flow]] on Opportunity that creates a follow-up Task. Sometimes the Create Records element fails. [[n|The admin wants every failure written to a custom Error Log record]], and [[c|the rep's Opportunity save must still go through when the Task fails]]. [[a|What should the admin add to the flow?]]",
+      "h": [
+        "You are picking one change to the flow's design.",
+        "Errors must be caught and recorded, not just shown.",
+        "Anything that blocks or undoes the save is out.",
+        "Think about the connector that only fires when an element errors."
+      ],
+      "opts": [
+        {
+          "text": "A Custom Error element on the main path after Create Records",
+          "why": "Wrong. Custom Error rolls back the transaction and blocks the Opportunity save, which breaks the constraint."
+        },
+        {
+          "text": "A fault connector from Create Records to a Create Records element that writes the Error Log",
+          "why": "Right. A fault path runs only when the element fails, and when a fault path handles the error the triggering record still saves."
+        },
+        {
+          "text": "A Roll Back Records element after Create Records",
+          "why": "Wrong. Roll Back Records is for screen flows and undoes pending changes. It does not log anything."
+        },
+        {
+          "text": "A Decision element after Create Records that checks whether the Task exists",
+          "why": "Wrong. With no fault path, the failed element stops the interview, so the Decision never runs and the save is blocked."
+        }
+      ],
+      "ans": [
+        1
+      ],
+      "rule": "A fault connector sends the flow down a separate path when an element fails. In a record-triggered flow, if a fault path handles the error the triggering change still saves; with no fault path the change is blocked and the user sees an error.",
+      "hook": "A fault path is a safety net under a trapeze: the act (the save) goes on even if one catch is missed. The trap is the Custom Error element, which is a stop sign, not a net.",
+      "nos": [
+        "Custom Error element: actually for: blocking the triggering save in a record-triggered flow with your own message",
+        "Roll Back Records element: actually for: undoing pending record changes in a screen flow",
+        "Decision element: actually for: branching on conditions while the flow is still running normally"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "Northern Trail Outfitters has a [[t|record-triggered flow]] on Case with an Update Records element. [[c|The element has no fault connector]]. [[n|A support rep edits a Case and the Update Records element fails.]] [[a|What happens?]]",
+          "h": [
+            "Predict the outcome for the rep.",
+            "Think about the rep's edit, not the flow's later steps.",
+            "There is nothing in the flow to catch the error.",
+            "Recall what happens to the triggering change without error handling."
+          ],
+          "opts": [
+            {
+              "text": "The Case saves and only the failed update is skipped",
+              "why": "Wrong. Skipping and saving only happens when a fault path handles the error."
+            },
+            {
+              "text": "The rep sees an error and the Case change is not saved",
+              "why": "Right. With no fault path, Salesforce shows an error and blocks the change that triggered the flow."
+            },
+            {
+              "text": "The flow skips the failed element and runs the rest of its elements",
+              "why": "Wrong. An unhandled error stops the interview."
+            },
+            {
+              "text": "The Case saves and the update is queued to run on the next edit",
+              "why": "Wrong. Flows do not queue a failed element for the next edit."
+            }
+          ],
+          "ans": [
+            1
+          ]
+        }
+      ],
+      "source": "https://trailhead.salesforce.com/content/learn/modules/flow-implementation-2/roll-back-changes-after-an-error"
+    },
+    {
+      "id": "nw-flow-custom-error",
+      "sec": "Automation",
+      "topic": "Flow: Custom Error element blocks a save",
+      "stem": "Universal Containers tracks Site Inspections in a custom object related to Opportunity by a [[c|lookup relationship]]. [[n|Reps must not be able to mark an Opportunity Closed Won unless at least one related Site Inspection has Status = Passed, and they must see a clear message]]. [[c|No code is allowed.]] [[a|Which solution meets the requirement?]] [[t|Flow error handling]]",
+      "h": [
+        "Pick the one design that works end to end.",
+        "The save has to be stopped, with a message, based on child records.",
+        "A lookup means no roll-up summary fields, and code is ruled out.",
+        "Think about a flow element that shows your own error and rolls back."
+      ],
+      "opts": [
+        {
+          "text": "A validation rule on Opportunity that checks the Site Inspection Status",
+          "why": "Wrong. A validation rule can reference parent records but cannot look at child records."
+        },
+        {
+          "text": "A roll-up summary field that counts passed inspections, plus a validation rule",
+          "why": "Wrong. Roll-up summary fields need a master-detail relationship, and this is a lookup."
+        },
+        {
+          "text": "A record-triggered flow that uses Get Records to find passed inspections and a Custom Error element when none exist",
+          "why": "Right. Get Records can check the child records, and the Custom Error element shows the message and rolls back the save."
+        },
+        {
+          "text": "A record-triggered flow with a Roll Back Records element when no passed inspection exists",
+          "why": "Wrong. Roll Back Records works in screen flows, not record-triggered flows, and it does not show a custom message."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "In a record-triggered flow, the Custom Error element shows a message you write (as a page banner or on a field) and rolls back the transaction, so the triggering save is blocked. It works on a normal path, not only on a fault path.",
+      "hook": "Custom Error is a validation rule that can look downstairs at child records. The trap is Roll Back Records, which is the screen flow's undo button, not a record-page stop sign.",
+      "nos": [
+        "Validation rule: actually for: blocking a save based on the record's own fields and its parents' fields",
+        "Roll-up summary field: actually for: counting or summing detail records on the master of a master-detail relationship",
+        "Roll Back Records element: actually for: undoing pending changes in a screen flow"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "An admin at Cloud Kicks is [[n|planning to block bad Account edits]] with the [[t|Custom Error element]] in Flow Builder. [[c|Only one of these statements is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true. Find the odd one out.",
+            "The goal is to stop a save with a message.",
+            "Think about which paths of a record-triggered flow the element can run on.",
+            "Recall where the element is allowed to run and what it does to the transaction."
+          ],
+          "opts": [
+            {
+              "text": "It can show the message as a banner on the record page or next to a specific field",
+              "why": "True. Both display options are supported."
+            },
+            {
+              "text": "It rolls back the current transaction, so the triggering change is not saved",
+              "why": "True. That is its purpose."
+            },
+            {
+              "text": "It can run on an asynchronous path or a scheduled path",
+              "why": "False. Custom error messages work only in the before-save or after-save path, not asynchronously."
+            },
+            {
+              "text": "It can sit on a normal flow path, not only on a fault path",
+              "why": "True. It does not need a fault path."
+            }
+          ],
+          "ans": [
+            2
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=sf.flow_ref_elements_custom_error.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-approval-record-lock",
+      "sec": "Automation",
+      "topic": "Approvals: record locking defaults",
+      "stem": "Universal Containers uses a classic [[t|approval process]] for discounts on Opportunity. [[n|While a request is pending, reps must not be able to change the discount. If the request is rejected, the rep must be able to edit the record and submit again]]. [[c|The admin wants to rely on the approval process itself, without extra rules.]] [[a|How should record locking be set?]]",
+      "h": [
+        "You are choosing lock settings for the stages of the approval.",
+        "One stage needs a lock, another needs the lock released.",
+        "Field and sharing settings are not part of the approval process.",
+        "Recall which approval stages lock or unlock a record by default."
+      ],
+      "opts": [
+        {
+          "text": "Unlock on initial submission and lock on final rejection",
+          "why": "Wrong. That is the reverse of what is needed: reps could edit during review and be stuck after rejection."
+        },
+        {
+          "text": "Make the Discount field read-only through field-level security",
+          "why": "Wrong. Field-level security is not tied to approval status, so reps could never edit the field."
+        },
+        {
+          "text": "Lock the record on recall so the rep cannot change a recalled request",
+          "why": "Wrong. Recall unlocks by default, and recall is not the rejection case in the need."
+        },
+        {
+          "text": "Keep the defaults: lock on initial submission and unlock on final rejection",
+          "why": "Right. Initial submission locks the record by default and final rejection unlocks it by default."
+        }
+      ],
+      "ans": [
+        3
+      ],
+      "rule": "In a classic approval process, initial submission locks the record by default, final rejection and recall unlock it by default, and final approval keeps it locked unless you change it. A locked record can only be edited by admins, users with Modify All, or approvers given edit rights.",
+      "hook": "Submitting puts the record in a glass display case. Rejection or recall opens the case; approval leaves it shut. The trap: people think approval unlocks by default.",
+      "nos": [
+        "Field-level security: actually for: hiding a field or making it read-only for a profile or permission set at all times",
+        "Recall action: actually for: steps that run when the submitter pulls back a pending request",
+        "Final rejection lock setting: actually for: deciding whether a rejected record stays editable"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "At Northern Trail Outfitters, a rep submits an expense record to a classic [[t|approval process]] that uses [[c|all default record lock settings]]. [[n|The rep then realizes the amount is wrong and recalls the request.]] [[a|What happens to the record?]]",
+          "h": [
+            "Predict the record's state after the recall.",
+            "The rep wants to fix the amount.",
+            "Nothing was changed from the defaults.",
+            "Recall what each approval stage does to the lock by default."
+          ],
+          "opts": [
+            {
+              "text": "It stays locked until an admin unlocks it",
+              "why": "Wrong. Recall unlocks by default."
+            },
+            {
+              "text": "It is unlocked, so the rep can edit it and resubmit",
+              "why": "Right. Recall actions unlock the record by default."
+            },
+            {
+              "text": "It is approved automatically because no approver acted",
+              "why": "Wrong. A recall ends the request; it does not approve it."
+            },
+            {
+              "text": "It moves to the next approval step",
+              "why": "Wrong. A recall removes the request from the process."
+            }
+          ],
+          "ans": [
+            1
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sf.approvals_terminology.htm&type=5"
+    },
+    {
+      "id": "nw-restriction-rules",
+      "sec": "Security",
+      "topic": "Sharing: restriction rules narrow access",
+      "stem": "Cloud Kicks sets the Contract org-wide default to Public Read Only because [[c|internal staff need to see all contracts]]. [[n|Contractors must see only contracts where Region matches the Region on their user record]]. [[a|What should the admin configure?]] [[t|record access]]",
+      "h": [
+        "You need one feature that changes what records a group can see.",
+        "Contractors should see fewer records than everyone else.",
+        "The org-wide default cannot be tightened for everyone.",
+        "Most sharing tools only add access. Think of the one that takes it away."
+      ],
+      "opts": [
+        {
+          "text": "A criteria-based sharing rule for contractors",
+          "why": "Wrong. Sharing rules only add access on top of the org-wide default. They can never narrow it."
+        },
+        {
+          "text": "A restriction rule on Contract that filters by the user's Region",
+          "why": "Right. Restriction rules narrow the records a user can already see, and Contract is a supported object."
+        },
+        {
+          "text": "A permission set that removes Read on Contract for contractors",
+          "why": "Wrong. Removing object Read hides every contract, not just other regions."
+        },
+        {
+          "text": "Placing contractors lower in the role hierarchy",
+          "why": "Wrong. The role hierarchy only opens access upward. It cannot take away Public Read Only access."
+        }
+      ],
+      "ans": [
+        1
+      ],
+      "rule": "Restriction rules filter which records a user can see, even when sharing would give them more. Sharing rules and the role hierarchy only add access, so they can never be stricter than the org-wide default.",
+      "hook": "Sharing rules open doors; a restriction rule is a pair of blinkers on a horse. The trap is reaching for a sharing rule, which can only widen the view.",
+      "nos": [
+        "Criteria-based sharing rule: actually for: giving extra access to records that match field criteria",
+        "Object permission in a permission set: actually for: turning access to a whole object on or off",
+        "Role hierarchy: actually for: letting managers see and edit what their subordinates own"
+      ],
+      "vars": [
+        {
+          "goal": "Which situation fits",
+          "stem": "A Universal Containers admin is [[n|reviewing access requests]] and wants to use a [[t|restriction rule]] [[c|only where no other tool can do the job]]. [[a|Which request is the best fit for a restriction rule?]]",
+          "h": [
+            "Pick the one request this feature is built for.",
+            "Each request is about who sees what.",
+            "Other tools already cover adding access and hiding fields.",
+            "Look for the request that removes record access from people who already have it."
+          ],
+          "opts": [
+            {
+              "text": "Let sales managers see opportunities owned by their reps",
+              "why": "Wrong. The role hierarchy does that."
+            },
+            {
+              "text": "Hide the Salary field from interns",
+              "why": "Wrong. Field-level security hides fields."
+            },
+            {
+              "text": "Give a partner team read access to all accounts in their territory",
+              "why": "Wrong. That adds access, which is a sharing rule's job."
+            },
+            {
+              "text": "Show users only the Events whose Department matches theirs, even though Events are visible more widely",
+              "why": "Right. Narrowing visible records by criteria is what restriction rules do, and Events are supported."
+            }
+          ],
+          "ans": [
+            3
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=platform.security_restriction_rule.htm&type=5"
+    },
+    {
+      "id": "nw-muting-permset",
+      "sec": "Security",
+      "topic": "Permission set groups: muting permissions",
+      "stem": "Northern Trail Outfitters gives its sales team the [[t|permission set group]] Sales Ops, which includes Delete on Opportunity. Interns get no Opportunity delete from their profile. [[n|Interns need everything in Sales Ops except Delete on Opportunity, and current members must keep Delete]]. [[c|The permission sets inside the group must not be edited.]] [[a|What should the admin do?]]",
+      "h": [
+        "Choose the setup that gives two groups of users different results.",
+        "Interns lose one permission; everyone else keeps it.",
+        "You cannot touch the included permission sets.",
+        "Think about the special permission set that turns permissions off inside a group."
+      ],
+      "opts": [
+        {
+          "text": "Add a muting permission set that mutes Opportunity Delete to the existing Sales Ops group",
+          "why": "Wrong. Muting applies to every member of that group, so current members would lose Delete too."
+        },
+        {
+          "text": "Remove Delete on Opportunity from the permission set inside Sales Ops",
+          "why": "Wrong. The constraint forbids editing the included permission sets, and it would affect everyone."
+        },
+        {
+          "text": "Create a new group for interns with the same permission sets plus a muting permission set that mutes Opportunity Delete",
+          "why": "Right. Each group can have one muting permission set, and it only affects members of that group."
+        },
+        {
+          "text": "Assign interns an extra permission set with Opportunity Delete unchecked",
+          "why": "Wrong. Permissions add up. An unchecked box in another permission set never removes access."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "A muting permission set turns off chosen permissions for members of one permission set group only. It does not remove a permission the user gets from their profile, another group, or a directly assigned permission set.",
+      "hook": "Muting is a mute button on one TV, the group, not a power cut to the building. The trap: thinking an unticked box in another permission set takes access away.",
+      "nos": [
+        "Muting the shared group: actually for: removing a permission from every member of that one group",
+        "Editing an included permission set: actually for: changing access for everyone who has that permission set anywhere",
+        "Extra permission set: actually for: adding permissions, since permission sets only grant access"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "At Cloud Kicks, a user is in a [[t|permission set group]] whose muting permission set mutes Edit on Account. [[c|The user's profile also grants Edit on Account.]] [[n|The user opens an Account they own and clicks Edit.]] [[a|What happens?]]",
+          "h": [
+            "Predict whether the edit works.",
+            "The user is trying to change their own record.",
+            "The same permission comes from two places.",
+            "Recall how far a mute reaches."
+          ],
+          "opts": [
+            {
+              "text": "The user can edit the Account, because muting does not block the profile's permission",
+              "why": "Right. Muting only affects permissions granted inside that group."
+            },
+            {
+              "text": "The user cannot edit, because muting overrides every source of the permission",
+              "why": "Wrong. Muting is limited to the group."
+            },
+            {
+              "text": "The profile's Edit permission is turned off for all users with that profile",
+              "why": "Wrong. A muting permission set never changes a profile."
+            },
+            {
+              "text": "Salesforce blocks the group assignment because of the conflict",
+              "why": "Wrong. There is no conflict check; permissions simply add up outside the group."
+            }
+          ],
+          "ans": [
+            0
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=platform.perm_set_groups_create_mute.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-health-check",
+      "sec": "Security",
+      "topic": "Security: Health Check baseline score",
+      "stem": "The security lead at Universal Containers [[n|wants a score showing how the org's password, session and network settings compare to Salesforce's recommended values, with a list of high-risk settings to fix]]. [[c|Later the team wants to measure against its own company standard instead.]] [[a|Which tool should the admin use?]] [[t|security settings]]",
+      "h": [
+        "You are naming a single Setup tool.",
+        "The need is a score against a recommended standard.",
+        "The tool must also accept a custom standard.",
+        "Think about a tool that grades settings, not one that logs events."
+      ],
+      "opts": [
+        {
+          "text": "Setup Audit Trail",
+          "why": "Wrong. It records who changed setup and when. It does not score settings."
+        },
+        {
+          "text": "Login History",
+          "why": "Wrong. It lists login attempts. It does not grade security settings."
+        },
+        {
+          "text": "Field History Tracking",
+          "why": "Wrong. It tracks changes to field values on records."
+        },
+        {
+          "text": "Health Check",
+          "why": "Right. Health Check scores settings against the Salesforce Baseline Standard by default and lets you import custom baselines."
+        }
+      ],
+      "ans": [
+        3
+      ],
+      "rule": "Health Check compares your security settings to the Salesforce Baseline Standard, gives a score, and lists risks by severity. You can fix settings one by one or with Fix Risks, and you can import up to five custom baselines.",
+      "hook": "Health Check is a school report card for your settings; Setup Audit Trail is the CCTV of who changed them. The trap is picking the CCTV when the question asks for a grade.",
+      "nos": [
+        "Setup Audit Trail: actually for: seeing recent setup changes and who made them",
+        "Login History: actually for: reviewing user login attempts, times and sources",
+        "Field History Tracking: actually for: auditing changes to selected fields on records"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Northern Trail Outfitters admin is [[n|briefing the security team]] about [[t|Health Check]]. [[c|Exactly one statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The team wants to know what the tool does and its risks.",
+            "Look for the statement that promises too much.",
+            "Think about what Trailhead says to do before changing many settings at once."
+          ],
+          "opts": [
+            {
+              "text": "By default it measures settings against the Salesforce Baseline Standard",
+              "why": "True."
+            },
+            {
+              "text": "You can import custom baselines to compare against your own standards",
+              "why": "True. Up to five can be imported."
+            },
+            {
+              "text": "Fix Risks can change settings to the selected baseline's recommended values",
+              "why": "True."
+            },
+            {
+              "text": "Fixing risks can never affect integrations, so no sandbox testing is needed",
+              "why": "False. Trailhead warns that bulk changes can affect integrations or user access, so test first."
+            }
+          ],
+          "ans": [
+            3
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=xcloud.security_health_check.htm&type=5"
+    },
+    {
+      "id": "nw-lookup-filter",
+      "sec": "Object Manager",
+      "topic": "Fields: lookup filters limit choices",
+      "stem": "Cloud Kicks adds a Partner Account lookup on Opportunity. [[n|Reps should only be able to choose Accounts where Type = Partner]], and [[c|non-partner accounts must not even appear when reps search in the lookup]]. [[a|What should the admin configure?]] [[t|relationship fields]]",
+      "h": [
+        "Pick the setting that controls which records a lookup offers.",
+        "Only one kind of Account should be selectable.",
+        "Blocking the save afterwards is not enough; the search results must be filtered.",
+        "Think about a setting that lives on the lookup field itself."
+      ],
+      "opts": [
+        {
+          "text": "A validation rule that errors when the Account Type is not Partner",
+          "why": "Wrong. It blocks the save but still shows every Account in the search."
+        },
+        {
+          "text": "A dependent picklist controlled by Account Type",
+          "why": "Wrong. Dependent picklists filter picklist values, not lookup records."
+        },
+        {
+          "text": "A lookup filter on the Partner Account field with Type equals Partner",
+          "why": "Right. Lookup filters limit the records shown and accepted in a lookup."
+        },
+        {
+          "text": "A new Opportunity record type for partner deals",
+          "why": "Wrong. Record types control layouts and picklist values, not which records a lookup offers."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "A lookup filter limits which records users can pick in a lookup, master-detail or hierarchical field. In Lightning Experience all lookup filters act as required, and they are also enforced on API data loads.",
+      "hook": "A lookup filter is a bouncer at the door of the search box; a validation rule is a guard who checks you on the way out. The trap is picking the guard when the question says the wrong records must not even appear.",
+      "nos": [
+        "Validation rule: actually for: blocking a save when field values break a rule",
+        "Dependent picklist: actually for: limiting picklist values based on a controlling field",
+        "Record type: actually for: different page layouts, picklist values and business processes"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Universal Containers admin is [[n|writing notes for the team]] about [[t|lookup filters]] in Lightning Experience. [[c|One statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The notes are about Lightning Experience only.",
+            "One option is a behaviour that only exists in Salesforce Classic.",
+            "Think about the difference between required and optional filters."
+          ],
+          "opts": [
+            {
+              "text": "In Lightning Experience every lookup filter behaves as required",
+              "why": "True."
+            },
+            {
+              "text": "Admins can customize the error message for a required lookup filter",
+              "why": "True."
+            },
+            {
+              "text": "Lookup filters are enforced when data is loaded through the API",
+              "why": "True."
+            },
+            {
+              "text": "Optional lookup filters let users click Show all results and save a non-matching value in Lightning Experience",
+              "why": "False. Optional filters only work that way in Salesforce Classic."
+            }
+          ],
+          "ans": [
+            3
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=platform.fields_lookup_filters.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-dynamic-actions",
+      "sec": "Object Manager",
+      "topic": "Lightning App Builder: Dynamic Actions",
+      "stem": "Northern Trail Outfitters support reps use one Case record page on desktop. [[n|The Escalate quick action should appear in the highlights panel only when Priority = High]]. [[c|The admin must not create new page layouts or record types.]] [[a|What should the admin do?]] [[t|Lightning record pages]]",
+      "h": [
+        "Pick one change made in a builder tool.",
+        "A button must show or hide based on a field value.",
+        "Layout and record type changes are ruled out.",
+        "Think about actions that can carry their own visibility filters."
+      ],
+      "opts": [
+        {
+          "text": "Enable Dynamic Actions on the Highlights Panel and add a filter Priority equals High to the Escalate action",
+          "why": "Right. Dynamic Actions let each action have visibility filters on the Lightning record page."
+        },
+        {
+          "text": "Add Escalate to the Case compact layout",
+          "why": "Wrong. Compact layouts choose the fields in the highlights panel, not when actions show."
+        },
+        {
+          "text": "Use Dynamic Forms and add a visibility rule to the Priority field",
+          "why": "Wrong. Dynamic Forms visibility controls fields, not actions."
+        },
+        {
+          "text": "Create a High Priority record type with its own page layout that includes Escalate",
+          "why": "Wrong. This breaks the constraint against new layouts and record types."
+        }
+      ],
+      "ans": [
+        0
+      ],
+      "rule": "Dynamic Actions move a record page's actions from the page layout into Lightning App Builder, where each action can have visibility filters based on record fields, device and more. Once enabled, users see the actions set on that Lightning page, not the page layout's actions.",
+      "hook": "Dynamic Actions are motion-sensor lights on each button: they switch on only when the right conditions walk by. The trap is Dynamic Forms, which puts sensors on fields, not buttons.",
+      "nos": [
+        "Compact layout: actually for: choosing the key fields shown in the highlights panel and on mobile cards",
+        "Dynamic Forms visibility rule: actually for: showing or hiding individual fields and field sections",
+        "Record type with page layout: actually for: giving different processes their own layouts and picklist values"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "A Cloud Kicks admin has [[t|Dynamic Actions]] enabled on the Account record page's highlights panel. [[n|A sales manager asks for a new Send Survey action, so the admin adds it to the Account page layout's action section.]] [[c|The admin changes nothing in Lightning App Builder.]] [[a|What do desktop users of that record page see?]]",
+          "h": [
+            "Predict what appears on the page.",
+            "The manager expects to see the new button.",
+            "Only the page layout was changed.",
+            "Recall which source of actions a page uses once Dynamic Actions is on."
+          ],
+          "opts": [
+            {
+              "text": "Send Survey appears, because page layout actions are always added",
+              "why": "Wrong. The page layout's actions are no longer used on that page."
+            },
+            {
+              "text": "Send Survey does not appear, because the page uses the actions set in Lightning App Builder",
+              "why": "Right. With Dynamic Actions, users see the actions configured on the Lightning page, not the page layout's."
+            },
+            {
+              "text": "Send Survey appears only for users with the System Administrator profile",
+              "why": "Wrong. Nothing in the setup ties it to a profile."
+            },
+            {
+              "text": "The highlights panel goes back to showing all page layout actions",
+              "why": "Wrong. Editing the page layout does not turn Dynamic Actions off."
+            }
+          ],
+          "ans": [
+            1
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=sf.lightning_app_builder_create_dynamic_action.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-schema-builder",
+      "sec": "Object Manager",
+      "topic": "Schema Builder: visual data model",
+      "stem": "A new admin at Universal Containers [[n|wants to see objects and their relationships as a diagram and create a custom object with a master-detail field by dragging and dropping]]. [[c|The tool must show relationship lines between objects.]] [[a|Which tool should the admin use?]] [[t|data modeling]]",
+      "h": [
+        "You are naming one Setup tool.",
+        "The admin wants to see and build the data model visually.",
+        "A list of objects or fields is not enough; lines must connect objects.",
+        "Think about a canvas, not a list."
+      ],
+      "opts": [
+        {
+          "text": "Lightning App Builder",
+          "why": "Wrong. It builds Lightning pages, not objects and relationships."
+        },
+        {
+          "text": "Object Manager",
+          "why": "Wrong. It can create objects and fields, but it shows them as lists, not a relationship diagram."
+        },
+        {
+          "text": "Schema Builder",
+          "why": "Right. Schema Builder shows objects and relationships on a canvas and lets you add objects, relationships and most field types by drag and drop."
+        },
+        {
+          "text": "Report Type setup",
+          "why": "Wrong. Custom report types define which related records a report can use. They do not create objects."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "Schema Builder is a drag-and-drop canvas for viewing and creating objects, lookup and master-detail relationships, and most custom field types. It does not add new fields to page layouts and cannot export the schema.",
+      "hook": "Schema Builder is the architect's blueprint table; Object Manager is the filing cabinet. The trap: a field built on the blueprint still has to be hung on the wall, the page layout, by hand.",
+      "nos": [
+        "Lightning App Builder: actually for: building Lightning record, home and app pages",
+        "Object Manager: actually for: managing an object's fields, layouts, record types and settings in list form",
+        "Custom report type: actually for: defining which objects and fields a report can use"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "A Northern Trail Outfitters admin [[t|creates a new custom field in Schema Builder]]. [[n|Users need to start filling in the field on the record page.]] [[c|The admin has not opened the Page Layout Editor.]] [[a|What happens to the page layouts?]]",
+          "h": [
+            "Predict where the new field appears.",
+            "Users need to see the field to fill it in.",
+            "No layout was edited.",
+            "Recall a known gap between the field wizard and the canvas tool."
+          ],
+          "opts": [
+            {
+              "text": "The field is added to every page layout automatically",
+              "why": "Wrong. Schema Builder does not place fields on layouts."
+            },
+            {
+              "text": "The field is added only to the default page layout",
+              "why": "Wrong. It is not added to any layout."
+            },
+            {
+              "text": "The field is not on any layout until the admin adds it in the Page Layout Editor",
+              "why": "Right. Fields made in Schema Builder must be added to layouts by hand."
+            },
+            {
+              "text": "Schema Builder asks which page layouts to add the field to",
+              "why": "Wrong. That step belongs to the field wizard in Object Manager."
+            }
+          ],
+          "ans": [
+            2
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=sf.schema_builder_considerations.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-object-vs-global-action",
+      "sec": "Productivity",
+      "topic": "Quick actions: object-specific vs global",
+      "stem": "Cloud Kicks reps want a button on the Account record page that opens a short form to create a Contact. [[n|The new Contact must be linked to that Account automatically]], and [[c|reps must not have to search for the Account in the form]]. [[a|Which type of action should the admin create?]] [[t|quick actions]]",
+      "h": [
+        "Pick one kind of action.",
+        "The new record must be tied to the record the rep is on.",
+        "Typing in the parent record defeats the purpose.",
+        "Think about which actions know what record they were launched from."
+      ],
+      "opts": [
+        {
+          "text": "A global Create a Record action for Contact",
+          "why": "Wrong. A global create action makes a record with no automatic link to the record the user is viewing."
+        },
+        {
+          "text": "An object-specific Create a Record action on Account with Contact as the target",
+          "why": "Right. Object-specific actions create records that are automatically related to the record."
+        },
+        {
+          "text": "An object-specific Update a Record action on Account",
+          "why": "Wrong. Update actions edit the current record. They do not create a Contact."
+        },
+        {
+          "text": "A Log a Call action on Account",
+          "why": "Wrong. Log a Call creates a completed Task, not a Contact."
+        }
+      ],
+      "ans": [
+        1
+      ],
+      "rule": "Object-specific actions live on an object's page layout and can create related records or update the current record. Global actions live on the global publisher layout, can be used almost anywhere, and create records with no automatic relationship.",
+      "hook": "An object-specific action is a sticky note stuck to this record; a global action is a blank notepad you can grab anywhere. The trap: global actions feel more powerful but never link or update.",
+      "nos": [
+        "Global create action: actually for: creating stand-alone records from anywhere, such as the global actions menu",
+        "Update a Record action: actually for: editing chosen fields on the record the user is viewing",
+        "Log a Call action: actually for: recording a completed call as a Task"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Universal Containers admin is [[n|training new admins]] on [[t|quick actions]]. [[c|Only one statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The training compares two kinds of actions.",
+            "One statement gives a global action a power it does not have.",
+            "Think about which action type can change an existing record."
+          ],
+          "opts": [
+            {
+              "text": "Global actions are placed on the global publisher layout",
+              "why": "True."
+            },
+            {
+              "text": "Object-specific actions can update the record the user is viewing",
+              "why": "True."
+            },
+            {
+              "text": "A create action for the detail object of a master-detail relationship must be object-specific",
+              "why": "True."
+            },
+            {
+              "text": "A global action can update the record the user is viewing",
+              "why": "False. Only object-specific actions can update existing records."
+            }
+          ],
+          "ans": [
+            3
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=actions_overview_global.htm&language=en_US"
+    },
+    {
+      "id": "nw-prompt-field-generation",
+      "sec": "Agentforce",
+      "topic": "Prompt Builder: Field Generation template",
+      "stem": "Universal Containers wants AI help on the Case record page. [[n|A rep clicks a button on a custom AI Summary field, AI writes a summary from the Case data into that field, and the rep reviews it before saving]]. [[c|No code is allowed.]] [[a|What should the admin build?]] [[t|Prompt Builder]]",
+      "h": [
+        "Pick one thing to build.",
+        "The output must land inside a field on the record.",
+        "Code-based options are out.",
+        "Think about the prompt template type tied to a single field."
+      ],
+      "opts": [
+        {
+          "text": "A Sales Email prompt template",
+          "why": "Wrong. Sales Email templates draft personalized emails, not field values."
+        },
+        {
+          "text": "A new agent topic with instructions in Agentforce Builder",
+          "why": "Wrong. Topics group an agent's actions and instructions for conversations. They do not fill a field from a button."
+        },
+        {
+          "text": "A Field Generation prompt template linked to the AI Summary field",
+          "why": "Right. Field Generation templates let a user fill a field with AI output from a button and review it."
+        },
+        {
+          "text": "A formula field that combines the Case fields",
+          "why": "Wrong. A formula can join text but cannot write a generated summary."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "Prompt Builder has template types for set jobs. Field Generation fills a chosen field when a user clicks its button, Sales Email drafts emails from record data, and Flex covers other cases with inputs you define.",
+      "hook": "A Field Generation template is a ghostwriter who writes straight into one box on the form. The trap is Sales Email, the ghostwriter for letters, not fields.",
+      "nos": [
+        "Sales Email template: actually for: drafting personalized customer emails from record data",
+        "Agent topic: actually for: telling an agent what jobs it handles and which actions to use",
+        "Formula field: actually for: calculating a value from other fields with fixed logic"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Cloud Kicks admin is [[n|choosing between prompt template types]] in [[t|Prompt Builder]]. [[c|One statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The admin wants to match each type to its job.",
+            "One statement ignores a limit of one template type.",
+            "Think about which kinds of fields AI is allowed to write into."
+          ],
+          "opts": [
+            {
+              "text": "A Field Generation template is started by a button and puts its output in the field",
+              "why": "True."
+            },
+            {
+              "text": "A Sales Email template drafts a personalized email using record data",
+              "why": "True."
+            },
+            {
+              "text": "A Field Generation template can write into a read-only field",
+              "why": "False. Field Generation prompts are not compatible with read-only fields."
+            },
+            {
+              "text": "A Flex template has inputs that the admin defines instead of fixed ones",
+              "why": "True. Flex inputs are not predefined."
+            }
+          ],
+          "ans": [
+            2
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=ai.prompt_builder_standard_template_types.htm&language=en_US&type=5"
+    },
+    {
+      "id": "nw-agent-user-access",
+      "sec": "Agentforce",
+      "topic": "Agentforce: service agent user permissions",
+      "stem": "Northern Trail Outfitters launches an [[t|Agentforce Service Agent]] on its website. [[n|Customers ask for order status, but the agent says it cannot find the order]]. [[c|The order flow works when the System Administrator runs it.]] [[a|What should the admin check first?]]",
+      "h": [
+        "You are choosing where to troubleshoot first.",
+        "The agent cannot reach the data it needs.",
+        "The admin's own access is fine, so look somewhere else.",
+        "Think about whose permissions the agent uses when it runs."
+      ],
+      "opts": [
+        {
+          "text": "Add more instructions to the topic telling the agent it may read orders",
+          "why": "Wrong. Instructions guide behaviour but never grant data access."
+        },
+        {
+          "text": "Give the System Administrator profile more object permissions",
+          "why": "Wrong. The service agent does not run as the admin."
+        },
+        {
+          "text": "Turn off data masking in the Einstein Trust Layer",
+          "why": "Wrong. Masking hides sensitive values in prompts. It does not grant record access."
+        },
+        {
+          "text": "Check that the agent user's permission sets give access to the Order object and the flow",
+          "why": "Right. Service agents run as a dedicated agent user that starts with minimal access, so it needs explicit permissions."
+        }
+      ],
+      "ans": [
+        3
+      ],
+      "rule": "An Agentforce Service Agent runs as its own agent user, which starts with minimal access. If the agent cannot reach records or run an action, check that user's permission sets, not the admin's.",
+      "hook": "The service agent is a temp worker with their own badge; your admin badge does not open doors for them. The trap is testing as admin and assuming the agent has the same keys.",
+      "nos": [
+        "Topic instructions: actually for: guiding how and when the agent uses its actions",
+        "System Administrator permissions: actually for: the admin's own access, which the service agent does not use",
+        "Einstein Trust Layer masking: actually for: hiding sensitive data before it reaches the model"
+      ],
+      "vars": [
+        {
+          "goal": "Which situation fits",
+          "stem": "A Universal Containers admin is [[n|explaining to sales reps]] how an [[t|Agentforce employee agent]] in Lightning Experience gets its access. [[c|The reps each have different permission sets.]] [[a|Which statement fits an employee agent?]]",
+          "h": [
+            "Pick the statement that matches this agent type.",
+            "Reps want to know what the agent can see for them.",
+            "Different reps have different access.",
+            "Compare this agent type with the one that faces customers."
+          ],
+          "opts": [
+            {
+              "text": "It runs in the context of the logged-in user, so each rep's own permissions apply",
+              "why": "Right. Employee agents work with the running user's access."
+            },
+            {
+              "text": "It runs as one dedicated agent user for every rep",
+              "why": "Wrong. That describes a service agent."
+            },
+            {
+              "text": "It runs as the System Administrator, so every rep sees all records",
+              "why": "Wrong. Agents do not borrow admin access."
+            },
+            {
+              "text": "It ignores sharing rules so it can answer any question",
+              "why": "Wrong. Agent access still follows Salesforce security."
+            }
+          ],
+          "ans": [
+            0
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=ai.service_agent_setup.htm&type=5"
+    },
+    {
+      "id": "nw-duplicate-vs-matching",
+      "sec": "Data & Analytics",
+      "topic": "Duplicate management: matching vs duplicate rules",
+      "stem": "A Cloud Kicks admin built and activated a custom [[t|matching rule]] that compares Lead email addresses. [[n|Reps should be stopped when they create a Lead with an email that already exists]]. [[c|Reps still save duplicates with no warning at all.]] [[a|What is missing?]]",
+      "h": [
+        "Find the missing piece of setup.",
+        "Reps must be stopped, not just tracked.",
+        "Finding duplicates is already set up, yet nothing happens.",
+        "Think about which rule decides what happens after a match."
+      ],
+      "opts": [
+        {
+          "text": "A second matching rule on Lead email",
+          "why": "Wrong. Matching rules only find duplicates. They never take action."
+        },
+        {
+          "text": "An active duplicate rule on Lead that uses the matching rule with the Block action",
+          "why": "Right. The duplicate rule decides whether to block or alert when the matching rule finds a match."
+        },
+        {
+          "text": "A validation rule using the ISCHANGED function on Email",
+          "why": "Wrong. ISCHANGED only checks whether this record's field changed. It cannot compare with other records."
+        },
+        {
+          "text": "Field history tracking on the Email field",
+          "why": "Wrong. It records changes after they happen. It does not stop duplicates."
+        }
+      ],
+      "ans": [
+        1
+      ],
+      "rule": "A matching rule defines how duplicates are identified; a duplicate rule defines what happens (block, or alert and report). A duplicate rule needs active matching rules, and can use up to three of them.",
+      "hook": "The matching rule is the sniffer dog; the duplicate rule is the guard who decides to stop you or wave you through. The trap: a dog with no guard just sniffs.",
+      "nos": [
+        "Second matching rule: actually for: adding another way to identify potential duplicates",
+        "Validation rule: actually for: checking the values on the record being saved",
+        "Field history tracking: actually for: auditing past changes to field values"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Universal Containers admin is [[n|planning duplicate management for Accounts]]. [[t|Matching rules and duplicate rules]] work as a pair. [[c|One statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The admin wants each rule's job straight.",
+            "One statement gives one rule the other rule's job.",
+            "Think about which rule has the Block and Alert options."
+          ],
+          "opts": [
+            {
+              "text": "A matching rule defines how potential duplicates are identified",
+              "why": "True."
+            },
+            {
+              "text": "A duplicate rule can block a save or alert the user",
+              "why": "True."
+            },
+            {
+              "text": "A duplicate rule can include up to three matching rules",
+              "why": "True."
+            },
+            {
+              "text": "A matching rule can block a save on its own, without a duplicate rule",
+              "why": "False. Only a duplicate rule takes action."
+            }
+          ],
+          "ans": [
+            3
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sales.duplicate_rules_overview.htm&type=5"
+    },
+    {
+      "id": "nw-row-level-formula",
+      "sec": "Data & Analytics",
+      "topic": "Reports: row-level vs summary formulas",
+      "stem": "The sales manager at Northern Trail Outfitters [[n|wants a column in an Opportunity report showing the number of days between Created Date and Close Date for each opportunity]]. [[c|The admin must not create a new field in Object Manager.]] [[a|What should the admin add to the report?]] [[t|report formulas]]",
+      "h": [
+        "Pick one thing to add in the report builder.",
+        "The value must be worked out for every single row.",
+        "A new custom field is ruled out.",
+        "Think about the two report formula types and what level each works at."
+      ],
+      "opts": [
+        {
+          "text": "A row-level formula that subtracts Created Date from Close Date",
+          "why": "Right. Row-level formulas calculate a value for each record in the report."
+        },
+        {
+          "text": "A summary formula",
+          "why": "Wrong. Summary formulas work on group subtotals and grand totals, not each record."
+        },
+        {
+          "text": "A custom formula field on Opportunity",
+          "why": "Wrong. It would work, but the constraint rules out new fields."
+        },
+        {
+          "text": "A cross filter",
+          "why": "Wrong. Cross filters include or exclude records based on related records. They do not calculate."
+        }
+      ],
+      "ans": [
+        0
+      ],
+      "rule": "Row-level formulas calculate a value on each record inside one report; summary formulas calculate on subtotals and grand totals. Neither can reference the other, and row-level formulas are not available in Salesforce Classic.",
+      "hook": "Row-level is a calculator on every line of the receipt; summary is the calculator at the bottom. The trap is picking summary because the word sounds like analysis.",
+      "nos": [
+        "Summary formula: actually for: calculations on grouped totals, such as a share of a group",
+        "Custom formula field: actually for: a calculated value stored with the object and usable everywhere",
+        "Cross filter: actually for: showing records with or without certain related records"
+      ],
+      "vars": [
+        {
+          "goal": "Spot the false statement",
+          "stem": "A Cloud Kicks admin is [[n|teaching analysts about report formulas]] in Lightning Experience. [[t|Row-level and summary formulas]] behave differently. [[c|One statement is false.]] [[a|Which statement is false?]]",
+          "h": [
+            "Three statements are true.",
+            "The analysts need to know when to use each type.",
+            "One statement lets the two types work together in a way they cannot.",
+            "Think about whether one formula type can use the other's result."
+          ],
+          "opts": [
+            {
+              "text": "A row-level formula calculates a value for each record",
+              "why": "True."
+            },
+            {
+              "text": "A summary formula calculates on subtotals and grand totals",
+              "why": "True."
+            },
+            {
+              "text": "A summary formula can reference a row-level formula",
+              "why": "False. Neither type can reference the other."
+            },
+            {
+              "text": "Row-level formulas are not available in Salesforce Classic",
+              "why": "True."
+            }
+          ],
+          "ans": [
+            2
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=analytics.reports_formulas_row_level_limits.htm&type=5"
+    },
+    {
+      "id": "nw-case-escalation-rules",
+      "sec": "Sales & Service",
+      "topic": "Service: escalation rules by case age",
+      "stem": "Universal Containers support has business hours of 8 AM to 6 PM. [[n|If a High priority case is still open after 4 business hours, it must move to the Tier 2 queue and the current owner must get an email]]. [[c|The admin wants a standard Service setup feature, not a flow.]] [[a|What should the admin configure?]] [[t|case management]]",
+      "h": [
+        "Pick one Service setup feature.",
+        "The trigger is time passing while the case stays open.",
+        "Flows are ruled out.",
+        "Think about the rule that has Age Over settings."
+      ],
+      "opts": [
+        {
+          "text": "A case assignment rule with an entry for High priority",
+          "why": "Wrong. Assignment rules route cases when they are created or edited, not after time passes."
+        },
+        {
+          "text": "An auto-response rule that emails the owner",
+          "why": "Wrong. Auto-response rules send a reply to the customer who submitted the case."
+        },
+        {
+          "text": "An escalation rule with an entry for High priority and an action at Age Over 4 hours that reassigns to Tier 2 and notifies the owner",
+          "why": "Right. Escalation actions run after a set age, respect business hours, and can reassign and notify."
+        },
+        {
+          "text": "A macro that support reps run on old cases",
+          "why": "Wrong. Macros run only when a rep starts them, so nothing happens automatically."
+        }
+      ],
+      "ans": [
+        2
+      ],
+      "rule": "Escalation rules reassign and notify when a case stays open past an Age Over time, using the business hours on the rule entry. Each rule entry can have up to five escalation actions, and only one escalation rule can be active at a time.",
+      "hook": "An escalation rule is an egg timer on each case: when it rings, the case gets passed up. The trap is the assignment rule, which only sorts cases at the door.",
+      "nos": [
+        "Case assignment rule: actually for: setting the owner when a case is created or edited",
+        "Auto-response rule: actually for: sending an automatic reply to the customer",
+        "Macro: actually for: letting a rep run several repeated steps with one click"
+      ],
+      "vars": [
+        {
+          "goal": "What happens",
+          "stem": "Cloud Kicks has an active [[t|escalation rule]] for Cases. [[n|The admin builds a second escalation rule for a new support team]] and [[c|clicks Active on the new rule]]. [[a|What happens to the first rule?]]",
+          "h": [
+            "Predict the state of the older rule.",
+            "The admin wants the new team covered.",
+            "Activation of the new rule is the trigger.",
+            "Recall how many escalation rules can be active together."
+          ],
+          "opts": [
+            {
+              "text": "Both rules stay active and run in order",
+              "why": "Wrong. Only one escalation rule can be active at a time."
+            },
+            {
+              "text": "The first rule is deactivated",
+              "why": "Right. Activating a rule deactivates the one that was active."
+            },
+            {
+              "text": "Salesforce blocks the activation until the first rule is deleted",
+              "why": "Wrong. You do not need to delete it."
+            },
+            {
+              "text": "The two rules merge into one rule",
+              "why": "Wrong. Rules never merge; add entries to one rule instead."
+            }
+          ],
+          "ans": [
+            1
+          ]
+        }
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=sf.rules_escalation_create.htm&language=en_US&type=5"
+    }
+  ],
+  "terms": [
+    {
+      "term": "Queue",
+      "does": "Holds records (such as cases or leads) that a group of users can pick up and own; a queue can be the record owner.",
+      "not": "Public group: a set of users, roles or groups used to share records, folders and more. A public group cannot own records."
+    },
+    {
+      "term": "Manual sharing",
+      "does": "Lets a record owner, someone above them in the role hierarchy, or an admin share one record with chosen users or groups using the Sharing button.",
+      "not": "Sharing rule: opens access automatically for a whole set of records by owner or criteria."
+    },
+    {
+      "term": "Delegated administrator",
+      "does": "A user who can manage users in chosen roles (create, edit, reset passwords, unlock, assign set profiles and permission sets) and manage chosen custom objects.",
+      "not": "System Administrator: full access to all setup and data. A delegated admin cannot assign profiles or permission sets with Modify All Data."
+    },
+    {
+      "term": "Login hours",
+      "does": "Set on a profile; users cannot log in outside these hours, and if hours end mid-session they can only view their current page.",
+      "not": "Session timeout: logs out a user after a period of inactivity, whatever the time of day."
+    },
+    {
+      "term": "Field Audit Trail",
+      "does": "Paid add-on (Shield) that keeps field history under a retention policy you set and tracks up to 200 fields per object.",
+      "not": "Field History Tracking: free, 20 fields per object, history kept 18 months in the UI and 24 months via the API."
+    },
+    {
+      "term": "Developer Pro sandbox",
+      "does": "Metadata-only sandbox with 1 GB of data storage, refreshable daily, for larger dev and test work.",
+      "not": "Developer sandbox: also metadata-only and daily refresh, but only 200 MB of data storage."
+    },
+    {
+      "term": "Agentforce Builder",
+      "does": "Where admins set up an agent: its topics, instructions and actions, with a conversation preview to test it.",
+      "not": "Prompt Builder: creates reusable prompt templates (such as Field Generation or Sales Email) that agents, buttons or flows can use."
+    },
+    {
+      "term": "Omni-Channel",
+      "does": "Routes work items from queues to available service reps based on capacity, availability or skills.",
+      "not": "Case assignment rules: set the case owner (a user or queue) when a case is created or edited, without looking at rep capacity."
+    },
+    {
+      "term": "Roll Back Records element",
+      "does": "Screen flow element that cancels the pending record changes in the current transaction.",
+      "not": "Custom Error element: record-triggered flow element that shows your own error message and blocks the save."
+    },
+    {
+      "term": "Asynchronous path",
+      "does": "Part of a record-triggered flow that runs in the background right after the triggering transaction finishes.",
+      "not": "Scheduled path: runs at a time you set relative to the trigger or a date field, such as 3 days after Close Date."
+    }
+  ],
+  "limits": [
+    {
+      "value": "25 (max 40)",
+      "what": "Roll-up summary fields per object",
+      "edition": "",
+      "trap": "40 is only possible after Salesforce Support raises it; 25 is the default",
+      "source": "https://help.salesforce.com/s/articleView?id=000386702&language=en_US&type=1"
+    },
+    {
+      "value": "50 · 200 · 2,000",
+      "what": "Custom objects per org",
+      "edition": "Professional 50, Enterprise 200, Unlimited 2,000",
+      "trap": "Confusing this with custom fields per object (500 · 800)",
+      "source": "https://help.salesforce.com/s/articleView?id=000386653&language=en_US&type=1"
+    },
+    {
+      "value": "15,000 bytes",
+      "what": "Formula compiled size (current Formula Field Limits page)",
+      "edition": "",
+      "trap": "5,000 bytes is the older figure, still shown on some edition allocation pages. The 3,900 typed-character limit is unchanged",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sf.formula_field_limits.htm&type=5"
+    },
+    {
+      "value": "15",
+      "what": "Unique cross-object relationships referenced per object",
+      "edition": "",
+      "trap": "Shared across all formulas, validation rules and more on that object, not 15 per formula",
+      "source": "https://help.salesforce.com/s/articleView?id=000383053&language=en_US&type=1"
+    },
+    {
+      "value": "1,000 · 255",
+      "what": "Values per global value set · characters per picklist value",
+      "edition": "",
+      "trap": "Inactive values count toward the 1,000 too",
+      "source": "https://help.salesforce.com/s/articleView?id=picklist_limitations.htm&language=en_US&type=5"
+    },
+    {
+      "value": "20 · 100 · 500",
+      "what": "Active validation rules per object",
+      "edition": "Professional 20, Enterprise 100, Unlimited and Performance 500",
+      "trap": "Support cannot raise it; only an edition upgrade can",
+      "source": "https://help.salesforce.com/s/articleView?id=000318742&language=en_US&type=1"
+    },
+    {
+      "value": "60 · 1,000",
+      "what": "Custom report type: object references · fields",
+      "edition": "",
+      "trap": "Only 4 objects form the main relationship chain; the other references come from fields added via lookup",
+      "source": "https://help.salesforce.com/s/articleView?id=sf.reports_report_type_guidelines.htm&language=en_US&type=5"
+    },
+    {
+      "value": "5 · 50",
+      "what": "Dashboard filters per dashboard · values per filter",
+      "edition": "",
+      "trap": "3 filters is the old limit",
+      "source": "https://help.salesforce.com/s/articleView?id=rd_reports_dashboards_limits.htm&language=en_US&type=5"
+    },
+    {
+      "value": "3 · 5 · 10",
+      "what": "Dynamic dashboards per org",
+      "edition": "Developer 3, Enterprise 5, Unlimited and Performance 10",
+      "trap": "Dynamic dashboards in the Recycle Bin still count, and they cannot be subscribed to",
+      "source": "https://help.salesforce.com/s/articleView?id=000385369&language=en_US&type=1"
+    },
+    {
+      "value": "20",
+      "what": "Field filters per report (report builder)",
+      "edition": "",
+      "trap": "10 is the Salesforce Classic report wizard figure",
+      "source": "https://help.salesforce.com/s/articleView?id=rd_reports_dashboards_limits.htm&language=en_US&type=5"
+    },
+    {
+      "value": "7 · 15",
+      "what": "Report subscriptions per user (dashboard subscriptions same)",
+      "edition": "Unlimited and Performance 15, other editions 7",
+      "trap": "It is a hard cap Support cannot raise",
+      "source": "https://help.salesforce.com/s/articleView?id=000383344&language=en_US&type=1"
+    },
+    {
+      "value": "2 · 5",
+      "what": "Row-level formulas · summary formulas per report",
+      "edition": "Row-level formulas: Lightning only, Professional and up",
+      "trap": "1 row-level formula is the older limit (raised to 2 in a 2026 release)",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=analytics.reports_formulas_row_level_limits.htm&type=5"
+    },
+    {
+      "value": "7 days · 29 days",
+      "what": "Data Export: weekly · monthly export frequency",
+      "edition": "Weekly in Enterprise, Performance, Unlimited; Professional and Developer monthly only",
+      "trap": "Mixing up 29 days with the 30-day month",
+      "source": "https://help.salesforce.com/s/articleView?id=sf.admin_exportdata.htm&language=en_US&type=5"
+    },
+    {
+      "value": "48 hours",
+      "what": "Data Export files stay downloadable",
+      "edition": "",
+      "trap": "Starting a new export deletes the previous files even within 48 hours",
+      "source": "https://help.salesforce.com/s/articleView?id=000319973&language=en_US&type=1"
+    },
+    {
+      "value": "8 · 3 · 90 days",
+      "what": "Password defaults: min length · history · expiry",
+      "edition": "",
+      "trap": "Password history default is 3, not 10",
+      "source": "https://help.salesforce.com/s/articleView?id=sf.admin_password.htm&language=en_US"
+    },
+    {
+      "value": "15 min",
+      "what": "Default lockout effective period",
+      "edition": "",
+      "trap": "Health Check counts 30 minutes or more as compliant",
+      "source": "https://help.salesforce.com/s/articleView?id=sf.admin_password.htm&language=en_US"
+    },
+    {
+      "value": "2 hours",
+      "what": "Default session timeout",
+      "edition": "",
+      "trap": "The range is 15 minutes to 24 hours; 2 hours is the default",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=xcloud.admin_sessions.htm&type=5"
+    },
+    {
+      "value": "24 hours",
+      "what": "Password reset link lifetime",
+      "edition": "",
+      "trap": "The 1, 7 or 180 days choice is for new-user welcome links, not reset links",
+      "source": "https://help.salesforce.com/s/articleView?id=000390510&language=en_US&type=1"
+    },
+    {
+      "value": "20,000 · 6 months",
+      "what": "Login History shown in Setup",
+      "edition": "",
+      "trap": "Setup Audit Trail is the one with 20 entries on screen and 180 days to download",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sf.users_login_history.htm&type=5"
+    },
+    {
+      "value": "24 months",
+      "what": "Field history kept when read via API",
+      "edition": "",
+      "trap": "18 months is the UI figure",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.tracking_field_history.htm&language=en_US&type=5"
+    },
+    {
+      "value": "200",
+      "what": "Fields tracked per object with Field Audit Trail",
+      "edition": "Needs Shield or Field Audit Trail add-on",
+      "trap": "60 is the older Field Audit Trail limit; 20 is standard field history",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.tracking_field_history.htm&language=en_US&type=5"
+    },
+    {
+      "value": "30 · 25",
+      "what": "Classic approval: steps per process · approvers per step",
+      "edition": "",
+      "trap": "Steps cannot be added or reordered once the process has been activated",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sf.approvals_limits.htm&type=5"
+    },
+    {
+      "value": "200 MB · 1 GB · 5 GB",
+      "what": "Sandbox data storage: Developer · Developer Pro · Partial Copy",
+      "edition": "",
+      "trap": "Full sandbox matches production storage",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sf.data_sandbox_environments.htm&type=5"
+    },
+    {
+      "value": "10,000",
+      "what": "Records per object copied into a Partial Copy sandbox",
+      "edition": "",
+      "trap": "Partial Copy needs a sandbox template",
+      "source": "https://help.salesforce.com/s/articleView?id=000386381&language=en_US&type=1"
+    },
+    {
+      "value": "5 · 1,000",
+      "what": "Path: key fields per step · guidance characters per step",
+      "edition": "",
+      "trap": "Guidance shows only on picklist-based steps",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=sales.path_considerations.htm&type=5"
+    },
+    {
+      "value": "100",
+      "what": "Components per Lightning page region",
+      "edition": "",
+      "trap": "Each tab or accordion section counts as a component: a 3-tab Tabs component counts as 4",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=lightning_app_builder_limitations.htm&type=0"
+    },
+    {
+      "value": "100",
+      "what": "Fields per column in a Dynamic Forms field section",
+      "edition": "",
+      "trap": "Blank spaces count as fields; a 2-column field section counts as 3 components",
+      "source": "https://help.salesforce.com/s/articleView?language=en_US&id=platform.dynamic_forms_limitations.htm&type=5"
+    },
+    {
+      "value": "300 · 50",
+      "what": "Sharing rules per object: total · criteria-based",
+      "edition": "",
+      "trap": "Criteria-based rules count toward both numbers",
+      "source": "https://help.salesforce.com/s/articleView?id=000384485&language=en_US&type=1"
+    },
+    {
+      "value": "2 · 5",
+      "what": "Active restriction rules per object",
+      "edition": "Enterprise and Developer 2, Performance and Unlimited 5",
+      "trap": "",
+      "source": "https://help.salesforce.com/s/articleView?id=sf.security_restriction_rule_considerations.htm&language=en_US&type=5"
+    },
+    {
+      "value": "5 · 1",
+      "what": "Escalation actions per rule entry · active escalation rules",
+      "edition": "",
+      "trap": "Activating a new escalation rule deactivates the old one",
+      "source": "https://help.salesforce.com/s/articleView?id=service.rules_escalation_actions.htm&language=en_US&type=5"
+    }
+  ]
+}
