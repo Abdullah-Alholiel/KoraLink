@@ -620,6 +620,8 @@ FIRST run allowed to build elapsed rows" was an arithmetic error — 2026-10-07T
 ALL fire before elapse. **Run #116 (10-09 10:15Z) is the first eligible.** No veto seen in
 chat/BOARD as of run #113; clocks keep running.
 
+| P2-298 | Infra/DB | **Nightly PROD Neon backups (P1-18 reborn — Neon was unbacked since the Sep project flip)** — `scripts/db-backup-prod.sh` (docker-exec PG17 pg_dump from momentum-db → `/home/ubuntu/backups/koralink-prod/`, gzip + gzip -t + size/CREATE-TABLE floor checks, 30-day retention, URI passed via container env never argv/logs) + `koralink-backup-prod.timer` (03:20 UTC daily, Persistent) + watchdog §8 freshness alarm (>26h → 🟠, missing → 🔴). First dump 2026-11-03 19:47Z (11,957 B, 30 tables). Owner go 2026-11-03. | scripts/db-backup-prod.sh; koralink-backup-prod.timer; watchdog §8 | **DONE ✅ (backup LIVE, timer armed, watchdog covered; restore-drill pending owner approval of throwaway-DB step)** | P1-18 reborn |
+
 ## Rules
 
 1. A run may only mark an item `DONE` **after** `turbo run build` + `npx vitest run` are green for its slices.
