@@ -8,11 +8,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { GenerateSettlementsDto } from './dto/generate-settlements.dto';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AdminSettlementsService } from './settlements.service';
 import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
+
+// P2-295 (run #185, Reviewer A run-#181 follow-through): admin MONEY ops carry
+// an explicit route-level 10/min cap instead of riding the global 60/min —
+// same posture as the wallet POSTs (topup/verify) and admin/metrics (P2-248).
+const MONEY_OP_THROTTLE = { default: { ttl: 60_000, limit: 10 } };
 
 @Controller('admin/settlements')
 @UseGuards(AdminAuthGuard)
@@ -30,12 +36,14 @@ export class AdminSettlementsController {
   }
 
   @Post(':id/pay')
+  @Throttle(MONEY_OP_THROTTLE)
   pay(@Param('id', UuidParamPipe) id: string, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.settlements.pay(id, adminId, req.ip);
   }
 
   @Post('generate')
+  @Throttle(MONEY_OP_THROTTLE)
   generate(@Query() dto: GenerateSettlementsDto, @Req() req: Request) {
     const adminId = (req as unknown as { user: { sub: string } }).user.sub;
     return this.settlements.generatePending(adminId, req.ip, dto.venueId);

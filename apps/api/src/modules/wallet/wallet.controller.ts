@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Param,
   Query,
   Body,
   UseGuards,
@@ -25,8 +26,10 @@ import { WalletHistoryDto } from './dto/wallet-history.dto';
 import { TopupWalletDto } from './dto/topup-wallet.dto';
 import { TopupIntentDto } from './dto/topup-intent.dto';
 import { VerifyTopupDto } from './dto/verify-topup.dto';
+import { WalletReceiptService } from './wallet.receipt.service';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @ApiTags('wallet')
 @ApiCookieAuth('access_token')
@@ -37,10 +40,30 @@ export class WalletController {
     private readonly walletService: WalletService,
     private readonly configService: ConfigService,
     private readonly topupService: WalletTopupService,
+    private readonly receiptService: WalletReceiptService,
   ) {}
+
+  // ── GET /wallet/payout-receipt/:matchId ──────────────────────
+  // P2-293 (run #185): the completing host's money-truth receipt. Owner-only
+  // (the service 404s for anyone but the host); UUID-param pipe rejects
+  // malformed ids with 400 before the service runs.
+  @Get('payout-receipt/:matchId')
+  @ApiOperation({
+    summary: "Get the authenticated host's payout receipt for a completed match",
+  })
+  @ApiOkResponse({ description: 'Payout breakdown for a released host payout.' })
+  async getPayoutReceipt(
+    @CurrentUser() user: { sub: string },
+    @Param('matchId', UuidParamPipe) matchId: string,
+  ) {
+    return this.receiptService.getPayoutReceipt(user.sub, matchId);
+  }
 
   // ── GET /wallet/balance ──────────────────────────────────────
   @Get('balance')
+  // Run #185 (Reviewer A): explicit route-level 60/min parity with the other
+  // wallet GETs (topup/config, topup/latest) instead of riding the global guard.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({ summary: 'Get authenticated user wallet balance' })
   @ApiOkResponse({ description: 'Current wallet balance in SAR.' })
   async getBalance(@CurrentUser() user: { sub: string }) {
@@ -50,6 +73,9 @@ export class WalletController {
 
   // ── GET /wallet/history ──────────────────────────────────────
   @Get('history')
+  // Run #185 (Reviewer A): explicit 60/min — history runs a paginated
+  // COUNT-over() + SELECT per hit, same read posture as its siblings.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({
     summary: 'Get paginated transaction history (optional from/to date range)',
   })
