@@ -29,7 +29,7 @@ const BS = String.fromCharCode(92); // one literal backslash, keeps it out of gr
 /** The banned inline char class as raw source text: [ + \\ + %_ + ]. */
 const INLINE_CLASS = `[${BS}${BS}%_]`;
 const HELPER_PATH = join(SRC_ROOT, 'src', 'common', 'utils', 'escape-like.ts');
-const AUDIT_PATH = join(SRC_ROOT, 'src', 'modules', 'admin', 'audit.controller.ts');
+const AUDIT_PATH = join(SRC_ROOT, 'src', 'modules', 'admin', 'audit-list.service.ts');
 
 function scanForInlineClass(): { offenders: string[]; scanFailed?: number } {
   let stdout = '';
@@ -69,7 +69,9 @@ describe('P2-182: escapeLikePattern is the only LIKE-escape implementation (run 
     expect(helperSrc).toContain(INLINE_CLASS);
   });
 
-  it('the audit controller routes its action filter through the shared helper', () => {
+  it('the audit list path routes its action filter through the shared helper', () => {
+    // P2-292 (run #186): the list queries moved from audit.controller.ts into
+    // AdminAuditListService (audit-list.service.ts) — the tripwire follows them.
     const src = readFileSync(AUDIT_PATH, 'utf8');
     expect(src).toContain('escapeLikePattern');
     expect(src).toContain(`ESCAPE '${BS}${BS}'`);

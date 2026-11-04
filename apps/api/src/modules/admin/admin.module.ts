@@ -18,6 +18,7 @@ import { AdminSettlementsController } from './settlements.controller';
 import { AdminSettingsService } from './settings.service';
 import { AdminSettingsController } from './settings.controller';
 import { AdminAuditController } from './audit.controller';
+import { AdminAuditListService } from './audit-list.service';
 import { AdminMatchesService } from './matches.service';
 import { AdminMatchesController } from './matches.controller';
 import { AdminPitchesService } from './pitches.service';
@@ -61,6 +62,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AdminMatchesService,
     AdminPitchesService,
     AdminReviewsService,
+    AdminAuditListService,
   ],
   exports: [AuditService],
 })
