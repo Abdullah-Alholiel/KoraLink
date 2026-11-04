@@ -1049,6 +1049,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         ? `evictFromMatch sweep failed for match ${matchId} (user ${userId}) — unknown number of sockets may remain in ${room}`
         : `evictFromMatch left ${leftBehind} socket(s) in ${room} for user ${userId}`;
       Sentry.captureException(new Error(detail), {
+        // Grouping hint must be the hint's TOP-LEVEL fingerprint array —
+        // tags.fingerprint is only a searchable tag (PR-Agent r3).
+        fingerprint: ['api-realtime:stale-room-membership-post-removal'],
         tags: { fingerprint: 'api-realtime:stale-room-membership-post-removal' },
       });
       this.logger.warn(detail);
