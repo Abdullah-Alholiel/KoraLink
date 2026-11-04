@@ -40,7 +40,7 @@ export class AdminReportsService {
         r.id, r.subject_type, r.subject_id, r.reason, r.status, r.resolution,
         r.resolved_at, r.created_at,
         rep.full_name AS reporter_name, rep.handle AS reporter_handle,
-        COALESCE(u.full_name, u.handle, m.title, v.name, 'Message from ' || COALESCE(su.full_name, su.handle, 'unknown user')) AS subject_label
+        COALESCE(u.full_name, u.handle, m.title, v.name, 'Message from ' || COALESCE(su.full_name, su.handle, 'unknown user'), 'Review by ' || COALESCE(ru.full_name, ru.handle, 'a player')) AS subject_label
       FROM reports r
       LEFT JOIN users rep ON rep.id = r.reporter_id
       LEFT JOIN users u ON u.id = r.subject_id AND r.subject_type = 'user'
@@ -48,6 +48,8 @@ export class AdminReportsService {
       LEFT JOIN venues v ON v.id = r.subject_id AND r.subject_type = 'venue'
       LEFT JOIN personal_messages pm ON r.subject_type = 'message' AND pm.id = r.subject_id
       LEFT JOIN users su ON su.id = pm.sender_id
+      LEFT JOIN venue_reviews rv ON r.subject_type = 'review' AND rv.id = r.subject_id
+      LEFT JOIN users ru ON ru.id = rv.user_id
       ${where}
       ORDER BY
         CASE r.status WHEN 'open' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END ASC,

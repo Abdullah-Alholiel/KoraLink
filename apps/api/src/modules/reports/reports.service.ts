@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -8,7 +9,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, personal_messages, reports, users, venues } from '../../database/schema';
+import { matches, personal_messages, reports, users, venues, venue_reviews } from '../../database/schema';
 import { CreateReportDto, ReportSubjectType } from './dto/create-report.dto';
 import { ListMyReportsDto } from './dto/list-my-reports.dto';
 
@@ -16,6 +17,9 @@ type DB = PostgresJsDatabase<typeof schema>;
 
 /** Second join over `users` for message reports (the message sender). */
 const message_sender = alias(users, 'message_sender');
+/** Joins for P1-74 review reports: the review row + its author (label). */
+const reported_review = alias(venue_reviews, 'reported_review');
+const review_author = alias(users, 'review_author');
 
 @Injectable()
 export class ReportsService {
@@ -35,6 +39,19 @@ export class ReportsService {
         .limit(1);
       if (msg && msg.sender_id === reporterId) {
         throw new BadRequestException('You cannot report your own message.');
+      }
+    }
+
+    // P1-74 (run #186): you cannot report your OWN review — the report path is
+    // for contesting OTHER players' reviews, mirroring the message-subject rule.
+    if (dto.subjectType === 'review') {
+      const [rev] = await this.db
+        .select({ user_id: venue_reviews.user_id })
+        .from(venue_reviews)
+        .where(eq(venue_reviews.id, dto.subjectId))
+        .limit(1);
+      if (rev && rev.user_id === reporterId) {
+        throw new ConflictException('You cannot report your own review.');
       }
     }
 
@@ -110,6 +127,7 @@ export class ReportsService {
         match_title: matches.title,
         venue_name: venues.name,
         message_sender_name: message_sender.full_name,
+        review_author_name: review_author.full_name,
         total: sql<number>`COUNT(*) OVER ()`.mapWith(Number),
       })
       .from(reports)
@@ -129,6 +147,15 @@ export class ReportsService {
           eq(message_sender.id, personal_messages.sender_id),
         ),
       )
+      // P1-74: review reports label after the review AUTHOR ("Review by …").
+      .leftJoin(
+        reported_review,
+        and(eq(reports.subject_type, 'review'), eq(reported_review.id, reports.subject_id)),
+      )
+      .leftJoin(
+        review_author,
+        and(eq(reports.subject_type, 'review'), eq(review_author.id, reported_review.user_id)),
+      )
       .where(eq(reports.reporter_id, reporterId))
       .orderBy(desc(reports.created_at))
       .limit(limit)
@@ -147,7 +174,9 @@ export class ReportsService {
           r.venue_name ??
           (r.message_sender_name != null
             ? `Message from ${r.message_sender_name}`
-            : r.subject_id),
+            : r.review_author_name != null
+              ? `Review by ${r.review_author_name}`
+              : r.subject_id),
         reason: r.reason,
         status: r.status,
         resolution: r.resolution,
@@ -185,6 +214,16 @@ export class ReportsService {
         .where(eq(personal_messages.id, id))
         .limit(1);
       if (!row) throw new NotFoundException('Message not found.');
+      return;
+    }
+    // P1-74 (run #186): review subjects bind against venue_reviews.
+    if (type === 'review') {
+      const [row] = await this.db
+        .select({ id: venue_reviews.id })
+        .from(venue_reviews)
+        .where(eq(venue_reviews.id, id))
+        .limit(1);
+      if (!row) throw new NotFoundException('Review not found.');
       return;
     }
     const [row] = await this.db

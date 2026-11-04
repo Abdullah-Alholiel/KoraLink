@@ -743,6 +743,7 @@
     "payAction": "Pay out",
     "generatePayouts": "Generate payouts",
     "thSubjectType": "Subject type",
+    "thReview": "Review",
     "labelPlatformMargin": "Platform margin (SAR)",
     "labelGracePeriod": "No-show grace period (minutes)",
     "labelPayoutCadence": "Payout cadence (days)",

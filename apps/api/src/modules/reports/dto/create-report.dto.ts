@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsIn, IsString, Matches, MaxLength } from 'class-validator';
 
-export const REPORT_SUBJECT_TYPES = ['user', 'match', 'venue', 'message'] as const;
+export const REPORT_SUBJECT_TYPES = ['user', 'match', 'venue', 'message', 'review'] as const;
 export type ReportSubjectType = (typeof REPORT_SUBJECT_TYPES)[number];
 
 export class CreateReportDto {
-  @ApiProperty({ enum: REPORT_SUBJECT_TYPES, description: 'Kind of subject being reported (user / match / venue / chat message)' })
+  @ApiProperty({ enum: REPORT_SUBJECT_TYPES, description: 'Kind of subject being reported (user / match / venue / chat message / venue review)' })
   @IsIn(REPORT_SUBJECT_TYPES)
   subjectType: ReportSubjectType;
 

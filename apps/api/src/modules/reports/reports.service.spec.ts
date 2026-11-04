@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReportsService } from './reports.service';
-import { personal_messages, reports, users } from '../../database/schema';
+import { personal_messages, reports, users, venue_reviews } from '../../database/schema';
 
 /**
  * `create` dedup TOCTOU guard: the open/reviewing report dedup was a
@@ -222,6 +222,132 @@ describe('ReportsService message subjects (P1-31)', () => {
       const none = await empty.listMine('u1');
       expect(none.total).toBe(0);
       expect(none.hasMore).toBe(false);
+    });
+  });
+
+  /**
+   * P1-74 (run #186): venue reviews are reportable subjects. The review
+   * probe hits `venue_reviews` in assertSubjectExists AND in the
+   * self-report guard (you cannot report your own review); the mine-list
+   * labels review reports after their AUTHOR ("Review by …").
+   */
+  describe('ReportsService review subjects (P1-74)', () => {
+    function makeService(opts: {
+      reviewRow?: { id: string; user_id: string } | null;
+      existing?: unknown[];
+      inserted?: unknown[];
+      authorRow?: Array<{ full_name: string | null }>;
+    }) {
+      const selectChain = (rows: unknown[]) => {
+        const chain: any = {
+          where: () => chain,
+          leftJoin: () => chain,
+          orderBy: () => chain,
+          limit: () => chain,
+          offset: () => chain,
+        };
+        chain.then = (resolve: (v: unknown) => void) => resolve(rows);
+        return chain;
+      };
+      const insertChain = (returningRows: unknown[]) => {
+        const chain: any = {
+          values: () => chain,
+          onConflictDoNothing: () => chain,
+          returning: () => returningRows,
+        };
+        return chain;
+      };
+      const db = {
+        select: () => ({
+          from: (table: unknown) => {
+            // Self-report guard + assertSubjectExists probe `venue_reviews`;
+            // the mine-list label join aliases it (reported_review) — the
+            // alias object is a distinct identity from the raw table.
+            if (
+              table === venue_reviews ||
+              (typeof table === 'object' && table !== null && (table as any).name !== undefined)
+            )
+              return selectChain(opts.reviewRow ? [opts.reviewRow] : []);
+            if (table === users) return selectChain(opts.authorRow ? opts.authorRow : []);
+            if (table === reports) return selectChain(opts.existing ?? []);
+            return selectChain([]);
+          },
+        }),
+        insert: jest.fn(() => insertChain(opts.inserted ?? [])),
+      };
+      return new ReportsService(db as never);
+    }
+
+    const REVIEW_DTO = { subjectType: 'review', subjectId: 'rv1', reason: 'abuse' } as never;
+
+    it('rejects reporting your own review (409 Conflict)', async () => {
+      const svc = makeService({ reviewRow: { id: 'rv1', user_id: 'u1' } });
+      await expect(svc.create('u1', REVIEW_DTO)).rejects.toThrow('You cannot report your own review.');
+    });
+
+    it('404s when the reported review does not exist', async () => {
+      const svc = makeService({ reviewRow: null });
+      await expect(svc.create('u1', REVIEW_DTO)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('creates a review report against someone else’s review', async () => {
+      const svc = makeService({
+        reviewRow: { id: 'rv1', user_id: 'u2' },
+        inserted: [{ id: 'r9', status: 'open' }],
+      });
+      const result = await svc.create('u1', REVIEW_DTO);
+      expect(result.id).toBe('r9');
+    });
+
+    it('labels a review report after its author, not the raw id (mine-list)', async () => {
+      const svc = makeService({
+        existing: [
+          {
+            id: 'r1',
+            subject_type: 'review',
+            subject_id: 'rv1',
+            reason: 'abuse',
+            status: 'open',
+            resolution: null,
+            resolved_at: null,
+            created_at: new Date(),
+            user_name: null,
+            match_title: null,
+            venue_name: null,
+            message_sender_name: null,
+            review_author_name: 'Khalid',
+            total: 1,
+          },
+        ],
+      });
+      const result = await svc.listMine('u1');
+      expect(result.reports).toHaveLength(1);
+      expect(result.reports[0].subject_label).toBe('Review by Khalid');
+    });
+
+    it('falls back to the raw id when the review author is gone (mine-list)', async () => {
+      const svc = makeService({
+        existing: [
+          {
+            id: 'r1',
+            subject_type: 'review',
+            subject_id: 'rv-gone',
+            reason: 'abuse',
+            status: 'resolved',
+            resolution: 'removed',
+            resolved_at: new Date(),
+            created_at: new Date(),
+            user_name: null,
+            match_title: null,
+            venue_name: null,
+            message_sender_name: null,
+            review_author_name: null,
+            total: 1,
+          },
+        ],
+      });
+      const result = await svc.listMine('u1');
+      expect(result.reports[0].subject_label).toBe('rv-gone');
     });
   });
 });

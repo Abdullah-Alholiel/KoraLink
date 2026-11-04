@@ -891,7 +891,9 @@
     "reviewThanks": "تم إرسال تقييمك. شكراً لمساعدة اللاعبين الآخرين!",
     "reviewNotAllowed": "يمكنك تقييم الملعب فقط بعد إكمال مباراة فيه. لم يُحفظ أي تقييم.",
     "reviewMine": "تقييمك",
-    "reviewAnonymous": "لاعب"
+    "reviewAnonymous": "لاعب",
+    "reviewReport": "الإبلاغ عن التقييم",
+    "reviewReportSubject": "الإبلاغ عن تقييم {name}"
   },
   "messages": {
     "title": "الرسائل",
