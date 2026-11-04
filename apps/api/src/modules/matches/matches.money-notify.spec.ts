@@ -98,7 +98,7 @@ function makeHarness(opts: {
   const svc = new MatchesService(
     db as never,
     {} as never, // walletService
-    { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {} } as never,
+    { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {}, evictFromMatch: async () => {} } as never,
     notificationsService as never,
     activitiesService as never,
     { getNumber: async () => 0 } as never,
