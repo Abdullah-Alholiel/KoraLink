@@ -9,7 +9,7 @@ export class CreateReportDto {
   @IsIn(REPORT_SUBJECT_TYPES)
   subjectType: ReportSubjectType;
 
-  @ApiProperty({ description: 'ID of the reported subject (user / match / venue / message)' })
+  @ApiProperty({ description: 'ID of the reported subject (user / match / venue / message / review)' })
   // P2-113 (run #77, Reviewer A): subjectId binds against varchar(36) id columns —
   // shape-validate (36 hex/dash chars, no UUID-scheme decorator) + bound at 36,
   // mirroring the run-#73 CastVoteDto/MarkNoShowDto id convention.
