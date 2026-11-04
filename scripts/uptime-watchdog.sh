@@ -69,13 +69,14 @@ fi
 # 4b. PROD backup freshness (P2-303, run #184): the Neon prod dumps land via
 # koralink-backup-prod.timer (03:20 UTC → /home/ubuntu/backups/koralink-prod).
 # Section 4 only watches the STAGING dir — a silently dead prod timer would
-# never alarm here. Same 26h threshold (nightly + slack).
+# never alarm here. Same threshold (nightly + slack); one shared literal.
+MAX_BACKUP_AGE_S=93600 # 26h
 PROD_BACKUP_DIR="/home/ubuntu/backups/koralink-prod"
 if [ -d "$PROD_BACKUP_DIR" ]; then
   PROD_LATEST=$(ls -t "$PROD_BACKUP_DIR"/koralink-prod-*.sql.gz 2>/dev/null | head -1)
   if [ -n "$PROD_LATEST" ]; then
     PROD_AGE=$(( $(date -u +%s) - $(stat -c%Y "$PROD_LATEST") ))
-    if [ "$PROD_AGE" -gt 93600 ]; then
+    if [ "$PROD_AGE" -gt "$MAX_BACKUP_AGE_S" ]; then
       say "FAIL last PROD backup ${PROD_AGE}s old (>26h): $PROD_LATEST"
       FAIL=1
     else
