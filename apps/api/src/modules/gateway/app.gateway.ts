@@ -963,6 +963,13 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // leave only shrinks the caller's own event surface, and blocking the
     // leave of a since-removed participant would trap them in the room.
     if (!client.userId) throw new WsException('Unauthenticated');
+    // R5-2 (audit run-5, built run #185): shape-validate the id BEFORE it
+    // becomes a room name. This is the last handler taking a raw id without
+    // isUuidShape — the exemption covers the PARTICIPANT gate only, never
+    // id validation (same invariant the other 9 handlers enforce).
+    if (!isUuidShape(data.conversationId)) {
+      throw new WsException('Invalid id format.');
+    }
     await client.leave(`conv:${data.conversationId}`);
   }
 

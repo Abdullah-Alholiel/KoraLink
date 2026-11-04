@@ -536,6 +536,24 @@ describe('AppGateway per-message moderation gate (P1-48, run #57)', () => {
     ).resolves.toBeUndefined();
   });
 
+  // ── R5-2 (run #185): id-shape validation — the exemption covers the
+  // participant gate only; the conversationId still must be UUID-shaped
+  // before it becomes a room name (same message as the gated handlers).
+  it('leave-conversation: non-UUID conversationId → Invalid id format (R5-2)', async () => {
+    const { gateway } = makeGw(makeRoutedDb(BANNED));
+    const client = makeClient();
+
+    await expect(
+      gateway.handleLeaveConversation({ conversationId: 'conv:drop-table' }, client as never),
+    ).rejects.toThrow('Invalid id format.');
+    await expect(
+      gateway.handleLeaveConversation({ conversationId: CONV_ID.slice(0, 30) }, client as never),
+    ).rejects.toThrow('Invalid id format.');
+    await expect(
+      gateway.handleLeaveConversation({ conversationId: 12345 as unknown as string }, client as never),
+    ).rejects.toThrow('Invalid id format.');
+  });
+
   // ── P2-231 (run #151): positive-only typing cache of the moderation gate ──
   describe('typing-only active-user cache (P2-231)', () => {
     /** Wraps makeRoutedDb with a mutable users row + a counter of users-table selects. */
