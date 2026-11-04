@@ -2,11 +2,11 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main)
-- Commits ahead of main: **369** (last promote 2026-09-25)
+- Commits ahead of main: **372** (last promote 2026-09-25)
 - Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
 - Services: API/PWA/Admin UP; Kong DOWN
-- Factory loop status: **RESTORED 2026-11-03** — provider tiers standardized (zai → Claude Opus 5.5 CLI → opencode GO), dead OpenCode key renewed, watchdog now escalates consecutive failed fires. Runs resume at next scheduled slot.
+- Factory loop status: **HEALTHY 2026-11-04** — run #184 shipped 3 security/hardening PRs (#208 P1-71 avatar gate, #209 P1-70 room eviction, #210 P2-303 watchdog prod-backup), all squash-merged with green CI + triaged PR-Agent rounds.
 
 ## Active owner actions
 
@@ -14,7 +14,7 @@
 - **Status (2026-11-03):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Earlier "empty prod" alarm = probe of the wrong project (PG18 experiment, now renamed locally). NOTHING blocks the merge technically.
 - **Your one click:** GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2. Then `/api/v1/health` 200.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
-- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment; download a backup (P1-18) or ask the factory to automate daily pg_dump.
+- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
 
 ### 2. P2-285 — settlements void/cancel policy
 - **What:** Should duplicate/erroneous settlement rows be voidable? If yes: void-while-pending-only? Audit trail? Never-after-paid?
