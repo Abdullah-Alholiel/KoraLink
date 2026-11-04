@@ -32,7 +32,10 @@ describe('WalletController.topup gate (P0-7 — explicit feature flag, NOT NODE_
         key === 'WALLET_TOPUP_ENABLED' ? flagValue : undefined,
       ),
     } as any;
-    const controller = new WalletController(walletService, configService, topupService);
+    const receiptService = {
+      getPayoutReceipt: jest.fn(),
+    } as any;
+    const controller = new WalletController(walletService, configService, topupService, receiptService);
     return { controller, walletService, configService };
   }
 

@@ -55,6 +55,7 @@ import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import RescheduleSheet from '@/components/matches/RescheduleSheet';
 import EmergencyCancelSheet from '@/components/matches/EmergencyCancelSheet';
 import LeaveMatchSheet from '@/components/matches/LeaveMatchSheet';
+import HostPayoutReceipt from '@/components/matches/HostPayoutReceipt';
 import ChatSheet from '@/components/matches/ChatSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import PostMatchSection from '@/components/matches/PostMatchSection';
@@ -596,6 +597,17 @@ export default function MatchDetailPage({
                                     </div>
                                 </div>
                             )}
+
+                            {/* P2-293 (run #185): the completing host's payout receipt —
+                                money-truth breakdown (fee pool, platform fee, forfeits,
+                                total credited). Renders only for the player-host of a
+                                completed player-hosted match; hidden on 404. */}
+                            <HostPayoutReceipt
+                                matchId={match.id}
+                                isUserHost={!!match.isUserHost}
+                                isPlayerHosted={!!match.isPlayerHosted}
+                                matchStatus={match.status}
+                            />
 
                             {/* Private match banner — invite link is the only way in */}
                             {match.isPrivate && (

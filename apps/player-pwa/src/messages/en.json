@@ -724,6 +724,12 @@
     "transactions": "Transactions",
     "noTransactions": "No transactions yet",
     "noTransactionsDescription": "Your transaction history will appear here.",
+    "payoutReceiptLoading": "Checking your payout…",
+    "payoutReceiptTitle": "Payout receipt",
+    "payoutReceiptFeePool": "Joiner fees ({count} players)",
+    "payoutReceiptPlatformFee": "Platform fee ({amount} × {count})",
+    "payoutReceiptForfeits": "Forfeited fees ({count, plural, one {# player} other {# players}})",
+    "payoutReceiptTotal": "Total credited",
     "topUpAmount": "Top Up Amount",
     "topupDisabled": "Wallet top-up is temporarily unavailable. Please try again later.",
     "topup": {
