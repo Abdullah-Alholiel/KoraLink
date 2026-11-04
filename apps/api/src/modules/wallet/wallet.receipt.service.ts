@@ -18,9 +18,11 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
  * ADJUSTMENT ledger rows keyed `host-forfeit-<episodeId>` with
  * reference_id = the EPISODE id (matches.service.ts forfeit branch) — so the
  * forfeit sum joins episodes→transactions and must NOT be folded into the
- * PRIZE amount. `payoutSar` = what the PRIZE release credited (the ledger
- * row is authoritative when present; the derived floor is the fallback for
- * zero-payout releases that wrote no row).
+ * PRIZE amount. The PRIZE ledger row is the SOURCE OF TRUTH for the receipt:
+ * payout = its amount; platformFee = feePool − payout (reconciles by
+ * construction, immune to post-release margin changes — PR-Agent r1 PR #211).
+ * A zero-payout release wrote no PRIZE row → payout displays 0 (never a
+ * derived number that could show money never credited).
  */
 
 /** Same default as matches.service PLATFORM_MARGIN_SAR. */
@@ -142,7 +144,16 @@ export class WalletReceiptService {
       forfeits = f?.n ?? 0;
     }
 
-    // 5. The PRIZE ledger row is the authoritative release credit.
+    // 5. The PRIZE ledger row is the authoritative release credit. The
+    //    breakdown derives FROM it (never from the current margin setting):
+    //    PR-Agent r1 on PR #211 (run #185) — an admin changing
+    //    platform_margin_sar after release would otherwise make the receipt
+    //    disagree with what was actually credited, and a lowered margin could
+    //    make a floored-0 release DISPLAY money that was never paid.
+    //      payout       = ledger amount (0 when no row = zero-payout release)
+    //      platformFee  = feePool − payout (reconciles by construction)
+    //      perJoinerFee = platformFee / payers (avg; margin setting only as
+    //                     the zero-payer fallback label)
     const [prize] = await this.db
       .select({ amount: transactions.amount })
       .from(transactions)
@@ -158,10 +169,14 @@ export class WalletReceiptService {
         ),
       );
 
-    const derivedPayout = WalletReceiptService.round2(
-      Math.max(0, feePoolSar - marginSar * payers),
+    const payoutSar = prize ? parseFloat(prize.amount) || 0 : 0;
+    const platformFeeSar = WalletReceiptService.round2(
+      Math.max(0, feePoolSar - payoutSar),
     );
-    const payoutSar = prize ? parseFloat(prize.amount) || 0 : derivedPayout;
+    const perJoinerFeeSar =
+      payers > 0
+        ? WalletReceiptService.round2(platformFeeSar / payers)
+        : marginSar;
 
     return {
       matchId,
@@ -175,8 +190,8 @@ export class WalletReceiptService {
       breakdown: {
         feePoolSar: WalletReceiptService.round2(feePoolSar),
         payers,
-        platformFeeSar: WalletReceiptService.round2(marginSar * payers),
-        perJoinerFeeSar: marginSar,
+        platformFeeSar,
+        perJoinerFeeSar,
       },
     };
   }

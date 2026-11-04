@@ -102,10 +102,10 @@ describe('WalletReceiptService — P2-293 host payout receipt', () => {
     expect(r.totalCreditedSar).toBe(57);
   });
 
-  it('zero-payout release (no PRIZE row) falls back to the derived floor', async () => {
+  it('zero-payout release (no PRIZE row) shows payout 0 — ledger-authoritative, never derived', async () => {
     const { svc } = makeDb({
       match: [RELEASED_MATCH],
-      feeTotal: '10.00', // 10 − 5×2 → floored 0
+      feeTotal: '10.00',
       payers: 2,
       episodes: [{ id: 'ep-1' }],
       forfeitTotal: '5.00',
@@ -114,9 +114,34 @@ describe('WalletReceiptService — P2-293 host payout receipt', () => {
     });
 
     const r = await svc.getPayoutReceipt(HOST, MATCH);
+    // PR-Agent r1 PR #211: a no-row release must display 0, not a
+    // margin-derived number (post-release margin drift could show money
+    // that was never credited).
     expect(r.payoutSar).toBe(0);
     expect(r.totalCreditedSar).toBe(5);
     expect(r.breakdown.platformFeeSar).toBe(10);
+  });
+
+  it('post-release margin change cannot distort the breakdown (platformFee = pool − payout)', async () => {
+    // Released when margin was 5 (pool 72 − 15 = 57 credited); margin NOW 1.
+    // The receipt must still reconcile to the ledger, not the live setting.
+    const { svc } = makeDb(
+      {
+        match: [RELEASED_MATCH],
+        feeTotal: '72.00',
+        payers: 3,
+        episodes: [{ id: 'ep-1' }],
+        forfeitTotal: '0',
+        forfeitCount: 0,
+        prize: [{ amount: '57.00' }],
+      },
+      1,
+    );
+    const r = await svc.getPayoutReceipt(HOST, MATCH);
+    expect(r.payoutSar).toBe(57);
+    expect(r.breakdown.platformFeeSar).toBe(15);
+    expect(r.breakdown.perJoinerFeeSar).toBe(5);
+    expect(r.totalCreditedSar).toBe(57);
   });
 
   it('empty roster → no forfeit query, zero sums', async () => {
