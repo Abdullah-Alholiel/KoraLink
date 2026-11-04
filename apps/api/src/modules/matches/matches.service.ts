@@ -2070,6 +2070,12 @@ export class MatchesService {
     // Return fully populated match with relations (API Contract Rule §2),
     // plus the leaver's refund outcome so the PWA can toast the exact rule
     // that applied (refunded / backfilled_refunded / forfeited / null).
+    // P1-70 (security audit run-5 R5-1): the leaver's sockets leave the
+    // match room BEFORE the roster broadcast — join-lobby gates membership
+    // only once, so without this they'd keep receiving lobby fan-out.
+    // evictFromMatch swallows its own errors (never fails the leave).
+    await this.appGateway.evictFromMatch(matchId, userId);
+
     const updatedMatch = await this.findOne(matchId);
     try {
       this.appGateway.broadcastRosterUpdate(matchId, updatedMatch);
@@ -4084,6 +4090,11 @@ export class MatchesService {
     if (promoted) {
       await this.waitlist.notifyPromotion(promoted, matchId);
     }
+
+    // P1-70 (security audit run-5 R5-1): evict the removed player's sockets
+    // from the match room BEFORE the roster broadcast, so they cannot observe
+    // post-removal state. evictFromMatch swallows its own errors.
+    await this.appGateway.evictFromMatch(matchId, targetUserId);
 
     const updatedMatch = await this.findOne(matchId);
     try {

@@ -24,6 +24,14 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     return { then: (r: (v: unknown) => void) => r([]) };
   }
 
+  function defaultGateway() {
+    return {
+      broadcastRosterUpdate: () => {},
+      broadcastStatusUpdate: () => {},
+      evictFromMatch: jest.fn().mockResolvedValue(undefined),
+    };
+  }
+
   type SelectRecord = { table: unknown; lock?: string; thenRows: unknown[] };
 
   function makeTx(opts: {
@@ -101,7 +109,7 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     return { tx, selects };
   }
 
-  function makeService(tx: unknown) {
+  function makeService(tx: unknown, appGateway: Record<string, unknown> = defaultGateway()) {
     const db = {
       transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       query: {
@@ -126,7 +134,7 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     const svc = new MatchesService(
       db as never,
       {} as never, // walletService
-      { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {} } as never,
+      appGateway as never,
       { sendPushToUsers: async () => {} } as never,
       { record: async () => {} } as never,
       { getNumber: async () => 0 } as never,
@@ -191,6 +199,36 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     const { tx } = makeTx({ match: { id: MATCH_ID, status: 'Open', host_id: HOST, min_players: 0, total_players: 1 }, player: null });
     const svc = makeService(tx);
     await expect(svc.leaveMatch(USER, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('leaveMatch evicts the leaving user from the match room (P1-70, post-tx, before roster broadcast)', async () => {
+    const { tx } = makeTx({
+      match: { id: MATCH_ID, status: 'Open', host_id: HOST, min_players: 4, total_players: 6 },
+      player: { id: 'mp-1', is_host: false },
+    });
+    const order: string[] = [];
+    const gw = {
+      broadcastRosterUpdate: jest.fn(() => {
+        order.push('roster');
+      }),
+      broadcastStatusUpdate: () => {},
+      evictFromMatch: jest.fn(async () => {
+        order.push('evict');
+      }),
+    };
+    const svc = makeService(tx, gw);
+    await svc.leaveMatch(USER, MATCH_ID);
+    expect(gw.evictFromMatch).toHaveBeenCalledTimes(1);
+    expect(gw.evictFromMatch).toHaveBeenCalledWith(MATCH_ID, USER);
+    expect(order).toEqual(['evict', 'roster']);
+  });
+
+  it('leaveMatch does not evict when membership is rejected (nothing committed)', async () => {
+    const { tx } = makeTx({ match: { id: MATCH_ID, status: 'Open', host_id: HOST, min_players: 0, total_players: 1 }, player: null });
+    const gw = defaultGateway();
+    const svc = makeService(tx, gw);
+    await expect(svc.leaveMatch(USER, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+    expect(gw.evictFromMatch).not.toHaveBeenCalled();
   });
 
   // ── removePlayer ───────────────────────────────────────── matches.service ──

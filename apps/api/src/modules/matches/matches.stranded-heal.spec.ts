@@ -335,7 +335,7 @@ describe('leaveMatch — terminal-state roster guard (attendance-record immutabi
     const svc = new MatchesService(
       db as never,
       {} as never,
-      { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {} } as never,
+      { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {}, evictFromMatch: async () => {} } as never,
       { sendPushToUsers: async () => {} } as never,
       { record: async () => {} } as never,
       { getNumber: async () => 0 } as never,

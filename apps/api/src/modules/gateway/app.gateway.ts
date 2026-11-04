@@ -986,6 +986,30 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     this.logger.log(`Force-disconnected sockets for user ${userId} (moderation action)`);
   }
 
+  /**
+   * Evict every socket of `userId` from the match room (roster removal / leave;
+   * security audit run-5 R5-1: join-lobby gates membership once, so a removed
+   * player's socket stayed in `match:<id>` until disconnect). Room name is
+   * constructed ONLY here — callers never build room names (P2-6 invariant).
+   * Failures are swallowed with a warn: eviction must never fail the removal.
+   */
+  async evictFromMatch(matchId: string, userId: string): Promise<void> {
+    const room = `match:${matchId}`;
+    try {
+      const sockets = await this.server.in(room).fetchSockets();
+      for (const s of sockets) {
+        const sid =
+          (s.data as { userId?: string } | undefined)?.userId ??
+          (s as unknown as { userId?: string }).userId;
+        if (sid === userId) await s.leave(room);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `evictFromMatch failed for match ${matchId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   // ── Status update broadcast (called from MatchesService) ──────────────────
 
   broadcastStatusUpdate(matchId: string, payload: unknown): void {
