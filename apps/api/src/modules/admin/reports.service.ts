@@ -40,7 +40,7 @@ export class AdminReportsService {
         r.id, r.subject_type, r.subject_id, r.reason, r.status, r.resolution,
         r.resolved_at, r.created_at,
         rep.full_name AS reporter_name, rep.handle AS reporter_handle,
-        COALESCE(u.full_name, u.handle, m.title, v.name, CASE WHEN r.subject_type = 'message' THEN 'Message from ' || COALESCE(su.full_name, su.handle, 'unknown user') END, CASE WHEN r.subject_type = 'review' THEN 'Review by ' || COALESCE(ru.full_name, ru.handle, 'a player') END) AS subject_label
+        COALESCE(u.full_name, u.handle, m.title, v.name, CASE WHEN r.subject_type = 'message' THEN 'Message from ' || COALESCE(su.full_name, su.handle, 'unknown user') END, CASE WHEN r.subject_type = 'review' THEN 'Review by ' || COALESCE(ru.full_name, ru.handle, 'a player') END, r.subject_id) AS subject_label
       FROM reports r
       LEFT JOIN users rep ON rep.id = r.reporter_id
       LEFT JOIN users u ON u.id = r.subject_id AND r.subject_type = 'user'
