@@ -724,6 +724,12 @@
     "transactions": "المعاملات",
     "noTransactions": "لا توجد معاملات بعد",
     "noTransactionsDescription": "ستظهر سجل معاملاتك هنا.",
+    "payoutReceiptLoading": "جارٍ التحقق من مستحقاتك…",
+    "payoutReceiptTitle": "إيصال المستحقات",
+    "payoutReceiptFeePool": "رسوم اللاعبين ({count} لاعبين)",
+    "payoutReceiptPlatformFee": "رسوم المنصة ({amount} × {count})",
+    "payoutReceiptForfeits": "رسوم محرومة ({count, plural, one {# لاعب} other {# لاعبين}})",
+    "payoutReceiptTotal": "الإجمالي المضاف",
     "topUpAmount": "مبلغ الشحن",
     "topupDisabled": "الإيداع في المحفظة غير متاح مؤقتاً. يرجى المحاولة لاحقاً.",
     "topup": {

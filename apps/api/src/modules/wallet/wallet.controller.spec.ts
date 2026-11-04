@@ -5,6 +5,7 @@ import { PATH_METADATA } from '@nestjs/common/constants';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
 import { WalletTopupService } from './wallet.topup.service';
+import { WalletReceiptService } from './wallet.receipt.service';
 
 /**
  * P0-7 (run #26) — wallet topup feature flag, replacing the old
@@ -43,6 +44,12 @@ describe('WalletController — topup feature flag (P0-7, run #26)', () => {
             createTopupIntent: jest.fn(),
             verifyTopup: jest.fn(),
           },
+        },
+        {
+          // P2-293 (run #185): the controller injects WalletReceiptService —
+          // stubbed; receipt behavior has its own spec (wallet.receipt.service.spec.ts).
+          provide: WalletReceiptService,
+          useValue: { getPayoutReceipt: jest.fn() },
         },
       ],
     }).compile();
