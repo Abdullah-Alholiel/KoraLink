@@ -130,4 +130,19 @@ describe('AppGateway.evictFromMatch (P1-70)', () => {
     await gateway.evictFromMatch(MATCH_ID, TARGET);
     expect(warn).not.toHaveBeenCalled();
   });
+
+  // PR-Agent r4: a deadline hit must NOT be silent — broadcasts race the
+  // eviction during the window, so the timeout path gets its own warn.
+  it('warns when the sweep stalls past the deadline', async () => {
+    const target = sock({ dataUserId: TARGET });
+    const { gateway, warn } = makeGateway(
+      () => new Promise<FakeSocket[]>(() => {}), // sweep never settles
+    );
+    gateway.evictionDeadlineMs = 30; // spec-tunable
+
+    await expect(gateway.evictFromMatch(MATCH_ID, TARGET)).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('deadline');
+    expect(String(warn.mock.calls[0][0])).toContain('broadcasts may have raced');
+  }, 5000);
 });

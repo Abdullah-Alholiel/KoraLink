@@ -1002,16 +1002,27 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // the background; its residue handling (Sentry + warn) still lands later.
     // The inner sweep never rejects, so the raced loser cannot turn into an
     // unhandled rejection.
-    const EVICTION_DEADLINE_MS = 2000;
-    await Promise.race([
-      this.evictFromMatchInner(matchId, userId),
-      new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, EVICTION_DEADLINE_MS);
+    const result = await Promise.race([
+      this.evictFromMatchInner(matchId, userId).then(() => 'done' as const),
+      new Promise<'deadline'>((resolve) => {
+        const t = setTimeout(() => resolve('deadline'), this.evictionDeadlineMs);
         // Unref: the deadline must not hold the process/event loop open.
         if (typeof t.unref === 'function') t.unref();
       }),
     ]);
+    if (result === 'deadline') {
+      // PR-Agent r4: a deadline hit means broadcasts raced the eviction and
+      // the removed socket MAY have received fan-out during the window — it
+      // must not be silent. (A later CLEAN sweep completion still evicts; a
+      // later FAILED sweep raises the residue Sentry below.)
+      this.logger.warn(
+        `evictFromMatch deadline (${this.evictionDeadlineMs}ms) hit for match ${matchId} (user ${userId}) — sweep continues in background; broadcasts may have raced the eviction`,
+      );
+    }
   }
+
+  /** Spec-tunable deadline (real path: 2s — see evictFromMatch). */
+  evictionDeadlineMs = 2000;
 
   private async evictFromMatchInner(matchId: string, userId: string): Promise<void> {
     const room = `match:${matchId}`;
