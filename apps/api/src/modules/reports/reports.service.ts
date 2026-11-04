@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -43,7 +42,9 @@ export class ReportsService {
     }
 
     // P1-74 (run #186): you cannot report your OWN review — the report path is
-    // for contesting OTHER players' reviews, mirroring the message-subject rule.
+    // for contesting OTHER players' reviews, mirroring the message-subject rule
+    // (same 400 BadRequest class as 'You cannot report your own message.' —
+    // PR-Agent r4 consistency MINOR; clients key self-report errors on 400).
     if (dto.subjectType === 'review') {
       const [rev] = await this.db
         .select({ user_id: venue_reviews.user_id })
@@ -51,7 +52,7 @@ export class ReportsService {
         .where(eq(venue_reviews.id, dto.subjectId))
         .limit(1);
       if (rev && rev.user_id === reporterId) {
-        throw new ConflictException('You cannot report your own review.');
+        throw new BadRequestException('You cannot report your own review.');
       }
     }
 

@@ -280,7 +280,7 @@ describe('ReportsService message subjects (P1-31)', () => {
 
     const REVIEW_DTO = { subjectType: 'review', subjectId: 'rv1', reason: 'abuse' } as never;
 
-    it('rejects reporting your own review (409 Conflict)', async () => {
+    it('rejects reporting your own review (400, mirrors the message rule)', async () => {
       const svc = makeService({ reviewRow: { id: 'rv1', user_id: 'u1' } });
       await expect(svc.create('u1', REVIEW_DTO)).rejects.toThrow('You cannot report your own review.');
     });
