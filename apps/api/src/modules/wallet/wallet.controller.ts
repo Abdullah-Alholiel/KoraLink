@@ -48,6 +48,9 @@ export class WalletController {
   // (the service 404s for anyone but the host); UUID-param pipe rejects
   // malformed ids with 400 before the service runs.
   @Get('payout-receipt/:matchId')
+  // PR-Agent r2 PR #211: explicit 60/min — the receipt runs ~5 queries per
+  // hit (heavier than balance/history); same explicit posture, not global-ride.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({
     summary: "Get the authenticated host's payout receipt for a completed match",
   })

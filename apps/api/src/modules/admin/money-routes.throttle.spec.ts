@@ -63,6 +63,15 @@ describe('Run #185 — money-route throttles', () => {
     expect(Reflect.getMetadata(TTL_KEY, fn)).toBe(60_000);
   });
 
+  it('GET wallet/payout-receipt/:matchId carries an explicit 60/min throttle (PR-Agent r2 PR #211)', () => {
+    const fn = methodOf(
+      WalletController.prototype as unknown as Record<string, unknown>,
+      'getPayoutReceipt',
+    );
+    expect(Reflect.getMetadata(LIMIT_KEY, fn)).toBe(60);
+    expect(Reflect.getMetadata(TTL_KEY, fn)).toBe(60_000);
+  });
+
   it('admin settlement READS stay on the global 60/min (no route metadata)', () => {
     const proto = AdminSettlementsController.prototype as unknown as Record<
       string,
