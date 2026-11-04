@@ -95,10 +95,11 @@ describe('AppGateway.evictFromMatch (P1-70)', () => {
 
     await expect(gateway.evictFromMatch(MATCH_ID, TARGET)).resolves.toBeUndefined();
     // Warn #1 = sweep failure (adapter down); warn #2 = residue is observable
-    // (Sentry captured + 'NOT evicted' residue line, PR-Agent r1 security note).
+    // (Sentry captured + 'unknown number' residue line — count is UNKNOWN on a
+    // sweep failure, PR-Agent r2).
     expect(warn).toHaveBeenCalledTimes(2);
     expect(String(warn.mock.calls[0][0])).toContain('adapter down');
-    expect(String(warn.mock.calls[1][0])).toContain('NOT evicted');
+    expect(String(warn.mock.calls[1][0])).toContain('unknown number');
   });
 
   // PR-Agent r1 (PR #209): per-socket failures must not strand remaining
@@ -118,8 +119,8 @@ describe('AppGateway.evictFromMatch (P1-70)', () => {
     expect(target.leave).toHaveBeenCalledWith(ROOM);
     expect(target2.leave).toHaveBeenCalledWith(ROOM); // loop continued
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toContain('NOT evicted');
-    expect(String(warn.mock.calls[0][0])).toContain('1 socket');
+    expect(String(warn.mock.calls[0][0])).toContain('left 1 socket');
+    expect(String(warn.mock.calls[0][0])).toContain(ROOM);
   });
 
   it('stays silent when every target socket evicts cleanly', async () => {

@@ -995,8 +995,28 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
    * Failures are swallowed with a warn: eviction must never fail the removal.
    */
   async evictFromMatch(matchId: string, userId: string): Promise<void> {
+    // Bounded inline latency (PR-Agent r2): a degraded remote adapter makes
+    // fetchSockets() stall until its transport timeout — that delay must not
+    // ride every leaveMatch/removePlayer API response. Race the sweep against
+    // a deadline: the caller proceeds after ≤2s while the sweep continues in
+    // the background; its residue handling (Sentry + warn) still lands later.
+    // The inner sweep never rejects, so the raced loser cannot turn into an
+    // unhandled rejection.
+    const EVICTION_DEADLINE_MS = 2000;
+    await Promise.race([
+      this.evictFromMatchInner(matchId, userId),
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, EVICTION_DEADLINE_MS);
+        // Unref: the deadline must not hold the process/event loop open.
+        if (typeof t.unref === 'function') t.unref();
+      }),
+    ]);
+  }
+
+  private async evictFromMatchInner(matchId: string, userId: string): Promise<void> {
     const room = `match:${matchId}`;
-    let failed = 0;
+    let leftBehind = 0;
+    let sweepFailed = false;
     try {
       const sockets = await this.server.in(room).fetchSockets();
       for (const s of sockets) {
@@ -1010,29 +1030,28 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
         try {
           await s.leave(room);
         } catch {
-          failed += 1;
+          leftBehind += 1;
         }
       }
     } catch (err) {
-      failed += 1;
+      // Sweep-level failure: the residue count is UNKNOWN (PR-Agent r2 —
+      // do not report a fake "1 socket"), so triage gets a distinct message.
+      sweepFailed = true;
       this.logger.warn(
         `evictFromMatch sweep failed for match ${matchId}: ${(err as Error).message}`,
       );
     }
-    if (failed > 0) {
-      // PR-Agent r1 security note: a swallowed failure silently degrades to the
-      // pre-fix state (removed player still in the room until disconnect) —
-      // that must be OBSERVABLE, not just a log line. Capture to Sentry with
-      // the run-5 fingerprint so the residue is triageable.
-      Sentry.captureException(
-        new Error(
-          `evictFromMatch left ${failed} socket(s) in ${room} for user ${userId}`,
-        ),
-        { tags: { fingerprint: 'api-realtime:stale-room-membership-post-removal' } },
-      );
-      this.logger.warn(
-        `evictFromMatch: ${failed} socket(s) NOT evicted from ${room} (user ${userId})`,
-      );
+    if (leftBehind > 0 || sweepFailed) {
+      // A swallowed failure silently degrades to the pre-fix state (removed
+      // player still in the room until disconnect) — that must be OBSERVABLE,
+      // not just a log line. Capture to Sentry with the run-5 fingerprint.
+      const detail = sweepFailed
+        ? `evictFromMatch sweep failed for match ${matchId} (user ${userId}) — unknown number of sockets may remain in ${room}`
+        : `evictFromMatch left ${leftBehind} socket(s) in ${room} for user ${userId}`;
+      Sentry.captureException(new Error(detail), {
+        tags: { fingerprint: 'api-realtime:stale-room-membership-post-removal' },
+      });
+      this.logger.warn(detail);
     }
   }
 
