@@ -2,11 +2,11 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main)
-- Commits ahead of main: **372** (last promote 2026-09-25)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations)
+- Commits ahead of main: **378** (last promote 2026-09-25)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP; Kong DOWN
-- Factory loop status: **HEALTHY 2026-11-04** — run #184 shipped 3 security/hardening PRs (#208 P1-71 avatar gate, #209 P1-70 room eviction, #210 P2-303 watchdog prod-backup), all squash-merged with green CI + triaged PR-Agent rounds.
+- Services: API/PWA/Admin UP (on run #185 squash `33bea28`); Kong DOWN
+- Factory loop status: **HEALTHY 2026-11-04** — run #185 shipped PR #211 (R5-2 WS id-shape guard + P2-295 money-route throttles + P2-293 host payout receipt), squash-merged, 8/8 checks, PR-Agent r3 clean, live-deployed.
 
 ## Active owner actions
 
