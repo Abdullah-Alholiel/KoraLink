@@ -27,6 +27,7 @@ import { WsRateLimitService } from './rate-limit.service';
 import { UUID_SHAPE } from '../../common/validation/id-shape';
 import { wsAllowRequest, extractHandshakeOrigin, setWsAllowedOriginsProvider } from '../../common/utils/ws-origin';
 import { originAllowed } from '../../common/utils/cors-origin';
+import * as Sentry from '@sentry/node';
 
 /** Parity with the REST message DTOs (@MaxLength(2000)). */
 const WS_MESSAGE_MAX_LENGTH = 2000;
@@ -995,17 +996,42 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
    */
   async evictFromMatch(matchId: string, userId: string): Promise<void> {
     const room = `match:${matchId}`;
+    let failed = 0;
     try {
       const sockets = await this.server.in(room).fetchSockets();
       for (const s of sockets) {
         const sid =
           (s.data as { userId?: string } | undefined)?.userId ??
           (s as unknown as { userId?: string }).userId;
-        if (sid === userId) await s.leave(room);
+        if (sid !== userId) continue;
+        // Per-socket guard (PR-Agent r1 MINOR): one rejecting leave (e.g. an
+        // adapter hiccup while a user has two devices in the room) must not
+        // strand the remaining target sockets.
+        try {
+          await s.leave(room);
+        } catch {
+          failed += 1;
+        }
       }
     } catch (err) {
+      failed += 1;
       this.logger.warn(
-        `evictFromMatch failed for match ${matchId}: ${(err as Error).message}`,
+        `evictFromMatch sweep failed for match ${matchId}: ${(err as Error).message}`,
+      );
+    }
+    if (failed > 0) {
+      // PR-Agent r1 security note: a swallowed failure silently degrades to the
+      // pre-fix state (removed player still in the room until disconnect) —
+      // that must be OBSERVABLE, not just a log line. Capture to Sentry with
+      // the run-5 fingerprint so the residue is triageable.
+      Sentry.captureException(
+        new Error(
+          `evictFromMatch left ${failed} socket(s) in ${room} for user ${userId}`,
+        ),
+        { tags: { fingerprint: 'api-realtime:stale-room-membership-post-removal' } },
+      );
+      this.logger.warn(
+        `evictFromMatch: ${failed} socket(s) NOT evicted from ${room} (user ${userId})`,
       );
     }
   }

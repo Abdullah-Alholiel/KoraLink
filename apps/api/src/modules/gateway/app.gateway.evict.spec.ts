@@ -88,13 +88,45 @@ describe('AppGateway.evictFromMatch (P1-70)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('swallows a rejecting fetchSockets with a warn (never throws)', async () => {
+  it('swallows a rejecting fetchSockets with warns (never throws)', async () => {
     const { gateway, warn } = makeGateway(async () => {
       throw new Error('adapter down');
     });
 
     await expect(gateway.evictFromMatch(MATCH_ID, TARGET)).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledTimes(1);
+    // Warn #1 = sweep failure (adapter down); warn #2 = residue is observable
+    // (Sentry captured + 'NOT evicted' residue line, PR-Agent r1 security note).
+    expect(warn).toHaveBeenCalledTimes(2);
     expect(String(warn.mock.calls[0][0])).toContain('adapter down');
+    expect(String(warn.mock.calls[1][0])).toContain('NOT evicted');
+  });
+
+  // PR-Agent r1 (PR #209): per-socket failures must not strand remaining
+  // target sockets, and any residue must be OBSERVABLE (Sentry capture),
+  // never silent — the swallowed failure degrades to the pre-fix state.
+  it('evicts remaining target sockets when one leave() rejects mid-loop', async () => {
+    const target = sock({ dataUserId: TARGET });
+    const rejecting = sock({ dataUserId: TARGET });
+    rejecting.leave = jest.fn<Promise<void>, [string]>(async () => {
+      throw new Error('leave failed');
+    });
+    const target2 = sock({ dataUserId: TARGET });
+    const { gateway, warn } = makeGateway(async () => [target, rejecting, target2]);
+
+    await expect(gateway.evictFromMatch(MATCH_ID, TARGET)).resolves.toBeUndefined();
+
+    expect(target.leave).toHaveBeenCalledWith(ROOM);
+    expect(target2.leave).toHaveBeenCalledWith(ROOM); // loop continued
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('NOT evicted');
+    expect(String(warn.mock.calls[0][0])).toContain('1 socket');
+  });
+
+  it('stays silent when every target socket evicts cleanly', async () => {
+    const target = sock({ dataUserId: TARGET });
+    const { gateway, warn } = makeGateway(async () => [target]);
+
+    await gateway.evictFromMatch(MATCH_ID, TARGET);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
