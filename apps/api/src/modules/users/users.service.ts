@@ -16,6 +16,7 @@ import { eq, sql, and, inArray, isNull, isNotNull, lt } from 'drizzle-orm';
 import { randomInt } from 'node:crypto';
 import * as Sentry from '@sentry/node';
 import { escapeLikePattern } from '../../common/utils/escape-like';
+import { isValidManagedAvatarUrl } from '../../common/utils/managed-avatar';
 import { reportFanOutError } from '../../common/utils/fanout';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
@@ -465,9 +466,27 @@ export class UsersService {
    * Update the authenticated user's profile fields.
    */
   async updateProfile(userId: string, dto: UpdateProfileDto) {
+    // P1-71 (Strix run-183 HIGH): canonical managed-path gate. The DTO validator
+    // guards HTTP requests; the service re-check is the real gate (internal call
+    // sites bypass DTO validation). `null` normalizes to '' so an explicit
+    // avatar-clear stays legal through the validator.
+    const avatarUrl =
+      (dto.avatar_url as string | null | undefined) === null
+        ? ''
+        : dto.avatar_url;
+    if (avatarUrl !== undefined && !isValidManagedAvatarUrl(avatarUrl)) {
+      throw new BadRequestException(
+        'avatar_url must be a managed media path under /media/avatars/',
+      );
+    }
     const [updated] = await this.db
       .update(users)
-      .set(withTimestamp({ ...dto }))
+      .set(
+        withTimestamp({
+          ...dto,
+          ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}),
+        }),
+      )
       .where(eq(users.id, userId))
       .returning({
         id: users.id,
