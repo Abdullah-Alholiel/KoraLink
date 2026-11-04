@@ -743,6 +743,7 @@
     "payAction": "صرف الدفعة",
     "generatePayouts": "توليد الدفعات",
     "thSubjectType": "نوع العنصر",
+    "thReview": "مراجعة",
     "labelPlatformMargin": "هامش المنصة (ر.س)",
     "labelGracePeriod": "مهلة عدم الحضور (بالدقائق)",
     "labelPayoutCadence": "دورية التحويلات (بالأيام)",

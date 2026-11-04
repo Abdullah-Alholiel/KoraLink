@@ -138,6 +138,8 @@ export default function ReportsPage() {
           <option value="match">{t('thMatch')}</option>
           <option value="venue">{t('thVenue')}</option>
           <option value="message">{t('thMessage')}</option>
+          {/* P1-74 (run #186): venue reviews are reportable subjects. */}
+          <option value="review">{t('thReview')}</option>
         </select>
         <button
           type="button"

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { Star, Loader2, AlertTriangle, PenLine, MessageSquareText } from 'lucide-react';
+import { Star, Loader2, AlertTriangle, Flag, PenLine, MessageSquareText } from 'lucide-react';
 import {
   useVenueReviews,
   useVenueReviewSubmit,
@@ -11,6 +11,7 @@ import {
 } from '@/hooks/useVenueReviews';
 import { useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ReportSheet from '@/components/matches/ReportSheet';
 import { formatCount, resolveDateLocale } from '@/lib/format';
 
 /**
@@ -42,7 +43,18 @@ function Stars({ value, size = 'w-3.5 h-3.5' }: { value: number; size?: string }
   );
 }
 
-function ReviewRow({ review, locale }: { review: VenueReviewApi; locale: string }) {
+function ReviewRow({
+  review,
+  locale,
+  canReport,
+  onReport,
+}: {
+  review: VenueReviewApi;
+  locale: string;
+  /** P1-74: signed-in non-authors can flag the review (report path). */
+  canReport: boolean;
+  onReport: (review: VenueReviewApi) => void;
+}) {
   const t = useTranslations();
   const initials = (review.user.full_name ?? '?').trim().charAt(0).toUpperCase();
   return (
@@ -80,6 +92,16 @@ function ReviewRow({ review, locale }: { review: VenueReviewApi; locale: string 
             {t('clubs.reviewMine')}
           </span>
         )}
+        {!review.mine && canReport && (
+          <button
+            type="button"
+            onClick={() => onReport(review)}
+            aria-label={t('clubs.reviewReport')}
+            className="p-1.5 -m-1 rounded-full text-gray-300 hover:text-brand-red active:scale-90 transition-transform flex-shrink-0"
+          >
+            <Flag className="w-3.5 h-3.5" strokeWidth={2} />
+          </button>
+        )}
       </div>
       {review.comment && (
         <p className="mt-1.5 text-sm text-gray-600 leading-relaxed break-words">
@@ -108,6 +130,8 @@ export default function VenueReviewsSection({
   const [draftRating, setDraftRating] = useState(0);
   const [draftComment, setDraftComment] = useState('');
   const [hoverRating, setHoverRating] = useState(0);
+  // P1-74 (run #186): report-a-review — opens the shared ReportSheet.
+  const [reportTarget, setReportTarget] = useState<VenueReviewApi | null>(null);
 
   function openSheet() {
     const mine = data?.reviews.find((r) => r.mine);
@@ -210,7 +234,13 @@ export default function VenueReviewsSection({
       {data.reviews.length > 0 ? (
         <ul className="mt-1 divide-y divide-gray-100">
           {data.reviews.slice(0, 5).map((r) => (
-            <ReviewRow key={r.id} review={r} locale={locale} />
+            <ReviewRow
+              key={r.id}
+              review={r}
+              locale={locale}
+              canReport={Boolean(user)}
+              onReport={setReportTarget}
+            />
           ))}
         </ul>
       ) : (
@@ -284,6 +314,21 @@ export default function VenueReviewsSection({
           </button>
         </div>
       </BottomSheet>
+
+      {/* P1-74 (run #186): report-a-review — shared sheet, subjectType="review". */}
+      <ReportSheet
+        open={reportTarget != null}
+        onClose={() => setReportTarget(null)}
+        subjectType="review"
+        subjectId={reportTarget?.id ?? ''}
+        subjectLabel={
+          reportTarget
+            ? t('clubs.reviewReportSubject', {
+                name: reportTarget.user.full_name || t('clubs.reviewAnonymous'),
+              })
+            : ''
+        }
+      />
     </div>
   );
 }

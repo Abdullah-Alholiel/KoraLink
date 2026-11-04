@@ -891,7 +891,9 @@
     "reviewThanks": "Review submitted. Thanks for helping other players!",
     "reviewNotAllowed": "You can review a venue only after completing a game there. No review was saved.",
     "reviewMine": "Yours",
-    "reviewAnonymous": "Player"
+    "reviewAnonymous": "Player",
+    "reviewReport": "Report review",
+    "reviewReportSubject": "Report the review by {name}"
   },
   "messages": {
     "title": "Messages",
