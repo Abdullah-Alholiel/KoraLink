@@ -136,6 +136,34 @@ describe('WalletReconcileService — discovery', () => {
     expect(out).toEqual({ scanned: 2, credited: 1, skipped: 1, failed: 0 });
   });
 
+  it('prefers the PAID payment when an intent carries several (stale 3DS then paid retry)', async () => {
+    const { service, verify } = makeService({ pendingRows: [PENDING_ROWS[0]] });
+    mockList.mockResolvedValue([
+      payment({ id: 'pay_stale999999999', status: 'failed' }),
+      payment({ id: 'pay_paid00000000001', status: 'paid' }),
+    ]);
+    const out = await service.reconcileOnce();
+    expect(verify).toHaveBeenCalledWith('user-1', {
+      intentId: '11111111-1111-4111-8111-111111111111',
+      paymentId: 'pay_paid00000000001',
+    });
+    expect(out.credited).toBe(1);
+  });
+
+  it('keeps an already-found paid payment even when a later non-paid one shares the intent', async () => {
+    const { service, verify } = makeService({ pendingRows: [PENDING_ROWS[0]] });
+    mockList.mockResolvedValue([
+      payment({ id: 'pay_paid00000000001', status: 'paid' }),
+      payment({ id: 'pay_stale999999999', status: 'failed' }),
+    ]);
+    const out = await service.reconcileOnce();
+    expect(verify).toHaveBeenCalledWith('user-1', {
+      intentId: '11111111-1111-4111-8111-111111111111',
+      paymentId: 'pay_paid00000000001',
+    });
+    expect(out.credited).toBe(1);
+  });
+
   it('skips payments whose description does not carry the intent-binding prefix', async () => {
     const { service, verify } = makeService({});
     mockList.mockResolvedValue([

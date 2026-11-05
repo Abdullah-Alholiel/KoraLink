@@ -115,7 +115,15 @@ export class WalletReconcileService {
         const desc = p.description ?? '';
         if (!desc.startsWith(INTENT_DESC_PREFIX)) continue;
         const intentId = desc.slice(INTENT_DESC_PREFIX.length);
-        if (!byIntentId.has(intentId)) byIntentId.set(intentId, { id: p.id, status: p.status });
+        // PR-Agent r1 IMPORTANT (run #189): prefer a PAID payment per intent —
+        // a stale/failed 3DS attempt can precede the successful retry in the
+        // list order (undocumented), and first-seen-wins would skip the paid
+        // payment every tick. One intent completes with exactly ONE payment
+        // (P2-282); the others are irrelevant once a paid one is found.
+        const existing = byIntentId.get(intentId);
+        if (!existing || (p.status === 'paid' && existing.status !== 'paid')) {
+          byIntentId.set(intentId, { id: p.id, status: p.status });
+        }
       }
 
       for (const intent of pending) {
