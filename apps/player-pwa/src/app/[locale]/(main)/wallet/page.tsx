@@ -103,6 +103,8 @@ export default function WalletPage() {
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [topUpAmount, setTopUpAmount] = useState('');
     const [topUpError, setTopUpError] = useState('');
+    // P2-260: show the "no money was taken" line under a generic top-up failure.
+    const [topUpReassure, setTopUpReassure] = useState(false);
 
     // ── Export sheet state (P2-119) ──
     const [showExportSheet, setShowExportSheet] = useState(false);
@@ -192,6 +194,7 @@ export default function WalletPage() {
 
     const handleTopUpSubmit = () => {
         setTopUpError('');
+        setTopUpReassure(false);
         // P2-289 (run #180): bounds come from the SERVER config (GET
         // /wallet/topup/config), not hardcoded client values — fixes the
         // SAR-10-vs-5 contract drift and adds the missing max check.
@@ -219,18 +222,26 @@ export default function WalletPage() {
                     setTopUpAmount('');
                 },
                 onError: (err: unknown) => {
-                    // FetchError carries the HTTP status — 403 means the dummy
-                    // top-up is production-gated (P0-2); show the specific message.
-                    if (
-                        err instanceof Error &&
-                        'status' in err &&
-                        (err as { status: number }).status === 403
-                    ) {
+                    // P2-260: error-message standard — offline must never read
+                    // like a bank decline. Precedence: network (status 0 or a
+                    // network-shaped message — the request never left the
+                    // device, so no reassurance needed) → 403 (dummy top-up
+                    // production-gated, P0-2) → generic failure + the
+                    // "no money was taken" money-surface reassurance.
+                    const status =
+                        err instanceof Error && 'status' in err
+                            ? (err as { status: number }).status
+                            : undefined;
+                    if (status === 0 || classifyError(err) === 'network') {
+                        setTopUpError(t('errors.offlineTryAgain'));
+                        setTopUpReassure(false);
+                    } else if (status === 403) {
                         setTopUpError(t('wallet.topupDisabled'));
+                        setTopUpReassure(false);
                     } else {
-                        // error-message standard: what happened + money-moved
-                        // reassurance + next step. Never raw backend text.
+                        // Never raw backend text.
                         setTopUpError(t('errors.walletTopupFailed'));
+                        setTopUpReassure(true);
                     }
                 },
             }
@@ -391,12 +402,20 @@ export default function WalletPage() {
 
                 {/* Error state */}
                 {historyError && !historyLoading && (
-                    <div className="flex flex-col items-center justify-center py-12">
+                    <div
+                        className="flex flex-col items-center justify-center py-12"
+                        role="status"
+                        data-testid="wallet-history-error"
+                    >
                         <div className="w-14 h-14 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
                             <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
                         </div>
-                        <p className="text-sm text-gray-400 text-center mb-4">
+                        <p className="text-sm text-gray-400 text-center">
                             {t(errorKey(classifyError(historyError)))}
+                        </p>
+                        {/* P2-260: money-surface reassurance. */}
+                        <p className="text-xs text-gray-400 text-center mt-1 mb-4">
+                            {t('errors.noMoneyTaken')}
                         </p>
                         <button
                             onClick={() => refetch()}
@@ -467,7 +486,7 @@ export default function WalletPage() {
             {/* ══════════════════════════════════════
                 TOP-UP MODAL (flag-off fallback — dummy self-credit)
             ═══════════════════════════════════ */}
-            <BottomSheet open={showTopUpModal} onClose={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }} widthClass="max-w-xl">
+            <BottomSheet open={showTopUpModal} onClose={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); setTopUpReassure(false); }} widthClass="max-w-xl">
                 <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
                     <div className="w-10 h-1 rounded-full bg-gray-300" />
                 </div>
@@ -476,7 +495,7 @@ export default function WalletPage() {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-bold text-brand-black">{t('wallet.topUp')}</h2>
                         <button
-                            onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); }}
+                            onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); setTopUpReassure(false); }}
                             aria-label={t('wallet.closeModal')}
                             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                         >
@@ -533,7 +552,12 @@ export default function WalletPage() {
                     </p>
 
                     {topUpError && (
-                        <p className="text-sm text-brand-red mb-3 text-center">{topUpError}</p>
+                        <div className="mb-3 text-center" role="alert">
+                            <p className="text-sm text-brand-red">{topUpError}</p>
+                            {topUpReassure && (
+                                <p className="text-xs text-gray-500 mt-1">{t('errors.noMoneyTaken')}</p>
+                            )}
+                        </div>
                     )}
 
                     <button
