@@ -31,3 +31,26 @@ export function isSwaggerEnabled(config: ConfigService): boolean {
   if (explicit === 'false') return false;
   return config.get<string>('NODE_ENV') !== 'production';
 }
+
+// PR-Agent r1 on PR #216 (run #188): silent fallthrough on typo'd values
+// (`COOKIE_SECURE=True` — capital T — would quietly keep cookies insecure) and
+// no guard against COOKIE_SECURE=false in production, which would violate the
+// P2-241 invariant (prod auth cookies must never ride an insecure connection).
+// Fail LOUD at boot instead — same posture as assertBootstrapSecrets (P0-3).
+export function assertEnvFlags(config: ConfigService): void {
+  for (const name of ['COOKIE_SECURE', 'SWAGGER_ENABLED'] as const) {
+    const v = config.get<string | undefined>(name);
+    if (v === undefined || v === 'true' || v === 'false') continue;
+    throw new Error(
+      `${name}=${v} is invalid — allowed values: true | false (or unset for the legacy NODE_ENV derivation)`,
+    );
+  }
+  if (
+    config.get<string>('NODE_ENV') === 'production' &&
+    isCookieSecure(config) === false
+  ) {
+    throw new Error(
+      'COOKIE_SECURE=false is not allowed when NODE_ENV=production — auth cookies must be secure in production',
+    );
+  }
+}

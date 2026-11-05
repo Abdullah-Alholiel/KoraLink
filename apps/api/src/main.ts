@@ -18,7 +18,7 @@ import {
   originAllowed,
 } from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
-import { isSwaggerEnabled } from './common/utils/env-flags';
+import { assertEnvFlags, isSwaggerEnabled } from './common/utils/env-flags';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -36,6 +36,12 @@ async function bootstrap(): Promise<void> {
     cookieSecret: configService.get<string>('COOKIE_SECRET'),
     nodeEnv: configService.get<string>('NODE_ENV', 'development'),
   });
+
+  // ── P1-72: refuse to boot on invalid security-posture flags ─────────────
+  // Same fail-loud posture: a typo'd COOKIE_SECURE/SWAGGER_ENABLED value, or
+  // COOKIE_SECURE=false in production (P2-241 invariant), kills the boot
+  // instead of silently serving insecure defaults.
+  assertEnvFlags(configService);
 
   const playerUrls = configService
     .get<string>('PLAYER_URL', 'http://localhost:3000')

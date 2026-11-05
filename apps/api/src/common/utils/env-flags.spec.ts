@@ -1,6 +1,10 @@
 import { ConfigService } from '@nestjs/config';
 
-import { isCookieSecure, isSwaggerEnabled } from './env-flags';
+import {
+  assertEnvFlags,
+  isCookieSecure,
+  isSwaggerEnabled,
+} from './env-flags';
 
 // P1-72 (run #188): explicit COOKIE_SECURE / SWAGGER_ENABLED flags with the
 // legacy NODE_ENV derivation as the unset default. Tripwire: the flag matrix
@@ -11,6 +15,43 @@ describe('env-flags (P1-72)', () => {
     ({
       get: (key: string) => env[key],
     }) as unknown as ConfigService;
+
+  describe('assertEnvFlags (PR-Agent r1: fail-loud boot validation)', () => {
+    it('accepts unset, true, and false values', () => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ COOKIE_SECURE: 'true', SWAGGER_ENABLED: 'false' })),
+      ).not.toThrow();
+      expect(() => assertEnvFlags(makeConfig({}))).not.toThrow();
+    });
+
+    it.each([
+      ['COOKIE_SECURE', 'True'],
+      ['COOKIE_SECURE', 'yes'],
+      ['COOKIE_SECURE', ''],
+      ['SWAGGER_ENABLED', 'off'],
+    ])('throws on %s=%s (typo protection)', (name, value) => {
+      expect(() => assertEnvFlags(makeConfig({ [name]: value }))).toThrow(
+        `${name}=${value} is invalid`,
+      );
+    });
+
+    it('throws when production sets COOKIE_SECURE=false (P2-241 invariant)', () => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: 'production', COOKIE_SECURE: 'false' })),
+      ).toThrow('must be secure in production');
+    });
+
+    it.each([
+      ['production', 'true'],
+      ['production', undefined],
+      ['staging', 'false'],
+      ['development', 'false'],
+    ])('allows NODE_ENV=%s with COOKIE_SECURE=%s', (nodeEnv, flag) => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, COOKIE_SECURE: flag })),
+      ).not.toThrow();
+    });
+  });
 
   describe('isCookieSecure', () => {
     it.each([
