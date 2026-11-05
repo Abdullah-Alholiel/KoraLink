@@ -78,6 +78,53 @@ export async function fetchMoyasarPayment(
   return (await res.json()) as MoyasarPayment;
 }
 
+/**
+ * Lists recent payments from Moyasar (GET /v1/payments, secret key Basic auth).
+ *
+ * Sweep-discovery source for the top-up reconcile (run #189): the sandbox
+ * contract was live-probed 2026-11-05 — response shape `{ payments: [...] }`,
+ * max 100/page; the `q=` query parameter was IGNORED server-side on the probe
+ * and Moyasar exposes no documented server-side `description` filter, so the
+ * description→payment narrowing happens CLIENT-SIDE here via the optional
+ * `query` substring filter. Newest-first order is assumed (probe's newest
+ * entries were E2E test payments from Oct 27) but never relied upon — the
+ * reconcile matches by description, not position.
+ */
+export interface MoyasarPaymentList {
+  payments: MoyasarPayment[];
+}
+
+export async function listMoyasarPayments(
+  secretKey: string,
+  query?: string,
+): Promise<MoyasarPayment[]> {
+  const url = new URL(`${MOYASAR_API_BASE}/payments`);
+  url.searchParams.set('limit', '100');
+  if (query) url.searchParams.set('q', query);
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization:
+        'Basic ' + Buffer.from(`${secretKey}:`).toString('base64'),
+      Accept: 'application/json',
+      'User-Agent':
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    },
+  });
+  if (!res.ok) {
+    throw new MoyasarHttpError(
+      res.status,
+      `Moyasar payment list failed (HTTP ${res.status})`,
+    );
+  }
+  const body = (await res.json()) as MoyasarPaymentList;
+  const payments = body.payments ?? [];
+  if (!query) return payments;
+  const needle = query.toLowerCase();
+  return payments.filter(
+    (p) => (p.description ?? '').toLowerCase().includes(needle),
+  );
+}
+
 /** Resolves the verification secret key (canonical env name first). */
 export function resolveMoyasarSecretKey(get: (key: string) => string | undefined): string | null {
   return get('MOYASAR_SECRET_KEY') ?? get('MOYASAR_SECRET_KEY_TEST') ?? null;

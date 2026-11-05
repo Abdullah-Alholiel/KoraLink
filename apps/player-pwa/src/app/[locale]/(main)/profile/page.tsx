@@ -276,7 +276,7 @@ export default function ProfilePage() {
                                     </div>
                                 </>
                             ) : statsError ? (
-                                <div className="flex-1 py-2 text-center">
+                                <div className="flex-1 py-2 text-center" role="status" aria-live="polite">
                                     <p className="text-sm text-white/70">{t(errorKey(classifyError(statsError)))}</p>
                                     <button
                                         type="button"
