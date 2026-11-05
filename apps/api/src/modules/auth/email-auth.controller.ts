@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
+import { isCookieSecure } from '../../common/utils/env-flags';
 import { EmailOtpService } from './email-otp.service';
 import { EmailSendOtpDto, EmailVerifyOtpDto } from './dto/email-otp.dto';
 
@@ -87,13 +88,17 @@ export class EmailAuthController {
       dto.surface,
     );
 
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
+    // P1-72 (run #188): EXPLICIT COOKIE_SECURE flag drives `secure` — same
+    // derivation as the phone verify-otp cookie; unset = legacy NODE_ENV gate.
+    const isProd = isCookieSecure(this.configService);
+    // sameSite stays NODE_ENV-derived (independent reviewer r2, PR #216):
+    // COOKIE_SECURE must not silently flip SameSite semantics.
+    const isProdEnv = this.configService.get<string>('NODE_ENV') === 'production';
 
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProdEnv ? 'strict' : 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',
     });
