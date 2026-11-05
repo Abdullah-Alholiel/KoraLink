@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — run-#187 PRs #214/#215 SQUASH-MERGED `3e51f85`/`d4aaaab` 2026-11-05 02:0xZ)
-- Commits ahead of main: **382** (last promote 2026-09-25; runs #186–#187 added 4 squash commits, NO migrations)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#187 added NO migrations)
+- Open PRs: 1 (#178 promote staging→main — run-#188 PRs #216/#217 SQUASH-MERGED `6eb11db`/`710e03d` 2026-11-05 11:1xZ)
+- Commits ahead of main: **385** (last promote 2026-09-25; runs #186–#188 added 6 squash commits, NO migrations)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#188 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (on run-#187 squashes `3e51f85` API / `d4aaaab` PWA); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-05** — run #187 shipped PR #214 (P2-308 audit-list throttle + DTO enum/id hardening) and PR #215 (P2-307 venue-picker error state); run-#186 claims live-verified (audit-logs 200/36 rows, review-report 404/400 paths); Sentry clean; Strix not due (done 2026-11-03, next window Dec 1–3).
+- Services: API/PWA/Admin UP (on run-#188 squashes `6eb11db` API / `710e03d` PWA); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-05** — run #188 shipped PR #216 (P1-72 explicit COOKIE_SECURE/SWAGGER_ENABLED posture flags + fail-loud boot validation) and PR #217 (P2-260 wallet offline-vs-failed error states); run-#187 claims live-verified; Sentry clean. **Strix November window MISSED (quota was healthy — runbook gap); Dec 1–3 catch-up recommended or an out-of-window run on #189.**
 
 ## Active owner actions
 
@@ -49,6 +49,11 @@
 ### 8. P1-73 — dev-login on staging
 - **What:** Should `DEV_LOGIN_ENABLED` stay `true` on staging? Factory recommends `false` (only real OTP) unless explicit staging-only dev-login policy.
 - **Close line:** "P1-73: disable dev-login on staging" OR "P1-73: keep dev-login on staging".
+- **Deadline:** Before public launch.
+
+### 10. P1-72 staging posture — one env change (NEW run #188)
+- **What:** The explicit flags are MERGED but unset (zero change by design). To close the Strix MEDIUM on staging: add to `apps/api/.env` → `COOKIE_SECURE=true` + `SWAGGER_ENABLED=false`, then `systemctl --user restart koralink-api.service`. Verify: dev-login response cookie shows `Secure`, `GET /api/docs` → 404. (Only if staging TLS is confirmed end-to-end on every access path.)
+- **Close line:** "P1-72: staging posture applied" OR "P1-72: keep unset for now".
 - **Deadline:** Before public launch.
 
 ### 9. Recurring-match series identity (run #121)
