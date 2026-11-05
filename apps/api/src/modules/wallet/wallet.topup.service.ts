@@ -68,6 +68,15 @@ export interface LatestTopupIntent {
 }
 
 const SAR_TO_HALALAS = 100;
+
+/**
+ * Machine prefix of the "3DS still in flight" conflict — the ONE reconcile
+ * outcome that is normal-and-silent. Run #189 PR-Agent r3: the sweep must
+ * classify conflicts by THIS constant (shared producer/consumer), never by
+ * re-typing the message — a reword here can never silently misroute sweep
+ * outcomes (paid-refusal anomalies always reach Sentry).
+ */
+export const TOPUP_CONFLICT_NOT_PAID_PREFIX = 'payment_not_paid';
 const TOPUP_KEY_PREFIX = 'topup:';
 const INTENT_KEY_PREFIX = 'topup-intent:';
 
@@ -295,7 +304,7 @@ export class WalletTopupService {
 
     if (payment.status !== 'paid') {
       throw new ConflictException(
-        'payment_not_paid: the payment is not completed yet — no money was credited',
+        `${TOPUP_CONFLICT_NOT_PAID_PREFIX}: the payment is not completed yet — no money was credited`,
       );
     }
     if (payment.currency !== 'SAR') {
