@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — run-#186 PRs #212/#213 SQUASH-MERGED `55ac793`/`991dd1e` 2026-11-04 17:17Z)
-- Commits ahead of main: **381** (last promote 2026-09-25; run #186 added 2 squash commits, NO migrations)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; run #186 added NO migrations)
+- Open PRs: 1 (#178 promote staging→main — run-#187 PRs #214/#215 SQUASH-MERGED `3e51f85`/`d4aaaab` 2026-11-05 02:0xZ)
+- Commits ahead of main: **382** (last promote 2026-09-25; runs #186–#187 added 4 squash commits, NO migrations)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#187 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (on run #185 squash `33bea28`); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-04** — run #186 shipped PR #212 (P2-292 audit-list service lift + PDPL-purge LEFT-JOIN rider + refund throttle) and PR #213 (P1-74 venue reviews reportable end-to-end); Sentry clean (all Failed-query noise lastSeen 2026-10-31T20:00Z = end of the resolved Neon quota storm); Strix scan not due (done 2026-11-03).
+- Services: API/PWA/Admin UP (on run-#187 squashes `3e51f85` API / `d4aaaab` PWA); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-05** — run #187 shipped PR #214 (P2-308 audit-list throttle + DTO enum/id hardening) and PR #215 (P2-307 venue-picker error state); run-#186 claims live-verified (audit-logs 200/36 rows, review-report 404/400 paths); Sentry clean; Strix not due (done 2026-11-03, next window Dec 1–3).
 
 ## Active owner actions
 
