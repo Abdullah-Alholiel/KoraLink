@@ -18,6 +18,7 @@ import {
   originAllowed,
 } from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
+import { isSwaggerEnabled } from './common/utils/env-flags';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -173,13 +174,13 @@ async function bootstrap(): Promise<void> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // ── Swagger (Cookie-Auth configured) — DEV ONLY ──────────────────────────
-  // Security audit run-1 (fingerprint: api-auth:swagger-unconditional-exposure):
-  // the OpenAPI document + UI were served unconditionally, publishing the full
-  // route/DTO surface to unauthenticated callers in production. Registered only
-  // outside production now; prod returns 404 on /api/docs (verification folded
-  // into the audit report).
-  if (configService.get<string>('NODE_ENV') !== 'production') {
+  // ── Swagger (Cookie-Auth configured) — DEV/staging ONLY by default ────────
+  // Security audit run-1 (fingerprint: api-auth:swagger-unconditional-exposure)
+  // + P1-72 (Strix run-#183 MEDIUM, run #188): the gate is the EXPLICIT
+  // SWAGGER_ENABLED flag when set; unset keeps the legacy NODE_ENV derivation
+  // (everything except a literal production is dev/staging tooling). Prod
+  // staging posture: SWAGGER_ENABLED=false returns 404 on /api/docs.
+  if (isSwaggerEnabled(configService)) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('KoraLink API')
       .setDescription(

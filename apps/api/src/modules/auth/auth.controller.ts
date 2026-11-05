@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
+import { isCookieSecure } from '../../common/utils/env-flags';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -92,8 +93,11 @@ export class AuthController {
       dto.surface,
     );
 
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
+    // P1-72 (run #188): EXPLICIT COOKIE_SECURE flag drives `secure` (Strix
+    // run-#183 MEDIUM: the old NODE_ENV string compare left staging's
+    // NODE_ENV=staging cookies secure:false). Unset = legacy derivation, so
+    // prod behavior is unchanged until the owner sets the flag.
+    const isProd = isCookieSecure(this.configService);
 
     // Issue the JWT exclusively as an HttpOnly cookie — never in the body.
     // (Exception, documented: the email+OTP flow's opt-in `responseToken`,
@@ -157,16 +161,16 @@ export class AuthController {
 
     const token = await this.authService.devLogin(dto.phone, dto.surface);
 
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
+    // P1-72 (run #188): same EXPLICIT COOKIE_SECURE derivation as verify-otp.
+    const secureCookie = isCookieSecure(this.configService);
 
-    // P2-241 (Reviewer A run #153): secure: isProd — same derivation as the
-    // verify-otp cookie above. dev-login only answers when DEV_LOGIN_ENABLED
-    // (default false), so this is dev ergonomics; in prod the cookie must
-    // never ride an insecure connection regardless.
+    // P2-241 (Reviewer A run #153): secure cookie flag — now from the explicit
+    // COOKIE_SECURE flag (P1-72). dev-login only answers when DEV_LOGIN_ENABLED
+    // (default false), so this is dev ergonomics; the cookie must
+    // never ride an insecure connection in prod regardless.
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: isProd,
+      secure: secureCookie,
       sameSite: 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',
