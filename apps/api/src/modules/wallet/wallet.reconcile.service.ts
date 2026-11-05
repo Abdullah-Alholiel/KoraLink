@@ -7,12 +7,13 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { wallet_topup_intents } from '../../database/schema';
 import {
-  fetchMoyasarPayment,
   listMoyasarPayments,
   resolveMoyasarSecretKey,
-  MoyasarHttpError,
 } from '../../common/moyasar/moyasar.client';
-import { WalletTopupService } from './wallet.topup.service';
+import {
+  TOPUP_CONFLICT_NOT_PAID_PREFIX,
+  WalletTopupService,
+} from './wallet.topup.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -157,7 +158,7 @@ export class WalletReconcileService {
             // guards) — exactly the anomaly class this backstop exists to
             // surface: log it loudly and capture it for ops.
             const msg = (err as Error).message ?? '';
-            if (msg.startsWith('payment_not_paid')) {
+            if (msg.startsWith(`${TOPUP_CONFLICT_NOT_PAID_PREFIX}:`)) {
               outcome.skipped++;
               continue;
             }

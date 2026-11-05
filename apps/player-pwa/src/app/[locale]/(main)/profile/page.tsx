@@ -258,6 +258,14 @@ export default function ProfilePage() {
                         P2-26 loading + error states preserved. */}
                     {isAuthenticated && (
                         <div className="mt-6 flex overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md">
+                            {/* P2-310 (run #189, PR-Agent r3): persistent live
+                                region — a live region that mounts together
+                                with its message is not reliably announced by
+                                all SR/browser combos; an always-present
+                                sr-only announcer guarantees delivery. */}
+                            <span role="status" aria-live="polite" className="sr-only">
+                                {statsError ? t(errorKey(classifyError(statsError))) : ''}
+                            </span>
                             {statsLoading ? (
                                 <>
                                     <div className="flex-1 px-4 py-3.5">
@@ -276,7 +284,7 @@ export default function ProfilePage() {
                                     </div>
                                 </>
                             ) : statsError ? (
-                                <div className="flex-1 py-2 text-center" role="status" aria-live="polite">
+                                <div className="flex-1 py-2 text-center">
                                     <p className="text-sm text-white/70">{t(errorKey(classifyError(statsError)))}</p>
                                     <button
                                         type="button"
