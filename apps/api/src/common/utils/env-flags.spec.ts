@@ -51,6 +51,20 @@ describe('env-flags (P1-72)', () => {
         assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, COOKIE_SECURE: flag })),
       ).not.toThrow();
     });
+
+    it('allows SWAGGER_ENABLED=true in production (documented owner escape hatch)', () => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: 'production', SWAGGER_ENABLED: 'true' })),
+      ).not.toThrow();
+    });
+
+    it('compose: the assert is the guard — without it the getters fall through to legacy', () => {
+      const cfg = makeConfig({ COOKIE_SECURE: 'True', NODE_ENV: 'staging' });
+      expect(() => assertEnvFlags(cfg)).toThrow('COOKIE_SECURE=True is invalid');
+      // Documents WHY assertEnvFlags must stay in bootstrap(): the getter
+      // alone silently falls through to the legacy derivation on junk values.
+      expect(isCookieSecure(cfg)).toBe(false);
+    });
   });
 
   describe('isCookieSecure', () => {

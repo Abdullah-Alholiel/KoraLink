@@ -98,6 +98,10 @@ export class AuthController {
     // NODE_ENV=staging cookies secure:false). Unset = legacy derivation, so
     // prod behavior is unchanged until the owner sets the flag.
     const isProd = isCookieSecure(this.configService);
+    // sameSite stays NODE_ENV-derived (independent reviewer r2, PR #216):
+    // COOKIE_SECURE=true on staging must NOT silently flip SameSite to
+    // strict — the two cookie axes are independent.
+    const isProdEnv = this.configService.get<string>('NODE_ENV') === 'production';
 
     // Issue the JWT exclusively as an HttpOnly cookie — never in the body.
     // (Exception, documented: the email+OTP flow's opt-in `responseToken`,
@@ -105,7 +109,7 @@ export class AuthController {
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProdEnv ? 'strict' : 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',
     });
