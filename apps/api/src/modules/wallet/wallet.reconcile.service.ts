@@ -151,9 +151,23 @@ export class WalletReconcileService {
           }
         } catch (err) {
           if (err instanceof ConflictException) {
-            // payment_not_paid = 3DS still in flight (normal); binding/amount
-            // conflicts surface on the client path — sweep just skips.
-            outcome.skipped++;
+            // PR-Agent r2 MINOR (run #189): only payment_not_paid (3DS still in
+            // flight) is normal-and-silent. Any OTHER conflict means a paid
+            // intent is being refused credit (binding/amount/already-credited
+            // guards) — exactly the anomaly class this backstop exists to
+            // surface: log it loudly and capture it for ops.
+            const msg = (err as Error).message ?? '';
+            if (msg.startsWith('payment_not_paid')) {
+              outcome.skipped++;
+              continue;
+            }
+            outcome.failed++;
+            this.logger.warn(
+              `topup reconcile anomaly intent=${intent.id}: ${msg}`,
+            );
+            Sentry.captureException(err, {
+              tags: { scope: 'wallet.topupReconcile', intentId: intent.id },
+            });
             continue;
           }
           outcome.failed++;

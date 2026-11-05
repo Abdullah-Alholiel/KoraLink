@@ -232,6 +232,20 @@ describe('WalletReconcileService — delegation outcomes', () => {
     expect(mockCapture).toHaveBeenCalledTimes(1);
   });
 
+  it('surfaces anomalous conflicts (binding/amount mismatch) as failures with Sentry, only payment_not_paid stays silent', async () => {
+    const { service, verify } = makeService({
+      pendingRows: [PENDING_ROWS[0]],
+      verify: jest.fn().mockRejectedValue(
+        new ConflictException('payment_intent_mismatch: not created for this intent'),
+      ),
+    });
+    mockList.mockResolvedValue([payment({})]);
+    const out = await service.reconcileOnce();
+    expect(out.failed).toBe(1);
+    expect(out.skipped).toBe(0);
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+  });
+
   it('a Moyasar list failure propagates to the cron wrapper (next tick retries)', async () => {
     const { service, verify } = makeService({});
     mockList.mockRejectedValue(new Error('moyasar 503'));
