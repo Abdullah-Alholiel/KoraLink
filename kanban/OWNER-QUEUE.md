@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — run-#188 PRs #216/#217 SQUASH-MERGED `6eb11db`/`710e03d` 2026-11-05 11:1xZ)
-- Commits ahead of main: **385** (last promote 2026-09-25; runs #186–#188 added 6 squash commits, NO migrations)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#188 added NO migrations)
+- Open PRs: 2 (#178 promote staging→main — owner-only · #218 run-#189 code PR, checks green, awaiting merge by the loop)
+- Commits ahead of main: **388** (last promote 2026-09-25; NO new migrations this cycle)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#189 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (on run-#188 squashes `6eb11db` API / `710e03d` PWA); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-05** — run #188 shipped PR #216 (P1-72 explicit COOKIE_SECURE/SWAGGER_ENABLED posture flags + fail-loud boot validation) and PR #217 (P2-260 wallet offline-vs-failed error states); run-#187 claims live-verified; Sentry clean. **Strix November window MISSED (quota was healthy — runbook gap); Dec 1–3 catch-up recommended or an out-of-window run on #189.**
+- Services: API/PWA/Admin UP; Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-05** — run #189 shipped PR #218 (top-up reconcile sweep P1-75 + profile stats live region P2-310). **CORRECTION: the Strix November scan was NOT missed** (run #188's claim was wrong) — scan completed 2026-11-03 (`strix_runs/koralink-src_2ebe`): HIGH avatar_url → P1-71 built (PR #208); Medium cookie posture → P1-72 built (PR #216); remaining = dependency-advisory cluster (proxy-addr, Next.js 15.5.21 criticals ×3 lockfiles, DOMPurify, multer/socket.io) → factory upgrade lane, next runs.
 
 ## Active owner actions
 
@@ -60,6 +60,16 @@
 - **What:** Confirm 8 weekly instances are independent matches (no series id); cancelled week does not propagate.
 - **Close line:** "Confirmed: recurring matches are independent".
 - **Deadline:** Before building any recurring-match editing/cancellation logic.
+
+### 11. P1-76 — social sign-in (Apple/Google) (NEW run #189)
+- **What:** Do we add Apple/Google sign-in? iOS App Store REQUIRES Sign in with Apple once any third-party login exists; Saudi market expects low-friction signup vs OTP. Priority vs other auth work?
+- **Close line:** "P1-76: build Apple first post-launch" OR "P1-76: defer, OTP is fine for now" OR "P1-76: plan a Gate cycle".
+- **Deadline:** Before iOS App Store submission.
+
+### 12. P2-311 — receipt/invoice artifact shape (NEW run #189, folds into P2-145)
+- **What:** Players top up + hosts pay pitch costs with no printable artifact (CSV export only). What shape: in-app receipt page? PDF invoice w/ VAT? Defer ZATCA e-invoicing?
+- **Close line:** "P2-311: in-app receipt MVP" OR "P2-311: PDF invoice w/ VAT" OR "P2-311: defer".
+- **Deadline:** Not urgent; before formal B2B venue contracts.
 
 ## Closed since last run
 - **P1-52 (Neon quota):** RESOLVED 2026-11-03 — direct prod Neon connect OK, no quota error.
