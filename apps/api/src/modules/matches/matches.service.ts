@@ -221,6 +221,8 @@ export interface NearbyMatchRow {
   spots_filled: number;
   /** P1-17: players queued on a full match (CTA counter). */
   waitlist_count: number;
+  /** P2-312: the viewer's waitlist position (null = not queued / anonymous). */
+  your_waitlist_position: number | null;
   distance_m: number;
   host_id: string;
   host_name: string | null;
@@ -1332,6 +1334,7 @@ export class MatchesService {
         m.max_players,
         (SELECT COUNT(*)::int FROM match_players mpx WHERE mpx.match_id = m.id) AS spots_filled,
         (SELECT COUNT(*)::int FROM match_waitlist w WHERE w.match_id = m.id) AS waitlist_count,
+        (SELECT w.position::int FROM match_waitlist w WHERE w.match_id = m.id AND w.user_id = ${currentUserId ?? null}::text LIMIT 1) AS your_waitlist_position,
         ${distanceExpr}           AS distance_m,
         u.id                      AS host_id,
         u.full_name               AS host_name,

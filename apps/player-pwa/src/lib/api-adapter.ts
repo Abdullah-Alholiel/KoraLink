@@ -53,6 +53,10 @@ export interface NearbyMatchApi {
   booking_mode?: 'koralink' | 'self';
   is_player_hosted?: boolean;
   host_payout_state?: 'held' | 'released' | 'cancelled' | 'not_applicable' | string;
+  /** P1-17: players queued on a full match (feed + my-matches SQL). */
+  waitlist_count?: number;
+  /** P2-312: the viewer's queue position (null when not queued). */
+  your_waitlist_position?: number | null;
 }
 
 /** Shape returned by GET /matches/:id — Drizzle findFirst with relations */
@@ -338,7 +342,8 @@ export function adaptNearbyMatch(
     currency: 'SAR',
     totalSpots: row.max_players,
     filledSpots: row.spots_filled,
-    waitlistCount: (row as { waitlist_count?: number }).waitlist_count ?? 0,
+    waitlistCount: row.waitlist_count ?? 0,
+    yourWaitlistPosition: row.your_waitlist_position ?? null,
     status,
     imageUrl: '',
     roster: [],
