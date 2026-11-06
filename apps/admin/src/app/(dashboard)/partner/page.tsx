@@ -5,6 +5,7 @@ import { CalendarClock, ChevronRight, MapPin, Plus, TrendingUp, Users, Wallet, Z
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import LoadingState from '@/components/LoadingState';
 import type { PartnerDashboard } from '@/lib/types';
 import { formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -35,7 +36,7 @@ export default function PartnerDashboardPage() {
     return (
       <div>
         <PageHeader title={t('title')} subtitle={t('loading')} />
-        <div className="p-8 text-sm text-gray-500">{t('loading')}</div>
+        <LoadingState message={t('loading')} />
       </div>
     );
   }
