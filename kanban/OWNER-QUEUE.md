@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner-only · #219 run-#190 P2-274 admin LoadingState, checks in flight)
-- Commits ahead of main: **390** (last promote 2026-09-25; NO new migrations this cycle)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#190 added NO migrations)
+- Open PRs: 1 (#178 promote staging→main — owner-only, checks 11/11 GREEN as of run #191)
+- Commits ahead of main: **395** (last promote 2026-09-25; NO new migrations this cycle)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#191 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP; Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-06** — run #190 shipped the P0-11 Coolify plan (docs/plans/prod-on-vps.md) + PR #219 (admin shared LoadingState, P2-274); Reviewer B #190 verified run-#189 claims; new P2-314 (reconcile coverage bound). Strix November scan DONE 2026-11-03 (koralink-src_2ebe) — no new scan due until December.
+- Services: API/PWA/Admin UP (serving run #191 build e660313 — next 15.5.29, @sentry/nextjs 10.78.0); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-06** — run #191 shipped PR #220 (dependency security: ALL prod criticals killed, audit parent-verified 0×4 trees) + PR #221 (P2-312 waitlist position chip on cards, live E2E via reversible tracer); both merged + deployed to the VPS quartet. New: P2-315 (SW match-detail cache staleness), P2-316 (majors register). Strix November scan DONE 2026-11-03 — next window Dec 1–3.
 
 ## Active owner actions
 
@@ -16,7 +16,7 @@
 - **Deadline:** Owner-paced; nothing executes without your A1.
 
 ### 2. Promote PR #178 merge (owner-only, remaining step)
-- **Status (2026-11-03):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Earlier "empty prod" alarm = probe of the wrong project (PG18 experiment, now renamed locally). NOTHING blocks the merge technically.
+- **Status (2026-11-06, run #191):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Checks now **11/11 GREEN** (gate, fresh-apply, semgrep, review, Dependency Audit, gitleaks, Vercel ×2 + previews). NOTHING blocks the merge technically; the promote now also carries the run-#191 dependency-security work (0 prod criticals).
 - **Your one click:** GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2. Then `/api/v1/health` 200.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
 - **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
