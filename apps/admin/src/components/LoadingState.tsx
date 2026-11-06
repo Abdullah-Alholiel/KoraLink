@@ -3,7 +3,12 @@
 interface LoadingStateProps {
   /** Localized message (caller picks the key: common.loading, t('loading'), …). */
   message: string;
-  /** Extra classes appended (padding overrides). */
+  /**
+   * Extra classes appended (same semantics as EmptyState). NOTE: Tailwind emits
+   * `p-*` utilities before `px-*`/`py-*` in its stylesheet, so appended padding
+   * classes CANNOT override the built-in px-8 py-10 — pass non-padding classes
+   * only, or wrap this component when a different padding is required.
+   */
   className?: string;
 }
 
