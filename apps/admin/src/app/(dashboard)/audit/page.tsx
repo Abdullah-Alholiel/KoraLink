@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import LoadingState from '@/components/LoadingState';
 import type { AuditLog, ListResponse } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -177,7 +178,7 @@ export default function AuditPage() {
       <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingAudit')}</div>
+        <LoadingState message={t('loadingAudit')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import LoadingState from '@/components/LoadingState';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { AdminVenueDetail } from '@/lib/types';
@@ -49,7 +50,7 @@ export default function VenueDetailPage() {
     return (
       <div>
         <PageHeader title={t('venue')} subtitle={tc('loading')} />
-        <div className="p-8 text-sm text-gray-500">{tc('loading')}</div>
+        <LoadingState message={tc('loading')} />
       </div>
     );
   }
