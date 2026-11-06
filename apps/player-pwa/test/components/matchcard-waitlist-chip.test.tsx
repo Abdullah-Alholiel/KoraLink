@@ -71,6 +71,13 @@ describe('MatchCard — waitlist position chip (P2-312)', () => {
     expect(screen.queryByText(/in line/)).not.toBeInTheDocument();
   });
 
+  it('does not render on a cancelled match (terminal guard, PR-Agent r1)', () => {
+    renderWithProviders(
+      <MatchCard match={{ ...fullMatch, yourWaitlistPosition: 3, status: 'cancelled' }} currentUserId="viewer" />,
+    );
+    expect(screen.queryByTestId('match-card-queued-chip')).not.toBeInTheDocument();
+  });
+
   it('does not render when the viewer already joined the match', () => {
     renderWithProviders(
       <MatchCard match={{ ...fullMatch, yourWaitlistPosition: 3, isJoined: true }} currentUserId="viewer" />,

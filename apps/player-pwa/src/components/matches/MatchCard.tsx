@@ -31,7 +31,11 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
     // P2-312: queue-position chip — meaningful only while the viewer is waiting.
-    const showQueuedChip = (match.yourWaitlistPosition ?? null) != null && !isJoined && !isHost;
+    // PR-Agent r1 (run #191): terminal matches are never actionable — waitlist
+    // rows survive host-cancel/completion (only auto-cancel sweeps the queue),
+    // so an explicit terminal guard prevents a stale "#N" chip on history cards.
+    const showQueuedChip =
+        (match.yourWaitlistPosition ?? null) != null && !isCompleted && !isJoined && !isHost;
     // POTM voting window — a match the user played in stays actionable for 24h
     // after the final whistle. Prefer the adapter-computed votingClosesAt (uses
     // the match's real duration); fall back to the coarse 60-min default only
