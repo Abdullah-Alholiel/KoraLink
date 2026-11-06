@@ -265,7 +265,10 @@ export class UsersService {
         m.pom_winner_id AS potm_winner_id,
         u2.full_name AS potm_winner_name,
         u2.avatar_url AS potm_winner_avatar,
-        (m.pom_winner_id IS NOT NULL OR m.pom_announced_at IS NOT NULL) AS potm_decided
+        (m.pom_winner_id IS NOT NULL OR m.pom_announced_at IS NOT NULL) AS potm_decided,
+        -- P2-312 (run #191): waitlist size + the viewer's queue position for card chips.
+        COALESCE((SELECT COUNT(*)::int FROM match_waitlist w WHERE w.match_id = m.id), 0) AS waitlist_count,
+        (SELECT w.position::int FROM match_waitlist w WHERE w.match_id = m.id AND w.user_id = ${userId}::text LIMIT 1) AS your_waitlist_position
       FROM match_players my
       INNER JOIN matches m ON m.id = my.match_id
       INNER JOIN users u ON u.id = m.host_id
@@ -319,6 +322,8 @@ export class UsersService {
       potm_winner_name: string | null;
       potm_winner_avatar: string | null;
       potm_decided: boolean;
+      waitlist_count: number;
+      your_waitlist_position: number | null;
     }>;
   }
 

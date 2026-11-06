@@ -30,6 +30,12 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
+    // P2-312: queue-position chip — meaningful only while the viewer is waiting.
+    // PR-Agent r1 (run #191): terminal matches are never actionable — waitlist
+    // rows survive host-cancel/completion (only auto-cancel sweeps the queue),
+    // so an explicit terminal guard prevents a stale "#N" chip on history cards.
+    const showQueuedChip =
+        (match.yourWaitlistPosition ?? null) != null && !isCompleted && !isJoined && !isHost;
     // POTM voting window — a match the user played in stays actionable for 24h
     // after the final whistle. Prefer the adapter-computed votingClosesAt (uses
     // the match's real duration); fall back to the coarse 60-min default only
@@ -275,13 +281,23 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
                     <span className="text-xs text-gray-500 font-medium">
                         {match.filledSpots}/{match.totalSpots}
                     </span>
                     <span className={`text-sm font-semibold px-5 py-2.5 rounded-full ${buttonStyle}`}>
                         {buttonLabel}
                     </span>
+                    {/* P2-312: the viewer's queue position — only while WAITING
+                        (never for joined players or the host). */}
+                    {showQueuedChip && (
+                        <span
+                            data-testid="match-card-queued-chip"
+                            className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                        >
+                            {t('matchCard.youQueued', { count: match.yourWaitlistPosition ?? 0 })}
+                        </span>
+                    )}
                 </div>
             </div>
         </Link>
