@@ -28,8 +28,9 @@ describe('MatchesService.createDispute idempotency', () => {
     evidence: [],
   };
 
-  function rowChain(rows: unknown[]) {
-    const chain: any = { where: () => chain, limit: () => chain };
+  function rowChain(rows: unknown[], lockedRows: unknown[] = rows) {
+    // `for` = the P2-139 locked read (SELECT … FOR UPDATE) inside the tx.
+    const chain: any = { where: () => chain, limit: () => chain, for: () => rowChain(lockedRows) };
     chain.then = (resolve: (v: unknown) => void) => resolve(rows);
     return chain;
   }
@@ -45,10 +46,12 @@ describe('MatchesService.createDispute idempotency', () => {
           if (table === matches) return rowChain([MATCH_ROW]);
           if (table === match_players) return rowChain([PLAYER_ROW]);
           if (table === disputes) {
-            // Two selects hit disputes: the fast-path (id,status,evidence) and
-            // the winner re-read (id,evidence) after an insert conflict.
+            // Two selects hit disputes: the fast-path (id,status) and the
+            // winner re-read (id only) after an insert conflict.
             if ('status' in (sel ?? {})) {
-              return rowChain(opts.existing ? [opts.existing] : []);
+              return rowChain(opts.existing ? [opts.existing] : [], [
+                opts.existing ?? opts.winner ?? DISPUTE_ROW,
+              ]);
             }
             return rowChain(opts.winner ? [opts.winner] : []);
           }
@@ -68,6 +71,9 @@ describe('MatchesService.createDispute idempotency', () => {
         };
         return chain;
       }),
+      // P2-139: the evidence append runs in db.transaction — the tx IS the
+      // same chainable mock.
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(db),
     };
 
     const appGateway = { broadcastRosterUpdate: () => {} };

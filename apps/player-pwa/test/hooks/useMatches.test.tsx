@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
@@ -20,15 +20,19 @@ vi.mock('@/lib/fetcher', () => ({
 }));
 
 import { useMatches, useMatch, useCreateMatch } from '@/hooks/useMatches';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '@/messages/en.json';
 
-// Wrapper with QueryClientProvider
+// Wrapper with QueryClientProvider (+ NextIntl — useLocale() in the hooks)
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <NextIntlClientProvider messages={enMessages} locale="en">
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </NextIntlClientProvider>
     ),
     queryClient,
   };
@@ -219,6 +223,49 @@ describe('useMatches hooks', () => {
           params: expect.objectContaining({ offset: '50', limit: '50' }),
         }),
       );
+    });
+  });
+
+  describe('useMatches freshness poll (listRefetchInterval)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('refetches page 1 every 45s, and stops polling once paged to page 2 (F4 guard)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const page1 = Array.from({ length: 50 }, (_, i) => makeApiMatch({ id: `m${i}` }));
+      mockFetcher.mockImplementation((_url: string, opts?: { params?: Record<string, string> }) =>
+        Promise.resolve(
+          opts?.params?.offset
+            ? { matches: [makeApiMatch({ id: 'm-last' })], total: 51, hasMore: false }
+            : { matches: page1, total: 51, hasMore: true },
+        ),
+      );
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useMatches(), { wrapper });
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+      // Page 1 only → the 45s poll fires a page-1 refetch.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45_000);
+      });
+      await waitFor(() => expect(mockFetcher).toHaveBeenCalledTimes(2));
+      expect(mockFetcher).toHaveBeenLastCalledWith('/matches', { params: { limit: '50' } });
+
+      // Page deeper → the poll disarms (an interval refetch would refetch
+      // EVERY loaded page).
+      act(() => {
+        result.current.fetchNextPage();
+      });
+      await waitFor(() => expect(result.current.matches).toHaveLength(51));
+      const callsAfterPaging = mockFetcher.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45_000 * 2);
+      });
+      expect(mockFetcher).toHaveBeenCalledTimes(callsAfterPaging);
     });
   });
 

@@ -7,6 +7,9 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft, Calendar, MapPin, Info, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
 import { fetcher } from '@/lib/fetcher';
 import { uuid } from '@/lib/uuid';
+import { classifyError, errorKey } from '@/lib/error-classify';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import BottomSheet from '@/components/layout/BottomSheet';
 
 interface PaymentSheetProps {
@@ -18,6 +21,8 @@ interface PaymentSheetProps {
     matchLocation: string;
     matchId: string;
     price: number;
+    /** ISO currency code the match price is denominated in (default 'SAR'). */
+    currency?: string;
     walletBalance: number;
     /** Player-host responsibility: who operates this match (drives the notice). */
     isPlayerHosted?: boolean;
@@ -33,6 +38,7 @@ export default function PaymentSheet({
     matchLocation,
     matchId,
     price,
+    currency = 'SAR',
     walletBalance,
     isPlayerHosted,
     bookingMode,
@@ -41,13 +47,20 @@ export default function PaymentSheet({
     const router = useRouter();
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
+    const isOnline = useOnlineStatus();
     const [agreed, setAgreed] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
     const [joinError, setJoinError] = useState<string | null>(null);
+    // P2-235: consent-policy expander state — the checkbox line shows the
+    // opening of the policy; "Read full policy" expands it in place.
+    const [policyExpanded, setPolicyExpanded] = useState(false);
     // Stable idempotency key per logical join+pay attempt. Slice 2: the key
     // rides the JOIN request — the server charges inside the join transaction
     // and replays return the original outcome (no double charge, no double seat).
-    // Only regenerates when the user explicitly re-opens the sheet.
+    // Regenerates on page remount (the component instance survives sheet
+    // close/reopen), which is safe: the server scopes the fee key per roster
+    // episode — `join:<episodeId>:<key>` (matches.service.ts) — and leaveMatch
+    // deletes the episode, so a leave→rejoin can never collide.
     const [idempotencyKey] = useState(() => uuid());
 
     const toPay = Math.max(0, price - walletBalance);
@@ -58,11 +71,14 @@ export default function PaymentSheet({
         if (!isOpen) {
             setAgreed(false);
             setJoinError(null);
+            setPolicyExpanded(false);
         }
     }, [isOpen]);
 
     const handlePay = async () => {
-        if (!agreed || isJoining) return;
+        // P2-228: offline tap guard — never send a doomed join+pay request;
+        // the CTA is also disabled below (both layers, play-page pattern).
+        if (!agreed || isJoining || !isOnline) return;
         setIsJoining(true);
         setJoinError(null);
         try {
@@ -76,7 +92,11 @@ export default function PaymentSheet({
             });
             onPaySuccess();
         } catch (err) {
-            setJoinError(err instanceof Error ? err.message : 'Payment failed');
+            // P2-228 (error-message-standards): classify → authored localized
+            // copy, never the raw backend English string. Money flow keeps the
+            // "no money was taken" reassurance (the wallet debit is inside the
+            // join tx, so any thrown error means nothing was charged).
+            setJoinError(t(errorKey(classifyError(err))));
         } finally {
             setIsJoining(false);
         }
@@ -127,16 +147,16 @@ export default function PaymentSheet({
                 <div className="mx-5 mt-5 space-y-3">
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('payment.total')}</span>
-                        <span className="text-sm font-bold text-brand-black">SAR {price.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{currency} {price.toFixed(2)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('profile.wallet')}</span>
-                        <span className="text-sm font-bold text-brand-black">SAR {walletBalance.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{currency} {walletBalance.toFixed(2)}</span>
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div className="flex items-center justify-between">
                         <span className="text-base font-bold text-brand-black">{t('payment.total')}</span>
-                        <span className="text-xl font-extrabold text-brand-red">SAR {toPay.toFixed(2)}</span>
+                        <span className="text-xl font-extrabold text-brand-red">{currency} {toPay.toFixed(2)}</span>
                     </div>
                 </div>
 
@@ -208,17 +228,42 @@ export default function PaymentSheet({
                             </svg>
                         )}
                     </button>
-                    <p className="text-xs text-gray-500">{t('host.disclaimer')} {t('host.disclaimerText').slice(0, 80)}...</p>
+                    {/* P2-235: full consent text — never a code-side truncation.
+                        Collapsed shows the opening with an in-place expander. */}
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500">
+                            {t('host.disclaimer')}{' '}
+                            <span className={policyExpanded ? '' : 'line-clamp-2'}>
+                                {t('host.disclaimerText')}
+                            </span>
+                        </p>
+                        <button
+                            onClick={() => setPolicyExpanded(!policyExpanded)}
+                            className="text-xs text-brand-green font-semibold mt-1 active:opacity-80"
+                            aria-expanded={policyExpanded}
+                        >
+                            {policyExpanded ? t('payment.readLessPolicy') : t('payment.readFullPolicy')}
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* CTA */}
             <div className="mx-5 mt-5 pb-8 flex-shrink-0">
+                {isOnline ? null : (
+                    <div className="mb-3">
+                        <OfflineBanner
+                            isOffline
+                            variant="plain"
+                            className="mx-0"
+                        />
+                    </div>
+                )}
                 <button
                     onClick={handlePay}
-                    disabled={!agreed || isJoining || !canAfford}
+                    disabled={!agreed || isJoining || !canAfford || !isOnline}
                     className={`w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all ${
-                        agreed && !isJoining && canAfford
+                        agreed && !isJoining && canAfford && isOnline
                             ? 'bg-brand-green shadow-[0_4px_16px_rgba(27,67,50,0.3)] active:scale-[0.98]'
                             : 'bg-gray-300 cursor-not-allowed'
                     }`}
@@ -228,17 +273,25 @@ export default function PaymentSheet({
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             {t('payment.processing')}
                         </>
+                    ) : !isOnline ? (
+                        t('errors.network')
                     ) : !canAfford ? (
                         t('payment.insufficientBalance')
                     ) : (
-                        <>{t('payment.payWithWallet')} SAR {price.toFixed(2)}</>
+                        <>{t('payment.payWithWallet')} {currency} {price.toFixed(2)}</>
                     )}
                 </button>
                 {joinError && (
-                    <p className="text-xs text-brand-red mt-2 text-center">
-                        {t('errors.walletPayFailed')}
-                    </p>
-                )}
+                    <div className="mt-2 text-center" role="alert">
+                        <p className="text-xs text-brand-red">{joinError}</p>
+                        {/* Money-flow reassurance (error-message-standards): the
+                            wallet debit lives INSIDE the join tx, so any thrown
+                            error means nothing was charged. Always shown. */}
+                        <p className="text-xs text-gray-500 mt-1">
+                            {t('payment.noMoneyTaken')}
+                        </p>
+                    </div>
+                    )}
             </div>
         </BottomSheet>
     );

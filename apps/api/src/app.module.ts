@@ -24,7 +24,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { PartnerModule } from './modules/partner/partner.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { ReportsModule } from './modules/reports/reports.module';
-import { MailerModule } from './modules/mailer/mailer.module';
+import { StorageModule } from './common/storage/storage.module';
+import { MediaModule } from './modules/media/media.module';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
@@ -77,6 +78,9 @@ import { MailerModule } from './modules/mailer/mailer.module';
 
     // ── Feature modules ──────────────────────────────────────────────────
     DatabaseModule,
+    // P1-38 (run #170): object storage + media routes. Storage first (global).
+    StorageModule,
+    MediaModule,
     AuthModule,
     MatchesModule,
     UsersModule,

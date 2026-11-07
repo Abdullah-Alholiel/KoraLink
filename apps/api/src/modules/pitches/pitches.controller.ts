@@ -1,10 +1,8 @@
 import {
   Controller,
   Get,
-  Post,
   Param,
   Query,
-  Body,
   UseGuards,
 } from '@nestjs/common';
 import {

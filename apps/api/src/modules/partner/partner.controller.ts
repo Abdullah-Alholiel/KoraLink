@@ -19,8 +19,9 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { CreateVenueDto } from './dto/create-venue.dto';
-import { CreateSlotDto, GenerateSlotsDto, UpdateVenuePartnerDto } from './dto/slots.dto';
+import { BlackoutSlotsDto, CreateSlotDto, GenerateSlotsDto, SlotWindowQueryDto, UpdateVenuePartnerDto } from './dto/slots.dto';
 import { GetPartnerMatchesDto } from './dto/get-partner-matches.dto';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('partner')
 @UseGuards(JwtCookieAuthGuard, RolesGuard)
@@ -53,7 +54,7 @@ export class PartnerController {
   @Patch('venues/:id')
   updateVenue(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdateVenuePartnerDto,
   ) {
     return this.partner.updateVenue(user.sub, user.role, id, dto);
@@ -64,17 +65,16 @@ export class PartnerController {
   @Get('pitches/:id/slots')
   listSlots(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
+    @Param('id', UuidParamPipe) id: string,
+    @Query() window: SlotWindowQueryDto,
   ) {
-    return this.partner.listSlots(user.sub, user.role, id, from, to);
+    return this.partner.listSlots(user.sub, user.role, id, window.from, window.to);
   }
 
   @Post('pitches/:id/slots/generate')
   generateSlots(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: GenerateSlotsDto,
   ) {
     return this.partner.generateSlots(user.sub, user.role, id, dto);
@@ -83,7 +83,7 @@ export class PartnerController {
   @Post('pitches/:id/slots')
   createSlot(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: CreateSlotDto,
   ) {
     return this.partner.createSlot(user.sub, user.role, id, dto);
@@ -92,9 +92,23 @@ export class PartnerController {
   @Delete('slots/:slotId')
   deleteSlot(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('slotId') slotId: string,
+    @Param('slotId', UuidParamPipe) slotId: string,
   ) {
     return this.partner.deleteSlot(user.sub, user.role, slotId);
+  }
+
+  /**
+   * P2-246 (run #161): bulk slot blackout — delete every FREE slot of the
+   * pitch in the inclusive [from, to] range (maintenance closures). Booked
+   * slots are never touched; the response reports both counts.
+   */
+  @Post('pitches/:id/slots/blackout')
+  blackoutSlots(
+    @CurrentUser() user: { sub: string; role: string },
+    @Param('id', UuidParamPipe) id: string,
+    @Body() dto: BlackoutSlotsDto,
+  ) {
+    return this.partner.blackoutSlots(user.sub, user.role, id, dto);
   }
 
   @Get('pitches')
@@ -110,7 +124,7 @@ export class PartnerController {
   @Patch('pitches/:id')
   updatePitch(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdatePitchDto,
   ) {
     return this.partner.updatePitch(user.sub, user.role, id, dto);
@@ -119,7 +133,7 @@ export class PartnerController {
   @Delete('pitches/:id')
   deletePitch(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
   ) {
     return this.partner.deletePitch(user.sub, user.role, id);
   }
@@ -127,6 +141,17 @@ export class PartnerController {
   @Get('earnings')
   earnings(@CurrentUser() user: { sub: string; role: string }) {
     return this.partner.getEarnings(user.sub, user.role);
+  }
+
+  /**
+   * P2-3 (run #138): partner-initiated payout REQUEST — creates pending
+   * settlements for unsettled completed-booking revenue. Moves NO money;
+   * HQ still pays via the existing settlement flow (owner decision ledger:
+   * P0-2 untouched). Route is VenueOwner-only via the class @Roles guard.
+   */
+  @Post('payout-requests')
+  requestPayout(@CurrentUser() user: { sub: string; role: string }) {
+    return this.partner.requestPayout(user.sub, user.role);
   }
 
   @Get('verification')
@@ -156,7 +181,7 @@ export class PartnerController {
   @Get('matches/:id')
   matchDetail(
     @CurrentUser() user: { sub: string; role: string },
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
   ) {
     return this.partner.getPartnerMatch(user.sub, user.role, id);
   }

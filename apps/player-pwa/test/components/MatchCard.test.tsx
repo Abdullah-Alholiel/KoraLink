@@ -190,4 +190,54 @@ describe('MatchCard', () => {
     renderWithProviders(<MatchCard match={acrossMidnight} currentUserId="p2" />);
     expect(screen.getByText('Vote POTM')).toBeInTheDocument();
   });
+
+  // ── P1-51 (run #116): History-row POTM outcome pills ──
+  // Window resolved (>24h old, my-matches fields present).
+  const decidedBase = {
+    ...baseMatch,
+    status: 'completed' as const,
+    scheduledAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    isJoined: true,
+    potmDecided: true as const,
+  };
+
+  it('shows the POTM winner pill with the winner name on a decided History row', () => {
+    renderWithProviders(
+      <MatchCard
+        match={{ ...decidedBase, potmWinnerName: 'Fahad Alqahtani' }}
+        currentUserId="p2"
+      />,
+    );
+    expect(screen.getByTestId('match-card-potm-winner')).toBeInTheDocument();
+    expect(screen.getByText('POTM: Fahad Alqahtani')).toBeInTheDocument();
+    expect(screen.queryByText('Vote POTM')).not.toBeInTheDocument();
+    expect(screen.queryByText('POTM voted')).not.toBeInTheDocument();
+  });
+
+  it('shows the no-winner pill on a decided tie/no-vote History row', () => {
+    renderWithProviders(
+      <MatchCard match={{ ...decidedBase, potmWinnerName: null }} currentUserId="p2" />,
+    );
+    expect(screen.getByTestId('match-card-potm-no-winner')).toBeInTheDocument();
+    expect(screen.getByText('Voting ended — no winner')).toBeInTheDocument();
+    expect(screen.queryByTestId('match-card-potm-winner')).not.toBeInTheDocument();
+  });
+
+  it('renders no POTM pill when potmDecided is absent (feeds without the fields)', () => {
+    renderWithProviders(<MatchCard match={{ ...decidedBase, potmDecided: undefined }} currentUserId="p2" />);
+    expect(screen.queryByTestId('match-card-potm-winner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('match-card-potm-no-winner')).not.toBeInTheDocument();
+    expect(screen.getByText('View Details')).toBeInTheDocument();
+  });
+
+  it('renders no POTM outcome pill for a non-participant viewer', () => {
+    renderWithProviders(
+      <MatchCard
+        match={{ ...decidedBase, potmWinnerName: 'Fahad Alqahtani', isJoined: false }}
+        currentUserId="someone-else"
+      />,
+    );
+    expect(screen.queryByTestId('match-card-potm-winner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('match-card-potm-no-winner')).not.toBeInTheDocument();
+  });
 });

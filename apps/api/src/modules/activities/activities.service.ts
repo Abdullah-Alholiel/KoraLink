@@ -12,6 +12,7 @@ import {
   venues,
 } from '../../database/schema';
 import { RealtimeService } from '../gateway/realtime.service';
+import { reportFanOutError } from '../../common/utils/fanout';
 import { MailerService } from '../mailer/mailer.service';
 import { EMAIL_ACTIVITY_VERBS, MailTemplateKey } from '../mailer/mailer.copy';
 
@@ -45,7 +46,9 @@ export type ActivityVerb =
   | 'waitlist_promoted'
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   | 'venue_ownership_added'
-  | 'venue_ownership_removed';
+  | 'venue_ownership_removed'
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  | 'payout_paid';
 
 /** Verbs that appear in the bell (directed notifications), not just the feed. */
 const DIRECTED_VERBS = [
@@ -66,6 +69,7 @@ const DIRECTED_VERBS = [
   'report_resolved',
   'match_rescheduled',
   'waitlist_promoted',
+  'payout_paid',
 ] as const;
 
 /** Raw SQL list for `verb = ANY(...)` filters below (compile-time constant — no injection). */
@@ -164,7 +168,10 @@ export class ActivitiesService {
           .sendToUsers(recipients, params.verb as MailTemplateKey, {}, {
             matchId: params.matchId ?? undefined,
           })
-          .catch(() => undefined);
+          // P2-169 (run #115): logged + Sentry'd, not swallowed.
+          .catch((err: unknown) =>
+            reportFanOutError('activities.queue-email', err),
+          );
       });
     }
   }

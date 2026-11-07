@@ -28,6 +28,7 @@
 
 import { usePathname } from 'next/navigation';
 import { navigatePreservingLocale } from '@/lib/locale-routing';
+import { syncUserLocale } from '@/lib/sync-user-locale';
 
 export type ToggleLocale = 'ar' | 'en';
 
@@ -59,6 +60,10 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
     const switchTo = (to: ToggleLocale) => {
         if (typeof window === 'undefined') return;
         if (to === current) return; // already there — toggle, don't reload
+        // P2-264 (run #168): persist the email-locale preference alongside the
+        // UI switch. Fire-and-forget with keepalive so it survives the reload
+        // below; silent on 401 (logged-out surfaces have nothing to sync).
+        void syncUserLocale(to);
         const segments = pathname.split('/');
         segments[1] = to; // locale is always segment 1 in the [locale] layout
         navigatePreservingLocale(`/${segments.slice(1).join('/')}${window.location.search}`);

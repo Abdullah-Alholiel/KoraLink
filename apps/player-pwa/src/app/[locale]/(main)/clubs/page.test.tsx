@@ -19,6 +19,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
 import ClubsPage from '@/app/[locale]/(main)/clubs/page';
 import type { VenueApi } from '@/hooks/useVenues';
+import { useAppStore } from '@/store/useAppStore';
 
 // ── Controllable useVenues fixture ──
 let venueFixture: VenueApi[] = [];
@@ -26,6 +27,8 @@ let venuesError: unknown = null;
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/clubs',
+    // Run #111: ClubsPage reads ?tab= behind useSearchParams (P2-165).
+    useSearchParams: () => ({ get: () => null }),
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
@@ -38,6 +41,22 @@ vi.mock('@/hooks/useVenues', async (importOriginal) => {
             isLoading: false,
             error: venuesError,
             refetch: vi.fn(),
+        }),
+    };
+});
+
+// ── P2-161 (run #109): controllable favorites fixtures ──
+let favIdsFixture: string[] = [];
+const toggleMutate = vi.fn();
+
+vi.mock('@/hooks/useVenueFavorites', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/hooks/useVenueFavorites')>();
+    return {
+        ...actual,
+        useVenueFavoriteIds: () => ({ data: favIdsFixture, isLoading: false }),
+        useVenueFavoriteToggle: () => ({
+            mutate: toggleMutate,
+            isPending: false,
         }),
     };
 });
@@ -82,6 +101,8 @@ function renderClubs() {
     });
     return render(
         <QueryClientProvider client={queryClient}>
+            {/* Run #110: hearts are auth-gated (!storeUser in the disabled
+                guard) — seed the real store with a signed-in user. */}
             <NextIntlClientProvider messages={enMessages} locale="en">
                 <ClubsPage />
             </NextIntlClientProvider>
@@ -94,6 +115,13 @@ describe('clubs page — run #68 drain slice', () => {
         vi.clearAllMocks();
         venueFixture = [];
         venuesError = null;
+        // Run #110: seed a signed-in user + hydrated store (hearts are
+        // auth-gated); the persist storage stays localStorage in jsdom.
+        useAppStore.setState({
+            user: { id: 'u-test', full_name: 'Tester', handle: 'tester' } as never,
+            isHydrated: true,
+            isAuthenticated: true,
+        });
     });
 
     it('Nearby (default pill) sorts venues by ascending distance — null distance LAST', () => {
@@ -130,11 +158,11 @@ describe('clubs page — run #68 drain slice', () => {
         expect(names).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 
-    it('the dead "Top Rated" pill is gone; the live pills remain', () => {
+    it('the Top Rated pill is BACK (P2-173 run #119: real server sort) beside the live pills', () => {
         venueFixture = [venue({ id: 'v-1', name: 'Some Club' })];
         renderClubs();
 
-        expect(screen.queryByText('Top Rated')).toBeNull();
+        expect(screen.getByText('Top Rated')).toBeTruthy();
         expect(screen.getByText('Nearby')).toBeTruthy();
         expect(screen.getByText('Indoor')).toBeTruthy();
         expect(screen.getByText('Available Now')).toBeTruthy();
@@ -245,5 +273,73 @@ describe('Clubs page — dynamic search suggestion chips', () => {
         // carries the neighborhood text; the chip is the visible undo.
         expect(input).toHaveValue('Al-Nakheel');
         expect(chip.getAttribute('aria-pressed')).toBe('true');
+    });
+});
+
+// ── P2-161 (run #109): venue favorites ──────────────────────────────────────
+describe('Clubs page — venue favorites (P2-161)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        venueFixture = [];
+        venuesError = null;
+        favIdsFixture = [];
+    });
+
+    it('renders a heart on every card with aria-pressed reflecting favorite state', () => {
+        venueFixture = [
+            venue({ id: 'v1', name: 'Fav Club', distance_m: 100 }),
+            venue({ id: 'v2', name: 'Plain Club', distance_m: 200 }),
+        ];
+        favIdsFixture = ['v1'];
+
+        renderClubs();
+
+        const hearts = screen
+            .getAllByRole('button', { name: /add to favorites|remove from favorites/i })
+            .filter((b) => b.getAttribute('aria-pressed') !== null);
+        expect(hearts).toHaveLength(2);
+        expect(hearts[0].getAttribute('aria-pressed')).toBe('true');
+        expect(hearts[1].getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('tapping a heart toggles without navigating (stopPropagation on the Link card)', () => {
+        venueFixture = [venue({ id: 'v1', name: 'Fav Club', distance_m: 100 })];
+
+        renderClubs();
+
+        const heart = screen.getByRole('button', { name: /add to favorites/i });
+        fireEvent.click(heart);
+        expect(toggleMutate).toHaveBeenCalledTimes(1);
+        expect(toggleMutate).toHaveBeenCalledWith(
+            { venueId: 'v1' },
+            expect.objectContaining({ onError: expect.any(Function) }),
+        );
+    });
+
+    it('the Favorites pill narrows the list to saved venues', () => {
+        venueFixture = [
+            venue({ id: 'v1', name: 'Fav Club', distance_m: 100 }),
+            venue({ id: 'v2', name: 'Plain Club', distance_m: 200 }),
+        ];
+        favIdsFixture = ['v1'];
+
+        renderClubs();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Favorites' }));
+        const names = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+        expect(names).toEqual(['Fav Club']);
+    });
+
+    it('an empty favorites set under the Favorites pill shows the onboarding empty state', () => {
+        venueFixture = [venue({ id: 'v2', name: 'Plain Club', distance_m: 200 })];
+        favIdsFixture = [];
+
+        renderClubs();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Favorites' }));
+        expect(screen.getByText('No favorites yet')).toBeInTheDocument();
+        expect(
+            screen.getByText('Tap the heart on any club to save it here.')
+        ).toBeInTheDocument();
     });
 });

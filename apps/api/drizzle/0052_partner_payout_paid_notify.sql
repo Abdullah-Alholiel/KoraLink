@@ -1,0 +1,21 @@
+-- ============================================================================
+-- Migration 0052: partner_payout_paid_notify — P1-67 (run #141)
+--
+-- Reviewer B (run #141): settlements.pay() flipped rows to `paid` with audit +
+-- ops broadcast but never told the venue partner — partners discovered their
+-- payout only by re-checking the page (trust gap on a money flow). The notify
+-- path needs a new bell activity verb, and the bell's fan-out (activities
+-- choke point) filters verbs through the DB enum "ActivityVerb".
+--
+-- Append-only enum extension: 'payout_paid' joins "ActivityVerb". Safe under
+-- concurrent use (ADD VALUE cannot run inside a transaction block in PG < 12
+-- semantics; drizzle wraps each migration file — ADD VALUE IF NOT EXISTS is
+-- idempotent and append-only, no row rewrites, no default change).
+--
+-- Hand-written raw-SQL-only migration (0047/0049/0050/0051 convention):
+-- snapshot derived from 0051 with the new enum value appended, fresh id,
+-- prevId = 0051 snapshot id (run-#39/#103 journal contract; tripwire suites
+-- must pass before push).
+-- ============================================================================
+
+ALTER TYPE "ActivityVerb" ADD VALUE IF NOT EXISTS 'payout_paid';

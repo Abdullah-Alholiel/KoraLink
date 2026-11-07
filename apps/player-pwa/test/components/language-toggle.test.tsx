@@ -19,6 +19,12 @@ vi.mock('@/lib/locale-routing', () => ({
   navigatePreservingLocale: vi.fn(),
 }));
 
+// P2-264 (run #168): the toggle now fire-and-forgets the email-locale sync.
+// Mocked so tests never hit the network layer.
+vi.mock('@/lib/sync-user-locale', () => ({
+  syncUserLocale: vi.fn().mockResolvedValue(undefined),
+}));
+
 import LanguageToggle from '@/components/common/LanguageToggle';
 
 describe('LanguageToggle required ariaLabel (P2-75, run #59)', () => {

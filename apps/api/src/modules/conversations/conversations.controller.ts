@@ -19,6 +19,7 @@ import {
 import { ConversationsService } from './conversations.service';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ParseUuidShapePipe } from '../../common/validation/id-shape';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ListConversationsQueryDto } from './dto/list-conversations-query.dto';
@@ -55,12 +56,14 @@ export class ConversationsController {
     );
   }
 
+  // P2-241: `:id` is UUID-shape validated at the pipe (clean 400, not a
+  // doomed query that 500s on a garbage id).
   @Get(':id/messages')
   @ApiOperation({ summary: 'Get conversation message history' })
   @ApiOkResponse({ description: 'Messages (chronological).' })
   listMessages(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ) {
@@ -78,7 +81,7 @@ export class ConversationsController {
   @ApiCreatedResponse({ description: 'The created message with sender.' })
   sendMessage(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: SendMessageDto,
   ) {
     return this.conversationsService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);

@@ -169,6 +169,10 @@ export interface UISlice {
     closeModal: () => void;
     showToast: (message: string, type: ToastType, meta?: ToastMeta) => void;
     dismissToast: () => void;
+    /** P2-258: epoch ms when the last booking succeeded (null = never). */
+    pushNudgeArmedAt: number | null;
+    armPushNudge: () => void;
+    disarmPushNudge: () => void;
     setNotificationBadge: (n: number) => void;
     setMessagesBadge: (n: number) => void;
 }
@@ -192,6 +196,15 @@ export const createUISlice = (
         })),
 
     dismissToast: () => set(() => ({ toast: null })),
+
+    // P2-258 (run #167): timestamp set the moment a booking succeeds (join,
+    // paid join, host publish). PushNudgeCard consumes it to offer push
+    // opt-in at the moment "match starting" pushes matter most — the
+    // profile toggle stays the ever-present fallback.
+    pushNudgeArmedAt: null,
+    armPushNudge: () =>
+        set(() => ({ pushNudgeArmedAt: Date.now() })),
+    disarmPushNudge: () => set(() => ({ pushNudgeArmedAt: null })),
 
     setNotificationBadge: (notificationBadge) => set(() => ({ notificationBadge })),
     setMessagesBadge: (messagesBadge) => set(() => ({ messagesBadge })),

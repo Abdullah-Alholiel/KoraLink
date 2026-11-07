@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval } from '@/lib/query-schedule';
 
 export type ActivityVerb =
   | 'created_match'
@@ -21,7 +22,9 @@ export type ActivityVerb =
   | 'host_underfilled_nudge'
   | 'player_removed'
   | 'match_auto_cancelled'
-  | 'report_resolved';
+  | 'report_resolved'
+  // ── Partner money flows (P1-67, run #141) ──
+  | 'payout_paid';
 
 export interface FeedItem {
   id: string;
@@ -45,6 +48,11 @@ export function useFeed() {
     queryKey: ['feed'],
     queryFn: () => fetcher<FeedApiResponse>('/users/me/feed'),
     staleTime: 30_000,
+    // Freshness poll (P2-135) — same policy as the paged lists (run #92):
+    // 45s, paused while fetching / tab hidden. Single-page query, so the
+    // page-1 guard passes trivially (pageParam 0).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({ isFetching: state.fetchStatus === 'fetching', pageParam: 0 }),
   });
 }
 
@@ -54,5 +62,9 @@ export function useNotifications() {
     queryKey: ['notifications'],
     queryFn: () => fetcher<FeedApiResponse>('/users/me/notifications'),
     staleTime: 30_000,
+    // Same freshness poll (P2-135) — notification list on home must not
+    // read stale while the user sits on the screen.
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({ isFetching: state.fetchStatus === 'fetching', pageParam: 0 }),
   });
 }

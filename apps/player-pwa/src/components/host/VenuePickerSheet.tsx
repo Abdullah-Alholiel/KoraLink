@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { Search } from 'lucide-react';
 import { useVenues, type VenueApi } from '@/hooks/useVenues';
 import BottomSheet from '@/components/layout/BottomSheet';
+import ErrorState from '@/components/ui/ErrorState';
+import { classifyError, errorKey } from '@/lib/error-classify';
 
 export interface VenuePickerSheetProps {
     open: boolean;
@@ -18,7 +20,7 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
     const [venueSearch, setVenueSearch] = useState('');
 
     // Note: is_koralink_partner filter now supported by useVenues (Slice 1)
-    const { data: venues, isLoading: venuesLoading } = useVenues(
+    const { data: venues, isLoading: venuesLoading, isError, error, refetch } = useVenues(
         { city: venueSearch || undefined, is_koralink_partner: filterPartnerOnly || undefined },
     );
 
@@ -55,6 +57,13 @@ export default function VenuePickerSheet({ open, onClose, onSelect, filterPartne
                             <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
                         ))}
                     </div>
+                ) : isError ? (
+                    // P2-307: a failed fetch must not masquerade as "no venues found".
+                    <ErrorState
+                        title={t(errorKey(classifyError(error)))}
+                        onRetry={() => refetch()}
+                        retryLabel={t('common.retry')}
+                    />
                 ) : venues && venues.length > 0 ? (
                     <div className="space-y-2">
                         {venues.map((venue) => (

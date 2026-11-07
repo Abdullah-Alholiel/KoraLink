@@ -28,19 +28,28 @@ describe('worker pushsubscriptionchange (P2-92, run #69) — source tripwire', (
     );
   });
 
-  it('re-subscribes with the SAME public VAPID key the hook uses', () => {
-    const keyMatches = WORKER_SRC.match(
-      /['"]([A-Za-z0-9_-]{80,120})['"]/g,
+  it('P1-66 (run #135): the codelab DEMO VAPID key is gone from the worker', () => {
+    // The old fallback was the Google web-push codelab demo key, whose
+    // private half is published — it could never match our server.
+    // Needle is split so the repo-wide codelab-key grep stays at zero hits.
+    expect(WORKER_SRC).not.toContain('BEl62iUYg' + 'U4x0mQ');
+    // The fallback is now EMPTY; the real key reaches the worker only via
+    // the page-written KV (/__kl/push-vapid).
+    expect(WORKER_SRC).toContain("DEFAULT_VAPID_PUBLIC_KEY = ''");
+  });
+
+  it('P1-66 (run #135): rotation aborts when the effective VAPID key is empty', () => {
+    const handlerStart = WORKER_SRC.indexOf(
+      "addEventListener('pushsubscriptionchange'",
     );
-    expect(keyMatches).not.toBeNull();
-    // The exact public key must appear in the worker (it is public by
-    // design; the hook carries the same value).
-    expect(
-      WORKER_SRC.includes(
-        'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc',
-      ),
-    ).toBe(true);
-    expect(keyMatches!.length).toBeGreaterThanOrEqual(1);
+    const handlerEnd = WORKER_SRC.indexOf("addEventListener('push'");
+    const body = WORKER_SRC.slice(handlerStart, handlerEnd);
+    const guard = body.search(/if\s*\(\s*!vapidKey\s*\)\s*return\s*;/);
+    const subscribeCall = body.indexOf('pushManager.subscribe(');
+    expect(guard).toBeGreaterThan(-1);
+    expect(subscribeCall).toBeGreaterThan(-1);
+    // The guard must run BEFORE pushManager.subscribe is attempted.
+    expect(guard).toBeLessThan(subscribeCall);
   });
 
   it('re-upserts the canonical POST subscribe endpoint with credentials', () => {
@@ -74,11 +83,11 @@ describe('worker pushsubscriptionchange (P2-92, run #69) — source tripwire', (
     expect(WORKER_SRC).toContain('`${apiBase}/notifications/subscribe`');
   });
 
-  it('run #70: re-subscribes with the KV-carried VAPID key, deployed key as fallback', () => {
+  it('run #70: re-subscribes with the KV-carried VAPID key, empty default as fallback (P1-66)', () => {
     expect(WORKER_SRC).toContain("PUSH_VAPID_KEY = '/__kl/push-vapid'");
     expect(WORKER_SRC).toContain('typeof body.k === ' + "'string'");
     expect(WORKER_SRC).toMatch(
-      /let vapidKey\s*=\s*VAPID_PUBLIC_KEY/,
+      /let vapidKey\s*=\s*DEFAULT_VAPID_PUBLIC_KEY/,
     );
     expect(WORKER_SRC).toContain(
       'pushVapidKeyToUint8Array(vapidKey)',

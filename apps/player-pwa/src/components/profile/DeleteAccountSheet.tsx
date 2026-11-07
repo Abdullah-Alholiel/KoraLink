@@ -8,7 +8,11 @@ interface DeleteAccountSheetProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
-    purgeDate: string; // ISO; pre-computed by the caller so the warning can show it
+    // ISO; pre-computed by the caller so the warning can show it.
+    // Optional (run #84 hydration fix): callers seed it after mount (the
+    // render-path `new Date()` here used to diverge server/client); the
+    // sheet hides the line until it arrives — a frame later at most.
+    purgeDate?: string;
     isPending?: boolean;
     errorMessage?: string | null;
 }
@@ -38,17 +42,20 @@ export default function DeleteAccountSheet({
     // Format the purge date in the user's locale. Use a stable
     // long-form date so the warning reads as a fixed date, not a
     // relative "in 30 days" (which can drift across sessions).
-    const formattedPurge = (() => {
-        try {
-            return new Intl.DateTimeFormat(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            }).format(new Date(purgeDate));
-        } catch {
-            return purgeDate.slice(0, 10);
-        }
-    })();
+    // Undefined purgeDate (pre-mount seed, run #84) hides the warning line.
+    const formattedPurge = purgeDate
+        ? (() => {
+              try {
+                  return new Intl.DateTimeFormat(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                  }).format(new Date(purgeDate));
+              } catch {
+                  return purgeDate.slice(0, 10);
+              }
+          })()
+        : null;
 
     return (
         <BottomSheet open={isOpen} onClose={onClose} widthClass="max-w-xl">
@@ -74,8 +81,12 @@ export default function DeleteAccountSheet({
 
                 <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+                    {/* purgeDate is seeded post-mount (run #84 hydration fix):
+                        render a neutral body-only line until it arrives. */}
                     <p className="text-xs text-amber-800 leading-relaxed">
-                        {t('profile.deleteAccount.warning', { date: formattedPurge })}
+                        {formattedPurge
+                            ? t('profile.deleteAccount.warning', { date: formattedPurge })
+                            : t('profile.deleteAccount.body')}
                     </p>
                 </div>
 

@@ -1,4 +1,5 @@
 import { MatchesService } from './matches.service';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { riyadhDateKey, riyadhTimeNow } from '../../common/utils/riyadh';
 
 /**
@@ -25,7 +26,6 @@ describe('MatchesService.getPitchSlots — past-slot filter', () => {
             // Render the composed WHERE through the real dialect so the
             // assertion sees exactly what Postgres would run (params
             // included — the time filter binds, it does not inline).
-            const { PgDialect } = require('drizzle-orm/pg-core');
             const rendered = new PgDialect().sqlToQuery(clause as never);
             queries.push(rendered.sql);
             params.push(...rendered.params);

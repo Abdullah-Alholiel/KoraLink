@@ -24,12 +24,24 @@ const DRIZZLE_DIR = path.join(ROOT, 'apps/api/drizzle');
 
 // ── load DATABASE_URL ────────────────────────────────────────────────────────
 // MIGRATE_DATABASE_URL env override targets a different database (Neon runbook,
-// CI scratch). ONLY when absent is apps/api/.env read (staging default) — so CI
-// runners without a .env file work by simply exporting the override.
+// CI scratch, Render pre-deploy). ONLY when absent is apps/api/.env read
+// (staging default) — so CI runners without a .env file work by simply
+// exporting the override. A bare DATABASE_URL env is accepted as the LAST
+// fallback (P2-51: Render pre-deploy commands export real env vars but have
+// no repo .env file).
 const dbUrl =
   process.env.MIGRATE_DATABASE_URL ||
+  process.env.DATABASE_URL ||
   (() => {
-    const envText = fs.readFileSync(ENV_FILE, 'utf8');
+    // Run #118 Reviewer A MINOR: a Render cold run with NEITHER env var NOR a
+    // repo .env used to die on an unhandled readFileSync stack; fail-loud
+    // with the contract message (exit 5) instead.
+    let envText;
+    try {
+      envText = fs.readFileSync(ENV_FILE, 'utf8');
+    } catch {
+      return undefined;
+    }
     return envText
       .split('\n')
       .map((l) => l.trim())
@@ -38,7 +50,7 @@ const dbUrl =
       .replace(/^["']|["']$/g, '');
   })();
 if (!dbUrl) {
-  console.error('migrate-vps: DATABASE_URL not found in apps/api/.env');
+  console.error('migrate-vps: no MIGRATE_DATABASE_URL/DATABASE_URL env and no DATABASE_URL in apps/api/.env');
   process.exit(5);
 }
 

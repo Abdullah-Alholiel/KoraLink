@@ -16,9 +16,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
-// Public VAPID key — this is safe to expose (it's the public key)
-const VAPID_PUBLIC_KEY =
-  'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
+// P1-66 (run #135): public VAPID key comes from the deployment env (public
+// by design). The old hardcoded literal was the Google web-push codelab DEMO
+// key — its private half is published, so it could never match our server.
+// Empty = push not configured on this deployment → subscribe() reports
+// 'not-configured' without prompting.
+const VAPID_PUBLIC_KEY = env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
 /**
  * P2-91 (run #69): WHY a subscribe attempt did not produce a subscription.
@@ -31,6 +34,8 @@ export type PushSubscribeOutcome =
   | 'ok'
   | 'not-installed'
   | 'permission-denied'
+  // P1-66 (run #135): the deployment has no NEXT_PUBLIC_VAPID_PUBLIC_KEY.
+  | 'not-configured'
   | 'error';
 
 /**
@@ -61,12 +66,16 @@ async function writePushMetaKv(locale: string): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
-    await cache.put(
-      '/__kl/push-vapid',
-      new Response(JSON.stringify({ k: VAPID_PUBLIC_KEY }), {
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+    // P1-66 (run #135): never mirror an empty key — the worker treats a
+    // missing KV entry as "no key" and aborts rotation.
+    if (VAPID_PUBLIC_KEY) {
+      await cache.put(
+        '/__kl/push-vapid',
+        new Response(JSON.stringify({ k: VAPID_PUBLIC_KEY }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
   } catch {
     // Cache-API unavailable (private mode, old browser) — rotation falls
     // back to the worker's Arabic-first default and same-origin base.
@@ -163,6 +172,7 @@ export function usePushNotifications(locale: string = 'en') {
 
   /**
    * P2-91 (run #69): returns WHY the attempt did not end subscribed —
+   * 'not-configured' (P1-66: no VAPID key deployed),
    * 'not-installed' (iOS standalone contract), 'permission-denied'
    * (browser permission refused or revoked since), or 'error' (SW/push
    * manager/POST failure — already shipped to Sentry). Previously a bare
@@ -170,6 +180,10 @@ export function usePushNotifications(locale: string = 'en') {
    * next and showed "install the app" for every failure.
    */
   const subscribe = useCallback(async (): Promise<PushSubscribeOutcome> => {
+    // P1-66 (run #135): no VAPID key on this deployment → honest
+    // 'not-configured' BEFORE the install gate and BEFORE the permission
+    // prompt (never ask for a permission that cannot be used).
+    if (!VAPID_PUBLIC_KEY) return 'not-configured';
     if (!('serviceWorker' in navigator)) return 'not-installed';
 
     setIsSubscribing(true);

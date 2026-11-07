@@ -23,6 +23,15 @@
 // 24h TTL applied on read).
 
 /* eslint-disable no-undef */
+
+// Consent-gated activation (P2-126, run #89): workbox is built with
+// skipWaiting:false, so a new worker stays WAITING until the page posts
+// SKIP_WAITING (ServiceWorkerUpdater — user tapped "Reload now", or first
+// install with no controller). Never skip waiting unconditionally here.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 const OFFLINE_PAGES = { en: '/en/offline', ar: '/ar/offline' };
 const RESTORE_CACHE = 'koralink-offline-restore';
 const RESTORE_KEY = '/__kl/restore-url';
@@ -42,11 +51,11 @@ const PUSH_LOCALE_KEY = '/__kl/push-locale';
 // silently — exactly the failure rotation handling exists to prevent.
 const PUSH_API_BASE_KEY = '/__kl/push-api-base';
 const PUSH_VAPID_KEY = '/__kl/push-vapid';
-// Public VAPID key — same value the hook uses (public by design). Kept as
-// the fallback: a rotation that fires before ANY page subscribe still has
-// the deployed key.
-const VAPID_PUBLIC_KEY =
-  'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc';
+// P1-66 (run #135): the fallback key is EMPTY — the old literal was the
+// Google web-push codelab DEMO key (private half published). The real key is
+// env-configured (NEXT_PUBLIC_VAPID_PUBLIC_KEY) and reaches the worker only
+// via the page-written KV (/__kl/push-vapid); no key → rotation aborts.
+const DEFAULT_VAPID_PUBLIC_KEY = '';
 // Same-origin fallback used only when the hook has never written the KV
 // (no subscribe has happened yet → nothing to re-point anyway).
 const DEFAULT_API_BASE = '/api/v1';
@@ -143,7 +152,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
     (async () => {
       let locale = 'ar';
       let apiBase = DEFAULT_API_BASE;
-      let vapidKey = VAPID_PUBLIC_KEY;
+      let vapidKey = DEFAULT_VAPID_PUBLIC_KEY;
       try {
         const cache = await caches.open(PUSH_META_CACHE);
         const cachedLocale = await cache.match(PUSH_LOCALE_KEY);
@@ -167,8 +176,12 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         }
       } catch (_) {
         // missing/unreadable KV → Arabic-first default (P2-72 convention),
-        // deployed VAPID key, same-origin API base.
+        // empty VAPID key (→ abort below), same-origin API base.
       }
+
+      // P1-66 (run #135): no effective VAPID key → never call
+      // pushManager.subscribe with an empty applicationServerKey.
+      if (!vapidKey) return;
 
       let newSub = null;
       try {
@@ -253,12 +266,26 @@ self.addEventListener('push', (event) => {
   )
     url = `/${locale}/match/${data.matchId}`;
 
+  // P2-233 (run #151): the tag must identify ONE notification, not one TYPE.
+  // A type-only tag renotify-replaced distinct same-type events (two different
+  // report resolutions showed as one). Priority: entity ids when present
+  // (same-entity re-stamps still replace — that dedupe is wanted), then a
+  // per-event unique tag for id-less types. The unique fallback also keeps
+  // `renotify: true` legal — it throws TypeError when tag is undefined.
+  const entityId = data.matchId ?? data.conversationId ?? data.reportId;
+  const uniqueSuffix = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tag = data.type
+    ? entityId
+      ? `${data.type}:${entityId}`
+      : `${data.type}:${uniqueSuffix}`
+    : uniqueSuffix;
+
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       icon: '/icons/icon-192x192.png',
       badge: '/icons/icon-192x192-maskable.png',
-      tag: data.type ? `${data.type}:${data.matchId ?? data.conversationId ?? ''}` : undefined,
+      tag,
       renotify: true,
       data: { ...data, url },
       // P2-8 (run #24): Arabic notifications render RTL, others auto.

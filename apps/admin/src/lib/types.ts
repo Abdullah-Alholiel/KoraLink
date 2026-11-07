@@ -45,7 +45,9 @@ export interface AdminVenue {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   created_at?: string;
   owner_id?: string;
   owner_name?: string | null;
@@ -93,7 +95,9 @@ export interface AdminVenueDetail {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   owner: { id: string; full_name: string | null; handle: string | null; phone: string | null } | null;
   pitches: { id: string; name: string; size: string; surface_type: string; hourly_rate: string | number }[];
   verification: AdminVenueVerification | null;
@@ -111,6 +115,14 @@ export interface DisputeListItem {
   respondent_name: string | null;
   match_id: string | null;
   match_title: string | null;
+  appeal_count: number;
+  has_appealed: boolean;
+  sla_escalated: boolean;
+  /** Run #122 SLA triage: deadline = updated_at + 7d (sweep clock); null for decided rows. */
+  sla_deadline: string | null;
+  /** Decimal hours left until the SLA deadline (numeric, SQL-computed); null for decided rows. */
+  sla_hours_left: number | null;
+  sla_breached: boolean;
 }
 
 export interface AdminReportListItem {
@@ -144,6 +156,8 @@ export interface AdminReportDetail extends AdminReportListItem {
   };
   resolvedBy: { id: string; full_name: string | null } | null;
   subject: ReportSubject;
+  /** P2-192: optimistic-edit token — echo on PATCH /admin/reports/:id. */
+  version: number;
 }
 
 export interface AdminTransaction {
@@ -159,6 +173,25 @@ export interface AdminTransaction {
   user_phone: string | null;
 }
 
+export interface VenueReview {
+  id: string;
+  venue_id: string;
+  venue_name: string;
+  user_id: string;
+  author_name: string | null;
+  rating: number;
+  comment: string | null;
+  hidden_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Row returned by every /admin/venue-reviews mutation. */
+export type VenueReviewMutation = Pick<
+  VenueReview,
+  'id' | 'venue_id' | 'user_id' | 'rating' | 'comment' | 'hidden_at' | 'updated_at'
+>;
+
 export interface Settlement {
   id: string;
   venue_id: string;
@@ -170,6 +203,9 @@ export interface Settlement {
   paid_at: string | null;
   created_at: string;
   venue_name: string | null;
+  /** P2-250: payout-request provenance — NULL = auto-generated (admin generator / pre-0053 row). */
+  requested_by: string | null;
+  requested_by_name: string | null;
 }
 
 export interface AuditLog {
@@ -278,6 +314,8 @@ export interface PartnerVenueRow {
   closed_day_4?: boolean;
   closed_day_5?: boolean;
   closed_day_6?: boolean;
+  /** P1-38: venue photo paths (/media/venues/...), display order. */
+  images?: unknown;
 }
 
 export interface PartnerSlot {
@@ -337,9 +375,32 @@ export interface PartnerEarnings {
     paid_at: string | null;
     created_at: string;
     venue_name: string | null;
+    /** P2-C (run #143): payout-request provenance — partner actor id or null (auto). */
+    requested_by: string | null;
+    requested_by_name: string | null;
   }[];
-  totalPending: number;
-  totalPaid: number;
+  // Run #163 (P2-216): totals are Postgres exact decimal strings ('0.00' on
+  // empty scopes) — formatMoney() branches on strings; `?? 0` still guards a
+  // loading-undefined.
+  totalPending: number | string;
+  totalPaid: number | string;
+  /** P1-65: 4-week Riyadh window, SQL-aggregated; money as numeric strings. */
+  perVenue: PartnerVenueRevenue[];
+  fourWeekTrend: PartnerRevenueWeek[];
+  utilizationPct: number;
+}
+
+export interface PartnerVenueRevenue {
+  venueId: string;
+  venueName: string;
+  bookedCount: number;
+  revenue: string;
+}
+
+export interface PartnerRevenueWeek {
+  weekStart: string;
+  revenue: string;
+  bookedCount: number;
 }
 
 /** One row of GET /admin/venues (used by admin pickers and lists). */
@@ -350,7 +411,9 @@ export interface AdminVenueListRow {
   address: string;
   is_approved: boolean;
   is_koralink_partner: boolean;
-  rating: number | string | null;
+  /** P1-55 (run #117): review aggregates (was: dead `rating` column). */
+  rating_avg: number;
+  rating_count: number;
   created_at: string;
   owner_id: string | null;
   owner_name: string | null;

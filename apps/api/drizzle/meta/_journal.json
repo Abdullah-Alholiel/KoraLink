@@ -315,7 +315,7 @@
       "version": "7",
       "when": 1789846359444,
       "tag": "0043_min_players_alignment",
-      "commit": null
+      "breakpoints": true
     },
     {
       "idx": 45,
@@ -323,6 +323,104 @@
       "when": 1790332992349,
       "tag": "0044_reminder_ladder",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791077581937,
+      "tag": "0045_user_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791077641937,
+      "tag": "0046_venue_favorites",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "when": 1791511109285,
+      "tag": "0047_matches_location_gist",
+      "version": "7",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791511109286,
+      "tag": "0048_venue_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791511109287,
+      "tag": "0049_dispute_sla",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1791598051701,
+      "tag": "0050_disputes_sla_queue_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1791942067224,
+      "tag": "0051_admin_edit_version_tokens"
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251717864,
+      "tag": "0052_partner_payout_paid_notify"
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251718864,
+      "tag": "0053_settlements_requested_by"
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251719864,
+      "tag": "0054_settlements_requested_by_idx"
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251720864,
+      "tag": "0055_users_locale"
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1792251721864,
+      "tag": "0056_wallet_topup_intents"
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1793115755731,
+      "tag": "0057_venue_images"
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1793115756731,
+      "tag": "0058_venue_reviews_hidden_at"
     }
   ]
 }

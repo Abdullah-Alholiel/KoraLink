@@ -15,7 +15,7 @@ export default function TermsPage() {
                     onClick={() => router.back()}
                     className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
                 >
-                    <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+                    <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
                 </button>
                 <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
                     {t('termsTitle')}

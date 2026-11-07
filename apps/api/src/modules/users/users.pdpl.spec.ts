@@ -228,14 +228,14 @@ describe('UsersService P0-6 PDPL (run #29)', () => {
               limit: async () => rows,
               then: (
                 resolve: (v: unknown[]) => void,
-                reject: (e: unknown) => void,
+                _reject: (e: unknown) => void,
               ) => resolve(rows),
             };
             return afterWhere;
           };
           return {
             where: handleClause,
-            innerJoin: (_table: unknown, on: unknown) => ({
+            innerJoin: (_table: unknown, _on: unknown) => ({
               where: handleClause,
             }),
           };

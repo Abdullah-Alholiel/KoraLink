@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
+import { WalletTopupService } from './wallet.topup.service';
+import { WalletReceiptService } from './wallet.receipt.service';
 
 /**
  * P0-7 (run #26) — wallet topup feature flag, replacing the old
@@ -32,6 +34,22 @@ describe('WalletController — topup feature flag (P0-7, run #26)', () => {
               key === 'WALLET_TOPUP_ENABLED' ? flagValue : undefined,
             ),
           },
+        },
+        {
+          // P0-2 (run #169): the controller now injects WalletTopupService —
+          // stubbed; intent/verify behavior has dedicated specs.
+          provide: WalletTopupService,
+          useValue: {
+            getTopupConfig: jest.fn().mockReturnValue({ enabled: false, publishableKey: null, minAmount: 5, maxAmount: 2000 }),
+            createTopupIntent: jest.fn(),
+            verifyTopup: jest.fn(),
+          },
+        },
+        {
+          // P2-293 (run #185): the controller injects WalletReceiptService —
+          // stubbed; receipt behavior has its own spec (wallet.receipt.service.spec.ts).
+          provide: WalletReceiptService,
+          useValue: { getPayoutReceipt: jest.fn() },
         },
       ],
     }).compile();

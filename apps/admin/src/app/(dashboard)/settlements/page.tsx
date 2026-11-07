@@ -2,13 +2,13 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
-import { Loader2, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Download, Loader2, Send } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { Settlement, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -18,6 +18,8 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvAmount, csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
@@ -31,7 +33,31 @@ export default function SettlementsPage() {
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // P2-284 (run #179): single-venue generate scope — '' = all venues.
+  const [generateVenue, setGenerateVenue] = useState('');
+  // Venue options for the scope picker (names only; small list).
+  const { data: venuesData } = useLiveAdminData<{ venues: Array<{ id: string; name: string }> }>(
+    '/admin/venues?perPage=100',
+  );
   const [selected, setSelected] = useState<Settlement | null>(null);
+  // P2-267: pay()/generate() previously had try/finally with NO catch — a
+  // failed POST rejected unhandled, the drawer stayed open with only a
+  // spinner reset, and the operator got zero feedback. Failures now map to
+  // localized buckets by HTTP status (BlackoutPanel pattern); raw backend
+  // text is never rendered.
+  const [payFailure, setPayFailure] = useState<MoneyActionFailure | null>(null);
+  const [generateFailure, setGenerateFailure] = useState<MoneyActionFailure | null>(null);
+  const [paySeq, setPaySeq] = useState(0);
+  const [generateSeq, setGenerateSeq] = useState(0);
+
+  // P2-267 (PR-Agent r1): pay-failure alerts are scoped to the drawer
+  // session — a failed pay on one settlement must never render inside
+  // another settlement's drawer. generateFailure is PAGE-scoped (toolbar
+  // alert), so it deliberately survives drawer open/close; it resets only
+  // when generate() itself re-runs (PR-Agent r2).
+  useEffect(() => {
+    setPayFailure(null);
+  }, [selected?.id, selected === null]);
 
   const sortParts = sort ? sort.split(':') : null;
   const sortField = sortParts?.[0] ?? '';
@@ -44,12 +70,34 @@ export default function SettlementsPage() {
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<SettlementsResponse>(`/admin/settlements?${qs.toString()}`);
 
+  // P2-267 (PR-Agent r1): shared ApiError→bucket mapping for both money
+  // actions. 409 = another operator already acted (conflict), NOT a network
+  // problem — it gets its own bucket so the copy doesn't invite pointless
+  // retries.
+  type MoneyActionFailure = 'auth' | 'access' | 'conflict' | 'server' | 'network';
+  function moneyActionFailure(err: unknown): MoneyActionFailure {
+    const status = err instanceof ApiError ? err.status : 0;
+    if (status === 401) return 'auth';
+    if (status === 403 || status === 404) return 'access';
+    if (status === 409) return 'conflict';
+    if (status === 429 || status >= 500) return 'server';
+    return 'network';
+  }
+
   async function pay(id: string) {
     setBusyId(id);
+    setPayFailure(null);
     try {
       await api.post(`/admin/settlements/${id}/pay`);
       reload();
       setSelected(null);
+      trackEvent('admin_settlement_pay_success', { page: 'admin.settlements' });
+    } catch (err) {
+      // P2-267: surface the failure — never an unhandled rejection. Sentry
+      // sees it through the api-client hook; PostHog gets the operator event.
+      trackEvent('admin_settlement_pay_failed', { page: 'admin.settlements' });
+      setPayFailure(moneyActionFailure(err));
+      setPaySeq((s) => s + 1);
     } finally {
       setBusyId(null);
     }
@@ -57,9 +105,17 @@ export default function SettlementsPage() {
 
   async function generate() {
     setGenerating(true);
+    setGenerateFailure(null);
     try {
-      await api.post('/admin/settlements/generate');
+      // P2-284: optional single-venue scope; '' = the all-venues run.
+      await api.post(`/admin/settlements/generate${generateVenue ? `?venueId=${encodeURIComponent(generateVenue)}` : ''}`);
+      setGenerateVenue('');
       reload();
+      trackEvent('admin_settlement_generate_success', { page: 'admin.settlements' });
+    } catch (err) {
+      trackEvent('admin_settlement_generate_failed', { page: 'admin.settlements' });
+      setGenerateFailure(moneyActionFailure(err));
+      setGenerateSeq((s) => s + 1);
     } finally {
       setGenerating(false);
     }
@@ -118,6 +174,51 @@ export default function SettlementsPage() {
     { value: 'amount:asc', label: tl('sortAmountLow') },
   ];
 
+  const rows = data?.settlements ?? [];
+  const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
+
+
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<SettlementsResponse, Settlement>({
+      url: `/admin/settlements?${qs.toString()}`,
+      rowKey: 'settlements',
+      build: (allRows) => ({
+        columns: [
+          { key: 'venue', header: t('thVenue'), value: (s: Settlement) => s.venue_name ?? '' },
+          { key: 'amount', header: t('thAmount'), value: (s: Settlement) => csvAmount(s.amount) },
+          { key: 'status', header: t('thStatus') },
+          {
+            key: 'period',
+            header: t('thPeriod'),
+            value: (s: Settlement) => `${csvDate(s.period_start)} → ${csvDate(s.period_end)}`,
+          },
+          { key: 'payoutRef', header: t('thPayoutRef'), value: (s: Settlement) => s.payout_ref ?? '' },
+          // P2-286: finance reconciliation columns (run #179) — when it was
+          // paid + payout-request provenance (same rule as the drawer: a
+          // partner-requested row shows the name or short id, never a
+          // misleading "Auto-generated"; auto rows say exactly that).
+          { key: 'paidAt', header: t('thPaidAt'), value: (s: Settlement) => csvDate(s.paid_at) },
+          {
+            key: 'paidBy',
+            header: t('thPaidBy'),
+            value: (s: Settlement) =>
+              s.requested_by
+                ? (s.requested_by_name ?? `#${s.requested_by.slice(0, 8).toUpperCase()}`)
+                : t('requestedByAuto'),
+          },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-settlements',
+        timestamp: new Date(),
+      }),
+    });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.settlements', rows: exported });
+  }
+
   function onSortChange(v: string) {
     setSort(v);
     setPage(1);
@@ -139,6 +240,31 @@ export default function SettlementsPage() {
           <option value="failed">{ts('failed')}</option>
         </select>
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
+        {/* P2-284 (run #179): optional generate scope — pick one venue to
+            settle just that batch member; '' = all venues (default). */}
+        <select
+          aria-label={t('generateScopeLabel')}
+          value={generateVenue}
+          onChange={(e) => setGenerateVenue(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('generateScopeAll')}</option>
+          {(venuesData?.venues ?? []).map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportDisabled}
+          aria-label={tc('exportCsv')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {t('exportSettlements')}
+        </button>
         <button
           onClick={generate}
           disabled={generating}
@@ -149,6 +275,21 @@ export default function SettlementsPage() {
         </button>
       </div>
 
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
+
+      {/* P2-267: generate-failure alert — key={seq} remounts the node so
+          screen readers re-announce on each failure (role=alert). Hidden,
+          never unmounted, when there is no failure to show. */}
+      <p role="alert" key={`gen-${generateSeq}`} className="mx-8 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" style={{ display: generateFailure ? undefined : 'none' }}>
+        {generateFailure === 'auth' ? t('generateFailedAuth')
+          : generateFailure === 'access' ? t('generateFailedAccess')
+            : generateFailure === 'conflict' ? t('generateFailedConflict')
+              : generateFailure === 'server' ? t('generateFailedServer')
+                : t('generateFailedNetwork')}
+      </p>
+
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettlements')}</div>
       ) : error ? (
@@ -158,7 +299,7 @@ export default function SettlementsPage() {
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.settlements ?? []}
+              rows={rows}
               rowKey={(s) => s.id}
               onRowClick={(s) => setSelected(s)}
               empty={<EmptyState message={tc('noData')} />}
@@ -189,21 +330,48 @@ export default function SettlementsPage() {
                   ),
                 },
                 { label: t('thPayoutRef'), value: <span dir="ltr">{selected.payout_ref ?? '—'}</span> },
+                {
+                  // P2-250 (PR-Agent r2 on PR #170): gate the provenance on
+                  // requested_by ITSELF — a partner-requested row whose user
+                  // row lost/never had a full_name must NOT read as
+                  // "Auto-generated"; fall back to the id, which is still
+                  // proof of a human requester.
+                  label: t('thRequestedBy'),
+                  value: selected.requested_by ? (
+                    <span dir="auto">{selected.requested_by_name ?? `#${selected.requested_by.slice(0, 8).toUpperCase()}`}</span>
+                  ) : (
+                    t('requestedByAuto')
+                  ),
+                },
               ]
             : []
         }
         actions={
           selected && selected.status === 'pending' ? (
-            busyId === selected.id ? (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-            ) : (
-              <button
-                onClick={() => pay(selected.id)}
-                className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-              >
-                <Send className="h-3.5 w-3.5" /> {t('payAction')}
-              </button>
-            )
+            <>
+              {/* P2-267: pay failure alert INSIDE the drawer (the button's
+                  surface) — mounts on failure so role=alert announces it;
+                  w-full + flex-wrap stacks it above the action button. */}
+              {payFailure && (
+                <p role="alert" key={`pay-${paySeq}`} className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+                  {payFailure === 'auth' ? t('payFailedAuth')
+                    : payFailure === 'access' ? t('payFailedAccess')
+                      : payFailure === 'conflict' ? t('payFailedConflict')
+                        : payFailure === 'server' ? t('payFailedServer')
+                          : t('payFailedNetwork')}
+                </p>
+              )}
+              {busyId === selected.id ? (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              ) : (
+                <button
+                  onClick={() => pay(selected.id)}
+                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                >
+                  <Send className="h-3.5 w-3.5" /> {t('payAction')}
+                </button>
+              )}
+            </>
           ) : undefined
         }
       />

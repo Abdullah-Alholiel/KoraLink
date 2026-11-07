@@ -58,13 +58,20 @@ export class AuthService {
 
   async sendOtp(phone: string, ip?: string): Promise<void> {
     // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
-    if (await this.otpStore.isCooldownActive(phone)) {
-      this.logger.warn(`send-otp blocked (cooldown) for ${phone}`);
+    // P2-194: one cache read gates AND sizes the 429 — if the key's TTL
+    // expires between a guard read and a second read, the old two-read shape
+    // threw 429 with retryAfter: 0 (PR-Agent r2 MINOR). remaining > 0 ⟺ the
+    // cooldown genuinely holds; an expired deadline falls through and the
+    // send proceeds.
+    const cooldownRemaining = await this.otpStore.getCooldownRemaining(phone);
+    if (cooldownRemaining > 0) {
+      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter: cooldownRemaining,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -167,14 +174,19 @@ export class AuthService {
       // ── Abuse protection: attempt lockout ──
       const failCount = await this.otpStore.getFailCount(phone);
       if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        // P2-198: machine-readable lockout countdown (same contract as the
+        // P2-194 send-cooldown retryAfter). A missing/legacy deadline reports
+        // 0 — the PWA falls back to the generic rate-limited copy.
+        const retryAfter = await this.otpStore.getLockoutRemaining(phone);
         this.logger.warn(
-          `verify-otp blocked (lockout after ${failCount} fails) for ${phone}`,
+          `verify-otp blocked (lockout after ${failCount} fails) for ${phone} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {
             statusCode: HttpStatus.TOO_MANY_REQUESTS,
             message: 'Too many attempts. Try again later.',
             error: 'Too Many Requests',
+            retryAfter,
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );
@@ -256,22 +268,44 @@ export class AuthService {
       throw new BadRequestException('Handle already taken.');
     }
 
-    const [updated] = await this.db
-      .update(users)
-      .set(withTimestamp(dto))
-      .where(eq(users.id, userId))
-      .returning({
-        id: users.id,
-        phone: users.phone,
-        full_name: users.full_name,
-        handle: users.handle,
-        avatar_url: users.avatar_url,
-        preferred_location: users.preferred_location,
-        preferred_position: users.preferred_position,
-        role: users.role,
-      });
+    // P2-238 (run #153, Reviewer A): the pre-check above is check-then-act
+    // against a UNIQUE column (users.handle). Two concurrent claims of the
+    // same handle: the loser 500s with a raw 23505. Catch the race the same
+    // way the other create paths do (conversations :111-131, email-otp
+    // :196-223): 23505 → re-select → clean 400 identical to the pre-check.
+    try {
+      const [updated] = await this.db
+        .update(users)
+        .set(withTimestamp(dto))
+        .where(eq(users.id, userId))
+        .returning({
+          id: users.id,
+          phone: users.phone,
+          full_name: users.full_name,
+          handle: users.handle,
+          avatar_url: users.avatar_url,
+          preferred_location: users.preferred_location,
+          preferred_position: users.preferred_position,
+          role: users.role,
+        });
 
-    return updated;
+      return updated;
+    } catch (err) {
+      const pgCode = (err as { code?: string; cause?: { code?: string } })?.code ??
+        (err as { cause?: { code?: string } })?.cause?.code;
+      if (pgCode !== '23505') throw err;
+      // Lost a handle race → verify it was really the handle (never another
+      // user's unique column) and return the SAME 400 the pre-check throws.
+      const [winner] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.handle, dto.handle))
+        .limit(1);
+      if (winner && winner.id !== userId) {
+        throw new BadRequestException('Handle already taken.');
+      }
+      throw err;
+    }
   }
 
   private generateOtp(): string {

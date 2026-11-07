@@ -1,6 +1,10 @@
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
-import { socketBaseUrl, LOBBY_NAMESPACE, TOKEN_STORAGE_KEY } from '@/lib/socket';
+import {
+  socketBaseUrl,
+  LOBBY_NAMESPACE,
+  buildSocketAuth,
+} from '@/lib/socket';
 import { captureError } from '@/providers/ObservabilityProvider';
 
 /**
@@ -140,17 +144,16 @@ export class RealtimeClient {
   };
 
   private createSocket(): void {
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem(TOKEN_STORAGE_KEY)
-        : null;
-
     const url = `${socketBaseUrl()}${LOBBY_NAMESPACE}`;
     const opts: Record<string, unknown> = {
       path: '/socket.io',
       transports: ['websocket'],
       withCredentials: true,
-      auth: token ? { token } : undefined,
+      // P2-240: same-site → the httpOnly cookie rides the handshake and NO
+      // localStorage token is attached (nothing XSS-readable); cross-site →
+      // the cookie cannot be delivered, so the stored Bearer token is the
+      // only path. buildSocketAuth() owns the policy.
+      auth: buildSocketAuth(),
       reconnection: true,
       // Session-long connection: never permanently give up (the per-hook
       // sockets implicitly "reset" by remounting; the singleton can't).

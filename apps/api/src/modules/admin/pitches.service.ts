@@ -4,11 +4,13 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { pitches } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { ListPitchesDto } from './dto/list-pitches.dto';
 import { UpdatePitchAdminDto } from './dto/update-pitch-admin.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { PartnerService } from '../partner/partner.service';
+import { riyadhDateString } from '../../common/utils/riyadh-date';
 import { CreateSlotDto, GenerateSlotsDto } from '../partner/dto/slots.dto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -36,7 +38,7 @@ export class AdminPitchesService {
     const clauses: SQL[] = [];
     if (search) {
       clauses.push(
-        sql`(p.name ILIKE ${'%' + search + '%'} OR v.name ILIKE ${'%' + search + '%'} OR u.full_name ILIKE ${'%' + search + '%'} OR u.phone ILIKE ${'%' + search + '%'})`,
+        sql`(p.name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR v.name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR u.full_name ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\' OR u.phone ILIKE ${'%' + escapeLikePattern(search) + '%'} ESCAPE '\\')`,
       );
     }
     if (dto.venueId) {
@@ -46,6 +48,11 @@ export class AdminPitchesService {
       ? sql`WHERE ${and(...clauses)!}`
       : sql``;
 
+    // P2-216 (run #163): "upcoming slots" is counted from the Riyadh today —
+    // bare CURRENT_DATE follows the Postgres server timezone and miscounts
+    // the last three hours of every Riyadh day on a UTC server.
+    const todayRiyadh = riyadhDateString();
+
     const rows = (await this.db.execute(sql`
       SELECT
         p.id, p.name, p.size, p.surface_type, p.environment,
@@ -53,9 +60,9 @@ export class AdminPitchesService {
         v.id AS venue_id, v.name AS venue_name, v.city AS venue_city,
         u.id AS owner_id, u.full_name AS owner_name, u.phone AS owner_phone,
         (SELECT COUNT(*)::int FROM pitch_slots ps
-           WHERE ps.pitch_id = p.id AND ps.slot_date >= CURRENT_DATE) AS slots_total,
+           WHERE ps.pitch_id = p.id AND ps.slot_date >= ${todayRiyadh}::date) AS slots_total,
         (SELECT COUNT(*)::int FROM pitch_slots ps
-           WHERE ps.pitch_id = p.id AND ps.slot_date >= CURRENT_DATE AND ps.is_booked) AS slots_booked
+           WHERE ps.pitch_id = p.id AND ps.slot_date >= ${todayRiyadh}::date AND ps.is_booked) AS slots_booked
       FROM pitches p
       INNER JOIN venues v ON v.id = p.venue_id
       LEFT JOIN users u ON u.id = v.owner_id
@@ -128,10 +135,18 @@ export class AdminPitchesService {
     if (dto.is_active !== undefined) updates.is_active = dto.is_active;
     if (dto.venue_id !== undefined) updates.venue_id = dto.venue_id;
 
-    await this.db
+    // P2-202 (run #132): guarded update — same parity as venues (the
+    // .returning() rowcount detects a vanished id; 0 rows → 404 BEFORE the
+    // audit write, so a no-op is never recorded as a change).
+    const updated = await this.db
       .update(pitches)
       .set(withTimestamp(updates) as never)
-      .where(eq(pitches.id, id));
+      .where(eq(pitches.id, id))
+      .returning({ id: pitches.id });
+
+    if (updated.length === 0) {
+      throw new NotFoundException('Pitch not found.');
+    }
 
     const after = await this.findOne(id);
 
@@ -153,9 +168,12 @@ export class AdminPitchesService {
   // Delegates to PartnerService with actorRole='Admin' — the same slot
   // logic the partner uses, admin-bypassed ownership, plus the audit trail.
 
-  async listSlots(id: string, from: string, to: string) {
+  async listSlots(id: string, from: string, to: string, adminId: string) {
     await this.findOne(id); // 404 guard
-    return this.partner.listSlots('', 'Admin', id, from, to);
+    // Forward the real admin id, not a '' sentinel: today the Admin branch
+    // makes ownerId moot, but a future non-Admin path with '' would query
+    // owner_id = '' and read as an empty schedule.
+    return this.partner.listSlots(adminId, 'Admin', id, from, to);
   }
 
   async generateSlots(id: string, dto: GenerateSlotsDto, adminId: string, ip?: string) {

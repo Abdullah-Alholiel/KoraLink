@@ -1,12 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { PartnerVenueRow } from '@/lib/types';
+
+/** Mirrors the API cap (media.service.ts MAX_VENUE_IMAGES). */
+const MAX_IMAGES = 6;
+/** Where the API serves these images from (public media route). */
+const API_ORIGIN =
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1')
+    // PR-Agent r9 (run #171): a trailing-slash env value would survive the
+    // suffix strip and produce `…/api/v1//media/...` srcs — normalize first.
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v1$/, '');
 
 interface VenueFormDrawerProps {
   open: boolean;
@@ -26,6 +36,8 @@ interface VenueFormValues {
   open: string;
   close: string;
   closedDays: boolean[];
+  /** P1-38: photo paths (/media/venues/...) — display order. */
+  images: string[];
 }
 
 const EMPTY: VenueFormValues = {
@@ -36,6 +48,7 @@ const EMPTY: VenueFormValues = {
   open: '8',
   close: '23',
   closedDays: [false, false, false, false, false, false, false],
+  images: [],
 };
 
 /**
@@ -52,9 +65,19 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
   const [errors, setErrors] = useState<{ name?: string; city?: string; address?: string; hours?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // P1-38: photo upload state (edit mode only — a venue id is required by the API).
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // PR-Agent r8 (run #171): paths the user EXPLICITLY removed this session.
+  // The Save-time stale-state merge treats these as owner intent (stay
+  // removed) while still preserving photos OTHER sessions appended since
+  // the drawer opened (appends are never owner-negative).
+  const removedPathsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
+    removedPathsRef.current = new Set();
     if (!venue) {
       setValues(EMPTY);
     } else {
@@ -74,6 +97,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
           Boolean(venue.closed_day_5),
           Boolean(venue.closed_day_6),
         ],
+        images: Array.isArray(venue.images) ? (venue.images as string[]) : [],
       });
     }
     setErrors({});
@@ -110,6 +134,48 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     setSaveError(null);
     try {
       if (venue) {
+        // PR-Agent r8 (run #171) stale-state overwrite guard: the form loaded
+        // at drawer-open; other sessions (partner console, a second admin, a
+        // just-landed upload) may have APPENDED to venues.images since.
+        // Patching values.images verbatim would silently dereference those
+        // photos (r8's orphaning scenario). Re-read server truth at Save:
+        //   - form removals stay removed (owner intent — removedPathsRef),
+        //   - concurrent server APPENDS are preserved (never owner-negative),
+        //   - cap overflow: this session's form wins (see the stated rule at
+        //     the merge below).
+        // A fresh-read failure falls back to the form state (pre-#171
+        // behavior) so the other fields still save.
+        let merged = values.images;
+        try {
+          const fresh = await api.get<unknown>(
+            endpointBase === '/admin' ? `/admin/venues/${venue.id}` : '/partner/venues',
+          );
+          let serverImages: unknown[] = [];
+          if (endpointBase === '/admin') {
+            const row = fresh as { images?: unknown } | null;
+            serverImages = Array.isArray(row?.images) ? (row.images as unknown[]) : [];
+          } else {
+            const list = Array.isArray(fresh)
+              ? (fresh as Array<{ id: string; images?: unknown }>)
+              : [];
+            const row = list.find((v) => v.id === venue.id);
+            serverImages = Array.isArray(row?.images) ? (row.images as unknown[]) : [];
+          }
+          const formSet = new Set(values.images);
+          const concurrent = serverImages.filter(
+            (p): p is string =>
+              typeof p === 'string' && !formSet.has(p) && !removedPathsRef.current.has(p),
+          );
+          // Cap overflow resolution (PR-Agent r11, run #171 — stated rule):
+          // the cap forces a loser when form+concurrent > 6, and THIS
+          // session's intent wins — form images keep their slots; overflow
+          // trims CONCURRENT appends (the other session can re-add after a
+          // refresh; a form the user explicitly arranged must not silently
+          // reorder or drop its own adds).
+          merged = [...values.images, ...concurrent].slice(0, MAX_IMAGES);
+        } catch {
+          // fall through with the form state — never block Save on this read
+        }
         const openHour = Number(values.open);
         const closeHour = Number(values.close);
         await api.patch(`${endpointBase}/venues/${venue.id}`, {
@@ -122,6 +188,9 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
             .filter(Boolean),
           open_hour: openHour,
           close_hour: closeHour,
+          // P1-38: merged at Save (see stale-state guard above; server
+          // dedupes + validates).
+          images: merged,
           ...Object.fromEntries(values.closedDays.map((closed, day) => [`closed_day_${day}`, closed])),
         });
       } else {
@@ -138,6 +207,68 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
     } finally {
       setSaving(false);
     }
+  }
+
+  /** P1-38: upload one photo; the API appends the canonical path server-side. */
+  async function handleFilesSelected(files: FileList | null) {
+    if (!venue || !files?.length) return;
+    setUploadError(null);
+    setUploading(true);
+    // PR-Agent r2 (run #170): append EACH successful upload to the form state
+    // immediately — a mid-loop failure (e.g. the 10/min throttle) must not
+    // discard files that already landed server-side (the next Save would
+    // silently PATCH them out of venues.images — data loss).
+    let uploaded = 0;
+    try {
+      for (const file of Array.from(files)) {
+        if (values.images.length + uploaded >= MAX_IMAGES) {
+          setUploadError(t('imagesTooMany'));
+          break;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        const res = await api.upload<{ path: string }>(
+          `/media/venues?venueId=${encodeURIComponent(venue.id)}`,
+          form,
+        );
+        if (res?.path) {
+          uploaded += 1;
+          setValues((v) =>
+            v.images.includes(res.path) ? v : { ...v, images: [...v.images, res.path] },
+          );
+        }
+      }
+    } catch (e) {
+      // Error standard: what happened + why + what to do next (localized).
+      // Partial-success is preserved: uploads that landed stay in the grid.
+      // PR-Agent r8 (run #171): a 400 is NOT always a type problem — the
+      // backend also 400s on the 6-photo cap and the 5 MB size limit with
+      // stable literal messages (media.service.ts), and 413 is always size.
+      // Route on the API cause (ApiError.message), never blame the type.
+      const status = e instanceof ApiError ? e.status : 0;
+      const cause = e instanceof ApiError ? e.message : '';
+      if (status === 429) setUploadError(t('imagesTooFast'));
+      else if (
+        /exceeds the 5 MB limit/i.test(cause) ||
+        /File too large/i.test(cause) ||
+        status === 413
+      )
+        setUploadError(t('imagesTooLarge'));
+      else if (/maximum of \d+ photos/i.test(cause)) setUploadError(t('imagesTooMany'));
+      else if (/JPEG, PNG or WebP/i.test(cause) || status === 400)
+        setUploadError(t('imagesBadType'));
+      else if (status === 403) setUploadError(t('imagesForbidden'));
+      else setUploadError(t('imagesUploadFailed'));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  /** P1-38: remove one photo from the form grid (persisted on Save). */
+  function removeImage(path: string) {
+    removedPathsRef.current.add(path);
+    setValues((v) => ({ ...v, images: v.images.filter((p) => p !== path) }));
   }
 
   return (
@@ -269,6 +400,72 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
                   </label>
                 ))}
               </div>
+            </div>
+
+            {/* P1-38 (run #170): venue photos — upload, grid, remove-on-Save.
+                PR-Agent r6 MINOR: upload is EDIT-MODE ONLY (the API requires a
+                venue id); in create mode show the hint instead of a dead button. */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="block text-xs font-medium text-gray-700">
+                  {t('images')}{' '}
+                  <span className="text-gray-400">
+                    ({values.images.length}/{MAX_IMAGES})
+                  </span>
+                </span>
+                {venue && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || values.images.length >= MAX_IMAGES}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {t('imagesAdd')}
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+                onChange={(e) => void handleFilesSelected(e.target.files)}
+              />
+              {uploadError && (
+                <p role="alert" className="mb-1.5 text-[11px] text-brand-red">
+                  {uploadError}
+                </p>
+              )}
+              <p className="mb-2 text-[11px] text-gray-400">
+                {venue ? t('imagesHint') : t('imagesCreateHint')}
+              </p>
+              {values.images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {values.images.map((path) => (
+                    <div key={path} className="group relative overflow-hidden rounded-lg border border-gray-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- API-served dynamic path, plain img keeps CSP simple */}
+                      <img
+                        src={`${API_ORIGIN}${path}`}
+                        alt=""
+                        className="h-20 w-full object-cover"
+                        loading="lazy"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(path)}
+                        aria-label={t('imagesRemove')}
+                        className="absolute end-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                      >
+                        <svg viewBox="0 0 14 14" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 2l10 10M12 2L2 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

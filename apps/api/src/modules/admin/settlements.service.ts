@@ -9,10 +9,15 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { settlements } from '../../database/schema';
 import { whitelistedOrderBy } from '../../common/utils/sort';
+import { riyadhDateString, addDaysToDateString } from '../../common/utils/riyadh-date';
+import { buildSettlementRevenueQuery } from '../partner/settlement-revenue';
 import { ListSettlementsDto } from './dto/list-settlements.dto';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { reportFanOutError } from '../../common/utils/fanout';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -39,6 +44,8 @@ export class AdminSettlementsService {
     private readonly audit: AuditService,
     private readonly settings: PlatformSettingsService,
     private readonly realtime: RealtimeService,
+    private readonly activities: ActivitiesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(dto: ListSettlementsDto) {
@@ -52,9 +59,15 @@ export class AdminSettlementsService {
       SELECT
         s.id, s.venue_id, s.amount::text AS amount,
         s.period_start, s.period_end, s.status, s.payout_ref, s.paid_at, s.created_at,
+        -- P2-250 (run #160, Reviewer A #159): surface payout-request
+        -- provenance so admins can distinguish partner-requested rows from
+        -- auto-generated ones (P2-C read-model, partner console half shipped
+        -- in PR #148; this is the admin half).
+        s.requested_by, u.full_name AS requested_by_name,
         v.name AS venue_name
       FROM settlements s
       INNER JOIN venues v ON v.id = s.venue_id
+      LEFT JOIN users u ON u.id = s.requested_by
       ${where}
       ORDER BY ${whitelistedOrderBy(
         dto.sortBy,
@@ -119,6 +132,44 @@ export class AdminSettlementsService {
     });
     this.realtime.broadcastOps('settlements');
 
+    // P1-67 (run #141): tell the venue partner their money moved. The guard
+    // above guarantees `status: 'paid'` — notify AFTER the write + audit so a
+    // notification is never emitted for a pay that didn't happen (TOCTOU-safe
+    // ordering). Best-effort: a resolve/fan-out failure is logged + Sentry'd
+    // (reportFanOutError) and NEVER throws into the admin's pay() — a paid
+    // settlement must not 500 because a push didn't land.
+    try {
+      const [target] = (await this.db.execute(sql`
+        SELECT v.owner_id,
+               v.name AS venue_name,
+               s.amount::text AS amount
+        FROM settlements s
+        INNER JOIN venues v ON v.id = s.venue_id
+        WHERE s.id = ${id}
+      `)) as unknown as Array<{
+        owner_id: string;
+        venue_name: string | null;
+        amount: string;
+      }>;
+
+      if (target?.owner_id) {
+        await this.activities.record({
+          actorId: adminId,
+          verb: 'payout_paid',
+          subjectId: id,
+          recipients: [target.owner_id],
+          excludeActor: false,
+        });
+        await this.notifications.sendPushToUsers([target.owner_id], {
+          key: 'payout_paid', // P2-8: text localized per subscription locale
+          vars: { venueName: target.venue_name ?? undefined, amount: target.amount },
+          data: { type: 'payout-paid' },
+        });
+      }
+    } catch (err) {
+      reportFanOutError('settlements.pay-notify', err);
+    }
+
     return after;
   }
 
@@ -126,35 +177,61 @@ export class AdminSettlementsService {
    * Generates a `pending` settlement per venue for completed KoraLink-booked
    * matches within the configured payout cadence window. Venues already
    * settled for the window are skipped (no double-payout).
+   *
+   * P2-216 (run #163): the revenue SELECT moved INSIDE the transaction and
+   * the venue rows are locked (ORDER BY id FOR UPDATE) before it runs — the
+   * old flow read the unsettled set on the pooled db OUTSIDE the tx, so a
+   * partner payout request committing between the SELECT and the INSERTs
+   * slipped past the dedupe guard (check-vs-insert TOCTOU against the very
+   * path it must serialize with). Both paths now share ONE money-source
+   * query (modules/partner/settlement-revenue.ts) and one lock order.
    */
-  async generatePending(adminId: string, ip?: string) {
+  async generatePending(adminId: string, ip?: string, venueId?: string) {
+    // P2-284 (run #179): optional single-venue scope. The scoped run locks and
+    // settles ONE venue so an off batch member can be settled/re-run without
+    // touching (or being blocked by) the rest. Unknown or pitch-less venues
+    // 404 BEFORE any tx opens. The revenue query receives the explicit id —
+    // the empty list (all-venues default) semantics are unchanged.
+    if (venueId !== undefined) {
+      const [venue] = (await this.db.execute(sql`
+        SELECT v.id
+        FROM venues v
+        INNER JOIN pitches p ON p.venue_id = v.id
+        WHERE v.id = ${venueId}
+        LIMIT 1
+      `)) as unknown as Array<{ id: string }>;
+      if (!venue) throw new NotFoundException('venue not found or has no pitches');
+    }
+
     const cadenceDays = await this.settings.getNumber('payout_cadence_days', 7);
-    const windowStart = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000);
-    const windowStartIso = windowStart.toISOString();
+    const riyadhEnd = riyadhDateString();
+    const startDay = addDaysToDateString(riyadhEnd, -cadenceDays);
 
-    const rows = (await this.db.execute(sql`
-      SELECT
-        v.id AS venue_id,
-        COALESCE(SUM(m.pitch_cost_sar), 0)::text AS amount
-      FROM matches m
-      INNER JOIN pitches p ON p.id = m.pitch_id
-      INNER JOIN venues v ON v.id = p.venue_id
-      WHERE m.status = 'Completed'
-        AND m.booking_mode = 'koralink'
-        AND m.scheduled_at >= ${windowStartIso}
-        AND NOT EXISTS (
-          SELECT 1 FROM settlements s
-          WHERE s.venue_id = v.id AND s.period_start >= ${windowStartIso}::date
-        )
-      GROUP BY v.id
-      HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0
-    `)) as unknown as Array<{ venue_id: string; amount: string }>;
-
-    const created: Array<Record<string, unknown>> = [];
-    // Insert inside a transaction and rely on the `(venue_id, period_start)`
-    // unique index via `onConflictDoNothing` — concurrent generatePending runs
-    // (or a re-run for an already-settled window) can no longer double-insert.
     const inserted = await this.db.transaction(async (tx) => {
+      // Lock the scope's venue rows up-front, in a deterministic order — the
+      // same lock the partner requestPayout tx takes first, so a concurrent
+      // request/generate waits here instead of racing the guard. JOIN-free
+      // IN(subquery) keeps FOR UPDATE legal (no outer-join partition) and
+      // locks ONLY the venue rows (not pitches/matches).
+      await tx.execute(
+        venueId !== undefined
+          ? sql`SELECT id FROM venues WHERE id = ${venueId} ORDER BY id FOR UPDATE`
+          : sql`
+        SELECT id FROM venues
+        WHERE id IN (SELECT venue_id FROM pitches)
+        ORDER BY id
+        FOR UPDATE
+      `,
+      );
+
+      const rows = (await tx.execute(
+        buildSettlementRevenueQuery({
+          venueIds: venueId !== undefined ? [venueId] : [],
+          cadenceDays,
+          riyadhEnd,
+        }),
+      )) as unknown as Array<{ venue_id: string; amount: string }>;
+
       const out: Array<Record<string, unknown>> = [];
       for (const row of rows) {
         // P2-4: row.amount arrives as Postgres' EXACT decimal string (numeric
@@ -166,8 +243,8 @@ export class AdminSettlementsService {
           .values({
             venue_id: row.venue_id,
             amount,
-            period_start: windowStartIso.slice(0, 10),
-            period_end: new Date().toISOString().slice(0, 10),
+            period_start: startDay,
+            period_end: riyadhEnd,
             status: 'pending',
           })
           .onConflictDoNothing()
@@ -178,7 +255,6 @@ export class AdminSettlementsService {
     });
 
     for (const settlement of inserted) {
-      created.push(settlement);
       await this.audit.log({
         adminId,
         action: 'settlement.generate',
@@ -191,6 +267,6 @@ export class AdminSettlementsService {
     }
     this.realtime.broadcastOps('settlements');
 
-    return { generated: created.length, settlements: created };
+    return { generated: inserted.length, settlements: inserted };
   }
 }

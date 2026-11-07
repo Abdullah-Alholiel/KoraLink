@@ -4,7 +4,7 @@ import {
   Inject,
   NotFoundException,
 } from '@nestjs/common';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, gte, lte, getTableColumns } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import {
@@ -13,6 +13,7 @@ import {
   TransactionType,
   ReferenceType,
 } from '../../database/schema';
+import { moneyToNumber } from '../../common/utils/money';
 import { withTimestamp } from '../../common/utils/timestamp';
 
 export interface LedgerEntryDto {
@@ -133,8 +134,12 @@ export class WalletService {
           .where(eq(users.id, userId))
           .returning({ id: users.id, wallet_balance: users.wallet_balance });
 
-        // 3. Guard against negative balance on DEBIT.
-        if (parseFloat(updatedUser.wallet_balance) < 0) {
+        // P2-168 (run #115): exact-cents guard (a vanished user row would
+        // previously parseFloat(undefined) → TypeError 500; now 400).
+        if (!updatedUser) {
+          throw new BadRequestException('Wallet account not found.');
+        }
+        if (moneyToNumber(updatedUser.wallet_balance) < 0) {
           throw new BadRequestException('Insufficient wallet balance.');
         }
 
@@ -169,25 +174,68 @@ export class WalletService {
     return user.wallet_balance;
   }
 
-  async getHistory(userId: string, page = 1, perPage = 20) {
-    const skip = (page - 1) * perPage;
-    const [transactionsData, totalResult] = await Promise.all([
-      this.db
-        .select()
-        .from(transactions)
-        .where(eq(transactions.user_id, userId))
-        .orderBy(desc(transactions.created_at))
-        .offset(skip)
-        .limit(perPage),
-      this.db
-        .select({ total: count() })
-        .from(transactions)
-        .where(eq(transactions.user_id, userId)),
-    ]);
+  /**
+   * P2-119: optional ISO-8601 `from`/`to` bounds (inclusive) are ANDed onto
+   * the user_id predicate — never replacing it — and the count query shares
+   * the same predicate so total/hasMore describe the filtered set.
+   */
+  async getHistory(
+    userId: string,
+    page = 1,
+    perPage = 20,
+    from?: string,
+    to?: string,
+  ) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    if (
+      (fromDate && Number.isNaN(fromDate.getTime())) ||
+      (toDate && Number.isNaN(toDate.getTime()))
+    ) {
+      throw new BadRequestException('Invalid date range');
+    }
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('`from` must be before or equal to `to`');
+    }
 
-    const total = totalResult[0]?.total ?? 0;
+    const predicate = and(
+      eq(transactions.user_id, userId),
+      fromDate ? gte(transactions.created_at, fromDate) : undefined,
+      toDate ? lte(transactions.created_at, toDate) : undefined,
+    );
+
+    const skip = (page - 1) * perPage;
+
+    // P2-241: single query with COUNT(*) OVER() (listForUser is the
+    // reference impl) instead of a second COUNT scan, plus `id ASC` as the
+    // deterministic tiebreaker so same-timestamp rows can never straddle a
+    // page boundary between fetches. The window count rides the page query,
+    // so total/hasMore still describe the exact filtered set.
+    const rows = await this.db
+      .select({ ...getTableColumns(transactions), total: sql<number>`COUNT(*) OVER()::int` })
+      .from(transactions)
+      .where(predicate)
+      .orderBy(desc(transactions.created_at), asc(transactions.id))
+      .offset(skip)
+      .limit(perPage);
+
+    let total = rows[0]?.total ?? 0;
+    if (rows.length === 0) {
+      // Reviewer A (run #154, PR #161 follow-up): a beyond-end page (stale
+      // offset after records were pruned) returns no rows, so the window
+      // count never materializes — fall back to ONE degenerate COUNT instead
+      // of reporting total 0 for a wallet that still has transactions (the
+      // same truthfulness fix conversations.service.ts listMessages got in
+      // PR #161).
+      const [c] = await this.db
+        .select({ total: sql<number>`COUNT(*)::int` })
+        .from(transactions)
+        .where(predicate);
+      total = c?.total ?? 0;
+    }
+
     const hasMore = skip + perPage < total;
 
-    return { transactions: transactionsData, total, hasMore };
+    return { transactions: rows, total, hasMore };
   }
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Param,
   Query,
   Body,
   UseGuards,
@@ -17,12 +18,18 @@ import {
   ApiCookieAuth,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 
 import { WalletService } from './wallet.service';
+import { WalletTopupService } from './wallet.topup.service';
 import { WalletHistoryDto } from './dto/wallet-history.dto';
 import { TopupWalletDto } from './dto/topup-wallet.dto';
+import { TopupIntentDto } from './dto/topup-intent.dto';
+import { VerifyTopupDto } from './dto/verify-topup.dto';
+import { WalletReceiptService } from './wallet.receipt.service';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @ApiTags('wallet')
 @ApiCookieAuth('access_token')
@@ -32,10 +39,34 @@ export class WalletController {
   constructor(
     private readonly walletService: WalletService,
     private readonly configService: ConfigService,
+    private readonly topupService: WalletTopupService,
+    private readonly receiptService: WalletReceiptService,
   ) {}
+
+  // ── GET /wallet/payout-receipt/:matchId ──────────────────────
+  // P2-293 (run #185): the completing host's money-truth receipt. Owner-only
+  // (the service 404s for anyone but the host); UUID-param pipe rejects
+  // malformed ids with 400 before the service runs.
+  @Get('payout-receipt/:matchId')
+  // PR-Agent r2 PR #211: explicit 60/min — the receipt runs ~5 queries per
+  // hit (heavier than balance/history); same explicit posture, not global-ride.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({
+    summary: "Get the authenticated host's payout receipt for a completed match",
+  })
+  @ApiOkResponse({ description: 'Payout breakdown for a released host payout.' })
+  async getPayoutReceipt(
+    @CurrentUser() user: { sub: string },
+    @Param('matchId', UuidParamPipe) matchId: string,
+  ) {
+    return this.receiptService.getPayoutReceipt(user.sub, matchId);
+  }
 
   // ── GET /wallet/balance ──────────────────────────────────────
   @Get('balance')
+  // Run #185 (Reviewer A): explicit route-level 60/min parity with the other
+  // wallet GETs (topup/config, topup/latest) instead of riding the global guard.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({ summary: 'Get authenticated user wallet balance' })
   @ApiOkResponse({ description: 'Current wallet balance in SAR.' })
   async getBalance(@CurrentUser() user: { sub: string }) {
@@ -45,13 +76,79 @@ export class WalletController {
 
   // ── GET /wallet/history ──────────────────────────────────────
   @Get('history')
-  @ApiOperation({ summary: 'Get paginated transaction history' })
+  // Run #185 (Reviewer A): explicit 60/min — history runs a paginated
+  // COUNT-over() + SELECT per hit, same read posture as its siblings.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({
+    summary: 'Get paginated transaction history (optional from/to date range)',
+  })
   @ApiOkResponse({ description: 'Paginated list of transactions.' })
   async getHistory(
     @CurrentUser() user: { sub: string },
     @Query() dto: WalletHistoryDto,
   ) {
-    return this.walletService.getHistory(user.sub, dto.page, dto.perPage);
+    return this.walletService.getHistory(
+      user.sub,
+      dto.page,
+      dto.perPage,
+      dto.from,
+      dto.to,
+    );
+  }
+
+  // ── GET /wallet/topup/config ─────────────────────────────────
+  // P0-2 (run #169): lets the PWA render the top-up entry point without
+  // baking the publishable key into the client bundle (NEXT_PUBLIC_* trap) —
+  // the key is served per-request to authenticated users only.
+  @Get('topup/config')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({ summary: 'Top-up availability + client form config' })
+  @ApiOkResponse({ description: 'Flag, publishable key (or null), amount bounds.' })
+  async getTopupConfig() {
+    return this.topupService.getTopupConfig();
+  }
+
+  // ── GET /wallet/topup/latest ─────────────────────────────────
+  // P2-279 (run #176): the newest top-up attempt for the caller — the
+  // player-visible trace of an attempt that never landed (failed 3DS,
+  // abandoned verify). Reports state only; never interprets charge/refund.
+  @Get('topup/latest')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({ summary: 'Newest wallet top-up attempt for the caller' })
+  @ApiOkResponse({ description: 'Latest intent (or null when none).' })
+  async getLatestTopupIntent(@CurrentUser() user: { sub: string }) {
+    return this.topupService.getLatestIntent(user.sub);
+  }
+
+  // ── POST /wallet/topup/intent ────────────────────────────────
+  // P0-2 (run #169): pins user + amount server-side BEFORE the hosted form
+  // creates the payment client-side. Idempotent per (user, idempotencyKey).
+  @Post('topup/intent')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @ApiOperation({ summary: 'Create a wallet top-up intent (Moyasar sandbox)' })
+  @ApiCreatedResponse({ description: 'Intent pinned; use publishableKey with the hosted form.' })
+  async createTopupIntent(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: TopupIntentDto,
+  ) {
+    return this.topupService.createTopupIntent(user.sub, dto);
+  }
+
+  // ── POST /wallet/topup/verify ────────────────────────────────
+  // P0-2 (run #169): the ONLY credit authority. Server fetches the payment
+  // from Moyasar (sk), asserts paid + SAR + amount === intent, credits in ONE
+  // tx. Throttled: this leg performs an outbound provider call per request.
+  @Post('topup/verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @ApiOperation({ summary: 'Verify a Moyasar payment and credit the wallet' })
+  @ApiOkResponse({ description: 'Credit result with balance (idempotent).' })
+  async verifyTopup(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: VerifyTopupDto,
+  ) {
+    return this.topupService.verifyTopup(user.sub, dto);
   }
 
   // ── POST /wallet/topup ──────────────────────────────────────
