@@ -49,12 +49,40 @@ export function formatShortDate(date: Date, locale: AppLocale): string {
  * "‏١٥٠٫٠٠ ر.س.‏" (ar: Arabic-Indic digits). Numeric DB columns arrive as
  * strings; callers pass the number. En output is the historical fixed
  * `en-GB`/`en-US` currency shape, so existing tests and UI copy stay
- * byte-identical.
+ * byte-identical. P2-257b (run #193): optional `currency` (default 'SAR')
+ * so PaymentSheet can honor the match's denomination (P2-239) while STILL
+ * routing through this formatter for locale-correct numerals/symbols.
  */
-export function formatMoney(value: number, locale: AppLocale): string {
+export function formatMoney(
+  value: number,
+  locale: AppLocale,
+  currency: string = 'SAR'
+): string {
   return numberFormat(locale, {
     style: 'currency',
-    currency: 'SAR',
+    // PR-Agent r1 (PR #225): Intl.NumberFormat THROWS RangeError on a
+    // null/malformed currency — a bad `match.currency` value would crash the
+    // whole PaymentSheet at render (the old `{currency} {x.toFixed(2)}`
+    // template degraded harmlessly). Guard: non-3-letter codes fall back to
+    // SAR (the schema default, wallet_topup_intents.currency).
+    currency: typeof currency === 'string' && /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : 'SAR',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/**
+ * Locale-neutral amount string for i18n interpolation (P2-257b, run #193) —
+ * the numerals-only half of formatMoney: "150.00" (en) / "١٥٠٫٠٠" (ar).
+ * Message strings interpolate `{amount}` between their OWN currency marks
+ * ("SAR {amount}" en / "{amount} ر.س" ar), so this helper carries NO
+ * currency — adding one here would double it. Route every message-embedded
+ * money value through this so AR users read Arabic-Indic numerals, not the
+ * Latin digits a bare `toFixed(2)` emits. 2-decimal minimum mirrors the
+ * `toFixed(2)` renders this replaced byte-for-byte in en.
+ */
+export function formatAmount(value: number, locale: AppLocale): string {
+  return numberFormat(locale, {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
 }
