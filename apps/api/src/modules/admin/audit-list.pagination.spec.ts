@@ -28,12 +28,17 @@ describe('audit-list pagination contract (P2-318)', () => {
     expect(SERVICE).not.toMatch(/ORDER BY a\.created_at DESC\s*\n\s*LIMIT/);
   });
 
-  it('computes total via COUNT(*) OVER() in the page query — no second COUNT scan', () => {
+  it('computes total via COUNT(*) OVER() in the page query — no UNCONDITIONAL second COUNT scan', () => {
     expect(SERVICE).toContain('COUNT(*) OVER()::int AS total_count');
-    expect(SERVICE.includes('SELECT COUNT(*)::int')).toBe(false);
+    // The legacy exact COUNT may exist ONLY behind the empty-page guard
+    // (PR-Agent r1: beyond-range pages would otherwise report total 0 and
+    // collapse console pagination).
+    expect(SERVICE).toMatch(
+      /if \(rows\.length === 0\) \{[\s\S]*?SELECT COUNT\(\*\)::int/
+    );
   });
 
-  it('strips total_count from response rows and falls back to total 0 on empty page', () => {
+  it('strips total_count from response rows and falls back to exact COUNT only on empty pages', () => {
     expect(SERVICE).toContain('({ total_count: _tc, ...rest }) => rest');
     expect(SERVICE).toContain("?.total_count === 'number'");
     expect(SERVICE).toMatch(/\?\s*\(rows\[0\] as \{ total_count: number \}\)\.total_count\s*:\s*0/);
