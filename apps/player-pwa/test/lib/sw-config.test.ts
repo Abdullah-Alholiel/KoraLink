@@ -217,6 +217,14 @@ describe('SW runtime-caching contract (P2-57, run #51)', () => {
       expect(opts.runtimeCaching.filter((r) => !r.options?.cacheName).length).toBe(3);
     });
 
+    // P2-315 drift guard: the mutation-triggered detail invalidation targets a
+    // real recipe — a rename in next.config.mjs would silently no-op it.
+    it('MATCH_DETAIL_CACHE names the match-detail recipe (P2-315 drift guard)', async () => {
+      const { MATCH_DETAIL_CACHE } = await import('@/lib/sw-match-cache-invalidate');
+      expect(MATCH_DETAIL_CACHE).toBe('match-detail-cache');
+      expect(byCache(MATCH_DETAIL_CACHE)).toBeDefined();
+    });
+
     it('money + auth URLs are NetworkOnly (never cached) — behavior-level', () => {
       const moneyAuth = [
         `${API}/auth/dev-login`,
