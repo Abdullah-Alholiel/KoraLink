@@ -69,8 +69,17 @@ describe('PaymentSheet currency', () => {
         expect(screen.getByText('AED 30.00')).toBeInTheDocument();
     });
 
-    it('renders the match currency identically in the Arabic locale', () => {
+    it('renders the match currency in the Arabic locale with Arabic-Indic numerals (P2-257b)', () => {
+        // P2-257b (run #193): the old expectation pinned the LATIN shape
+        // ("AED 30.00") under locale=ar — that was the exact defect this
+        // census fixes (Latin digits on an AR money surface, banned by the
+        // owner's numeral standard / BlockedCard convention). formatMoney
+        // now yields Intl's ar-SA shape: Arabic-Indic digits + localized
+        // symbol — "٣٠٫٠٠ د.إ." (mirrors the wallet page's ر.س precedent).
         renderSheet({ currency: 'AED', price: 40, walletBalance: 10 }, 'ar');
-        expect(screen.getByText('AED 30.00')).toBeInTheDocument();
+        const text = document.body.textContent ?? '';
+        expect(text).toMatch(/٣٠٫٠٠/);
+        expect(text).toContain('د.إ');
+        expect(text).not.toMatch(/AED 30\.00/);
     });
 });

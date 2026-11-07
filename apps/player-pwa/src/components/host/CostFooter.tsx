@@ -1,7 +1,8 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { formatMoney } from '@/lib/format';
 
 export interface CostFooterProps {
     selectedPitch: boolean;          // has a pitch been selected?
@@ -21,6 +22,7 @@ export default function CostFooter({
     onPublish,
 }: CostFooterProps) {
     const t = useTranslations();
+    const intlLocale = useLocale() as 'ar' | 'en';
 
     const publishDisabled = isPending || !canPublish;
 
@@ -30,7 +32,7 @@ export default function CostFooter({
             <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-400">{t('host.playerShare')}</span>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-brand-black">SAR {playerShare}</span>
+                    <span className="text-sm font-bold text-brand-black">{formatMoney(playerShare, intlLocale)}</span>
                     <span className="inline-flex items-center gap-1 bg-brand-green/10 text-brand-green text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <Sparkles className="w-3 h-3" strokeWidth={2} />
                         {t('host.hostPlaysFree')}
@@ -40,7 +42,7 @@ export default function CostFooter({
             <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-gray-400">{t('host.pitchCost')}</span>
                 <span className="text-base font-extrabold text-brand-black">
-                    SAR {pitchCostSar.toFixed(2)}
+                    {formatMoney(pitchCostSar, intlLocale)}
                 </span>
             </div>
 

@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useLocale } from 'next-intl';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Calendar, MapPin, Info, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
 import { fetcher } from '@/lib/fetcher';
 import { uuid } from '@/lib/uuid';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { formatMoney } from '@/lib/format';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -45,8 +47,10 @@ export default function PaymentSheet({
 }: PaymentSheetProps) {
     const t = useTranslations();
     const router = useRouter();
-    const pathname = usePathname();
-    const locale = (pathname ?? '').split('/')[1] || 'en';
+    // P2-257b (run #193): next-intl's useLocale() is the provider-correct
+    // locale source (the old pathname.split fallback read 'en' under any
+    // prefix-less path and diverged from the app's active locale wrapper).
+    const locale = useLocale() as 'ar' | 'en';
     const isOnline = useOnlineStatus();
     const [agreed, setAgreed] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
@@ -147,16 +151,16 @@ export default function PaymentSheet({
                 <div className="mx-5 mt-5 space-y-3">
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('payment.total')}</span>
-                        <span className="text-sm font-bold text-brand-black">{currency} {price.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{formatMoney(price, locale, currency)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{t('profile.wallet')}</span>
-                        <span className="text-sm font-bold text-brand-black">{currency} {walletBalance.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-brand-black">{formatMoney(walletBalance, locale, currency)}</span>
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div className="flex items-center justify-between">
                         <span className="text-base font-bold text-brand-black">{t('payment.total')}</span>
-                        <span className="text-xl font-extrabold text-brand-red">{currency} {toPay.toFixed(2)}</span>
+                        <span className="text-xl font-extrabold text-brand-red">{formatMoney(toPay, locale, currency)}</span>
                     </div>
                 </div>
 
@@ -278,7 +282,7 @@ export default function PaymentSheet({
                     ) : !canAfford ? (
                         t('payment.insufficientBalance')
                     ) : (
-                        <>{t('payment.payWithWallet')} {currency} {price.toFixed(2)}</>
+                        <>{t('payment.payWithWallet')} {formatMoney(price, locale, currency)}</>
                     )}
                 </button>
                 {joinError && (

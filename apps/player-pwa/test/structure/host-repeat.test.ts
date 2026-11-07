@@ -60,7 +60,11 @@ describe('P1-64 recurring matches — host form', () => {
 
   it('shows the per-week breakdown in the warning sheet', () => {
     expect(SHEET).toMatch(/\{repeatWeeks > 1 && \(/);
-    expect(SHEET).toContain('SAR {(depositSar / repeatWeeks).toFixed(2)} × {repeatWeeks}');
+    // P2-257b (run #193): the breakdown amount routes through formatMoney
+    // (Arabic-Indic numerals in AR) — the old `SAR {toFixed}` template is
+    // banned in this sheet.
+    expect(SHEET).toContain('{formatMoney(depositSar / repeatWeeks, intlLocale)} × {repeatWeeks}');
+    expect(SHEET.includes('SAR {(depositSar / repeatWeeks).toFixed(2)}')).toBe(false);
   });
 
   it('keeps host.repeat.* in BOTH locales with leaf-key parity', () => {

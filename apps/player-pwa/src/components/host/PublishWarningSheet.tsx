@@ -1,9 +1,10 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { AlertTriangle, Shield, CircleAlert, Wallet } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 import { computeShortfall } from '@/lib/publish-error';
+import { formatMoney, formatAmount } from '@/lib/format';
 
 export interface PublishWarningSheetProps {
     open: boolean;
@@ -36,6 +37,7 @@ export default function PublishWarningSheet({
     open, mode, errorKey, depositSar, repeatWeeks = 1, walletBalanceSar, balanceResolved, serverShortfallSar, consentAccepted, onConsentChange, onTopUp, onConfirm, onCancel, isPending,
 }: PublishWarningSheetProps) {
     const t = useTranslations();
+    const intlLocale = useLocale() as 'ar' | 'en';
 
     if (!open) return null;
 
@@ -140,13 +142,13 @@ export default function PublishWarningSheet({
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-xs text-gray-400">{t('host.depositLabel')}</span>
                             <span dir="ltr" className="text-base font-extrabold text-brand-black">
-                                SAR {depositSar.toFixed(2)}
+                                {formatMoney(depositSar, intlLocale)}
                             </span>
                         </div>
                         {repeatWeeks > 1 && (
                             <div className="flex justify-end mb-1">
                                 <span dir="ltr" data-testid="deposit-breakdown" className="text-xs text-gray-500">
-                                    SAR {(depositSar / repeatWeeks).toFixed(2)} × {repeatWeeks}
+                                    {formatMoney(depositSar / repeatWeeks, intlLocale)} × {repeatWeeks}
                                 </span>
                             </div>
                         )}
@@ -158,7 +160,7 @@ export default function PublishWarningSheet({
                                 <span className="text-xs text-gray-400">—</span>
                             ) : (
                                 <span dir="ltr" className={`text-sm font-bold ${isShort ? 'text-brand-red' : 'text-brand-black'}`}>
-                                    SAR {walletBalanceSar.toFixed(2)}
+                                    {formatMoney(walletBalanceSar, intlLocale)}
                                 </span>
                             )}
                         </div>
@@ -183,7 +185,7 @@ export default function PublishWarningSheet({
                         <div className="flex-1 text-sm leading-relaxed">
                             <p className="font-bold text-brand-red mb-0.5">{t('host.shortfallLabel')}</p>
                             <p className="text-gray-700">
-                                {t('host.shortfallBody', { amount: shortfallSar.toFixed(2) })}
+                                {t('host.shortfallBody', { amount: formatAmount(shortfallSar, intlLocale) })}
                             </p>
                             <button
                                 type="button"
