@@ -43,22 +43,32 @@ export class AdminAuditListService {
     }
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
+    // P2-318 (Reviewer A run #193): single-query pagination contract —
+    // `COUNT(*) OVER()` (window count taken BEFORE LIMIT — no second COUNT
+    // scan; same shape as conversations.service / reports.service) and the
+    // unique `a.id DESC` tiebreaker: bulk admin actions stamp identical ms
+    // timestamps, so created_at-only ordering duplicated/straddled rows
+    // across pages.
     const rows = (await this.db.execute(sql`
       SELECT
         a.id, a.admin_id, a.action, a.entity_type, a.entity_id,
         a.before, a.after, a.ip, a.created_at,
-        u.full_name AS admin_name
+        u.full_name AS admin_name,
+        COUNT(*) OVER()::int AS total_count
       FROM audit_logs a
       LEFT JOIN users u ON u.id = a.admin_id
       ${where}
-      ORDER BY a.created_at DESC
+      ORDER BY a.created_at DESC, a.id DESC
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as Array<Record<string, unknown>>;
 
-    const countRows = (await this.db.execute(sql`
-      SELECT COUNT(*)::int AS c FROM audit_logs a ${where}
-    `)) as unknown as Array<{ c: number }>;
+    const logs = rows.map(({ total_count: _tc, ...rest }) => rest);
+    const total =
+      typeof (rows[0] as { total_count?: unknown } | undefined)
+        ?.total_count === 'number'
+        ? (rows[0] as { total_count: number }).total_count
+        : 0;
 
-    return { logs: rows, total: countRows[0]?.c ?? 0, page, perPage };
+    return { logs, total, page, perPage };
   }
 }
