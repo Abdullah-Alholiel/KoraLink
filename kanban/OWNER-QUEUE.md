@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, checks 11/11 GREEN as of run #191)
-- Commits ahead of main: **395** (last promote 2026-09-25; NO new migrations this cycle)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#191 added NO migrations)
+- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN as of run #191)
+- Commits ahead of main: **398** (last promote 2026-09-25; NO new migrations this cycle)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#192 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (serving run #191 build e660313 — next 15.5.29, @sentry/nextjs 10.78.0); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-06** — run #191 shipped PR #220 (dependency security: ALL prod criticals killed, audit parent-verified 0×4 trees) + PR #221 (P2-312 waitlist position chip on cards, live E2E via reversible tracer); both merged + deployed to the VPS quartet. New: P2-315 (SW match-detail cache staleness), P2-316 (majors register). Strix November scan DONE 2026-11-03 — next window Dec 1–3.
+- Services: API/PWA/Admin UP (serving run #192 build 462352d — wallet/my-games route error boundaries, reports skeleton, SW match-detail purge); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-07** — run #192 shipped PR #222 (PWA route boundaries: wallet/my-games error states + reports loading skeleton) + PR #223 (P2-315: SW match-detail cache purged on every match mutation — stale joinable CTA after last-spot-taken eliminated); both merged + live on the VPS. Strix November scan DONE 2026-11-03 — next window Dec 1–3.
 
 ## Active owner actions
 
