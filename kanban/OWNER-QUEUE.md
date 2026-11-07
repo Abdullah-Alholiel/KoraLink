@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN as of run #191)
-- Commits ahead of main: **398** (last promote 2026-09-25; NO new migrations this cycle)
+- Open PRs: 1 (#178 promote staging→main — owner-only, checks 12/12 GREEN + MERGEABLE CLEAN as of run #193, refreshed this run)
+- Commits ahead of main: **401** (last promote 2026-09-25; NO new migrations this cycle — runs #193 added none)
 - Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#192 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (serving run #192 build 462352d — wallet/my-games route error boundaries, reports skeleton, SW match-detail purge); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-07** — run #192 shipped PR #222 (PWA route boundaries: wallet/my-games error states + reports loading skeleton) + PR #223 (P2-315: SW match-detail cache purged on every match mutation — stale joinable CTA after last-spot-taken eliminated); both merged + live on the VPS. Strix November scan DONE 2026-11-03 — next window Dec 1–3.
+- Services: API/PWA/Admin UP (serving run #193 builds ff4239c/7b82614 — audit-list pagination contract, Arabic-Indic money numerals outside wallet); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-07** — run #193 shipped PR #224 (P2-318 audit-list pagination: unique tiebreaker + window count, empty-page truthful total) + PR #225 (P2-319: Arabic-Indic money numerals outside wallet — PaymentSheet/CostFooter/PublishWarningSheet all formatMoney-routed); both merged + live on the VPS. Strix next window Dec 1–3. Found: z.ai HTTP/2 curl-43 quirk (probes now pin --http1.1).
 
 ## Active owner actions
 
@@ -51,7 +51,10 @@
 - **Close line:** "P1-69: bank-transfer withdrawal with IBAN" OR "P1-69: defer until post-launch".
 - **Deadline:** Before building withdrawal path.
 
-### 9. P1-73 — dev-login on staging
+### 9. P1-73 — dev-login on staging (factory re-assessed run #193)
+- **What:** Factory VERIFIED dev-login 403s in prod and assessed staging-on usage as deliberate owner workflow → reclassified ACCEPTED-RISK on the board (run #193). Owner confirmation still welcome.
+- **Close line:** "P1-73: keep dev-login on staging" (confirms the accepted-risk) OR "P1-73: disable dev-login on staging".
+- **Deadline:** Before public launch.
 - **What:** Should `DEV_LOGIN_ENABLED` stay `true` on staging? Factory recommends `false` (only real OTP) unless explicit staging-only dev-login policy.
 - **Close line:** "P1-73: disable dev-login on staging" OR "P1-73: keep dev-login on staging".
 - **Deadline:** Before public launch.
