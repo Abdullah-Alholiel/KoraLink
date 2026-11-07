@@ -23,6 +23,9 @@ const LOADING = [
   'src/app/[locale]/match/[id]/loading.tsx',
   // P2-180 (run #124): standalone club-detail route ships its own skeleton.
   'src/app/[locale]/clubs/[id]/loading.tsx',
+  // Run #192 (Reviewer B 5-state gap): reports was the last (main) route
+  // without one — first paint flashed empty before the page spinner.
+  'src/app/[locale]/(main)/reports/loading.tsx',
 ];
 
 const ERRORS = [
@@ -31,6 +34,11 @@ const ERRORS = [
   // P2-180 (run #124): clubs/[id] is OUTSIDE (main) — the (main)/layout
   // surface boundary never covers it, so it needs its own scoped boundary.
   'src/app/[locale]/clubs/[id]/error.tsx',
+  // Run #192 (Reviewer B P1): wallet is a money surface and my-games a hot
+  // route — a crash there must stay scoped with classified copy + retry
+  // (RouteError), not fall to the generic group boundary.
+  'src/app/[locale]/(main)/wallet/error.tsx',
+  'src/app/[locale]/(main)/my-games/error.tsx',
 ];
 
 const ROUTE_ERROR = 'src/components/layout/RouteError.tsx';
