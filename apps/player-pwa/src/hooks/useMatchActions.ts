@@ -7,6 +7,7 @@ import { classifyError } from '@/lib/error-classify';
 import { parseWalletShortfall } from '@/lib/publish-error';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { invalidateMatchDetailCache } from '@/lib/sw-match-cache-invalidate';
 import type { Match, RosterPlayer } from '@/types';
 
 // ─── Toast helper ──────────────────────────────────────
@@ -156,6 +157,8 @@ export function useJoinMatch() {
       const matchId = context.matchId;
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       // Join now moves money server-side (player-host-responsibility slice 2):
       // the ledger changed, so wallet caches must refetch.
@@ -186,6 +189,8 @@ export function useJoinWaitlist() {
     onSuccess: (_data, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
     },
   });
@@ -201,6 +206,8 @@ export function useLeaveWaitlist() {
     onSuccess: (_data, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
     },
   });
@@ -248,6 +255,8 @@ export function useLeaveMatch() {
     onSuccess: (data, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       // Money moved (refund / forfeit) — wallet caches must refetch.
       queryClient.invalidateQueries({ queryKey: ['wallet', 'balance'] });
@@ -284,6 +293,8 @@ export function useCancelMatch() {
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       showToast(tMatch('cancelledToast'), 'info');
       trackEvent('match_cancelled', { match_id: matchId });
@@ -308,6 +319,8 @@ export function useStartMatch() {
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       showToast(tMatch('startedToast'), 'success');
     },
@@ -331,6 +344,8 @@ export function useCompleteMatch() {
     onSuccess: (_, matchId) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       queryClient.invalidateQueries({ queryKey: ['pom', matchId] });
       showToast(tMatch('completedToast'), 'success');
@@ -363,6 +378,8 @@ export function useRescheduleMatch() {
     onSuccess: (_, { matchId }) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // P2-315: also purge the SW match-detail HTTP cache (fire-and-forget, never throws).
+      void invalidateMatchDetailCache(matchId);
       queryClient.invalidateQueries({ queryKey: ['pitch-slots'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'my-matches'] });
       showToast(tReschedule('success'), 'success');
