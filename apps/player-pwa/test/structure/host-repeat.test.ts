@@ -63,7 +63,7 @@ describe('P1-64 recurring matches — host form', () => {
     // P2-257b (run #193): the breakdown amount routes through formatMoney
     // (Arabic-Indic numerals in AR) — the old `SAR {toFixed}` template is
     // banned in this sheet.
-    expect(SHEET).toContain('{formatMoney(depositSar / repeatWeeks, intlLocale)} × {repeatWeeks}');
+    expect(SHEET).toContain('{formatMoney(depositSar / repeatWeeks, intlLocale)} × {formatCount(repeatWeeks, intlLocale)}');
     expect(SHEET.includes('SAR {(depositSar / repeatWeeks).toFixed(2)}')).toBe(false);
   });
 

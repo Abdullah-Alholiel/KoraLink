@@ -84,3 +84,37 @@ describe('P2-257b — Arabic-Indic money numerals outside the wallet', () => {
     expect(pws).toContain('formatAmount(shortfallSar, intlLocale)');
   });
 });
+
+describe('P2-257b r2 — recurring-deposit breakdown carries Arabic-Indic week count (PR-Agent r1)', () => {
+  it('AR breakdown: both the amount AND the week count render Arabic-Indic digits', () => {
+    renderSheetAr({ depositSar: 750, repeatWeeks: 2, walletBalanceSar: 900, balanceResolved: true });
+    const card = screen.getByTestId('deposit-card');
+    expect(card.textContent).toContain('٣٧٥');
+    expect(card.textContent).toContain('×');
+    expect(card.textContent).toContain('٢');
+    // No Latin digit anywhere in the deposit card.
+    expect(card.textContent).not.toMatch(/[0-9]/);
+  });
+
+  it('EN breakdown keeps Latin digits ("SAR 375.00 × 2")', () => {
+    render(
+      <NextIntlClientProvider messages={enMessages} locale="en">
+        <PublishWarningSheet
+          open
+          mode="koralink"
+          consentAccepted
+          onConsentChange={() => {}}
+          onTopUp={() => {}}
+          onConfirm={() => {}}
+          onCancel={() => {}}
+          isPending={false}
+          depositSar={750}
+          repeatWeeks={2}
+          walletBalanceSar={900}
+          balanceResolved={true}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByTestId('deposit-breakdown').textContent).toMatch(/SAR\s?375\.00 × 2/);
+  });
+});

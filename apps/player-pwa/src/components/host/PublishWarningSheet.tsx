@@ -4,7 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { AlertTriangle, Shield, CircleAlert, Wallet } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 import { computeShortfall } from '@/lib/publish-error';
-import { formatMoney, formatAmount } from '@/lib/format';
+import { formatMoney, formatAmount, formatCount } from '@/lib/format';
 
 export interface PublishWarningSheetProps {
     open: boolean;
@@ -148,7 +148,7 @@ export default function PublishWarningSheet({
                         {repeatWeeks > 1 && (
                             <div className="flex justify-end mb-1">
                                 <span dir="ltr" data-testid="deposit-breakdown" className="text-xs text-gray-500">
-                                    {formatMoney(depositSar / repeatWeeks, intlLocale)} × {repeatWeeks}
+                                    {formatMoney(depositSar / repeatWeeks, intlLocale)} × {formatCount(repeatWeeks, intlLocale)}
                                 </span>
                             </div>
                         )}

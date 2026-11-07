@@ -60,7 +60,12 @@ export function formatMoney(
 ): string {
   return numberFormat(locale, {
     style: 'currency',
-    currency,
+    // PR-Agent r1 (PR #225): Intl.NumberFormat THROWS RangeError on a
+    // null/malformed currency — a bad `match.currency` value would crash the
+    // whole PaymentSheet at render (the old `{currency} {x.toFixed(2)}`
+    // template degraded harmlessly). Guard: non-3-letter codes fall back to
+    // SAR (the schema default, wallet_topup_intents.currency).
+    currency: typeof currency === 'string' && /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : 'SAR',
     maximumFractionDigits: 2,
   }).format(value);
 }

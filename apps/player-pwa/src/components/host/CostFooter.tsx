@@ -2,7 +2,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { ArrowRight, Loader2, Sparkles } from 'lucide-react';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatCount } from '@/lib/format';
 
 export interface CostFooterProps {
     selectedPitch: boolean;          // has a pitch been selected?

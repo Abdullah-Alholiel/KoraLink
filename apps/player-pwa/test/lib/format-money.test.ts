@@ -76,3 +76,15 @@ describe('formatMoney currency param (P2-257b/P2-239 — match denomination)', (
     expect(squashed(formatMoney(150, 'en'))).toBe('SAR150.00');
   });
 });
+
+describe('formatMoney currency guard (PR-Agent r1, PR #225)', () => {
+  it('malformed currency falls back to SAR instead of throwing RangeError', () => {
+    expect(() => formatMoney(30, 'en', 'ABCDE')).not.toThrow();
+    expect(squashed(formatMoney(30, 'en', 'ABCDE'))).toBe('SAR30.00');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(() => formatMoney(30, 'en', null as any)).not.toThrow();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(squashed(formatMoney(30, 'en', null as any))).toBe('SAR30.00');
+    expect(squashed(formatMoney(30, 'en', 'aed'))).toBe('AED30.00'); // case-normalized
+  });
+});
