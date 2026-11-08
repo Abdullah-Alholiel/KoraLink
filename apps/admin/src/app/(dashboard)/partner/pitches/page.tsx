@@ -73,6 +73,7 @@ export default function MyPitchesPage() {
     try {
       await api.patch(`/partner/pitches/${p.id}`, { is_active: !p.is_active });
       reload();
+      setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
     } catch (err) {
       setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'toggle' });
     } finally {
@@ -125,6 +126,7 @@ export default function MyPitchesPage() {
       await api.delete(`/partner/pitches/${p.id}`);
       if (schedulePitchId === p.id) setSchedulePitchId(null);
       reload();
+      setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
     } catch (err) {
       setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'delete' });
     } finally {
