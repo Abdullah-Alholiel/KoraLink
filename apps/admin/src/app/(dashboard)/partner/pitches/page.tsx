@@ -90,10 +90,11 @@ export default function MyPitchesPage() {
       // drawer stays open via the rethrow.
       const kind = pitchActionFailure(err);
       setFormError(
-        kind === 'auth' ? t('createFailedAuth')
-          : kind === 'access' ? t('createFailedAccess')
-            : kind === 'server' ? t('createFailedServer')
-              : t('createFailedNetwork'),
+        kind === 'validation' ? t('createFailedValidation')
+          : kind === 'auth' ? t('createFailedAuth')
+            : kind === 'access' ? t('createFailedAccess')
+              : kind === 'server' ? t('createFailedServer')
+                : t('createFailedNetwork'),
       );
       throw err; // keep the drawer open so the partner sees the error
     }
@@ -169,13 +170,15 @@ export default function MyPitchesPage() {
           style={{ display: actionFailure ? undefined : 'none' }}
         >
           {actionFailure
-            ? actionFailure.kind === 'auth'
-              ? t('actionFailedAuth', { name: actionFailure.name })
-              : actionFailure.kind === 'access'
-                ? t('actionFailedAccess', { name: actionFailure.name })
-                : actionFailure.kind === 'server'
-                  ? t('actionFailedServer', { name: actionFailure.name })
-                  : t('actionFailedNetwork', { name: actionFailure.name })
+            ? actionFailure.kind === 'validation'
+              ? t('actionFailedValidation', { name: actionFailure.name })
+              : actionFailure.kind === 'auth'
+                ? t('actionFailedAuth', { name: actionFailure.name })
+                : actionFailure.kind === 'access'
+                  ? t('actionFailedAccess', { name: actionFailure.name })
+                  : actionFailure.kind === 'server'
+                    ? t('actionFailedServer', { name: actionFailure.name })
+                    : t('actionFailedNetwork', { name: actionFailure.name })
             : ''}
         </p>
 

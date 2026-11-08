@@ -65,10 +65,11 @@ export function blackoutErrorKind(e: unknown): BlackoutErrorKind {
  * 409 leg (pitch writes have no conflict path today). Callers map each bucket
  * to its own localized key; raw backend text is never rendered.
  */
-export type PitchActionFailure = 'auth' | 'access' | 'server' | 'network';
+export type PitchActionFailure = 'auth' | 'access' | 'validation' | 'server' | 'network';
 
 export function pitchActionFailure(err: unknown): PitchActionFailure {
   if (err instanceof ApiError) {
+    if (err.status === 400) return 'validation';
     if (err.status === 401) return 'auth';
     if (err.status === 403 || err.status === 404) return 'access';
     if (err.status === 429 || err.status >= 500) return 'server';
