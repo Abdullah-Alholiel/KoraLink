@@ -229,7 +229,7 @@
       "deleteFailed": "Delete failed",
       "deleteConfirm": "Delete pitch \"{name}\"? This removes its slots too.",
       "actionFailedAuth": "Couldn't update \"{name}\" — your session ended. Sign in again and retry.",
-      "actionFailedValidation": "The server rejected the change to \"{name}\" — check the values (name, rate, dates) and try again.",
+      "actionFailedValidation": "The server rejected the change to \"{name}\" — refresh the page and try again.",
       "actionFailedAccess": "Couldn't update \"{name}\" — it wasn't found or your account doesn't have access. Refresh the page; if it persists, contact KoraLink support.",
       "actionFailedServer": "Couldn't update \"{name}\" — the server is busy or failed. Try again in a moment.",
       "actionFailedNetwork": "Couldn't update \"{name}\" — connection problem. Check your connection and retry.",
