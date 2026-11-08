@@ -69,10 +69,12 @@ export type PitchActionFailure = 'auth' | 'access' | 'validation' | 'server' | '
 
 export function pitchActionFailure(err: unknown): PitchActionFailure {
   if (err instanceof ApiError) {
-    if (err.status === 400) return 'validation';
     if (err.status === 401) return 'auth';
     if (err.status === 403 || err.status === 404) return 'access';
     if (err.status === 429 || err.status >= 500) return 'server';
+    // PR-Agent r3 (run #194, PR #228): ANY other 4xx (409/422/…) is a
+    // server-REJECTED request — it must never read as a connection problem.
+    if (err.status >= 400) return 'validation';
   }
   return 'network';
 }
