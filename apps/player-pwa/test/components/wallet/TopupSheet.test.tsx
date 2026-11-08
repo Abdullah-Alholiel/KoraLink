@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 import TopupSheet from '@/components/wallet/TopupSheet';
 
 /**
@@ -52,7 +53,8 @@ function makeT() {
     };
 }
 
-function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean } = {}) {
+function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean; locale?: 'en' | 'ar' } = {}) {
+    const locale = overrides.locale ?? 'en';
     const props = {
         isOpen: true,
         onClose: vi.fn(),
@@ -61,7 +63,11 @@ function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnli
         maxAmount: overrides.maxAmount ?? 2000,
     };
     render(
-        <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Riyadh">
+        <NextIntlClientProvider
+            locale={locale}
+            messages={locale === 'ar' ? arMessages : enMessages}
+            timeZone="Asia/Riyadh"
+        >
             <TopupSheet {...props} />
         </NextIntlClientProvider>,
     );
@@ -105,6 +111,21 @@ describe('TopupSheet — preset chips (P2-289, run #180)', () => {
         // The chip is marked pressed once selected.
         expect((screen.getByRole('button', { name: '50' }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true');
         expect(createIntentMock).not.toHaveBeenCalled();
+    });
+
+    it('renders preset chips with Arabic-Indic numerals under locale=ar (P2-257b follow-up, run #194)', () => {
+        // Reviewer B run-#194 gap: the presets were a bare {qa} interpolation —
+        // Latin digits on a money surface in AR, the exact class P2-257b fixed
+        // in PaymentSheet/CostFooter/PublishWarningSheet. This file post-dated
+        // the census (P0-2 run #169) and was missed by it.
+        renderSheet({ locale: 'ar' });
+        expect(screen.getByRole('button', { name: '٢٥' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '٥٠' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '١٠٠' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '٢٠٠' })).toBeTruthy();
+        // The Latin shapes must be GONE (the defect pin, PaymentSheet-test style).
+        expect(screen.queryByRole('button', { name: '25' })).toBeNull();
+        expect(screen.queryByRole('button', { name: '50' })).toBeNull();
     });
 });
 
