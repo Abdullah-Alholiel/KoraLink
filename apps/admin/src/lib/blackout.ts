@@ -58,3 +58,23 @@ export function blackoutErrorKind(e: unknown): BlackoutErrorKind {
   }
   return 'network';
 }
+
+/**
+ * P2-323 (run #194): shared ApiError→copy bucket for pitch actions
+ * (toggle/save/delete) — the settlements moneyActionFailure shape minus the
+ * 409 leg (pitch writes have no conflict path today). Callers map each bucket
+ * to its own localized key; raw backend text is never rendered.
+ */
+export type PitchActionFailure = 'auth' | 'access' | 'validation' | 'server' | 'network';
+
+export function pitchActionFailure(err: unknown): PitchActionFailure {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'auth';
+    if (err.status === 403 || err.status === 404) return 'access';
+    if (err.status === 429 || err.status >= 500) return 'server';
+    // PR-Agent r3 (run #194, PR #228): ANY other 4xx (409/422/…) is a
+    // server-REJECTED request — it must never read as a connection problem.
+    if (err.status >= 400) return 'validation';
+  }
+  return 'network';
+}
