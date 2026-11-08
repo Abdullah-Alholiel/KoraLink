@@ -85,6 +85,7 @@ export default function MyPitchesPage() {
     try {
       await api.post('/partner/pitches', values);
       reload();
+      setActionFailure(null); // P2-323 r2: success clears any stale alert
     } catch (err) {
       // P2-323: same de-raw rule as toggle/delete — localized bucket, the
       // drawer stays open via the rethrow.
@@ -113,6 +114,7 @@ export default function MyPitchesPage() {
       hourly_rate: values.hourly_rate,
     });
     reload();
+    setActionFailure(null); // P2-323 r2: success clears any stale alert
   }
 
   async function deletePitch(p: PartnerPitch) {
