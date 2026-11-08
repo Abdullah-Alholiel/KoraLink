@@ -30,7 +30,7 @@ export default function MyPitchesPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null);
   // P2-323: localized action-failure bucket (toggle/delete) — what/why/what-next.
-  const [actionFailure, setActionFailure] = useState<{ kind: PitchActionFailure; name: string } | null>(null);
+  const [actionFailure, setActionFailure] = useState<{ kind: PitchActionFailure; name: string; action: 'toggle' | 'delete' } | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
   // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
@@ -74,7 +74,7 @@ export default function MyPitchesPage() {
       await api.patch(`/partner/pitches/${p.id}`, { is_active: !p.is_active });
       reload();
     } catch (err) {
-      setActionFailure({ kind: pitchActionFailure(err), name: p.name });
+      setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'toggle' });
     } finally {
       setBusyId(null);
     }
@@ -126,7 +126,7 @@ export default function MyPitchesPage() {
       if (schedulePitchId === p.id) setSchedulePitchId(null);
       reload();
     } catch (err) {
-      setActionFailure({ kind: pitchActionFailure(err), name: p.name });
+      setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'delete' });
     } finally {
       setBusyId(null);
     }
@@ -172,15 +172,25 @@ export default function MyPitchesPage() {
           style={{ display: actionFailure ? undefined : 'none' }}
         >
           {actionFailure
-            ? actionFailure.kind === 'validation'
-              ? t('actionFailedValidation', { name: actionFailure.name })
-              : actionFailure.kind === 'auth'
-                ? t('actionFailedAuth', { name: actionFailure.name })
-                : actionFailure.kind === 'access'
-                  ? t('actionFailedAccess', { name: actionFailure.name })
-                  : actionFailure.kind === 'server'
-                    ? t('actionFailedServer', { name: actionFailure.name })
-                    : t('actionFailedNetwork', { name: actionFailure.name })
+            ? actionFailure.action === 'delete'
+              ? actionFailure.kind === 'validation'
+                ? t('deleteFailedValidation', { name: actionFailure.name })
+                : actionFailure.kind === 'auth'
+                  ? t('deleteFailedAuth', { name: actionFailure.name })
+                  : actionFailure.kind === 'access'
+                    ? t('deleteFailedAccess', { name: actionFailure.name })
+                    : actionFailure.kind === 'server'
+                      ? t('deleteFailedServer', { name: actionFailure.name })
+                      : t('deleteFailedNetwork', { name: actionFailure.name })
+              : actionFailure.kind === 'validation'
+                ? t('actionFailedValidation', { name: actionFailure.name })
+                : actionFailure.kind === 'auth'
+                  ? t('actionFailedAuth', { name: actionFailure.name })
+                  : actionFailure.kind === 'access'
+                    ? t('actionFailedAccess', { name: actionFailure.name })
+                    : actionFailure.kind === 'server'
+                      ? t('actionFailedServer', { name: actionFailure.name })
+                      : t('actionFailedNetwork', { name: actionFailure.name })
             : ''}
         </p>
 
