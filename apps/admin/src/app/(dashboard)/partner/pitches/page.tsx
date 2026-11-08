@@ -31,6 +31,13 @@ export default function MyPitchesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   // P2-323: localized action-failure bucket (toggle/delete) — what/why/what-next.
   const [actionFailure, setActionFailure] = useState<{ kind: PitchActionFailure; name: string; action: 'toggle' | 'delete' } | null>(null);
+  // r6: attempt counter in the remount key — two IDENTICAL failures in a row
+  // (same pitch, same kind) must still re-announce (role=alert pattern).
+  const [failureSeq, setFailureSeq] = useState(0);
+  const recordFailure = (f: { kind: PitchActionFailure; name: string; action: 'toggle' | 'delete' }) => {
+    setFailureSeq((s) => s + 1);
+    setActionFailure(f);
+  };
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
   // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
@@ -75,7 +82,7 @@ export default function MyPitchesPage() {
       reload();
       setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
     } catch (err) {
-      setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'toggle' });
+      recordFailure({ kind: pitchActionFailure(err), name: p.name, action: 'toggle' });
     } finally {
       setBusyId(null);
     }
@@ -128,7 +135,7 @@ export default function MyPitchesPage() {
       reload();
       setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
     } catch (err) {
-      setActionFailure({ kind: pitchActionFailure(err), name: p.name, action: 'delete' });
+      recordFailure({ kind: pitchActionFailure(err), name: p.name, action: 'delete' });
     } finally {
       setBusyId(null);
     }
@@ -169,7 +176,7 @@ export default function MyPitchesPage() {
             settlements P2-267 pattern). Hidden, never unmounted, when clear. */}
         <p
           role="alert"
-          key={actionFailure ? `${actionFailure.kind}-${actionFailure.name}` : 'clear'}
+          key={actionFailure ? `${failureSeq}-${actionFailure.kind}-${actionFailure.name}` : 'clear'}
           className="mx-8 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
           style={{ display: actionFailure ? undefined : 'none' }}
         >
