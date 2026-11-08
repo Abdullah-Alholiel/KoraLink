@@ -1182,12 +1182,17 @@ export const settlements = pgTable(
     index('settlements_venue_idx').on(t.venue_id),
     // P2-9: one OPEN (pending/paid/failed) settlement per venue per period —
     // closes the generatePending double-insert race under concurrency.
-    // P2-285 (run #195): now PARTIAL (excludes 'voided') so voiding a pending
-    // settlement frees its window for re-settlement by the generator / a
-    // partner payout request; an open row still blocks duplicates.
+    // P2-285 (run #195): now PARTIAL so voiding a pending settlement frees
+    // its window for re-settlement by the generator / a partner payout
+    // request; an open row still blocks duplicates.
+    // CI-proven trap: the predicate must NOT reference the newly-added
+    // 'voided' value (fresh-apply runs all migrations in ONE transaction —
+    // PG forbids USING a new enum value before commit), so it enumerates the
+    // pre-existing open statuses instead. Semantically identical for this
+    // enum; a future SettlementStatus addition must revisit this predicate.
     uniqueIndex('settlements_venue_period_open_uidx')
       .on(t.venue_id, t.period_start)
-      .where(sql`${t.status} <> 'voided'`),
+      .where(sql`${t.status} IN ('pending','paid','failed')`),
   ],
 );
 

@@ -2741,7 +2741,7 @@
      "concurrently": false,
      "method": "btree",
      "with": {},
-     "where": "\"settlements\".\"status\" <> 'voided'"
+     "where": "\"settlements\".\"status\" IN ('pending', 'paid', 'failed')"
     }
    },
    "foreignKeys": {

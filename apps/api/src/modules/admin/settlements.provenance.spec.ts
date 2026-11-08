@@ -135,6 +135,14 @@ describe('Settlement void path (P2-285) — money-truth pins', () => {
     expect(sqlText).toContain("s.status <> 'voided'");
   });
 
+  it('0059 index predicate references NO new enum value (fresh-apply one-tx trap)', () => {
+    const fs = require('node:fs');
+    const raw = fs.readFileSync('drizzle/0059_settlement_void.sql', 'utf-8');
+    const pred = raw.match(/CREATE UNIQUE INDEX[^;]+;/)?.[0] ?? '';
+    expect(pred).toContain('IN (\'pending\',\'paid\',\'failed\')');
+    expect(pred).not.toContain("'voided'");
+  });
+
   it('metrics pending_payouts stays status=pending (voided rows excluded)', async () => {
     // Capture the REAL totals query MetricsService runs (not a mirror string).
     const queries: unknown[] = [];

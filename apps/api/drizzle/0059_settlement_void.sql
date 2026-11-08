@@ -4,9 +4,14 @@
 -- the row keeps its history (audit settlement.void carries before/after).
 --
 -- (1) New terminal enum value. IF NOT EXISTS keeps this idempotent against
---     legacy environments that already carry it. Safe inside the per-file
---     transaction used by both drizzle-kit migrate and scripts/migrate-vps.mjs
---     (0026/0027/0028 precedent): the value is never USED later in the same tx.
+--     legacy environments that already carry it.
+--     FRESH-APPLY TRAP (CI run 42498845309 proved it): the enum value is
+--     added inside the same transaction drizzle/migrate-vps run in, so it
+--     must NOT be USED anywhere later in that transaction (PG "unsafe use
+--     of new value", all supported versions). Hence the index predicate
+--     below enumerates the PRE-EXISTING open statuses instead of
+--     `status <> 'voided'` — semantically identical for this enum, and a
+--     future enum addition must revisit this predicate (grep 0059).
 -- (2) The (venue_id, period_start) uniqueness guard becomes PARTIAL — an OPEN
 --     (pending/paid/failed) settlement still blocks duplicates for its window,
 --     but a VOIDED row frees the window: the next generator run / partner
@@ -14,4 +19,4 @@
 --     uniqueness property intact at every instant of the swap.
 ALTER TYPE "SettlementStatus" ADD VALUE IF NOT EXISTS 'voided';--> statement-breakpoint
 DROP INDEX IF EXISTS "settlements_venue_period_uidx";--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "settlements_venue_period_open_uidx" ON "settlements" ("venue_id","period_start") WHERE "status" <> 'voided';
+CREATE UNIQUE INDEX IF NOT EXISTS "settlements_venue_period_open_uidx" ON "settlements" ("venue_id","period_start") WHERE "status" IN ('pending','paid','failed');
