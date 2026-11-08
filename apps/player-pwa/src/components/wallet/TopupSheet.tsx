@@ -18,8 +18,7 @@
  * api.moyasar.com (connect-src) for the tokenization XHRs.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { usePathname } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import { AlertTriangle, CreditCard, ShieldCheck } from 'lucide-react';
 
 import BottomSheet from '@/components/layout/BottomSheet';
@@ -37,6 +36,7 @@ import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup
 // one source of truth across both top-up surfaces (this sheet + the legacy
 // dummy sheet in wallet/page.tsx).
 import { presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
+import { formatCount } from '@/lib/format';
 
 /** Minimal shape of the CDN-loaded form library (docs.moyasar.com contract;
  * the runtime also accepts a live Element for `element` — verified in the
@@ -104,8 +104,11 @@ export default function TopupSheet({
   maxAmount,
 }: TopupSheetProps) {
   const t = useTranslations();
-  const pathname = usePathname();
-  const locale = (pathname ?? '').split('/')[1] || 'en';
+  // P2-257b follow-up (run #194, Reviewer B): next-intl's useLocale() is the
+  // provider-correct locale source (the pathname-split it replaces is the
+  // exact defect class PaymentSheet fixed in run #193); numeral standard
+  // routes ALL money renders through format helpers.
+  const locale = useLocale() as 'ar' | 'en';
   const isOnline = useOnlineStatus();
   const createIntent = useCreateTopupIntent();
   const verifyTopup = useVerifyTopup();
@@ -345,7 +348,7 @@ export default function TopupSheet({
                 }}
                 className="flex-1 rounded-full border border-gray-200 py-2 text-sm font-medium text-brand-black hover:bg-gray-50 aria-pressed:bg-brand-black aria-pressed:text-white"
               >
-                {qa}
+                {formatCount(qa, locale)}
               </button>
             ))}
           </div>
