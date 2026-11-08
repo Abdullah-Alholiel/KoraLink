@@ -221,8 +221,16 @@
       "loading": "Loading pitches…",
       "error": "Failed to load: {error}",
       "createFailed": "Failed to create pitch",
+      "createFailedAuth": "Couldn't create the pitch — your session ended. Sign in again and retry.",
+      "createFailedAccess": "Couldn't create the pitch — your account doesn't have access to that venue. Refresh the page; if it persists, contact KoraLink support.",
+      "createFailedServer": "Couldn't create the pitch — the server is busy or failed. Try again in a moment.",
+      "createFailedNetwork": "Couldn't create the pitch — connection problem. Check your connection and retry.",
       "deleteFailed": "Delete failed",
-      "deleteConfirm": "Delete pitch \"{name}\"? This removes its slots too."
+      "deleteConfirm": "Delete pitch \"{name}\"? This removes its slots too.",
+      "actionFailedAuth": "Couldn't update \"{name}\" — your session ended. Sign in again and retry.",
+      "actionFailedAccess": "Couldn't update \"{name}\" — it wasn't found or your account doesn't have access. Refresh the page; if it persists, contact KoraLink support.",
+      "actionFailedServer": "Couldn't update \"{name}\" — the server is busy or failed. Try again in a moment.",
+      "actionFailedNetwork": "Couldn't update \"{name}\" — connection problem. Check your connection and retry."
     },
     "earnings": {
       "title": "Earnings",
