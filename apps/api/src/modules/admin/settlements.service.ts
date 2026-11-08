@@ -174,6 +174,52 @@ export class AdminSettlementsService {
   }
 
   /**
+   * P2-285 (run #195): VOID a pending settlement — owner decision
+   * D-20261106-03: "Void pending only, with audit trail." A duplicate or
+   * erroneous pending row is flipped to the terminal `voided` status with a
+   * full audit record; paid/failed rows can never be voided (400). Mirrors
+   * pay()'s TOCTOU posture: conditional UPDATE `WHERE status='pending'` —
+   * zero rows means a concurrent pay/void flipped the row first → 400.
+   * Unlike pay() there is NO notification fan-out: the operator sees the
+   * void in the list + audit trail, and the venue is not owed anything by a
+   * voided row (the freed window is re-settled by the next generate run).
+   */
+  async void(id: string, adminId: string, ip?: string) {
+    const before = await this.findOne(id);
+
+    if (before.status !== 'pending') {
+      throw new BadRequestException('Only pending settlements can be voided.');
+    }
+
+    // Conditional update — only `pending` rows flip to `voided`. A concurrent
+    // pay/void that already flipped the row matches zero rows here (same
+    // race guard as pay()).
+    const updated = await this.db
+      .update(settlements)
+      .set({ status: 'voided' })
+      .where(and(eq(settlements.id, id), eq(settlements.status, 'pending')))
+      .returning({ id: settlements.id });
+
+    if (updated.length === 0) {
+      throw new BadRequestException('Only pending settlements can be voided.');
+    }
+
+    const after = await this.findOne(id);
+    await this.audit.log({
+      adminId,
+      action: 'settlement.void',
+      entityType: 'settlement',
+      entityId: id,
+      before,
+      after,
+      ip,
+    });
+    this.realtime.broadcastOps('settlements');
+
+    return after;
+  }
+
+  /**
    * Generates a `pending` settlement per venue for completed KoraLink-booked
    * matches within the configured payout cadence window. Venues already
    * settled for the window are skipped (no double-payout).

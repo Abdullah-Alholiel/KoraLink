@@ -421,6 +421,13 @@
       "breakpoints": true,
       "when": 1793115756731,
       "tag": "0058_venue_reviews_hidden_at"
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "breakpoints": true,
+      "when": 1793115756732,
+      "tag": "0059_settlement_void"
     }
   ]
 }

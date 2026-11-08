@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useEffect, useState } from 'react';
-import { Download, Loader2, Send } from 'lucide-react';
+import { Ban, Download, Loader2, Send } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -17,6 +17,7 @@ import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvAmount, csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
@@ -49,6 +50,14 @@ export default function SettlementsPage() {
   const [generateFailure, setGenerateFailure] = useState<MoneyActionFailure | null>(null);
   const [paySeq, setPaySeq] = useState(0);
   const [generateSeq, setGenerateSeq] = useState(0);
+  // P2-285 (run #195): void a pending settlement — owner decision
+  // D-20261106-03 ("void pending only, with audit trail"). Confirm-gated in
+  // the drawer; failure surfaces use the SAME moneyActionFailure buckets as
+  // pay/generate. voidSeq remounts the alert so identical consecutive
+  // failures re-announce (P2-267 remount-key lesson).
+  const [confirmVoid, setConfirmVoid] = useState(false);
+  const [voidFailure, setVoidFailure] = useState<MoneyActionFailure | null>(null);
+  const [voidSeq, setVoidSeq] = useState(0);
 
   // P2-267 (PR-Agent r1): pay-failure alerts are scoped to the drawer
   // session — a failed pay on one settlement must never render inside
@@ -57,6 +66,8 @@ export default function SettlementsPage() {
   // when generate() itself re-runs (PR-Agent r2).
   useEffect(() => {
     setPayFailure(null);
+    setVoidFailure(null);
+    setConfirmVoid(false);
   }, [selected?.id, selected === null]);
 
   const sortParts = sort ? sort.split(':') : null;
@@ -98,6 +109,26 @@ export default function SettlementsPage() {
       trackEvent('admin_settlement_pay_failed', { page: 'admin.settlements' });
       setPayFailure(moneyActionFailure(err));
       setPaySeq((s) => s + 1);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // P2-285 (run #195): void a pending settlement — same failure buckets as
+  // pay; no notification fan-out exists server-side, so none is expected.
+  async function voidSettlement(id: string) {
+    setBusyId(id);
+    setVoidFailure(null);
+    setConfirmVoid(false);
+    try {
+      await api.post(`/admin/settlements/${id}/void`);
+      reload();
+      setSelected(null);
+      trackEvent('admin_settlement_void_success', { page: 'admin.settlements' });
+    } catch (err) {
+      trackEvent('admin_settlement_void_failed', { page: 'admin.settlements' });
+      setVoidFailure(moneyActionFailure(err));
+      setVoidSeq((s) => s + 1);
     } finally {
       setBusyId(null);
     }
@@ -238,6 +269,7 @@ export default function SettlementsPage() {
           <option value="pending">{ts('pending')}</option>
           <option value="paid">{ts('paid')}</option>
           <option value="failed">{ts('failed')}</option>
+          <option value="voided">{ts('voided')}</option>
         </select>
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
         {/* P2-284 (run #179): optional generate scope — pick one venue to
@@ -361,19 +393,60 @@ export default function SettlementsPage() {
                           : t('payFailedNetwork')}
                 </p>
               )}
+              {/* P2-285: void failure alert — same surface + buckets as pay. */}
+              {voidFailure && (
+                <p role="alert" key={`void-${voidSeq}`} className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+                  {voidFailure === 'auth' ? t('voidFailedAuth')
+                    : voidFailure === 'access' ? t('voidFailedAccess')
+                      : voidFailure === 'conflict' ? t('voidFailedConflict')
+                        : voidFailure === 'server' ? t('voidFailedServer')
+                          : t('voidFailedNetwork')}
+                </p>
+              )}
               {busyId === selected.id ? (
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
               ) : (
-                <button
-                  onClick={() => pay(selected.id)}
-                  className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                >
-                  <Send className="h-3.5 w-3.5" /> {t('payAction')}
-                </button>
+                <>
+                  <button
+                    onClick={() => pay(selected.id)}
+                    className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                  >
+                    <Send className="h-3.5 w-3.5" /> {t('payAction')}
+                  </button>
+                  <button
+                    onClick={() => setConfirmVoid(true)}
+                    className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                  >
+                    <Ban className="h-3.5 w-3.5" /> {t('voidAction')}
+                  </button>
+                </>
               )}
             </>
           ) : undefined
         }
+      />
+
+      {/* P2-285: void confirmation — money-adjacent destructive action gets
+          the shared accessible ConfirmDialog (danger variant). Message names
+          the amount + period so the operator confirms the RIGHT row. */}
+      <ConfirmDialog
+        open={confirmVoid && !!selected}
+        danger
+        title={t('voidConfirmTitle')}
+        message={
+          selected
+            ? t('voidConfirmMessage', {
+                amount: formatMoney(selected.amount),
+                from: formatDate(selected.period_start),
+                to: formatDate(selected.period_end),
+              })
+            : undefined
+        }
+        confirmLabel={t('voidAction')}
+        onConfirm={() => {
+          if (selected) voidSettlement(selected.id);
+        }}
+        onClose={() => setConfirmVoid(false)}
       />
     </div>
   );

@@ -198,7 +198,8 @@ export interface Settlement {
   amount: number;
   period_start: string;
   period_end: string;
-  status: 'pending' | 'paid' | 'failed';
+  /** P2-285 (run #195): 'voided' — terminal, audit-backed, pending-only (owner decision D-20261106-03). */
+  status: 'pending' | 'paid' | 'failed' | 'voided';
   payout_ref: string | null;
   paid_at: string | null;
   created_at: string;
