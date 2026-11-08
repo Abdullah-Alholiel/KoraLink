@@ -26,7 +26,19 @@ interface BlackoutOpts {
   deletedRows?: { id: string }[];
   /** The booked-count SELECT result. */
   bookedCount?: number;
+  /** Rows the booked-matches SELECT returns (P2-255 deep-link data). */
+  bookedMatchRows?: BlackoutBookedMatch[];
   access?: 'ok' | 'deny';
+}
+
+/** P2-255: shape the blackout response carries for each blocking match. */
+interface BlackoutBookedMatch {
+  id: string;
+  title: string;
+  status: string;
+  scheduledAt: string;
+  spotsFilled: number;
+  maxPlayers: number;
 }
 
 function makeService(opts: BlackoutOpts = {}) {
@@ -37,10 +49,17 @@ function makeService(opts: BlackoutOpts = {}) {
     select: () => ({
       from: (table: unknown) => {
         const isLock = table === pitches;
+        let joined = false;
         const chain = {
-          innerJoin: () => chain,
+          innerJoin: () => {
+            joined = true;
+            return chain;
+          },
+          leftJoin: () => chain,
           where: () => {
-            calls.push(isLock ? 'pitch-lock' : 'booked-count');
+            if (isLock) calls.push('pitch-lock');
+            else if (joined) calls.push('booked-matches');
+            else calls.push('booked-count');
             return chain;
           },
           limit: () => chain,
@@ -48,11 +67,15 @@ function makeService(opts: BlackoutOpts = {}) {
             calls.push(`lock-${mode}`);
             return chain;
           },
+          groupBy: () => chain,
+          orderBy: () => chain,
           then: (resolve: (v: unknown) => void) =>
             resolve(
               isLock
                 ? opts.lockedPitch ?? [{ id: PITCH }]
-                : [{ booked: opts.bookedCount ?? 0 }],
+                : joined
+                  ? opts.bookedMatchRows ?? []
+                  : [{ booked: opts.bookedCount ?? 0 }],
             ),
         };
         return chain;
@@ -86,10 +109,29 @@ function makeService(opts: BlackoutOpts = {}) {
 const DTO: BlackoutSlotsDto = { from: '2026-11-01', to: '2026-11-05' };
 
 describe('PartnerService.blackoutSlots (P2-246)', () => {
-  it('happy path: deletes free slots in range, reports booked skips', async () => {
+  it('happy path: deletes free slots in range, reports booked skips + booked matches', async () => {
+    const bookedMatchRows: BlackoutBookedMatch[] = [
+      {
+        id: 'm1',
+        title: 'Sunset 7v7',
+        status: 'Full',
+        scheduledAt: '2026-11-02T18:00:00.000Z',
+        spotsFilled: 14,
+        maxPlayers: 14,
+      },
+      {
+        id: 'm2',
+        title: 'Morning padel',
+        status: 'Open',
+        scheduledAt: '2026-11-03T09:00:00.000Z',
+        spotsFilled: 3,
+        maxPlayers: 4,
+      },
+    ];
     const { svc, calls } = makeService({
       deletedRows: [{ id: 's1' }, { id: 's2' }, { id: 's3' }],
       bookedCount: 2,
+      bookedMatchRows,
     });
     await expect(
       svc.blackoutSlots(OWNER, 'VenueOwner', PITCH, DTO),
@@ -99,13 +141,26 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       to: '2026-11-05',
       closedInstances: 3,
       skippedBooked: 2,
+      bookedMatches: bookedMatchRows,
     });
     expect(calls).toEqual([
       'pitch-lock',
       'lock-update',
       'conditional-delete',
       'booked-count',
+      'booked-matches',
     ]);
+  });
+
+  it('booked-matches SELECT runs in the same tx AFTER the count (consistent view)', async () => {
+    const { svc, calls } = makeService({ deletedRows: [], bookedCount: 1 });
+    await svc.blackoutSlots(OWNER, 'VenueOwner', PITCH, DTO);
+    expect(calls.indexOf('booked-count')).toBeGreaterThan(
+      calls.indexOf('conditional-delete'),
+    );
+    expect(calls.indexOf('booked-matches')).toBeGreaterThan(
+      calls.indexOf('booked-count'),
+    );
   });
 
   it('locks the pitch FOR UPDATE inside the tx (guard parity with generateSlots)', async () => {
@@ -124,7 +179,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('empty range → 200 zeros (idempotent no-op, not 404)', async () => {
+  it('empty range → 200 zeros + empty bookedMatches (idempotent no-op, not 404)', async () => {
     const { svc } = makeService({ deletedRows: [], bookedCount: 0 });
     await expect(
       svc.blackoutSlots(OWNER, 'VenueOwner', PITCH, DTO),
@@ -134,6 +189,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       to: '2026-11-05',
       closedInstances: 0,
       skippedBooked: 0,
+      bookedMatches: [],
     });
   });
 
@@ -146,7 +202,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
     expect(capturedDelete.whereArg).toBeDefined();
   });
 
-  it('source pins: DELETE predicate + booked-count query exist in the service', () => {
+  it('source pins: DELETE predicate + booked-count/booked-matches queries exist in the service', () => {
     // Belt-and-braces for the mock-agnostic test above: read the method body.
     const { readFileSync } = require('fs') as typeof import('fs');
     const { join } = require('path') as typeof import('path');
@@ -159,6 +215,10 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
     expect(body).toContain('eq(pitch_slots.is_booked, false)');
     expect(body).toContain('eq(pitch_slots.is_booked, true)');
     expect(body).toContain("for('update')");
+    // P2-255: the deep-link payload is real — joined booked-matches query + response field.
+    expect(body).toContain('bookedMatches');
+    expect(body).toContain('eq(pitch_slots.booked_match_id, matches.id)');
+    expect(body).toContain('orderBy(asc(matches.scheduled_at))');
   });
 
   it('assertPitchAccess still runs before any tx work', async () => {

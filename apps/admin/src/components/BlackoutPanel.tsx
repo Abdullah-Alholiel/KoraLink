@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Wrench, X } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, Wrench, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import StatusBadge from '@/components/StatusBadge';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import {
   BLACKOUT_MAX_DAYS,
   blackoutErrorKind,
@@ -143,9 +146,45 @@ export default function BlackoutPanel({ pitchId, onChanged }: BlackoutPanelProps
             <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" /> {t('success', { count: result.closedInstances })}
           </p>
           {result.skippedBooked > 0 && (
-            <p className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <AlertTriangle className="h-3.5 w-3.5" /> {t('skippedBooked', { count: result.skippedBooked })}
-            </p>
+            <>
+              <p className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" /> {t('skippedBooked', { count: result.skippedBooked })}
+              </p>
+              {/* P2-255 (run #194): deep links to the blocking matches — the
+                  partner cancels from the match page, not from here (money
+                  path stays the match-cancellation flow). */}
+              {result.bookedMatches && result.bookedMatches.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-white">
+                  <p className="border-b border-amber-100 px-3 py-2 text-xs font-semibold text-amber-700">
+                    {t('bookedMatchesHeading', { count: result.bookedMatches.length })}
+                  </p>
+                  <ul>
+                    {result.bookedMatches.map((m) => (
+                      <li key={m.id} className="border-b border-gray-100 last:border-b-0">
+                        <Link
+                          href={`/partner/matches/${m.id}`}
+                          className="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-amber-50"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium text-gray-900">{m.title}</span>
+                            <span className="block text-gray-500">
+                              <StatusBadge status={m.status} /> · {formatDate(m.scheduledAt)} ·{' '}
+                              <span dir="ltr">
+                                {m.spotsFilled}/{m.maxPlayers}
+                              </span>
+                            </span>
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400 rtl:rotate-180" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="border-t border-amber-100 px-3 py-2 text-[11px] text-gray-500">
+                    {t('bookedMatchesHint')}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
