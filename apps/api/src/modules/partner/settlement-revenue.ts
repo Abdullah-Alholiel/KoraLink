@@ -64,6 +64,10 @@ export function buildSettlementRevenueQuery(opts: SettlementRevenueQueryOpts): S
         WHERE s.venue_id = v.id
           AND s.period_start <= ${opts.riyadhEnd}::date
           AND s.period_end >= ${startDay}::date
+          -- P2-285 (run #195): a VOIDED settlement must not block its window —
+          -- voiding a duplicate/erroneous pending row frees the period for
+          -- re-settlement. Open (pending/paid/failed) rows still block.
+          AND s.status <> 'voided'
       )
     GROUP BY v.id
     HAVING COALESCE(SUM(m.pitch_cost_sar), 0) > 0

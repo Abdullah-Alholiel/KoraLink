@@ -416,3 +416,130 @@ describe('AdminSettlementsService race guards', () => {
     );
   });
 });
+
+/**
+ * P2-285 (run #195) — settlement VOID behavior. Mirrors the pay() race-guard
+ * tests above: conditional UPDATE flips pending→voided; zero rows = a
+ * concurrent pay/void won the race → BadRequest; paid/failed pre-check →
+ * BadRequest; audit settlement.void carries before/after; NO notification
+ * fan-out (deliberate — a voided row owes the venue nothing, the operator
+ * sees it in list + audit).
+ */
+describe('AdminSettlementsService void (P2-285)', () => {
+  const SETTLEMENT_ID = 'settle-void-1';
+
+  function updateChain(returningRows: unknown[]) {
+    const chain: any = {
+      set: () => chain,
+      where: () => chain,
+      returning: () => returningRows,
+    };
+    return chain;
+  }
+
+  function makeVoidService(opts: {
+    currentStatus: string;
+    updateRows: unknown[];
+  }) {
+    let call = 0;
+    const findFirst = jest.fn(async () => {
+      call += 1;
+      return call === 1
+        ? { id: SETTLEMENT_ID, status: opts.currentStatus, venue: { id: 'v1' } }
+        : { id: SETTLEMENT_ID, status: 'voided', venue: { id: 'v1' } };
+    });
+    const db = {
+      query: { settlements: { findFirst } },
+      update: jest.fn(() => updateChain(opts.updateRows)),
+      execute: jest.fn(async () => []),
+      transaction: jest.fn(),
+      insert: jest.fn(),
+    };
+    const audit = { log: jest.fn(async () => {}) };
+    const realtime = { broadcastOps: jest.fn() };
+    const svc = new AdminSettlementsService(
+      db as never,
+      audit as never,
+      { getNumber: jest.fn(async () => 7) } as never,
+      realtime as never,
+      {} as never,
+      {} as never,
+    );
+    return { svc, audit, realtime, db };
+  }
+
+  it('void flips a pending settlement and audits settlement.void with before/after', async () => {
+    const { svc, audit, realtime } = makeVoidService({
+      currentStatus: 'pending',
+      updateRows: [{ id: SETTLEMENT_ID }],
+    });
+
+    const result = await svc.void(SETTLEMENT_ID, 'admin-1', '10.0.0.8');
+    expect(result.status).toBe('voided');
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'settlement.void',
+        entityType: 'settlement',
+        entityId: SETTLEMENT_ID,
+        ip: '10.0.0.8',
+      }),
+    );
+    expect(realtime.broadcastOps).toHaveBeenCalledWith('settlements');
+  });
+
+  it('void rejects a paid settlement (void pending only — owner policy)', async () => {
+    const { svc, audit, db } = makeVoidService({
+      currentStatus: 'paid',
+      updateRows: [],
+    });
+
+    await expect(svc.void(SETTLEMENT_ID, 'admin-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(db.update).not.toHaveBeenCalled();
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('void rejects when the conditional update matches 0 rows (concurrent pay/void race)', async () => {
+    const { svc, audit } = makeVoidService({
+      currentStatus: 'pending',
+      updateRows: [],
+    });
+
+    await expect(svc.void(SETTLEMENT_ID, 'admin-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('void performs NO notification fan-out (no activities/notifications calls)', async () => {
+    const activities = { record: jest.fn(async () => {}) };
+    const notifications = { sendPushToUsers: jest.fn(async () => 0) };
+    let call = 0;
+    const findFirst = jest.fn(async () => {
+      call += 1;
+      return call === 1
+        ? { id: SETTLEMENT_ID, status: 'pending', venue: { id: 'v1' } }
+        : { id: SETTLEMENT_ID, status: 'voided', venue: { id: 'v1' } };
+    });
+    const db = {
+      query: { settlements: { findFirst } },
+      update: jest.fn(() => updateChain([{ id: SETTLEMENT_ID }])),
+      execute: jest.fn(async () => []),
+      transaction: jest.fn(),
+      insert: jest.fn(),
+    };
+    const svc = new AdminSettlementsService(
+      db as never,
+      { log: jest.fn(async () => {}) } as never,
+      { getNumber: jest.fn(async () => 7) } as never,
+      { broadcastOps: jest.fn() } as never,
+      activities as never,
+      notifications as never,
+    );
+
+    await svc.void(SETTLEMENT_ID, 'admin-1');
+    expect(activities.record).not.toHaveBeenCalled();
+    expect(notifications.sendPushToUsers).not.toHaveBeenCalled();
+  });
+});

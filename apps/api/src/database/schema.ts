@@ -158,6 +158,11 @@ export const settlementStatusEnum = pgEnum('SettlementStatus', [
   'pending',
   'paid',
   'failed',
+  // P2-285 (run #195, owner decision D-20261106-03): an admin may VOID a
+  // pending settlement (duplicate/erroneous row). Terminal, audit-backed,
+  // never reachable from paid/failed. A voided row no longer blocks its
+  // (venue, period) window — see the partial unique index below.
+  'voided',
 ]);
 
 export const verificationStatusEnum = pgEnum('VerificationStatus', [
@@ -1175,9 +1180,14 @@ export const settlements = pgTable(
   },
   (t) => [
     index('settlements_venue_idx').on(t.venue_id),
-    // P2-9: one pending/paid settlement per venue per period — closes the
-    // generatePending double-insert race under concurrency.
-    uniqueIndex('settlements_venue_period_uidx').on(t.venue_id, t.period_start),
+    // P2-9: one OPEN (pending/paid/failed) settlement per venue per period —
+    // closes the generatePending double-insert race under concurrency.
+    // P2-285 (run #195): now PARTIAL (excludes 'voided') so voiding a pending
+    // settlement frees its window for re-settlement by the generator / a
+    // partner payout request; an open row still blocks duplicates.
+    uniqueIndex('settlements_venue_period_open_uidx')
+      .on(t.venue_id, t.period_start)
+      .where(sql`${t.status} <> 'voided'`),
   ],
 );
 
