@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, checks 12/12 GREEN + MERGEABLE CLEAN as of run #193, refreshed this run)
-- Commits ahead of main: **401** (last promote 2026-09-25; NO new migrations this cycle — runs #193 added none)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#192 added NO migrations)
+- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN + MERGEABLE CLEAN as of run #194, refreshed this run)
+- Commits ahead of main: **405** (last promote 2026-09-25; NO new migrations this cycle — runs #194 added none)
+- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#194 added NO migrations)
 - Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (serving run #193 builds ff4239c/7b82614 — audit-list pagination contract, Arabic-Indic money numerals outside wallet); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-07** — run #193 shipped PR #224 (P2-318 audit-list pagination: unique tiebreaker + window count, empty-page truthful total) + PR #225 (P2-319: Arabic-Indic money numerals outside wallet — PaymentSheet/CostFooter/PublishWarningSheet all formatMoney-routed); both merged + live on the VPS. Strix next window Dec 1–3. Found: z.ai HTTP/2 curl-43 quirk (probes now pin --http1.1).
+- Services: API/PWA/Admin UP (serving run #194 builds dea7cab/e34bc76/b4d4424 — blackout deep-links, topup Arabic-Indic preset numerals, partner pitch localized failures); Kong DOWN (not koralink)
+- Factory loop status: **HEALTHY 2026-11-08** — run #194 shipped PR #226 (P2-255 blackout deep-links to blocking matches) + PR #227 (P2-257b residual: TopupSheet preset numerals Arabic-Indic) + PR #228 (P2-323 partner pitch actions localized failures — 8 PR-Agent rounds all real); all merged + live on the VPS. Strix next window Dec 1–3.
 
 ## Active owner actions
 
