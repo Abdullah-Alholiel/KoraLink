@@ -1443,7 +1443,38 @@ export class PartnerService {
         .from(pitch_slots)
         .where(and(range, eq(pitch_slots.is_booked, true)));
 
-      return { closed: deleted.length, skippedBooked: bookedRow?.booked ?? 0 };
+      // P2-255 (run #194): the booked slots in range are real matches the
+      // partner must act on — carry them so the panel can deep-link (the
+      // bare count left the partner to hunt for them). Same tx read as the
+      // count (one consistent view); roster count via LEFT JOIN (COUNT
+      // includes the host — standing spots rule).
+      const bookedMatches = await tx
+        .select({
+          id: matches.id,
+          title: matches.title,
+          status: matches.status,
+          scheduledAt: matches.scheduled_at,
+          spotsFilled: sql<number>`count(${match_players.id})::int`,
+          maxPlayers: matches.max_players,
+        })
+        .from(pitch_slots)
+        .innerJoin(matches, eq(pitch_slots.booked_match_id, matches.id))
+        .leftJoin(match_players, eq(match_players.match_id, matches.id))
+        .where(and(range, eq(pitch_slots.is_booked, true)))
+        .groupBy(
+          matches.id,
+          matches.title,
+          matches.status,
+          matches.scheduled_at,
+          matches.max_players,
+        )
+        .orderBy(asc(matches.scheduled_at));
+
+      return {
+        closed: deleted.length,
+        skippedBooked: bookedRow?.booked ?? 0,
+        bookedMatches,
+      };
     });
 
     this.realtime.broadcastOps('venues');
@@ -1454,6 +1485,7 @@ export class PartnerService {
       to: dto.to,
       closedInstances: result.closed,
       skippedBooked: result.skippedBooked,
+      bookedMatches: result.bookedMatches,
     };
   }
 

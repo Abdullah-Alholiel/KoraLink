@@ -6,6 +6,22 @@ export const BLACKOUT_MAX_DAYS = 62;
 export interface BlackoutResult {
   closedInstances: number;
   skippedBooked: number;
+  /**
+   * P2-255 (run #194): booked matches blocking the range — the panel deep-links
+   * each to its partner match page. Optional so an older API response (count
+   * only) still type-checks; render guards on presence + length.
+   */
+  bookedMatches?: BlackoutBookedMatch[];
+}
+
+/** One booked match inside the blackout range (wire shape, blackoutSlots response). */
+export interface BlackoutBookedMatch {
+  id: string;
+  title: string;
+  status: string;
+  scheduledAt: string;
+  spotsFilled: number;
+  maxPlayers: number;
 }
 
 export type BlackoutRangeIssue = 'missing' | 'order' | 'tooLong' | null;
