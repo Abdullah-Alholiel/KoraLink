@@ -138,7 +138,12 @@ export default function WalletPage() {
     // renders ONLY for a pending attempt; credited attempts already show as
     // ledger transactions below.
     const { data: latestTopup } = useLatestTopupIntent({
-        enabled: topupAvailability === true,
+        // P2-331 r3 (PR-Agent r2 MINOR): the pending-attempt TRACE is a
+        // money-surface record — a charged-but-uncredited intent must stay
+        // visible even while the config request is loading/failed or the
+        // flag is off. The endpoint itself is flag-independent server-side
+        // (getLatestIntent) and throttled 60/min, so it always runs.
+        enabled: true,
     });
     const pendingTopup =
         latestTopup?.intent?.status === 'pending' ? latestTopup.intent : null;
