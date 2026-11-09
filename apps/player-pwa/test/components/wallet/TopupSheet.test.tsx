@@ -53,7 +53,17 @@ function makeT() {
     };
 }
 
-function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean; locale?: 'en' | 'ar'; enabled?: boolean } = {}) {
+function renderSheet(
+    overrides: {
+        minAmount?: number;
+        maxAmount?: number;
+        isOnline?: boolean;
+        locale?: 'en' | 'ar';
+        enabled?: boolean | 'loading' | 'error';
+        refetchConfig?: () => void;
+        topupConfigError?: unknown;
+    } = {},
+) {
     const locale = overrides.locale ?? 'en';
     const props = {
         isOpen: true,
@@ -62,6 +72,10 @@ function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnli
         minAmount: overrides.minAmount ?? 5,
         maxAmount: overrides.maxAmount ?? 2000,
         ...(overrides.enabled !== undefined ? { enabled: overrides.enabled } : {}),
+        ...(overrides.refetchConfig !== undefined ? { refetchConfig: overrides.refetchConfig } : {}),
+        ...(overrides.topupConfigError !== undefined
+            ? { topupConfigError: overrides.topupConfigError }
+            : {}),
     };
     render(
         <NextIntlClientProvider
@@ -248,5 +262,29 @@ describe('TopupSheet — enabled=false notice (P2-331)', () => {
         renderSheet();
         expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
         expect(screen.getByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeTruthy();
+    });
+
+    // P2-331 r2 (PR-Agent MINOR on PR #232): an enabled server must NEVER read
+    // as disabled — loading and error are distinct, recoverable states.
+    it("enabled='loading' renders the neutral notice, never 'unavailable'", () => {
+        renderSheet({ enabled: 'loading' });
+        expect(screen.getByTestId('topup-config-loading')).toBeTruthy();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.queryByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeNull();
+    });
+
+    it("enabled='error' renders classified copy + Try-again wired to refetchConfig", () => {
+        const refetchConfig = vi.fn();
+        renderSheet({
+            enabled: 'error',
+            refetchConfig,
+            topupConfigError: Object.assign(new Error('boom'), { status: 500 }),
+        });
+        const errBox = screen.getByTestId('topup-config-error');
+        expect(errBox.textContent).toContain(enMessages.errors.server);
+        const retry = screen.getByRole('button', { name: enMessages.common.retry });
+        retry.click();
+        expect(refetchConfig).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
     });
 });

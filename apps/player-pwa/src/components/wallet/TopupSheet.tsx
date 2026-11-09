@@ -94,11 +94,22 @@ interface TopupSheetProps {
   maxAmount: number;
   /**
    * P2-331 (run #197): server top-up flag (GET /wallet/topup/config `enabled`).
-   * When explicitly `false` the sheet renders a localized "top-up unavailable"
-   * notice instead of the payment form — this sheet is the ONLY top-up surface
-   * now that the legacy dummy self-credit modal is gone. Defaults to `true`.
+   * - `false`  → the server flag is OFF: renders the localized "top-up
+   *              unavailable" notice instead of the payment form — this sheet
+   *              is the ONLY top-up surface now that the legacy dummy
+   *              self-credit modal is gone.
+   * - `'loading'` → config request still in flight: neutral notice, NO
+   *              unavailable claim (PR-Agent r1 MINOR — an enabled server must
+   *              never read as disabled while its config loads).
+   * - `'error'` → config request failed: classified copy + Try-again wired to
+   *              `refetchConfig`, never a false "unavailable" state.
+   * Defaults to `true`.
    */
-  enabled?: boolean;
+  enabled?: boolean | 'loading' | 'error';
+  /** Refetch for the config query — wired to Try-again when enabled='error'. */
+  refetchConfig?: () => void;
+  /** Config-query error (enabled='error' branch classifies + shows it). */
+  topupConfigError?: unknown;
 }
 
 export default function TopupSheet({
@@ -108,6 +119,8 @@ export default function TopupSheet({
   minAmount,
   maxAmount,
   enabled = true,
+  refetchConfig,
+  topupConfigError,
 }: TopupSheetProps) {
   const t = useTranslations();
   // P2-257b follow-up (run #194, Reviewer B): next-intl's useLocale() is the
@@ -298,7 +311,42 @@ export default function TopupSheet({
         </h2>
       </div>
 
-      {!enabled && (
+      {/* P2-331 (run #197, PR-Agent r2): the unavailable notice ONLY when the
+          server flag is explicitly off. Loading → neutral notice (an enabled
+          server must never read as disabled); error → classified copy +
+          retry. */}
+
+      {enabled === 'error' && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div role="status" data-testid="topup-config-error" className="text-center">
+            <p className="text-sm text-brand-red">
+              {t(errorKey(classifyError(topupConfigError)))}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchConfig?.()}
+              className="mt-2 rounded-full bg-brand-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {enabled === 'loading' && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div
+            role="status"
+            data-testid="topup-config-loading"
+            aria-busy="true"
+            className="rounded-xl bg-gray-50 px-3 py-3 text-center"
+          >
+            <p className="text-sm text-gray-500">{t('common.loading')}</p>
+          </div>
+        </div>
+      )}
+
+      {(enabled === false) && (
         <div className="px-5 pb-6 flex-shrink-0">
           <div
             role="status"
@@ -311,7 +359,7 @@ export default function TopupSheet({
         </div>
       )}
 
-      {enabled && (
+      {(enabled === true) && (
       <>
       {/* PR-Agent r2 IMPORTANT: stage-INDEPENDENT recovery — verify failure
           leaves stage='paying', so the retry block must live outside the

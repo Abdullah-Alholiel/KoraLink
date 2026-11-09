@@ -117,14 +117,28 @@ export default function WalletPage() {
     // (TopupSheet) is the ONLY top-up surface. The legacy dummy self-credit
     // modal was removed with its API route; when the server flag is off the
     // sheet renders a truthful "top-up unavailable" notice instead.
-    const { data: topupConfig } = useTopupConfig();
-    const moyasarEnabled = topupConfig?.enabled === true;
+    // P2-331 (run #197): the config query is now the SINGLE availability
+    // source (the legacy dummy modal is gone). Tri-state so an enabled server
+    // never reads as "unavailable" while its config loads or if the request
+    // fails (PR-Agent r1 MINOR on PR #232): loading → neutral notice,
+    // error → classified copy + retry, else the server's explicit flag.
+    const {
+        data: topupConfig,
+        isLoading: topupConfigLoading,
+        error: topupConfigError,
+        refetch: refetchTopupConfig,
+    } = useTopupConfig();
+    const topupAvailability: boolean | 'loading' | 'error' = topupConfigError
+        ? 'error'
+        : topupConfigLoading
+          ? 'loading'
+          : topupConfig?.enabled === true;
     // P2-279 (run #176): newest top-up attempt — the player-visible trace of
     // an attempt that never landed (failed 3DS / abandoned verify). The card
     // renders ONLY for a pending attempt; credited attempts already show as
     // ledger transactions below.
     const { data: latestTopup } = useLatestTopupIntent({
-        enabled: moyasarEnabled,
+        enabled: topupAvailability === true,
     });
     const pendingTopup =
         latestTopup?.intent?.status === 'pending' ? latestTopup.intent : null;
@@ -419,7 +433,9 @@ export default function WalletPage() {
                 onCredited={() => showToast(t('wallet.topup.successBody'), 'success')}
                 minAmount={topupConfig?.minAmount ?? 5}
                 maxAmount={topupConfig?.maxAmount ?? 2000}
-                enabled={moyasarEnabled}
+                enabled={topupAvailability}
+                refetchConfig={() => void refetchTopupConfig()}
+                topupConfigError={topupConfigError}
             />
 
             {/* ══════════════════════════════════════
