@@ -2,11 +2,17 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN + MERGEABLE CLEAN as of run #194; owner-deferred per D-20261106-02 Coolify cutover)
-- Commits ahead of main: **413** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
-- Services: API/PWA/Admin UP (serving run #196 builds 8b1655d — chat-page crash fix + blackout bookedMatches cap)
-- Factory loop status: **HEALTHY 2026-11-09** — run #196 shipped PR #230 (P2-321 RE-SCOPED UP: chat page crashed on EVERY render since run #176 — use(useParams()) rejects plain objects in React 19; fixed + live-verified) + PR #231 (P2-324 blackout bookedMatches cap 20 + exact total + "+N more" footer, LIVE E2E proven). Strix next window Dec 1–3.
+- Commits ahead of main: **414** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
+- Services: API/PWA/Admin UP (API+PWA serving run #197 build `b805c97` — legacy dummy top-up route RETIRED end-to-end, live-probed 404; admin unchanged on 8b1655d)
+- Factory loop status: **HEALTHY 2026-11-09** — run #197 shipped PR #232 (P2-331 money-security: Reviewer-A latent-CRITICAL retired; 4 PR-Agent rounds all real fixes; reconcile sweep ASC flip = P2-314 starvation half). Strix next window Dec 1–3.
 
 ## Active owner actions
+
+### NEW-5. P2-332 — cancellation window + refund policy (NEW run #197)
+- **What:** Players can cancel/leave a match up to any point with no cutoff and refunds are 100% (no fee tier). A booking product needs a cancel-by deadline driving refund eligibility. MONEY-ADJACENT → refund rules are owner-only per the Defaults register; the factory will NOT default-build this.
+- **Your part:** Decide the policy shape: how many hours before slot-time the cancel window closes, the fee tier (full refund vs partial vs forfeit), and whether it's platform-wide or per-venue.
+- **Close line:** "P2-332: window = Xh before slot, refund = <full/partial/forfeit>, scope = <platform/venue>" OR "P2-332: keep 100% refunds for now (accepted with dated note)".
+- **Deadline:** Before paid matches go live at scale.
 
 ### NEW-1. P2-325 — Moyasar webhook registration (NEW run #196)
 - **What:** Wallet top-up credit currently depends on the client verify call + the 5-min reconcile backstop (webhook-less flow, wallet.reconcile.service.ts:34). A player who pays then closes the app before verify waits for the cron rescue. Industry norm = signed webhook capture.
