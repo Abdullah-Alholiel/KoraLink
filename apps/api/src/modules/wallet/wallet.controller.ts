@@ -8,7 +8,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,13 +16,11 @@ import {
   ApiCreatedResponse,
   ApiCookieAuth,
 } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 
 import { WalletService } from './wallet.service';
 import { WalletTopupService } from './wallet.topup.service';
 import { WalletHistoryDto } from './dto/wallet-history.dto';
-import { TopupWalletDto } from './dto/topup-wallet.dto';
 import { TopupIntentDto } from './dto/topup-intent.dto';
 import { VerifyTopupDto } from './dto/verify-topup.dto';
 import { WalletReceiptService } from './wallet.receipt.service';
@@ -38,7 +35,6 @@ import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,
-    private readonly configService: ConfigService,
     private readonly topupService: WalletTopupService,
     private readonly receiptService: WalletReceiptService,
   ) {}
@@ -151,39 +147,14 @@ export class WalletController {
     return this.topupService.verifyTopup(user.sub, dto);
   }
 
-  // ── POST /wallet/topup ──────────────────────────────────────
-  // P0-7 (run #26): gated by an explicit `WALLET_TOPUP_ENABLED` env flag
-  // (default DISABLED). The previous `NODE_ENV === 'production'` string
-  // compare was the run-#25 Strix finding (CVSS 9.1) — free SAR 10,000
-  // credits were open on any Tailscale-reachable deployment running
-  // NODE_ENV=development. Real payments replace this path when P0-2 ships.
-  @Post('topup')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Top up wallet balance' })
-  @ApiCreatedResponse({ description: 'Top-up recorded successfully.' })
-  async topup(
-    @CurrentUser() user: { sub: string },
-    @Body() dto: TopupWalletDto,
-  ) {
-    // Dummy self-credit path (no payment provider yet — P0-2). Kept available
-    // only when the operator has explicitly opted in via WALLET_TOPUP_ENABLED.
-    // Mirror dev-login gating (auth.controller.ts).
-    const isEnabled =
-      this.configService.get<string>('WALLET_TOPUP_ENABLED') === 'true';
-    if (!isEnabled) {
-      throw new ForbiddenException(
-        'Wallet top-up is disabled in this environment until a payment provider is integrated',
-      );
-    }
-
-    return this.walletService.recordTransaction(user.sub, {
-      type: 'CREDIT',
-      amount: dto.amount,
-      referenceType: 'TOPUP',
-      referenceId: dto.referenceId,
-      idempotencyKey: dto.idempotencyKey,
-    });
-  }
+  // ── POST /wallet/topup — REMOVED (P2-331, run #197) ─────────────────
+  // The legacy dummy top-up accepted a CLIENT-SUPPLIED amount + idempotency
+  // key and self-credited via walletService.recordTransaction, gated only by
+  // WALLET_TOPUP_ENABLED — the SAME flag that enables the real Moyasar flow.
+  // Turning real payments on would have re-opened free money minting with no
+  // rate limit. The Moyasar intent→verify legs above are now the ONLY credit
+  // authority; WALLET_TOPUP_ENABLED gates only them (wallet.topup.service).
+  // Do NOT reintroduce a client-amount credit route.
 
   // ── POST /wallet/pay — REMOVED (run #58, reviewer-B P1) ────────────
   // This endpoint accepted a CLIENT-SUPPLIED amount for a MATCH_FEE DEBIT
