@@ -37,6 +37,11 @@ type DB = PostgresJsDatabase<typeof schema>;
 
 const UPCOMING_STATUSES = sql`${matches.status} IN ('Open', 'Full', 'InProgress')`;
 
+/** P2-324 (run #196): bookedMatches list cap — the blackout response carries
+ * at most this many blocking matches (oldest-scheduled first); the exact
+ * total rides the same query as a window count (`bookedMatchesTotal`). */
+export const BOOKED_MATCHES_PAGE_LIMIT = 20;
+
 /** P1-25: how many dur-minute slots fit in [startMins, endMins). */
 function windowCapacity(startMins: number, endMins: number, dur: number): number {
   return endMins > startMins ? Math.floor((endMins - startMins) / dur) : 0;
@@ -1448,6 +1453,11 @@ export class PartnerService {
       // bare count left the partner to hunt for them). Same tx read as the
       // count (one consistent view); roster count via LEFT JOIN (COUNT
       // includes the host — standing spots rule).
+      // P2-324 (run #196): the list is CAPPED (oldest-scheduled first keeps
+      // the most actionable matches; a 62-day range × joined rosters can
+      // otherwise render hundreds of rows) and `bookedMatchesTotal` rides
+      // the page query as a window count (§2026-09-22 pagination standard —
+      // no second COUNT scan).
       const bookedMatches = await tx
         .select({
           id: matches.id,
@@ -1456,6 +1466,7 @@ export class PartnerService {
           scheduledAt: matches.scheduled_at,
           spotsFilled: sql<number>`count(${match_players.id})::int`,
           maxPlayers: matches.max_players,
+          bookedMatchesTotal: sql<number>`count(*) over ()::int`,
         })
         .from(pitch_slots)
         .innerJoin(matches, eq(pitch_slots.booked_match_id, matches.id))
@@ -1468,7 +1479,8 @@ export class PartnerService {
           matches.scheduled_at,
           matches.max_players,
         )
-        .orderBy(asc(matches.scheduled_at));
+        .orderBy(asc(matches.scheduled_at))
+        .limit(BOOKED_MATCHES_PAGE_LIMIT);
 
       return {
         closed: deleted.length,
@@ -1485,7 +1497,10 @@ export class PartnerService {
       to: dto.to,
       closedInstances: result.closed,
       skippedBooked: result.skippedBooked,
-      bookedMatches: result.bookedMatches,
+      bookedMatches: result.bookedMatches.map(
+        ({ bookedMatchesTotal: _total, ...row }) => row,
+      ),
+      bookedMatchesTotal: result.bookedMatches[0]?.bookedMatchesTotal ?? 0,
     };
   }
 

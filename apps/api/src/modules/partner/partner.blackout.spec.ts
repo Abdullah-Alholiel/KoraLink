@@ -39,6 +39,8 @@ interface BlackoutBookedMatch {
   scheduledAt: string;
   spotsFilled: number;
   maxPlayers: number;
+  /** P2-324: window-count helper the service strips before returning rows. */
+  bookedMatchesTotal?: number;
 }
 
 function makeService(opts: BlackoutOpts = {}) {
@@ -118,6 +120,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
         scheduledAt: '2026-11-02T18:00:00.000Z',
         spotsFilled: 14,
         maxPlayers: 14,
+        bookedMatchesTotal: 2,
       },
       {
         id: 'm2',
@@ -126,6 +129,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
         scheduledAt: '2026-11-03T09:00:00.000Z',
         spotsFilled: 3,
         maxPlayers: 4,
+        bookedMatchesTotal: 2,
       },
     ];
     const { svc, calls } = makeService({
@@ -141,7 +145,27 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       to: '2026-11-05',
       closedInstances: 3,
       skippedBooked: 2,
-      bookedMatches: bookedMatchRows,
+      // P2-324: the window-count helper column never leaks onto the wire —
+      // rows come back stripped, total surfaced at the top level.
+      bookedMatches: [
+        {
+          id: 'm1',
+          title: 'Sunset 7v7',
+          status: 'Full',
+          scheduledAt: '2026-11-02T18:00:00.000Z',
+          spotsFilled: 14,
+          maxPlayers: 14,
+        },
+        {
+          id: 'm2',
+          title: 'Morning padel',
+          status: 'Open',
+          scheduledAt: '2026-11-03T09:00:00.000Z',
+          spotsFilled: 3,
+          maxPlayers: 4,
+        },
+      ],
+      bookedMatchesTotal: 2,
     });
     expect(calls).toEqual([
       'pitch-lock',
@@ -190,7 +214,36 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       closedInstances: 0,
       skippedBooked: 0,
       bookedMatches: [],
+      bookedMatchesTotal: 0,
     });
+  });
+
+  it('P2-324: caps the booked-matches query at BOOKED_MATCHES_PAGE_LIMIT and reports the exact total', async () => {
+    // Simulate the SQL cap: 25 blocking matches, the query returns only the
+    // first 20 (oldest-scheduled first) — each row carrying the window count.
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      id: `m${i + 1}`,
+      title: `Match ${i + 1}`,
+      status: 'Open',
+      scheduledAt: `2026-11-0${(i % 8) + 1}T10:00:00.000Z`,
+      spotsFilled: 1,
+      maxPlayers: 4,
+      bookedMatchesTotal: 25,
+    }));
+    const { svc, calls } = makeService({
+      deletedRows: [],
+      bookedCount: 25,
+      bookedMatchRows: rows,
+    });
+    const res = await svc.blackoutSlots(OWNER, 'VenueOwner', PITCH, DTO);
+    expect(res.bookedMatches).toHaveLength(20);
+    // Every row stripped of the helper column; total rides top level.
+    expect(
+      res.bookedMatches.every((m) => !('bookedMatchesTotal' in m)),
+    ).toBe(true);
+    expect(res.bookedMatchesTotal).toBe(25);
+    // The cap is real: the query chain carries a .limit() call.
+    expect(calls).toContain('booked-matches');
   });
 
   it('DELETE carries the is_booked=false predicate (P1-18 pattern)', async () => {
@@ -219,6 +272,11 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
     expect(body).toContain('bookedMatches');
     expect(body).toContain('eq(pitch_slots.booked_match_id, matches.id)');
     expect(body).toContain('orderBy(asc(matches.scheduled_at))');
+    // P2-324: the list is capped + total rides a window count on the SAME query
+    // (no second COUNT scan — §2026-09-22 pagination standard).
+    expect(body).toContain('.limit(BOOKED_MATCHES_PAGE_LIMIT)');
+    expect(body).toContain('count(*) over ()::int');
+    expect(body).toContain('bookedMatchesTotal');
   });
 
   it('assertPitchAccess still runs before any tx work', async () => {
