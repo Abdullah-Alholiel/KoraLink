@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject, ConflictException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as Sentry from '@sentry/node';
 import { ConfigService } from '@nestjs/config';
-import { desc, sql } from 'drizzle-orm';
+import { asc, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { wallet_topup_intents } from '../../database/schema';
@@ -105,7 +105,10 @@ export class WalletReconcileService {
         .select({ id: wallet_topup_intents.id, user_id: wallet_topup_intents.user_id })
         .from(wallet_topup_intents)
         .where(sql`${wallet_topup_intents.status} = 'pending'`)
-        .orderBy(desc(wallet_topup_intents.created_at))
+        // P2-331: OLDEST pending intents first. They carry the oldest real
+        // (possibly already-captured) money; newest-first + LIMIT 200 could
+        // starve them forever behind a stream of fresh abandoned intents.
+        .orderBy(asc(wallet_topup_intents.created_at))
         .limit(200);
       if (pending.length === 0) return outcome;
       outcome.scanned = pending.length;

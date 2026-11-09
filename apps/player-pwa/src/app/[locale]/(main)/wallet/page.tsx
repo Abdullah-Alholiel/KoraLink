@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { classifyError, errorKey } from '@/lib/error-classify';
-import { formatMoney, formatCount } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import {
     ArrowLeft,
     Plus,
@@ -22,11 +22,9 @@ import {
 import {
     useWalletBalance,
     useWalletHistory,
-    useTopupWallet,
     useFetchAllWalletHistory,
 } from '@/hooks/useWallet';
 import { useAppStore } from '@/store/useAppStore';
-import { uuid } from '@/lib/uuid';
 import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ErrorState from '@/components/ui/ErrorState';
@@ -35,13 +33,6 @@ import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
 import { downloadTextAsFile } from '@/lib/download';
-// P2-289 (run #180): shared top-up amount domain — presets + config-driven
-// validation (the legacy sheet previously hardcoded a SAR-10 minimum while
-// the API/config minimum is 5).
-import {
-    presetsWithinBounds,
-    validateTopupAmount,
-} from '@/lib/topup-amount';
 import type { Transaction } from '@/types';
 import { useTopupConfig, useLatestTopupIntent } from '@/hooks/useTopup';
 import TopupSheet from '@/components/wallet/TopupSheet';
@@ -99,13 +90,6 @@ export default function WalletPage() {
     const intlLocale = useLocale() as 'ar' | 'en';
     const showToast = useAppStore((s) => s.showToast);
 
-    // ── Top-up modal state ──
-    const [showTopUpModal, setShowTopUpModal] = useState(false);
-    const [topUpAmount, setTopUpAmount] = useState('');
-    const [topUpError, setTopUpError] = useState('');
-    // P2-260: show the "no money was taken" line under a generic top-up failure.
-    const [topUpReassure, setTopUpReassure] = useState(false);
-
     // ── Export sheet state (P2-119) ──
     const [showExportSheet, setShowExportSheet] = useState(false);
     const [exportFrom, setExportFrom] = useState('');
@@ -128,20 +112,38 @@ export default function WalletPage() {
         refetch,
     } = useWalletHistory();
 
-    const topup = useTopupWallet();
     const fetchAllHistory = useFetchAllWalletHistory();
-    // P0-2 (run #169): when the Moyasar top-up is enabled server-side, the
-    // entry modal routes through the hosted-form flow (TopupSheet); the
-    // legacy dummy self-credit modal stays as the flag-off fallback so dev
-    // environments keep their seeding path.
-    const { data: topupConfig } = useTopupConfig();
-    const moyasarEnabled = topupConfig?.enabled === true;
+    // P0-2 (run #169) / P2-331 (run #197): the Moyasar hosted-form flow
+    // (TopupSheet) is the ONLY top-up surface. The legacy dummy self-credit
+    // modal was removed with its API route; when the server flag is off the
+    // sheet renders a truthful "top-up unavailable" notice instead.
+    // P2-331 (run #197): the config query is now the SINGLE availability
+    // source (the legacy dummy modal is gone). Tri-state so an enabled server
+    // never reads as "unavailable" while its config loads or if the request
+    // fails (PR-Agent r1 MINOR on PR #232): loading → neutral notice,
+    // error → classified copy + retry, else the server's explicit flag.
+    const {
+        data: topupConfig,
+        isLoading: topupConfigLoading,
+        error: topupConfigError,
+        refetch: refetchTopupConfig,
+    } = useTopupConfig();
+    const topupAvailability: boolean | 'loading' | 'error' = topupConfigError
+        ? 'error'
+        : topupConfigLoading
+          ? 'loading'
+          : topupConfig?.enabled === true;
     // P2-279 (run #176): newest top-up attempt — the player-visible trace of
     // an attempt that never landed (failed 3DS / abandoned verify). The card
     // renders ONLY for a pending attempt; credited attempts already show as
     // ledger transactions below.
     const { data: latestTopup } = useLatestTopupIntent({
-        enabled: moyasarEnabled,
+        // P2-331 r3 (PR-Agent r2 MINOR): the pending-attempt TRACE is a
+        // money-surface record — a charged-but-uncredited intent must stay
+        // visible even while the config request is loading/failed or the
+        // flag is off. The endpoint itself is flag-independent server-side
+        // (getLatestIntent) and throttled 60/min, so it always runs.
+        enabled: true,
     });
     const pendingTopup =
         latestTopup?.intent?.status === 'pending' ? latestTopup.intent : null;
@@ -190,62 +192,6 @@ export default function WalletPage() {
         } finally {
             setExporting(false);
         }
-    };
-
-    const handleTopUpSubmit = () => {
-        setTopUpError('');
-        setTopUpReassure(false);
-        // P2-289 (run #180): bounds come from the SERVER config (GET
-        // /wallet/topup/config), not hardcoded client values — fixes the
-        // SAR-10-vs-5 contract drift and adds the missing max check.
-        const minSar = topupConfig?.minAmount ?? 5;
-        const maxSar = topupConfig?.maxAmount ?? 2000;
-        const verdict = validateTopupAmount(topUpAmount, minSar, maxSar);
-        if (verdict === 'empty' || verdict === 'invalid') {
-            setTopUpError(t('wallet.invalidAmount'));
-            return;
-        }
-        if (verdict === 'belowMin' || verdict === 'aboveMax') {
-            setTopUpError(
-                t('wallet.topup.invalidAmount', { min: minSar, max: maxSar }),
-            );
-            return;
-        }
-        topup.mutate(
-            {
-                amount: Number(topUpAmount),
-                idempotencyKey: `topup-${uuid()}`,
-            },
-            {
-                onSuccess: () => {
-                    setShowTopUpModal(false);
-                    setTopUpAmount('');
-                },
-                onError: (err: unknown) => {
-                    // P2-260: error-message standard — offline must never read
-                    // like a bank decline. Precedence: network (status 0 or a
-                    // network-shaped message — the request never left the
-                    // device, so no reassurance needed) → 403 (dummy top-up
-                    // production-gated, P0-2) → generic failure + the
-                    // "no money was taken" money-surface reassurance.
-                    const status =
-                        err instanceof Error && 'status' in err
-                            ? (err as { status: number }).status
-                            : undefined;
-                    if (status === 0 || classifyError(err) === 'network') {
-                        setTopUpError(t('errors.offlineTryAgain'));
-                        setTopUpReassure(false);
-                    } else if (status === 403) {
-                        setTopUpError(t('wallet.topupDisabled'));
-                        setTopUpReassure(false);
-                    } else {
-                        // Never raw backend text.
-                        setTopUpError(t('errors.walletTopupFailed'));
-                        setTopUpReassure(true);
-                    }
-                },
-            }
-        );
     };
 
     // Use API data only; show skeleton while loading
@@ -348,7 +294,7 @@ export default function WalletPage() {
             {/* ── Action Buttons ───────────────────── */}
             <div className="flex justify-center gap-6 mt-6 px-4">
                 {[
-                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => (moyasarEnabled ? setShowTopupSheet(true) : setShowTopUpModal(true)) },
+                    { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopupSheet(true) },
                     { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: Download, label: t('wallet.export'), active: false, onClick: () => setShowExportSheet(true) },
@@ -484,97 +430,7 @@ export default function WalletPage() {
                 )}
             </div>
             {/* ══════════════════════════════════════
-                TOP-UP MODAL (flag-off fallback — dummy self-credit)
-            ═══════════════════════════════════ */}
-            <BottomSheet open={showTopUpModal} onClose={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); setTopUpReassure(false); }} widthClass="max-w-xl">
-                <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
-                    <div className="w-10 h-1 rounded-full bg-gray-300" />
-                </div>
-
-                <div className="flex-1 overflow-y-auto scroll-container min-h-0 px-5 pb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold text-brand-black">{t('wallet.topUp')}</h2>
-                        <button
-                            onClick={() => { setShowTopUpModal(false); setTopUpAmount(''); setTopUpError(''); setTopUpReassure(false); }}
-                            aria-label={t('wallet.closeModal')}
-                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                        >
-                            <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
-                        </button>
-                    </div>
-
-                    <p className="text-xs text-gray-400 mb-3">{t('wallet.topUpAmount')}</p>
-
-                    {/* P2-289 (run #180): preset chips — same 4 presets as the
-                        Moyasar TopupSheet (shared TOPUP_QUICK_AMOUNTS). Chip
-                        digits route through formatCount (Arabic-Indic for AR;
-                        Reviewer B run-#180 design-lens). */}
-                    <div className="mb-3 flex gap-2" role="group" aria-label={t('wallet.topup.quickAmounts')}>
-                        {presetsWithinBounds(
-                            topupConfig?.minAmount ?? 5,
-                            topupConfig?.maxAmount ?? 2000,
-                        ).map((qa) => (
-                            <button
-                                key={qa}
-                                type="button"
-                                aria-pressed={topUpAmount === String(qa)}
-                                onClick={() => {
-                                    setTopUpAmount(String(qa));
-                                    setTopUpError('');
-                                }}
-                                className="flex-1 rounded-full border border-gray-200 py-2 text-sm font-medium text-brand-black hover:bg-gray-50 aria-pressed:bg-brand-black aria-pressed:text-white"
-                            >
-                                {formatCount(qa, intlLocale)}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-xl border border-gray-100 px-4 py-3.5 mb-3 focus-within:border-brand-green transition-colors">
-                        <span className="text-sm font-bold text-gray-500" dir="ltr">SAR</span>
-                        <input
-                            type="number"
-                            inputMode="decimal"
-                            value={topUpAmount}
-                            onChange={(e) => setTopUpAmount(e.target.value)}
-                            placeholder="0"
-                            className="flex-1 text-lg font-bold text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
-                            autoFocus
-                        />
-                    </div>
-
-                    <p className="text-xs text-gray-400 mb-4">
-                        {/* P2-289 (run #180): dedicated hint key (PR-Agent r1 MINOR)
-                            — the error key showed the identical sentence twice. */}
-                        {t('wallet.topup.amountHint', {
-                            min: topupConfig?.minAmount ?? 5,
-                            max: topupConfig?.maxAmount ?? 2000,
-                        })}
-                    </p>
-
-                    {topUpError && (
-                        <div className="mb-3 text-center" role="alert">
-                            <p className="text-sm text-brand-red">{topUpError}</p>
-                            {topUpReassure && (
-                                <p className="text-xs text-gray-500 mt-1">{t('errors.noMoneyTaken')}</p>
-                            )}
-                        </div>
-                    )}
-
-                    <button
-                        onClick={handleTopUpSubmit}
-                        disabled={topup.isPending || !topUpAmount}
-                        className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
-                            shadow-[0_4px_20px_rgba(37,65,50,0.4)]
-                            active:scale-[0.98] transition-transform
-                            disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
-                    >
-                        {topup.isPending ? t('payment.processing') : t('wallet.topUp')}
-                    </button>
-                </div>
-            </BottomSheet>
-
-            {/* ══════════════════════════════════════
-                TOP-UP SHEET (P0-2 Moyasar hosted form — flag-on path)
+                TOP-UP SHEET (P0-2 Moyasar hosted form — the only top-up surface)
             ═══════════════════════════════════ */}
             <TopupSheet
                 isOpen={showTopupSheet}
@@ -582,6 +438,9 @@ export default function WalletPage() {
                 onCredited={() => showToast(t('wallet.topup.successBody'), 'success')}
                 minAmount={topupConfig?.minAmount ?? 5}
                 maxAmount={topupConfig?.maxAmount ?? 2000}
+                enabled={topupAvailability}
+                refetchConfig={() => void refetchTopupConfig()}
+                topupConfigError={topupConfigError}
             />
 
             {/* ══════════════════════════════════════

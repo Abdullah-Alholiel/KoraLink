@@ -53,7 +53,17 @@ function makeT() {
     };
 }
 
-function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean; locale?: 'en' | 'ar' } = {}) {
+function renderSheet(
+    overrides: {
+        minAmount?: number;
+        maxAmount?: number;
+        isOnline?: boolean;
+        locale?: 'en' | 'ar';
+        enabled?: boolean | 'loading' | 'error';
+        refetchConfig?: () => void;
+        topupConfigError?: unknown;
+    } = {},
+) {
     const locale = overrides.locale ?? 'en';
     const props = {
         isOpen: true,
@@ -61,6 +71,11 @@ function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnli
         onCredited: vi.fn(),
         minAmount: overrides.minAmount ?? 5,
         maxAmount: overrides.maxAmount ?? 2000,
+        ...(overrides.enabled !== undefined ? { enabled: overrides.enabled } : {}),
+        ...(overrides.refetchConfig !== undefined ? { refetchConfig: overrides.refetchConfig } : {}),
+        ...(overrides.topupConfigError !== undefined
+            ? { topupConfigError: overrides.topupConfigError }
+            : {}),
     };
     render(
         <NextIntlClientProvider
@@ -221,5 +236,97 @@ describe('TopupSheet — validation + intent + form host (P0-2)', () => {
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /Retry confirmation/i })).toBeTruthy();
         });
+    });
+});
+
+// P2-331 (run #197): TopupSheet is the ONLY top-up surface; with the server
+// flag off it must render a truthful localized notice, never a payment form.
+describe('TopupSheet — enabled=false notice (P2-331)', () => {
+    it('renders the localized unavailable notice and no amount/pay controls (en)', () => {
+        renderSheet({ enabled: false });
+        const notice = screen.getByTestId('topup-disabled-notice');
+        expect(notice.textContent).toContain(enMessages.wallet.topupDisabled);
+        expect(screen.queryByLabelText(enMessages.wallet.topup.amountLabel)).toBeNull();
+        expect(screen.queryByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeNull();
+        expect(createIntentMock).not.toHaveBeenCalled();
+    });
+
+    it('renders the Arabic notice under an ar session', () => {
+        renderSheet({ enabled: false, locale: 'ar' });
+        expect(screen.getByTestId('topup-disabled-notice').textContent).toContain(
+            arMessages.wallet.topupDisabled,
+        );
+    });
+
+    it('defaults to enabled (backward compat) — the payment form renders', () => {
+        renderSheet();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.getByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeTruthy();
+    });
+
+    // P2-331 r2 (PR-Agent MINOR on PR #232): an enabled server must NEVER read
+    // as disabled — loading and error are distinct, recoverable states.
+    it("enabled='loading' renders the neutral notice, never 'unavailable'", () => {
+        renderSheet({ enabled: 'loading' });
+        expect(screen.getByTestId('topup-config-loading')).toBeTruthy();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.queryByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeNull();
+    });
+
+    it("enabled='error' renders classified copy + Try-again wired to refetchConfig", () => {
+        const refetchConfig = vi.fn();
+        renderSheet({
+            enabled: 'error',
+            refetchConfig,
+            topupConfigError: Object.assign(new Error('boom'), { status: 500 }),
+        });
+        const errBox = screen.getByTestId('topup-config-error');
+        expect(errBox.textContent).toContain(enMessages.errors.server);
+        const retry = screen.getByRole('button', { name: enMessages.common.retry });
+        retry.click();
+        expect(refetchConfig).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+    });
+
+    // P2-331 r4 (PR-Agent r3 MINOR): a mid-flow config failure must NOT
+    // unmount the recovery surface for a charged-but-unverified payment —
+    // degraded config states only own the sheet BEFORE the flow starts.
+    it("mid-flow config degradation never unmounts the pay/recovery body", async () => {
+        const { rerender } = render(
+            <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Riyadh">
+                <TopupSheet
+                    isOpen
+                    onClose={vi.fn()}
+                    onCredited={vi.fn()}
+                    minAmount={5}
+                    maxAmount={2000}
+                    enabled
+                />
+            </NextIntlClientProvider>,
+        );
+        const input = screen.getByLabelText("Amount (SAR)");
+        fireEvent.change(input, { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        // Config degrades to error mid-flow → the form host MUST stay mounted.
+        rerender(
+            <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Riyadh">
+                <TopupSheet
+                    isOpen
+                    onClose={vi.fn()}
+                    onCredited={vi.fn()}
+                    minAmount={5}
+                    maxAmount={2000}
+                    enabled="error"
+                    topupConfigError={Object.assign(new Error('boom'), { status: 500 })}
+                />
+            </NextIntlClientProvider>,
+        );
+        expect(screen.queryByTestId('topup-config-error')).toBeNull();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.getByTestId('moyasar-form-host')).toBeTruthy();
     });
 });

@@ -24,7 +24,6 @@ vi.mock('@/lib/fetcher', () => ({
 import {
   useWalletBalance,
   useWalletHistory,
-  useTopupWallet,
   useFetchAllWalletHistory,
 } from '@/hooks/useWallet';
 
@@ -57,17 +56,6 @@ function makeApiTransaction(overrides: Partial<Record<string, unknown>> = {}) {
     created_at: new Date().toISOString(),
     ...overrides,
   };
-}
-
-// Helper: controllable promise for asserting optimistic (in-flight) state
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 }
 
 describe('useWallet hooks', () => {
@@ -293,63 +281,13 @@ describe('useWallet hooks', () => {
     });
   });
 
-  describe('useTopupWallet', () => {
-    it('POSTs topup data to /wallet/topup', async () => {
-      const mockResponse = {
-        ledgerEntry: { id: 'txn_new', type: 'CREDIT', amount: '100.00' },
-        wallet_balance: '250.00',
-      };
-      mockFetcher.mockResolvedValue(mockResponse);
-
-      const { wrapper } = createWrapper();
-      const { result } = renderHook(() => useTopupWallet(), { wrapper });
-
-      await act(async () => {
-        await result.current.mutateAsync({
-          amount: 100,
-          idempotencyKey: 'test-key-001',
-        });
-      });
-
-      expect(mockFetcher).toHaveBeenCalledWith('/wallet/topup', {
-        method: 'POST',
-        body: JSON.stringify({ amount: 100, idempotencyKey: 'test-key-001' }),
-      });
-    });
-
-    it('optimistically credits the balance and rolls back on failure', async () => {
-      const { wrapper, queryClient } = createWrapper();
-      queryClient.setQueryData(['wallet', 'balance'], { balance: 100, currency: 'SAR' });
-
-      const d = deferred<unknown>();
-      mockFetcher.mockReturnValue(d.promise);
-
-      const { result } = renderHook(() => useTopupWallet(), { wrapper });
-
-      act(() => {
-        result.current.mutate({ amount: 50, idempotencyKey: 'ik-opt' });
-      });
-
-      // Optimistic credit is visible while the request is still in flight.
-      await waitFor(() =>
-        expect(queryClient.getQueryData(['wallet', 'balance'])).toEqual({
-          balance: 150,
-          currency: 'SAR',
-        }),
-      );
-
-      await act(async () => {
-        d.reject(new Error('payment failed'));
-      });
-      await waitFor(() => expect(result.current.isError).toBe(true));
-
-      // Rolled back to the pre-mutation balance.
-      await waitFor(() =>
-        expect(queryClient.getQueryData(['wallet', 'balance'])).toEqual({
-          balance: 100,
-          currency: 'SAR',
-        }),
-      );
+  // P2-331 (run #197): the legacy dummy top-up hook was REMOVED with its
+  // API route (client-supplied amount self-credit). The Moyasar flow
+  // (hooks/useTopup) is the only top-up path. This pin fails if it returns.
+  describe('useTopupWallet — REMOVED (P2-331 pin)', () => {
+    it('is no longer exported from hooks/useWallet', async () => {
+      const mod = await import('@/hooks/useWallet');
+      expect(mod).not.toHaveProperty('useTopupWallet');
     });
   });
 });

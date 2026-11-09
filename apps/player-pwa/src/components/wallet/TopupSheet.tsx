@@ -32,9 +32,8 @@ import {
   type TopupIntentResponse,
 } from '@/hooks/useTopup';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
-// P2-289 (run #180): presets + validation live in the SHARED domain module —
-// one source of truth across both top-up surfaces (this sheet + the legacy
-// dummy sheet in wallet/page.tsx).
+// P2-289 (run #180): presets + validation live in the SHARED domain module
+// (the legacy dummy sheet that also used it was removed in P2-331).
 import { presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
 import { formatCount } from '@/lib/format';
 
@@ -63,8 +62,7 @@ declare global {
 }
 
 const FORM_CDN = 'https://cdn.jsdelivr.net/npm/moyasar-payment-form@2.3.0/dist/moyasar.umd.min.js';
-// P2-289 (run #180): moved to lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS) —
-// shared with the legacy dummy sheet so both surfaces offer the same presets.
+// P2-289 (run #180): quick amounts live in lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS).
 
 function loadMoyasarScript(): Promise<MoyasarFormApi> {
   return new Promise((resolve, reject) => {
@@ -94,6 +92,24 @@ interface TopupSheetProps {
   onCredited?: () => void;
   minAmount: number;
   maxAmount: number;
+  /**
+   * P2-331 (run #197): server top-up flag (GET /wallet/topup/config `enabled`).
+   * - `false`  → the server flag is OFF: renders the localized "top-up
+   *              unavailable" notice instead of the payment form — this sheet
+   *              is the ONLY top-up surface now that the legacy dummy
+   *              self-credit modal is gone.
+   * - `'loading'` → config request still in flight: neutral notice, NO
+   *              unavailable claim (PR-Agent r1 MINOR — an enabled server must
+   *              never read as disabled while its config loads).
+   * - `'error'` → config request failed: classified copy + Try-again wired to
+   *              `refetchConfig`, never a false "unavailable" state.
+   * Defaults to `true`.
+   */
+  enabled?: boolean | 'loading' | 'error';
+  /** Refetch for the config query — wired to Try-again when enabled='error'. */
+  refetchConfig?: () => void;
+  /** Config-query error (enabled='error' branch classifies + shows it). */
+  topupConfigError?: unknown;
 }
 
 export default function TopupSheet({
@@ -102,6 +118,9 @@ export default function TopupSheet({
   onCredited,
   minAmount,
   maxAmount,
+  enabled = true,
+  refetchConfig,
+  topupConfigError,
 }: TopupSheetProps) {
   const t = useTranslations();
   // P2-257b follow-up (run #194, Reviewer B): next-intl's useLocale() is the
@@ -116,6 +135,11 @@ export default function TopupSheet({
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<'form' | 'form-loading' | 'paying'>('form');
+  // P2-331 r4 (PR-Agent r3 MINOR): once a payment flow has STARTED, a config
+  // load/error must NEVER swap the sheet body away — that would unmount the
+  // recovery block + injected form host for a charged-but-unverified payment.
+  // The degraded states only own the sheet BEFORE the flow starts.
+  const [flowStarted, setFlowStarted] = useState(false);
   /** PR-Agent r1 IMPORTANT: a failed verify keeps the charged payment's ids visible with a retry. */
   const [pendingPayment, setPendingPayment] = useState<{ paymentId: string; intentId: string } | null>(null);
   const intentRef = useRef<TopupIntentResponse | null>(null);
@@ -127,6 +151,7 @@ export default function TopupSheet({
     setStage('form');
     setPendingPayment(null);
     intentRef.current = null;
+    setFlowStarted(false);
     if (formHostRef.current) formHostRef.current.innerHTML = '';
   }, []);
 
@@ -192,6 +217,7 @@ export default function TopupSheet({
       setError(t('wallet.topup.invalidAmount', { min: minAmount, max: maxAmount }));
       return;
     }
+    setFlowStarted(true);
     setStage('form-loading');
     try {
       setPendingPayment(null);
@@ -292,6 +318,58 @@ export default function TopupSheet({
         </h2>
       </div>
 
+      {/* P2-331 (run #197, PR-Agent r2): the unavailable notice ONLY when the
+          server flag is explicitly off. Loading → neutral notice (an enabled
+          server must never read as disabled); error → classified copy +
+          retry. r4: degraded states only own the sheet BEFORE a payment flow
+          has started — mid-flow config failures never unmount the recovery
+          block or the injected form host. */}
+
+      {enabled === 'error' && !flowStarted && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div role="status" data-testid="topup-config-error" className="text-center">
+            <p className="text-sm text-brand-red">
+              {t(errorKey(classifyError(topupConfigError)))}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchConfig?.()}
+              className="mt-2 rounded-full bg-brand-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {enabled === 'loading' && !flowStarted && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div
+            role="status"
+            data-testid="topup-config-loading"
+            aria-busy="true"
+            className="rounded-xl bg-gray-50 px-3 py-3 text-center"
+          >
+            <p className="text-sm text-gray-500">{t('common.loading')}</p>
+          </div>
+        </div>
+      )}
+
+      {(enabled === false && !flowStarted) && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div
+            role="status"
+            data-testid="topup-disabled-notice"
+            className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-3"
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" aria-hidden />
+            <p className="text-sm text-amber-800">{t('wallet.topupDisabled')}</p>
+          </div>
+        </div>
+      )}
+
+      {(enabled === true || flowStarted) && (
+      <>
       {/* PR-Agent r2 IMPORTANT: stage-INDEPENDENT recovery — verify failure
           leaves stage='paying', so the retry block must live outside the
           stage switch or a charged-but-unverified payment never sees it. */}
@@ -396,6 +474,8 @@ export default function TopupSheet({
               stage state (a real re-render) removes the null-host race. */}
           <div ref={formHostRef} data-testid="moyasar-form-host" className={stage === 'form-loading' ? 'hidden' : undefined} />
         </div>
+      )}
+      </>
       )}
     </BottomSheet>
   );
