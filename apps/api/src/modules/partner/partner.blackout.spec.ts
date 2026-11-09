@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Validator } from 'class-validator';
-import { PartnerService } from './partner.service';
+import { PartnerService, BOOKED_MATCHES_PAGE_LIMIT } from './partner.service';
 import { pitch_slots, pitches } from '../../database/schema';
 import { BlackoutSlotsDto } from './dto/slots.dto';
 
@@ -64,7 +64,13 @@ function makeService(opts: BlackoutOpts = {}) {
             else calls.push('booked-count');
             return chain;
           },
-          limit: () => chain,
+          limit: (n: number) => {
+            // Record ONLY the booked-matches chain's limit — the pitch-lock
+            // select ALSO innerJoins (venue access), so `joined` alone can't
+            // discriminate at limit() time; the source table can.
+            if (!isLock && joined) calls.push(`limit-${n}`);
+            return chain;
+          },
           for: (mode: string) => {
             calls.push(`lock-${mode}`);
             return chain;
@@ -173,6 +179,7 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       'conditional-delete',
       'booked-count',
       'booked-matches',
+      'limit-20',
     ]);
   });
 
@@ -242,8 +249,10 @@ describe('PartnerService.blackoutSlots (P2-246)', () => {
       res.bookedMatches.every((m) => !('bookedMatchesTotal' in m)),
     ).toBe(true);
     expect(res.bookedMatchesTotal).toBe(25);
-    // The cap is real: the query chain carries a .limit() call.
-    expect(calls).toContain('booked-matches');
+    // The cap is REAL and behavioral: the service must call .limit() on the
+    // booked-matches chain with the exported page limit (PR-Agent #231 MINOR
+    // fixed — the mock no longer simulates the cut on its own).
+    expect(calls).toContain(`limit-${BOOKED_MATCHES_PAGE_LIMIT}`);
   });
 
   it('DELETE carries the is_booked=false predicate (P1-18 pattern)', async () => {
