@@ -1,14 +1,33 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN + MERGEABLE CLEAN as of run #194, refreshed this run)
-- Commits ahead of main: **405** (last promote 2026-09-25; NO new migrations this cycle — runs #194 added none)
-- Pending migrations for next promote: **0045_user_blocks → 0058_venue_reviews_hidden_at** (14 migrations — ALL already applied to prod Neon with owner go, 60/60 verified; runs #186–#194 added NO migrations)
-- Migration-chain CI: **8/8 passed** (journal + snapshot specs green)
-- Services: API/PWA/Admin UP (serving run #194 builds dea7cab/e34bc76/b4d4424 — blackout deep-links, topup Arabic-Indic preset numerals, partner pitch localized failures); Kong DOWN (not koralink)
-- Factory loop status: **HEALTHY 2026-11-08** — run #194 shipped PR #226 (P2-255 blackout deep-links to blocking matches) + PR #227 (P2-257b residual: TopupSheet preset numerals Arabic-Indic) + PR #228 (P2-323 partner pitch actions localized failures — 8 PR-Agent rounds all real); all merged + live on the VPS. Strix next window Dec 1–3.
+- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN + MERGEABLE CLEAN as of run #194; owner-deferred per D-20261106-02 Coolify cutover)
+- Commits ahead of main: **413** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
+- Services: API/PWA/Admin UP (serving run #196 builds 8b1655d — chat-page crash fix + blackout bookedMatches cap)
+- Factory loop status: **HEALTHY 2026-11-09** — run #196 shipped PR #230 (P2-321 RE-SCOPED UP: chat page crashed on EVERY render since run #176 — use(useParams()) rejects plain objects in React 19; fixed + live-verified) + PR #231 (P2-324 blackout bookedMatches cap 20 + exact total + "+N more" footer, LIVE E2E proven). Strix next window Dec 1–3.
 
 ## Active owner actions
+
+### NEW-1. P2-325 — Moyasar webhook registration (NEW run #196)
+- **What:** Wallet top-up credit currently depends on the client verify call + the 5-min reconcile backstop (webhook-less flow, wallet.reconcile.service.ts:34). A player who pays then closes the app before verify waits for the cron rescue. Industry norm = signed webhook capture.
+- **Your part:** Moyasar dashboard → register a webhook URL for invoice/payment events (the factory builds the signature-verify endpoint once the URL exists).
+- **Close line:** "P2-325: webhook URL registered — build the verify endpoint" OR "P2-325: reconcile backstop is enough for now".
+- **Deadline:** Before prod launch (money-adjacent).
+
+### NEW-2. P2-327 — admin console MFA (NEW run #196, follows RBAC)
+- **What:** The admin console (settlements void/pay, refunds, CSV exports) sits behind password-only auth; no 2FA anywhere. Per D-20261106-14 RBAC design comes first; MFA is the follows-item.
+- **Close line:** "P2-327: plan MFA after RBAC" OR "P2-327: not needed (VPS-private console)".
+- **Deadline:** Before staff accounts exist.
+
+### NEW-3. P2-328 — promo/coupon system shape (NEW run #196, CEO-lane)
+- **What:** No discount codes exist (grep 0 hits); competitors run first-game discounts heavily in KSA. Needs product shape: % vs flat, per-venue vs platform, stacking rules.
+- **Close line:** "P2-328: build <shape>" OR "P2-328: defer post-launch".
+- **Deadline:** None (acquisition lever, not a gap).
+
+### NEW-4. P2-329 — player no-show fee policy (NEW run #196, CEO-lane)
+- **What:** A player who no-shows a PAID match owes nothing (fee is refunded on cancel; karma penalties only). Host math goes negative with zero recourse. Needs your call: fee vs karma vs both.
+- **Close line:** "P2-329: <fee/karma/both>" OR "P2-329: defer".
+- **Deadline:** Before paid matches go live at scale.
 
 ### 1. P0-11 — Coolify cutover go/no-go (NEW run #190 — the plan is ready)
 - **Owner decision (Life OS 2026-11-07, D-20261106-01):** Approve plan, start A2
