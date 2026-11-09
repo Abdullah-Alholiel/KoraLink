@@ -53,7 +53,7 @@ function makeT() {
     };
 }
 
-function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean; locale?: 'en' | 'ar' } = {}) {
+function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnline?: boolean; locale?: 'en' | 'ar'; enabled?: boolean } = {}) {
     const locale = overrides.locale ?? 'en';
     const props = {
         isOpen: true,
@@ -61,6 +61,7 @@ function renderSheet(overrides: { minAmount?: number; maxAmount?: number; isOnli
         onCredited: vi.fn(),
         minAmount: overrides.minAmount ?? 5,
         maxAmount: overrides.maxAmount ?? 2000,
+        ...(overrides.enabled !== undefined ? { enabled: overrides.enabled } : {}),
     };
     render(
         <NextIntlClientProvider
@@ -221,5 +222,31 @@ describe('TopupSheet — validation + intent + form host (P0-2)', () => {
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /Retry confirmation/i })).toBeTruthy();
         });
+    });
+});
+
+// P2-331 (run #197): TopupSheet is the ONLY top-up surface; with the server
+// flag off it must render a truthful localized notice, never a payment form.
+describe('TopupSheet — enabled=false notice (P2-331)', () => {
+    it('renders the localized unavailable notice and no amount/pay controls (en)', () => {
+        renderSheet({ enabled: false });
+        const notice = screen.getByTestId('topup-disabled-notice');
+        expect(notice.textContent).toContain(enMessages.wallet.topupDisabled);
+        expect(screen.queryByLabelText(enMessages.wallet.topup.amountLabel)).toBeNull();
+        expect(screen.queryByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeNull();
+        expect(createIntentMock).not.toHaveBeenCalled();
+    });
+
+    it('renders the Arabic notice under an ar session', () => {
+        renderSheet({ enabled: false, locale: 'ar' });
+        expect(screen.getByTestId('topup-disabled-notice').textContent).toContain(
+            arMessages.wallet.topupDisabled,
+        );
+    });
+
+    it('defaults to enabled (backward compat) — the payment form renders', () => {
+        renderSheet();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.getByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeTruthy();
     });
 });

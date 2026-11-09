@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import enMessages from '@/messages/en.json';
 import WalletPage from '@/app/[locale]/(main)/wallet/page';
 import { useAppStore } from '@/store/useAppStore';
 
-// ── P2-260: wallet actions distinguish offline from failed (error-message
-// standard). Offline → "reconnect and try again" (no reassurance: the request
-// never left the device); 403 → production-gated copy; anything else →
-// generic failure + "no money was taken". The history error block is a
-// role=status live region carrying the same money-surface reassurance.
+// ── P2-260: the history error block is a role=status live region carrying
+// the money-surface "no money was taken" reassurance.
+//
+// P2-331 (run #197): the legacy dummy top-up modal (client-amount
+// self-credit via the removed legacy route) is GONE. The Top-Up action
+// ALWAYS opens the Moyasar TopupSheet; with the server flag off the sheet
+// shows the localized "top-up unavailable" notice instead of a fake credit
+// form. Intent/verify error classification is covered by TopupSheet.test.tsx.
 
 const mockFetcher = vi.fn();
 vi.mock('@/lib/fetcher', () => ({
@@ -25,17 +28,10 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/download', () => ({ downloadTextAsFile: vi.fn() }));
 
-const mockTopup = vi.fn();
-vi.mock('@/hooks/useWallet', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/hooks/useWallet')>();
-  return {
-    ...actual,
-    useTopupWallet: () =>
-      useMutation({
-        mutationFn: (vars: { amount: number; idempotencyKey: string }) => mockTopup(vars),
-      }),
-  };
-});
+vi.mock('@/providers/ObservabilityProvider', () => ({
+  trackEvent: vi.fn(),
+  captureError: vi.fn(),
+}));
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -50,10 +46,15 @@ function renderPage() {
   );
 }
 
-function mockApi(opts: { historyFails?: boolean } = {}) {
+function mockApi(opts: { historyFails?: boolean; topupEnabled?: boolean } = {}) {
   mockFetcher.mockImplementation(async (path: string) => {
     if (path === '/wallet/balance') return { balance: '100.00' };
-    if (path === '/wallet/topup/config') return { enabled: false, minAmount: 5, maxAmount: 2000 };
+    if (path === '/wallet/topup/config') {
+      return opts.topupEnabled
+        ? { enabled: true, publishableKey: 'pk_test_x', minAmount: 5, maxAmount: 2000 }
+        : { enabled: false, publishableKey: null, minAmount: 5, maxAmount: 2000 };
+    }
+    if (path.startsWith('/wallet/topup/latest')) return { intent: null };
     if (path.startsWith('/wallet/history') || path.startsWith('/wallet/transactions')) {
       if (opts.historyFails) throw Object.assign(new Error('x'), { status: 500 });
       return { transactions: [], total: 0, hasMore: false };
@@ -62,43 +63,51 @@ function mockApi(opts: { historyFails?: boolean } = {}) {
   });
 }
 
-async function submitTopup() {
+async function openTopup() {
   renderPage();
-  // Open the legacy (flag-off) top-up sheet via the quick-action button.
   const openers = await screen.findAllByRole('button', { name: enMessages.wallet.topUp });
   fireEvent.click(openers[0]);
-  const input = await screen.findByPlaceholderText('0');
-  fireEvent.change(input, { target: { value: '50' } });
-  const submit = screen
-    .getAllByRole('button', { name: enMessages.wallet.topUp })
-    .find((b) => !b.hasAttribute('disabled') && b.className.includes('w-full'));
-  expect(submit).toBeTruthy();
-  fireEvent.click(submit!);
 }
 
-describe('WalletPage top-up onError classification (P2-260)', () => {
+/** No call ever hits the removed legacy self-credit route (exact path). */
+function expectNoLegacyTopupCall() {
+  for (const call of mockFetcher.mock.calls) {
+    expect(call[0]).not.toBe('/wallet/topup');
+  }
+}
+
+describe('WalletPage top-up — single Moyasar surface (P2-331)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAppStore.setState({ toast: null } as never);
-    mockApi();
   });
 
-  const cases: Array<[string, Error, string, boolean]> = [
-    ['status 0', Object.assign(new Error('x'), { status: 0 }), enMessages.errors.offlineTryAgain, false],
-    ['network-shaped message', new TypeError('Failed to fetch'), enMessages.errors.offlineTryAgain, false],
-    ['status 403', Object.assign(new Error('x'), { status: 403 }), enMessages.wallet.topupDisabled, false],
-    ['status 500', Object.assign(new Error('x'), { status: 500 }), enMessages.errors.walletTopupFailed, true],
-  ];
+  it('flag off: Top-Up opens the TopupSheet with the localized unavailable notice (no fake credit form)', async () => {
+    mockApi({ topupEnabled: false });
+    await openTopup();
+    // The page fetched the config before the click; wait for the flag to land.
+    const notice = await screen.findByTestId('topup-disabled-notice');
+    expect(within(notice).getByText(enMessages.wallet.topupDisabled)).toBeTruthy();
+    expect(notice.getAttribute('role')).toBe('status');
+    // Neither the legacy dummy amount input nor the Moyasar form is offered.
+    expect(screen.queryByPlaceholderText('0')).toBeNull();
+    expect(screen.queryByRole('button', { name: enMessages.wallet.topup.payWithCard })).toBeNull();
+    expectNoLegacyTopupCall();
+  });
 
-  it.each(cases)('%s → correct copy', async (_label, err, expected, reassure) => {
-    mockTopup.mockRejectedValue(err);
-    await submitTopup();
-    const alert = await screen.findByRole('alert');
-    await waitFor(() => expect(within(alert).getByText(expected)).toBeTruthy());
-    expect(mockTopup).toHaveBeenCalledTimes(1);
-    const reassurance = within(alert).queryByText(enMessages.errors.noMoneyTaken);
-    if (reassure) expect(reassurance).toBeTruthy();
-    else expect(reassurance).toBeNull();
+  it('flag on: Top-Up opens the real Moyasar TopupSheet form', async () => {
+    mockApi({ topupEnabled: true });
+    renderPage();
+    await waitFor(() =>
+      expect(mockFetcher.mock.calls.some((c) => c[0] === '/wallet/topup/config')).toBe(true),
+    );
+    const openers = await screen.findAllByRole('button', { name: enMessages.wallet.topUp });
+    fireEvent.click(openers[0]);
+    expect(
+      await screen.findByRole('button', { name: enMessages.wallet.topup.payWithCard }),
+    ).toBeTruthy();
+    expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+    expectNoLegacyTopupCall();
   });
 });
 

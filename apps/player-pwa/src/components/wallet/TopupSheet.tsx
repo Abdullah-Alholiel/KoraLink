@@ -32,9 +32,8 @@ import {
   type TopupIntentResponse,
 } from '@/hooks/useTopup';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
-// P2-289 (run #180): presets + validation live in the SHARED domain module —
-// one source of truth across both top-up surfaces (this sheet + the legacy
-// dummy sheet in wallet/page.tsx).
+// P2-289 (run #180): presets + validation live in the SHARED domain module
+// (the legacy dummy sheet that also used it was removed in P2-331).
 import { presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
 import { formatCount } from '@/lib/format';
 
@@ -63,8 +62,7 @@ declare global {
 }
 
 const FORM_CDN = 'https://cdn.jsdelivr.net/npm/moyasar-payment-form@2.3.0/dist/moyasar.umd.min.js';
-// P2-289 (run #180): moved to lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS) —
-// shared with the legacy dummy sheet so both surfaces offer the same presets.
+// P2-289 (run #180): quick amounts live in lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS).
 
 function loadMoyasarScript(): Promise<MoyasarFormApi> {
   return new Promise((resolve, reject) => {
@@ -94,6 +92,13 @@ interface TopupSheetProps {
   onCredited?: () => void;
   minAmount: number;
   maxAmount: number;
+  /**
+   * P2-331 (run #197): server top-up flag (GET /wallet/topup/config `enabled`).
+   * When explicitly `false` the sheet renders a localized "top-up unavailable"
+   * notice instead of the payment form — this sheet is the ONLY top-up surface
+   * now that the legacy dummy self-credit modal is gone. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 export default function TopupSheet({
@@ -102,6 +107,7 @@ export default function TopupSheet({
   onCredited,
   minAmount,
   maxAmount,
+  enabled = true,
 }: TopupSheetProps) {
   const t = useTranslations();
   // P2-257b follow-up (run #194, Reviewer B): next-intl's useLocale() is the
@@ -292,6 +298,21 @@ export default function TopupSheet({
         </h2>
       </div>
 
+      {!enabled && (
+        <div className="px-5 pb-6 flex-shrink-0">
+          <div
+            role="status"
+            data-testid="topup-disabled-notice"
+            className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-3"
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" aria-hidden />
+            <p className="text-sm text-amber-800">{t('wallet.topupDisabled')}</p>
+          </div>
+        </div>
+      )}
+
+      {enabled && (
+      <>
       {/* PR-Agent r2 IMPORTANT: stage-INDEPENDENT recovery — verify failure
           leaves stage='paying', so the retry block must live outside the
           stage switch or a charged-but-unverified payment never sees it. */}
@@ -396,6 +417,8 @@ export default function TopupSheet({
               stage state (a real re-render) removes the null-host race. */}
           <div ref={formHostRef} data-testid="moyasar-form-host" className={stage === 'form-loading' ? 'hidden' : undefined} />
         </div>
+      )}
+      </>
       )}
     </BottomSheet>
   );
