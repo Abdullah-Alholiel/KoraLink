@@ -135,6 +135,11 @@ export default function TopupSheet({
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<'form' | 'form-loading' | 'paying'>('form');
+  // P2-331 r4 (PR-Agent r3 MINOR): once a payment flow has STARTED, a config
+  // load/error must NEVER swap the sheet body away — that would unmount the
+  // recovery block + injected form host for a charged-but-unverified payment.
+  // The degraded states only own the sheet BEFORE the flow starts.
+  const [flowStarted, setFlowStarted] = useState(false);
   /** PR-Agent r1 IMPORTANT: a failed verify keeps the charged payment's ids visible with a retry. */
   const [pendingPayment, setPendingPayment] = useState<{ paymentId: string; intentId: string } | null>(null);
   const intentRef = useRef<TopupIntentResponse | null>(null);
@@ -146,6 +151,7 @@ export default function TopupSheet({
     setStage('form');
     setPendingPayment(null);
     intentRef.current = null;
+    setFlowStarted(false);
     if (formHostRef.current) formHostRef.current.innerHTML = '';
   }, []);
 
@@ -211,6 +217,7 @@ export default function TopupSheet({
       setError(t('wallet.topup.invalidAmount', { min: minAmount, max: maxAmount }));
       return;
     }
+    setFlowStarted(true);
     setStage('form-loading');
     try {
       setPendingPayment(null);
@@ -314,9 +321,11 @@ export default function TopupSheet({
       {/* P2-331 (run #197, PR-Agent r2): the unavailable notice ONLY when the
           server flag is explicitly off. Loading → neutral notice (an enabled
           server must never read as disabled); error → classified copy +
-          retry. */}
+          retry. r4: degraded states only own the sheet BEFORE a payment flow
+          has started — mid-flow config failures never unmount the recovery
+          block or the injected form host. */}
 
-      {enabled === 'error' && (
+      {enabled === 'error' && !flowStarted && (
         <div className="px-5 pb-6 flex-shrink-0">
           <div role="status" data-testid="topup-config-error" className="text-center">
             <p className="text-sm text-brand-red">
@@ -333,7 +342,7 @@ export default function TopupSheet({
         </div>
       )}
 
-      {enabled === 'loading' && (
+      {enabled === 'loading' && !flowStarted && (
         <div className="px-5 pb-6 flex-shrink-0">
           <div
             role="status"
@@ -346,7 +355,7 @@ export default function TopupSheet({
         </div>
       )}
 
-      {(enabled === false) && (
+      {(enabled === false && !flowStarted) && (
         <div className="px-5 pb-6 flex-shrink-0">
           <div
             role="status"
@@ -359,7 +368,7 @@ export default function TopupSheet({
         </div>
       )}
 
-      {(enabled === true) && (
+      {(enabled === true || flowStarted) && (
       <>
       {/* PR-Agent r2 IMPORTANT: stage-INDEPENDENT recovery — verify failure
           leaves stage='paying', so the retry block must live outside the

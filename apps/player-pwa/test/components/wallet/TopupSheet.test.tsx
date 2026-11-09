@@ -287,4 +287,46 @@ describe('TopupSheet — enabled=false notice (P2-331)', () => {
         expect(refetchConfig).toHaveBeenCalledTimes(1);
         expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
     });
+
+    // P2-331 r4 (PR-Agent r3 MINOR): a mid-flow config failure must NOT
+    // unmount the recovery surface for a charged-but-unverified payment —
+    // degraded config states only own the sheet BEFORE the flow starts.
+    it("mid-flow config degradation never unmounts the pay/recovery body", async () => {
+        const { rerender } = render(
+            <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Riyadh">
+                <TopupSheet
+                    isOpen
+                    onClose={vi.fn()}
+                    onCredited={vi.fn()}
+                    minAmount={5}
+                    maxAmount={2000}
+                    enabled
+                />
+            </NextIntlClientProvider>,
+        );
+        const input = screen.getByLabelText("Amount (SAR)");
+        fireEvent.change(input, { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        // Config degrades to error mid-flow → the form host MUST stay mounted.
+        rerender(
+            <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Riyadh">
+                <TopupSheet
+                    isOpen
+                    onClose={vi.fn()}
+                    onCredited={vi.fn()}
+                    minAmount={5}
+                    maxAmount={2000}
+                    enabled="error"
+                    topupConfigError={Object.assign(new Error('boom'), { status: 500 })}
+                />
+            </NextIntlClientProvider>,
+        );
+        expect(screen.queryByTestId('topup-config-error')).toBeNull();
+        expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
+        expect(screen.getByTestId('moyasar-form-host')).toBeTruthy();
+    });
 });
