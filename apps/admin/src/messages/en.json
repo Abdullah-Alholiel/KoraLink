@@ -315,6 +315,7 @@
       "skippedBooked": "{count, plural, one {# booked slot was left untouched} other {# booked slots were left untouched}} — cancel those matches first if the pitch must be fully closed.",
       "bookedMatchesHeading": "{count, plural, one {Match blocking this range} other {Matches blocking this range}}",
       "bookedMatchesHint": "Open a match to review or cancel it from its own page — cancelling frees its slot.",
+      "bookedMatchesMore": "Showing the {shown, plural, one {earliest # match} other {earliest # matches}} of {total, plural, one {# blocking match} other {# blocking matches}} — cancel the ones in the way, then blackout again.",
       "failRange": "The server rejected this date range — it may be invalid or longer than the allowed limit. Check both dates and try again.",
       "failAuth": "Your session ended — nothing was closed. Sign in again to continue.",
       "failServer": "The server had a problem — nothing was closed. Try again in a moment; if it keeps failing, contact support.",

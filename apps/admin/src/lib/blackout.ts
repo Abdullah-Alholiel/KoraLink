@@ -3,6 +3,12 @@ import { ApiError } from '@/lib/api';
 /** Server cap (P2-246 BlackoutSlotsDto): an inclusive range spans ≤ 62 days. */
 export const BLACKOUT_MAX_DAYS = 62;
 
+/**
+ * P2-324 (run #196): the API caps bookedMatches at 20 rows (BOOKED_MATCHES_PAGE_LIMIT);
+ * `bookedMatchesTotal` carries the exact count so the panel can render "and N more".
+ */
+export const BOOKED_MATCHES_PAGE_LIMIT = 20;
+
 export interface BlackoutResult {
   closedInstances: number;
   skippedBooked: number;
@@ -12,6 +18,11 @@ export interface BlackoutResult {
    * only) still type-checks; render guards on presence + length.
    */
   bookedMatches?: BlackoutBookedMatch[];
+  /**
+   * P2-324 (run #196): exact blocking-match count (may exceed the capped list).
+   * Optional for the same older-response tolerance as bookedMatches.
+   */
+  bookedMatchesTotal?: number;
 }
 
 /** One booked match inside the blackout range (wire shape, blackoutSlots response). */

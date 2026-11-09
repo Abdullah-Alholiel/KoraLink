@@ -180,7 +180,16 @@ export default function BlackoutPanel({ pitchId, onChanged }: BlackoutPanelProps
                     ))}
                   </ul>
                   <p className="border-t border-amber-100 px-3 py-2 text-[11px] text-gray-500">
-                    {t('bookedMatchesHint')}
+                    {/* P2-324 (run #196): the API caps the list (oldest-scheduled
+                        first); when the exact total exceeds it, say so instead of
+                        silently hiding blocking matches. */}
+                    {result.bookedMatchesTotal != null &&
+                    result.bookedMatchesTotal > result.bookedMatches.length
+                      ? t('bookedMatchesMore', {
+                          shown: result.bookedMatches.length,
+                          total: result.bookedMatchesTotal,
+                        })
+                      : t('bookedMatchesHint')}
                   </p>
                 </div>
               )}
