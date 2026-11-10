@@ -127,6 +127,13 @@ export class WalletReconcileService {
         // starve them forever behind a stream of fresh abandoned intents.
         .orderBy(asc(wallet_topup_intents.created_at))
         .limit(200);
+      // P2-314 eviction BEFORE the empty early-return: the dedup Set must shed
+      // resolved ids even when the pending backlog momentarily empties (a
+      // return above this point would freeze stale ids forever).
+      const pendingIds = new Set(pending.map((p) => p.id));
+      for (const id of this.agedOutAlerted) {
+        if (!pendingIds.has(id)) this.agedOutAlerted.delete(id);
+      }
       if (pending.length === 0) return outcome;
       outcome.scanned = pending.length;
 

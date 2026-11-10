@@ -315,6 +315,40 @@ describe('WalletReconcileService — P2-314 age-out visibility', () => {
     expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('evicts resolved intents from the dedup Set — a resurfaced pending intent re-alerts (PR-Agent r1 run #198)', async () => {
+    // Mutable db stub: rows change between sweeps to simulate an intent that
+    // resolves (leaves the pending scan) and later resurfaces.
+    const rows: unknown[] = [agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333')];
+    const mutableDb = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => Promise.resolve(rows),
+            }),
+          }),
+        }),
+      }),
+    };
+    const config = makeConfig({ WALLET_TOPUP_ENABLED: 'true', MOYASAR_SECRET_KEY: 'sk_test_x' });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(mutableDb as never, config, topupService);
+
+    mockList.mockResolvedValue([]);
+    await service.reconcileOnce(); // tick 1: alerts once
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+
+    rows.length = 0; // intent resolves (credited/cancelled) → leaves pending scan
+    await service.reconcileOnce(); // tick 2: eviction sweep, no alert
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+
+    // Same id resurfaces as pending: WITHOUT eviction tick 3 would stay silent;
+    // re-alerting is the DOCUMENTED trade-off (ops must know it resurfaced).
+    rows.push(agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333'));
+    await service.reconcileOnce(); // tick 3: re-alerts
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(2);
+  });
+
   it('fresh intents never alert (agedOut stays 0)', async () => {
     const { service } = makeService({ pendingRows: PENDING_ROWS });
     mockList.mockResolvedValue([]);
