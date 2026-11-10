@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { SQL, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -51,6 +51,12 @@ export class AdminAuditListService {
     // (house rule: never ::uuid).
     if (dto.from) conds.push(sql`a.created_at >= (${dto.from}::date)::timestamp AT TIME ZONE 'UTC'`);
     if (dto.to) conds.push(sql`a.created_at < (((${dto.to}::date + INTERVAL '1 day'))::timestamp AT TIME ZONE 'UTC')`);
+    // r2 MINOR: an inverted range (from > to — keyboard-typed values bypass
+    // the picker's min/max) must 400, not silently match nothing. YYYY-MM-DD
+    // strings compare correctly lexicographically.
+    if (dto.from && dto.to && dto.from > dto.to) {
+      throw new BadRequestException('from must be on or before to');
+    }
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
     // P2-318 (Reviewer A run #193): pagination contract —

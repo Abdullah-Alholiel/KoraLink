@@ -30,7 +30,11 @@ class AuditCalendarDateConstraint implements ValidatorConstraintInterface {
   validate(value?: string): boolean {
     if (typeof value !== 'string' || !AUDIT_DATE_SHAPE.test(value)) return false;
     const parsed = new Date(`${value}T00:00:00Z`);
-    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    if (Number.isNaN(parsed.getTime())) return false;
+    // r2 MINOR: JS Date accepts year 0000 but Postgres has no year 0 — the
+    // ::date cast would throw a 500. Require AD years only.
+    if (parsed.getUTCFullYear() < 1) return false;
+    return parsed.toISOString().slice(0, 10) === value;
   }
 
   defaultMessage(): string {

@@ -86,6 +86,11 @@ describe('ListAuditDto (P2-308 hardening contract)', () => {
     expect(errsOn({ from: '2024-02-29' }, 'from')).toHaveLength(0);
   });
 
+  // r2 MINOR: JS Date accepts year 0000 but Postgres has no year 0.
+  it('rejects year 0000 (Postgres has no year 0 — ::date would 500)', () => {
+    expect(errsOn({ from: '0000-01-01' }, 'from').length).toBeGreaterThan(0);
+  });
+
   it('accepts every value in AUDIT_ENTITY_TYPES (console select parity)', () => {
     for (const et of AUDIT_ENTITY_TYPES) {
       expect(errsOn({ entityType: et }, 'entityType')).toHaveLength(0);
