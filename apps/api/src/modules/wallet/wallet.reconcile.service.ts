@@ -20,11 +20,22 @@ type DB = PostgresJsDatabase<typeof schema>;
 /** Moyasar hosted-form description prefix binding a payment to an intent. */
 const INTENT_DESC_PREFIX = 'wallet-topup:';
 
+/**
+ * P2-314 (run #198): a pending intent older than this is "aged out" — real
+ * money may be captured but sweep-rescue is unreliable at that age, so ops
+ * gets exactly ONE alert per intent (process-lifetime) and reconciles
+ * manually via the admin wallet view. Fires regardless of Moyasar-list
+ * visibility: a blind spot must never be silent.
+ */
+const AGED_OUT_ALERT_THRESHOLD_MS = 60 * 60 * 1000;
+
 export interface ReconcileOutcome {
   scanned: number;
   credited: number;
   skipped: number;
   failed: number;
+  /** Pending intents past the age threshold (alerted once each, P2-314). */
+  agedOut: number;
 }
 
 /**
@@ -55,6 +66,8 @@ export interface ReconcileOutcome {
 export class WalletReconcileService {
   private readonly logger = new Logger(WalletReconcileService.name);
   private running = false;
+  /** P2-314: intents already age-out-alerted (process-lifetime, one alert each). */
+  private readonly agedOutAlerted = new Set<string>();
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -75,9 +88,9 @@ export class WalletReconcileService {
     if (!this.enabled) return;
     try {
       const outcome = await this.reconcileOnce();
-      if (outcome.credited > 0 || outcome.failed > 0) {
+      if (outcome.credited > 0 || outcome.failed > 0 || outcome.agedOut > 0) {
         this.logger.log(
-          `topup reconcile: scanned=${outcome.scanned} credited=${outcome.credited} skipped=${outcome.skipped} failed=${outcome.failed}`,
+          `topup reconcile: scanned=${outcome.scanned} credited=${outcome.credited} skipped=${outcome.skipped} failed=${outcome.failed} agedOut=${outcome.agedOut}`,
         );
       }
     } catch (err) {
@@ -94,7 +107,7 @@ export class WalletReconcileService {
    * (those are logged + Sentry-captured and retried by the next tick).
    */
   async reconcileOnce(): Promise<ReconcileOutcome> {
-    const outcome: ReconcileOutcome = { scanned: 0, credited: 0, skipped: 0, failed: 0 };
+    const outcome: ReconcileOutcome = { scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 };
     if (this.running) return outcome;
     const secretKey = resolveMoyasarSecretKey((k) => this.getConfig(k));
     if (!this.enabled || !secretKey) return outcome;
@@ -102,7 +115,11 @@ export class WalletReconcileService {
     this.running = true;
     try {
       const pending = await this.db
-        .select({ id: wallet_topup_intents.id, user_id: wallet_topup_intents.user_id })
+        .select({
+          id: wallet_topup_intents.id,
+          user_id: wallet_topup_intents.user_id,
+          created_at: wallet_topup_intents.created_at,
+        })
         .from(wallet_topup_intents)
         .where(sql`${wallet_topup_intents.status} = 'pending'`)
         // P2-331: OLDEST pending intents first. They carry the oldest real
@@ -112,6 +129,27 @@ export class WalletReconcileService {
         .limit(200);
       if (pending.length === 0) return outcome;
       outcome.scanned = pending.length;
+
+      // P2-314 age-out visibility (BEFORE discovery/credit so an intent is
+      // alerted even when the Moyasar list window already lost it): a pending
+      // intent older than 1h gets ONE warn + Sentry message (process-lifetime
+      // rate-limit), then ops reconciles manually via the admin wallet view.
+      const now = Date.now();
+      for (const intent of pending) {
+        const createdAt = intent.created_at ? new Date(intent.created_at).getTime() : NaN;
+        if (!Number.isFinite(createdAt) || now - createdAt < AGED_OUT_ALERT_THRESHOLD_MS) continue;
+        outcome.agedOut++;
+        if (this.agedOutAlerted.has(intent.id)) continue;
+        this.agedOutAlerted.add(intent.id);
+        this.logger.warn(
+          `topup intent aged out of rescuable window: intent=${intent.id} user=${intent.user_id} ageMs=${now - createdAt} — reconcile manually via admin wallet view`,
+        );
+        Sentry.captureMessage('Wallet top-up intent aged out of rescuable window', {
+          level: 'warning',
+          tags: { scope: 'wallet.topupReconcile', intentId: intent.id },
+          extra: { userId: intent.user_id, ageMs: now - createdAt },
+        });
+      }
 
       const recent = await listMoyasarPayments(secretKey, INTENT_DESC_PREFIX);
       const byIntentId = new Map<string, { id: string; status: string }>();
