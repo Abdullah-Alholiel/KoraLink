@@ -44,6 +44,10 @@ export default function ReviewsPage() {
   const t = useTranslations('reviews');
   const [venueId, setVenueId] = useState('');
   const [hidden, setHidden] = useState('');
+  // P2-336 (run #199): rating filter + sort controls ('' = all).
+  const [rating, setRating] = useState('');
+  const [sortBy, setSortBy] = useState('');
+  const [dir, setDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<VenueReview | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -64,6 +68,12 @@ export default function ReviewsPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: String(PER_PAGE) });
   if (venueId) qs.set('venueId', venueId);
   if (hidden) qs.set('hidden', hidden);
+  // P2-336 (run #199): rating filter + sort ride the endpoint params.
+  if (rating) qs.set('rating', rating);
+  if (sortBy) {
+    qs.set('sortBy', sortBy);
+    qs.set('dir', dir);
+  }
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<ReviewsResponse>(
     `/admin/venue-reviews?${qs.toString()}`,
@@ -207,6 +217,48 @@ export default function ReviewsPage() {
           <option value="false">{t('visible')}</option>
           <option value="true">{t('hidden')}</option>
         </select>
+        {/* P2-336 (run #199): rating filter — 'all ratings' + exact 1-5. */}
+        <select
+          aria-label={t('filterRating')}
+          value={rating}
+          onChange={(e) => {
+            setRating(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('allRatings')}</option>
+          {[5, 4, 3, 2, 1].map((n) => (
+            <option key={n} value={String(n)}>
+              {t('ratingNStars', { count: n })}
+            </option>
+          ))}
+        </select>
+        {/* P2-336 (run #199): sort key + direction. */}
+        <select
+          aria-label={t('sortBy')}
+          value={sortBy}
+          onChange={(e) => {
+            setSortBy(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">{t('sortDefault')}</option>
+          <option value="created_at">{t('sortNewestReview')}</option>
+          <option value="rating">{t('sortRating')}</option>
+        </select>
+        {sortBy && (
+          <button
+            type="button"
+            onClick={() => setDir(dir === 'desc' ? 'asc' : 'desc')}
+            aria-label={t('sortDirToggle')}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <span aria-hidden="true">{dir === 'desc' ? '↓' : '↑'}</span>
+            {dir === 'desc' ? t('sortDirDesc') : t('sortDirAsc')}
+          </button>
+        )}
       </div>
 
       {loading ? (

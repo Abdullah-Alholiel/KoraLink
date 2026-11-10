@@ -206,5 +206,44 @@ describe('AdminReviewsService (P2-291)', () => {
 
       expect(executed[0].sql).toContain('WHERE vr.hidden_at IS NULL');
     });
+
+    // ── P2-336 (run #199): rating filter + whitelisted sort ────────────────
+    it('P2-336: rating filter applies to the page AND the count', async () => {
+      const { service, executed } = makeService({ executes: [[], [{ c: 0 }]] });
+
+      await service.list({ page: 1, perPage: 25, rating: 2 });
+
+      for (const q of executed) {
+        expect(q.sql).toContain('vr.rating = $');
+      }
+    });
+
+    it('P2-336: rating=3 narrows to exactly rating 3 (parameterized)', async () => {
+      const { service, executed } = makeService({ executes: [[], [{ c: 7 }]] });
+
+      const out = await service.list({ page: 1, perPage: 25, rating: 3 });
+
+      expect(executed[0].params).toContain(3);
+      expect(out.total).toBe(7);
+    });
+
+    it('P2-336: sortBy=rating dir=asc whitelists the key and keeps the id tiebreaker', async () => {
+      const { service, executed } = makeService({ executes: [[], [{ c: 0 }]] });
+
+      await service.list({ page: 1, perPage: 25, sortBy: 'rating', dir: 'asc' });
+
+      expect(executed[0].sql).toContain('ORDER BY vr.rating ASC');
+      // Pagination contract: unique total order under ANY sort key.
+      expect(executed[0].sql).toContain('vr.id DESC');
+    });
+
+    it('P2-336: unknown sortBy silently falls back to the updated_at default', async () => {
+      const { service, executed } = makeService({ executes: [[], [{ c: 0 }]] });
+
+      await service.list({ page: 1, perPage: 25, sortBy: 'author_name; DROP TABLE', dir: 'asc' });
+
+      expect(executed[0].sql).toContain('ORDER BY vr.updated_at ASC');
+      expect(executed[0].sql).not.toContain('DROP');
+    });
   });
 });
