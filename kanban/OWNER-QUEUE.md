@@ -1,10 +1,10 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover; #235 P2-335 audit date-range filter — factory PR, CI running at run-#198 report time)
-- Commits ahead of main: **417** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
-- Services: API/PWA/Admin UP (API serving run #198 build `4823a43` — top-up age-out alert live; admin serving run #198 build `c09254c` — settings stale-save guard + per-setting save state, standalone marker verified)
-- Factory loop status: **HEALTHY 2026-11-10** — run #198 shipped PR #233 (P2-322 admin stale-save guard, zeroshot lane) + PR #234 (P2-314 age-out alert completes the item) + PR #235 (P2-335 audit date filter). Strix next window Dec 1–3.
+- Open PRs: 1 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover)
+- Commits ahead of main: **423** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified via Render env, run #196)**; migrate-first runbook mandatory before any merge)
+- Services: API/PWA/Admin UP (API serving run #199 build `17439f4` — earnings statusBreakdown + reviews rating/sort live, E2E-verified; admin serving run #199 build `17439f4` — settlement-status chips + cadence hint + reviews filters, chunks verified)
+- Factory loop status: **HEALTHY 2026-11-10** — run #199 shipped PR #236 (P2-337 earnings status breakdown + live cadence hint) + PR #237 (P2-336 re-scoped: reviews rating filter + whitelisted sort). #198 claims all confirmed. Strix next window Dec 1–3. Swap 100% full (0 oom — monitor only).
 
 ## Active owner actions
 
