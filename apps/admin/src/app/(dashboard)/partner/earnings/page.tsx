@@ -324,9 +324,14 @@ export default function PartnerEarningsPage() {
                   </span>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-gray-500">
-                {t('cadenceHint', { days: data?.payoutCadenceDays ?? 7 })}
-              </p>
+              {/* P2-337 r1 (PR-Agent): hide the hint until the LIVE cadence
+                  arrives — a fabricated "7" during loading/older-server is a
+                  false fact, unlike a 0-count chip which is truthfully empty. */}
+              {data?.payoutCadenceDays != null && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {t('cadenceHint', { days: data.payoutCadenceDays })}
+                </p>
+              )}
             </section>
 
             {/* ── P2-3: payout request action + 5 UX states ─────────────── */}
