@@ -1,10 +1,10 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, checks GREEN + MERGEABLE CLEAN as of run #194; owner-deferred per D-20261106-02 Coolify cutover)
-- Commits ahead of main: **414** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
-- Services: API/PWA/Admin UP (API+PWA serving run #197 build `b805c97` — legacy dummy top-up route RETIRED end-to-end, live-probed 404; admin unchanged on 8b1655d)
-- Factory loop status: **HEALTHY 2026-11-09** — run #197 shipped PR #232 (P2-331 money-security: Reviewer-A latent-CRITICAL retired; 4 PR-Agent rounds all real fixes; reconcile sweep ASC flip = P2-314 starvation half). Strix next window Dec 1–3.
+- Open PRs: 2 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover; #235 P2-335 audit date-range filter — factory PR, CI running at run-#198 report time)
+- Commits ahead of main: **417** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified live via Render env, run #196)**; migrate-first runbook mandatory before any merge)
+- Services: API/PWA/Admin UP (API serving run #198 build `4823a43` — top-up age-out alert live; admin serving run #198 build `c09254c` — settings stale-save guard + per-setting save state, standalone marker verified)
+- Factory loop status: **HEALTHY 2026-11-10** — run #198 shipped PR #233 (P2-322 admin stale-save guard, zeroshot lane) + PR #234 (P2-314 age-out alert completes the item) + PR #235 (P2-335 audit date filter). Strix next window Dec 1–3.
 
 ## Active owner actions
 
@@ -34,6 +34,12 @@
 - **What:** A player who no-shows a PAID match owes nothing (fee is refunded on cancel; karma penalties only). Host math goes negative with zero recourse. Needs your call: fee vs karma vs both.
 - **Close line:** "P2-329: <fee/karma/both>" OR "P2-329: defer".
 - **Deadline:** Before paid matches go live at scale.
+
+### NEW-6. P2-334 — blackout product shape: soft-record vs snapshot-restore (NEW run #198)
+- **What:** Pitch blackouts DELETE every free slot in the range with no list/undo — a partner who fat-fingers a date range cannot recover availability without manually re-adding slots (admin surface omits it too). Before the factory builds a blackout list/restore surface, the product shape needs your call.
+- **Your part:** Choose: (a) blackouts become durable records (list + delete = restore slots), or (b) keep delete-but add a pre-delete preview + short undo window, or (c) both.
+- **Close line:** "P2-334: durable blackout records + restore" OR "P2-334: preview + undo window" OR "P2-334: both" OR "P2-334: defer".
+- **Deadline:** Before partner portals onboard real venues.
 
 ### 1. P0-11 — Coolify cutover go/no-go (NEW run #190 — the plan is ready)
 - **Owner decision (Life OS 2026-11-07, D-20261106-01):** Approve plan, start A2
