@@ -9,7 +9,7 @@ import { useLiveAdminData } from '@/lib/use-live-data';
 import { api } from '@/lib/api';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
-import { formatDate, formatMoney, formatPercent } from '@/lib/utils';
+import { cn, formatDate, formatMoney, formatPercent } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import StatusBadge from '@/components/StatusBadge';
@@ -301,6 +301,38 @@ export default function PartnerEarningsPage() {
               <MetricCard label={t('totalPending')} value={formatMoney(data?.totalPending ?? 0)} icon={Wallet} />
               <MetricCard label={t('totalPaid')} value={formatMoney(data?.totalPaid ?? 0)} icon={Wallet} />
             </div>
+
+            {/* ── P2-337 (run #199): settlement-status breakdown + cadence hint ── */}
+            <section className="rounded-xl border border-gray-200 bg-white p-4">
+              <h2 className="text-sm font-semibold text-gray-900">{t('statusBreakdownTitle')}</h2>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { key: 'pending', cls: 'bg-amber-100 text-amber-700' },
+                    { key: 'paid', cls: 'bg-green-100 text-green-700' },
+                    { key: 'voided', cls: 'bg-gray-100 text-gray-600' },
+                  ] as const
+                ).map(({ key, cls }) => (
+                  <span
+                    key={key}
+                    className={cn(
+                      'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
+                      cls,
+                    )}
+                  >
+                    {t(`breakdown_${key}`, { count: data?.statusBreakdown?.[key] ?? 0 })}
+                  </span>
+                ))}
+              </div>
+              {/* P2-337 r1 (PR-Agent): hide the hint until the LIVE cadence
+                  arrives — a fabricated "7" during loading/older-server is a
+                  false fact, unlike a 0-count chip which is truthfully empty. */}
+              {data?.payoutCadenceDays != null && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {t('cadenceHint', { days: data.payoutCadenceDays })}
+                </p>
+              )}
+            </section>
 
             {/* ── P2-3: payout request action + 5 UX states ─────────────── */}
             <div className="rounded-xl border border-gray-200 bg-white p-4">
