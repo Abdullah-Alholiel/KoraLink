@@ -13,6 +13,8 @@
     "filterByRole": "تصفية حسب الدور",
     "filterByType": "تصفية حسب النوع",
     "filterByAction": "تصفية حسب الإجراء",
+    "filterFromDate": "من تاريخ",
+    "filterToDate": "إلى تاريخ",
     "filterBySubject": "تصفية حسب نوع الموضوع",
     "prev": "السابق",
     "next": "التالي",

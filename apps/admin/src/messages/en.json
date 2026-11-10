@@ -13,6 +13,8 @@
     "filterByRole": "Filter by role",
     "filterByType": "Filter by type",
     "filterByAction": "Filter by action",
+    "filterFromDate": "From date",
+    "filterToDate": "To date",
     "filterBySubject": "Filter by subject type",
     "prev": "Prev",
     "next": "Next",

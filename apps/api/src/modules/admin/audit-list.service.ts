@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { SQL, and, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
@@ -40,6 +40,22 @@ export class AdminAuditListService {
     if (dto.action) {
       const pattern = '%' + escapeLikePattern(dto.action) + '%';
       conds.push(sql`a.action ILIKE ${pattern} ESCAPE '\\'`);
+    }
+    // P2-335 (Reviewer B run #198): date-range filter for incident forensics.
+    // from is inclusive; to is treated as "on/before that DAY" — implemented
+    // as `< to::date + 1 day` so the boundary timestamp's time-of-day never
+    // silently drops same-day rows. Day bounds are pinned to UTC explicitly
+    // (r1 MINOR: ::date casts interpret in the session TimeZone — the app's
+    // display timezone is Asia/Riyadh but the audit day convention is UTC,
+    // matching the CSV timestamp export). Casts stay ::date/::text-safe
+    // (house rule: never ::uuid).
+    if (dto.from) conds.push(sql`a.created_at >= (${dto.from}::date)::timestamp AT TIME ZONE 'UTC'`);
+    if (dto.to) conds.push(sql`a.created_at < (((${dto.to}::date + INTERVAL '1 day'))::timestamp AT TIME ZONE 'UTC')`);
+    // r2 MINOR: an inverted range (from > to — keyboard-typed values bypass
+    // the picker's min/max) must 400, not silently match nothing. YYYY-MM-DD
+    // strings compare correctly lexicographically.
+    if (dto.from && dto.to && dto.from > dto.to) {
+      throw new BadRequestException('from must be on or before to');
     }
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
