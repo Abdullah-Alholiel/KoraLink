@@ -73,6 +73,19 @@ describe('ListAuditDto (P2-308 hardening contract)', () => {
     expect(errsOn({ to: 'y'.repeat(37) }, 'to').length).toBeGreaterThan(0);
   });
 
+  // PR-Agent #235 r1 IMPORTANT: shape-valid but calendar-invalid dates must
+  // 400 (not pass validation and blow up the Postgres ::date cast as a 500).
+  it('rejects calendar-invalid dates (shape-valid)', () => {
+    expect(errsOn({ from: '2026-02-30' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ from: '2026-13-01' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ from: '2026-00-10' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ to: '2026-04-31' }, 'to').length).toBeGreaterThan(0);
+  });
+
+  it('accepts a real leap day', () => {
+    expect(errsOn({ from: '2024-02-29' }, 'from')).toHaveLength(0);
+  });
+
   it('accepts every value in AUDIT_ENTITY_TYPES (console select parity)', () => {
     for (const et of AUDIT_ENTITY_TYPES) {
       expect(errsOn({ entityType: et }, 'entityType')).toHaveLength(0);

@@ -171,9 +171,11 @@ export default function AuditPage() {
         />
         {/* P2-335: date-range forensics filter (UTC day bounds; API treats
             `to` as on/before that day). Browser-native date inputs keep the
-            console dependency-free; dir=ltr per the console date convention. */}
+            console dependency-free; dir=ltr so date segments never
+            direction-flip under the ar locale. */}
         <input
           type="date"
+          dir="ltr"
           aria-label={tc('filterFromDate')}
           value={from}
           max={to || undefined}
@@ -186,6 +188,7 @@ export default function AuditPage() {
         <span className="text-sm text-gray-400">–</span>
         <input
           type="date"
+          dir="ltr"
           aria-label={tc('filterToDate')}
           value={to}
           min={from || undefined}

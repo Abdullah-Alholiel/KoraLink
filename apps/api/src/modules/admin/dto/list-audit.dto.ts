@@ -1,6 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
   IsIn,
   IsInt,
   IsOptional,
@@ -13,6 +16,27 @@ import {
 
 /** P2-335: date-range filter shape (YYYY-MM-DD), shared by from/to. */
 const AUDIT_DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * P2-335 r1 (PR-Agent #235 IMPORTANT): the shape regex alone accepts
+ * calendar-invalid dates (2026-02-30, 2026-13-01) which pass validation and
+ * then make the Postgres ::date cast THROW — an unhandled 500 instead of the
+ * promised 400. Deterministic round-trip check: parse as UTC midnight and
+ * require the ISO round-trip to reproduce the exact input (rejects rollover
+ * dates like 2026-02-30 → 2026-03-02 and out-of-range months).
+ */
+@ValidatorConstraint({ name: 'auditCalendarDate', async: false })
+class AuditCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value?: string): boolean {
+    if (typeof value !== 'string' || !AUDIT_DATE_SHAPE.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }
+
+  defaultMessage(): string {
+    return 'from/to must be a valid calendar date in YYYY-MM-DD form';
+  }
+}
 
 /**
  * Entity types that exist in the audit trail (audit.service.ts write sites).
@@ -64,18 +88,18 @@ export class ListAuditDto {
   action?: string;
 
   @ApiPropertyOptional({
-    description: 'P2-335: only include logs created on/after this date (UTC, YYYY-MM-DD).',
+    description: 'P2-335: only include logs created on/after this date (UTC day, YYYY-MM-DD).',
   })
   @IsOptional()
-  @Matches(AUDIT_DATE_SHAPE, { message: 'from must be a YYYY-MM-DD date' })
+  @Validate(AuditCalendarDateConstraint)
   @MaxLength(10)
   from?: string;
 
   @ApiPropertyOptional({
-    description: 'P2-335: only include logs created on/before this date (UTC, YYYY-MM-DD).',
+    description: 'P2-335: only include logs created on/before this date (UTC day, YYYY-MM-DD).',
   })
   @IsOptional()
-  @Matches(AUDIT_DATE_SHAPE, { message: 'to must be a YYYY-MM-DD date' })
+  @Validate(AuditCalendarDateConstraint)
   @MaxLength(10)
   to?: string;
 

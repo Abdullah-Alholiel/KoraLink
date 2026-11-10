@@ -44,10 +44,13 @@ export class AdminAuditListService {
     // P2-335 (Reviewer B run #198): date-range filter for incident forensics.
     // from is inclusive; to is treated as "on/before that DAY" — implemented
     // as `< to::date + 1 day` so the boundary timestamp's time-of-day never
-    // silently drops same-day rows. Raw SQL casts stay ::date/::text-safe
+    // silently drops same-day rows. Day bounds are pinned to UTC explicitly
+    // (r1 MINOR: ::date casts interpret in the session TimeZone — the app's
+    // display timezone is Asia/Riyadh but the audit day convention is UTC,
+    // matching the CSV timestamp export). Casts stay ::date/::text-safe
     // (house rule: never ::uuid).
-    if (dto.from) conds.push(sql`a.created_at >= ${dto.from}::date`);
-    if (dto.to) conds.push(sql`a.created_at < (${dto.to}::date + INTERVAL '1 day')`);
+    if (dto.from) conds.push(sql`a.created_at >= (${dto.from}::date)::timestamp AT TIME ZONE 'UTC'`);
+    if (dto.to) conds.push(sql`a.created_at < (((${dto.to}::date + INTERVAL '1 day'))::timestamp AT TIME ZONE 'UTC')`);
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
     // P2-318 (Reviewer A run #193): pagination contract —
