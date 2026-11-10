@@ -11,6 +11,9 @@ import {
   Min,
 } from 'class-validator';
 
+/** P2-335: date-range filter shape (YYYY-MM-DD), shared by from/to. */
+const AUDIT_DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * Entity types that exist in the audit trail (audit.service.ts write sites).
  * P2-308 (run #187, Reviewer B): entityType was a bare @IsString — a non-UI
@@ -59,6 +62,22 @@ export class ListAuditDto {
   @IsOptional()
   @IsString()
   action?: string;
+
+  @ApiPropertyOptional({
+    description: 'P2-335: only include logs created on/after this date (UTC, YYYY-MM-DD).',
+  })
+  @IsOptional()
+  @Matches(AUDIT_DATE_SHAPE, { message: 'from must be a YYYY-MM-DD date' })
+  @MaxLength(10)
+  from?: string;
+
+  @ApiPropertyOptional({
+    description: 'P2-335: only include logs created on/before this date (UTC, YYYY-MM-DD).',
+  })
+  @IsOptional()
+  @Matches(AUDIT_DATE_SHAPE, { message: 'to must be a YYYY-MM-DD date' })
+  @MaxLength(10)
+  to?: string;
 
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)

@@ -53,6 +53,26 @@ describe('ListAuditDto (P2-308 hardening contract)', () => {
     expect(errsOn({ adminId: 'x'.repeat(37) }, 'adminId').length).toBeGreaterThan(0);
   });
 
+  // P2-335 (run #198): date-range filter — console sends YYYY-MM-DD from
+  // <input type="date">; anything else must 400, not silently match nothing.
+  it('accepts console-shaped from/to (YYYY-MM-DD)', () => {
+    expect(errsOn({ from: '2026-11-01' }, 'from')).toHaveLength(0);
+    expect(errsOn({ to: '2026-11-09' }, 'to')).toHaveLength(0);
+  });
+
+  it('accepts omitted from/to', () => {
+    expect(errsOn({}, 'from')).toHaveLength(0);
+    expect(errsOn({}, 'to')).toHaveLength(0);
+  });
+
+  it('rejects malformed from/to shapes', () => {
+    expect(errsOn({ from: '11/01/2026' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ from: '2026-1-1' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ from: 'DROP TABLE' }, 'from').length).toBeGreaterThan(0);
+    expect(errsOn({ to: 'not-a-date' }, 'to').length).toBeGreaterThan(0);
+    expect(errsOn({ to: 'y'.repeat(37) }, 'to').length).toBeGreaterThan(0);
+  });
+
   it('accepts every value in AUDIT_ENTITY_TYPES (console select parity)', () => {
     for (const et of AUDIT_ENTITY_TYPES) {
       expect(errsOn({ entityType: et }, 'entityType')).toHaveLength(0);

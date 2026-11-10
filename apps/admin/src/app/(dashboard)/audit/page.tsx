@@ -42,6 +42,12 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const [entityType, setEntityType] = useState('');
   const [action, setAction] = useState('');
+  // P2-335 (Reviewer B run #198): date-range filter for incident forensics —
+  // "what happened last Tuesday" must not require paging. The committed range
+  // rides the same query string as the table, so the full-set CSV export
+  // inherits it automatically (P2-147 contract: export = same filters).
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   // Debounce the free-text action search so typing doesn't fire a request
   // per keystroke; committed value is what the query string uses.
   const [actionQuery, setActionQuery] = useState('');
@@ -54,6 +60,8 @@ export default function AuditPage() {
   const qs = new URLSearchParams({ page: String(page), perPage: '50' });
   if (entityType) qs.set('entityType', entityType);
   if (actionQuery) qs.set('action', actionQuery);
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<AuditResponse>(`/admin/audit-logs?${qs.toString()}`);
 
@@ -160,6 +168,32 @@ export default function AuditPage() {
           }}
           placeholder={tc('filterByAction')}
           className="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+        {/* P2-335: date-range forensics filter (UTC day bounds; API treats
+            `to` as on/before that day). Browser-native date inputs keep the
+            console dependency-free; dir=ltr per the console date convention. */}
+        <input
+          type="date"
+          aria-label={tc('filterFromDate')}
+          value={from}
+          max={to || undefined}
+          onChange={(e) => {
+            setFrom(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+        <span className="text-sm text-gray-400">–</span>
+        <input
+          type="date"
+          aria-label={tc('filterToDate')}
+          value={to}
+          min={from || undefined}
+          onChange={(e) => {
+            setTo(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
         <button
           type="button"

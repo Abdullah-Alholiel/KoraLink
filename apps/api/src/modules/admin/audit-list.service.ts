@@ -41,6 +41,13 @@ export class AdminAuditListService {
       const pattern = '%' + escapeLikePattern(dto.action) + '%';
       conds.push(sql`a.action ILIKE ${pattern} ESCAPE '\\'`);
     }
+    // P2-335 (Reviewer B run #198): date-range filter for incident forensics.
+    // from is inclusive; to is treated as "on/before that DAY" — implemented
+    // as `< to::date + 1 day` so the boundary timestamp's time-of-day never
+    // silently drops same-day rows. Raw SQL casts stay ::date/::text-safe
+    // (house rule: never ::uuid).
+    if (dto.from) conds.push(sql`a.created_at >= ${dto.from}::date`);
+    if (dto.to) conds.push(sql`a.created_at < (${dto.to}::date + INTERVAL '1 day')`);
     const where = conds.length ? sql`WHERE ${and(...conds)}` : sql``;
 
     // P2-318 (Reviewer A run #193): pagination contract —
