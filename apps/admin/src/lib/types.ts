@@ -385,6 +385,10 @@ export interface PartnerEarnings {
   // loading-undefined.
   totalPending: number | string;
   totalPaid: number | string;
+  /** P2-337 (run #199): server-aggregated settlement-status counts (optional = older-response tolerant). */
+  statusBreakdown?: { pending: number; paid: number; voided: number };
+  /** P2-337: LIVE payout_cadence_days PlatformSetting, for the partner-facing cadence hint. */
+  payoutCadenceDays?: number;
   /** P1-65: 4-week Riyadh window, SQL-aggregated; money as numeric strings. */
   perVenue: PartnerVenueRevenue[];
   fourWeekTrend: PartnerRevenueWeek[];

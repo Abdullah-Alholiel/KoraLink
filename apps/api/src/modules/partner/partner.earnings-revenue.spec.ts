@@ -26,7 +26,14 @@ interface Fixture {
   weekRows?: WeekRow[];
   slots?: { total: number; booked: number };
   /** Run #163 (P2-216): the settlement-totals aggregate row. */
-  totals?: { pending: string; paid: string };
+  totals?: {
+    pending: string;
+    paid: string;
+    /** P2-337 (run #199): per-status FILTER counts riding the same query. */
+    pending_count?: number;
+    paid_count?: number;
+    voided_count?: number;
+  };
 }
 
 function makeService(fx: Fixture) {
@@ -94,6 +101,10 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
       // floats — same money-string contract as every other aggregate here.
       totalPending: '0.00',
       totalPaid: '0.00',
+      // P2-337 (run #199): breakdown shape parity on the empty scope; cadence
+      // falls back to 7 (legacy-spec construction omits the settings service).
+      statusBreakdown: { pending: 0, paid: 0, voided: 0 },
+      payoutCadenceDays: 7,
       perVenue: [],
       fourWeekTrend: WEEKS.map((weekStart) => ({ weekStart, revenue: '0.00', bookedCount: 0 })),
       utilizationPct: 0,
@@ -117,6 +128,42 @@ describe('PartnerService.getEarnings revenue view (P1-65)', () => {
     expect(totalsQ!.sql).not.toContain('::uuid');
     // Scope rides the venue ids — never the whole table.
     expect(totalsQ!.params).toEqual(expect.arrayContaining(['v1', 'v2']));
+  });
+
+  it('P2-337: status breakdown counts ride the SAME totals query (no second scan)', async () => {
+    const { svc, executed } = makeService({
+      venueIds: ['v1'],
+      pitchIds: ['p1'],
+      totals: {
+        pending: '500.00',
+        paid: '480.25',
+        pending_count: 3,
+        paid_count: 5,
+        voided_count: 1,
+      },
+    });
+    const res = await svc.getEarnings('owner', 'VenueOwner');
+    expect(res.statusBreakdown).toEqual({ pending: 3, paid: 5, voided: 1 });
+    // One totals query serves money strings AND status counts.
+    const totalsQueries = executed.filter((q) => q.sql.includes('filter (where status'));
+    expect(totalsQueries).toHaveLength(1);
+    // Counts are int filter clauses per status, voided included (run #195
+    // feature). Lowercase `filter` keeps the fixture's slots-query marker
+    // (capital `FILTER`) disjoint.
+    expect(totalsQueries[0].sql).toContain("count(*) filter (where status = 'pending')");
+    expect(totalsQueries[0].sql).toContain("count(*) filter (where status = 'paid')");
+    expect(totalsQueries[0].sql).toContain("count(*) filter (where status = 'voided')");
+  });
+
+  it('P2-337: breakdown falls back to zeros when the totals row is missing', async () => {
+    const { svc } = makeService({
+      venueIds: ['v1'],
+      pitchIds: ['p1'],
+      totals: { pending: '0.00', paid: '0.00' },
+    });
+    const res = await svc.getEarnings('owner', 'VenueOwner');
+    expect(res.statusBreakdown).toEqual({ pending: 0, paid: 0, voided: 0 });
+    expect(res.payoutCadenceDays).toBe(7);
   });
 
   it('trend is always 4 zero-filled Riyadh weeks (no holes)', async () => {

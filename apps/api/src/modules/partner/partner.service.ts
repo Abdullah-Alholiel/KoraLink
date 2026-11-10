@@ -847,6 +847,9 @@ export class PartnerService {
         settlements: [],
         totalPending: ZERO_MONEY,
         totalPaid: ZERO_MONEY,
+        // P2-337 (run #199): breakdown shape parity on the empty scope.
+        statusBreakdown: { pending: 0, paid: 0, voided: 0 },
+        payoutCadenceDays: await this.getPayoutCadenceDays(),
         perVenue: [] as EarningsVenueRevenue[],
         fourWeekTrend: zeroTrendWeeks(trendWeeks),
         utilizationPct: 0,
@@ -860,15 +863,32 @@ export class PartnerService {
     const [totals] = (await this.db.execute(sql`
       SELECT
         coalesce(sum(amount) filter (where status = 'pending'), 0)::numeric(12,2)::text AS pending,
-        coalesce(sum(amount) filter (where status = 'paid'), 0)::numeric(12,2)::text AS paid
+        coalesce(sum(amount) filter (where status = 'paid'), 0)::numeric(12,2)::text AS paid,
+        count(*) filter (where status = 'pending')::int AS pending_count,
+        count(*) filter (where status = 'paid')::int AS paid_count,
+        count(*) filter (where status = 'voided')::int AS voided_count
       FROM settlements
       WHERE venue_id IN (${sql.join(
         venueIds.map((id) => sql`${id}`),
         sql`, `,
       )})
-    `)) as unknown as Array<{ pending: string; paid: string }>;
+    `)) as unknown as Array<{
+      pending: string;
+      paid: string;
+      pending_count: number;
+      paid_count: number;
+      voided_count: number;
+    }>;
     const totalPending = totals?.pending ?? ZERO_MONEY;
     const totalPaid = totals?.paid ?? ZERO_MONEY;
+    // P2-337 (run #199): settlement-status breakdown rides the SAME aggregate
+    // query as the console totals — exact counts, zero extra round-trip.
+    const statusBreakdown = {
+      pending: totals?.pending_count ?? 0,
+      paid: totals?.paid_count ?? 0,
+      voided: totals?.voided_count ?? 0,
+    };
+    const payoutCadenceDays = await this.getPayoutCadenceDays();
 
     const rows = await this.db
       .select({
@@ -897,7 +917,25 @@ export class PartnerService {
     const pitchIds = await this.scopedPitchIds(ownerId, actorRole);
     const revenue = await this.getEarningsRevenue(venueIds, pitchIds, trendWeeks, windowStart, windowEnd);
 
-    return { settlements: rows, totalPending, totalPaid, ...revenue };
+    return {
+      settlements: rows,
+      totalPending,
+      totalPaid,
+      statusBreakdown,
+      payoutCadenceDays,
+      ...revenue,
+    };
+  }
+
+  /**
+   * P2-337 (run #199): the LIVE payout cadence PlatformSetting for the earnings
+   * read-model. Optional-injection guard mirrors the requestPayout read (:176) —
+   * legacy spec constructions omit `settings`, so undefined → fallback 7.
+   */
+  private async getPayoutCadenceDays(): Promise<number> {
+    return this.settings
+      ? await this.settings.getNumber('payout_cadence_days', 7)
+      : 7;
   }
 
   /**
