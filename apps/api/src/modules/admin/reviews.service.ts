@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { venue_reviews } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { whitelistedOrderBy } from '../../common/utils/sort';
 import { AuditService } from './audit.service';
 import { ListVenueReviewsDto } from './dto/list-venue-reviews.dto';
 
@@ -71,9 +72,21 @@ export class AdminReviewsService {
     if (dto.venueId) conditions.push(sql`vr.venue_id = ${dto.venueId}`);
     if (dto.hidden === 'true') conditions.push(sql`vr.hidden_at IS NOT NULL`);
     if (dto.hidden === 'false') conditions.push(sql`vr.hidden_at IS NULL`);
+    // P2-336 (run #199): exact-rating filter (validated 1-5 in the DTO).
+    if (dto.rating) conditions.push(sql`vr.rating = ${dto.rating}`);
     const where = conditions.length
       ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
       : sql``;
+
+    // P2-336 (run #199): whitelisted sort — the tiebreaker stays appended so
+    // the pagination contract (unique total order) holds under any sort key.
+    const orderBy = whitelistedOrderBy(
+      dto.sortBy,
+      dto.dir,
+      { created_at: sql`vr.created_at`, rating: sql`vr.rating` },
+      sql`vr.updated_at`,
+      'desc',
+    );
 
     const rows = (await this.db.execute(sql`
       SELECT
@@ -84,7 +97,7 @@ export class AdminReviewsService {
       INNER JOIN venues v ON v.id = vr.venue_id
       LEFT JOIN users u ON u.id = vr.user_id
       ${where}
-      ORDER BY vr.updated_at DESC, vr.id DESC
+      ORDER BY ${orderBy}, vr.id DESC
       LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
     `)) as unknown as VenueReviewListItem[];
 

@@ -16,6 +16,27 @@ export class ListVenueReviewsDto {
   @IsIn(['true', 'false'])
   hidden?: 'true' | 'false';
 
+  /** P2-336 (run #199): exact-rating filter (1-5). Omit = all ratings. */
+  @ApiPropertyOptional({ enum: [1, 2, 3, 4, 5], description: 'Omit for all ratings' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating?: number;
+
+  /** P2-336 (run #199): sort key — whitelist enforced in the service; unknown → default. */
+  @ApiPropertyOptional({ description: 'Sort key (whitelist enforced server-side; unknown → default order)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  dir?: 'asc' | 'desc';
+
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
   @IsInt()
