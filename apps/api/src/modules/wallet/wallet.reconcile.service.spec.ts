@@ -21,15 +21,29 @@ jest.mock('../../common/moyasar/moyasar.client', () => ({
   ...jest.requireActual('../../common/moyasar/moyasar.client'),
   listMoyasarPayments: jest.fn(),
 }));
-jest.mock('@sentry/node', () => ({ captureException: jest.fn() }));
+jest.mock('@sentry/node', () => ({
+  captureException: jest.fn(),
+  captureMessage: jest.fn(),
+}));
 
 import * as Sentry from '@sentry/node';
 const mockList = listMoyasarPayments as jest.Mock;
 const mockCapture = Sentry.captureException as jest.Mock;
+const mockCaptureMessage = Sentry.captureMessage as jest.Mock;
 
+const HOUR_MS = 60 * 60 * 1000;
+const NOW = Date.now();
 const PENDING_ROWS = [
-  { id: '11111111-1111-4111-8111-111111111111', user_id: 'user-1' },
-  { id: '22222222-2222-4222-8222-222222222222', user_id: 'user-2' },
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    user_id: 'user-1',
+    created_at: new Date(NOW - 2 * 60 * 1000), // fresh
+  },
+  {
+    id: '22222222-2222-4222-8222-222222222222',
+    user_id: 'user-2',
+    created_at: new Date(NOW - 3 * 60 * 1000), // fresh
+  },
 ];
 
 function payment(partial: Partial<MoyasarPayment>): MoyasarPayment {
@@ -85,13 +99,14 @@ function makeService(opts: {
 beforeEach(() => {
   mockList.mockReset();
   mockCapture.mockReset();
+  mockCaptureMessage.mockReset();
 });
 
 describe('WalletReconcileService — gating', () => {
   it('no-ops without touching Moyasar or the DB when the topup flag is off', async () => {
     const { service, verify } = makeService({ enabled: false });
     const out = await service.reconcileOnce();
-    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0 });
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
     expect(mockList).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled();
   });
@@ -133,7 +148,7 @@ describe('WalletReconcileService — discovery', () => {
       intentId: '11111111-1111-4111-8111-111111111111',
       paymentId: 'pay_test1234567890',
     });
-    expect(out).toEqual({ scanned: 2, credited: 1, skipped: 1, failed: 0 });
+    expect(out).toEqual({ scanned: 2, credited: 1, skipped: 1, failed: 0, agedOut: 0 });
   });
 
   it('prefers the PAID payment when an intent carries several (stale 3DS then paid retry)', async () => {
@@ -171,7 +186,7 @@ describe('WalletReconcileService — discovery', () => {
     ]);
     const out = await service.reconcileOnce();
     expect(verify).not.toHaveBeenCalled();
-    expect(out).toEqual({ scanned: 2, credited: 0, skipped: 2, failed: 0 });
+    expect(out).toEqual({ scanned: 2, credited: 0, skipped: 2, failed: 0, agedOut: 0 });
   });
 
   it('never delegates a payment that is not paid (3DS pending/failed/authorized)', async () => {
@@ -190,7 +205,7 @@ describe('WalletReconcileService — discovery', () => {
     const { service, verify } = makeService({ pendingRows: [] });
     const out = await service.reconcileOnce();
     expect(mockList).not.toHaveBeenCalled();
-    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0 });
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
     expect(verify).not.toHaveBeenCalled();
   });
 });
@@ -252,6 +267,125 @@ describe('WalletReconcileService — delegation outcomes', () => {
     await expect(service.reconcileOnce()).rejects.toThrow('moyasar 503');
     expect(verify).not.toHaveBeenCalled();
     expect(mockCapture).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletReconcileService — P2-314 age-out visibility', () => {
+  function agedRow(overByMs: number, id: string) {
+    return {
+      id,
+      user_id: 'user-3',
+      created_at: new Date(NOW - (HOUR_MS + overByMs)),
+    };
+  }
+
+  it('alerts exactly once (warn + Sentry message) for a pending intent past 1h, regardless of Moyasar visibility', async () => {
+    const { service, verify } = makeService({
+      pendingRows: [
+        PENDING_ROWS[0],
+        agedRow(5 * 60 * 1000, '33333333-3333-4333-8333-333333333333'),
+      ],
+    });
+    // Moyasar list does NOT contain the aged intent — the alert must still fire.
+    mockList.mockResolvedValue([
+      payment({ description: 'wallet-topup:11111111-1111-4111-8111-111111111111' }),
+    ]);
+    const out = await service.reconcileOnce();
+    expect(out.agedOut).toBe(1);
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      'Wallet top-up intent aged out of rescuable window',
+      expect.objectContaining({
+        level: 'warning',
+        tags: expect.objectContaining({ intentId: '33333333-3333-4333-8333-333333333333' }),
+      }),
+    );
+    // Alerting must NOT invent a credit path — verify only for the paid hit.
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(verify).toHaveBeenCalledWith('user-1', expect.anything());
+    expect(out.credited).toBe(1);
+  });
+
+  it('never re-alerts the same intent on subsequent sweeps', async () => {
+    const aged = agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333');
+    const { service } = makeService({ pendingRows: [aged] });
+    mockList.mockResolvedValue([]);
+    await service.reconcileOnce();
+    await service.reconcileOnce();
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts resolved intents from the dedup Set — a resurfaced pending intent re-alerts (PR-Agent r1 run #198)', async () => {
+    // Mutable db stub: rows change between sweeps to simulate an intent that
+    // resolves (leaves the pending scan) and later resurfaces.
+    const rows: unknown[] = [agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333')];
+    const mutableDb = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => Promise.resolve(rows),
+            }),
+          }),
+        }),
+      }),
+    };
+    const config = makeConfig({ WALLET_TOPUP_ENABLED: 'true', MOYASAR_SECRET_KEY: 'sk_test_x' });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(mutableDb as never, config, topupService);
+
+    mockList.mockResolvedValue([]);
+    await service.reconcileOnce(); // tick 1: alerts once
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+
+    rows.length = 0; // intent resolves (credited/cancelled) → leaves pending scan
+    await service.reconcileOnce(); // tick 2: eviction sweep, no alert
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(1);
+
+    // Same id resurfaces as pending: WITHOUT eviction tick 3 would stay silent;
+    // re-alerting is the DOCUMENTED trade-off (ops must know it resurfaced).
+    rows.push(agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333'));
+    await service.reconcileOnce(); // tick 3: re-alerts
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('fresh intents never alert (agedOut stays 0)', async () => {
+    const { service } = makeService({ pendingRows: PENDING_ROWS });
+    mockList.mockResolvedValue([]);
+    const out = await service.reconcileOnce();
+    expect(out.agedOut).toBe(0);
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+  });
+
+  it('counts multiple aged intents in one sweep but alerts each once', async () => {
+    const { service } = makeService({
+      pendingRows: [
+        agedRow(1 * 60 * 1000, '33333333-3333-4333-8333-333333333333'),
+        agedRow(2 * 60 * 1000, '55555555-5555-4555-8555-555555555555'),
+      ],
+    });
+    mockList.mockResolvedValue([]);
+    const out = await service.reconcileOnce();
+    expect(out.agedOut).toBe(2);
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('a null/invalid created_at never crashes the sweep nor alerts', async () => {
+    const { service } = makeService({
+      pendingRows: [{ id: '44444444-4444-4444-8444-444444444444', user_id: 'user-4', created_at: null }],
+    });
+    mockList.mockResolvedValue([]);
+    const out = await service.reconcileOnce();
+    expect(out.agedOut).toBe(0);
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+    expect(out.scanned).toBe(1);
+  });
+
+  it('disables the whole sweep with the topup flag (age-out alerts included)', async () => {
+    const { service } = makeService({ enabled: false, pendingRows: [agedRow(60 * 60 * 1000, '33333333-3333-4333-8333-333333333333')] });
+    const out = await service.reconcileOnce();
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
   });
 });
 
