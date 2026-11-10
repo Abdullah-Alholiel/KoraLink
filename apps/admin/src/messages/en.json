@@ -697,6 +697,7 @@
     "settingsTitle": "Settings",
     "loadingSettings": "Loading settings…",
     "savedOk": "Saved.",
+    "settingsStaleNoSave": "Live connection lost — saving paused while data may be out of date. It resumes automatically when the connection returns.",
     "disputesTitle": "Disputes",
     "disputesSubtitle": "Resolve no-show appeals and other disputes",
     "loadingDisputes": "Loading disputes…",
