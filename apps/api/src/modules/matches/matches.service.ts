@@ -173,7 +173,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { MailerService } from '../mailer/mailer.service';
 import { UpdateMatchScheduleDto } from './dto/update-match-schedule.dto';
-import { MatchWaitlistService, WaitlistPromotion } from './waitlist.service';
+import {
+  MatchWaitlistService,
+  WaitlistPromotion,
+  WaitlistEviction,
+} from './waitlist.service';
 
 /**
  * Capacity standardisation (owner directive 2026-09-06): match capacity is
@@ -1846,6 +1850,9 @@ export class MatchesService {
     // P1-17: set inside the tx when a queue head was promoted into the freed
     // spot — drives the post-commit notification.
     let promoted: WaitlistPromotion | null = null;
+    // Run #200 (P2-347): underfunded-head evictions collected in-tx,
+    // notified post-commit — never silent.
+    let evicted: WaitlistEviction[] = [];
     // Slice 4: refund outcome for the leaver's fee row (null = no fee row).
     // Re-annotated to defeat TS closure-narrowing (assigned inside the tx cb).
     let leaveRefundOutcome = null as
@@ -1971,14 +1978,20 @@ export class MatchesService {
           // Run #200 (P2-333): the ≥4h refund path also frees a PAID seat —
           // the queue head must be charged the same fee (free-seat leak
           // closed; the inside-window path below already did this).
-          promoted = await this.waitlist.promoteNextInTx(tx, matchId, {
+          const result = await this.waitlist.promoteNextInTx(tx, matchId, {
             feePriceSar: feeSar,
           });
+          // Defensive unwrap: harness stubs may return null (same
+          // partial-row-mock contract as waitlist ?? []).
+          promoted = result?.promotion ?? null;
+          evicted = result?.evicted ?? evicted;
         } else {
           // Inside the window: refund ONLY on a paid backfill.
-          const backfill = await this.waitlist.promoteNextInTx(tx, matchId, {
+          const backfillResult = await this.waitlist.promoteNextInTx(tx, matchId, {
             feePriceSar: feeSar,
           });
+          const backfill = backfillResult?.promotion ?? null;
+          evicted = evicted.concat(backfillResult?.evicted ?? []);
           if (backfill) {
             await creditWalletTx(
               tx,
@@ -2012,7 +2025,9 @@ export class MatchesService {
         }
       } else {
         // Free match / legacy row: no money moves, queue fills as before.
-        promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+        const freeResult = await this.waitlist.promoteNextInTx(tx, matchId);
+        promoted = freeResult?.promotion ?? null;
+        evicted = evicted.concat(freeResult?.evicted ?? []);
       }
 
       // Below minimum after this withdrawal → re-arm the hourly nudge clock
@@ -2039,6 +2054,12 @@ export class MatchesService {
     // P1-17: bell + WS for the promoted player (fire-and-forget after commit).
     if (promoted) {
       await this.waitlist.notifyPromotion(promoted, matchId);
+    }
+    // Run #200 (P2-347): evicted (underfunded) heads learn they left the
+    // queue — never silent. Fire-and-forget; a notify failure never fails
+    // the committed leave.
+    for (const e of evicted as WaitlistEviction[]) {
+      await this.waitlist.notifyWaitlistRemoval(e.userId, matchId, e.matchTitle);
     }
 
     // Underfill re-nudge: tell the host immediately that the match dropped
@@ -4010,6 +4031,9 @@ export class MatchesService {
     // P1-17: set inside the tx when a queue head was promoted into the freed
     // spot — drives the post-commit notification.
     let promoted: WaitlistPromotion | null = null;
+    // Run #200 (P2-347): underfunded-head evictions collected in-tx,
+    // notified post-commit — never silent.
+    let evicted: WaitlistEviction[] = [];
     // P2-193 (run #155): fee snapshot for the removed player's refund push.
     // Re-annotated assignment through a plain let (assigned inside the tx cb).
     let removedRefundSar = 0;
@@ -4095,15 +4119,22 @@ export class MatchesService {
       // the seat is still a PAID seat, so the promoted backfill must be
       // charged the same fee (a free seat here was a money-invariant leak:
       // paid roster spot with no payment snapshot). Underfunded heads are
-      // skipped by the service (never wedge the kick).
-      promoted = await this.waitlist.promoteNextInTx(tx, matchId, {
+      // skipped by the service (never wedge the kick); their evictions are
+      // collected for post-commit notification (P2-347).
+      const kickResult = await this.waitlist.promoteNextInTx(tx, matchId, {
         feePriceSar: removedFeeSar > 0 ? removedFeeSar : undefined,
       });
+      promoted = kickResult?.promotion ?? null;
+      evicted = kickResult?.evicted ?? evicted;
     });
 
     // P1-17: bell + WS for the promoted player (after commit).
     if (promoted) {
       await this.waitlist.notifyPromotion(promoted, matchId);
+    }
+    // Run #200 (P2-347): kicked-match evictions are never silent either.
+    for (const e of evicted as WaitlistEviction[]) {
+      await this.waitlist.notifyWaitlistRemoval(e.userId, matchId, e.matchTitle);
     }
 
     // P1-70 (security audit run-5 R5-1): evict the removed player's sockets

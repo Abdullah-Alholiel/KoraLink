@@ -27,6 +27,10 @@ export type PushKey =
   | 'report_dismissed'
   | 'waitlist_promoted'
   | 'waitlist_closed'
+  // Run #200 (P2-347): a paid backfill skip removes an underfunded head from
+  // the queue — the player MUST be told (silent eviction was PR-Agent r2's
+  // IMPORTANT on PR #238).
+  | 'waitlist_removed'
   // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
   | 'payout_paid'
   // ── Player money flows (P2-193, run #155): wallet credits get a voice ──
@@ -256,6 +260,18 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
         v.amount != null
           ? `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة. تم خصم ${payoutAmount(v.amount, 'ar-SA')} من محفظتك.`
           : `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
+    },
+  },
+  waitlist_removed: {
+    en: {
+      title: '⏳ You left the waitlist',
+      body: (v) =>
+        `You were removed from the waitlist for "${v.title ?? 'a match'}" — the join fee is more than your current wallet balance. Top up and join again to claim a spot.`,
+    },
+    ar: {
+      title: '⏳ خرجت من قائمة الانتظار',
+      body: (v) =>
+        `تم إزالتك من قائمة الانتظار لمباراة "${v.title ?? 'غير محددة'}" — رسوم المشاركة أكبر من رصيد محفظتك الحالي. اشحن محفظتك وسجّل مرة أخرى لحجز مكانك.`,
     },
   },
   waitlist_closed: {

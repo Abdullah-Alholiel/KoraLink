@@ -145,13 +145,17 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
       match: baseMatch,
     });
 
-    const promoted = await svc.promoteNextInTx(tx as never, 'match-1', {
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', {
       feePriceSar: 37,
     });
 
-    expect(promoted).not.toBeNull();
-    expect(promoted!.userId).toBe('user-rich');
-    expect(promoted!.chargedSar).toBe(37);
+    expect(result.promotion).not.toBeNull();
+    expect(result.promotion!.userId).toBe('user-rich');
+    expect(result.promotion!.chargedSar).toBe(37);
+    // P2-347: the evicted underfunded head is reported for notification.
+    expect(result.evicted).toEqual([
+      { userId: 'user-poor', matchTitle: 'Tuesday Padel' },
+    ]);
     // Both queue entries removed: the skipped head AND the seated head.
     expect(deletedWaitlistIds).toHaveLength(2);
     const seatInserts = insertedPlayers.filter((v) => 'match_id' in v);
@@ -177,11 +181,11 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
       match: baseMatch,
     });
 
-    const promoted = await svc.promoteNextInTx(tx as never, 'match-1', {
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', {
       feePriceSar: 37,
     });
 
-    expect(promoted).toBeNull();
+    expect(result.promotion).toBeNull();
     expect(insertedPlayers).toHaveLength(0);
     expect(playerUpdates).toHaveLength(0);
     expect(deletedWaitlistIds).toHaveLength(2); // both heads skipped
@@ -196,9 +200,10 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
       players: [],
     });
 
-    const promoted = await svc.promoteNextInTx(tx as never, 'match-1', { feePriceSar: 37 });
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', { feePriceSar: 37 });
 
-    expect(promoted!.chargedSar).toBe(37);
+    expect(result.promotion!.chargedSar).toBe(37);
+    expect(result.evicted).toEqual([]); // fully-funded head: no evictions
     expect(insertedPlayers[0].user_id).toBe('user-ok');
     expect(playerUpdates[0].fee_paid_sar).toBe('37.00');
   });
@@ -210,10 +215,53 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
       match: baseMatch,
     });
 
-    const promoted = await svc.promoteNextInTx(tx as never, 'match-1');
+    const result = await svc.promoteNextInTx(tx as never, 'match-1');
 
-    expect(promoted!.chargedSar).toBeNull();
+    expect(result.promotion!.chargedSar).toBeNull();
+    expect(result.evicted).toEqual([]); // no fee → no skip path at all
     expect(playerUpdates).toHaveLength(0);
+  });
+
+  it('ALL heads underfunded → evicted carries EVERY head for notification (P2-347)', async () => {
+    const { svc, tx, insertedPlayers } = makeHarness({
+      heads: [
+        { id: 'w-1', user_id: 'user-a', position: 1 },
+        { id: 'w-2', user_id: 'user-b', position: 2 },
+      ],
+      wallets: { 'user-a': '1.00', 'user-b': '0.50' },
+      match: baseMatch,
+    });
+
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', {
+      feePriceSar: 37,
+    });
+
+    expect(result.promotion).toBeNull();
+    expect(result.evicted.map((e) => e.userId).sort()).toEqual(['user-a', 'user-b']);
+    expect(insertedPlayers.filter((v) => 'match_id' in v)).toHaveLength(0);
+  });
+
+  it('notifyWaitlistRemoval pushes the waitlist_removed key with the match title (P2-347)', async () => {
+    const notifications = { sendPushToUsers: jest.fn(async () => 1) };
+    const activities = { record: jest.fn(async () => undefined) };
+    const svc = new MatchWaitlistService(
+      {} as never,
+      activities as never,
+      { broadcastRosterUpdate: () => {} } as never,
+      notifications as never,
+    );
+
+    await svc.notifyWaitlistRemoval('user-poor', 'match-1', 'Tuesday Padel');
+
+    expect(activities.record).toHaveBeenCalledWith(
+      expect.objectContaining({ verb: 'waitlist_removed', matchId: 'match-1' }),
+    );
+    expect(notifications.sendPushToUsers).toHaveBeenCalledWith(['user-poor'], {
+      key: 'waitlist_removed',
+      vars: { title: 'Tuesday Padel' },
+      data: { type: 'waitlist-removed', matchId: 'match-1' },
+      category: 'match',
+    });
   });
 
   it('moneyToNumber sanity: the balance gate uses exact numeric parsing', () => {
