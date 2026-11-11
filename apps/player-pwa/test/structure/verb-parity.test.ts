@@ -20,21 +20,38 @@ import { join } from 'node:path';
 
 const REPO = join(__dirname, '../../../..');
 
-const ACTIVITIES_SRC = readFileSync(
-  join(REPO, 'apps/api/src/modules/activities/activities.service.ts'),
-  'utf-8',
+/** Strip `//` line comments so prose that quotes a verb literal can never
+ * phantom-match (or false-green) the tripwire — PR-Agent r2, PR #240. */
+function stripComments(src: string): string {
+  return src
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))
+    .join('\n');
+}
+
+const ACTIVITIES_SRC = stripComments(
+  readFileSync(
+    join(REPO, 'apps/api/src/modules/activities/activities.service.ts'),
+    'utf-8',
+  ),
 );
-const USE_FEED_SRC = readFileSync(
-  join(__dirname, '../../src/hooks/useFeed.ts'),
-  'utf-8',
+const USE_FEED_SRC = stripComments(
+  readFileSync(
+    join(__dirname, '../../src/hooks/useFeed.ts'),
+    'utf-8',
+  ),
 );
-const ACTIVITY_CARD_SRC = readFileSync(
-  join(__dirname, '../../src/components/feed/ActivityCard.tsx'),
-  'utf-8',
+const ACTIVITY_CARD_SRC = stripComments(
+  readFileSync(
+    join(__dirname, '../../src/components/feed/ActivityCard.tsx'),
+    'utf-8',
+  ),
 );
-const NOTIF_SHEET_SRC = readFileSync(
-  join(__dirname, '../../src/components/layout/NotificationSheet.tsx'),
-  'utf-8',
+const NOTIF_SHEET_SRC = stripComments(
+  readFileSync(
+    join(__dirname, '../../src/components/layout/NotificationSheet.tsx'),
+    'utf-8',
+  ),
 );
 const EN = JSON.parse(
   readFileSync(join(__dirname, '../../src/messages/en.json'), 'utf-8'),
