@@ -26,16 +26,20 @@ policy (owner-gated P2-329), refund-window policy change (P2-332 owner-gated), w
 
 - `WaitlistPromotion` gains `chargedSar: number | null` (null = free match promotion or
   uncharged path — never rendered as 0.00 to avoid implying a charge).
-- `promoteNextInTx(tx, matchId, opts?: { feePriceSar?: number; requireCharge?: boolean })`:
-  - paid backfill path (caller passes `feePriceSar` + `requireCharge`): read head's balance
-    in-tx FIRST; insufficient → `continue` (delete+resequence+next head) instead of throw.
-    Balance pre-read is advisory-only; `chargeMatchFeeTx`'s negative-balance guard stays the
-    authoritative check (concurrent debit can still land between read and charge → aborts tx
-    → caller retry; documented + spec-pinned).
+- `promoteNextInTx(tx, matchId, opts?: { feePriceSar?: number })`:
+  - paid backfill path (caller passes `feePriceSar`): read head's balance in-tx FIRST;
+    insufficient → `continue` (delete+resequence+next head) instead of throw. There is NO
+    separate `requireCharge` flag — a caller passing `feePriceSar` always demands payment
+    (skip underfunded heads), and omitting it is the free-match path. Balance pre-read is
+    advisory-only; `chargeMatchFeeTx`'s negative-balance guard stays the authoritative check
+    (concurrent debit can still land between read and charge → aborts tx → caller retry;
+    documented + spec-pinned). IMPLEMENTATION NOTE (run #200, PR-Agent r1 catch): the
+    initial draft of this doc declared a `requireCharge` option that the final design
+    folded away — this paragraph is the corrected contract.
   - The paid path MUST only run when the freeing episode was paid; callers decide.
-- `matches.service.ts` `leaveMatch`: ≥4h path passes `{ feePriceSar: feeSar,
-  requireCharge: true }`; host-kick path passes `{ feePriceSar: <removed player's fee>,
-  requireCharge: true }`; free-match/legacy path unchanged.
+- `matches.service.ts` `leaveMatch`: ≥4h path passes `{ feePriceSar: feeSar }`;
+  host-kick path passes `{ feePriceSar: <removed player's fee> }`; free-match/legacy path
+  unchanged (no opts).
 - `notifyPromotion` sends `amount` push var when `chargedSar != null`; push-text
   `waitlist_promoted` gains charged copy (EN+AR) using the existing `PushVars.amount`
   Intl pipeline (refund_credited precedent).

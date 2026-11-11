@@ -47,6 +47,21 @@ describe('adaptTransaction — match-title enrichment (run #200, P2-333)', () =>
     expect(t.title).toBe('Refund — Tuesday Padel @ KSU');
   });
 
+  it('REFUND row with match_title under AR locale localizes the prefix (no mixed-language row)', () => {
+    // PR-Agent r1 (run #200): the prefix must not render English inside an
+    // Arabic wallet list.
+    const t = adaptTransaction(
+      txRow({
+        type: 'CREDIT',
+        reference_type: 'REFUND',
+        match_title: 'باذل الثلاثاء',
+      }),
+      'ar',
+    );
+    expect(t.title).toBe('استرداد — باذل الثلاثاء');
+    expect(t.title).not.toContain('Refund');
+  });
+
   it('REFUND without match_title stays plain "Refund"', () => {
     const t = adaptTransaction(txRow({ type: 'CREDIT', reference_type: 'REFUND' }));
     expect(t.title).toBe('Refund');
