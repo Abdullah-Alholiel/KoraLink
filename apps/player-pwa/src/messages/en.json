@@ -977,6 +977,9 @@
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
     "playerRemoved": "{name} removed you from a match",
+    "waitlistPromoted": "You're in! A spot opened up in {title}",
+    "waitlistRemoved": "You left the waitlist for {title} — your wallet couldn't cover the join fee. Top up and join again to claim a spot.",
+    "matchRescheduled": "{name} rescheduled a match you're in",
     "payoutPaid": "KoraLink sent your venue payout"
   },
   "payment": {
@@ -1159,6 +1162,9 @@
     "matchAutoCancelled": "Match was cancelled — the minimum number of players wasn't reached",
     "reportResolved": "Your report was reviewed by our moderation team",
     "playerRemoved": "{name} removed you from a match",
+    "waitlistPromoted": "You're in! A spot opened up in {title}",
+    "waitlistRemoved": "You left the waitlist for {title} — your wallet couldn't cover the join fee. Top up and join again to claim a spot.",
+    "matchRescheduled": "{name} rescheduled a match you're in",
     "payoutPaid": "Your venue payout has been sent"
   },
   "attendance": {

@@ -249,6 +249,11 @@ self.addEventListener('push', (event) => {
   // type fell through to '/' and the tap lost all context.
   else if (data.type === 'waitlist-promoted' && data.matchId)
     url = `/${locale}/match/${data.matchId}`;
+  // Run #201 (P2-348): waitlist eviction (paid-backfill skip, PR #239) sends
+  // type 'waitlist-removed' — same deep-link target as the promotion: the tap
+  // must land on the match, not the home feed.
+  else if (data.type === 'waitlist-removed' && data.matchId)
+    url = `/${locale}/match/${data.matchId}`;
   // Run #70 (Reviewer B): the starting-soon reminder stopped borrowing the
   // 'match-chat' type (tag collision renotify-replaced unread chat pushes);
   // same deep-link target as before.

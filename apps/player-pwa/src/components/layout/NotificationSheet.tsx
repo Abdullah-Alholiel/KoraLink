@@ -20,6 +20,7 @@ import {
   PauseCircle,
   Ban,
   Flag,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 import { useNotificationsFeed, useMarkNotificationsRead, useUnreadNotificationCount } from '@/hooks/useNotificationsFeed';
@@ -52,6 +53,10 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   player_removed: UserMinus,
   match_auto_cancelled: XCircle,
   report_resolved: Flag,
+  // ── Waitlist lifecycle + reschedule (run #201: labels were missing → blank rows) ──
+  waitlist_promoted: Trophy,
+  waitlist_removed: XCircle,
+  match_rescheduled: CalendarClock,
   payout_paid: Wallet,
 };
 
@@ -73,6 +78,10 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   player_removed: 'notifications.playerRemoved',
   match_auto_cancelled: 'notifications.matchAutoCancelled',
   report_resolved: 'notifications.reportResolved',
+  // ── Waitlist lifecycle + reschedule (run #201) ──
+  waitlist_promoted: 'notifications.waitlistPromoted',
+  waitlist_removed: 'notifications.waitlistRemoved',
+  match_rescheduled: 'notifications.matchRescheduled',
   payout_paid: 'notifications.payoutPaid',
 };
 

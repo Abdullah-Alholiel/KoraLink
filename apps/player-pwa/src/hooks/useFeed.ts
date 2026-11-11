@@ -23,6 +23,10 @@ export type ActivityVerb =
   | 'player_removed'
   | 'match_auto_cancelled'
   | 'report_resolved'
+  // ── Waitlist lifecycle (P1-17 promotion; run #201: removal + reschedule labels) ──
+  | 'waitlist_promoted'
+  | 'waitlist_removed'
+  | 'match_rescheduled'
   // ── Partner money flows (P1-67, run #141) ──
   | 'payout_paid';
 

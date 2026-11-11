@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Plus, Users, UserPlus, UserMinus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, Flag, type LucideIcon } from 'lucide-react';
+import { Plus, Users, UserPlus, UserMinus, MessageSquare, Trophy, ShieldCheck, ShieldAlert, Wallet, XCircle, PauseCircle, Ban, AlertTriangle, Flag, CalendarClock, type LucideIcon } from 'lucide-react';
 import type { FeedItem, ActivityVerb } from '@/hooks/useFeed';
 import { formatRelativeTime } from '@/lib/format';
 
@@ -29,6 +29,11 @@ const VERB_ICON: Record<ActivityVerb, LucideIcon> = {
   player_removed: UserMinus,
   match_auto_cancelled: XCircle,
   report_resolved: Flag,
+  // ── Waitlist lifecycle + reschedule (run #201: labels were missing → blank rows) ──
+  waitlist_promoted: Trophy,
+  waitlist_removed: XCircle,
+  match_rescheduled: CalendarClock,
+  // ── Partner money flows (P1-67, run #141) ──
   payout_paid: Wallet,
 };
 
@@ -50,6 +55,10 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
   player_removed: 'feed.playerRemoved',
   match_auto_cancelled: 'feed.matchAutoCancelled',
   report_resolved: 'feed.reportResolved',
+  // ── Waitlist lifecycle + reschedule (run #201) ──
+  waitlist_promoted: 'feed.waitlistPromoted',
+  waitlist_removed: 'feed.waitlistRemoved',
+  match_rescheduled: 'feed.matchRescheduled',
   payout_paid: 'feed.payoutPaid',
 };
 
