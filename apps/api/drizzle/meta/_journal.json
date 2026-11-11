@@ -428,6 +428,13 @@
       "breakpoints": true,
       "when": 1793115756732,
       "tag": "0059_settlement_void"
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793115756733,
+      "tag": "0060_waitlist_removed_verb",
+      "breakpoints": true
     }
   ]
 }

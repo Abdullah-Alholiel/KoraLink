@@ -117,6 +117,8 @@ export const activityVerbEnum = pgEnum('ActivityVerb', [
   'match_rescheduled',
   // ── Waitlist (P1-17) ──
   'waitlist_promoted',
+  // Run #200 (P2-347): paid-backfill skip tells the evicted head they're out.
+  'waitlist_removed',
   // ── Admin ownership transfer (admin-ux-overhaul slice 4) ──
   'venue_ownership_added',
   'venue_ownership_removed',

@@ -26,6 +26,24 @@ export interface WaitlistPromotion {
   chargedSar: number | null;
 }
 
+/** Run #200 (P2-347): a queue head evicted by the paid-backfill skip. */
+export interface WaitlistEviction {
+  userId: string;
+  /** Resolved in-tx so the caller can notify post-commit without a re-read. */
+  matchTitle: string;
+}
+
+export interface WaitlistPromotionResult {
+  promotion: WaitlistPromotion | null;
+  /**
+   * Every head removed by the underfunded skip during THIS call (P2-347).
+   * Callers MUST notify each evicted player post-commit via
+   * notifyWaitlistRemoval — a silent eviction reads as a vanished queue
+   * position (PR-Agent r2, PR #238).
+   */
+  evicted: WaitlistEviction[];
+}
+
 /**
  * FIFO waitlist for full matches (board P1-17).
  *
@@ -231,7 +249,10 @@ export class MatchWaitlistService {
     tx: Tx,
     matchId: string,
     opts?: { feePriceSar?: number },
-  ): Promise<WaitlistPromotion | null> {
+  ): Promise<WaitlistPromotionResult> {
+    // Run #200 (P2-347): collect underfunded-head evictions so the caller can
+    // notify them post-commit — the skip must never be silent again.
+    const evicted: WaitlistEviction[] = [];
     for (;;) {
       const [head] = await tx
         .select({
@@ -244,7 +265,7 @@ export class MatchWaitlistService {
         .orderBy(asc(schema.match_waitlist.position))
         .limit(1)
         .for('update');
-      if (!head) return null;
+      if (!head) return { promotion: null, evicted };
 
       // Spot actually free? (defensive: the caller just freed one, but a
       // concurrent path in the same tx may have taken it.)
@@ -257,7 +278,9 @@ export class MatchWaitlistService {
         .from(schema.matches)
         .where(eq(schema.matches.id, matchId))
         .limit(1);
-      if (!match || match.roster >= match.max_players) return null;
+      if (!match || match.roster >= match.max_players) {
+        return { promotion: null, evicted };
+      }
 
       const [alreadyIn] = await tx
         .select({ id: schema.match_players.id })
@@ -297,6 +320,9 @@ export class MatchWaitlistService {
         ) {
           await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));
           await this.resequenceInTx(tx, matchId);
+          // P2-347: record the eviction (title resolved here in-tx; the
+          // caller notifies post-commit). Never silent.
+          evicted.push({ userId: head.user_id, matchTitle: match.title });
           continue;
         }
       }
@@ -362,10 +388,13 @@ export class MatchWaitlistService {
         .where(sql`${schema.matches.id} = ${matchId} AND ${schema.matches.status} = 'Open'`);
 
       return {
-        userId: head.user_id,
-        previousPosition: head.position,
-        matchTitle: match.title,
-        chargedSar,
+        promotion: {
+          userId: head.user_id,
+          previousPosition: head.position,
+          matchTitle: match.title,
+          chargedSar,
+        },
+        evicted,
       };
     }
   }
@@ -418,6 +447,53 @@ export class MatchWaitlistService {
     } catch (err) {
       this.logger.error(
         `waitlist promotion push failed (match ${matchId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Run #200 (P2-347): a paid backfill SKIPPED this head (wallet below the
+   * fee) and removed them from the queue — tell them, or the eviction is
+   * silent and the player wonders why their queue position vanished
+   * (PR-Agent r2 IMPORTANT on PR #238). Copy names the WHY (fee > balance)
+   * and the WHAT-NEXT (top up and join again) per the error-message standard.
+   *
+   * Fire-and-forget AFTER the caller's tx commits — the caller collects the
+   * evicted userIds during the loop and invokes this post-commit (a failure
+   * here must never roll back or fail the freeing operation, same contract
+   * as notifyPromotion).
+   */
+  async notifyWaitlistRemoval(
+    userId: string,
+    matchId: string,
+    matchTitle: string,
+  ): Promise<void> {
+    // Leg 1 — bell (log-only failure).
+    try {
+      await this.activities.record({
+        actorId: userId,
+        verb: 'waitlist_removed',
+        matchId,
+        subjectId: userId,
+        recipients: [userId],
+        excludeActor: false, // the evicted player IS the recipient
+      });
+    } catch (err) {
+      this.logger.error(
+        `waitlist removal activity fan-out failed (match ${matchId}): ${(err as Error).message}`,
+      );
+    }
+    // Leg 2 — the web push (category 'match' so mutes are honored).
+    try {
+      await this.notifications.sendPushToUsers([userId], {
+        key: 'waitlist_removed',
+        vars: { title: matchTitle },
+        data: { type: 'waitlist-removed', matchId },
+        category: 'match',
+      });
+    } catch (err) {
+      this.logger.error(
+        `waitlist removal push failed (match ${matchId}): ${(err as Error).message}`,
       );
     }
   }

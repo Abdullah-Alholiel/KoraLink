@@ -19,6 +19,7 @@ const ALL_KEYS: PushKey[] = [
   'report_dismissed',
   'refund_credited',
   'payout_released',
+  'waitlist_removed',
 ];
 
 describe('normalizePushLocale (P2-8)', () => {

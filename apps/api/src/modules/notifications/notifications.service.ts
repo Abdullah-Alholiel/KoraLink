@@ -38,6 +38,7 @@ const CATEGORY_BY_KEY: Partial<Record<PushKey, NotificationCategory>> = {
   report_dismissed: 'system',
   waitlist_promoted: 'match',
   waitlist_closed: 'match',
+  waitlist_removed: 'match',
 };
 
 type DB = PostgresJsDatabase<typeof schema>;
