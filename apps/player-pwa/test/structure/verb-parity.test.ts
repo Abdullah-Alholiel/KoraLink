@@ -69,11 +69,16 @@ describe('verb parity: API bell gate ↔ PWA union ↔ labels ↔ i18n (P2-348)'
   });
 
   it('every bell verb has VERB_LABEL + VERB_ICON entries in both surfaces', () => {
-    for (const src of [ACTIVITY_CARD_SRC, NOTIF_SHEET_SRC]) {
+    // Named surfaces so a failure says WHICH map is missing the entry
+    // (PR-Agent r1 on PR #240: an empty-string context helps nobody).
+    for (const [surface, src] of [
+      ['ActivityCard', ACTIVITY_CARD_SRC],
+      ['NotificationSheet', NOTIF_SHEET_SRC],
+    ] as const) {
       for (const verb of BELL_VERBS) {
         expect(
           src.includes(`${verb}:`),
-          `verb map is missing '${verb}' (file: ${src.slice(0, 0)})`,
+          `${surface} verb map is missing '${verb}' — bell rows for it render blank`,
         ).toBe(true);
       }
     }
