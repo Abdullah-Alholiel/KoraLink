@@ -127,6 +127,7 @@ describe('worker push route map (run #70) — cross-layer type contract', () => 
       'match-rescheduled',
       'report-resolved',
       'waitlist-promoted', // P2-95, run #70
+      'waitlist-removed', // P2-348, run #201: eviction push (PR #239) deep-links to the match
       'match_starting_soon', // run #70: renamed off 'match-chat' (tag collision)
       'match_starting_24h', // P2-100, run #74: day-ahead reminder leg
       'players_needed', // run #70: renamed off 'match-chat' (tag collision)

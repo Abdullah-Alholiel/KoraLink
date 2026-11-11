@@ -71,6 +71,9 @@ const DIRECTED_VERBS = [
   'report_resolved',
   'match_rescheduled',
   'waitlist_promoted',
+  // Run #201 (P2-348): the eviction bell row (PR #239) was written but never
+  // returned — DIRECTED_VERBS gates both bell queries + ranking.
+  'waitlist_removed',
   'payout_paid',
 ] as const;
 
