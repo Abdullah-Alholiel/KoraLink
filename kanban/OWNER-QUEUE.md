@@ -2,9 +2,9 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover)
-- Commits ahead of main: **423** (last promote 2026-09-25; **0059_settlement_void rides the next promote — applied to staging, NOT prod (prod Neon 60/60 rows re-verified via Render env, run #196)**; migrate-first runbook mandatory before any merge)
+- Commits ahead of main: **428** (last promote 2026-09-25; **0059 + 0060 ride the next promote — applied to staging, NOT prod (prod Neon 60/60 rows, run #196 verify)**; migrate-first runbook mandatory before any merge)
 - Services: API/PWA/Admin UP (API serving run #199 build `17439f4` — earnings statusBreakdown + reviews rating/sort live, E2E-verified; admin serving run #199 build `17439f4` — settlement-status chips + cadence hint + reviews filters, chunks verified)
-- Factory loop status: **HEALTHY 2026-11-10** — run #199 shipped PR #236 (P2-337 earnings status breakdown + live cadence hint) + PR #237 (P2-336 re-scoped: reviews rating filter + whitelisted sort). #198 claims all confirmed. Strix next window Dec 1–3. Swap 100% full (0 oom — monitor only).
+- Factory loop status: **HEALTHY 2026-11-11** — run #200 shipped PRs #238/#239 (waitlist money loop + never-silent eviction, LIVE-verified run #201). Run #201 in flight: PR #240 (P2-348 waitlist bell surface — routed removal push, visible bell rows, verb labels EN+AR + tripwire). Strix next window Dec 1–3. Swap full (0 oom — monitor only).
 
 ## Active owner actions
 
@@ -53,12 +53,6 @@
 - **Your one click:** GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2. Then `/api/v1/health` 200.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
 - **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
-
-### 3. P2-285 — settlements void/cancel policy
-- **Owner decision (Life OS 2026-11-07, D-20261106-03):** Void pending only, with audit trail
-- **What:** Should duplicate/erroneous settlement rows be voidable? If yes: void-while-pending-only? Audit trail? Never-after-paid?
-- **Close line:** "P2-285: void pending settlements only with audit trail" OR "P2-285: never void, fix by adjustment row" OR "P2-285: defer".
-- **Deadline:** Before building any settlement cancellation feature.
 
 ### 4. P0-2 sandbox → live Moyasar
 - **Owner decision (Life OS 2026-11-07, D-20261106-04):** Flip WALLET_TOPUP_ENABLED and test
