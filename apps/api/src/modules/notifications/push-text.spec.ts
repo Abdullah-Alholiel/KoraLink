@@ -125,4 +125,33 @@ describe('renderPushText per-locale content (P2-8)', () => {
     // Missing amount = the passthrough raw string (P1-67 contract), ASCII here.
     expect(renderPushText('payout_released', {}, 'ar').body).toContain('0.00');
   });
+
+  it('waitlist_promoted: charged variant names the exact debit (run #200, P2-333)', () => {
+    const en = renderPushText(
+      'waitlist_promoted',
+      { title: 'Tuesday Padel', amount: '37' },
+      'en',
+    );
+    expect(en.body).toContain('SAR\u00A037.00');
+    expect(en.body).toContain('charged to your wallet');
+
+    const ar = renderPushText(
+      'waitlist_promoted',
+      { title: 'Tuesday Padel', amount: '37' },
+      'ar',
+    );
+    expect(ar.body).toContain('٣٧٫٠٠'); // Arabic-Indic digits
+    expect(ar.body).toContain('ر.س');
+    expect(ar.body).toContain('تم خصم');
+  });
+
+  it('waitlist_promoted: free promotion keeps the plain invite copy (no charge line)', () => {
+    const en = renderPushText('waitlist_promoted', { title: 'Tuesday Padel' }, 'en');
+    expect(en.body).not.toContain('charged');
+    expect(en.body).toContain('moved off the waitlist');
+
+    const ar = renderPushText('waitlist_promoted', { title: 'Tuesday Padel' }, 'ar');
+    expect(ar.body).not.toContain('تم خصم');
+    expect(ar.body).toContain('من قائمة الانتظار');
+  });
 });

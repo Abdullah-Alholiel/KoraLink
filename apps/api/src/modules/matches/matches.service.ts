@@ -1968,7 +1968,12 @@ export class MatchesService {
           );
           leaveRefundOutcome = 'refunded';
           leaveRefundSar = feeSar.toFixed(2);
-          promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+          // Run #200 (P2-333): the ≥4h refund path also frees a PAID seat —
+          // the queue head must be charged the same fee (free-seat leak
+          // closed; the inside-window path below already did this).
+          promoted = await this.waitlist.promoteNextInTx(tx, matchId, {
+            feePriceSar: feeSar,
+          });
         } else {
           // Inside the window: refund ONLY on a paid backfill.
           const backfill = await this.waitlist.promoteNextInTx(tx, matchId, {
@@ -4086,7 +4091,14 @@ export class MatchesService {
       }
 
       // P1-17 waitlist: freed spot goes to the queue head atomically.
-      promoted = await this.waitlist.promoteNextInTx(tx, matchId);
+      // Run #200 (P2-333): the removed player was JUST refunded their fee —
+      // the seat is still a PAID seat, so the promoted backfill must be
+      // charged the same fee (a free seat here was a money-invariant leak:
+      // paid roster spot with no payment snapshot). Underfunded heads are
+      // skipped by the service (never wedge the kick).
+      promoted = await this.waitlist.promoteNextInTx(tx, matchId, {
+        feePriceSar: removedFeeSar > 0 ? removedFeeSar : undefined,
+      });
     });
 
     // P1-17: bell + WS for the promoted player (after commit).

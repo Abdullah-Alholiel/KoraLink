@@ -211,8 +211,18 @@ export class WalletService {
     // deterministic tiebreaker so same-timestamp rows can never straddle a
     // page boundary between fetches. The window count rides the page query,
     // so total/hasMore still describe the exact filtered set.
+    // Run #200 (P2-333): enrich match-referencing rows with the match title —
+    // the PWA wallet shows "Match Payment #a3b2c1d4" today, which reads as
+    // noise. Scalar subquery on the matches PK (reference_id IS the match id
+    // for MATCH_FEE / match REFUND rows; TOPUP/payout rows resolve null) —
+    // same shape as P2-312's your_waitlist_position: no JOIN/GROUP BY, query
+    // shape unchanged, optional field tolerant of older clients.
     const rows = await this.db
-      .select({ ...getTableColumns(transactions), total: sql<number>`COUNT(*) OVER()::int` })
+      .select({
+        ...getTableColumns(transactions),
+        match_title: sql<string | null>`(SELECT m.title FROM matches m WHERE m.id = ${transactions.reference_id} AND ${transactions.reference_type} IN ('MATCH_FEE', 'REFUND'))`,
+        total: sql<number>`COUNT(*) OVER()::int`,
+      })
       .from(transactions)
       .where(predicate)
       .orderBy(desc(transactions.created_at), asc(transactions.id))
