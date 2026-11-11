@@ -128,5 +128,10 @@
 - **Owner decision (Life OS 2026-11-07, D-20261106-15):** Generate and set VAPID keys
 - **Owner decision (Life OS 2026-11-08, D-20261106-11):** Confirmed: independent — Review and assess situation fully and re assess recomended decision depending on my app !
 
+### NEW-7. P2-345 — waitlist cap / anti-flood product shape (NEW run #200)
+- **What:** Waitlist queue on a popular paid match is unbounded — push fan-out and notification noise grow with queue length. Options: hard cap N (suggest 20), auto-close queue at N, or accept as-is.
+- **Close line:** "P2-345: cap at 20" OR "P2-345: auto-close at N" OR "P2-345: accept unlimited".
+- **Deadline:** Not urgent; matters most for popular venue-flagship matches.
+
 ## Closed since last run
 - **P1-52 (Neon quota):** RESOLVED 2026-11-03 — direct prod Neon connect OK, no quota error.
