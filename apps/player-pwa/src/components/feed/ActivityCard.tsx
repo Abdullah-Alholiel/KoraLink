@@ -65,7 +65,17 @@ const VERB_LABEL: Record<ActivityVerb, string> = {
 export default function ActivityCard({ item, locale }: ActivityCardProps) {
   const t = useTranslations();
   const Icon = VERB_ICON[item.verb] ?? Users;
-  const label = t(VERB_LABEL[item.verb], { name: item.actor.name });
+  // `title` must ride EVERY label call: the waitlist/reschedule verbs
+  // (run #201) interpolate {title} — PR-Agent r3 on PR #240 caught the
+  // feed card passing only {name}, which would render the placeholder
+  // unfilled (NotificationSheet already passes both).
+  const label = t(VERB_LABEL[item.verb], {
+    // System actors (purge sweep, moderation) can carry a null actor —
+    // fall back to the app name instead of crashing the row (same guard
+    // as NotificationSheet, Reviewer A minor run #40).
+    name: item.actor?.name ?? 'KoraLink',
+    title: item.match?.title ?? '',
+  });
 
   const href = item.match
     ? `/${locale}/match/${item.match.id}`
