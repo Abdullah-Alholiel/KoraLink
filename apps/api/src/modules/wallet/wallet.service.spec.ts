@@ -414,6 +414,46 @@ describe('WalletService getHistory — date range (P2-119)', () => {
     expect(res.total).toBe(5);
     expect(countCalls).toBe(0); // fallback never fires on a normal page
   });
+
+  // ── Run #200 (P2-333): match-title enrichment on the SAME page query ──
+
+  it('match-title enrichment rides the page query (scalar subquery, no JOIN/GROUP BY)', async () => {
+    // Capture the projection the service builds — the enrichment must appear
+    // as a scalar subquery inside the SELECT list, keeping the query shape
+    // the P2-119/P2-241 specs pin (no second query, no JOIN chain).
+    let capturedProjection: Record<string, unknown> | undefined;
+    const rows = [{ id: 'tx-1', match_title: 'Tuesday Padel' }];
+    const db = {
+      select: (projection?: Record<string, unknown>) => {
+        capturedProjection = projection;
+        return {
+          from: (_table: unknown) => ({
+            where: (cond: unknown) => {
+              const q = dialect.sqlToQuery(cond as never);
+              expect(q.sql).toContain('"user_id" = $1');
+              return {
+                orderBy: () => ({
+                  offset: () => ({
+                    limit: async () => rows.map((r) => ({ ...r, total: 1 })),
+                  }),
+                }),
+              };
+            },
+          }),
+        };
+      },
+    };
+    const svc = new WalletService(db as never);
+    const res = await svc.getHistory('user-1', 1, 20);
+    expect(res.transactions[0].match_title).toBe('Tuesday Padel');
+    const proj = capturedProjection as Record<string, unknown> | undefined;
+    expect(proj).toBeDefined();
+    const enrichment = dialect.sqlToQuery(proj!.match_title as never);
+    expect(enrichment.sql).toContain('SELECT m.title FROM matches m');
+    expect(enrichment.sql).toContain("m.id =");
+    // Only match-referencing types get a title; TOPUP/PRIZE resolve NULL.
+    expect(enrichment.sql).toContain("IN ('MATCH_FEE', 'REFUND')");
+  });
 });
 
 // users import retained for the stub's table-identity assertions in future specs.

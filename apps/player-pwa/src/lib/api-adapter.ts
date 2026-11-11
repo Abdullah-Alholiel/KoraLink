@@ -148,6 +148,9 @@ export interface TransactionApi {
   idempotency_key: string;
   status: 'Pending' | 'Completed' | 'Failed' | 'Reversed';
   created_at: string;
+  /** Run #200 (P2-333): match title for MATCH_FEE / match REFUND rows
+   *  (server-side enrichment). Optional — older responses tolerate. */
+  match_title?: string | null;
 }
 
 /** Shape returned by GET /wallet/balance */
@@ -467,7 +470,7 @@ export function adaptTransaction(
   const status = mapTransactionStatus(row.status);
 
   // Build human-readable title and description
-  const title = buildTransactionTitle(row.reference_type, row.reference_id);
+  const title = buildTransactionTitle(row.reference_type, row.reference_id, row.match_title, locale);
   const description = buildTransactionDescription(status, row.created_at, locale);
 
   return {
@@ -495,9 +498,27 @@ export function adaptWalletBalance(raw: WalletBalanceApi): number {
 
 // ─── Transaction Title / Description builders ─────────────────────────────
 
-function buildTransactionTitle(ref: string, refId: string | null): string {
+function buildTransactionTitle(
+  ref: string,
+  refId: string | null,
+  matchTitle?: string | null,
+  locale: AppLocale = 'en',
+): string {
+  // Run #200 (P2-333): prefer the server-enriched match title — the raw
+  // reference-id slice ("Match Payment #a3b2c1d4") reads as noise in a
+  // wallet list. Fallback strings unchanged for responses without the field.
+  // PR-Agent r1 (run #200): the refund prefix is LOCALIZED — an Arabic user
+  // must not get a mixed "Refund — <arabic title>" row (the rest of the
+  // title surface stays English data per the existing legacy strings;
+  // full key-ification is P2-342's scope).
+  if (ref === 'REFUND' && matchTitle) {
+    return locale === 'ar' ? `استرداد — ${matchTitle}` : `Refund — ${matchTitle}`;
+  }
+  if (ref === 'MATCH_FEE') {
+    if (matchTitle) return matchTitle;
+    return refId ? `Match Payment #${refId.slice(0, 8)}` : 'Match Payment';
+  }
   switch (ref) {
-    case 'MATCH_FEE': return refId ? `Match Payment #${refId.slice(0, 8)}` : 'Match Payment';
     case 'TOPUP': return 'Wallet Top Up';
     case 'REFUND': return 'Refund';
     case 'PRIZE': return 'Prize / Store Credit';

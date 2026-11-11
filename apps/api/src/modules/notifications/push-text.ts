@@ -246,12 +246,16 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
     en: {
       title: '🎉 You’re in!',
       body: (v) =>
-        `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game.`,
+        v.amount != null
+          ? `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game. ${payoutAmount(v.amount, 'en-GB')} was charged to your wallet.`
+          : `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game.`,
     },
     ar: {
       title: '🎉 مبروك، أنت داخل!',
       body: (v) =>
-        `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
+        v.amount != null
+          ? `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة. تم خصم ${payoutAmount(v.amount, 'ar-SA')} من محفظتك.`
+          : `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
     },
   },
   waitlist_closed: {
