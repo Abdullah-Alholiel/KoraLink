@@ -7,6 +7,11 @@ import { creditWalletTx } from './match-fees';
  * with no any waiting players, if a player cancels within the last 4 hour
  * period and there are people waiting, player can get refunded fully."
  *
+ * Boundary moved 4h → 12h by the owner's cancel-window decision
+ * (kanban/DECISIONS.md 2026-11-11, D-20261110-06: "Full refund until 12h
+ * before slot, then forfeit, platform-wide"). The inside-window backfill
+ * exception above is the owner's own verbatim rule and stays by default.
+ *
  * These specs pin the DECISION TABLE (the pure function that turns
  * hours-to-kickoff × waitlist-depth × fee into a money outcome). The
  * transaction wiring around it is covered by the join-payment specs and the
@@ -36,17 +41,20 @@ function decideLeaveRefund(args: {
   return { outcome: 'forfeited', refundTo: 'host' };
 }
 
-describe('Slice 4 — leave refund decision table (4-hour rule)', () => {
-  it('window constant is 4 hours', () => {
-    expect(REFUND_WINDOW_HOURS).toBe(4);
+describe('Slice 4 — leave refund decision table (12-hour rule, D-20261110-06)', () => {
+  it('window constant is 12 hours (owner decision 2026-11-11)', () => {
+    expect(REFUND_WINDOW_HOURS).toBe(12);
   });
 
-  it('refund 100% when leaving at/after the 4h boundary (no waitlist needed)', () => {
-    expect(decideLeaveRefund({ feeSar: 10, hoursToKickoff: 5, backfillSeated: false }))
+  it('refund 100% when leaving at/after the 12h boundary (no waitlist needed)', () => {
+    expect(decideLeaveRefund({ feeSar: 10, hoursToKickoff: 13, backfillSeated: false }))
       .toEqual({ outcome: 'refunded', refundTo: 'leaver' });
-    // Boundary pinned: EXACTLY 4h counts as outside the window.
-    expect(decideLeaveRefund({ feeSar: 10, hoursToKickoff: 4, backfillSeated: false }))
+    // Boundary pinned: EXACTLY 12h counts as outside the window.
+    expect(decideLeaveRefund({ feeSar: 10, hoursToKickoff: 12, backfillSeated: false }))
       .toEqual({ outcome: 'refunded', refundTo: 'leaver' });
+    // Just inside the new window (11.9h): backfill decides, not the clock.
+    expect(decideLeaveRefund({ feeSar: 10, hoursToKickoff: 11.9, backfillSeated: false }))
+      .toEqual({ outcome: 'forfeited', refundTo: 'host' });
   });
 
   it('inside the window: refund only when a waitlisted player backfills (paid)', () => {

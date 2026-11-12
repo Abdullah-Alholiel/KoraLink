@@ -1954,10 +1954,10 @@ export class MatchesService {
 
       // 4. Slice 4 — CONDITIONAL REFUND ENGINE + the EXACTLY-ONE queue
       //    promotion for this freeing path (S4 regression: two calls seat
-      //    past capacity). Abdullah rule:
-      //    ≥4h to kickoff          → 100% refund, always.
-      //    <4h AND waitlist exists → 100% refund (queue head backfills, paid).
-      //    <4h AND no backfill     → fee forfeited to the host (ToS-stated).
+      //    past capacity). Owner rule (DECISIONS.md 2026-11-11, D-20261110-06):
+      //    ≥12h to kickoff         → 100% refund, always.
+      //    <12h AND waitlist exists → 100% refund (queue head backfills, paid).
+      //    <12h AND no backfill     → fee forfeited to the host (ToS-stated).
       //    Per-episode ledger keys (run #20 lesson). All inside THIS tx.
       const feeSar = membership.fee_paid_sar ? parseFloat(membership.fee_paid_sar) : 0;
       if (feeSar > 0 && match) {
@@ -1984,7 +1984,10 @@ export class MatchesService {
           // Defensive unwrap: harness stubs may return null (same
           // partial-row-mock contract as waitlist ?? []).
           promoted = result?.promotion ?? null;
-          evicted = result?.evicted ?? evicted;
+          // Concat (matches the inside-window/free branches below): never
+          // let a future second promote call after this one silently drop
+          // earlier evictions (run #202 Reviewer-A consistency note).
+          evicted = evicted.concat(result?.evicted ?? []);
         } else {
           // Inside the window: refund ONLY on a paid backfill.
           const backfillResult = await this.waitlist.promoteNextInTx(tx, matchId, {
@@ -4059,6 +4062,14 @@ export class MatchesService {
 
       if (match.host_id !== hostId) {
         throw new ForbiddenException('Only the match host can remove players.');
+      }
+
+      if (match.status === 'Cancelled') {
+        // Run #202 (PR-Agent): a cancelled match can never start — the
+        // generic "before the match starts" copy misleads the host. Say why.
+        throw new BadRequestException(
+          'This match was cancelled — its roster can no longer be changed.',
+        );
       }
 
       if (match.status === 'InProgress' || match.status === 'Completed') {
