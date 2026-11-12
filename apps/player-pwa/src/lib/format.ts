@@ -88,6 +88,19 @@ export function formatAmount(value: number, locale: AppLocale): string {
 }
 
 /**
+ * Rating in the active locale (P2-353): "4.5" (en) / "٤٫٥" (ar), one fraction
+ * digit — replaces VenueReviewsSection's bare `toFixed(1)` that leaked Latin
+ * digits into AR. Null/undefined/non-finite return '' (caller keeps its '—').
+ */
+export function formatRating(value: number, locale: AppLocale): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '';
+  return numberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+/**
  * Count in the active locale (run #112, Reviewer-B design-lens finding):
  * "3" (en) / "٣" (ar, Arabic-Indic digits). Route ALL bare count renders
  * (venues found, pitch counts, players joined) through this — a bare `{n}`

@@ -34,7 +34,7 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
 import { shareOrCopy } from '@/lib/share';
-import { formatClockTime, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
+import { formatClockTime, formatCount, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
 import {
     matchHasStarted,
     matchHasEnded,
@@ -76,6 +76,8 @@ export default function MatchDetailPage({
     params: Promise<{ id: string; locale: string }>;
 }) {
     const { id, locale } = use(params);
+    // P2-353: display locale for money/count renders (Arabic-Indic digits in AR).
+    const numeralLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
     const router = useRouter();
     const t = useTranslations();
 
@@ -458,6 +460,7 @@ export default function MatchDetailPage({
                                     date={match.date}
                                     time={match.time}
                                     price={match.price}
+                                    currency={match.currency}
                                     hasJoined={true}
                                     isHost={isUserHost}
                                 />
@@ -870,7 +873,7 @@ export default function MatchDetailPage({
                             {/* Rule Pills */}
                             <div className="flex gap-2.5 px-5 mt-4 overflow-x-auto scroll-container">
                                 {[
-                                    { label: t('gameDetails.price'), value: match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}` },
+                                    { label: t('gameDetails.price'), value: match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, numeralLocale, match.currency) },
                                     { label: t('matchDetail.genderLabel'), value: match.gender === 'men' ? t('matchDetail.gender.men') : match.gender === 'women' ? t('matchDetail.gender.women') : t('matchDetail.gender.mixed') },
                                     { label: t('matchDetail.surface'), value: match.surface },
                                 ].map((pill) => (
@@ -947,7 +950,7 @@ export default function MatchDetailPage({
                                                 : t('matchDetail.joinMatch')}
                                         </span>
                                         <span className="font-extrabold">
-                                            {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                                            {match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, numeralLocale, match.currency)}
                                         </span>
                                     </button>
                                 </div>
@@ -981,12 +984,12 @@ export default function MatchDetailPage({
                                                     data-testid="waitlist-count-pill"
                                                     className="rounded-full bg-white/25 px-2 py-0.5 text-[11px] font-extrabold leading-none"
                                                 >
-                                                    {match.waitlistCount}
+                                                    {formatCount(match.waitlistCount ?? 0, numeralLocale)}
                                                 </span>
                                             )}
                                         </span>
                                         <span className="font-extrabold">
-                                            {match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                                            {match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, numeralLocale, match.currency)}
                                         </span>
                                     </button>
                                 </div>

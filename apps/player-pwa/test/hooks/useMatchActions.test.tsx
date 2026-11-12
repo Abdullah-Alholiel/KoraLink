@@ -13,6 +13,7 @@ import {
 } from '@/hooks/useMatchActions';
 import { useAppStore } from '@/store/useAppStore';
 import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 
 // Mock fetcher
 const mockFetcher = vi.fn();
@@ -41,13 +42,13 @@ const testUser = {
   locale: 'en' as const,
 };
 
-function createWrapper() {
+function createWrapper(locale: 'en' | 'ar' = 'en') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <NextIntlClientProvider messages={enMessages} locale="en">
+      <NextIntlClientProvider messages={locale === 'ar' ? arMessages : enMessages} locale={locale}>
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       </NextIntlClientProvider>
     ),
@@ -288,6 +289,26 @@ describe('useRescheduleMatch', () => {
     expect(toast?.meta?.detail).toBe(
       'No money was taken and the match kept its original time. Top up your wallet, then reschedule.',
     );
+  });
+
+  it('P2-353: AR wallet-shortfall toast interpolates Arabic-Indic digits (formatAmount, not toFixed)', async () => {
+    const { wrapper } = createWrapper('ar');
+    mockFetcher.mockRejectedValueOnce(
+      new Error(
+        'Insufficient wallet balance for the reschedule. Required: SAR 375.00, Available: SAR 120.00',
+      ),
+    );
+
+    const { result } = renderHook(() => useRescheduleMatch(), { wrapper });
+    act(() => {
+      result.current.mutate({ matchId: 'm1', bookingSlotId: 'slot-2' });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const message = useAppStore.getState().toast?.message ?? '';
+    expect(message).toContain('٢٥٥');
+    expect(message).toContain('ر.س');
+    expect(message).not.toMatch(/[0-9]/);
   });
 
   it('keeps the generic reschedule copy for every other failure cause', async () => {

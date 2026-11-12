@@ -1,10 +1,11 @@
 'use client';
 
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { fetcher, FetchError } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
 import { parseWalletShortfall } from '@/lib/publish-error';
+import { formatAmount, type AppLocale } from '@/lib/format';
 import { useAppStore } from '@/store/useAppStore';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { invalidateMatchDetailCache } from '@/lib/sw-match-cache-invalidate';
@@ -368,6 +369,7 @@ export function useRescheduleMatch() {
   const showToast = useToast();
   const t = useTranslations('errors');
   const tReschedule = useTranslations('reschedule');
+  const appLocale: AppLocale = useLocale() === 'ar' ? 'ar' : 'en';
 
   return useMutation<unknown, FetchError, RescheduleMatchInput>({
     mutationFn: ({ matchId, bookingSlotId }) =>
@@ -399,7 +401,7 @@ export function useRescheduleMatch() {
           shortfall_sar: shortfall.shortfallSar,
         });
         showToast(
-          t('rescheduleWalletShortfall', { amount: shortfall.shortfallSar.toFixed(2) }),
+          t('rescheduleWalletShortfall', { amount: formatAmount(shortfall.shortfallSar, appLocale) }),
           'error',
           { detail: t('rescheduleWalletDetail') },
         );

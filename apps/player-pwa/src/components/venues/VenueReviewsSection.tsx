@@ -12,7 +12,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ReportSheet from '@/components/matches/ReportSheet';
-import { formatCount, resolveDateLocale } from '@/lib/format';
+import { formatCount, formatRating, resolveDateLocale, type AppLocale } from '@/lib/format';
 
 /**
  * P1-55 (run #117): booking-verified venue reviews on the club detail page.
@@ -120,6 +120,7 @@ export default function VenueReviewsSection({
   locale: string;
 }) {
   const t = useTranslations();
+  const appLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
   const showToast = useAppStore((s) => s.showToast);
   const user = useAppStore((s) => s.user);
   const isHydrated = useAppStore((s) => s.isHydrated);
@@ -197,7 +198,7 @@ export default function VenueReviewsSection({
           <div className="flex items-center gap-2 mt-1">
             <Stars value={data.average} />
             <span className="text-sm font-bold text-brand-black" dir="ltr">
-              {data.average > 0 ? data.average.toFixed(1) : '—'}
+              {data.average > 0 ? formatRating(data.average, appLocale) : '—'}
             </span>
             <span className="text-xs text-gray-400">
               {t('clubs.reviewCount', { count: data.count })}
