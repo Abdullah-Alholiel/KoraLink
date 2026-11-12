@@ -4064,11 +4064,15 @@ export class MatchesService {
         throw new ForbiddenException('Only the match host can remove players.');
       }
 
-      if (
-        match.status === 'InProgress' ||
-        match.status === 'Completed' ||
-        match.status === 'Cancelled'
-      ) {
+      if (match.status === 'Cancelled') {
+        // Run #202 (PR-Agent): a cancelled match can never start — the
+        // generic "before the match starts" copy misleads the host. Say why.
+        throw new BadRequestException(
+          'This match was cancelled — its roster can no longer be changed.',
+        );
+      }
+
+      if (match.status === 'InProgress' || match.status === 'Completed') {
         throw new BadRequestException(
           'Players can only be removed before the match starts.',
         );

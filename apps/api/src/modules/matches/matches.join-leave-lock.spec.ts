@@ -261,7 +261,8 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
       player: { id: 'mp-1' },
     });
     const svc = makeService(tx);
-    await expect(svc.removePlayer(HOST, MATCH_ID, USER)).rejects.toBeInstanceOf(BadRequestException);
+    // PR-Agent r1: the message must say WHY (cancelled ≠ "before it starts").
+    await expect(svc.removePlayer(HOST, MATCH_ID, USER)).rejects.toThrow(/cancelled/i);
   });
 
   it('removePlayer still rejects a non-host caller with Forbidden', async () => {
