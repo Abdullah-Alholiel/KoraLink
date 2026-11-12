@@ -2,11 +2,17 @@
 
 ## Snapshot
 - Open PRs: 1 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover)
-- Commits ahead of main: **431** (last promote 2026-09-25; **0059 + 0060 ride the next promote — applied to staging, NOT prod (prod Neon 60/60 rows)**; migrate-first runbook mandatory before any merge; #241/#242 add NO migrations)
-- Services: API/PWA/Admin UP (API serving run #202 build `1896183` — REFUND_WINDOW_HOURS=12 in dist, E2E-verified; PWA serving run #202 build `bdaf233` — MatchCard numerals + enum labels live, chunk-verified)
-- Factory loop status: **HEALTHY 2026-11-12** — run #202 shipped PRs #241 (P2-332 refund window 12h, decided+built) + #242 (P2-342 MatchCard numerals), both LIVE-verified. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Commits ahead of main: **435** (last promote 2026-09-25; **0059 + 0060 ride the next promote — applied to staging, NOT prod (prod Neon 60/60 rows)**; migrate-first runbook mandatory before any merge; run #203 added NO migrations)
+- Services: API/PWA/Admin UP — **all three serving run #203 builds** (`479affd` tree: API = P2-349 guard in dist, push ENABLED (VAPID live, 0 boot warnings); PWA = numerals live + VAPID key baked (verified in served shim chunk); Admin = P2-346 dir-toggle fix)
+- Factory loop status: **HEALTHY 2026-11-12** — run #203 shipped PRs #243/#244/#245 (numerals completion batch, waitlist missing-wallet guard, reviews dir-toggle) all MERGED+LIVE, plus P1-66 VAPID activation per owner D-20261106-15. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
 
 ## Active owner actions
+
+### NEW-8. P1-66 — 2-minute browser subscribe test (NEW run #203)
+- **What:** VAPID keys are now generated + live (your D-20261106-15 decision, executed run #203). Server pushes are ENABLED and the PWA bundle carries the public key. Push needs one human test on a real device to close.
+- **Your part:** Open the PWA on your phone → PROFILE → enable push → accept the permission prompt → confirm the bell/subscription state.
+- **Close line:** "P1-66: subscribe test passed" (factory then records the ledger close) — or report what failed.
+- **Deadline:** Before public launch.
 
 ### NEW-1. P2-325 — Moyasar webhook registration (NEW run #196)
 - **What:** Wallet top-up credit currently depends on the client verify call + the 5-min reconcile backstop (webhook-less flow, wallet.reconcile.service.ts:34). A player who pays then closes the app before verify waits for the cron rescue. Industry norm = signed webhook capture.
@@ -124,4 +130,5 @@
 ## Closed since last run
 - **P2-332 (cancel window + refund policy):** DECIDED 2026-11-11 (D-20261110-06: full refund until 12h before slot, then forfeit, platform-wide) AND SHIPPED run #202 — PR #241 merged `1896183`, LIVE E2E-verified (36h→REFUND / 2h→host-forfeit). Inside-window backfill exception kept by default (owner’s earlier verbatim rule); 48h veto window until 2026-11-14 02:30Z — veto ⇒ strict shape.
 - **P2-350 (eviction concat asymmetry):** folded into PR #241, built run #202.
+- **P1-66 (VAPID keys):** DECIDED 2026-11-07 (D-20261106-15 "Generate and set VAPID keys") AND ACTIVATED run #203 — keypair generated server-side (secrets only in apps/api/.env + pwa .env.local, never in chat/logs), API restarted and serving with push ENABLED (zero "not configured" warnings, health 200). PWA rebuild + browser subscribe test remain (NEXT_PUBLIC_* bakes at build).
 - **P1-52 (Neon quota):** RESOLVED 2026-11-03 — direct prod Neon connect OK, no quota error.
