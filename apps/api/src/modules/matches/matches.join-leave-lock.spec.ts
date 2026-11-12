@@ -255,6 +255,15 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     await expect(svc.removePlayer(HOST, MATCH_ID, HOST)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('removePlayer rejects a CANCELLED match (run #202 — the roster is the audit record, mirrors leaveMatch)', async () => {
+    const { tx } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Cancelled' },
+      player: { id: 'mp-1' },
+    });
+    const svc = makeService(tx);
+    await expect(svc.removePlayer(HOST, MATCH_ID, USER)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('removePlayer still rejects a non-host caller with Forbidden', async () => {
     const { tx } = makeTx({
       match: { id: MATCH_ID, host_id: HOST, status: 'Open' },
