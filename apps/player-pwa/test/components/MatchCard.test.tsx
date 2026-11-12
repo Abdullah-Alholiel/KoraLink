@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import type { Match } from '@/types';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
-import { formatDistance } from '@/lib/format';
+import arMessages from '@/messages/ar.json';
+import { formatDistance, formatMoney } from '@/lib/format';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -80,14 +81,38 @@ describe('MatchCard', () => {
     expect(screen.queryByText('Khalid FC')).not.toBeInTheDocument();
   });
 
-  it('renders price with SAR', () => {
+  it('renders price via formatMoney (numerals standard, P2-342)', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText('37 SAR')).toBeInTheDocument();
+    // P2-342: money routes through formatMoney. The mocked pathname is /ar/*
+    // (component locale=ar) while this wrapper keeps EN messages, so the
+    // expected shape is the ar-SA currency render with Arabic-Indic digits
+    // (٣٧٫٠٠ ر.س.‏ with bidi marks) — regex-matched because the exact string
+    // carries RTL control chars that break exact text matching. The OLD raw
+    // template ("37 SAR") is asserted ABSENT — it was the defect class.
+    expect(screen.getByText(/ر\.س/)).toBeInTheDocument();
+    expect(screen.getByText(/٣٧٫٠٠/)).toBeInTheDocument();
+    expect(screen.queryByText('37 SAR')).not.toBeInTheDocument();
   });
 
-  it('renders spot count', () => {
+  it('renders spot count (Arabic-Indic under the ar component locale, P2-342)', () => {
     renderWithProviders(<MatchCard match={baseMatch} />);
-    expect(screen.getByText(/8\s*\/\s*14/)).toBeInTheDocument();
+    // component locale=ar (mocked /ar/ pathname) → formatCount renders ٨/١٤.
+    expect(screen.getByText(/٨\s*\/\s*١٤/)).toBeInTheDocument();
+    expect(screen.queryByText(/8\s*\/\s*14/)).not.toBeInTheDocument();
+  });
+
+  it('localizes enum labels under an AR provider (P2-342)', () => {
+    render(
+      <NextIntlClientProvider messages={arMessages} locale="ar">
+        <MatchCard match={{ ...baseMatch, intensity: 'Casual', surface: 'Grass' }} />
+      </NextIntlClientProvider>
+    );
+    // DB enum values map to localized labels (raw values were the defect).
+    // The intensity pill renders `{emoji} {label}` (multi text node) → regex.
+    expect(screen.getByText(/ودية/)).toBeInTheDocument();
+    expect(screen.getByText('عشب طبيعي')).toBeInTheDocument();
+    expect(screen.queryByText('Grass')).not.toBeInTheDocument();
+    expect(screen.queryByText('High Intensity')).not.toBeInTheDocument();
   });
 
   it('renders location', () => {
@@ -115,7 +140,12 @@ describe('MatchCard', () => {
 
   it('shows 1 SPOT LEFT when only 1 spot remaining', () => {
     renderWithProviders(<MatchCard match={{ ...baseMatch, filledSpots: 13, totalSpots: 14 }} />);
-    expect(screen.getByText('1 SPOT LEFT')).toBeInTheDocument();
+    // component locale=ar (mocked /ar/ pathname) → the count is Arabic-Indic ١;
+    // the EN label comes from this wrapper's EN messages. Regex match: the
+    // interpolated template renders one text node but keeps bidi-sensitive
+    // digits, so exact matching is brittle.
+    expect(screen.getByText(/SPOT LEFT/)).toBeInTheDocument();
+    expect(screen.getByText(/١ SPOT LEFT/)).toBeInTheDocument();
   });
 
   it('does not render the host initial', () => {
