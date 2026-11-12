@@ -251,7 +251,10 @@ export default function ReviewsPage() {
         {sortBy && (
           <button
             type="button"
-            onClick={() => setDir(dir === 'desc' ? 'asc' : 'desc')}
+            onClick={() => {
+              setDir(dir === 'desc' ? 'asc' : 'desc');
+              setPage(1); // P2-346: a page-3 toggle must not strand on a possibly-empty page
+            }}
             aria-label={t('sortDirToggle')}
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
