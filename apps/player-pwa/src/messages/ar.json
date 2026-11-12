@@ -895,7 +895,9 @@
     "reviewMine": "تقييمك",
     "reviewAnonymous": "لاعب",
     "reviewReport": "الإبلاغ عن التقييم",
-    "reviewReportSubject": "الإبلاغ عن تقييم {name}"
+    "reviewReportSubject": "الإبلاغ عن تقييم {name}",
+    "surfaceGrass": "عشب طبيعي",
+    "surfaceArtificial": "عشب صناعي"
   },
   "messages": {
     "title": "الرسائل",

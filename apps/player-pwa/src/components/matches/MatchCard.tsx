@@ -7,7 +7,7 @@ import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as L
 import type { Match } from '@/types';
 import { isPotmVotingOpen } from '@/lib/match-pricing';
 import { useNow } from '@/hooks/useNow';
-import { formatDistance } from '@/lib/format';
+import { formatDistance, formatMoney, formatCount, type AppLocale } from '@/lib/format';
 
 interface MatchCardProps {
     match: Match;
@@ -23,6 +23,22 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const spotsLeft = match.totalSpots - match.filledSpots;
     const isClosing = match.status === 'closing_soon' || (spotsLeft <= 2 && spotsLeft > 0);
     const isFull = match.status === 'full' || spotsLeft <= 0;
+    // P2-342 (run #202): enum labels localize — the adapter ships DB enum
+    // strings (match_type → intensity: 'Casual'/'Competitive'; pitch surface:
+    // 'Grass'/'Artificial'). Known values map to i18n; unknown values keep the
+    // raw fallback so novel data never renders a blank pill.
+    const intensityLabel =
+        match.intensity === 'Casual'
+            ? t('host.matchTypeCasual')
+            : match.intensity === 'Competitive'
+                ? t('host.matchTypeCompetitive')
+                : match.intensity;
+    const surfaceLabel =
+        match.surface === 'Grass'
+            ? t('clubs.surfaceGrass')
+            : match.surface === 'Artificial'
+                ? t('clubs.surfaceArtificial')
+                : match.surface;
     // Cancelled = terminal, never actionable (My Games tailored tags, 2026-09-18).
     const isCancelled = match.status === 'cancelled';
 
@@ -181,7 +197,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     {isClosing && !isFull && (
                         <p className="text-[10px] font-bold text-brand-red uppercase tracking-wide mt-0.5">
                             {spotsLeft <= 1
-                                ? `${spotsLeft} ${t('matchCard.spotLeft')}`
+                                ? `${formatCount(spotsLeft, locale === 'ar' ? 'ar' : 'en')} ${t('matchCard.spotLeft')}`
                                 : t('matchCard.closingSoon')}
                         </p>
                     )}
@@ -246,7 +262,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                 </span>
                 {match.surface && (
                     <span className="text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">
-                        {match.surface}
+                        {surfaceLabel}
                     </span>
                 )}
                 <span className="text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">
@@ -257,7 +273,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         ? 'bg-brand-red/10 text-brand-red'
                         : 'bg-brand-green/10 text-brand-green'
                 }`}>
-                    {match.intensity === 'Competitive' ? '🏆' : '⚽'} {match.intensity}
+                    {match.intensity === 'Competitive' ? '🏆' : '⚽'} {intensityLabel}
                 </span>
             </div>
 
@@ -267,7 +283,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <div>
                         <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">{t('matchCard.price')}</p>
                         <p className="text-xl font-extrabold text-brand-black leading-none">
-                            {isHost ? t('gameDetails.free') : match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                            {isHost ? t('gameDetails.free') : match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, (locale === 'ar' ? 'ar' : 'en') as AppLocale, match.currency)}
                         </p>
                     </div>
                     {/* Roster preview avatars */}
@@ -283,7 +299,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
                     <span className="text-xs text-gray-500 font-medium">
-                        {match.filledSpots}/{match.totalSpots}
+                        {formatCount(match.filledSpots, locale === 'ar' ? 'ar' : 'en')}/{formatCount(match.totalSpots, locale === 'ar' ? 'ar' : 'en')}
                     </span>
                     <span className={`text-sm font-semibold px-5 py-2.5 rounded-full ${buttonStyle}`}>
                         {buttonLabel}

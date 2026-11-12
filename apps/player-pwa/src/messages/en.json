@@ -895,7 +895,9 @@
     "reviewMine": "Yours",
     "reviewAnonymous": "Player",
     "reviewReport": "Report review",
-    "reviewReportSubject": "Report the review by {name}"
+    "reviewReportSubject": "Report the review by {name}",
+    "surfaceGrass": "Grass",
+    "surfaceArtificial": "Artificial"
   },
   "messages": {
     "title": "Messages",
