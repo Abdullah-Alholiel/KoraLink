@@ -314,8 +314,14 @@ export class MatchWaitlistService {
           .where(eq(schema.users.id, head.user_id))
           .limit(1)
           .for('update');
+        // P2-349 (run #203, Reviewer A run-#201 IMPORTANT-2): a head whose
+        // users row is GONE (purged/anonymized between enqueue and promotion)
+        // must land in the SAME skip+evict branch as an underfunded head.
+        // The old `headWallet &&` shape treated the missing row as FUNDED and
+        // let chargeMatchFeeTx run against a nonexistent wallet — aborting the
+        // caller's tx (the exact wedge P2-333 removed) instead of skipping.
         if (
-          headWallet &&
+          !headWallet ||
           moneyToNumber(headWallet.wallet_balance) < (opts?.feePriceSar ?? 0)
         ) {
           await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));

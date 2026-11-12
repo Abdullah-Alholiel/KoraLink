@@ -222,6 +222,60 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
     expect(playerUpdates).toHaveLength(0);
   });
 
+  // P2-349 (run #203, Reviewer A run-#201 IMPORTANT-2): a head whose users
+  // row is gone (purge/anonymization between enqueue and promotion) must be
+  // SKIPPED + EVICTED like an underfunded head — the old `headWallet &&`
+  // guard treated the missing row as funded and sent chargeMatchFeeTx after a
+  // nonexistent wallet, aborting the CALLER's free/cancel tx.
+  it('missing wallet row → head skipped + evicted, next head seated (P2-349)', async () => {
+    const { svc, tx, deletedWaitlistIds, insertedPlayers, playerUpdates } = makeHarness({
+      heads: [
+        { id: 'w-gone', user_id: 'user-gone', position: 1 },
+        { id: 'w-ok', user_id: 'user-ok', position: 2 },
+      ],
+      // user-gone has NO entry → the users select resolves empty (row purged).
+      wallets: { 'user-ok': '100.00' },
+      match: baseMatch,
+    });
+
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', {
+      feePriceSar: 37,
+    });
+
+    expect(result.promotion).not.toBeNull();
+    expect(result.promotion!.userId).toBe('user-ok');
+    expect(result.promotion!.chargedSar).toBe(37);
+    expect(result.evicted).toEqual([
+      { userId: 'user-gone', matchTitle: 'Tuesday Padel' },
+    ]);
+    // Queue entries removed: the evicted head AND the seated head.
+    expect(deletedWaitlistIds).toHaveLength(2);
+    const seatInserts = insertedPlayers.filter((v) => 'match_id' in v);
+    expect(seatInserts).toHaveLength(1);
+    expect(seatInserts[0].user_id).toBe('user-ok');
+    expect(playerUpdates).toHaveLength(1); // only the seated head is charged
+  });
+
+  it('ALL heads missing wallet rows → null promotion, no throw (P2-349)', async () => {
+    const { svc, tx, insertedPlayers, deletedWaitlistIds } = makeHarness({
+      heads: [
+        { id: 'w-1', user_id: 'user-gone-a', position: 1 },
+        { id: 'w-2', user_id: 'user-gone-b', position: 2 },
+      ],
+      wallets: {},
+      match: baseMatch,
+    });
+
+    const result = await svc.promoteNextInTx(tx as never, 'match-1', {
+      feePriceSar: 37,
+    });
+
+    expect(result.promotion).toBeNull();
+    expect(insertedPlayers).toHaveLength(0);
+    expect(deletedWaitlistIds).toHaveLength(2); // both skipped, no wedge
+    expect(result.evicted).toHaveLength(2);
+  });
+
   it('ALL heads underfunded → evicted carries EVERY head for notification (P2-347)', async () => {
     const { svc, tx, insertedPlayers } = makeHarness({
       heads: [
