@@ -131,6 +131,12 @@ describe('P2-279 — getLatestIntent', () => {
     expect(Number.isNaN(new Date(res.intent!.createdAt).getTime())).toBe(false);
   });
 
+  it('t_b8468d98: passes a sweep-expired (failed) intent through as status "failed"', async () => {
+    const svc = makeService(makeDb({ latestRow: { ...INTENT_ROW, status: 'failed' } }));
+    const res = await svc.getLatestIntent('user-1');
+    expect(res.intent?.status).toBe('failed');
+  });
+
   it('sarToHalalas round-trip guard still holds (sanity)', () => {
     expect(sarToHalalas(25)).toBe(2500);
   });

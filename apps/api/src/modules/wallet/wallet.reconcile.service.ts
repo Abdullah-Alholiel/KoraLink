@@ -2,10 +2,11 @@ import { Injectable, Logger, Inject, ConflictException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as Sentry from '@sentry/node';
 import { ConfigService } from '@nestjs/config';
-import { asc, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, lt, notInArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { wallet_topup_intents } from '../../database/schema';
+import { withTimestamp } from '../../common/utils/timestamp';
 import {
   listMoyasarPayments,
   resolveMoyasarSecretKey,
@@ -29,6 +30,16 @@ const INTENT_DESC_PREFIX = 'wallet-topup:';
  */
 const AGED_OUT_ALERT_THRESHOLD_MS = 60 * 60 * 1000;
 
+/**
+ * Follow-up t_b8468d98: a pending intent older than this with NO paid payment
+ * bound is abandoned (3DS never completed / app closed mid-flow). verifyTopup
+ * is the ONLY writer that can still move it (the PWA's Try-again always opens
+ * a FRESH intent), so this sweep expires it to 'failed' — the wallet page's
+ * amber pending banner reads /topup/latest and naturally clears. 24h default,
+ * overridable via WALLET_TOPUP_INTENT_EXPIRY_HOURS.
+ */
+const INTENT_EXPIRY_DEFAULT_HOURS = 24;
+
 export interface ReconcileOutcome {
   scanned: number;
   credited: number;
@@ -36,6 +47,8 @@ export interface ReconcileOutcome {
   failed: number;
   /** Pending intents past the age threshold (alerted once each, P2-314). */
   agedOut: number;
+  /** Abandoned pending intents flipped to 'failed' this pass (banner hygiene). */
+  expired: number;
 }
 
 /**
@@ -68,6 +81,13 @@ export class WalletReconcileService {
   private running = false;
   /** P2-314: intents already age-out-alerted (process-lifetime, one alert each). */
   private readonly agedOutAlerted = new Set<string>();
+  /**
+   * t_b8468d98: intents this process has already expired (one warn+Sentry per
+   * intent, process-lifetime). A later-credited intent's own alert re-fires
+   * independently — expiry never gates money alerts. Excluded ids are dropped
+   * from the UPDATE by id (empty array = matches nothing in Postgres).
+   */
+  private readonly expiredNotifyGuard = new Set<string>();
 
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
@@ -88,9 +108,9 @@ export class WalletReconcileService {
     if (!this.enabled) return;
     try {
       const outcome = await this.reconcileOnce();
-      if (outcome.credited > 0 || outcome.failed > 0 || outcome.agedOut > 0) {
+      if (outcome.credited > 0 || outcome.failed > 0 || outcome.agedOut > 0 || outcome.expired > 0) {
         this.logger.log(
-          `topup reconcile: scanned=${outcome.scanned} credited=${outcome.credited} skipped=${outcome.skipped} failed=${outcome.failed} agedOut=${outcome.agedOut}`,
+          `topup reconcile: scanned=${outcome.scanned} credited=${outcome.credited} skipped=${outcome.skipped} failed=${outcome.failed} agedOut=${outcome.agedOut} expired=${outcome.expired}`,
         );
       }
     } catch (err) {
@@ -107,7 +127,7 @@ export class WalletReconcileService {
    * (those are logged + Sentry-captured and retried by the next tick).
    */
   async reconcileOnce(): Promise<ReconcileOutcome> {
-    const outcome: ReconcileOutcome = { scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 };
+    const outcome: ReconcileOutcome = { scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0, expired: 0 };
     if (this.running) return outcome;
     const secretKey = resolveMoyasarSecretKey((k) => this.getConfig(k));
     if (!this.enabled || !secretKey) return outcome;
@@ -228,6 +248,68 @@ export class WalletReconcileService {
           });
         }
       }
+
+      // ── Abandoned-intent expiry (follow-up t_b8468d98) ────────────────────
+      // Runs AFTER the credit pass so an intent with a paid payment is always
+      // given its credit FIRST (verifyTopup flips pending→credited; expiring
+      // one first would force topup_intent_race + a rolled-back credit).
+      // Eligible = still pending after the pass + older than the expiry window
+      // + NOT carrying a paid payment found this pass. A sweep-eligible intent
+      // whose discovery listed a paid payment but verify failed is left pending
+      // (failed++ + Sentry) so the credit path retries next tick — expiry never
+      // buries a possibly-charged intent.
+      const expiryHours = Math.max(
+        0,
+        Number.parseInt(
+          this.configService.get<string>('WALLET_TOPUP_INTENT_EXPIRY_HOURS') ?? '',
+          10,
+        ) || INTENT_EXPIRY_DEFAULT_HOURS,
+      );
+      const expiryCutoff = new Date(Date.now() - expiryHours * 60 * 60 * 1000);
+      const creditedIds = new Set(
+        (await this.db
+          .select({ id: wallet_topup_intents.id })
+          .from(wallet_topup_intents)
+          .where(and(eq(wallet_topup_intents.status, 'credited'), gt(wallet_topup_intents.updated_at, expiryCutoff)))
+          .catch(() => [] as { id: string }[])).map((r) => r.id),
+      );
+      const paidIntentIds = new Set<string>();
+      for (const [intentId, hit] of byIntentId) {
+        if (hit.status === 'paid') paidIntentIds.add(intentId);
+      }
+      try {
+        const expired = await this.db
+          .update(wallet_topup_intents)
+          .set(withTimestamp({ status: 'failed' }))
+          .where(
+            and(
+              eq(wallet_topup_intents.status, 'pending'),
+              lt(wallet_topup_intents.created_at, expiryCutoff),
+              notInArray(wallet_topup_intents.id, [...paidIntentIds]),
+              notInArray(wallet_topup_intents.id, [...creditedIds]),
+              notInArray(wallet_topup_intents.id, [...this.expiredNotifyGuard.keys()]),
+            ),
+          )
+          .returning({ id: wallet_topup_intents.id });
+        outcome.expired = expired.length;
+        for (const row of expired) this.expiredNotifyGuard.add(row.id);
+        if (expired.length > 0) {
+          this.logger.warn(
+            `topup intents expired (abandoned >${expiryHours}h, no paid payment bound): count=${expired.length} ids=${expired.map((r) => r.id).join(',')}`,
+          );
+          Sentry.captureMessage('Wallet top-up intents expired (abandoned)', {
+            level: 'warning',
+            tags: { scope: 'wallet.topupReconcile' },
+            extra: { count: expired.length, ids: expired.map((r) => r.id), expiryHours },
+          });
+        }
+      } catch (err) {
+        // Expiry is hygiene, never money-truth: a failure here must not kill
+        // the sweep outcome. Next tick retries.
+        this.logger.warn(`topup intent expiry pass failed: ${(err as Error).message}`);
+        Sentry.captureException(err, { tags: { scope: 'wallet.topupReconcile' } });
+      }
+
       return outcome;
     } finally {
       this.running = false;

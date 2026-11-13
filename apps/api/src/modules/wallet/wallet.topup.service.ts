@@ -11,7 +11,7 @@
  */
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, eq, sql, desc } from 'drizzle-orm';
+import { and, eq, inArray, sql, desc } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import * as schema from '../../database/schema';
@@ -61,8 +61,13 @@ export interface LatestTopupIntent {
   id: string;
   /** Exact SAR amount pinned at intent create (halalas / 100). */
   amountSar: number;
-  /** 'pending' = unconfirmed (verify never ran or failed); 'credited' = landed. */
-  status: 'pending' | 'credited';
+  /**
+   * 'pending' = unconfirmed (verify never ran or failed); 'credited' = landed.
+   * t_b8468d98: 'failed' = the reconcile sweep expired an abandoned intent
+   * (>expiry window, no paid payment bound) — the PWA must NOT render the
+   * pending banner for it (a fresh top-up starts a new intent).
+   */
+  status: 'pending' | 'credited' | 'failed';
   /** ISO-8601 wire timestamp. */
   createdAt: string;
 }
@@ -148,7 +153,10 @@ export class WalletTopupService {
       intent: {
         id: intent.id,
         amountSar: intent.amount_halalas / SAR_TO_HALALAS,
-        status: intent.status === 'credited' ? 'credited' : 'pending',
+        // t_b8468d98: 'failed' (expired-abandoned intents, wallet reconcile
+        // sweep) passes through so the PWA's pending banner clears; only
+        // 'credited' lands money and shows as a ledger row instead.
+        status: intent.status === 'credited' ? 'credited' : intent.status === 'failed' ? 'failed' : 'pending',
         createdAt: intent.created_at.toISOString(),
       },
     };
@@ -346,12 +354,23 @@ export class WalletTopupService {
 
         // 3. Intent flip rides the SAME tx as the credit (Gate 3 contract) —
         //    a credited wallet can never leave a pending intent behind.
-        //    P2-282: zero rows = the intent was credited by another payment
-        //    mid-verify — throw so the credit above rolls back.
+        //    t_b8468d98: accepts 'failed' too — the reconcile sweep expires
+        //    abandoned intents >24h (status='failed'); if the payment actually
+        //    completed inside that window ( Moyasar webhook-less latency), the
+        //    paid payment must still credit. P2-282 preserved: zero rows = the
+        //    intent was credited by another payment mid-verify — throw so the
+        //    credit above rolls back. 'credited' rows (second payment) still
+        //    refuse: a completed intent accepts ONLY a replay of payment_id
+        //    (topup_already_credited), which never reaches this statement.
         const flipped = await tx
           .update(wallet_topup_intents)
           .set(withTimestamp({ status: 'credited', payment_id: payment.id }))
-          .where(and(eq(wallet_topup_intents.id, intent.id), eq(wallet_topup_intents.status, 'pending')))
+          .where(
+            and(
+              eq(wallet_topup_intents.id, intent.id),
+              inArray(wallet_topup_intents.status, ['pending', 'failed']),
+            ),
+          )
           .returning({ id: wallet_topup_intents.id });
         if (flipped.length === 0) {
           throw new ConflictException(
@@ -421,7 +440,14 @@ export class WalletTopupService {
       await this.db
         .update(wallet_topup_intents)
         .set(withTimestamp({ status: 'credited', payment_id: paymentId }))
-        .where(and(eq(wallet_topup_intents.id, intentId), eq(wallet_topup_intents.status, 'pending')));
+        .where(
+          and(
+            eq(wallet_topup_intents.id, intentId),
+            // t_b8468d98: heals a sweep-expired ('failed') intent on replay
+            // paths too — the credit already exists, the row must match it.
+            inArray(wallet_topup_intents.status, ['pending', 'failed']),
+          ),
+        );
     } catch {
       // Cosmetic-only on replay paths; the credit itself is already idempotent.
     }

@@ -45,8 +45,6 @@ const PAID_PAYMENT = {
   source: { type: 'creditcard', company: 'mada', message: null },
 };
 
-type TableKey = 'intent' | 'tx' | 'user';
-
 /** Minimal Drizzle-shaped db stub; select().from(table) resolves by table key. */
 function makeDb(overrides: {
   intentRows?: unknown[];
@@ -343,5 +341,34 @@ describe('verifyTopup — P2-282 one intent, one payment', () => {
     );
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(db.committedLedgerInserts).toHaveLength(0);
+  });
+});
+
+describe('verifyTopup — sweep-expired (failed) intent heal (t_b8468d98)', () => {
+  const FAILED_INTENT = { ...INTENT_ROW, status: 'failed' };
+  const dto = { paymentId: 'pay_test1234567890', intentId: 'intent-1' };
+
+  it('still credits a paid payment bound to a failed (sweep-expired) intent', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({ intentRows: [FAILED_INTENT] });
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.verifyTopup('user-1', dto);
+    expect(res.credited).toBe(true);
+    expect(res.alreadyCredited).toBe(false);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(db.committedLedgerInserts).toHaveLength(1);
+  });
+
+  it('heals a failed intent on the replay path too (flipIntentCredited, no re-credit)', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({
+      intentRows: [{ ...FAILED_INTENT, payment_id: 'pay_test1234567890' }],
+      txRows: [{ amount: '50.00', user_id: 'user-1', idempotency_key: 'topup:pay_test1234567890' }],
+    });
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.verifyTopup('user-1', dto);
+    expect(res.credited).toBe(false);
+    expect(res.alreadyCredited).toBe(true);
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 });
