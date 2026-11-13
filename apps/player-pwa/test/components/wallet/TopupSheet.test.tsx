@@ -196,6 +196,24 @@ describe('TopupSheet — validation + intent + form host (P0-2)', () => {
         });
     });
 
+    it('on_completed is an ASYNC function — the Moyasar form rejects sync callbacks at init', async () => {
+        // Regression (2026-11-13, first real sandbox top-up): moyasar-payment-form@2.x validates
+        // callbacks via constructor.name === 'AsyncFunction' || toString().startsWith('async') and
+        // renders "Form configuration issue" instead of the card form when the check fails.
+        renderSheet();
+        const input = screen.getByLabelText("Amount (SAR)");
+        fireEvent.change(input, { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+        const cb = init.mock.calls[0][0].on_completed as (...a: unknown[]) => unknown;
+        const isAsync = cb.constructor.name === 'AsyncFunction' || cb.toString().startsWith('async');
+        expect(isAsync).toBe(true);
+    });
+
     it('verify fires with payment id from on_completed', async () => {
         renderSheet();
         const input = screen.getByLabelText("Amount (SAR)");

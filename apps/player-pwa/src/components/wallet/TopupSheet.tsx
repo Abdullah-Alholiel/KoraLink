@@ -51,7 +51,9 @@ interface MoyasarFormApi {
     callback_url: string;
     supported_networks: string[];
     methods: string[];
-    on_completed: (payment: { id: string; status: string; amount: number; source?: { message?: string | null } | null }) => void | Promise<void>;
+    // moyasar-payment-form >=2.x REJECTS non-async callbacks at init ("On completed must be a
+    // promise based callback") — the type is Promise-only so a sync handler cannot compile.
+    on_completed: (payment: { id: string; status: string; amount: number; source?: { message?: string | null } | null }) => Promise<void>;
   }): void;
 }
 
@@ -247,7 +249,11 @@ export default function TopupSheet({
         callback_url: `${window.location.origin}/${locale}/wallet/topup/callback`,
         supported_networks: ['visa', 'mastercard', 'mada', 'unionpay'],
         methods: ['creditcard'],
-        on_completed: (payment) => {
+        // MUST be `async`: the Moyasar form validates callbacks with
+        // constructor.name === 'AsyncFunction' || toString().startsWith('async') and refuses
+        // to render otherwise ("Form configuration issue"). Found in the first real sandbox
+        // top-up on staging (2026-11-13); the jsdom specs stub init and could not see it.
+        on_completed: async (payment) => {
           // PR-Agent r3 IMPORTANT: capture the ids in CLOSURE, not via
           // intentRef — a user closing the sheet mid-'paying' nulls intentRef
           // (reset()), but a frictionless charge still completes later; the
