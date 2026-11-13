@@ -1025,11 +1025,14 @@ export default function MatchDetailPage({
                                             <Clock className="h-4 w-4 shrink-0" />
                                             {(match.waitlistCount ?? 0) > 0
                                                 ? t('waitlist.queuedOf', {
-                                                      position: match.yourWaitlistPosition,
-                                                      count: match.waitlistCount,
+                                                      // Run #204 (probe-verified): plain {arg}
+                                                      // interpolation in non-plural keys renders
+                                                      // LATIN digits in AR — pre-format via Intl.
+                                                      position: formatCount(match.yourWaitlistPosition ?? 0, numeralLocale),
+                                                      count: formatCount(match.waitlistCount ?? 0, numeralLocale),
                                                   })
                                                 : t('waitlist.queuedPrefix', {
-                                                      position: match.yourWaitlistPosition,
+                                                      position: formatCount(match.yourWaitlistPosition ?? 0, numeralLocale),
                                                   })}
                                         </span>
                                         <button
