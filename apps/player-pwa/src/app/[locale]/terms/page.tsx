@@ -4,6 +4,106 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 
+// Run #205 (launch lane F4): expanded Terms of Service (13 sections), rendered
+// from the `legal` namespace as a section array — same contract as the privacy
+// page. Content is a DRAFT pending lawyer review (draftBanner surfaces this).
+type LegalSection = { heading: string; paragraphs: string[] };
+
+const TERMS_SECTIONS: LegalSection[] = [
+  {
+    heading: 'termsAccountsH',
+    paragraphs: [
+      'termsAccountsBody1',
+      'termsAccountsBody2',
+      'termsAccountsBody3',
+      'termsAccountsBody4',
+    ],
+  },
+  {
+    heading: 'termsMatchesH',
+    paragraphs: [
+      'termsMatchesBody1',
+      'termsMatchesBody2',
+      'termsMatchesBody3',
+      'termsMatchesBody4',
+    ],
+  },
+  {
+    heading: 'termsHostingTitle',
+    paragraphs: ['termsHostingDesc'],
+  },
+  {
+    heading: 'termsHostingPayoutTitle',
+    paragraphs: ['termsHostingPayoutDesc'],
+  },
+  {
+    heading: 'termsPaymentsH',
+    paragraphs: [
+      'termsPaymentsBody1',
+      'termsPaymentsBody2',
+      'termsPaymentsBody3',
+      'termsPaymentsBody4',
+    ],
+  },
+  {
+    heading: 'termsRefundH',
+    paragraphs: [
+      'termsRefundBody1',
+      'termsRefundBody2',
+      'termsRefundBody3',
+      'termsRefundBody4',
+    ],
+  },
+  {
+    heading: 'termsConductH',
+    paragraphs: [
+      'termsConductBody1',
+      'termsConductBody2',
+      'termsConductBody3',
+      'termsConductBody4',
+    ],
+  },
+  {
+    heading: 'termsSuspensionH',
+    paragraphs: [
+      'termsSuspensionBody1',
+      'termsSuspensionBody2',
+      'termsSuspensionBody3',
+    ],
+  },
+  {
+    heading: 'termsIpH',
+    paragraphs: [
+      'termsIpBody1',
+      'termsIpBody2',
+      'termsIpBody3',
+    ],
+  },
+  {
+    heading: 'termsLiabilityH',
+    paragraphs: [
+      'termsLiabilityBody1',
+      'termsLiabilityBody2',
+      'termsLiabilityBody3',
+    ],
+  },
+  {
+    heading: 'termsLawH',
+    paragraphs: [
+      'termsLawBody1',
+      'termsLawBody2',
+    ],
+  },
+  {
+    heading: 'termsChangesH',
+    paragraphs: ['termsChangesBody1'],
+  },
+  {
+    heading: 'termsContactH',
+    paragraphs: ['termsContactBody1'],
+  },
+];
+
 export default function TermsPage() {
     const router = useRouter();
     const t = useTranslations('legal');
@@ -21,23 +121,26 @@ export default function TermsPage() {
                     {t('termsTitle')}
                 </h1>
             </div>
-            <div className="p-6 prose prose-sm max-w-none text-gray-600">
-                <p className="text-sm text-gray-500 mb-4">{t('lastUpdated')}: September 2026</p>
+            <div className="p-6 max-w-none text-gray-600">
+                <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
+                    <p className="text-xs font-semibold text-amber-800">{t('draftBanner')}</p>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">
+                    {t('lastUpdated')}: {t('lastUpdatedValue')}
+                </p>
                 <p className="text-sm leading-relaxed mb-4">{t('termsIntro')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsAccounts')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsAccountsDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsMatches')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsMatchesDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsHostingTitle')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsHostingDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsPayments')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsPaymentsDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsHostingPayoutTitle')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsHostingPayoutDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('termsRefundTitle')}</h2>
-                <p className="text-sm leading-relaxed">{t('termsRefundDesc')}</p>
-                <h2 className="text-base font-bold text-brand-black mt-6 mb-2">{t('privacyContact')}</h2>
-                <p className="text-sm leading-relaxed">hello@koralink.sa</p>
+                {TERMS_SECTIONS.map((section) => (
+                    <section key={section.heading}>
+                        <h2 className="text-base font-bold text-brand-black mt-6 mb-2">
+                            {t(section.heading)}
+                        </h2>
+                        {section.paragraphs.map((key) => (
+                            <p key={key} className="text-sm leading-relaxed mb-2">
+                                {t(key)}
+                            </p>
+                        ))}
+                    </section>
+                ))}
             </div>
         </div>
     );
