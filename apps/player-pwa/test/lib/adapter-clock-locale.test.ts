@@ -79,6 +79,8 @@ describe('P2-rider: adapter clock times follow the active locale', () => {
     const en = adaptTransaction(row);
     expect(en.description).toMatch(/^\d{1,2}:\d{2} (AM|PM) • Completed$/);
     const ar = adaptTransaction(row, 'ar');
-    expect(ar.description).toMatch(/^[٠-٩]{1,2}:[٠-٩]{2} [صم] • Completed$/);
+    // 2026-11-13 (P0-2 owner finding #6): the status half localizes too —
+    // '• مكتمل' (wallet.completed), never bare English 'Completed'.
+    expect(ar.description).toMatch(/^[٠-٩]{1,2}:[٠-٩]{2} [صم] • مكتمل$/);
   });
 });
