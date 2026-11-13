@@ -118,12 +118,17 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
   }, [open]);
 
   // Hydrate the bell badge from the server whenever the sheet opens.
+  // PR-Agent r1 (run #204): v5 refetch() re-fetches EVERY loaded page, so
+  // after "Load more" each sheet-open would fire N sequential requests —
+  // the exact cost the poll guard avoids. Page-1 trees keep the fresh
+  // on-open hydration; multi-page trees rely on the 45s poll + focus
+  // refetch of the last page only.
   useEffect(() => {
     if (open) {
       trackEvent('notification_sheet_opened');
-      refetch();
+      if ((data?.pages.length ?? 1) <= 1) refetch();
     }
-  }, [open, refetch]);
+  }, [open, refetch, data?.pages.length]);
 
   if (!open) return null;
 
