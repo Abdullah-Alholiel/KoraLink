@@ -136,7 +136,9 @@ export default function WalletPage() {
     // P2-279 (run #176): newest top-up attempt — the player-visible trace of
     // an attempt that never landed (failed 3DS / abandoned verify). The card
     // renders ONLY for a pending attempt; credited attempts already show as
-    // ledger transactions below.
+    // ledger transactions below. t_b8468d98: status 'failed' (the reconcile
+    // sweep expired the abandoned intent) never renders the card either —
+    // a fresh top-up opens a new intent, so the stale amber banner clears.
     const { data: latestTopup } = useLatestTopupIntent({
         // P2-331 r3 (PR-Agent r2 MINOR): the pending-attempt TRACE is a
         // money-surface record — a charged-but-uncredited intent must stay

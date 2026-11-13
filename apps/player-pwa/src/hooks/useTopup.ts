@@ -91,8 +91,12 @@ export interface LatestTopupIntent {
   id: string;
   /** Exact SAR amount pinned at intent create (server converts halalas). */
   amountSar: number;
-  /** 'pending' = unconfirmed (verify never ran/failed); 'credited' = landed. */
-  status: 'pending' | 'credited';
+  /**
+   * 'pending' = unconfirmed (verify never ran/failed); 'credited' = landed;
+   * 'failed' = the reconcile sweep expired the abandoned intent (no paid
+   * payment bound, past the expiry window) — no banner, no poll.
+   */
+  status: 'pending' | 'credited' | 'failed';
   /** ISO-8601 timestamp of the attempt. */
   createdAt: string;
 }
@@ -104,8 +108,9 @@ export interface LatestTopupIntentResponse {
 /**
  * GET /wallet/topup/latest — the newest attempt for the caller. The wallet
  * page renders an unconfirmed-attempt card only when status === 'pending'
- * (credited attempts already appear as ledger transactions; there is no
- * 'failed' writer — a stuck attempt stays pending).
+ * (credited attempts already appear as ledger transactions). t_b8468d98:
+ * status 'failed' = the reconcile sweep expired an abandoned intent (no paid
+ * payment bound, past the expiry window) — no card, and the poll stops.
  *
  * P2-287: polls while pending so the card self-resolves once the attempt is
  * credited; keeps polling in the background because 3DS confirmations land
