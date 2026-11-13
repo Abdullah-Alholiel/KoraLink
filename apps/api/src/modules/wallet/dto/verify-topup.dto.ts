@@ -4,11 +4,20 @@ import { IsNotEmpty, IsString, IsUUID, Matches } from 'class-validator';
 export class VerifyTopupDto {
   @ApiProperty({
     description: 'Moyasar payment id returned by the hosted form / callback redirect',
-    example: 'pay_7c1e8f2a9b3d4c5e6f7a8b9c',
+    example: '94924fcf-64c5-4b0f-9472-eed05cae5ee2',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^pay_[A-Za-z0-9]{10,60}$/, { message: 'paymentId must look like pay_<id>' })
+  // Moyasar payment ids are UUIDs (checked against the sandbox API 2026-11-13: every id
+  // returned by GET /v1/payments is UUID-shaped). The original `pay_<id>` pattern was a
+  // guess: it made POST /wallet/topup/verify answer 400 for EVERY real payment, so a paid
+  // top-up was only ever credited by the 5-minute reconcile sweep. The legacy shape stays
+  // accepted for older fixtures; the id is URL-encoded before it reaches Moyasar and an
+  // unknown id is a 404 there, so the shape check is hygiene, not the authorization.
+  @Matches(
+    /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|pay_[A-Za-z0-9]{10,60})$/,
+    { message: 'paymentId must be a Moyasar payment id' },
+  )
   paymentId!: string;
 
   @ApiProperty({
