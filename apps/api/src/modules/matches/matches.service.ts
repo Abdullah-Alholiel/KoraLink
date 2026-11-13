@@ -4136,7 +4136,10 @@ export class MatchesService {
         feePriceSar: removedFeeSar > 0 ? removedFeeSar : undefined,
       });
       promoted = kickResult?.promotion ?? null;
-      evicted = kickResult?.evicted ?? evicted;
+      // Concat (matches the sibling promote branches at ~L1990/2033): never
+      // let a future second promote call after this one silently drop
+      // earlier evictions (run #204 Reviewer-A consistency note; P2-350 class).
+      evicted = evicted.concat(kickResult?.evicted ?? []);
     });
 
     // P1-17: bell + WS for the promoted player (after commit).
