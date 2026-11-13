@@ -1,10 +1,10 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover)
-- Commits ahead of main: **435** (last promote 2026-09-25; **0059 + 0060 ride the next promote — applied to staging, NOT prod (prod Neon 60/60 rows)**; migrate-first runbook mandatory before any merge; run #203 added NO migrations)
-- Services: API/PWA/Admin UP — **all three serving run #203 builds** (`479affd` tree: API = P2-349 guard in dist, push ENABLED (VAPID live, 0 boot warnings); PWA = numerals live + VAPID key baked (verified in served shim chunk); Admin = P2-346 dir-toggle fix)
-- Factory loop status: **HEALTHY 2026-11-12** — run #203 shipped PRs #243/#244/#245 (numerals completion batch, waitlist missing-wallet guard, reviews dir-toggle) all MERGED+LIVE, plus P1-66 VAPID activation per owner D-20261106-15. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Open PRs: 2 (#178 promote staging→main — owner-only, owner-deferred per D-20261106-02 Coolify cutover · #247 P2-352 bell Load-more, run #204, checks rolling)
+- Commits ahead of main: **436** (last promote 2026-09-25; **0059 + 0060 ride the next promote — applied to staging, NOT prod (prod Neon 60/60 rows)**; migrate-first runbook mandatory before any merge; runs #203/#204 added NO migrations; PR #246 numerals-2 merged `c6b1b49`)
+- Services: API/PWA/Admin UP — PWA serving the run-#204 uncached build (P2-352 Load-more in the standalone tree pre-merge, BUILD_ID `nwnQq6vh`); API = P2-349 guard in dist, push ENABLED (VAPID live); Admin = P2-346 fix
+- Factory loop status: **HEALTHY 2026-11-13** — run #204 shipped PR #246 (residual numerals + enums + queued-pill digits, MERGED) + PR #247 (P2-352 bell Load-more, zeroshot lane 01a1d28e). Strix next window Dec 1–3. Swap full (0 oom — monitor only).
 
 ## Active owner actions
 
