@@ -9,7 +9,7 @@ import enMessages from '@/messages/en.json';
 import OngoingGameJoinSheet from '@/components/matches/OngoingGameJoinSheet';
 import GameDetails from '@/components/matches/GameDetails';
 import VenueReviewsSection from '@/components/venues/VenueReviewsSection';
-import { formatRating } from '@/lib/format';
+import { formatMoney, formatRating } from '@/lib/format';
 
 /**
  * P2-353 / P2-354 / P2-356 (run #203): Latin digits leaked into AR on the
@@ -128,6 +128,17 @@ describe('formatRating (P2-356)', () => {
   });
 });
 
+describe('formatMoney non-finite guard (run #204)', () => {
+  it('returns empty string for NaN/Infinity instead of Intl literal "NaN"', () => {
+    expect(formatMoney(NaN, 'ar')).toBe('');
+    expect(formatMoney(NaN, 'en')).toBe('');
+    expect(formatMoney(Infinity, 'en')).toBe('');
+    // finite path unchanged
+    expect(formatMoney(25, 'en')).toMatch(/SAR/);
+    expect(formatMoney(25, 'ar')).toContain('٢٥');
+  });
+});
+
 describe('P2-353 — structure bans on the removed shapes', () => {
   const read = (p: string) => readFileSync(join(__dirname, p), 'utf8');
   const page = read('../../src/app/[locale]/match/[id]/page.tsx');
@@ -151,6 +162,18 @@ describe('P2-353 — structure bans on the removed shapes', () => {
     for (const src of [page, sheet, details, reviewsSrc, actions]) {
       expect(src).not.toContain('toFixed(');
     }
+  });
+
+  it('residual numeral/enum bypasses fixed (run #204): counts formatted, enums localized', () => {
+    // counts route through formatCount (openSpots + comments)
+    expect(page).toContain('formatCount(openSpots, numeralLocale)');
+    expect(page).toContain('formatCount(match.comments.length, numeralLocale)');
+    // share text honors the match currency (Reviewer A run #204)
+    expect(page).toContain('formatMoney(m.price, appLocale, m.currency)');
+    // intensity/surface enums localized (Reviewer B run #204)
+    expect(page).toContain('detailSurfaceLabel');
+    expect(page).toContain('detailIntensityLabel');
+    expect(page).not.toContain('value: match.surface');
   });
 
   it('GameDetails caller passes the match currency', () => {

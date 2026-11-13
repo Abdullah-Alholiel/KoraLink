@@ -105,6 +105,21 @@ export default function MatchDetailPage({
     const showToast = useAppStore((s) => s.showToast);
 
     const openSpots = match ? match.totalSpots - match.filledSpots : 0;
+    // Match-detail enum localization (run #204 — same class as MatchCard's
+    // P2-342 fix): intensity/surface route through i18n so AR users never
+    // read raw 'Casual'/'Grass' enum values on this page.
+    const detailIntensityLabel =
+        match?.intensity === 'Casual'
+            ? t('host.matchTypeCasual')
+            : match?.intensity === 'Competitive'
+                ? t('host.matchTypeCompetitive')
+                : (match?.intensity ?? '');
+    const detailSurfaceLabel =
+        match?.surface === 'Grass'
+            ? t('clubs.surfaceGrass')
+            : match?.surface === 'Artificial'
+                ? t('clubs.surfaceArtificial')
+                : (match?.surface ?? '');
     const isJoined = match?.isJoined ?? false;
     const isUserHost = match?.isUserHost ?? false;
     const showJoin = !!match && !isJoined && !isUserHost && (match.status === 'open' || match.status === 'full' || match.status === 'in_progress') && openSpots > 0;
@@ -230,7 +245,7 @@ export default function MatchDetailPage({
             date: scheduled ? formatShortDate(scheduled, appLocale) : m.date,
             time: scheduled ? formatClockTime(scheduled, appLocale) : m.time,
             venue: m.venueName,
-            price: m.price === 0 ? t('gameDetails.free') : formatMoney(m.price, appLocale),
+            price: m.price === 0 ? t('gameDetails.free') : formatMoney(m.price, appLocale, m.currency),
         };
     };
 
@@ -781,7 +796,7 @@ export default function MatchDetailPage({
                                     </div>
                                     <div className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
                                         <span className="text-[11px] font-bold text-white">
-                                            {openSpots} {t('matchDetail.spotsLeft')} • {t('matchDetail.fillSquad')}
+                                            {formatCount(openSpots, numeralLocale)} {t('matchDetail.spotsLeft')} • {t('matchDetail.fillSquad')}
                                         </span>
                                     </div>
                                 </a>
@@ -863,10 +878,10 @@ export default function MatchDetailPage({
                             <div className="px-5 mt-5">
                                 <div className="flex items-center gap-2">
                                     <Trophy className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                                    <p className="text-sm font-bold text-brand-black">{match.intensity} {t('matchDetail.matchType')}</p>
+                                    <p className="text-sm font-bold text-brand-black">{detailIntensityLabel} {t('matchDetail.matchType')}</p>
                                 </div>
                                 <p className="text-xs text-gray-500 mt-0.5 ms-6">
-                                    {match.format} • {match.surface} • {t('matchDetail.matchRules')}
+                                    {match.format} • {detailSurfaceLabel} • {t('matchDetail.matchRules')}
                                 </p>
                             </div>
 
@@ -875,7 +890,7 @@ export default function MatchDetailPage({
                                 {[
                                     { label: t('gameDetails.price'), value: match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, numeralLocale, match.currency) },
                                     { label: t('matchDetail.genderLabel'), value: match.gender === 'men' ? t('matchDetail.gender.men') : match.gender === 'women' ? t('matchDetail.gender.women') : t('matchDetail.gender.mixed') },
-                                    { label: t('matchDetail.surface'), value: match.surface },
+                                    { label: t('matchDetail.surface'), value: detailSurfaceLabel },
                                 ].map((pill) => (
                                     <div
                                         key={pill.label}
@@ -927,7 +942,7 @@ export default function MatchDetailPage({
                                         </div>
                                     </div>
                                     <button className="text-sm font-medium text-brand-green mt-3" onClick={() => setShowChatSheet(true)}>
-                                        {t('matchDetail.viewAllComments')} {match.comments.length} {t('matchDetail.comments')}
+                                        {t('matchDetail.viewAllComments')} {formatCount(match.comments.length, numeralLocale)} {t('matchDetail.comments')}
                                     </button>
                                 </div>
                             )}
@@ -1120,7 +1135,7 @@ export default function MatchDetailPage({
                 isOpen={showPayment}
                 onClose={() => setShowPayment(false)}
                 onPaySuccess={handlePaySuccess}
-                matchTitle={`${match.format} ${match.intensity}`}
+                matchTitle={`${match.format} ${detailIntensityLabel}`}
                 matchTime={`${match.date}, ${match.time}`}
                 matchLocation={match.venueName}
                 matchId={match.id}

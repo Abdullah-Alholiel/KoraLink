@@ -58,6 +58,10 @@ export function formatMoney(
   locale: AppLocale,
   currency: string = 'SAR'
 ): string {
+  // Run #204 (Reviewer A MINOR): match the formatCount/formatRating
+  // convention — non-finite input returns '' instead of Intl's literal
+  // "NaN" render (a NaN price must degrade silently, not display NaN).
+  if (!Number.isFinite(value)) return '';
   return numberFormat(locale, {
     style: 'currency',
     // PR-Agent r1 (PR #225): Intl.NumberFormat THROWS RangeError on a
