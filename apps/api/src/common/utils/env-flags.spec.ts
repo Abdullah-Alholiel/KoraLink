@@ -52,9 +52,31 @@ describe('env-flags (P1-72)', () => {
       ).not.toThrow();
     });
 
-    it('allows SWAGGER_ENABLED=true in production (documented owner escape hatch)', () => {
+    // Run #205 (Reviewer A IMPORTANT, parent-verified): the prod+true case below
+    // was ORIGINALLY pinned as a "documented owner escape hatch" (PR #216 r2,
+    // run #188). That was a factory-authored default, never an owner ledger
+    // decision — and it silently re-exposed /api/docs in production (the exact
+    // Strix run-#183 MEDIUM this file exists to close). Superseded by the
+    // symmetric prod guard; if the owner wants an emergency prod-Swagger
+    // lever, that is an explicit DECISIONS.md row that reintroduces it.
+    it('throws when production explicitly enables Swagger (Strix run-#183 class)', () => {
       expect(() =>
         assertEnvFlags(makeConfig({ NODE_ENV: 'production', SWAGGER_ENABLED: 'true' })),
+      ).toThrow('SWAGGER_ENABLED=true is not allowed when NODE_ENV=production');
+    });
+
+    it.each([
+      ['production', 'false'],
+      ['production', undefined],
+      ['staging', 'true'],
+      ['staging', 'false'],
+      ['staging', undefined],
+      ['development', 'true'],
+      ['development', 'false'],
+      [undefined, 'true'],
+    ])('allows NODE_ENV=%s with SWAGGER_ENABLED=%s (no throw)', (nodeEnv, flag) => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, SWAGGER_ENABLED: flag })),
       ).not.toThrow();
     });
 
