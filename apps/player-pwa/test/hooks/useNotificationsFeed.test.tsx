@@ -61,13 +61,13 @@ describe('useNotificationsFeed (bell-sheet freshness poll, P2-135 completion)', 
     const { result } = renderHook(() => useNotificationsFeed(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockFetcher).toHaveBeenCalledTimes(1);
-    expect(mockFetcher).toHaveBeenCalledWith('/users/me/notifications');
+    expect(mockFetcher).toHaveBeenCalledWith('/users/me/notifications?page=1&perPage=20');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(45_000);
     });
     await waitFor(() => expect(mockFetcher).toHaveBeenCalledTimes(2));
-    expect(mockFetcher).toHaveBeenLastCalledWith('/users/me/notifications');
+    expect(mockFetcher).toHaveBeenLastCalledWith('/users/me/notifications?page=1&perPage=20');
   });
 
   it('does not stack a poll behind an in-flight fetch', async () => {
@@ -91,14 +91,39 @@ describe('useNotificationsFeed (bell-sheet freshness poll, P2-135 completion)', 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
   });
 
-  it('returns the typed notifications payload unchanged', async () => {
+  it('returns the typed notifications payload as the first page', async () => {
     const wrapper = createWrapper();
     const { result } = renderHook(() => useNotificationsFeed(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({
-      items: [makeApiFeedItem('n1')],
-      total: 1,
-      hasMore: false,
+    expect(result.current.data?.pages).toEqual([
+      { items: [makeApiFeedItem('n1')], total: 1, hasMore: false },
+    ]);
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it('pages with ?page=N while hasMore, then stops the 45s poll past page 1 (P2-352)', async () => {
+    mockFetcher.mockImplementation((url: string) => {
+      if (url.includes('page=2')) {
+        return Promise.resolve({ items: [makeApiFeedItem('n2')], total: 2, hasMore: false });
+      }
+      return Promise.resolve({ items: [makeApiFeedItem('n1')], total: 2, hasMore: true });
     });
+    const wrapper = createWrapper();
+    const { result } = renderHook(() => useNotificationsFeed(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.hasNextPage).toBe(true);
+
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+    expect(mockFetcher).toHaveBeenLastCalledWith('/users/me/notifications?page=2&perPage=20');
+    expect(result.current.hasNextPage).toBe(false);
+
+    const callsBefore = mockFetcher.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000 * 2);
+    });
+    expect(mockFetcher).toHaveBeenCalledTimes(callsBefore);
   });
 });

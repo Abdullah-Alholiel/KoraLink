@@ -21,6 +21,7 @@ import {
   Ban,
   Flag,
   CalendarClock,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react';
 import { useNotificationsFeed, useMarkNotificationsRead, useUnreadNotificationCount } from '@/hooks/useNotificationsFeed';
@@ -93,7 +94,16 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
   const t = useTranslations();
   const locale = useLocale();
   const setNotificationBadge = useAppStore((s) => s.setNotificationBadge);
-  const { data, isLoading, isError, refetch } = useNotificationsFeed();
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useNotificationsFeed();
   const { data: unread } = useUnreadNotificationCount(open);
   const markRead = useMarkNotificationsRead();
 
@@ -117,7 +127,18 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
 
   if (!open) return null;
 
-  const items = data?.items ?? [];
+  // "Load more" pages (P2-352) — flatten every loaded page into one list.
+  const items = data?.pages.flatMap((p) => p.items) ?? [];
+  // A failed "Load more" also flips the query into error status in
+  // react-query v5; keep the loaded rows and show the inline retry instead
+  // of replacing the whole list with the full-screen error state.
+  const showError = isError && !isFetchNextPageError;
+
+  const handleLoadMore = () => {
+    if (isFetchingNextPage) return;
+    trackEvent('notifications_load_more', { loadedCount: items.length });
+    void fetchNextPage();
+  };
   // Server-authoritative unread total (all pages, not just the loaded first
   // page — Reviewer A, run #40): with hasMore the first page alone undercounts
   // and could hide the "Mark all read" action entirely.
@@ -183,7 +204,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
           )}
 
           {/* 2. Error */}
-          {isError && !isLoading && (
+          {showError && !isLoading && (
             <div className="flex flex-col items-center justify-center py-14 px-6">
               <div className="w-14 h-14 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
                 <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
@@ -206,7 +227,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
           )}
 
           {/* 3. Empty */}
-          {!isLoading && !isError && items.length === 0 && (
+          {!isLoading && !showError && items.length === 0 && (
             <div className="flex flex-col items-center justify-center py-14 px-6">
               <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mb-3">
                 <Bell className="w-7 h-7 text-brand-green" strokeWidth={1.5} />
@@ -219,7 +240,7 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
           )}
 
           {/* 4. Populated */}
-          {!isLoading && !isError && items.length > 0 && (
+          {!isLoading && !showError && items.length > 0 && (
             <div className="divide-y divide-gray-50">
               {items.map((item) => {
                 const Icon = VERB_ICON[item.verb] ?? Bell;
@@ -270,6 +291,32 @@ export default function NotificationSheet({ open, onClose }: NotificationSheetPr
                   </Link>
                 );
               })}
+              {/* 5. Load more (P2-352) — only while the server reports more pages. */}
+              {hasNextPage && (
+                <div className="flex flex-col items-center gap-2 pt-3 pb-1">
+                  {isFetchNextPageError && !isFetchingNextPage && (
+                    <p role="status" className="text-xs font-medium text-brand-red text-center px-4">
+                      {t('notifications.loadMoreFailed')}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={isFetchingNextPage}
+                    aria-busy={isFetchingNextPage}
+                    className="flex items-center gap-2 px-5 py-2 rounded-full border border-gray-200 text-xs font-semibold text-brand-black active:scale-95 transition-transform disabled:opacity-60"
+                  >
+                    {isFetchingNextPage && (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} aria-hidden="true" />
+                    )}
+                    {isFetchingNextPage
+                      ? t('notifications.loadingMore')
+                      : isFetchNextPageError
+                        ? t('common.retry')
+                        : t('notifications.loadMore')}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
