@@ -12,10 +12,11 @@
  * 3DS: frictionless cards complete in-place via on_completed; challenge flows
  * full-page-redirect to /<locale>/wallet/topup/callback, which re-verifies.
  *
- * The library is injected as a script tag on first use (not bundled): its npm
- * type declarations reference an undeclared global namespace, and the CDN
- * hosts are CSP-allowlisted in next.config.mjs (script-src) alongside
- * api.moyasar.com (connect-src) for the tokenization XHRs.
+ * The library + stylesheet are SELF-HOSTED from /vendor/moyasar/
+ * (moyasar-payment-form@2.3.0 via npm, SRI-pinned): the CDN era loaded only
+ * the script while the page CSP is `style-src 'self'` — the CDN stylesheet
+ * could never load and the form rendered unstyled (bare pink error block,
+ * invisible pay button). Same-origin keeps the CSP tight.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
@@ -32,6 +33,12 @@ import {
   type TopupIntentResponse,
 } from '@/hooks/useTopup';
 import { TOPUP_INTENT_SESSION_KEY, TOPUP_PAYMENT_SESSION_KEY } from '@/lib/topup';
+import {
+  MOYASAR_SCRIPT_URL,
+  MOYASAR_SCRIPT_INTEGRITY,
+  MOYASAR_CSS_URL,
+  MOYASAR_CSS_INTEGRITY,
+} from '@/lib/topup';
 // P2-289 (run #180): presets + validation live in the SHARED domain module
 // (the legacy dummy sheet that also used it was removed in P2-331).
 import { presetsWithinBounds, validateTopupAmount } from '@/lib/topup-amount';
@@ -54,6 +61,9 @@ interface MoyasarFormApi {
     // moyasar-payment-form >=2.x REJECTS non-async callbacks at init ("On completed must be a
     // promise based callback") — the type is Promise-only so a sync handler cannot compile.
     on_completed: (payment: { id: string; status: string; amount: number; source?: { message?: string | null } | null }) => Promise<void>;
+    // Same async-only validation applies to on_failure ("On failure must be a
+    // promise based callback") — declined/errored payments arrive here.
+    on_failure: (payment: { id?: string; status?: string; source?: { message?: string | null } | null }) => Promise<void>;
   }): void;
 }
 
@@ -63,8 +73,22 @@ declare global {
   }
 }
 
-const FORM_CDN = 'https://cdn.jsdelivr.net/npm/moyasar-payment-form@2.3.0/dist/moyasar.umd.min.js';
+const FORM_CDN = MOYASAR_SCRIPT_URL;
+const FORM_CSS_URL = MOYASAR_CSS_URL;
 // P2-289 (run #180): quick amounts live in lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS).
+
+/** Idempotently ensure the vendored Moyasar stylesheet is in the document. */
+function ensureMoyasarStylesheet(): void {
+  if (document.querySelector(`link[href="${FORM_CSS_URL}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = FORM_CSS_URL;
+  // setAttribute (not the IDL property): jsdom does not reflect `.integrity`,
+  // and the attribute is what SRI reads in every browser.
+  link.setAttribute('integrity', MOYASAR_CSS_INTEGRITY);
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+}
 
 function loadMoyasarScript(): Promise<MoyasarFormApi> {
   return new Promise((resolve, reject) => {
@@ -81,6 +105,10 @@ function loadMoyasarScript(): Promise<MoyasarFormApi> {
     }
     const script = document.createElement('script');
     script.src = FORM_CDN;
+    // setAttribute (not the IDL property): jsdom does not reflect `.integrity`,
+    // and the attribute is what SRI reads in every browser.
+    script.setAttribute('integrity', MOYASAR_SCRIPT_INTEGRITY);
+    script.crossOrigin = 'anonymous';
     script.async = true;
     script.addEventListener('load', onLoad);
     script.addEventListener('error', () => reject(new Error('Failed to load the payment form')));
@@ -157,32 +185,65 @@ export default function TopupSheet({
     if (formHostRef.current) formHostRef.current.innerHTML = '';
   }, []);
 
+  /**
+   * Shared verify runner (recovery retry AND the on_completed path AND the
+   * sheet-open auto-verify). 2026-11-13 owner finding: a credited intent used
+   * to keep showing "payment confirmation in progress … retry confirmation"
+   * forever — the restore-on-open effect restored the ids but never VERIFIED
+   * them. Now a restored pair is verified automatically; the manual button
+   * stays only for a failed attempt (network down etc).
+   *
+   * LATEST-REF PATTERN — runVerify is created ONCE and reads the live
+   * mutation/handlers through refs. The restore-on-open effect depends on
+   * runVerify; react-query hands a FRESH mutation object every render, so
+   * depending on it directly re-fired the effect after each setPendingPayment
+   * render → set → re-render loop (the suite hung to timeout live). Same
+   * class as the §26 stale-snapshot rules: never let a per-render identity
+   * into an effect that writes state.
+   */
+  const verifyRef = useRef(verifyTopup);
+  verifyRef.current = verifyTopup;
+  const handlersRef = useRef({ locale, onClose, onCredited, t });
+  handlersRef.current = { locale, onClose, onCredited, t };
+  const runVerify = useCallback(
+    (paymentId: string, intentId: string, via: 'completed' | 'recovery' | 'restored') => {
+      const { locale: l, onClose: close, onCredited: credited, t: tr } = handlersRef.current;
+      verifyRef.current.mutate(
+        { paymentId, intentId },
+        {
+          onSuccess: (res) => {
+            trackEvent('topup_completed', {
+              amountSar: res.amountSar,
+              alreadyCredited: res.alreadyCredited,
+              via,
+              locale: l,
+            });
+            window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
+            window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
+            setPendingPayment(null);
+            credited?.();
+            close();
+          },
+          onError: (err: unknown) => {
+            captureError(err, { area: via === 'recovery' ? 'wallet-topup-verify-retry' : 'wallet-topup-verify' });
+            // The sheet may be closed mid-flow (isOpen=false renders null but
+            // stays mounted) — the ids stay persisted, so the recovery block
+            // is restored (and re-verified) on the next open.
+            setPendingPayment({ paymentId, intentId });
+            setError(tr(errorKey(classifyError(err))));
+            setStage('paying');
+          },
+        },
+      );
+    },
+    [],
+  );
+
   const retryVerify = useCallback(() => {
     if (!pendingPayment) return;
     setError(null);
-    verifyTopup.mutate(
-      { paymentId: pendingPayment.paymentId, intentId: pendingPayment.intentId },
-      {
-        onSuccess: (res) => {
-          trackEvent('topup_completed', {
-            amountSar: res.amountSar,
-            alreadyCredited: res.alreadyCredited,
-            via: 'recovery',
-            locale,
-          });
-          window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
-          window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
-          setPendingPayment(null);
-          onCredited?.();
-          onClose();
-        },
-        onError: (err: unknown) => {
-          captureError(err, { area: 'wallet-topup-verify-retry' });
-          setError(t(errorKey(classifyError(err))));
-        },
-      },
-    );
-  }, [locale, onClose, onCredited, pendingPayment, t, verifyTopup]);
+    runVerify(pendingPayment.paymentId, pendingPayment.intentId, 'recovery');
+  }, [pendingPayment, runVerify]);
 
   useEffect(() => {
     if (!isOpen) reset();
@@ -191,16 +252,29 @@ export default function TopupSheet({
   // PR-Agent r3 IMPORTANT: mid-flow close recovery. A late on_completed (or a
   // verify failure) persists the charged payment's ids to sessionStorage even
   // when the sheet was closed; on the next open, restore the recovery block
-  // so the charge can be confirmed (success paths clear the keys themselves).
+  // and verify AUTOMATICALLY (success paths clear the keys themselves). A
+  // credited pair thus confirms on open — the stale "retry confirmation"
+  // block the owner saw after the reconcile sweep had already credited the
+  // wallet is gone; a genuinely unverified pair re-runs the server verify.
+  // autoVerifiedRef guards StrictMode's double effect-fire.
+  const autoVerifiedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isOpen) return;
     const paymentId = window.sessionStorage.getItem(TOPUP_PAYMENT_SESSION_KEY);
     const intentId = window.sessionStorage.getItem(TOPUP_INTENT_SESSION_KEY);
-    if (paymentId && intentId && !intentRef.current) {
+    if (!paymentId || !intentId || intentRef.current) return;
+    const pairKey = `${paymentId}:${intentId}`;
+    setFlowStarted(true);
+    if (autoVerifiedRef.current === pairKey) {
+      // Already auto-verified this pair and it failed — manual retry only.
       setPendingPayment({ paymentId, intentId });
       setStage('paying');
+      return;
     }
-  }, [isOpen]);
+    autoVerifiedRef.current = pairKey;
+    setStage('paying');
+    runVerify(paymentId, intentId, 'restored');
+  }, [isOpen, runVerify]);
 
   useEffect(() => {
     if (!isOnline && stage !== 'form') setError(t('wallet.topup.offlineNote'));
@@ -233,6 +307,9 @@ export default function TopupSheet({
       window.sessionStorage.setItem(TOPUP_INTENT_SESSION_KEY, intentRes.intent.id);
       trackEvent('topup_intent_created', { amountSar: parsed, locale });
 
+      // The stylesheet must exist BEFORE Moyasar renders (it builds the form
+      // DOM synchronously at init); the link idempotently no-ops if present.
+      ensureMoyasarStylesheet();
       const Moyasar = await loadMoyasarScript();
       if (!formHostRef.current) throw new Error('form host missing');
       formHostRef.current.innerHTML = '';
@@ -265,32 +342,20 @@ export default function TopupSheet({
           // unrecoverable (recovery block + session survive reloads).
           window.sessionStorage.setItem(TOPUP_INTENT_SESSION_KEY, closedIntent.intent.id);
           window.sessionStorage.setItem(TOPUP_PAYMENT_SESSION_KEY, payment.id);
-          verifyTopup.mutate(
-            { paymentId: payment.id, intentId: closedIntent.intent.id },
-            {
-              onSuccess: (res) => {
-                trackEvent('topup_completed', {
-                  amountSar: res.amountSar,
-                  alreadyCredited: res.alreadyCredited,
-                  locale,
-                });
-                window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
-                window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
-                setPendingPayment(null);
-                onCredited?.();
-                onClose();
-              },
-              onError: (err: unknown) => {
-                captureError(err, { area: 'wallet-topup-verify' });
-                // The sheet may be closed mid-flow (isOpen=false renders null
-                // but stays mounted) — the restore-on-open effect below picks
-                // the recovery block up from the persisted ids on reopen.
-                setPendingPayment({ paymentId: payment.id, intentId: closedIntent.intent.id });
-                setError(t(errorKey(classifyError(err))));
-                setStage('paying');
-              },
-            },
-          );
+          runVerify(payment.id, closedIntent.intent.id, 'completed');
+        },
+        // Same async-only contract as on_completed. A declined/errored
+        // payment (or the card XHR failing entirely, e.g. DNS/connectivity)
+        // must surface a LOCALIZED error with the sheet usable again —
+        // never the form library's crash or a silent dead form (the 2026-11-13
+        // owner session saw TypeError: Failed to fetch + a form-library crash).
+        on_failure: async () => {
+          captureError(new Error('moyasar form reported failure'), { area: 'wallet-topup-form' });
+          // The ids were never persisted here: a failed payment did not
+          // charge the card (server confirms truth on verify if it did).
+          window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
+          setStage('form');
+          setError(t('wallet.topup.paymentFailed'));
         },
       });
       setStage('paying');
@@ -299,7 +364,10 @@ export default function TopupSheet({
       setError(t(errorKey(classifyError(err))));
       setStage('form');
     }
-  }, [amount, createIntent, isOnline, locale, maxAmount, minAmount, onClose, onCredited, t, verifyTopup]);
+    // runVerify is a useCallback with stable dependencies (t/locale/onClose/
+    // onCredited/verifyTopup); createIntent.mutateAsync identity is stable
+    // across renders (react-query mutation object).
+  }, [amount, createIntent, isOnline, locale, maxAmount, minAmount, onClose, onCredited, runVerify, t]);
 
   if (!isOpen) return null;
 

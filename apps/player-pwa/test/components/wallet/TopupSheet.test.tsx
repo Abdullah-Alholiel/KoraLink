@@ -97,8 +97,11 @@ beforeEach(() => {
         publishableKey: 'pk_test_x',
     });
     verifyTopupMock.mockReset();
-    // jsdom: script injection + global Moyasar stub
-    document.querySelectorAll(`script[src*="moyasar-payment-form"]`).forEach((s) => s.remove());
+    // jsdom: script injection + global Moyasar stub (vendor URL since
+    // 2026-11-13; the legacy CDN path is kept in the selector so a stray
+    // legacy tag can never leak between tests).
+    document.querySelectorAll(`script[src*="moyasar"]`).forEach((s) => s.remove());
+    document.querySelectorAll(`link[href*="moyasar"]`).forEach((l) => l.remove());
     (window as { Moyasar?: unknown }).Moyasar = {
         init: vi.fn(),
     };
@@ -107,6 +110,8 @@ beforeEach(() => {
 afterEach(() => {
     cleanup();
     document.body.innerHTML = '';
+    document.querySelectorAll(`script[src*="moyasar"]`).forEach((s) => s.remove());
+    document.querySelectorAll(`link[href*="moyasar"]`).forEach((l) => l.remove());
     window.sessionStorage.clear();
 });
 
@@ -346,5 +351,146 @@ describe('TopupSheet — enabled=false notice (P2-331)', () => {
         expect(screen.queryByTestId('topup-config-error')).toBeNull();
         expect(screen.queryByTestId('topup-disabled-notice')).toBeNull();
         expect(screen.getByTestId('moyasar-form-host')).toBeTruthy();
+    });
+});
+
+// P0-2 (2026-11-13, owner-blocked): the CDN era loaded ONLY the script while
+// the page CSP is style-src 'self' — the stylesheet never loaded and the form
+// rendered unstyled (bare pink error block, invisible pay button). The vendor
+// is now self-hosted; the sheet must inject BOTH the stylesheet and the
+// SRI-pinned script before Moyasar.init renders the form DOM.
+describe('TopupSheet — self-hosted vendor assets (P0-2 2026-11-13)', () => {
+    it('injects the vendored stylesheet BEFORE calling Moyasar.init', async () => {
+        renderSheet();
+        fireEvent.change(screen.getByLabelText('Amount (SAR)'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const link = document.querySelector('link[rel="stylesheet"][href*="vendor/moyasar/moyasar.css"]');
+            expect(link).toBeTruthy();
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+    });
+
+    it('loads the SELF-HOSTED script with SRI — never the CDN', async () => {
+        // Delete the global stub: loadMoyasarScript only injects the tag when
+        // the library is not already present (exactly the first-top-up path).
+        delete (window as { Moyasar?: unknown }).Moyasar;
+        renderSheet();
+        fireEvent.change(screen.getByLabelText('Amount (SAR)'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const script = document.querySelector('script[src*="moyasar"]') as HTMLScriptElement | null;
+            expect(script).toBeTruthy();
+            expect(script!.getAttribute('src')).toContain('/vendor/moyasar/moyasar.umd.js');
+            expect(script!.getAttribute('integrity')).toMatch(/^sha256-/);
+            expect(script!.getAttribute('crossorigin')).toBe('anonymous');
+        });
+        expect(document.querySelector('script[src*="cdn.jsdelivr.net"]')).toBeNull();
+    });
+
+    it('stylesheet link carries SRI integrity (CDN-free styling contract)', async () => {
+        renderSheet();
+        fireEvent.change(screen.getByLabelText('Amount (SAR)'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const link = document.querySelector('link[rel="stylesheet"][href*="moyasar.css"]') as HTMLLinkElement | null;
+            expect(link).toBeTruthy();
+            expect(link!.getAttribute('integrity')).toMatch(/^sha256-/);
+        });
+    });
+});
+
+// P0-2 (2026-11-13): a declined/errored payment (or a dead network at pay
+// time) must surface a LOCALIZED error with the sheet usable again — the
+// owner session saw the form library crash with TypeError: Failed to fetch
+// and nothing useful on screen.
+describe('TopupSheet — on_failure path (P0-2 2026-11-13)', () => {
+    it('on_failure is an ASYNC function (same init-time validation as on_completed)', async () => {
+        renderSheet();
+        fireEvent.change(screen.getByLabelText('Amount (SAR)'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+        const cfg = init.mock.calls[0][0];
+        expect(typeof cfg.on_failure).toBe('function');
+        const cb = cfg.on_failure as (...a: unknown[]) => unknown;
+        const isAsync = cb.constructor.name === 'AsyncFunction' || cb.toString().startsWith('async');
+        expect(isAsync).toBe(true);
+    });
+
+    it('a failed payment shows the localized nothing-charged copy and returns to the amount form', async () => {
+        renderSheet();
+        fireEvent.change(screen.getByLabelText('Amount (SAR)'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: /Continue to card payment/i }));
+        await waitFor(() => {
+            const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+            expect(init).toHaveBeenCalled();
+        });
+        const init = (window as { Moyasar?: { init: ReturnType<typeof vi.fn> } }).Moyasar?.init as ReturnType<typeof vi.fn>;
+        const cfg = init.mock.calls[0][0];
+        await cfg.on_failure({ id: 'pay_failed', status: 'failed' });
+        // on_failure flips stage back to 'form' — waitFor the re-render (the
+        // assertion is sync; the React state flush is not).
+        await waitFor(() => {
+            expect(screen.getByText(enMessages.wallet.topup.paymentFailed)).toBeTruthy();
+        });
+        // Back on the amount form: the pay CTA is visible again.
+        expect(screen.getByRole('button', { name: /Continue to card payment/i })).toBeTruthy();
+        // A failed payment must NOT leave recovery ids behind.
+        expect(window.sessionStorage.getItem('koralink:topup-payment-id')).toBeNull();
+    });
+});
+
+// P0-2 (2026-11-13): restored ids (charged mid-flow, sheet closed/reopened or
+// reconcile-credited) used to show the stale "retry confirmation" block
+// forever — the restore effect never verified. Now a restored pair auto-verifies
+// once; a failed auto-verify falls back to the manual retry button.
+describe('TopupSheet — restored ids auto-verify (P0-2 2026-11-13)', () => {
+    function seedPair() {
+        window.sessionStorage.setItem('koralink:topup-payment-id', 'pay_restored123');
+        window.sessionStorage.setItem('koralink:topup-intent-id', 'intent-1');
+    }
+
+    it('verify fires automatically on open — no manual retry needed for a credited pair', async () => {
+        seedPair();
+        verifyTopupMock.mockImplementation((_input, options) => {
+            options.onSuccess({ credited: true, alreadyCredited: true, balance: '55.00', paymentId: 'pay_restored123', amountSar: 5 });
+        });
+        renderSheet();
+        await waitFor(() => {
+            expect(verifyTopupMock).toHaveBeenCalledWith(
+                { paymentId: 'pay_restored123', intentId: 'intent-1' },
+                expect.objectContaining({ onSuccess: expect.any(Function) }),
+            );
+        });
+        expect(screen.queryByRole('button', { name: /Retry confirmation/i })).toBeNull();
+    });
+
+    it('a FAILED auto-verify falls back to the visible manual retry button', async () => {
+        seedPair();
+        verifyTopupMock.mockImplementation((_input, options) => {
+            options.onError(new Error('verify failed'));
+        });
+        renderSheet();
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Retry confirmation/i })).toBeTruthy();
+        });
+    });
+
+    it('auto-verifies only ONCE per pair (manual retry owns any later attempts)', async () => {
+        seedPair();
+        verifyTopupMock.mockImplementation((_input, options) => {
+            options.onError(new Error('verify failed'));
+        });
+        renderSheet();
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Retry confirmation/i })).toBeTruthy();
+        });
+        const callsAfterAuto = verifyTopupMock.mock.calls.length;
+        expect(callsAfterAuto).toBe(1);
     });
 });

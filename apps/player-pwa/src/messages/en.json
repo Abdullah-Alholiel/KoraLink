@@ -761,7 +761,8 @@
       "lastAttemptPendingTitle": "Top-up not completed",
       "lastAttemptPendingBody": "Your last top-up attempt of {amount} didn’t finish — nothing has been added to your wallet. If your bank shows a charge, contact support.",
       "lastAttemptRetry": "Try again",
-      "backToWallet": "Back to wallet"
+      "backToWallet": "Back to wallet",
+      "paymentFailed": "The payment didn’t go through — nothing was charged. Please try again."
     },
     "pay": "Pay",
     "amount": "Amount",

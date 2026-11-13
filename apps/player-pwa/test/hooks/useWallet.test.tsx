@@ -268,9 +268,11 @@ describe('useWallet hooks', () => {
 
       // Arabic-Indic digits prove the AR path ran (the legacy bug exported
       // Latin "7:30 PM • Completed"). Meridiem itself is TZ-dependent —
-      // never asserted; digits + Completed are the locale oracle.
+      // never asserted; digits + the localized status are the locale oracle.
+      // 2026-11-13 (P0-2 owner finding #6): the status localizes too — the
+      // old English '• Completed' pin WAS the defect.
       expect(out!.rows[0].description).toMatch(/[\u0660-\u0669]/);
-      expect(out!.rows[0].description).toContain('• Completed');
+      expect(out!.rows[0].description).toContain('• مكتمل');
       expect(
         queryClient.getQueryData([
           'wallet',

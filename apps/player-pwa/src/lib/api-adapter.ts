@@ -519,7 +519,11 @@ function buildTransactionTitle(
     return refId ? `Match Payment #${refId.slice(0, 8)}` : 'Match Payment';
   }
   switch (ref) {
-    case 'TOPUP': return 'Wallet Top Up';
+    // 2026-11-13 (owner P0-2 finding #6): the top-up row rendered English
+    // "Wallet Top Up" inside the Arabic UI. Same localization shape as the
+    // REFUND prefix above (run #200); full key-ification stays P2-342's scope.
+    case 'TOPUP':
+      return locale === 'ar' ? 'شحن المحفظة' : 'Wallet Top Up';
     case 'REFUND': return 'Refund';
     case 'PRIZE': return 'Prize / Store Credit';
     default: return 'Transaction';
@@ -538,5 +542,17 @@ function buildTransactionDescription(
     hour12: true,
   });
   const capStatus = status.charAt(0).toUpperCase() + status.slice(1);
-  return `${timeStr} • ${capStatus}`;
+  // 2026-11-13 (owner P0-2 finding #6): the status half rendered English
+  // "Completed" inside the Arabic UI. Same inline-localization shape as the
+  // title switch (full key-ification stays P2-342's scope); strings match the
+  // existing wallet.completed/pending/failed lexicon.
+  const statusStr =
+    locale === 'ar'
+      ? status === 'pending'
+        ? 'قيد الانتظار'
+        : status === 'completed'
+          ? 'مكتمل'
+          : 'فشل'
+      : capStatus;
+  return `${timeStr} • ${statusStr}`;
 }
