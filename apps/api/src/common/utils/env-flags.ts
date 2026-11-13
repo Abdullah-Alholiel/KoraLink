@@ -53,4 +53,17 @@ export function assertEnvFlags(config: ConfigService): void {
       'COOKIE_SECURE=false is not allowed when NODE_ENV=production — auth cookies must be secure in production',
     );
   }
+  // PR-Agent r2 (run #205 Reviewer A): the prod guard above was asymmetric —
+  // an explicit SWAGGER_ENABLED=true silently re-exposed /api/docs in
+  // production (the exact Strix run-#183 exposure this file exists to close).
+  // Mirror the cookie invariant: prod boots with Swagger deliberately enabled
+  // must fail loud, never silently serve the OpenAPI document.
+  if (
+    config.get<string>('NODE_ENV') === 'production' &&
+    isSwaggerEnabled(config) === true
+  ) {
+    throw new Error(
+      'SWAGGER_ENABLED=true is not allowed when NODE_ENV=production — the OpenAPI document must not be public in production',
+    );
+  }
 }
