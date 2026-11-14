@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
@@ -66,8 +66,16 @@ function renderSheet(overrides: Partial<Parameters<typeof PaymentSheet>[0]> = {}
 }
 
 async function agree() {
-  // The consent checkbox is the only border-2 button in the agree row; find
-  // it by its accessible position (first button after the policy text).
+  // P2-341 (run #206): the consent control now carries role="checkbox" —
+  // query it directly (role queries beat DOM-position heuristics; the old
+  // button-scan breaks by design once the a11y role is correct).
+  const box = screen.queryByRole('checkbox');
+  if (box) {
+    await userEvent.click(box);
+    return;
+  }
+  // Legacy fallback (pre-P2-341 markup): the only border-2 button in the
+  // agree row; find it by its accessible position.
   const buttons = screen.getAllByRole('button');
   const agreeBtn = buttons.find((b) => b.closest('div')?.textContent?.includes('Disclaimer:'));
   // Fallback: it is the button directly before the "Read full policy" button.
@@ -88,6 +96,20 @@ describe('PaymentSheet — P2-228 localized failure copy + offline guard', () =>
 
   afterEach(() => {
     setOnline(true);
+    // Run-#206 P2-341 lesson: no vitest globals here → RTL auto-cleanup is
+    // OFF; without an explicit cleanup the first test's DOM persists and
+    // duplicated buttons hijack the shared agree() helper in later tests.
+    cleanup();
+  });
+
+  // P2-341 (run #206): the money-consent control is a real checkbox in the
+  // a11y tree — screen readers announce state, not an unlabeled toggle.
+  it('agree control exposes role=checkbox with a live aria-checked state (P2-341)', async () => {
+    renderSheet();
+    const box = screen.getByRole('checkbox');
+    expect(box).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(box);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
   });
 
   it('renders the full consent text (no 80-char truncation) with a Read full policy expander (P2-235)', async () => {
