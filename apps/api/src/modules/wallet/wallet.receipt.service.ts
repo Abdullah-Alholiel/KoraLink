@@ -2,7 +2,13 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { matches, match_players, transactions } from '../../database/schema';
+import {
+  matches,
+  match_players,
+  transactions,
+  pitches,
+  venues,
+} from '../../database/schema';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 /**
@@ -50,6 +56,38 @@ export interface PayoutReceipt {
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
+
+// ── F5 (run #206, D-20261106-13): player transaction receipt contract ──
+
+export type TransactionReceiptContext =
+  | {
+      kind: 'match';
+      matchId: string;
+      matchTitle: string;
+      scheduledAt: string | null;
+      venueName: string | null;
+      city: string | null;
+    }
+  | { kind: 'topup'; paymentId: string | null }
+  | { kind: 'generic' };
+
+export interface TransactionReceipt {
+  txId: string;
+  /**
+   * KL-20261114-A1B2C3D4E5F6 — deterministic per tx, no schema column.
+   * 12 hex chars (48 bits) + UTC day: collision-resistant at any plausible
+   * daily volume; the number is a human reference, not a uniqueness
+   * contract — the tx id stays the PK.
+   */
+  receiptNumber: string;
+  status: 'Pending' | 'Completed' | 'Failed' | 'Reversed';
+  direction: 'credit' | 'debit';
+  amountSar: number;
+  currency: 'SAR';
+  createdAt: string;
+  issuedAt: string;
+  context: TransactionReceiptContext;
+}
 
 @Injectable()
 export class WalletReceiptService {
@@ -161,6 +199,11 @@ export class WalletReceiptService {
         and(
           eq(transactions.reference_type, 'PRIZE'),
           eq(transactions.reference_id, matchId),
+          // Reviewer A run-#206 (IMPORTANT, defense-in-depth): the idempotency
+          // key embeds the matchId today, but the release path is host-scoped —
+          // pin the read to the host explicitly so a future key-format change
+          // can never leak another host's release credit into this receipt.
+          eq(transactions.user_id, match.host_id),
           eq(
             transactions.idempotency_key,
             `host-payout-${matchId}`,
@@ -194,5 +237,122 @@ export class WalletReceiptService {
         perJoinerFeeSar,
       },
     };
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // F5 (run #206, decision D-20261106-13): the PLAYER-side proof-of-payment
+  // receipt. One ledger row in, a structured receipt out — computed on read
+  // (same doctrine as getPayoutReceipt: zero schema change, zero migration).
+  //
+  // Context per reference_type:
+  //   MATCH_FEE / REFUND → the match (title + scheduled date + venue via
+  //     matches→pitches→venues); reference_id IS the match id (match-fees.ts
+  //     fee insert; matches.service refund inserts).
+  //   TOPUP → the Moyasar payment id (reference_id IS payment_id —
+  //     wallet.topup.service.ts credit insert). No intents lookup needed:
+  //     the row itself is already owner-scoped, the id is the artifact.
+  //   everything else (SETTLEMENT / PAYOUT / PRIZE / ADJUSTMENT) → generic
+  //     ledger note — still proof-of-payment, no fabricated context.
+  //
+  // Receipt number: deterministic `KL-<yyyyMMdd>-<first12 of tx id>` —
+  // stable across reads, collision-resistant (48-bit slice), no schema
+  // column. Invoice EXPORT (PDF /
+  // formal invoice artifact) is a later decision — this is the in-app MVP.
+  // ──────────────────────────────────────────────────────────
+
+  async getTransactionReceipt(
+    userId: string,
+    txId: string,
+  ): Promise<TransactionReceipt> {
+    // 1. The transaction must exist AND belong to the caller (owner-only,
+    //    mirroring getPayoutReceipt's host check).
+    const [tx] = await this.db
+      .select({
+        id: transactions.id,
+        user_id: transactions.user_id,
+        type: transactions.type,
+        amount: transactions.amount,
+        reference_type: transactions.reference_type,
+        reference_id: transactions.reference_id,
+        status: transactions.status,
+        created_at: transactions.created_at,
+      })
+      .from(transactions)
+      .where(eq(transactions.id, txId))
+      .limit(1);
+
+    if (!tx || tx.user_id !== userId) {
+      throw new NotFoundException('Receipt not found.');
+    }
+
+    // 2. Context by reference type (match → venue join; topup → payment id).
+    const context = await this.buildContext(tx);
+
+    return {
+      txId: tx.id,
+      receiptNumber: WalletReceiptService.buildReceiptNumber(tx),
+      status: tx.status,
+      direction: tx.type === 'CREDIT' ? 'credit' : 'debit',
+      amountSar: parseFloat(tx.amount) || 0,
+      currency: 'SAR',
+      createdAt: tx.created_at.toISOString(),
+      issuedAt: new Date().toISOString(),
+      context,
+    };
+  }
+
+  private async buildContext(
+    tx: {
+      reference_type: string;
+      reference_id: string | null;
+    },
+  ): Promise<TransactionReceiptContext> {
+    if (
+      (tx.reference_type === 'MATCH_FEE' || tx.reference_type === 'REFUND') &&
+      tx.reference_id
+    ) {
+      const [match] = await this.db
+        .select({
+          id: matches.id,
+          title: matches.title,
+          scheduled_at: matches.scheduled_at,
+          venue_name: venues.name,
+          city: venues.city,
+        })
+        .from(matches)
+        .leftJoin(pitches, eq(matches.pitch_id, pitches.id))
+        .leftJoin(venues, eq(pitches.venue_id, venues.id))
+        .where(eq(matches.id, tx.reference_id))
+        .limit(1);
+
+      if (match) {
+        return {
+          kind: 'match',
+          matchId: match.id,
+          matchTitle: match.title,
+          scheduledAt: match.scheduled_at
+            ? match.scheduled_at.toISOString()
+            : null,
+          venueName: match.venue_name ?? null,
+          city: match.city ?? null,
+        };
+      }
+      // Match gone (defensive — restrict FKs make this rare): a receipt is
+      // still owed, just without fabricated context.
+      return { kind: 'generic' };
+    }
+
+    if (tx.reference_type === 'TOPUP') {
+      // reference_id is the Moyasar payment id (wallet.topup.service credit).
+      return { kind: 'topup', paymentId: tx.reference_id };
+    }
+
+    return { kind: 'generic' };
+  }
+
+  /** KL-20261114-A1B2C3D4E5F6 — deterministic per tx, no schema column. */
+  static buildReceiptNumber(tx: { id: string; created_at: Date }): string {
+    const ymd = tx.created_at.toISOString().slice(0, 10).replace(/-/g, '');
+    return `KL-${ymd}-${tx.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
   }
 }

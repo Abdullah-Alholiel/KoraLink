@@ -184,3 +184,178 @@ describe('WalletReceiptService — P2-293 host payout receipt', () => {
     );
   });
 });
+
+// ──────────────────────────────────────────────────────────────
+// F5 (run #206, D-20261106-13) — player transaction receipt contract:
+// 1. Owner-only: missing row or another user's row → 404.
+// 2. MATCH_FEE / REFUND → match context (title + scheduled date + venue) via
+//    matches→pitches→venues; missing match degrades to generic (no fabricate).
+// 3. TOPUP → paymentId from reference_id (Moyasar payment id).
+// 4. Other ledger types → generic context (still a proof-of-payment).
+// 5. Receipt number is deterministic: KL-<yyyyMMdd>-<first6 tx id>.
+// ──────────────────────────────────────────────────────────────
+
+interface TxRows {
+  tx: Array<Record<string, unknown>> | null;
+  matchCtx: Array<Record<string, unknown>> | null;
+}
+
+function makeTxDb(rows: TxRows) {
+  const settings = { getNumber: async (_k: string, d: number) => d };
+  const db = {
+    select: (fields: Record<string, unknown> = {}) => ({
+      from: (_table: unknown) => {
+        const b: Record<string, unknown> = {};
+        b.leftJoin = () => b;
+        b.where = () => b;
+        b.limit = () => b;
+        b.then = (resolve: (v: unknown) => void) => {
+          let out: unknown = [];
+          if ('venue_name' in fields) out = rows.matchCtx ?? [];
+          else if ('user_id' in fields) out = rows.tx ?? [];
+          resolve(out);
+        };
+        return b;
+      },
+    }),
+  };
+  return { svc: new WalletReceiptService(db as never, settings as never) };
+}
+
+const USER = 'user-1';
+const TX_ID = 'a1b2c3d4-0000-0000-0000-000000000000';
+const TX_CREATED = new Date('2026-11-14T09:30:00Z');
+
+const TX_BASE = {
+  id: TX_ID,
+  user_id: USER,
+  amount: '37.00',
+  reference_id: null,
+  status: 'Completed',
+  created_at: TX_CREATED,
+};
+
+describe('WalletReceiptService — F5 player transaction receipt', () => {
+  it('MATCH_FEE debit → match context with venue (matches→pitches→venues join)', async () => {
+    const { svc } = makeTxDb({
+      tx: [{ ...TX_BASE, type: 'DEBIT', reference_type: 'MATCH_FEE', reference_id: 'm-9' }],
+      matchCtx: [
+        {
+          id: 'm-9',
+          title: 'Sunset 7v7 Rooftop',
+          scheduled_at: new Date('2026-11-15T18:00:00Z'),
+          venue_name: 'Riyadh Padel Club',
+          city: 'Riyadh',
+        },
+      ],
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r).toMatchObject({
+      txId: TX_ID,
+      receiptNumber: 'KL-20261114-A1B2C3D40000',
+      status: 'Completed',
+      direction: 'debit',
+      amountSar: 37,
+      currency: 'SAR',
+      context: {
+        kind: 'match',
+        matchId: 'm-9',
+        matchTitle: 'Sunset 7v7 Rooftop',
+        scheduledAt: '2026-11-15T18:00:00.000Z',
+        venueName: 'Riyadh Padel Club',
+        city: 'Riyadh',
+      },
+    });
+    expect(r.createdAt).toBe('2026-11-14T09:30:00.000Z');
+    expect(typeof r.issuedAt).toBe('string');
+  });
+
+  it('REFUND credit → same match context, direction credit', async () => {
+    const { svc } = makeTxDb({
+      tx: [{ ...TX_BASE, type: 'CREDIT', reference_type: 'REFUND', reference_id: 'm-9' }],
+      matchCtx: [
+        {
+          id: 'm-9',
+          title: 'Sunset 7v7 Rooftop',
+          scheduled_at: new Date('2026-11-15T18:00:00Z'),
+          venue_name: null,
+          city: null,
+        },
+      ],
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r.direction).toBe('credit');
+    expect(r.context).toEqual({
+      kind: 'match',
+      matchId: 'm-9',
+      matchTitle: 'Sunset 7v7 Rooftop',
+      scheduledAt: '2026-11-15T18:00:00.000Z',
+      venueName: null,
+      city: null,
+    });
+  });
+
+  it('TOPUP credit → paymentId context (Moyasar payment id), no match query', async () => {
+    const { svc } = makeTxDb({
+      tx: [
+        {
+          ...TX_BASE,
+          type: 'CREDIT',
+          reference_type: 'TOPUP',
+          reference_id: 'pay_moyasar_123',
+        },
+      ],
+      matchCtx: null, // must never be consulted
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r.context).toEqual({ kind: 'topup', paymentId: 'pay_moyasar_123' });
+  });
+
+  it('TOPUP with null reference_id → paymentId null', async () => {
+    const { svc } = makeTxDb({
+      tx: [{ ...TX_BASE, type: 'CREDIT', reference_type: 'TOPUP' }],
+      matchCtx: null,
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r.context).toEqual({ kind: 'topup', paymentId: null });
+  });
+
+  it('ADJUSTMENT (generic ledger row) → generic context', async () => {
+    const { svc } = makeTxDb({
+      tx: [{ ...TX_BASE, type: 'CREDIT', reference_type: 'ADJUSTMENT' }],
+      matchCtx: null,
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r.context).toEqual({ kind: 'generic' });
+  });
+
+  it('MATCH_FEE whose match row is gone → degrades to generic (no fabricated context)', async () => {
+    const { svc } = makeTxDb({
+      tx: [{ ...TX_BASE, type: 'DEBIT', reference_type: 'MATCH_FEE', reference_id: 'm-gone' }],
+      matchCtx: null,
+    });
+    const r = await svc.getTransactionReceipt(USER, TX_ID);
+    expect(r.context).toEqual({ kind: 'generic' });
+  });
+
+  it.each([
+    ['missing tx', null],
+    ['another user tx', [{ ...TX_BASE, user_id: 'someone-else' }]],
+  ])('404: %s', async (_label, tx) => {
+    const { svc } = makeTxDb({ tx: tx as Array<Record<string, unknown>> | null, matchCtx: null });
+    await expect(svc.getTransactionReceipt(USER, TX_ID)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('receipt number is deterministic per tx + created date', () => {
+    expect(
+      WalletReceiptService.buildReceiptNumber({ id: TX_ID, created_at: TX_CREATED }),
+    ).toBe('KL-20261114-A1B2C3D40000');
+    expect(
+      WalletReceiptService.buildReceiptNumber({ id: TX_ID, created_at: TX_CREATED }),
+    ).toBe(
+      WalletReceiptService.buildReceiptNumber({ id: TX_ID, created_at: TX_CREATED }),
+    );
+  });
+});
