@@ -66,24 +66,11 @@ function renderSheet(overrides: Partial<Parameters<typeof PaymentSheet>[0]> = {}
 }
 
 async function agree() {
-  // P2-341 (run #206): the consent control now carries role="checkbox" —
-  // query it directly (role queries beat DOM-position heuristics; the old
-  // button-scan breaks by design once the a11y role is correct).
-  const box = screen.queryByRole('checkbox');
-  if (box) {
-    await userEvent.click(box);
-    return;
-  }
-  // Legacy fallback (pre-P2-341 markup): the only border-2 button in the
-  // agree row; find it by its accessible position.
-  const buttons = screen.getAllByRole('button');
-  const agreeBtn = buttons.find((b) => b.closest('div')?.textContent?.includes('Disclaimer:'));
-  // Fallback: it is the button directly before the "Read full policy" button.
-  const target =
-    agreeBtn ??
-    buttons[buttons.findIndex((b) => b.textContent === 'Read full policy') - 1];
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  await userEvent.click(target!);
+  // P2-341 (run #206): the consent control carries role="checkbox" — query
+  // it directly. NO DOM-position fallback: if the role ever regresses, this
+  // throws and the suite fails loudly (PR-Agent r1 #257 — a silent fallback
+  // would mask exactly the a11y regression this pin exists to catch).
+  await userEvent.click(screen.getByRole('checkbox'));
 }
 
 describe('PaymentSheet — P2-228 localized failure copy + offline guard', () => {
