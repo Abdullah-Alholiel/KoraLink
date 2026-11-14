@@ -369,16 +369,19 @@ describe('D-20261114-02 notification email via EMAIL_SENDER port (run #207)', ()
     expect(sent).toHaveLength(1);
   });
 
-  it('brevo adapter throws → one failed outcome (never upward), same as legacy inline path', async () => {
+  it('brevo adapter throws → one failed outcome (never upward) with failure context preserved', async () => {
     const throwing = {
       send: async () => {
-        throw new Error('provider down');
+        throw new Error('Email provider error.');
       },
       isConfigured: () => true,
     };
     const svc = makeMailer([VERIFIED], { RESEND_API_KEY: 'k' }, throwing);
     const outcomes = await svc.sendToUsers(['u1'], 'wallet_refunded');
-    expect(outcomes[0]).toMatchObject({ userId: 'u1', status: 'failed', reason: 'transport-error' });
+    expect(outcomes[0]).toMatchObject({ userId: 'u1', status: 'failed' });
+    // PR-Agent r1 #258 MINOR fix: reason carries the adapter's message.
+    const first = outcomes[0] as { userId: string; status: string; reason?: string };
+    expect(first.reason).toBe('transport-error: Email provider error.');
   });
 
   it('port-unavailable legacy double falls back to env-field probe (isConfigured semantics preserved)', () => {

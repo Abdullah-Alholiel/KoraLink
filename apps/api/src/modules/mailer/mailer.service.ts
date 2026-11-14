@@ -270,7 +270,16 @@ export class MailerService {
         `mailer: transport error for ${template} → ${recipient.userId}: ${(err as Error).message}`,
       );
       Sentry.captureException(err, { tags: { component: 'mailer', template } });
-      return { userId: recipient.userId, status: 'failed', reason: 'transport-error' };
+      // PR-Agent r1 #258 MINOR fix: keep failure context machine-readable —
+      // fold the adapter's error text (e.g. 'Email provider error.' vs
+      // 'Email sender misconfigured.') into the outcome reason, restoring the
+      // observability the old transport-<status> reason carried.
+      const detail = ((err as Error).message ?? '').slice(0, 80);
+      return {
+        userId: recipient.userId,
+        status: 'failed',
+        reason: detail ? `transport-error: ${detail}` : 'transport-error',
+      };
     }
   }
 }
