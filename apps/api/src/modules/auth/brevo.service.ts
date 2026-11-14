@@ -34,7 +34,13 @@ export class BrevoService implements EmailSender {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(to: string, subject: string, html: string, debugCode?: string): Promise<void> {
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    debugCode?: string,
+    text?: string,
+  ): Promise<void> {
     const apiKey = this.config.get<string>('BREVO_API_KEY');
     if (!apiKey) {
       // Dev/staging parity with ResendService: no provider key → log only.
@@ -70,6 +76,7 @@ export class BrevoService implements EmailSender {
           to: [{ email: to }],
           subject,
           htmlContent: html,
+          ...(text ? { textContent: text } : {}),
         }),
       });
     } catch (err) {
@@ -84,5 +91,11 @@ export class BrevoService implements EmailSender {
       );
       throw new ServiceUnavailableException('Email provider error.');
     }
+  }
+
+  /** True when a real send is possible: key + verified sender address. */
+  isConfigured(): boolean {
+    return Boolean(this.config.get<string>('BREVO_API_KEY')) &&
+      Boolean(this.config.get<string>('BREVO_FROM'));
   }
 }
