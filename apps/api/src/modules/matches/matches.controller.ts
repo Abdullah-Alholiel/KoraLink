@@ -9,12 +9,10 @@ import {
   Body,
   Res,
   UseGuards,
-  UseInterceptors,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
   ApiOperation,
@@ -35,6 +33,7 @@ import { JoinMatchDto } from './dto/join-match.dto';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { escapeIcsText } from '../../common/security/ics-text';
+import { ParseUuidShapePipe } from '../../common/validation/id-shape';
 
 @ApiTags('matches')
 @ApiCookieAuth('access_token')
@@ -56,12 +55,21 @@ export class MatchesController {
     return this.matchesService.findNearby(dto, user.sub);
   }
 
+  // ── GET /matches/my-disputes — Current user's filed disputes (all matches) ──
+  // MUST be declared BEFORE `@Get(':id')` so "my-disputes" never parses as an id.
+  @Get('my-disputes')
+  @ApiOperation({ summary: "List the current user's disputes across all matches (newest first, 50-row cap)." })
+  @ApiOkResponse({ description: 'Dispute list with match context.' })
+  findMyDisputes(@CurrentUser() user: { sub: string }) {
+    return this.matchesService.findMyDisputes(user.sub);
+  }
+
   // ── GET /matches/:id/calendar — ICS file download ─────────────────────
   // Must come BEFORE `:id` to avoid route collision
   @Get(':id/calendar')
   @ApiOperation({ summary: 'Download match as ICS calendar file' })
   async getCalendar(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
     @Query('format') format: 'ics' | 'google' = 'ics',
     @Res() res: Response,
@@ -123,7 +131,7 @@ export class MatchesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get full match details including lobby roster' })
   findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
   ) {
     // P0-1: viewer-scoped — chat history is stripped for non-members
@@ -149,7 +157,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Successfully joined the match.' })
   joinMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: JoinMatchDto,
   ) {
     return this.matchesService.joinMatch(user.sub, id, dto?.idempotencyKey);
@@ -161,7 +169,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Successfully left the match.' })
   leaveMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.leaveMatch(user.sub, id);
   }
@@ -171,16 +179,20 @@ export class MatchesController {
   @ApiOperation({ summary: 'Get match chat message history' })
   @ApiOkResponse({ description: 'Paginated chat messages for a match.' })
   getMessages(
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @CurrentUser() user: { sub: string },
     @Query('before') before?: string,
+    @Query('after') after?: string,
     @Query('limit') limit?: string,
   ) {
     // P0-1: members-only, mirroring the WS gateway's join-lobby check.
     // P1-3 (run #65): optional keyset pagination — bare-array contract kept.
+    // P2-196 (run #132): `after` pages strictly NEWER than the cursor — the
+    // reconnect backfill direction (service 400s when both cursors arrive).
     const limitNum = limit !== undefined ? Number(limit) : undefined;
     return this.matchesService.getMessages(id, user.sub, {
       before,
+      after,
       limit: Number.isFinite(limitNum) ? limitNum : undefined,
     });
   }
@@ -192,7 +204,7 @@ export class MatchesController {
   @ApiCreatedResponse({ description: 'The created message with sender.' })
   sendMessage(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CreateMatchMessageDto,
   ) {
     return this.matchesService.sendMessage(user.sub, id, dto.content, dto.clientMessageId);
@@ -207,7 +219,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Watermark advanced.' })
   markChatRead(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.markChatRead(user.sub, id);
   }
@@ -219,7 +231,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match started successfully.' })
   startMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.startMatch(user.sub, id);
   }
@@ -231,7 +243,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match completed successfully.' })
   completeMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.completeMatch(user.sub, id);
   }
@@ -243,7 +255,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Match cancelled successfully.' })
   cancelMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.cancelMatch(user.sub, id);
   }
@@ -257,7 +269,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Fully populated match after the move, plus a reschedule summary block.' })
   rescheduleMatch(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: UpdateMatchScheduleDto,
   ) {
     return this.matchesService.rescheduleMatch(user.sub, id, dto);
@@ -270,7 +282,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Vote recorded successfully.' })
   castVote(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CastVoteDto,
   ) {
     return this.matchesService.castVote(user.sub, id, dto.candidateId);
@@ -282,7 +294,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'POM voting status or winner.' })
   getPomResult(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.getPomResult(id, user.sub);
   }
@@ -294,7 +306,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Attendance updated.' })
   markNoShow(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: MarkNoShowDto,
   ) {
     return this.matchesService.markNoShow(user.sub, id, dto.targetUserId, dto.noShow);
@@ -306,8 +318,8 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Player removed; fully populated match returned.' })
   removePlayer(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
-    @Param('playerId') playerId: string,
+    @Param('id', ParseUuidShapePipe) id: string,
+    @Param('playerId', ParseUuidShapePipe) playerId: string,
   ) {
     return this.matchesService.removePlayer(user.sub, id, playerId);
   }
@@ -319,7 +331,7 @@ export class MatchesController {
   @ApiCreatedResponse({ description: 'Dispute created.' })
   createDispute(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() dto: CreateDisputeDto,
   ) {
     return this.matchesService.createDispute(user.sub, id, dto);
@@ -331,7 +343,7 @@ export class MatchesController {
   @ApiOkResponse({ description: 'Dispute or null.' })
   findMyDispute(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
   ) {
     return this.matchesService.findMyDispute(user.sub, id);
   }

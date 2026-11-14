@@ -7,6 +7,7 @@ import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { chargeMatchFeeTx } from './match-fees';
+import { moneyToNumber } from '../../common/utils/money';
 
 type DB = PostgresJsDatabase<typeof schema>;
 /** Tx handle carried into promoteNextInTx (must share the caller's transaction). */
@@ -16,6 +17,31 @@ export interface WaitlistPromotion {
   userId: string;
   previousPosition: number;
   matchTitle: string;
+  /**
+   * Run #200 (P2-333): fee actually charged to the promoted player, or null
+   * when the promotion moved no money (free match / legacy row). Null — never
+   * 0 — so callers can distinguish "charged 0" from "no charge happened" and
+   * the push/wallet surfaces render a charge line only when one exists.
+   */
+  chargedSar: number | null;
+}
+
+/** Run #200 (P2-347): a queue head evicted by the paid-backfill skip. */
+export interface WaitlistEviction {
+  userId: string;
+  /** Resolved in-tx so the caller can notify post-commit without a re-read. */
+  matchTitle: string;
+}
+
+export interface WaitlistPromotionResult {
+  promotion: WaitlistPromotion | null;
+  /**
+   * Every head removed by the underfunded skip during THIS call (P2-347).
+   * Callers MUST notify each evicted player post-commit via
+   * notifyWaitlistRemoval — a silent eviction reads as a vanished queue
+   * position (PR-Agent r2, PR #238).
+   */
+  evicted: WaitlistEviction[];
 }
 
 /**
@@ -223,7 +249,10 @@ export class MatchWaitlistService {
     tx: Tx,
     matchId: string,
     opts?: { feePriceSar?: number },
-  ): Promise<WaitlistPromotion | null> {
+  ): Promise<WaitlistPromotionResult> {
+    // Run #200 (P2-347): collect underfunded-head evictions so the caller can
+    // notify them post-commit — the skip must never be silent again.
+    const evicted: WaitlistEviction[] = [];
     for (;;) {
       const [head] = await tx
         .select({
@@ -236,7 +265,7 @@ export class MatchWaitlistService {
         .orderBy(asc(schema.match_waitlist.position))
         .limit(1)
         .for('update');
-      if (!head) return null;
+      if (!head) return { promotion: null, evicted };
 
       // Spot actually free? (defensive: the caller just freed one, but a
       // concurrent path in the same tx may have taken it.)
@@ -249,7 +278,9 @@ export class MatchWaitlistService {
         .from(schema.matches)
         .where(eq(schema.matches.id, matchId))
         .limit(1);
-      if (!match || match.roster >= match.max_players) return null;
+      if (!match || match.roster >= match.max_players) {
+        return { promotion: null, evicted };
+      }
 
       const [alreadyIn] = await tx
         .select({ id: schema.match_players.id })
@@ -264,6 +295,42 @@ export class MatchWaitlistService {
         await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));
         await this.resequenceInTx(tx, matchId);
         continue;
+      }
+
+      // Run #200 (P2-333): a PAID backfill must never wedge the freeing
+      // operation. If the queue head cannot afford the fee, skip them
+      // (delete + resequence + offer the spot to the next head) instead of
+      // throwing — the old behavior aborted the CALLER's whole leave/cancel/
+      // kick transaction, freezing a roster spot behind an underfunded
+      // player. The pre-read here is advisory fast-path only: a concurrent
+      // debit between this read and the charge still trips the authoritative
+      // negative-balance guard inside chargeMatchFeeTx (which aborts the tx —
+      // same as any money race; the caller's client retry resolves it).
+      const feeRequired = !!opts?.feePriceSar && opts.feePriceSar > 0;
+      if (feeRequired) {
+        const [headWallet] = await tx
+          .select({ wallet_balance: schema.users.wallet_balance })
+          .from(schema.users)
+          .where(eq(schema.users.id, head.user_id))
+          .limit(1)
+          .for('update');
+        // P2-349 (run #203, Reviewer A run-#201 IMPORTANT-2): a head whose
+        // users row is GONE (purged/anonymized between enqueue and promotion)
+        // must land in the SAME skip+evict branch as an underfunded head.
+        // The old `headWallet &&` shape treated the missing row as FUNDED and
+        // let chargeMatchFeeTx run against a nonexistent wallet — aborting the
+        // caller's tx (the exact wedge P2-333 removed) instead of skipping.
+        if (
+          !headWallet ||
+          moneyToNumber(headWallet.wallet_balance) < (opts?.feePriceSar ?? 0)
+        ) {
+          await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));
+          await this.resequenceInTx(tx, matchId);
+          // P2-347: record the eviction (title resolved here in-tx; the
+          // caller notifies post-commit). Never silent.
+          evicted.push({ userId: head.user_id, matchTitle: match.title });
+          continue;
+        }
       }
 
       // Same balanced-team rule as joinMatch: fill the lighter side.
@@ -289,7 +356,9 @@ export class MatchWaitlistService {
 
       // Slice 4: paid backfill — charge the promoted player's fee in-tx and
       // snapshot it on their roster row (per-EPISODE key from the fresh row).
-      if (opts?.feePriceSar && opts.feePriceSar > 0) {
+      let chargedSar: number | null = null;
+      if (feeRequired) {
+        const feeSar = opts?.feePriceSar as number;
         const [ep] = await tx
           .select({ id: schema.match_players.id })
           .from(schema.match_players)
@@ -304,13 +373,14 @@ export class MatchWaitlistService {
           tx,
           head.user_id,
           matchId,
-          opts.feePriceSar,
+          feeSar,
           `join:${ep.id}:${randomUUID()}`,
         );
         await tx
           .update(schema.match_players)
-          .set({ fee_paid_sar: opts.feePriceSar.toFixed(2) })
+          .set({ fee_paid_sar: feeSar.toFixed(2) })
           .where(eq(schema.match_players.id, ep.id));
+        chargedSar = feeSar;
       }
 
       await tx.delete(schema.match_waitlist).where(eq(schema.match_waitlist.id, head.id));
@@ -324,9 +394,13 @@ export class MatchWaitlistService {
         .where(sql`${schema.matches.id} = ${matchId} AND ${schema.matches.status} = 'Open'`);
 
       return {
-        userId: head.user_id,
-        previousPosition: head.position,
-        matchTitle: match.title,
+        promotion: {
+          userId: head.user_id,
+          previousPosition: head.position,
+          matchTitle: match.title,
+          chargedSar,
+        },
+        evicted,
       };
     }
   }
@@ -362,16 +436,70 @@ export class MatchWaitlistService {
     }
     // Leg 2 — the web push (P2-95). Semantic-key catalog (per-subscription
     // locale); category 'match' so a user who muted match pushes stays muted.
+    // Run #200 (P2-333): a CHARGED promotion names the exact debit in the
+    // push itself (localized, Intl-rendered) so an offline promoted player is
+    // never surprised by the wallet line they find later. amount rides ONLY
+    // when money actually moved — a free promotion keeps the plain invite copy.
     try {
       await this.notifications.sendPushToUsers([promotion.userId], {
         key: 'waitlist_promoted',
-        vars: { title: promotion.matchTitle },
+        vars:
+          promotion.chargedSar != null
+            ? { title: promotion.matchTitle, amount: promotion.chargedSar.toFixed(2) }
+            : { title: promotion.matchTitle },
         data: { type: 'waitlist-promoted', matchId },
         category: 'match',
       });
     } catch (err) {
       this.logger.error(
         `waitlist promotion push failed (match ${matchId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Run #200 (P2-347): a paid backfill SKIPPED this head (wallet below the
+   * fee) and removed them from the queue — tell them, or the eviction is
+   * silent and the player wonders why their queue position vanished
+   * (PR-Agent r2 IMPORTANT on PR #238). Copy names the WHY (fee > balance)
+   * and the WHAT-NEXT (top up and join again) per the error-message standard.
+   *
+   * Fire-and-forget AFTER the caller's tx commits — the caller collects the
+   * evicted userIds during the loop and invokes this post-commit (a failure
+   * here must never roll back or fail the freeing operation, same contract
+   * as notifyPromotion).
+   */
+  async notifyWaitlistRemoval(
+    userId: string,
+    matchId: string,
+    matchTitle: string,
+  ): Promise<void> {
+    // Leg 1 — bell (log-only failure).
+    try {
+      await this.activities.record({
+        actorId: userId,
+        verb: 'waitlist_removed',
+        matchId,
+        subjectId: userId,
+        recipients: [userId],
+        excludeActor: false, // the evicted player IS the recipient
+      });
+    } catch (err) {
+      this.logger.error(
+        `waitlist removal activity fan-out failed (match ${matchId}): ${(err as Error).message}`,
+      );
+    }
+    // Leg 2 — the web push (category 'match' so mutes are honored).
+    try {
+      await this.notifications.sendPushToUsers([userId], {
+        key: 'waitlist_removed',
+        vars: { title: matchTitle },
+        data: { type: 'waitlist-removed', matchId },
+        category: 'match',
+      });
+    } catch (err) {
+      this.logger.error(
+        `waitlist removal push failed (match ${matchId}): ${(err as Error).message}`,
       );
     }
   }

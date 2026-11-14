@@ -27,6 +27,8 @@ export default function AppealSheet({
     onSubmit,
 }: AppealSheetProps) {
     const t = useTranslations('appeal');
+    // a11y (run #80, P2-101): localized close label (was hardcoded "Close").
+    const tCommon = useTranslations('common');
     const [reason, setReason] = useState('');
 
     if (!isOpen) return null;
@@ -40,7 +42,7 @@ export default function AppealSheet({
             <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
                 <div className="w-8" />
                 <h2 className="text-lg font-bold text-brand-black">{t('title')}</h2>
-                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" aria-label="Close">
+                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" aria-label={tCommon('close')}>
                     <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
                 </button>
             </div>

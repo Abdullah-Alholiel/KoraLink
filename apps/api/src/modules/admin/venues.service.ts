@@ -4,6 +4,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { venues, venue_verifications, users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { ListVenuesDto } from './dto/list-venues.dto';
 import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { TransferVenueDto } from './dto/transfer-venue.dto';
@@ -27,11 +28,11 @@ export class AdminVenuesService {
     const conds: SQL[] = [];
 
     if (dto.search) {
-      const q = `%${dto.search.trim()}%`;
-      conds.push(sql`(v.name ILIKE ${q} OR v.city ILIKE ${q} OR u.full_name ILIKE ${q})`);
+      const q = '%' + escapeLikePattern(dto.search.trim()) + '%';
+      conds.push(sql`(v.name ILIKE ${q} ESCAPE '\\' OR v.city ILIKE ${q} ESCAPE '\\' OR u.full_name ILIKE ${q} ESCAPE '\\')`);
     }
     if (dto.city) {
-      conds.push(sql`v.city ILIKE ${'%' + dto.city + '%'}`);
+      conds.push(sql`v.city ILIKE ${'%' + escapeLikePattern(dto.city) + '%'} ESCAPE '\\'`);
     }
     if (dto.status === 'approved') {
       conds.push(sql`v.is_approved = true`);
@@ -52,12 +53,12 @@ export class AdminVenuesService {
     const rows = (await this.db.execute(sql`
       SELECT
         v.id, v.name, v.city, v.address, v.is_approved, v.is_koralink_partner,
-        v.rating, v.created_at,
-        u.id AS owner_id, u.full_name AS owner_name,
+        v.rating_avg, v.rating_count, v.created_at, v.images,
+        u.id AS owner_id, COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         COALESCE(vv.status::text, 'pending') AS verification_status
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       LEFT JOIN venue_verifications vv ON vv.venue_id = v.id
       ${where}
@@ -69,7 +70,7 @@ export class AdminVenuesService {
     const countRows = (await this.db.execute(sql`
       SELECT COUNT(DISTINCT v.id)::int AS c
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN venue_verifications vv ON vv.venue_id = v.id
       ${where}
     `)) as unknown as Array<{ c: number }>;
@@ -167,6 +168,19 @@ export class AdminVenuesService {
     if (dto.city !== undefined) updates.city = dto.city;
     if (dto.address !== undefined) updates.address = dto.address;
     if (dto.amenities !== undefined) updates.amenities = dto.amenities;
+    // P1-38 (run #170): reorder/remove photos. The DTO pattern already pins
+    // each path to /media/venues/<uuid>/…jpg|png|webp (no traversal), which IS
+    // the admin contract: Admin is cross-venue BY DESIGN (HQ reorders/removes
+    // photos on any venue, mirroring admin venue edit authority everywhere
+    // else — partner/venues, disputes, reports). Stored-object GC for paths
+    // removed here happens in the media module's delete path (removeVenueImage
+    // is wired to the storage DELETE); bulk orphan sweep = P2-268 follow-up.
+    if (dto.images !== undefined) {
+      if (!Array.isArray(dto.images)) {
+        throw new BadRequestException('images must be an array of photo paths.');
+      }
+      updates.images = [...new Set(dto.images)];
+    }
     if (dto.open_hour !== undefined || dto.close_hour !== undefined) {
       const openHour = dto.open_hour ?? Number(before.open_hour ?? 8);
       const closeHour = dto.close_hour ?? Number(before.close_hour ?? 23);
@@ -185,10 +199,19 @@ export class AdminVenuesService {
       throw new BadRequestException('No changes provided.');
     }
 
-    await this.db
+    // P2-202 (run #132): guarded update — the .returning() rowcount turns a
+    // vanished id into an immediate 404 instead of a silent no-op that still
+    // lands in the audit log as a change (parity with the P2-191/192
+    // predicated-update pattern; no version column exists on this table).
+    const updated = await this.db
       .update(venues)
       .set(withTimestamp(updates) as never)
-      .where(eq(venues.id, id));
+      .where(eq(venues.id, id))
+      .returning({ id: venues.id });
+
+    if (updated.length === 0) {
+      throw new NotFoundException('Venue not found.');
+    }
 
     const after = await this.findOne(id);
     await this.audit.log({
@@ -212,6 +235,14 @@ export class AdminVenuesService {
    *
    * Immediate hard transfer per Abdullah's approved semantics: audited,
    * both owners notified, no acceptance round-trip.
+   *
+   * P2-141 (Reviewer A run #98): the target role check was a plain read and
+   * the write an unconditional WHERE-id UPDATE — a concurrent demotion of
+   * the target between read and write still transferred the venue to a
+   * non-owner. The venue row and the TARGET USER row are now locked
+   * FOR UPDATE inside one tx and the role is re-checked from the locked
+   * row; the UPDATE is owner-predicated so a concurrent transfer of the
+   * same venue makes it match zero rows → 409.
    */
   async transferOwnership(id: string, dto: TransferVenueDto, adminId: string, ip?: string) {
     const before = await this.findOne(id);
@@ -221,22 +252,52 @@ export class AdminVenuesService {
       throw new BadRequestException('That user already owns this venue.');
     }
 
-    const [target] = await this.db
-      .select({ id: users.id, role: users.role, full_name: users.full_name, phone: users.phone })
-      .from(users)
-      .where(eq(users.id, dto.newOwnerId))
-      .limit(1);
-    if (!target) {
-      throw new NotFoundException('Target user not found.');
-    }
-    if (target.role !== 'VenueOwner') {
-      throw new BadRequestException('Target user is not a venue owner.');
-    }
+    await this.db.transaction(async (tx) => {
+      // Lock the venue first (deterministic order: venue row → user row —
+      // every transfer takes venue-then-user, so concurrent transfers of
+      // overlapping venue/user sets serialize without lock cycles).
+      const [venue] = await tx
+        .select({ id: venues.id, owner_id: venues.owner_id })
+        .from(venues)
+        .where(eq(venues.id, id))
+        .for('update');
 
-    await this.db
-      .update(venues)
-      .set(withTimestamp({ owner_id: dto.newOwnerId }))
-      .where(eq(venues.id, id));
+      if (!venue) {
+        throw new NotFoundException('Venue not found.');
+      }
+      // Re-check the preconditions the audit snapshot was built from — a
+      // concurrent transfer may have moved the venue between findOne and
+      // the lock grant.
+      if (venue.owner_id === dto.newOwnerId) {
+        throw new BadRequestException('That user already owns this venue.');
+      }
+
+      // Lock the target USER row and re-check the role from the LOCKED row:
+      // a concurrent demote serializes behind this tx and the re-check
+      // catches it (plain-read role check was the P2-141 finding).
+      const [target] = await tx
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.id, dto.newOwnerId))
+        .for('update');
+
+      if (!target) {
+        throw new NotFoundException('Target user not found.');
+      }
+      if (target.role !== 'VenueOwner') {
+        throw new BadRequestException('Target user is not a venue owner.');
+      }
+
+      // Owner-predicated write: zero rows = concurrently transferred → 409.
+      const written = await tx
+        .update(venues)
+        .set(withTimestamp({ owner_id: dto.newOwnerId }))
+        .where(and(eq(venues.id, id), eq(venues.owner_id, venue.owner_id)))
+        .returning({ id: venues.id });
+      if (written.length === 0) {
+        throw new ConflictException('Venue was concurrently transferred — re-check its owner.');
+      }
+    });
 
     const after = await this.findOne(id);
     await this.audit.log({

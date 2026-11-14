@@ -101,6 +101,7 @@ export default function CommunityFeedPage() {
           <div className="sticky top-0 z-40 flex justify-center -mt-2 mb-2">
             <button
               onClick={scrollToTop}
+              aria-label={t('newActivities')}
               className="flex items-center gap-1.5 bg-brand-green text-white text-xs font-bold rounded-full px-4 py-2 shadow-[0_4px_16px_rgba(37,65,50,0.35)] active:scale-95 transition-transform animate-scale-in"
             >
               <ArrowUp className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -132,6 +133,7 @@ export default function CommunityFeedPage() {
             <p className="text-sm text-gray-500 mt-1">{t('errorDescription')}</p>
             <button
               onClick={() => refetch()}
+              aria-label={t('retry')}
               className="mt-4 px-6 py-2 bg-brand-green text-white text-sm font-medium rounded-full active:scale-95 transition-colors"
             >
               {t('retry')}

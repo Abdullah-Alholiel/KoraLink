@@ -96,6 +96,10 @@ export const useAppStore = create<AppStore>()(
           bookedMatchIds: state.bookedMatchIds,
           balance: state.balance,
           paymentMethods: state.paymentMethods,
+          // P2-258: the armed nudge must survive a locale-switch reload
+          // (full location navigation) that lands the user back on the
+          // match page within the offer window.
+          pushNudgeArmedAt: state.pushNudgeArmedAt,
         }),
         onRehydrateStorage: () => (state) => {
           state?.setHydrated(true);

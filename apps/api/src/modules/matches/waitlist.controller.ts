@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtCookieAuthGuard } from '../../common/guards/jwt-cookie-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ParseUuidShapePipe } from '../../common/validation/id-shape';
 import { MatchWaitlistService } from './waitlist.service';
 import { JoinWaitlistDto } from './dto/join-waitlist.dto';
 
@@ -39,7 +40,7 @@ export class MatchWaitlistController {
   })
   join(
     @CurrentUser() user: { sub: string },
-    @Param('id') id: string,
+    @Param('id', ParseUuidShapePipe) id: string,
     @Body() _dto: JoinWaitlistDto,
   ) {
     return this.waitlist.join(user.sub, id).then((r) => ({
@@ -51,7 +52,7 @@ export class MatchWaitlistController {
   @Delete()
   @ApiOperation({ summary: 'Leave the waitlist' })
   @ApiOkResponse({ description: 'Removed from the queue.' })
-  leave(@CurrentUser() user: { sub: string }, @Param('id') id: string) {
+  leave(@CurrentUser() user: { sub: string }, @Param('id', ParseUuidShapePipe) id: string) {
     return this.waitlist.leave(user.sub, id);
   }
 
@@ -69,7 +70,7 @@ export class MatchWaitlistController {
       },
     },
   })
-  list(@CurrentUser() user: { sub: string }, @Param('id') id: string) {
+  list(@CurrentUser() user: { sub: string }, @Param('id', ParseUuidShapePipe) id: string) {
     return this.waitlist.list(id, user.sub);
   }
 }

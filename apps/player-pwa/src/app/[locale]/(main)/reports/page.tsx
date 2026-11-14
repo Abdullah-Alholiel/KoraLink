@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ChevronDown, ChevronUp, Flag, Gavel, Loader2, ShieldCheck } from 'lucide-react';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useMyReports, type MyReportApi } from '@/hooks/useReports';
+import { useMyDisputes } from '@/hooks/useDisputes';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { classifyError, errorKey } from '@/lib/error-classify';
+import { reportLifecycleKey, disputeLifecycleKey } from '@/lib/lifecycle';
 
 /** P2-23 (run #17): "My Reports" — reporters see their reports and outcomes. */
 
@@ -18,6 +20,14 @@ const STATUS_STYLE: Record<MyReportApi['status'], string> = {
   dismissed: 'text-gray-600 bg-gray-100',
 };
 
+/** Dispute lifecycle chip styling — mirrors ReportDisputeSheet STATUS_STYLES tones. */
+const DISPUTE_STATUS_STYLE: Record<'opened' | 'under_review' | 'resolved' | 'rejected', string> = {
+  opened: 'text-amber-700 bg-amber-100',
+  under_review: 'text-blue-700 bg-blue-100',
+  resolved: 'text-green-700 bg-green-100',
+  rejected: 'text-gray-600 bg-gray-100',
+};
+
 export default function ReportsPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,10 +36,19 @@ export default function ReportsPage() {
   const tc = useTranslations('common');
   // Root-scope translator for the classified `errors.*` keys (P2-63).
   const terr = useTranslations();
+  // Dispute namespace: category + lifecycle status labels (existing keys).
+  const tDispute = useTranslations('dispute');
   const isOnline = useOnlineStatus();
 
   const { reports, isLoading, error, refetch, hasMore, fetchNextPage, isFetchingNextPage } =
     useMyReports();
+  // P2-195 residual (run #172): cross-match dispute tracking — the player sees
+  // every dispute they filed with its live lifecycle status.
+  const {
+    disputes: myDisputes,
+    isLoading: disputesLoading,
+    error: disputesError,
+  } = useMyDisputes();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const dateFmt = (iso: string) =>
@@ -47,7 +66,7 @@ export default function ReportsPage() {
           onClick={() => router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
         >
-          <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
+          <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
         </button>
         <h1 className="text-base font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
           {t('title')}
@@ -117,6 +136,15 @@ export default function ReportsPage() {
                 </span>
               </div>
 
+              {/* P2-281 M-4: plain-language lifecycle line — what the state
+                  means for the player (chip alone was jargon-only). */}
+              {(() => {
+                const lifecycleKey = reportLifecycleKey(r.status);
+                return lifecycleKey ? (
+                  <p className="text-xs text-gray-500 mt-2">{t(lifecycleKey)}</p>
+                ) : null;
+              })()}
+
               <p className="text-xs text-gray-600 mt-2 line-clamp-2">{r.reason}</p>
 
               {r.status !== 'open' && r.status !== 'reviewing' && (
@@ -154,6 +182,78 @@ export default function ReportsPage() {
             </button>
           </div>
         )}
+
+        {/* ── My Disputes (P2-195 residual, run #172) ─────────────────────── */}
+        {/* Separate section under the reports list: every dispute the player   */}
+        {/* filed across all matches, with its live lifecycle status. Errors in */}
+        {/* this section never mask the reports list (independent queries).     */}
+        <div className="pt-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Gavel className="w-4 h-4 text-brand-black" strokeWidth={2} />
+            <h2 className="text-sm font-bold text-brand-black">{t('disputesTitle')}</h2>
+          </div>
+
+          {disputesLoading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 text-brand-green animate-spin" strokeWidth={2} />
+            </div>
+          )}
+
+          {disputesError && !disputesLoading && (
+            <div className="flex flex-col items-center py-6 text-center">
+              <p className="text-xs text-gray-500">{terr(errorKey(classifyError(disputesError)))}</p>
+            </div>
+          )}
+
+          {!disputesLoading && !disputesError && myDisputes.length === 0 && (
+            <p className="text-xs text-gray-400 text-center py-6">{t('disputesEmpty')}</p>
+          )}
+
+          {!disputesLoading &&
+            !disputesError &&
+            myDisputes.map((d) => (
+              <div key={d.id} className="bg-white rounded-2xl shadow-card p-4 mt-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-brand-black truncate">
+                      {tDispute(`cat_${d.type}`)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">
+                      {d.match_title ?? t('disputesMatchDeleted')}
+                      {d.match_scheduled_at ? ` · ${dateFmt(d.match_scheduled_at)}` : ''}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{dateFmt(d.created_at)}</p>
+                  </div>
+                  <span
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${DISPUTE_STATUS_STYLE[d.status]}`}
+                  >
+                    {tDispute(
+                      d.status === 'opened'
+                        ? 'statusOpened'
+                        : d.status === 'under_review'
+                          ? 'statusUnderReview'
+                          : d.status === 'resolved'
+                            ? 'statusResolved'
+                            : 'statusRejected',
+                    )}
+                  </span>
+                </div>
+                {/* P2-281 M-4: plain-language lifecycle line for disputes too
+                    (shares the reports.lifecycle keys — same player meaning). */}
+                {(() => {
+                  const lifecycleKey = disputeLifecycleKey(d.status);
+                  return lifecycleKey ? (
+                    <p className="text-xs text-gray-500 mt-2">{t(lifecycleKey)}</p>
+                  ) : null;
+                })()}
+                {d.decision && (
+                  <div className="mt-2 rounded-xl bg-gray-50 p-3">
+                    <p className="text-xs text-gray-700">{d.decision}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );

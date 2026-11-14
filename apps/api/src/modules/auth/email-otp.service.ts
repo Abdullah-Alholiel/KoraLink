@@ -58,13 +58,16 @@ export class EmailOtpService {
     const key = OTP_KEY(email);
 
     // ── Abuse protection — identical thresholds to the phone flow ──
-    if (await this.otpStore.isCooldownActive(key)) {
-      this.logger.warn(`email send-otp blocked (cooldown) for ${email}`);
+    // P2-194: single-read gate (see auth.service sendOtp comment).
+    const cooldownRemaining = await this.otpStore.getCooldownRemaining(key);
+    if (cooldownRemaining > 0) {
+      this.logger.warn(`email send-otp blocked (cooldown) for ${email} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Please wait before requesting another code.',
           error: 'Too Many Requests',
+          retryAfter: cooldownRemaining,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -157,14 +160,20 @@ export class EmailOtpService {
     await this.otpStore.withVerifyLock(key, async () => {
       const failCount = await this.otpStore.getFailCount(key);
       if (failCount >= OtpStoreService.FAIL_LIMIT) {
+        // P2-241 (Reviewer A run #153): machine-readable lockout countdown —
+        // exact parity with the phone flow (auth.service.ts, P2-198). The
+        // PWA blocked-card countdown reads this field; a missing/legacy
+        // deadline reports 0 and the client falls back to generic copy.
+        const retryAfter = await this.otpStore.getLockoutRemaining(key);
         this.logger.warn(
-          `email verify-otp blocked (lockout after ${failCount} fails) for ${email}`,
+          `email verify-otp blocked (lockout after ${failCount} fails) for ${email} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {
             statusCode: HttpStatus.TOO_MANY_REQUESTS,
             message: 'Too many attempts. Try again later.',
             error: 'Too Many Requests',
+            retryAfter,
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );

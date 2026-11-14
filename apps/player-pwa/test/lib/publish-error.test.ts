@@ -25,7 +25,7 @@ describe('classifyPublishError', () => {
       ),
     ).toBe('slot_started');
     expect(PUBLISH_ERROR_KEYS.slot_started).toBe('host.errorSlotStarted');
-    expect((enMessages as { host: Record<string, string> }).host.errorSlotStarted).toBeTruthy();
+    expect((enMessages as { host: Record<string, unknown> }).host.errorSlotStarted).toBeTruthy();
   });
 
   it('classifies the hosting-terms consent rejection (stale bundle/session path)', () => {
@@ -33,8 +33,8 @@ describe('classifyPublishError', () => {
     expect(classifyPublishError(err)).toBe('hosting_terms');
     expect(PUBLISH_ERROR_KEYS.hosting_terms).toBe('host.hostingConsentRequired');
     // The key must exist in BOTH locales (the sheet resolves it via t(errorKey)).
-    expect((enMessages as { host: Record<string, string> }).host.hostingConsentRequired).toBeTruthy();
-    expect((arMessages as { host: Record<string, string> }).host.hostingConsentRequired).toBeTruthy();
+    expect((enMessages as { host: Record<string, unknown> }).host.hostingConsentRequired).toBeTruthy();
+    expect((arMessages as { host: Record<string, unknown> }).host.hostingConsentRequired).toBeTruthy();
   });
 
   it('classifies network failures', () => {

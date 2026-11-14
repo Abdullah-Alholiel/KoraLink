@@ -65,7 +65,11 @@ describe('MatchesService.removePlayer', () => {
     const recorded: Array<{ verb: string; recipients: string[] }> = [];
     const pushes: Array<{ users: string[]; title?: string; key?: string }> = [];
     const db = {
-      transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(makeTx(opts)),
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+        const out = await cb(makeTx(opts));
+        order.push('tx-commit');
+        return out;
+      },
       query: {
         matches: {
           findFirst: async () => ({
@@ -85,9 +89,16 @@ describe('MatchesService.removePlayer', () => {
       },
     };
     const settings = { getNumber: async () => 0 };
+    const order: string[] = [];
     const appGateway = {
-      broadcastRosterUpdate: () => {},
+      broadcastRosterUpdate: jest.fn(() => {
+        order.push('broadcastRosterUpdate');
+      }),
       broadcastStatusUpdate: () => {},
+      // P1-70: eviction swallows its own errors, so the stub just resolves.
+      evictFromMatch: jest.fn(async () => {
+        order.push('evictFromMatch');
+      }),
     };
     const realtime = { broadcastOps: () => {} };
     const activitiesService = {
@@ -113,7 +124,7 @@ describe('MatchesService.removePlayer', () => {
       realtime as never,
       { promoteNextInTx: async () => null } as never
     );
-    return { svc, recorded, pushes };
+    return { svc, recorded, pushes, appGateway, order };
   }
 
   it('rejects the host trying to remove themselves', async () => {
@@ -210,6 +221,39 @@ describe('MatchesService.removePlayer', () => {
       });
       await svc.removePlayer(HOST, MATCH_ID, TARGET);
       expect(capture.filter((c) => c.table === matches)).toEqual([]);
+    });
+  });
+
+  // ── P1-70 (security audit run-5 R5-1): realtime room eviction ────────────
+  // join-lobby gates room membership once; removal must evict the target's
+  // sockets from `match:<id>` post-commit and BEFORE the roster broadcast.
+  describe('P1-70 room eviction', () => {
+    it('evicts the removed player from the match room exactly once, post-tx, before the roster broadcast', async () => {
+      const { svc, appGateway, order } = makeService({
+        match: { id: MATCH_ID, host_id: HOST, status: 'Open' },
+        player: { id: 'mp-1' },
+      });
+      await svc.removePlayer(HOST, MATCH_ID, TARGET);
+      expect(appGateway.evictFromMatch).toHaveBeenCalledTimes(1);
+      expect(appGateway.evictFromMatch).toHaveBeenCalledWith(MATCH_ID, TARGET);
+      expect(order.indexOf('tx-commit')).toBeLessThan(order.indexOf('evictFromMatch'));
+      expect(order.indexOf('evictFromMatch')).toBeLessThan(order.indexOf('broadcastRosterUpdate'));
+    });
+
+    it('removal still succeeds and returns the match detail with eviction wired in', async () => {
+      const { svc, appGateway } = makeService({
+        match: { id: MATCH_ID, host_id: HOST, status: 'Full' },
+        player: { id: 'mp-1' },
+      });
+      const result = await svc.removePlayer(HOST, MATCH_ID, TARGET);
+      expect(result.id).toBe(MATCH_ID);
+      expect(appGateway.evictFromMatch).toHaveBeenCalled();
+    });
+
+    it('does not evict when a guard rejects (nothing committed)', async () => {
+      const { svc, appGateway } = makeService({ match: null });
+      await expect(svc.removePlayer(HOST, MATCH_ID, TARGET)).rejects.toBeInstanceOf(NotFoundException);
+      expect(appGateway.evictFromMatch).not.toHaveBeenCalled();
     });
   });
 });

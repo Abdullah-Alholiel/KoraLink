@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -36,6 +37,25 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Rendered by BOTH branches when the list is empty. */
   empty?: React.ReactNode;
+  /**
+   * P2-107 (run #116): optional leading checkbox column — batch actions on the
+   * users list. Fully additive: pages that omit it render byte-identical to
+   * before. Checkboxes stopPropagation so a tick never opens the drawer;
+   * select-all covers the CURRENT page only (cross-page selection is out of
+   * scope by design — the confirm dialog names exactly what was selected).
+   */
+  selection?: {
+    selectedIds: ReadonlySet<string>;
+    isRowSelectable: (row: T) => boolean;
+    onToggle: (row: T) => void;
+    onToggleAll: () => void;
+    allSelected: boolean;
+    someSelected: boolean;
+    selectAllLabel: string;
+    /** Accessible label for a ROW checkbox (e.g. "Select <name>"); falls
+     *  back to selectAllLabel when omitted. */
+    rowLabel?: (row: T) => string;
+  };
 }
 
 /**
@@ -51,10 +71,20 @@ export default function DataTable<T>({
   rowKey,
   onRowClick,
   empty,
+  selection,
 }: DataTableProps<T>) {
   const identity = columns.find((c) => c.role === 'identity');
   const value = columns.find((c) => c.role === 'value');
   const metas = columns.filter((c) => c.role === 'meta');
+
+  // P2-107: indeterminate select-all checkbox needs a direct ref (React has
+  // no `indeterminate` prop).
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = !!selection && selection.someSelected && !selection.allSelected;
+    }
+  }, [selection, selection?.someSelected, selection?.allSelected]);
 
   // Empty list: single shell, no table headers, no card chrome.
   if (rows.length === 0 && empty) {
@@ -72,6 +102,18 @@ export default function DataTable<T>({
         <table className="w-full text-start text-sm">
           <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
+              {selection && (
+                <th scope="col" className="w-10 py-3 ps-8 pe-2">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    aria-label={selection.selectAllLabel}
+                    checked={selection.allSelected}
+                    onChange={selection.onToggleAll}
+                    className="h-4 w-4 cursor-pointer accent-brand-600"
+                  />
+                </th>
+              )}
               {columns.map((c, i) => (
                 <th
                   key={c.key}
@@ -106,12 +148,26 @@ export default function DataTable<T>({
                   'hover:bg-gray-50',
                 )}
               >
+                {selection && (
+                  <td className="w-10 py-3 ps-8 pe-2">
+                    {selection.isRowSelectable(row) && (
+                      <input
+                        type="checkbox"
+                        aria-label={selection.rowLabel ? selection.rowLabel(row) : selection.selectAllLabel}
+                        checked={selection.selectedIds.has(rowKey(row, i))}
+                        onChange={() => selection.onToggle(row)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 cursor-pointer accent-brand-600"
+                      />
+                    )}
+                  </td>
+                )}
                 {columns.map((c, i) => (
                   <td
                     key={c.key}
                     className={cn(
                       'py-3 align-middle',
-                      i === 0 ? 'ps-8 pe-4' : 'px-4',
+                      i === 0 && !selection ? 'ps-8 pe-4' : i === 0 ? 'ps-4 pe-4' : 'px-4',
                       c.align === 'end' ? 'text-end' : 'text-start',
                       c.tabular && 'tabular-nums',
                     )}
@@ -150,17 +206,29 @@ export default function DataTable<T>({
             )}
             tabIndex={onRowClick ? 0 : undefined}
           >
-            {/* Line 1: identity left · value right (one slot, tabular figures) */}
+            {/* Line 1: [selection] identity left · value right (one slot, tabular figures) */}
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-medium text-gray-900">
-                  {identity?.render(row)}
-                </div>
-                {identity?.secondary?.(row) && (
-                  <div className="truncate text-xs text-gray-500">
-                    {identity.secondary(row)}
-                  </div>
+              <div className="flex min-w-0 items-start gap-2.5">
+                {selection && selection.isRowSelectable(row) && (
+                  <input
+                    type="checkbox"
+                    aria-label={selection.rowLabel ? selection.rowLabel(row) : selection.selectAllLabel}
+                    checked={selection.selectedIds.has(rowKey(row, i))}
+                    onChange={() => selection.onToggle(row)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand-600"
+                  />
                 )}
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-gray-900">
+                    {identity?.render(row)}
+                  </div>
+                  {identity?.secondary?.(row) && (
+                    <div className="truncate text-xs text-gray-500">
+                      {identity.secondary(row)}
+                    </div>
+                  )}
+                </div>
               </div>
               {value && (
                 <div

@@ -6,18 +6,25 @@ import {
     Droplets,
     Crown,
 } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { formatMoney, type AppLocale } from '@/lib/format';
 
 interface GameDetailsProps {
     date: string;
     time: string;
     price: number;
+    /** ISO currency of the match (P2-353) — defaults to SAR. */
+    currency?: string;
     hasJoined: boolean;
     isHost?: boolean;
 }
 
-export default function GameDetails({ date, time, price, hasJoined, isHost }: GameDetailsProps) {
+export default function GameDetails({ date, time, price, currency = 'SAR', hasJoined, isHost }: GameDetailsProps) {
     const t = useTranslations('gameDetails');
+    const pathname = usePathname();
+    const locale = (pathname ?? '').split('/')[1] || 'en';
+    const appLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
 
     return (
         <div className="bg-white rounded-2xl shadow-card p-5">
@@ -47,7 +54,7 @@ export default function GameDetails({ date, time, price, hasJoined, isHost }: Ga
                         ) : (
                             <>
                                 <span className="text-sm font-semibold text-brand-black">
-                                    {price === 0 ? t('free') : `${price} SAR`}
+                                    {price === 0 ? t('free') : formatMoney(price, appLocale, currency)}
                                 </span>
                                 {hasJoined && (
                                     <span className="text-[10px] font-bold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">

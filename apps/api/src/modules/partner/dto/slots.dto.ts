@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -10,6 +11,10 @@ import {
   Max,
   Min,
   MinLength,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 
 /** Days of week: 0=Sunday … 6=Saturday */
@@ -59,6 +64,109 @@ export class CreateSlotDto {
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'end_time must be HH:MM' })
   end_time: string;
+}
+
+/**
+ * Run #94 (Reviewer-A P2-137): validated slot-window query shared by BOTH
+ * schedule endpoints — `GET /admin/pitches/:id/slots` and
+ * `GET /partner/pitches/:id/slots`. Previously each controller passed the raw
+ * `@Query('from')/@Query('to')` strings straight into drizzle gte/lte on
+ * slot_date: a garbage value produced a PG comparison error (500) and a
+ * reversed range silently returned an empty schedule. Both fields must be
+ * REAL YYYY-MM-DD calendar dates (format + month/day round-trip — PR-Agent
+ * run #94: `2026-02-31` passes a shape-only regex but still 500s in the PG
+ * date cast) and `from <= to` is enforced so a reversed range is a clear 400.
+ */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Shape + calendar round-trip in one predicate (shared by both constraints). */
+function isCalendarRealDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+@ValidatorConstraint({ name: 'slotCalendarDate', async: false })
+export class SlotCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    // Missing/null: presence is reported by @IsString — don't stack a
+    // calendar error on a field the client never sent.
+    if (value === undefined || value === null) return true;
+    return isCalendarRealDate(value);
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} must be a real YYYY-MM-DD calendar date`;
+  }
+}
+
+@ValidatorConstraint({ name: 'slotWindowOrder', async: false })
+class SlotWindowOrderConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const o = args.object as { from?: string; to?: string };
+    // Format/calendar errors are reported per-field — skip the cross-field
+    // check unless both sides are REAL dates (PR-Agent round 2: comparing a
+    // calendar-invalid 'from' like 2026-02-31 against an earlier valid 'to'
+    // used to stack a spurious order error on top of the calendar error).
+    if (!isCalendarRealDate(o.from) || !isCalendarRealDate(o.to)) return true;
+    return o.from <= o.to;
+  }
+
+  defaultMessage(): string {
+    return 'from must be on or before to';
+  }
+}
+
+export class SlotWindowQueryDto {
+  @ApiProperty({ example: '2026-10-01', description: 'Window start (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  from: string;
+
+  @ApiProperty({ example: '2026-10-08', description: 'Window end (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  @Validate(SlotWindowOrderConstraint)
+  to: string;
+}
+
+/** Cross-field cap: an inclusive blackout range may span at most 62 days. */
+@ValidatorConstraint({ name: 'blackoutMaxRange', async: false })
+class BlackoutMaxRangeConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const o = args.object as { from?: string; to?: string };
+    if (!isCalendarRealDate(o.from) || !isCalendarRealDate(o.to)) return true;
+    const days = (Date.UTC(...(o.to.split('-').map(Number) as [number, number, number])) -
+      Date.UTC(...(o.from.split('-').map(Number) as [number, number, number]))) / 86_400_000;
+    return days <= 61; // inclusive span ≤ 62 days
+  }
+
+  defaultMessage(): string {
+    return 'blackout range may span at most 62 days';
+  }
+}
+
+/**
+ * P2-246 (run #161): bulk slot blackout — close every FREE slot of one pitch
+ * in a date range with a single call (venue maintenance, Ramadan closure).
+ * Mirrors the single-slot close semantics (deleteSlot): "closed" = row
+ * DELETED; booked slots are NEVER touched here (reported as `skippedBooked`)
+ * — releasing a booked slot stays the match-cancellation flow's job.
+ * Re-generating slots afterwards recreates the window (generateSlots).
+ */
+export class BlackoutSlotsDto {
+  @ApiProperty({ example: '2026-11-01', description: 'Blackout start (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  from: string;
+
+  @ApiProperty({ example: '2026-11-05', description: 'Blackout end (inclusive) YYYY-MM-DD' })
+  @IsString()
+  @Validate(SlotCalendarDateConstraint)
+  @Validate(SlotWindowOrderConstraint)
+  @Validate(BlackoutMaxRangeConstraint)
+  to: string;
 }
 
 export class UpdateVenuePartnerDto {
@@ -135,4 +243,22 @@ export class UpdateVenuePartnerDto {
   @IsOptional()
   @IsBoolean()
   closed_day_6?: boolean;
+
+  // P1-38 (run #170): venue photo paths — canonical "/media/venues/…" strings
+  // minted by POST /media/venues. Sending the array SETS the order/removal;
+  // omit it to leave photos untouched (partial-update semantics).
+  @ApiPropertyOptional({
+    example: ['/media/venues/<venueId>/<sha256>.jpg'],
+    type: [String],
+    description: 'Venue photo paths (max 6, order = display order)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  // PR-Agent r3 MINOR (run #170): segment-level `..` is rejected — a segment
+  // is 1+ chars of [A-Za-z0-9._-] but never exactly ".." (or "."), and the
+  // file segment must end jpg/png/webp.
+  @Matches(/^\/media\/venues\/(?!\.\.?(?:\/|\$))[A-Za-z0-9-]+(?:\/(?!\.\.?(?:\/|\$))[A-Za-z0-9._-]+)*\.(?:jpg|png|webp)$/, { each: true })
+  images?: string[];
 }

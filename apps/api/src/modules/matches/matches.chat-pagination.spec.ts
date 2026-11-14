@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { asc, desc } from 'drizzle-orm';
 import { match_messages } from '../../database/schema';
 import { MatchesService } from './matches.service';
@@ -132,7 +132,7 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
   }
 
   it('default call: latest-50 window (DESC probe, reversed to chronological), bare array', async () => {
-    const rows = [{ id: 'm1' }, { id: 'm2' }];
+    const rows = [{ id: '77777777-7777-4777-8777-777777777777' }, { id: '88888888-8888-4888-8888-888888888888' }];
     const { svc, findManyCalls } = makeService({
       memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
       messages: rows,
@@ -162,14 +162,14 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
 
   it('before cursor: anchors on the message row and pages strictly older', async () => {
     const anchorTime = new Date('2026-09-01T10:00:00Z');
-    const olderPage = [{ id: 'm-old' }];
+    const olderPage = [{ id: '22222222-2222-4222-8222-222222222222' }];
     const { svc, findManyCalls } = makeService({
       memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
       messages: olderPage,
-      cursorRow: { id: 'm-cursor', match_id: MATCH_ID, created_at: anchorTime },
+      cursorRow: { id: '11111111-1111-4111-8111-111111111111', match_id: MATCH_ID, created_at: anchorTime },
     });
     const out = await svc.getMessages(MATCH_ID, MEMBER, {
-      before: 'm-cursor',
+      before: '11111111-1111-4111-8111-111111111111',
       limit: 20,
     });
     expect(out).toEqual(olderPage);
@@ -177,7 +177,7 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
     // The composite keyset predicate must mention the cursor id bound value.
     const pairs: Array<[string, unknown]> = [];
     collectEqPairs(findManyCalls[0].where, pairs);
-    expect(pairs.some(([, v]) => v === 'm-cursor')).toBe(true);
+    expect(pairs.some(([, v]) => v === '11111111-1111-4111-8111-111111111111')).toBe(true);
   });
 
   it('unknown cursor id → NotFoundException (no silent empty page)', async () => {
@@ -196,13 +196,13 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
       memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
       messages: [],
       cursorRow: {
-        id: 'm-other',
-        match_id: 'match-OTHER',
+        id: '33333333-3333-4333-8333-333333333333',
+        match_id: '44444444-4444-4444-8444-444444444444',
         created_at: new Date(),
       },
     });
     await expect(
-      svc.getMessages(MATCH_ID, MEMBER, { before: 'm-other' }),
+      svc.getMessages(MATCH_ID, MEMBER, { before: '33333333-3333-4333-8333-333333333333' }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -214,10 +214,10 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
     const { svc, findManyCalls } = makeService({
       memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
       messages: [],
-      cursorRow: { id: 'm-cursor', match_id: MATCH_ID, created_at: anchorTime },
+      cursorRow: { id: '11111111-1111-4111-8111-111111111111', match_id: MATCH_ID, created_at: anchorTime },
     });
 
-    await svc.getMessages(MATCH_ID, MEMBER, { before: 'm-cursor' });
+    await svc.getMessages(MATCH_ID, MEMBER, { before: '11111111-1111-4111-8111-111111111111' });
     await svc.getMessages(MATCH_ID, MEMBER);
 
     expect(orderSignature(findManyCalls[0].orderBy)).toMatch(/^created_at,id\|asc$/);
@@ -228,11 +228,104 @@ describe('MatchesService.getMessages — P1-3 keyset pagination (run #65)', () =
     const { svc, findManyCalls } = makeService({
       memberships: [],
       messages: [],
-      cursorRow: { id: 'm-x', match_id: MATCH_ID, created_at: new Date() },
+      cursorRow: { id: '66666666-6666-4666-8666-666666666666', match_id: MATCH_ID, created_at: new Date() },
     });
     await expect(
-      svc.getMessages(MATCH_ID, OUTSIDER, { before: 'm-x' }),
+      svc.getMessages(MATCH_ID, OUTSIDER, { before: '66666666-6666-4666-8666-666666666666' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(findManyCalls).toHaveLength(0);
+  });
+
+  // ── P2-196 (run #132): the `after` direction — reconnect backfill ──────
+
+  it('after cursor: anchors on the message row and pages strictly newer (ASC)', async () => {
+    const anchorTime = new Date('2026-09-01T10:00:00Z');
+    const newerPage = [{ id: '22222222-2222-4222-8222-222222222222' }];
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: newerPage,
+      cursorRow: { id: '11111111-1111-4111-8111-111111111111', match_id: MATCH_ID, created_at: anchorTime },
+    });
+    const out = await svc.getMessages(MATCH_ID, MEMBER, {
+      after: '11111111-1111-4111-8111-111111111111',
+      limit: 20,
+    });
+    expect(out).toEqual(newerPage);
+    expect(findManyCalls[0].limit).toBe(20);
+    // The composite keyset predicate must mention the cursor id bound value.
+    const pairs: Array<[string, unknown]> = [];
+    collectEqPairs(findManyCalls[0].where, pairs);
+    expect(pairs.some(([, v]) => v === '11111111-1111-4111-8111-111111111111')).toBe(true);
+    // Backfill pages forward — ASC order, mirroring the before direction.
+    expect(orderSignature(findManyCalls[0].orderBy)).toMatch(/^created_at,id\|asc$/);
+  });
+
+  it('after cursor: unknown id → NotFoundException (no silent empty page)', async () => {
+    const { svc } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: null,
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { after: 'forged-id' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('PR-Agent r2: non-UUID-shaped cursor (before or after) → NotFoundException without a DB read', async () => {
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: null,
+    });
+    // 'forged-id' is not UUID-shaped — rejected on shape alone (same contract
+    // the WS gateway applies to room ids; no uuid-cast 500 possible).
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { after: 'forged-id' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { before: ' ../../etc/passwd' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(findManyCalls).toHaveLength(0);
+  });
+
+  it('after cursor from ANOTHER match → NotFoundException (no cross-match leak)', async () => {
+    const { svc } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: {
+        id: '33333333-3333-4333-8333-333333333333',
+        match_id: '44444444-4444-4444-8444-444444444444',
+        created_at: new Date(),
+      },
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, { after: '33333333-3333-4333-8333-333333333333' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('both cursors at once → BadRequestException (client bug, clean 400)', async () => {
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: { id: '55555555-5555-4555-8555-555555555555', match_id: MATCH_ID, created_at: new Date() },
+    });
+    await expect(
+      svc.getMessages(MATCH_ID, MEMBER, {
+        before: '55555555-5555-4555-8555-555555555555',
+        after: '55555555-5555-4555-8555-555555555555',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    // The 400 fires before any cursor anchor read.
+    expect(findManyCalls).toHaveLength(0);
+  });
+
+  it('after with a large limit still clamps into [1, 100]', async () => {
+    const { svc, findManyCalls } = makeService({
+      memberships: [{ match_id: MATCH_ID, user_id: MEMBER }],
+      messages: [],
+      cursorRow: { id: '55555555-5555-4555-8555-555555555555', match_id: MATCH_ID, created_at: new Date() },
+    });
+    await svc.getMessages(MATCH_ID, MEMBER, { after: '55555555-5555-4555-8555-555555555555', limit: 5000 });
+    expect(findManyCalls[0].limit).toBe(100);
   });
 });

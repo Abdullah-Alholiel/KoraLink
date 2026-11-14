@@ -1,69 +1,67 @@
-import { Test } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PATH_METADATA } from '@nestjs/common/constants';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import { RequestMethod } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { WalletController } from './wallet.controller';
-import { WalletService } from './wallet.service';
 
 /**
- * P0-7 (run #26) — wallet topup feature flag, replacing the old
- * `NODE_ENV === 'production'` string gate. The new gate is
- * `WALLET_TOPUP_ENABLED === 'true'` (default DISABLED).
+ * Collect every route the controller declares as `${METHOD} ${path}` by
+ * walking the prototype's handler metadata (what Nest's RouterExplorer reads).
  */
-describe('WalletController — topup feature flag (P0-7, run #26)', () => {
-  const makeController = async (flagValue: string | undefined) => {
-    const moduleRef = await Test.createTestingModule({
-      controllers: [WalletController],
-      providers: [
-        {
-          provide: WalletService,
-          useValue: {
-            recordTransaction: jest.fn().mockResolvedValue({
-              ledgerEntry: { id: 'x', type: 'CREDIT', amount: '25.00' },
-              wallet_balance: '725.00',
-            }),
-          },
-        },
-        {
-          provide: ConfigService,
-          // New gate: only the literal 'true' enables the endpoint.
-          useValue: {
-            get: jest.fn((key: string) =>
-              key === 'WALLET_TOPUP_ENABLED' ? flagValue : undefined,
-            ),
-          },
-        },
-      ],
-    }).compile();
+function declaredRoutes(): string[] {
+  const proto = WalletController.prototype as unknown as Record<string, unknown>;
+  const routes: string[] = [];
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    if (name === 'constructor') continue;
+    const handler = proto[name];
+    if (typeof handler !== 'function') continue;
+    const path = Reflect.getMetadata(PATH_METADATA, handler) as string | string[] | undefined;
+    const method = Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod | undefined;
+    if (path === undefined || method === undefined) continue;
+    for (const p of Array.isArray(path) ? path : [path]) {
+      routes.push(`${RequestMethod[method]} ${p.replace(/^\/+/, '')}`);
+    }
+  }
+  return routes;
+}
 
-    return moduleRef.get<WalletController>(WalletController);
-  };
-
-  const dto = { amount: 25, idempotencyKey: 'test-key' } as any;
-  const user = { sub: 'user-1' } as any;
-
-  it('WALLET_TOPUP_ENABLED=true: dummy top-up credits the wallet (unchanged behavior)', async () => {
-    const ctrl = await makeController('true');
-    const res = await ctrl.topup(user, dto);
-    expect(res).toMatchObject({ wallet_balance: '725.00' });
+describe('WalletController — removed client-amount money surfaces', () => {
+  // P2-331 (run #197): the legacy dummy POST /wallet/topup was REMOVED. It
+  // accepted a CLIENT-SUPPLIED amount + idempotencyKey and self-credited via
+  // walletService.recordTransaction, gated only by WALLET_TOPUP_ENABLED — the
+  // same flag that turns on the real Moyasar flow — so enabling real payments
+  // would have re-opened free money minting with no rate limit. This pin makes
+  // a regression (re-adding the route or its handler) fail the suite.
+  it('POST /wallet/topup stays REMOVED — no client-amount self-credit route (P2-331 pin)', () => {
+    const proto = WalletController.prototype as unknown as Record<string, unknown>;
+    expect(proto.topup).toBeUndefined();
+    expect(declaredRoutes()).not.toContain('POST topup');
   });
 
-  it('WALLET_TOPUP_ENABLED=false: top-up is forbidden (403)', async () => {
-    const ctrl = await makeController('false');
-    await expect(ctrl.topup(user, dto)).rejects.toThrow(ForbiddenException);
+  it('the real Moyasar top-up surface is still declared (config / intent / verify)', () => {
+    const routes = declaredRoutes();
+    expect(routes).toEqual(
+      expect.arrayContaining(['GET topup/config', 'POST topup/intent', 'POST topup/verify']),
+    );
   });
 
-  it('WALLET_TOPUP_ENABLED unset: top-up is forbidden (default DISABLED — migration from NODE_ENV)', async () => {
-    const ctrl = await makeController(undefined);
-    await expect(ctrl.topup(user, dto)).rejects.toThrow(ForbiddenException);
-  });
-
-  it('WALLET_TOPUP_ENABLED="production" (legacy value): still forbidden (proves the NODE_ENV migration)', async () => {
-    // Previously, NODE_ENV=production was the "off" state. Under the new gate,
-    // "production" must NOT enable the endpoint — operators must set the
-    // explicit true flag.
-    const ctrl = await makeController('production');
-    await expect(ctrl.topup(user, dto)).rejects.toThrow(ForbiddenException);
+  // Tripwire: WALLET_TOPUP_ENABLED now gates ONLY the Moyasar flow (read in
+  // wallet.topup.service.ts). No controller may read it — a controller-level
+  // read is how the legacy gate+recordTransaction path worked.
+  it('no wallet controller file references WALLET_TOPUP_ENABLED or recordTransaction (P2-331 tripwire)', () => {
+    const dir = __dirname;
+    const controllers = readdirSync(dir).filter(
+      (f) => f.endsWith('.controller.ts') && !f.endsWith('.spec.ts'),
+    );
+    expect(controllers.length).toBeGreaterThan(0);
+    for (const f of controllers) {
+      const src = readFileSync(join(dir, f), 'utf8')
+        // strip comments: the removal note legitimately names the old gate
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      expect(src).not.toContain('WALLET_TOPUP_ENABLED');
+      expect(src).not.toContain('recordTransaction');
+    }
   });
 
   // Run #58 (reviewer-B P1): POST /wallet/pay was REMOVED — it accepted a
@@ -80,5 +78,6 @@ describe('WalletController — topup feature flag (P0-7, run #26)', () => {
     ) as string[];
     const flattened = Array.isArray(routes) ? routes : [routes];
     expect(flattened).not.toContain('pay');
+    expect(declaredRoutes()).not.toContain('POST pay');
   });
 });

@@ -4,8 +4,10 @@ import {
   Get,
   Param,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { AdminSettingsService } from './settings.service';
@@ -21,7 +23,12 @@ export class AdminSettingsController {
   }
 
   @Put(':key')
-  set(@Param('key') key: string, @Body() dto: UpdateSettingDto) {
-    return this.settings.set(key, dto.value);
+  set(
+    @Param('key') key: string,
+    @Body() dto: UpdateSettingDto,
+    @Req() req: Request,
+  ) {
+    const adminId = (req as unknown as { user: { sub: string } }).user.sub;
+    return this.settings.set(key, dto.value, adminId, req.ip);
   }
 }

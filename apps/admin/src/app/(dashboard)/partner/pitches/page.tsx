@@ -7,8 +7,10 @@ import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
+import { pitchActionFailure, type PitchActionFailure } from '@/lib/blackout';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { weekEnd, weekStart } from '@/lib/week';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import PitchFormDrawer, { type PitchFormResult } from '@/components/PitchFormDrawer';
@@ -27,9 +29,29 @@ export default function MyPitchesPage() {
   const venues = useLiveAdminData<PartnerVenueRow[]>('/partner/venues', ['venues']);
 
   const [busyId, setBusyId] = useState<string | null>(null);
+  // P2-323: localized action-failure bucket (toggle/delete) — what/why/what-next.
+  const [actionFailure, setActionFailure] = useState<{ kind: PitchActionFailure; name: string; action: 'toggle' | 'delete' } | null>(null);
+  // r6: attempt counter in the remount key — two IDENTICAL failures in a row
+  // (same pitch, same kind) must still re-announce (role=alert pattern).
+  const [failureSeq, setFailureSeq] = useState(0);
+  const recordFailure = (f: { kind: PitchActionFailure; name: string; action: 'toggle' | 'delete' }) => {
+    setFailureSeq((s) => s + 1);
+    setActionFailure(f);
+  };
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerPitch | null>(null);
+  // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
+  // drawer opens — synchronously in openSchedule (PR-Agent MINOR on #51: the
+  // effect variant still fired the first fetch with the stale range). The
+  // deep-link effect below routes through openSchedule too.
+  const [weekFrom, setWeekFrom] = useState(() => weekStart());
+  const [weekTo, setWeekTo] = useState(() => weekEnd());
   const [schedulePitchId, setSchedulePitchId] = useState<string | null>(null);
+  function openSchedule(id: string) {
+    setWeekFrom(weekStart());
+    setWeekTo(weekEnd());
+    setSchedulePitchId(id);
+  }
   const [deleting, setDeleting] = useState<PartnerPitch | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -37,11 +59,11 @@ export default function MyPitchesPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const id = q.get('schedule');
-    if (id) setSchedulePitchId(id);
+    if (id) openSchedule(id);
   }, []);
 
   const scheduleState = useLiveAdminData<SlotsResponse>(
-    schedulePitchId ? `/partner/pitches/${schedulePitchId}/slots?from=${weekStart()}&to=${weekEnd()}` : '/partner/pitches',
+    schedulePitchId ? `/partner/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/partner/pitches',
     [],
     { pollMs: 60_000 },
   );
@@ -50,22 +72,17 @@ export default function MyPitchesPage() {
 
   const schedulePitch = (data ?? []).find((p) => p.id === schedulePitchId) ?? null;
 
-  function weekStart(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    return d.toISOString().slice(0, 10);
-  }
-  function weekEnd(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-    return d.toISOString().slice(0, 10);
-  }
-
   async function toggleActive(p: PartnerPitch) {
     setBusyId(p.id);
+    // P2-323: catch the failure — never an unhandled rejection; surface a
+    // localized bucket (raw backend text is never shown).
+    setActionFailure(null);
     try {
       await api.patch(`/partner/pitches/${p.id}`, { is_active: !p.is_active });
       reload();
+      setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
+    } catch (err) {
+      recordFailure({ kind: pitchActionFailure(err), name: p.name, action: 'toggle' });
     } finally {
       setBusyId(null);
     }
@@ -76,13 +93,27 @@ export default function MyPitchesPage() {
     try {
       await api.post('/partner/pitches', values);
       reload();
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : t('createFailed'));
-      throw e; // keep the drawer open so the partner sees the error
+      setActionFailure(null); // P2-323 r2: success clears any stale alert
+    } catch (err) {
+      // P2-323: same de-raw rule as toggle/delete — localized bucket, the
+      // drawer stays open via the rethrow.
+      const kind = pitchActionFailure(err);
+      setFormError(
+        kind === 'validation' ? t('createFailedValidation')
+          : kind === 'auth' ? t('createFailedAuth')
+            : kind === 'access' ? t('createFailedAccess')
+              : kind === 'server' ? t('createFailedServer')
+                : t('createFailedNetwork'),
+      );
+      throw err; // keep the drawer open so the partner sees the error
     }
   }
 
   async function savePitch(pitchId: string, values: PitchFormResult) {
+    // P2-323 (verified, not drive-by wrapped): PitchFormDrawer's own submit
+    // catch buckets the failure into its localized saveError and keeps the
+    // drawer open (PitchFormDrawer.tsx submit → catch → setSaveError) —
+    // a try/catch here would be a useless rethrow. Nothing to add.
     await api.patch(`/partner/pitches/${pitchId}`, {
       name: values.name,
       size: values.size,
@@ -91,16 +122,20 @@ export default function MyPitchesPage() {
       hourly_rate: values.hourly_rate,
     });
     reload();
+    setActionFailure(null); // P2-323 r2: success clears any stale alert
   }
 
   async function deletePitch(p: PartnerPitch) {
     setBusyId(p.id);
+    // P2-323: window.alert(raw e.message) → localized role=alert bucket.
+    setActionFailure(null);
     try {
       await api.delete(`/partner/pitches/${p.id}`);
       if (schedulePitchId === p.id) setSchedulePitchId(null);
       reload();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : t('deleteFailed'));
+      setActionFailure(null); // r5: success clears any stale alert (parity with create/save)
+    } catch (err) {
+      recordFailure({ kind: pitchActionFailure(err), name: p.name, action: 'delete' });
     } finally {
       setBusyId(null);
     }
@@ -135,6 +170,38 @@ export default function MyPitchesPage() {
           onSubmit={createPitch}
         />
         {formError && creating && <p className="text-sm text-brand-red">{formError}</p>}
+
+        {/* P2-323: toggle/delete failure alert — key remounts the node so
+            screen readers re-announce on each failure (role=alert, the
+            settlements P2-267 pattern). Hidden, never unmounted, when clear. */}
+        <p
+          role="alert"
+          key={actionFailure ? `${failureSeq}-${actionFailure.kind}-${actionFailure.name}` : 'clear'}
+          className="mx-8 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          style={{ display: actionFailure ? undefined : 'none' }}
+        >
+          {actionFailure
+            ? actionFailure.action === 'delete'
+              ? actionFailure.kind === 'validation'
+                ? t('deleteFailedValidation', { name: actionFailure.name })
+                : actionFailure.kind === 'auth'
+                  ? t('deleteFailedAuth', { name: actionFailure.name })
+                  : actionFailure.kind === 'access'
+                    ? t('deleteFailedAccess', { name: actionFailure.name })
+                    : actionFailure.kind === 'server'
+                      ? t('deleteFailedServer', { name: actionFailure.name })
+                      : t('deleteFailedNetwork', { name: actionFailure.name })
+              : actionFailure.kind === 'validation'
+                ? t('actionFailedValidation', { name: actionFailure.name })
+                : actionFailure.kind === 'auth'
+                  ? t('actionFailedAuth', { name: actionFailure.name })
+                  : actionFailure.kind === 'access'
+                    ? t('actionFailedAccess', { name: actionFailure.name })
+                    : actionFailure.kind === 'server'
+                      ? t('actionFailedServer', { name: actionFailure.name })
+                      : t('actionFailedNetwork', { name: actionFailure.name })
+            : ''}
+        </p>
 
         {/* Edit drawer */}
         <PitchFormDrawer
@@ -199,7 +266,7 @@ export default function MyPitchesPage() {
 
                   <div className="mt-auto space-y-2 pt-4">
                     <button
-                      onClick={() => setSchedulePitchId(p.id)}
+                      onClick={() => openSchedule(p.id)}
                       className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
                     >
                       <Zap className="h-4 w-4" /> {t('manageSchedule')}

@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { MapPin, Users as UsersIcon, Trophy, Crown, Check, Navigation, Lock as LockIcon, Building2, ShieldAlert, UserCheck, XCircle } from 'lucide-react';
 import type { Match } from '@/types';
-import { isPotmVotingOpen } from '@/lib/api-adapter';
+import { isPotmVotingOpen } from '@/lib/match-pricing';
 import { useNow } from '@/hooks/useNow';
-import { formatDistance } from '@/lib/format';
+import { formatDistance, formatMoney, formatCount, type AppLocale } from '@/lib/format';
 
 interface MatchCardProps {
     match: Match;
@@ -23,6 +23,22 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const spotsLeft = match.totalSpots - match.filledSpots;
     const isClosing = match.status === 'closing_soon' || (spotsLeft <= 2 && spotsLeft > 0);
     const isFull = match.status === 'full' || spotsLeft <= 0;
+    // P2-342 (run #202): enum labels localize — the adapter ships DB enum
+    // strings (match_type → intensity: 'Casual'/'Competitive'; pitch surface:
+    // 'Grass'/'Artificial'). Known values map to i18n; unknown values keep the
+    // raw fallback so novel data never renders a blank pill.
+    const intensityLabel =
+        match.intensity === 'Casual'
+            ? t('host.matchTypeCasual')
+            : match.intensity === 'Competitive'
+                ? t('host.matchTypeCompetitive')
+                : match.intensity;
+    const surfaceLabel =
+        match.surface === 'Grass'
+            ? t('clubs.surfaceGrass')
+            : match.surface === 'Artificial'
+                ? t('clubs.surfaceArtificial')
+                : match.surface;
     // Cancelled = terminal, never actionable (My Games tailored tags, 2026-09-18).
     const isCancelled = match.status === 'cancelled';
 
@@ -30,6 +46,12 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     const isCompleted = ['completed', 'cancelled'].includes(match.status);
     const isHost = match.isUserHost ?? (currentUserId ? match.hostId === currentUserId : false);
     const isJoined = match.isJoined ?? match.roster.some(p => p.userId === currentUserId);
+    // P2-312: queue-position chip — meaningful only while the viewer is waiting.
+    // PR-Agent r1 (run #191): terminal matches are never actionable — waitlist
+    // rows survive host-cancel/completion (only auto-cancel sweeps the queue),
+    // so an explicit terminal guard prevents a stale "#N" chip on history cards.
+    const showQueuedChip =
+        (match.yourWaitlistPosition ?? null) != null && !isCompleted && !isJoined && !isHost;
     // POTM voting window — a match the user played in stays actionable for 24h
     // after the final whistle. Prefer the adapter-computed votingClosesAt (uses
     // the match's real duration); fall back to the coarse 60-min default only
@@ -78,6 +100,31 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
     } else if (isCompleted) {
         buttonLabel = t('matchDetail.viewDetails');
         buttonStyle = 'bg-gray-100 text-gray-600';
+        // P1-51 (run #116): History-row POTM outcome — once the 24h window has
+        // RESOLVED (finalizePomVoting stamped winner or tie/no-vote) for a match
+        // the user played/hosted. Feeds without the my-matches fields ship
+        // potmDecided undefined → no pill, unchanged render.
+        if ((isJoined || isHost) && !votingOpenFinal && match.potmDecided) {
+            badge = match.potmWinnerName ? (
+                <span
+                    data-testid="match-card-potm-winner"
+                    className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                >
+                    <Crown className="w-3 h-3 flex-shrink-0" strokeWidth={2} />
+                    <span className="truncate max-w-[140px]">
+                        {t('matchCard.potmWinner', { name: match.potmWinnerName })}
+                    </span>
+                </span>
+            ) : (
+                <span
+                    data-testid="match-card-potm-no-winner"
+                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                >
+                    <XCircle className="w-3 h-3" strokeWidth={2} />
+                    {t('matchCard.potmNoWinner')}
+                </span>
+            );
+        }
     } else if (isHost) {
         buttonLabel = t('matchDetail.yourMatch');
         buttonStyle = 'bg-amber-100 text-amber-800 border border-amber-300';
@@ -150,7 +197,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     {isClosing && !isFull && (
                         <p className="text-[10px] font-bold text-brand-red uppercase tracking-wide mt-0.5">
                             {spotsLeft <= 1
-                                ? `${spotsLeft} ${t('matchCard.spotLeft')}`
+                                ? `${formatCount(spotsLeft, locale === 'ar' ? 'ar' : 'en')} ${t('matchCard.spotLeft')}`
                                 : t('matchCard.closingSoon')}
                         </p>
                     )}
@@ -215,7 +262,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                 </span>
                 {match.surface && (
                     <span className="text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">
-                        {match.surface}
+                        {surfaceLabel}
                     </span>
                 )}
                 <span className="text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2 py-1">
@@ -226,7 +273,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         ? 'bg-brand-red/10 text-brand-red'
                         : 'bg-brand-green/10 text-brand-green'
                 }`}>
-                    {match.intensity === 'Competitive' ? '🏆' : '⚽'} {match.intensity}
+                    {match.intensity === 'Competitive' ? '🏆' : '⚽'} {intensityLabel}
                 </span>
             </div>
 
@@ -236,7 +283,7 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                     <div>
                         <p className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">{t('matchCard.price')}</p>
                         <p className="text-xl font-extrabold text-brand-black leading-none">
-                            {isHost ? t('gameDetails.free') : match.price === 0 ? t('gameDetails.free') : `${match.price} ${match.currency}`}
+                            {isHost ? t('gameDetails.free') : match.price === 0 ? t('gameDetails.free') : formatMoney(match.price, (locale === 'ar' ? 'ar' : 'en') as AppLocale, match.currency)}
                         </p>
                     </div>
                     {/* Roster preview avatars */}
@@ -250,13 +297,23 @@ export default function MatchCard({ match, currentUserId }: MatchCardProps) {
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
                     <span className="text-xs text-gray-500 font-medium">
-                        {match.filledSpots}/{match.totalSpots}
+                        {formatCount(match.filledSpots, locale === 'ar' ? 'ar' : 'en')}/{formatCount(match.totalSpots, locale === 'ar' ? 'ar' : 'en')}
                     </span>
                     <span className={`text-sm font-semibold px-5 py-2.5 rounded-full ${buttonStyle}`}>
                         {buttonLabel}
                     </span>
+                    {/* P2-312: the viewer's queue position — only while WAITING
+                        (never for joined players or the host). */}
+                    {showQueuedChip && (
+                        <span
+                            data-testid="match-card-queued-chip"
+                            className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                        >
+                            {t('matchCard.youQueued', { count: match.yourWaitlistPosition ?? 0 })}
+                        </span>
+                    )}
                 </div>
             </div>
         </Link>

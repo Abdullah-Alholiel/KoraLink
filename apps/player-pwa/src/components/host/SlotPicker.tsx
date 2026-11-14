@@ -13,10 +13,11 @@
  * Riyadh clock with a client-side belt-and-braces pass.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Clock, Shield } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Clock, Shield } from 'lucide-react';
 import { usePitchSlots, type PitchSlotApi } from '@/hooks/usePitchSlots';
+import { useSlotTapRevalidate } from '@/hooks/useSlotTapRevalidate';
 import { useNow } from '@/hooks/useNow';
 import { riyadhDateKey, riyadhTimeNow } from '@/lib/venue-hours';
 import DatePicker from '@/components/matches/DatePicker';
@@ -24,7 +25,8 @@ import DatePicker from '@/components/matches/DatePicker';
 export interface SlotPickerProps {
     pitchId: string | null;
     selectedSlot: PitchSlotApi | null;
-    onSelectSlot: (slot: PitchSlotApi) => void;
+    /** Receives the picked slot, or null when a pick is cleared/reset. */
+    onSelectSlot: (slot: PitchSlotApi | null) => void;
 }
 
 export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: SlotPickerProps) {
@@ -46,6 +48,25 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
         pitchId,
         effectiveKey,
     );
+
+    /* ── Tap-time revalidation (P2-234) ──
+       The rendered list is a snapshot; this re-reads availability at tap
+       time and refuses the pick when the slot was just booked, surfacing
+       host.errorSlotTaken right here instead of a generic error at confirm. */
+    const { handleSelect, slotTaken, clearTaken } = useSlotTapRevalidate(
+        pitchId,
+        effectiveKey,
+        {
+            onSelect: onSelectSlot,
+            onTaken: () => onSelectSlot(null),
+        },
+    );
+
+    /* Leaving the day (or unmounting) drops any just-booked flag — it
+       belonged to the day the tap happened on. */
+    useEffect(() => {
+        clearTaken();
+    }, [effectiveKey, clearTaken]);
 
     // §19b: the wall clock enters render paths ONLY through useNow() — null
     // during SSR + first client paint (both sides render the unfiltered list,
@@ -88,7 +109,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                     </div>
                     <button
                         type="button"
-                        onClick={() => onSelectSlot(null as unknown as PitchSlotApi)}
+                        onClick={() => onSelectSlot(null)}
                         className="text-xs text-brand-red font-medium active:scale-95 transition-transform"
                     >
                         {t('host.changeSlot')}
@@ -103,6 +124,26 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 {t('host.selectSlot')}
             </p>
+
+            {/* P2-234 — the tapped slot was just booked: refuse in place
+                with the localized specific message (§12 error standard).
+                role="alert" announces it; the day strip above offers the
+                natural retry path. */}
+            {slotTaken && (
+                <div
+                    role="alert"
+                    data-testid="slot-taken-error"
+                    className="flex items-start gap-2 rounded-xl border border-brand-red/30 bg-brand-red/5 p-3"
+                >
+                    <AlertCircle
+                        className="w-4 h-4 text-brand-red flex-shrink-0 mt-0.5"
+                        strokeWidth={2}
+                    />
+                    <p className="text-xs font-semibold text-brand-red">
+                        {t('host.errorSlotTaken')}
+                    </p>
+                </div>
+            )}
 
             {/* Shared day strip — TODAY selected by default; picking a day
                 clears any chosen slot (existing contract). fireOnMount=false:
@@ -159,7 +200,7 @@ export default function SlotPicker({ pitchId, selectedSlot, onSelectSlot }: Slot
                             <button
                                 key={slot.id}
                                 disabled={isBooked}
-                                onClick={() => onSelectSlot(slot)}
+                                onClick={() => handleSelect(slot)}
                                 aria-label={
                                     isBooked
                                         ? t('host.slotTimeAriaBooked', { start: startLabel, end: endLabel })

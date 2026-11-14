@@ -28,7 +28,7 @@ export default function Pagination({
         >
           {t('prev')}
         </button>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-gray-600" aria-current="page">
           {t('pageOf', { page, pages })}
         </span>
         <button

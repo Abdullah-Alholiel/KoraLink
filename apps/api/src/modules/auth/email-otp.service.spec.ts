@@ -12,6 +12,8 @@ describe('EmailOtpService', () => {
   } = {}) {
     const otpStore = {
       isCooldownActive: jest.fn().mockResolvedValue(false),
+      // P2-194: the send gate reads remaining seconds; default = no cooldown.
+      getCooldownRemaining: jest.fn().mockResolvedValue(0),
       getDailyCount: jest.fn().mockResolvedValue(0),
       getIpDailyCount: jest.fn().mockResolvedValue(0),
       incrementIpDaily: jest.fn().mockResolvedValue(1),
@@ -26,6 +28,9 @@ describe('EmailOtpService', () => {
       getFailCount: jest.fn().mockResolvedValue(0),
       incrementFail: jest.fn().mockResolvedValue(1),
       resetFails: jest.fn().mockResolvedValue(undefined),
+      // P2-241: the lockout 429 reads the armed deadline (P2-198 parity);
+      // default = none armed → retryAfter 0.
+      getLockoutRemaining: jest.fn().mockResolvedValue(0),
       ...(overrides.otpStore ?? {}),
     };
 
@@ -101,10 +106,16 @@ describe('EmailOtpService', () => {
 
   it('send blocked by cooldown (429)', async () => {
     const { service, emailSender } = setup({
-      otpStore: { isCooldownActive: jest.fn().mockResolvedValue(true) },
+      otpStore: {
+        // P2-194: the gate reads getCooldownRemaining (single cache read).
+        getCooldownRemaining: jest.fn().mockResolvedValue(41),
+      },
     });
-    await expect(service.requestEmailOtp('a@b.com')).rejects.toMatchObject({
-      status: HttpStatus.TOO_MANY_REQUESTS,
+    const err = await service.requestEmailOtp('a@b.com').catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getResponse()).toMatchObject({
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      retryAfter: 41,
     });
     expect(emailSender.send).not.toHaveBeenCalled();
   });
@@ -250,6 +261,42 @@ describe('EmailOtpService', () => {
     await expect(
       service.verifyEmailOtp('user@example.com', '123456', 'ops'),
     ).rejects.toBeInstanceOf(HttpException);
+  });
+
+  // ── P2-241 (Reviewer A run #153): the email verify lockout 429 carries the
+  // machine-readable retryAfter countdown — exact parity with the phone flow
+  // (auth.service.ts P2-198). A missing/legacy deadline degrades to 0.
+
+  it('verify: lockout 429 carries retryAfter from the armed deadline (P2-241 / P2-198 parity)', async () => {
+    const { service } = setup({
+      otpStore: {
+        getFailCount: jest.fn().mockResolvedValue(5),
+        getLockoutRemaining: jest.fn().mockResolvedValue(734),
+      },
+    });
+    const err = await service
+      .verifyEmailOtp('user@example.com', '123456')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect((err as HttpException).getResponse()).toMatchObject({
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      message: 'Too many attempts. Try again later.',
+      retryAfter: 734,
+    });
+  });
+
+  it('verify: lockout 429 degrades to retryAfter 0 without an armed deadline (legacy entries)', async () => {
+    const { service } = setup({
+      otpStore: {
+        getFailCount: jest.fn().mockResolvedValue(5),
+        getLockoutRemaining: jest.fn().mockResolvedValue(0),
+      },
+    });
+    const err = await service
+      .verifyEmailOtp('user@example.com', '123456')
+      .catch((e: unknown) => e);
+    expect((err as HttpException).getResponse()).toMatchObject({ retryAfter: 0 });
   });
 });
 

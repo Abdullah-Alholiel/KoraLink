@@ -20,6 +20,8 @@ describe('UsersService phone-change (P1-19)', () => {
   } = {}) {
     const otpStore = {
       isCooldownActive: jest.fn().mockResolvedValue(false),
+      // P2-194: the send gate reads remaining seconds; default = no cooldown.
+      getCooldownRemaining: jest.fn().mockResolvedValue(0),
       getDailyCount: jest.fn().mockResolvedValue(0),
       getIpDailyCount: jest.fn().mockResolvedValue(0),
       incrementIpDaily: jest.fn().mockResolvedValue(1),

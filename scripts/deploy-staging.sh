@@ -3,6 +3,10 @@
 # Contract: docs/plans/environment-segregation/03-program-design.md (Contract 1)
 # Order is FIXED: preflight → sync(ff-only) → deps → build → migrate → assets → restart → verify.
 # Exit codes: 0 ok · 1 verify fail · 2 wrong branch · 3 unsafe tree/diverged · 4 build fail · 5 migrate fail
+# H7 note: the real-browser top-up form check (scripts/verify-topup-form.mjs) runs AFTER the
+# health gate as an ADVISORY probe (P0-2, 2026-11-13): the jsdom suite stubs Moyasar.init, so
+# only a real browser can prove the card form renders styled with a visible pay button.
+# A red H7 does NOT fail the deploy — it prints [FAIL] H7 … for the run report to escalate.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -104,4 +108,12 @@ probe "H6 docker postgres" \
 if [ "$FAIL" -ne 0 ]; then
   die "health matrix has failures (see [FAIL] lines above)" 1
 fi
+
+mkdir -p scripts/artifacts
+if node scripts/verify-topup-form.mjs; then
+  echo "    [ok] H7 top-up card form real-browser check (screenshots: scripts/artifacts/)"
+else
+  echo "    [FAIL] H7 top-up card form real-browser check — ESCALATE: the payment form is broken for real users (see scripts/artifacts/*.png)"
+fi
+
 echo "[OK] staging deploy complete on $(git rev-parse --short HEAD)"

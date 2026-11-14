@@ -64,7 +64,7 @@ afterEach(() => {
 describe('shouldPersistQuery exclusion matrix (P2-45)', () => {
   it('excludes wallet / auth / notifications namespaces', () => {
     expect(shouldPersistQuery(['wallet', 'balance'])).toBe(false);
-    expect(shouldPersistQuery(['wallet', 'history', { page: 1 }])).toBe(false);
+    expect(shouldPersistQuery(['wallet', 'history', { page: 1, locale: 'ar' }])).toBe(false);
     expect(shouldPersistQuery(['auth', 'bootstrap'])).toBe(false);
     expect(shouldPersistQuery(['notifications', 'unread-count'])).toBe(false);
     expect(NO_PERSIST_PREFIXES).toEqual(['wallet', 'auth', 'notifications']);

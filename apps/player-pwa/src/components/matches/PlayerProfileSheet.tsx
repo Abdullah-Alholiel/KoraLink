@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { X, Trophy, Users, UserX, Loader2, AlertTriangle, Flag, UserMinus, MessageCircle } from 'lucide-react';
 import { usePublicProfile } from '@/hooks/useUser';
 import { useFollow } from '@/hooks/useFollow';
+import { useBlockStatus, useBlockActions } from '@/hooks/useBlocks';
 import { useStartConversation } from '@/hooks/useConversations';
 import FollowButton from '@/components/features/FollowButton';
 import { selectUser, useAppStore } from '@/store/useAppStore';
@@ -30,6 +31,10 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
     const locale = (pathname ?? '').split('/')[1] || 'en';
     const { data: profile, isLoading, error } = usePublicProfile(player?.userId ?? '');
     const { followersCount, followingCount } = useFollow(player?.userId ?? '');
+    // P1-53 (run #100): block state + actions for this profile.
+    const targetUserId = player?.userId ?? '';
+    const { data: blockStatus } = useBlockStatus(targetUserId);
+    const { block, unblock } = useBlockActions(targetUserId);
     const startConversation = useStartConversation();
     const { isSuccess: startSuccess, data: startData, reset: startReset } = startConversation;
     const showToast = useAppStore((s) => s.showToast);
@@ -37,6 +42,9 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
     const isSelf = player?.userId === storeUser?.id;
     const [showReport, setShowReport] = useState(false);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+    // P1-53: two-tap confirm mirrors the roster-remove pattern (reset effect
+    // sits with the existing playerId-keyed reset below).
+    const [confirmingBlock, setConfirmingBlock] = useState(false);
 
     // Navigate to the 1:1 conversation once find-or-create resolves.
     useEffect(() => {
@@ -62,6 +70,7 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
     const playerId = player?.userId ?? null;
     useEffect(() => {
         setConfirmingRemove(false);
+        setConfirmingBlock(false);
     }, [playerId]);
 
     if (!player) return null;
@@ -76,7 +85,7 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
             {/* Header */}
             <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0">
                 <h2 className="text-lg font-bold text-brand-black">{t('matchDetail.playerProfile')}</h2>
-                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <button onClick={onClose} aria-label={t('common.close')} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
                     <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
                 </button>
             </div>
@@ -220,6 +229,47 @@ export default function PlayerProfileSheet({ player, onClose, showRemove = false
                     >
                         <Flag className="w-4 h-4" strokeWidth={2} />
                         {t('report.reportUser')}
+                    </button>
+                )}
+
+                {/* ── P1-53: block / unblock (hidden for self; two-tap confirm on block) ── */}
+                {!isSelf && targetUserId && (
+                    <button
+                        onClick={() => {
+                            if (blockStatus?.blocked) {
+                                unblock.mutate(undefined, {
+                                    onSuccess: () => showToast(t('blocks.unblockSuccess'), 'success'),
+                                    onError: () => showToast(t('errors.unblockFailed'), 'error'),
+                                });
+                                return;
+                            }
+                            if (!confirmingBlock) {
+                                setConfirmingBlock(true);
+                                return;
+                            }
+                            setConfirmingBlock(false);
+                            block.mutate(undefined, {
+                                onSuccess: () => showToast(t('blocks.blockSuccess'), 'success'),
+                                onError: () => showToast(t('errors.blockFailed'), 'error'),
+                            });
+                        }}
+                        disabled={block.isPending || unblock.isPending}
+                        className={`w-full rounded-xl shadow-card p-4 mb-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors ${
+                            confirmingBlock
+                                ? 'bg-brand-red text-white'
+                                : 'bg-white text-gray-500'
+                        } disabled:opacity-50`}
+                    >
+                        {block.isPending || unblock.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+                        ) : (
+                            <UserX className="w-4 h-4" strokeWidth={2} />
+                        )}
+                        {blockStatus?.blocked
+                            ? t('profile.unblockUser')
+                            : confirmingBlock
+                              ? t('profile.confirmBlock')
+                              : t('profile.blockUser')}
                     </button>
                 )}
             </div>

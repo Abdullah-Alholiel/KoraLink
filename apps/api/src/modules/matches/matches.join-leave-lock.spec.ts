@@ -24,6 +24,14 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     return { then: (r: (v: unknown) => void) => r([]) };
   }
 
+  function defaultGateway() {
+    return {
+      broadcastRosterUpdate: () => {},
+      broadcastStatusUpdate: () => {},
+      evictFromMatch: jest.fn().mockResolvedValue(undefined),
+    };
+  }
+
   type SelectRecord = { table: unknown; lock?: string; thenRows: unknown[] };
 
   function makeTx(opts: {
@@ -71,7 +79,20 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
           return chainFor([], table);
         },
       }),
-      update: () => ({ set: () => ({ where: () => thenable() }) }),
+      update: () => ({
+        set: () => ({
+          where: () => {
+            // Await directly (payout flips do) → resolves like before;
+            // .returning() (start/complete/cancel P2-140 guard) → row array.
+            const q: any = {
+              then: (r: (v: unknown) => void) => r([]),
+              returning: () =>
+                ({ then: (r: (v: unknown) => void) => r([{ id: 'match-1' }]) }) as any,
+            };
+            return q;
+          },
+        }),
+      }),
       delete: () => ({ where: () => thenable() }),
       // Slice 2 (player-host-responsibility): joinMatch inserts the roster
       // row with .returning({ id }) — stub the episode id the DB would mint.
@@ -88,7 +109,7 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     return { tx, selects };
   }
 
-  function makeService(tx: unknown) {
+  function makeService(tx: unknown, appGateway: Record<string, unknown> = defaultGateway()) {
     const db = {
       transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       query: {
@@ -113,7 +134,7 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     const svc = new MatchesService(
       db as never,
       {} as never, // walletService
-      { broadcastRosterUpdate: () => {}, broadcastStatusUpdate: () => {} } as never,
+      appGateway as never,
       { sendPushToUsers: async () => {} } as never,
       { record: async () => {} } as never,
       { getNumber: async () => 0 } as never,
@@ -180,6 +201,36 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     await expect(svc.leaveMatch(USER, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('leaveMatch evicts the leaving user from the match room (P1-70, post-tx, before roster broadcast)', async () => {
+    const { tx } = makeTx({
+      match: { id: MATCH_ID, status: 'Open', host_id: HOST, min_players: 4, total_players: 6 },
+      player: { id: 'mp-1', is_host: false },
+    });
+    const order: string[] = [];
+    const gw = {
+      broadcastRosterUpdate: jest.fn(() => {
+        order.push('roster');
+      }),
+      broadcastStatusUpdate: () => {},
+      evictFromMatch: jest.fn(async () => {
+        order.push('evict');
+      }),
+    };
+    const svc = makeService(tx, gw);
+    await svc.leaveMatch(USER, MATCH_ID);
+    expect(gw.evictFromMatch).toHaveBeenCalledTimes(1);
+    expect(gw.evictFromMatch).toHaveBeenCalledWith(MATCH_ID, USER);
+    expect(order).toEqual(['evict', 'roster']);
+  });
+
+  it('leaveMatch does not evict when membership is rejected (nothing committed)', async () => {
+    const { tx } = makeTx({ match: { id: MATCH_ID, status: 'Open', host_id: HOST, min_players: 0, total_players: 1 }, player: null });
+    const gw = defaultGateway();
+    const svc = makeService(tx, gw);
+    await expect(svc.leaveMatch(USER, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+    expect(gw.evictFromMatch).not.toHaveBeenCalled();
+  });
+
   // ── removePlayer ───────────────────────────────────────── matches.service ──
 
   it('removePlayer locks the matches row FOR UPDATE as its FIRST statement', async () => {
@@ -202,6 +253,16 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     });
     const svc = makeService(tx);
     await expect(svc.removePlayer(HOST, MATCH_ID, HOST)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('removePlayer rejects a CANCELLED match (run #202 — the roster is the audit record, mirrors leaveMatch)', async () => {
+    const { tx } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Cancelled' },
+      player: { id: 'mp-1' },
+    });
+    const svc = makeService(tx);
+    // PR-Agent r1: the message must say WHY (cancelled ≠ "before it starts").
+    await expect(svc.removePlayer(HOST, MATCH_ID, USER)).rejects.toThrow(/cancelled/i);
   });
 
   it('removePlayer still rejects a non-host caller with Forbidden', async () => {
@@ -262,5 +323,32 @@ describe('MatchesService row locks (P2-49 run #37)', () => {
     });
     const svc = makeService(tx);
     await expect(svc.completeMatch(HOST, MATCH_ID)).rejects.toBeInstanceOf(BadRequestException);
+  });
+  // ── markNoShow (P2-118) ───────────────────────────────────────────────────
+  // The attendance write read the matches row without a lock, so a
+  // concurrent status flip could interleave with the no-show mark.
+
+  it('markNoShow locks the matches row FOR UPDATE as its first statement', async () => {
+    const { tx, selects } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'InProgress', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+      // Unchanged flag (false → false) keeps the stub off the dispute branch.
+      player: { id: 'mp-1', no_show: false },
+    });
+    const svc = makeService(tx);
+    await svc.markNoShow(HOST, MATCH_ID, USER, false);
+    const first = selects[0];
+    expect(first).toBeDefined();
+    expect(first.lock).toBe('update');
+    expect(first.table).toBe(matches);
+  });
+
+  it('markNoShow still rejects an Open match with BadRequest after taking the lock', async () => {
+    const { tx, selects } = makeTx({
+      match: { id: MATCH_ID, host_id: HOST, status: 'Open', scheduled_at: new Date(Date.now() - 60 * 60_000) },
+      player: { id: 'mp-1', no_show: false },
+    });
+    const svc = makeService(tx);
+    await expect(svc.markNoShow(HOST, MATCH_ID, USER, true)).rejects.toBeInstanceOf(BadRequestException);
+    expect(selects[0].lock).toBe('update');
   });
 });
