@@ -222,6 +222,9 @@ export default function PaymentSheet({
                 <div className="mx-5 mt-5 flex items-start gap-3">
                     <button
                         onClick={() => setAgreed(!agreed)}
+                        role="checkbox"
+                        aria-checked={agreed}
+                        aria-label={t('host.disclaimer')}
                         className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
                             agreed ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'
                         }`}
