@@ -13,6 +13,7 @@ import {
   mailFooter,
   mailBrand,
 } from './mailer.copy';
+import { EMAIL_SENDER, EmailSender } from '../auth/email-sender.port';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -62,23 +63,45 @@ export class MailerService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     config: ConfigService,
+    // D-20261114-02 (run #207): notification email routes through the SAME
+    // transport-agnostic port as auth OTP email — EMAIL_PROVIDER=brevo makes
+    // Brevo cover notification mail too (no second provider key needed).
+    @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {
+    // Kept as a CONFIGURATION HEURISTIC ONLY (isConfigured gate below). The
+    // transport itself is the injected EmailSender port; a Brevo-configured
+    // deployment (BREVO_API_KEY, no RESEND_API_KEY) correctly passes this
+    // gate and delivers through the port.
     this.apiKey = config.get<string>('RESEND_API_KEY', '') ?? '';
     this.from = config.get<string>('MAIL_FROM', '') ?? '';
     this.playerUrl = (
       config.get<string>('PLAYER_URL', 'https://koralink.app') ?? ''
     ).replace(/\/+$/, '');
-    if (!this.apiKey || !this.from) {
-      // Deliberate: email self-disables without configuration (plan §Gate 2).
+    if (!this.apiKey && !this.from) {
+      // Deliberate: email self-disables without ANY transport configuration
+      // (plan §Gate 2). D-20261114-02: the TRANSPORT is the injected port —
+      // this heuristic only gates the warn line; the authoritative
+      // "can we send?" answer is emailSender.isConfigured() in deliver().
       this.logger.warn(
-        'mailer: RESEND_API_KEY/MAIL_FROM not set — transactional email DISABLED (log-only mode)',
+        'mailer: no RESEND_API_KEY/MAIL_FROM env (legacy fields) — port transport still selected via EMAIL_PROVIDER; delivery ability = emailSender.isConfigured()',
       );
     }
   }
 
-  /** Feature flag: true when a transport is actually configured. */
+  /** Feature flag: true when the SELECTED transport can actually deliver.
+   *  D-20261114-02: delegates to the injected EmailSender port (the same
+   *  adapter auth OTP uses) — a Brevo-configured deployment is "configured"
+   *  without any RESEND_API_KEY. The legacy apiKey/from fields stay only as
+   *  a fallback for legacy spec doubles.
+   */
   get isConfigured(): boolean {
-    return this.apiKey.length > 0 && this.from.length > 0;
+    try {
+      return this.emailSender.isConfigured();
+    } catch {
+      // Port not available in a legacy double → fall back to env-field probe
+      // so old specs keep their semantics instead of crashing.
+      return this.apiKey.length > 0 && this.from.length > 0;
+    }
   }
 
   /**
@@ -227,32 +250,20 @@ export class MailerService {
       return { userId: recipient.userId, status: 'failed', reason: 'render-error' };
     }
     const { subject, html, text } = rendered;
+    // D-20261114-02 (run #207): deliver through the EMAIL_SENDER port (the
+    // same adapter the auth OTP path uses — EMAIL_PROVIDER selects it) instead
+    // of a hard-coded Resend fetch. Errors from the adapter degrade exactly
+    // like the old inline fetch path: one 'failed' outcome for THIS recipient,
+    // never an upward throw (transport rejections arrive as
+    // ServiceUnavailableException → caught below as transport-error).
     try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: this.from,
-          to: [recipient.email],
-          subject,
-          html,
-          text,
-        }),
-      });
-      if (!res.ok) {
-        const body = (await res.text()).slice(0, 300);
-        this.logger.warn(
-          `mailer: transport ${res.status} for ${template} → ${recipient.userId}: ${body}`,
-        );
-        Sentry.captureException(new Error(`mail transport ${res.status}`), {
-          tags: { component: 'mailer', template },
-          extra: { status: res.status, userId: recipient.userId },
-        });
-        return { userId: recipient.userId, status: 'failed', reason: `transport-${res.status}` };
-      }
+      await this.emailSender.send(recipient.email, subject, html, undefined, text);
+      // D-20261114-02 proof line: names the ADAPTER that carried the mail
+      // (BrevoService/ResendService) — ops can confirm the chosen send path
+      // from journald alone.
+      this.logger.log(
+        `mailer: ${template} → user ${recipient.userId} delivered via ${this.emailSender.constructor.name}`,
+      );
       return { userId: recipient.userId, status: 'sent' };
     } catch (err) {
       this.logger.warn(

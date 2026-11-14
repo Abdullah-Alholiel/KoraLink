@@ -22,7 +22,13 @@ export class ResendService implements EmailSender {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(to: string, subject: string, html: string, debugCode?: string): Promise<void> {
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    debugCode?: string,
+    text?: string,
+  ): Promise<void> {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       // Dev/staging parity with UnifonicService: no provider key → log only.
@@ -46,7 +52,7 @@ export class ResendService implements EmailSender {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ from, to: [to], subject, html }),
+        body: JSON.stringify({ from, to: [to], subject, html, ...(text ? { text } : {}) }),
       });
     } catch (err) {
       this.logger.error(`Resend request failed: ${(err as Error).message}`);
@@ -60,5 +66,10 @@ export class ResendService implements EmailSender {
       );
       throw new ServiceUnavailableException('Email provider error.');
     }
+  }
+
+  /** True when a real send is possible: a provider API key. */
+  isConfigured(): boolean {
+    return Boolean(this.config.get<string>('RESEND_API_KEY'));
   }
 }

@@ -45,11 +45,42 @@ function makeConfig(values: Record<string, string> = {}) {
 function makeMailer(
   rows: unknown[] = [],
   config: Record<string, string> = {},
+  // D-20261114-02: specs inject a fake EmailSender (port) — default mirrors
+  // the real adapters' env-selection rule so legacy assertions keep meaning.
+  sender = makeSender(config).impl,
 ): MailerService {
   return new MailerService(
     makeDb(rows) as never,
     makeConfig(config) as never,
+    sender as never,
   );
+}
+
+/** Fake EmailSender — records sends; isConfigured mirrors adapter env rules. */
+function makeSender(config: Record<string, string> = {}) {
+  const sent: Array<{
+    to: string;
+    subject: string;
+    html: string;
+    debugCode?: string;
+    text?: string;
+  }> = [];
+  const impl = {
+    send: async (
+      to: string,
+      subject: string,
+      html: string,
+      debugCode?: string,
+      text?: string,
+    ) => {
+      sent.push({ to, subject, html, debugCode, text });
+    },
+    isConfigured: () =>
+      (config.EMAIL_PROVIDER || 'resend').trim().toLowerCase() === 'brevo'
+        ? Boolean(config.BREVO_API_KEY && config.BREVO_FROM)
+        : Boolean(config.RESEND_API_KEY),
+  };
+  return { impl, sent };
 }
 
 describe('P1-41 mail templates (run #35)', () => {
@@ -295,5 +326,76 @@ describe('P1-41 deliver() render hardening (run #36, Reviewer A)', () => {
     } finally {
       global.fetch = realFetch;
     }
+  });
+});
+
+// ── D-20261114-02 (run #207): notification email routes through EMAIL_SENDER ──
+// Worker request: MailerService read RESEND_API_KEY directly, so on a Brevo-
+// configured deployment (EMAIL_PROVIDER=brevo, no RESEND key) notification
+// mail was log-only while OTP email delivered. Now BOTH go through the port.
+describe('D-20261114-02 notification email via EMAIL_SENDER port (run #207)', () => {
+  const VERIFIED = {
+    id: 'u1',
+    email: 'p1@test.sa',
+    deleted_at: null,
+    email_verified_at: new Date(),
+    email_muted: false,
+    locale: 'ar',
+  };
+
+  it('brevo-configured deployment (no RESEND key) delivers notifications + reports configured', async () => {
+    const { impl, sent } = makeSender({
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'brevo-key',
+      BREVO_FROM: 'KoraLink <no-reply@koralink.sa>',
+    });
+    const svc = makeMailer([VERIFIED], {}, impl);
+    expect(svc.isConfigured).toBe(true);
+
+    const outcomes = await svc.sendToUsers(['u1'], 'wallet_refunded');
+    expect(outcomes[0]).toMatchObject({ userId: 'u1', status: 'sent' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: 'p1@test.sa' });
+    // plain-text alternative forwarded through the port (deliverability).
+    expect(typeof sent[0].text).toBe('string');
+    expect(sent[0].text!.length).toBeGreaterThan(0);
+  });
+
+  it('resend-selected default still routes through the port (identical contract)', async () => {
+    const { impl, sent } = makeSender({ RESEND_API_KEY: 're_k' });
+    const svc = makeMailer([VERIFIED], { RESEND_API_KEY: 're_k', MAIL_FROM: 'KoraLink <n@t.sa>' }, impl);
+    const outcomes = await svc.sendToUsers(['u1'], 'wallet_refunded');
+    expect(outcomes[0]).toMatchObject({ userId: 'u1', status: 'sent' });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('brevo adapter throws → one failed outcome (never upward), same as legacy inline path', async () => {
+    const throwing = {
+      send: async () => {
+        throw new Error('provider down');
+      },
+      isConfigured: () => true,
+    };
+    const svc = makeMailer([VERIFIED], { RESEND_API_KEY: 'k' }, throwing);
+    const outcomes = await svc.sendToUsers(['u1'], 'wallet_refunded');
+    expect(outcomes[0]).toMatchObject({ userId: 'u1', status: 'failed', reason: 'transport-error' });
+  });
+
+  it('port-unavailable legacy double falls back to env-field probe (isConfigured semantics preserved)', () => {
+    const svc = makeMailer([], { RESEND_API_KEY: 'k', MAIL_FROM: 'KoraLink <n@t.sa>' });
+    expect(svc.isConfigured).toBe(true);
+    const bare = makeMailer([], {});
+    expect(bare.isConfigured).toBe(false);
+  });
+
+  it('real BrevoService.isConfigured(): needs BOTH key and sender; real ResendService needs key only', async () => {
+    const { BrevoService } = await import('../auth/brevo.service');
+    const { ResendService } = await import('../auth/resend.service');
+    const brevo = new BrevoService(makeConfig({ BREVO_API_KEY: 'b' }) as never);
+    expect(brevo.isConfigured()).toBe(false); // sender missing
+    const brevoOk = new BrevoService(makeConfig({ BREVO_API_KEY: 'b', BREVO_FROM: 'KoraLink <n@k.sa>' }) as never);
+    expect(brevoOk.isConfigured()).toBe(true);
+    const resend = new ResendService(makeConfig({}) as never);
+    expect(resend.isConfigured()).toBe(false);
   });
 });
