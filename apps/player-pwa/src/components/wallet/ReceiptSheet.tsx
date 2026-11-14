@@ -17,6 +17,7 @@
  * Money + dates render through the format helpers (Arabic-Indic numerals in
  * ar) — never raw `${n} SAR` interpolation (P2-342/P2-353 defect class).
  */
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CalendarDays, Copy, Share2 } from 'lucide-react';
 
@@ -60,6 +61,14 @@ export default function ReceiptSheet({
     useTransactionReceipt(txId, open);
 
   const receipt = data ?? null;
+
+  // PR-Agent r2 (PR #256): gate navigator.share on mount, not render — the
+  // server never has it, so a render-time gate would render the button
+  // client-only and produce a hydration mismatch on the sheet markup.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    setCanShare(typeof navigator.share !== 'undefined');
+  }, []);
 
   async function handleShare(r: TransactionReceipt) {
     if (!navigator.share) return;
@@ -211,7 +220,7 @@ export default function ReceiptSheet({
                 <Copy className="w-4 h-4" strokeWidth={1.5} />
                 {receipt.receiptNumber}
               </button>
-              {typeof navigator.share !== 'undefined' && (
+              {canShare && (
                 <button
                   type="button"
                   onClick={() => void handleShare(receipt)}
