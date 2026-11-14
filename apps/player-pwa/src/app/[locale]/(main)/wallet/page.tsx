@@ -29,6 +29,7 @@ import { useNow } from '@/hooks/useNow';
 import BottomSheet from '@/components/layout/BottomSheet';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
+import ReceiptSheet from '@/components/wallet/ReceiptSheet';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { buildWalletCsv, toIsoDateRange, walletCsvFilename } from '@/lib/wallet-csv';
@@ -88,6 +89,8 @@ export default function WalletPage() {
     const router = useRouter();
     const t = useTranslations();
     const intlLocale = useLocale() as 'ar' | 'en';
+    // F5 (run #206): the receipt sheet's target tx — null = closed.
+    const [receiptTxId, setReceiptTxId] = useState<string | null>(null);
     const showToast = useAppStore((s) => s.showToast);
 
     // ── Export sheet state (P2-119) ──
@@ -391,7 +394,13 @@ export default function WalletPage() {
                                 </p>
                                 <div className="space-y-4">
                                     {group.items.map((txn) => (
-                                        <div key={txn.id} className="flex items-center gap-3">
+                                        <button
+                                            key={txn.id}
+                                            type="button"
+                                            onClick={() => setReceiptTxId(txn.id)}
+                                            aria-label={t('wallet.receiptTitle')}
+                                            className="w-full flex items-center gap-3 text-left"
+                                        >
                                             <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
                                                 {getTransactionIcon(txn.icon)}
                                             </div>
@@ -420,7 +429,7 @@ export default function WalletPage() {
                                                 </span>
                                                 <FileText className="w-4 h-4 text-gray-300" strokeWidth={1.5} />
                                             </div>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </div>
@@ -441,6 +450,16 @@ export default function WalletPage() {
                 enabled={topupAvailability}
                 refetchConfig={() => void refetchTopupConfig()}
                 topupConfigError={topupConfigError}
+            />
+
+            {/* ══════════════════════════════════════
+                RECEIPT SHEET (F5 — proof-of-payment per history row)
+            ═══════════════════════════════════ */}
+            <ReceiptSheet
+                txId={receiptTxId}
+                open={receiptTxId !== null}
+                onClose={() => setReceiptTxId(null)}
+                locale={intlLocale}
             />
 
             {/* ══════════════════════════════════════

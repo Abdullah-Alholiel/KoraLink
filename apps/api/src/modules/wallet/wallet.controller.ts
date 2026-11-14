@@ -58,6 +58,25 @@ export class WalletController {
     return this.receiptService.getPayoutReceipt(user.sub, matchId);
   }
 
+  // ── GET /wallet/receipt/:txId ────────────────────────────────
+  // F5 (run #206, D-20261106-13): the PLAYER's proof-of-payment receipt for
+  // any ledger row (top-up credit, match-fee debit, refund credit, …).
+  // Owner-only (service 404s when tx.user_id ≠ caller); UuidParamPipe rejects
+  // malformed ids with 400 before the service runs. Same explicit 60/min
+  // throttle posture as payout-receipt (reads richer than balance/history).
+  @Get('receipt/:txId')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({
+    summary: "Get the authenticated user's receipt for one wallet transaction",
+  })
+  @ApiOkResponse({ description: 'Structured receipt for the ledger row.' })
+  async getTransactionReceipt(
+    @CurrentUser() user: { sub: string },
+    @Param('txId', UuidParamPipe) txId: string,
+  ) {
+    return this.receiptService.getTransactionReceipt(user.sub, txId);
+  }
+
   // ── GET /wallet/balance ──────────────────────────────────────
   @Get('balance')
   // Run #185 (Reviewer A): explicit route-level 60/min parity with the other
