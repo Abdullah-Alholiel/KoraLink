@@ -36,7 +36,7 @@ function makeReceipt(
 ): TransactionReceipt {
   return {
     txId: 'a1b2c3d4-0000-0000-0000-000000000000',
-    receiptNumber: 'KL-20261114-A1B2C3',
+    receiptNumber: 'KL-20261114-A1B2C3D40000D4E5F6',
     status: 'Completed',
     direction: 'debit',
     amountSar: 37,
@@ -101,7 +101,7 @@ describe('ReceiptSheet — F5 player transaction receipt (run #206)', () => {
     routeReceipt(makeReceipt());
     renderSheet();
     // The number renders twice (detail row + copy-button label).
-    expect((await screen.findAllByText('KL-20261114-A1B2C3')).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText('KL-20261114-A1B2C3D40000D4E5F6')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/37\.00/)).toBeInTheDocument();
     expect(screen.getByText('Sunset 7v7 Rooftop')).toBeInTheDocument();
     expect(screen.getByText(/Riyadh Padel Club/)).toBeInTheDocument();
@@ -122,7 +122,8 @@ describe('ReceiptSheet — F5 player transaction receipt (run #206)', () => {
     renderSheet();
     expect(await screen.findByText('pay_moyasar_123')).toBeInTheDocument();
     expect(screen.queryByText('Sunset 7v7 Rooftop')).not.toBeInTheDocument();
-    expect(screen.getByText('Wallet top-up')).toBeInTheDocument();
+    // PR-Agent r1: no fabricated label row — the payment ref IS the context.
+    expect(screen.queryByText('Wallet top-up')).not.toBeInTheDocument();
   });
 
   it('404 → "unavailable" copy, NOT an error state', async () => {
@@ -154,7 +155,7 @@ describe('ReceiptSheet — F5 player transaction receipt (run #206)', () => {
         configurable: true,
       });
       const first = renderSheet();
-      await screen.findAllByText('KL-20261114-A1B2C3');
+      await screen.findAllByText('KL-20261114-A1B2C3D40000D4E5F6');
       expect(screen.getByRole('button', { name: 'Share receipt' })).toBeInTheDocument();
       first.unmount();
 
@@ -164,7 +165,7 @@ describe('ReceiptSheet — F5 player transaction receipt (run #206)', () => {
         configurable: true,
       });
       renderSheet();
-      await screen.findAllByText('KL-20261114-A1B2C3');
+      await screen.findAllByText('KL-20261114-A1B2C3D40000D4E5F6');
       expect(
         screen.queryByRole('button', { name: 'Share receipt' }),
       ).not.toBeInTheDocument();

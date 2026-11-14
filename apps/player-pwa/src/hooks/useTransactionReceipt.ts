@@ -26,7 +26,7 @@ export type TransactionReceiptContext =
 
 export interface TransactionReceipt {
   txId: string;
-  /** KL-<yyyyMMdd>-<first6 of tx id> — deterministic, unique per tx. */
+  /** KL-<yyyyMMdd>-<first12 of tx id> — deterministic, no schema column. */
   receiptNumber: string;
   status: 'Pending' | 'Completed' | 'Failed' | 'Reversed';
   direction: 'credit' | 'debit';

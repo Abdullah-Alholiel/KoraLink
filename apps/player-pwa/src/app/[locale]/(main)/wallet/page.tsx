@@ -398,7 +398,6 @@ export default function WalletPage() {
                                             key={txn.id}
                                             type="button"
                                             onClick={() => setReceiptTxId(txn.id)}
-                                            aria-label={t('wallet.receiptTitle')}
                                             className="w-full flex items-center gap-3 text-left"
                                         >
                                             <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">

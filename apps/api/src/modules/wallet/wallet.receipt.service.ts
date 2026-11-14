@@ -73,7 +73,12 @@ export type TransactionReceiptContext =
 
 export interface TransactionReceipt {
   txId: string;
-  /** KL-<yyyyMMdd>-<first6 of tx id> — deterministic, unique per tx. */
+  /**
+   * KL-20261114-A1B2C3D4E5F6 — deterministic per tx, no schema column.
+   * 12 hex chars (48 bits) + UTC day: collision-resistant at any plausible
+   * daily volume; the number is a human reference, not a uniqueness
+   * contract — the tx id stays the PK.
+   */
   receiptNumber: string;
   status: 'Pending' | 'Completed' | 'Failed' | 'Reversed';
   direction: 'credit' | 'debit';
@@ -249,8 +254,9 @@ export class WalletReceiptService {
   //   everything else (SETTLEMENT / PAYOUT / PRIZE / ADJUSTMENT) → generic
   //     ledger note — still proof-of-payment, no fabricated context.
   //
-  // Receipt number: deterministic `KL-<yyyyMMdd>-<first6 of tx id>` — stable
-  // across reads, unique per tx, no schema column. Invoice EXPORT (PDF /
+  // Receipt number: deterministic `KL-<yyyyMMdd>-<first12 of tx id>` —
+  // stable across reads, collision-resistant (48-bit slice), no schema
+  // column. Invoice EXPORT (PDF /
   // formal invoice artifact) is a later decision — this is the in-app MVP.
   // ──────────────────────────────────────────────────────────
 
@@ -344,9 +350,9 @@ export class WalletReceiptService {
     return { kind: 'generic' };
   }
 
-  /** KL-20261114-A1B2C3 — deterministic, unique per tx, no schema column. */
+  /** KL-20261114-A1B2C3D4E5F6 — deterministic per tx, no schema column. */
   static buildReceiptNumber(tx: { id: string; created_at: Date }): string {
     const ymd = tx.created_at.toISOString().slice(0, 10).replace(/-/g, '');
-    return `KL-${ymd}-${tx.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+    return `KL-${ymd}-${tx.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
   }
 }

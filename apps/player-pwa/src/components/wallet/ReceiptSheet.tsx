@@ -186,23 +186,13 @@ export default function ReceiptSheet({
                 </>
               )}
 
-              {receipt.context.kind === 'topup' && (
-                <>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-gray-400">{t('wallet.receiptTopup')}</dt>
-                    <dd className="font-semibold text-brand-black text-right">
-                      {t('wallet.title')}
-                    </dd>
-                  </div>
-                  {receipt.context.paymentId && (
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-gray-400">{t('wallet.receiptPaymentRef')}</dt>
-                      <dd className="font-mono text-xs font-semibold text-brand-black text-right break-all max-w-[60%]">
-                        {receipt.context.paymentId}
-                      </dd>
-                    </div>
-                  )}
-                </>
+              {receipt.context.kind === 'topup' && receipt.context.paymentId && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-400">{t('wallet.receiptPaymentRef')}</dt>
+                  <dd className="font-mono text-xs font-semibold text-brand-black text-right break-all max-w-[60%]">
+                    {receipt.context.paymentId}
+                  </dd>
+                </div>
               )}
 
               {receipt.context.kind === 'generic' && (

@@ -728,7 +728,6 @@
     "receiptMatch": "Match",
     "receiptDate": "Match date",
     "receiptVenue": "Venue",
-    "receiptTopup": "Wallet top-up",
     "receiptPaymentRef": "Payment reference",
     "receiptShare": "Share receipt",
     "receiptUnavailable": "Receipt unavailable for this transaction.",

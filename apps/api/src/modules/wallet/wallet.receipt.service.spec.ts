@@ -252,7 +252,7 @@ describe('WalletReceiptService — F5 player transaction receipt', () => {
     const r = await svc.getTransactionReceipt(USER, TX_ID);
     expect(r).toMatchObject({
       txId: TX_ID,
-      receiptNumber: 'KL-20261114-A1B2C3',
+      receiptNumber: 'KL-20261114-A1B2C3D40000',
       status: 'Completed',
       direction: 'debit',
       amountSar: 37,
@@ -351,7 +351,7 @@ describe('WalletReceiptService — F5 player transaction receipt', () => {
   it('receipt number is deterministic per tx + created date', () => {
     expect(
       WalletReceiptService.buildReceiptNumber({ id: TX_ID, created_at: TX_CREATED }),
-    ).toBe('KL-20261114-A1B2C3');
+    ).toBe('KL-20261114-A1B2C3D40000');
     expect(
       WalletReceiptService.buildReceiptNumber({ id: TX_ID, created_at: TX_CREATED }),
     ).toBe(
