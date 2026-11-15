@@ -2,7 +2,7 @@
 
 import {
     Calendar,
-    Clock,
+    Banknote,
     Droplets,
     Crown,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ export default function GameDetails({ date, time, price, currency = 'SAR', hasJo
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+                        <Banknote className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
                         <span className="text-sm text-gray-600">{t('price')}</span>
                     </div>
                     <div className="flex items-center gap-2">

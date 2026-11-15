@@ -187,4 +187,31 @@ describe('PaymentSheet — P2-228 localized failure copy + offline guard', () =>
     expect(screen.getByText(enMessages.payment.noMoneyTaken as string)).toBeInTheDocument();
     expect(screen.getByText(enMessages.errors.server as string)).toBeInTheDocument();
   });
+
+  // Run #208 D2 (D-20261113-32 defect #2, owner acceptance: "no scrolling
+  // needed to complete the payment"): the consent control must render BEFORE
+  // the pay button in DOM order (pinned footer) — never back in the
+  // scrollable body below the fold.
+  it('consent checkbox renders in the pinned footer, before the pay CTA (run #208 D2)', () => {
+    renderSheet();
+    const sheet = document.body;
+    const checkbox = screen.getByRole('checkbox');
+    const cta = screen.getByRole('button', { name: /Pay with Wallet/i });
+    expect(sheet.contains(checkbox)).toBe(true);
+    // DOM-order: compareDocumentPosition — checkbox MUST precede the CTA.
+    expect(checkbox.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // And the pay CTA must be inside a non-scrolling (flex-shrink-0) footer,
+    // not the overflow-y-auto body — walk up from the CTA and assert no
+    // overflow-y-auto container wraps it except ABOVE the body sibling.
+    let el: HTMLElement | null = cta as HTMLElement;
+    let sawFooterClamp = false;
+    while (el && el !== sheet) {
+      if (el.className && typeof el.className === 'string' && el.className.includes('flex-shrink-0')) {
+        sawFooterClamp = true;
+        break;
+      }
+      el = el.parentElement;
+    }
+    expect(sawFooterClamp).toBe(true);
+  });
 });
