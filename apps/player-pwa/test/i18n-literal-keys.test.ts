@@ -25,7 +25,9 @@ function hasKey(obj: NestedRecord, dotted: string): boolean {
     if (cur == null || typeof cur !== 'object' || !(part in cur)) return false;
     cur = cur[part];
   }
-  return true;
+  // PR-Agent r3 (run #208): a namespace NODE is not a translation —
+  // t('payment') must fail here, not pass while rendering [object Object].
+  return typeof cur === 'string';
 }
 
 function collectMissing(): string[] {
