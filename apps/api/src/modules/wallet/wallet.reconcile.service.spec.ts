@@ -553,6 +553,82 @@ describe('WalletReconcileService — abandoned-intent expiry (t_b8468d98)', () =
     void captured;
   });
 
+  // P2-369a (run #209): a NEGATIVE override must clamp to the 1h floor —
+  // the old Math.max(0,…) let it produce a 0h cutoff that would expire every
+  // pending intent (including seconds-old mid-3DS ones) on every sweep.
+  it('negative WALLET_TOPUP_INTENT_EXPIRY_HOURS clamps to the 1h floor (no 0h cutoff)', async () => {
+    const { db } = makeExpiryDb();
+    mockList.mockResolvedValue([]);
+    const config = makeConfig({
+      WALLET_TOPUP_ENABLED: 'true',
+      MOYASAR_SECRET_KEY: 'sk_test_x',
+      WALLET_TOPUP_INTENT_EXPIRY_HOURS: '-5',
+    });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(db as never, config, topupService);
+    const out = await service.reconcileOnce();
+    expect(out.expired).toBe(1);
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      'Wallet top-up intents expired (abandoned)',
+      expect.objectContaining({ extra: expect.objectContaining({ expiryHours: 1 }) }),
+    );
+  });
+
+  // P2-369b (run #209): the notify guard must stay bounded. ONE service
+  // instance, two sweeps: sweep 1 expires X (guard={X}); sweep 2 sees X
+  // resolved out-of-band (absent from pending) — eviction sheds it, so the
+  // UPDATE predicate no longer pads its exclusion with X (render-level proof)
+  // and the new abandoned Y still expires.
+  it('expiredNotifyGuard evicts resolved ids — exclusion list sheds them next sweep', async () => {
+    const otherId = '88888888-8888-4888-8888-888888888888';
+    const otherRow = { id: otherId, user_id: 'user-8', created_at: new Date(NOW - 25 * HOUR_MS) };
+    const captured: { updateSet?: unknown; catchPred?: unknown } = {};
+    const db1 = makeDb({ pendingRows: [abandonedRow], expiredReturning: [{ id: ABANDONED_ID }], captured });
+    const db2 = makeDb({ pendingRows: [otherRow], expiredReturning: [{ id: otherId }], captured });
+    let current = db1 as Record<string, unknown>;
+    const dbProxy = {
+      select: (...args: unknown[]) => (current.select as (...a: unknown[]) => unknown)(...args),
+      update: (...args: unknown[]) => (current.update as (...a: unknown[]) => unknown)(...args),
+    };
+    mockList.mockResolvedValue([]);
+    const config = makeConfig({ WALLET_TOPUP_ENABLED: 'true', MOYASAR_SECRET_KEY: 'sk_test_x' });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(dbProxy as never, config, topupService);
+    const out1 = await service.reconcileOnce(); // expires X → guard={X}
+    expect(out1.expired).toBe(1);
+    current = db2 as Record<string, unknown>;
+    const out2 = await service.reconcileOnce(); // X evicted; Y expires
+    expect(out2.expired).toBe(1);
+    const { sql, params } = new PgDialect().sqlToQuery(captured.catchPred as SQL);
+    expect(params).not.toContain(ABANDONED_ID); // evicted — no longer in the exclusion
+    expect(sql).not.toContain('not in'); // guard emptied entirely (only X was in it)
+  });
+
+  // P2-369b safety half: eviction only sheds RESOLVED ids — a still-pending
+  // expired id stays guarded (exclusion holds, no duplicate expiry alert).
+  it('a still-pending expired id keeps its guard (no duplicate alert)', async () => {
+    mockList.mockResolvedValue([]);
+    const first = makeExpiryDb({ expiredReturning: [{ id: ABANDONED_ID }] });
+    const second = makeExpiryDb({ pendingRows: [abandonedRow], expiredReturning: [] });
+    let current = first.db as Record<string, unknown>;
+    const dbProxy = {
+      select: (...args: unknown[]) => (current.select as (...a: unknown[]) => unknown)(...args),
+      update: (...args: unknown[]) => (current.update as (...a: unknown[]) => unknown)(...args),
+    };
+    const config = makeConfig({ WALLET_TOPUP_ENABLED: 'true', MOYASAR_SECRET_KEY: 'sk_test_x' });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(dbProxy as never, config, topupService);
+    await service.reconcileOnce(); // expired=1 → guard={X}, age-out + expiry alerts fire
+    current = second.db as Record<string, unknown>;
+    const out2 = await service.reconcileOnce(); // X still pending → excluded
+    expect(out2.expired).toBe(0);
+    // Sweep 1 fired BOTH alerts (age-out + expiry); sweep 2 must add NONE
+    // (aged-out dedup holds, expiry exclusion holds).
+    expect(mockCaptureMessage).toHaveBeenCalledTimes(2);
+    const { params } = new PgDialect().sqlToQuery((second.captured as { catchPred?: unknown }).catchPred as SQL);
+    expect(params).toContain(ABANDONED_ID); // still-pending X stays in the exclusion
+  });
+
   it('an expiry UPDATE failure is contained: outcome keeps counters, Sentry captures, no throw', async () => {
     // Selects work (makeDb shape); only the expiry UPDATE explodes.
     const boomDb = {

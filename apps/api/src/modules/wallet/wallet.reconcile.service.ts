@@ -154,6 +154,14 @@ export class WalletReconcileService {
       for (const id of this.agedOutAlerted) {
         if (!pendingIds.has(id)) this.agedOutAlerted.delete(id);
       }
+      // P2-369b (run #209): expiredNotifyGuard evicts here too — bounded like
+      // agedOutAlerted instead of growing for the process lifetime. Safe: no
+      // writer flips failed→pending, so an evicted id can never re-match the
+      // expiry UPDATE's status='pending' predicate (its exclusion is
+      // belt-and-braces, not the only guard).
+      for (const id of this.expiredNotifyGuard) {
+        if (!pendingIds.has(id)) this.expiredNotifyGuard.delete(id);
+      }
       if (pending.length === 0) return outcome;
       outcome.scanned = pending.length;
 
@@ -258,8 +266,12 @@ export class WalletReconcileService {
       // whose discovery listed a paid payment but verify failed is left pending
       // (failed++ + Sentry) so the credit path retries next tick — expiry never
       // buries a possibly-charged intent.
+      // P2-369a (run #209): floor of 1h — a NEGATIVE override must not yield a
+      // 0h cutoff (every pending intent, including seconds-old mid-3DS ones,
+      // would expire each sweep). '0'/unparsable still fall to the 24h default
+      // via the || below (documented run-#208 behavior, unchanged).
       const expiryHours = Math.max(
-        0,
+        1,
         Number.parseInt(
           this.configService.get<string>('WALLET_TOPUP_INTENT_EXPIRY_HOURS') ?? '',
           10,
