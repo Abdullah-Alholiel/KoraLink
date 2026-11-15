@@ -189,29 +189,30 @@ describe('PaymentSheet — P2-228 localized failure copy + offline guard', () =>
   });
 
   // Run #208 D2 (D-20261113-32 defect #2, owner acceptance: "no scrolling
-  // needed to complete the payment"): the consent control must render BEFORE
-  // the pay button in DOM order (pinned footer) — never back in the
-  // scrollable body below the fold.
-  it('consent checkbox renders in the pinned footer, before the pay CTA (run #208 D2)', () => {
+  // needed to complete the payment"). PR-Agent r2 MINOR: a bare DOM-order pin
+  // is VACUOUS — a checkbox left in the scrollable body still precedes the
+  // footer CTA. The real guarantee is structural: the checkbox's nearest
+  // "pinned footer OR scrollable body" ancestor must be the FOOTER
+  // (flex-shrink-0), never the scroll container (overflow-y-auto). Reverting
+  // the consent move fails here.
+  it('consent checkbox is structurally OUTSIDE the scrollable body (pinned footer)', () => {
     renderSheet();
-    const sheet = document.body;
-    const checkbox = screen.getByRole('checkbox');
+    const checkbox = screen.getByRole('checkbox') as HTMLElement;
     const cta = screen.getByRole('button', { name: /Pay with Wallet/i });
-    expect(sheet.contains(checkbox)).toBe(true);
-    // DOM-order: compareDocumentPosition — checkbox MUST precede the CTA.
+    // DOM-order sanity: checkbox precedes the CTA.
     expect(checkbox.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // And the pay CTA must be inside a non-scrolling (flex-shrink-0) footer,
-    // not the overflow-y-auto body — walk up from the CTA and assert no
-    // overflow-y-auto container wraps it except ABOVE the body sibling.
-    let el: HTMLElement | null = cta as HTMLElement;
-    let sawFooterClamp = false;
-    while (el && el !== sheet) {
-      if (el.className && typeof el.className === 'string' && el.className.includes('flex-shrink-0')) {
-        sawFooterClamp = true;
-        break;
+    const nearestFooterOrScroll = (el: HTMLElement): 'footer' | 'scroll' | 'none' => {
+      let cur: HTMLElement | null = el.parentElement;
+      while (cur && cur !== document.body) {
+        const cls = typeof cur.className === 'string' ? cur.className : '';
+        if (cls.includes('flex-shrink-0')) return 'footer';
+        if (cls.includes('overflow-y-auto')) return 'scroll';
+        cur = cur.parentElement;
       }
-      el = el.parentElement;
-    }
-    expect(sawFooterClamp).toBe(true);
+      return 'none';
+    };
+    expect(nearestFooterOrScroll(checkbox)).toBe('footer');
+    // The CTA stays pinned in the same footer container.
+    expect(nearestFooterOrScroll(cta)).toBe('footer');
   });
 });
