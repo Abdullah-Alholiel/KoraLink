@@ -53,15 +53,19 @@ function collectMissing(): string[] {
         const decls: { line: number; name: string; ns: string }[] = [];
         for (let i = 0; i < lines.length; i++) {
           for (const m of lines[i].matchAll(
-            /(?:const|let)\s+(\w+)\s*=\s*useTranslations\(\s*(?:'([^']*)'|"([^"]*)")?\s*\)/g,
+            /(?:const|let)\s+(\w+)\s*=\s*(?:await\s+)?(?:useTranslations|getTranslations)\(\s*(?:'([^']*)'|"([^"]*)")?\s*\)/g,
           )) {
             decls.push({ line: i + 1, name: m[1], ns: m[2] ?? m[3] ?? '' });
           }
         }
         for (let i = 0; i < lines.length; i++) {
-          for (const m of lines[i].matchAll(/\b(\w+)\(\s*'([A-Za-z0-9_.]+)'\s*[),]/g)) {
+          // PR-Agent r5 (run #208): accept double-quoted keys too — the
+          // declaration regex already did, the call regex didn't.
+          for (const m of lines[i].matchAll(
+            /\b(\w+)\(\s*(?:'([A-Za-z0-9_.]+)'|"([A-Za-z0-9_.]+)")\s*[),]/g,
+          )) {
             const fn = m[1];
-            const key = m[2];
+            const key = m[2] ?? m[3];
             let ns: string | null = null;
             for (const d of decls) if (d.name === fn && d.line <= i + 1) ns = d.ns;
             if (ns === null) continue; // not a useTranslations-derived call
