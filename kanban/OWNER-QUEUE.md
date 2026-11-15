@@ -93,11 +93,9 @@
 - **Close line:** "P1-73: disable dev-login on staging" OR "P1-73: keep dev-login on staging".
 - **Deadline:** Before public launch.
 
-### 11. P1-72 staging posture — one env change (NEW run #188)
-- **Owner decision (Life OS 2026-11-07, D-20261106-10):** Apply posture
-- **What:** The explicit flags are MERGED but unset (zero change by design). To close the Strix MEDIUM on staging: add to `apps/api/.env` → `COOKIE_SECURE=true` + `SWAGGER_ENABLED=false`, then `systemctl --user restart koralink-api.service`. Verify: dev-login response cookie shows `Secure`, `GET /api/docs` → 404. (Only if staging TLS is confirmed end-to-end on every access path.)
-- **Close line:** "P1-72: staging posture applied" OR "P1-72: keep unset for now".
-- **Deadline:** Before public launch.
+### 11. P1-72 staging posture — CLOSED by factory run #209 (verify-only)
+- **Owner decision (Life OS 2026-11-07, D-20261106-10):** Apply posture — flags were ALREADY SET in apps/api/.env (COOKIE_SECURE=true, SWAGGER_ENABLED=false; DEV_LOGIN_ENABLED untouched per owner) and the API has been serving them. Run #209 executed the REQUESTED VERIFICATION (D-20261113-08 proof): GET /api/docs → **404**, dev-login Set-Cookie → **HttpOnly; Secure; SameSite=Lax**, /health 200. No env change was needed; Strix MEDIUM is closed on staging evidence.
+- **Closed:** 2026-11-15 (run #209). Ledger row added to kanban/DECISIONS.md.
 
 ### 10. Recurring-match series identity (run #121)
 - **What:** Confirm 8 weekly instances are independent matches (no series id); cancelled week does not propagate.
