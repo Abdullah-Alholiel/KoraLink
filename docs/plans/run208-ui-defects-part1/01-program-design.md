@@ -14,10 +14,10 @@ missing keys** repo-wide (not just `common.messages`):
 | match/[id]/page.tsx:347 | `t('common.messages')` (MISSING) | `t('messages.title')` | messages.title = "Messages"/"الرسائل" EXISTS in both files; the button opens the chat sheet |
 | (main)/profile/page.tsx:444 | `te('pushUnsubscribeFailed')` (MISSING in errors ns) | `t('common.pushUnsubscribeFailed')` | full what/why/next copy EXISTS under common (both locales) |
 | (main)/profile/page.tsx:472 | `te('pushSubscribeFailed')` (MISSING) | `t('common.pushSubscribeFailed')` | same |
-| components/host/HostOnboarding.tsx:165 | `t('guideClose')` (MISSING) | `t('common.close')` | common.close = "Close"/"إغلاق" EXISTS; it's an aria-label for a close button |
+| components/host/HostOnboarding.tsx:165 | `t('guideClose')` (MISSING) | `t('close')` → **hostOnboarding.close (NEW key, EN+AR)** | The original plan (`common.close`) was WRONG — HostOnboarding's `t` is scoped to the hostOnboarding ns, so `common.close` would resolve to `hostOnboarding.common.close` (missing; the run-#208 tripwire caught this on its first run). Key added under hostOnboarding in both locales. |
 | components/wallet/ReceiptSheet.tsx:113 | `t('errors.offline')` (MISSING) | `t('common.offline')` | common.offline = "Offline"/"غير متصل" EXISTS |
 
-(Zero new translation content needed for D1 — pure key-repoint fixes. TeamLineup `matchDetail.` prefixed calls
+(One new key added (hostOnboarding.close EN+AR) — the rest are key-repoints to existing copy. TeamLineup `matchDetail.` prefixed calls
 were FALSE POSITIVES of the flat scan — keys exist; no change.)
 
 ### D2 — PaymentSheet: consent below fold + ambiguous totals (owner defect #2)
