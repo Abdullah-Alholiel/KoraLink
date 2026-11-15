@@ -499,6 +499,7 @@
   },
   "hostOnboarding": {
     "skip": "Skip",
+    "close": "Close",
     "getStarted": "Get Started",
     "next": "Next",
     "back": "Back",
@@ -1020,7 +1021,9 @@
     "paymentSuccess": "Payment successful!",
     "paymentFailed": "Payment failed. Please try again.",
     "processing": "Processing…",
-    "freeMatch": "Free Match"
+    "freeMatch": "Free Match",
+    "matchPrice": "Match price",
+    "amountDue": "Amount due"
   },
   "matchRules": {
     "standard": {

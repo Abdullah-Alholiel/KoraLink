@@ -110,7 +110,7 @@ export default function ReceiptSheet({
         {isError && (
           <div className="flex flex-col items-center py-8" role="status" data-testid="receipt-error">
             {!online && (
-              <p className="text-xs text-gray-400 mb-1">{t('errors.offline')}</p>
+              <p className="text-xs text-gray-400 mb-1">{t('common.offline')}</p>
             )}
             <p className="text-sm text-gray-500 text-center">
               {t(errorKey(classifyError(error)))}

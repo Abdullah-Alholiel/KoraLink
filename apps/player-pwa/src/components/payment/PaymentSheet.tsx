@@ -150,7 +150,7 @@ export default function PaymentSheet({
                 {/* Price Breakdown */}
                 <div className="mx-5 mt-5 space-y-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">{t('payment.total')}</span>
+                        <span className="text-sm text-gray-600">{t('payment.matchPrice')}</span>
                         <span className="text-sm font-bold text-brand-black">{formatMoney(price, locale, currency)}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -159,7 +159,7 @@ export default function PaymentSheet({
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div className="flex items-center justify-between">
-                        <span className="text-base font-bold text-brand-black">{t('payment.total')}</span>
+                        <span className="text-base font-bold text-brand-black">{t('payment.amountDue')}</span>
                         <span className="text-xl font-extrabold text-brand-red">{formatMoney(toPay, locale, currency)}</span>
                     </div>
                 </div>
@@ -218,8 +218,19 @@ export default function PaymentSheet({
                     </div>
                 )}
 
+                {/* Run #208 D2: the consent block MOVED to the pinned footer
+                    (below) — reachable without scrolling at 360x640, the
+                    owner's acceptance for D-20261113-32 defect #2. */}
+            </div>
+
+            {/* CTA — pinned footer. Run #208 D2 (D-20261113-32 defect #2):
+                the consent control lives HERE, directly above the pay button,
+                so the player never scrolls to find it before paying. The long
+                policy text stays collapsible (P2-235 contract: full text, an
+                in-place expander, never a code-side truncation). */}
+            <div className="mx-5 mt-4 pb-8 flex-shrink-0">
                 {/* Agree Checkbox */}
-                <div className="mx-5 mt-5 flex items-start gap-3">
+                <div className="flex items-start gap-3 mb-4">
                     <button
                         onClick={() => setAgreed(!agreed)}
                         role="checkbox"
@@ -235,8 +246,6 @@ export default function PaymentSheet({
                             </svg>
                         )}
                     </button>
-                    {/* P2-235: full consent text — never a code-side truncation.
-                        Collapsed shows the opening with an in-place expander. */}
                     <div className="min-w-0">
                         <p className="text-xs text-gray-500">
                             {t('host.disclaimer')}{' '}
@@ -253,10 +262,6 @@ export default function PaymentSheet({
                         </button>
                     </div>
                 </div>
-            </div>
-
-            {/* CTA */}
-            <div className="mx-5 mt-5 pb-8 flex-shrink-0">
                 {isOnline ? null : (
                     <div className="mb-3">
                         <OfflineBanner

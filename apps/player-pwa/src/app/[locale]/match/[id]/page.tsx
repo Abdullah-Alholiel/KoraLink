@@ -344,7 +344,7 @@ export default function MatchDetailPage({
                             <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
                         </button>
                         <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
-                            aria-label={isJoined ? t('common.messages') : t('matchDetail.shareAria')}
+                            aria-label={isJoined ? t('messages.title') : t('matchDetail.shareAria')}
                             onClick={() => {
                                 if (isJoined) {
                                     setShowChatSheet(true);
@@ -482,7 +482,7 @@ export default function MatchDetailPage({
                             </div>
 
                             {/* 2. Match Rules */}
-                            <div className="flex items-center justify-center gap-4 py-4">
+                            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 py-4">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}
@@ -905,7 +905,7 @@ export default function MatchDetailPage({
                             </div>
 
                             {/* View Match Rules (accessible before join) */}
-                            <div className="flex items-center justify-center gap-4 py-4">
+                            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 py-4">
                                 <Trophy className="w-4 h-4 text-brand-green" strokeWidth={2} />
                                 <button onClick={() => setShowRules(true)} className="text-sm font-semibold text-brand-black">
                                     {t('matchDetail.viewRules')}

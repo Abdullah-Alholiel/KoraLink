@@ -77,6 +77,21 @@ const FORM_CDN = MOYASAR_SCRIPT_URL;
 const FORM_CSS_URL = MOYASAR_CSS_URL;
 // P2-289 (run #180): quick amounts live in lib/topup-amount.ts (TOPUP_QUICK_AMOUNTS).
 
+/**
+ * Run #208 D4 (owner brief Part 1 defect #4b): theme the Moyasar card form to
+ * the app's brand. The vendored stylesheet paints the pay button purple
+ * (`div#mysr .bg-primary` → rgb(118 141 255)!important); this override —
+ * appended to <head> AFTER the vendor link, equal specificity so document
+ * order wins — repaints it brand-green. Hover/focus stay coherent. Scoped
+ * under div#mysr so nothing else is touched.
+ */
+const MOYASAR_BRAND_OVERRIDES_ID = 'moyasar-brand-overrides';
+const BRAND_OVERRIDES = [
+  // The pay button (vendor: .bg-primary). Hover stays vendor-styled —
+  // inventing a hover override against an unverified class = dead CSS.
+  'div#mysr .bg-primary{background-color:#254132 !important}',
+].join('\n');
+
 /** Idempotently ensure the vendored Moyasar stylesheet is in the document. */
 function ensureMoyasarStylesheet(): void {
   if (document.querySelector(`link[href="${FORM_CSS_URL}"]`)) return;
@@ -88,6 +103,14 @@ function ensureMoyasarStylesheet(): void {
   link.setAttribute('integrity', MOYASAR_CSS_INTEGRITY);
   link.crossOrigin = 'anonymous';
   document.head.appendChild(link);
+  // D4: brand overrides ride the same idempotent gate — inserted after the
+  // vendor link so document order (not !important escalation) decides.
+  if (!document.getElementById(MOYASAR_BRAND_OVERRIDES_ID)) {
+    const style = document.createElement('style');
+    style.id = MOYASAR_BRAND_OVERRIDES_ID;
+    style.textContent = BRAND_OVERRIDES;
+    document.head.appendChild(style);
+  }
 }
 
 function loadMoyasarScript(): Promise<MoyasarFormApi> {

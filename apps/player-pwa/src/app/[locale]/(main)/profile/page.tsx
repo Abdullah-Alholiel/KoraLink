@@ -120,10 +120,9 @@ export default function ProfilePage() {
     const storeUser = useAppStore(selectUser);
     const isAuthenticated = useAppStore(selectIsAuth);
     const logout = useAppStore((s) => s.logout);
-    // P2-87 (run #67): localized toast for unsubscribe failures (errors.*
-    // namespace; the root `t` above stays for common.* keys).
+    // P2-87 (run #67): localized toast for unsubscribe failures (copy lives
+    // under common.* since run #208 — exists in both locales).
     const showToast = useAppStore((s) => s.showToast);
-    const te = useTranslations('errors');
 
     // ── Real data from API (fills gaps when store is stale after dev-login) ──
     // P2-26: userStatsError drives the error state (profile still renders with
@@ -439,9 +438,10 @@ export default function ProfilePage() {
                                         if (!ok) {
                                             // Error-message standard: what
                                             // happened + why + what next —
-                                            // already localized in errors.*.
+                                            // copy lives under common.*
+                                            // (exists in both locales).
                                             showToast(
-                                                te('pushUnsubscribeFailed'),
+                                                t('common.pushUnsubscribeFailed'),
                                                 'error',
                                             );
                                         }
@@ -469,7 +469,7 @@ export default function ProfilePage() {
                                         setSubscribeHint(outcome);
                                     } else if (outcome === 'error') {
                                         showToast(
-                                            te('pushSubscribeFailed'),
+                                            t('common.pushSubscribeFailed'),
                                             'error',
                                         );
                                     }
