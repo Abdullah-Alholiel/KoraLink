@@ -16,15 +16,21 @@ import ar from '@/messages/ar.json';
  * t(VERB_LABEL[v])) are covered by their own parity tests (verb-parity,
  * i18n key parity) and are deliberately out of scope here.
  *
- * STATED LIMITATION (PR-Agent r4, run #208 — accepted, not a defect in
+ * STATED LIMITATION (PR-Agent r4–r6, run #208 — accepted, not a defect in
  * practice): namespace resolution is "nearest same-named useTranslations
- * declaration at-or-above the call line". A shadowed translator id (e.g. a
- * function parameter named t) or a helper defined AFTER a component-level
- * redeclaration could be validated against the wrong namespace — a false
- * NEGATIVE (a real missing key passes). The tripwire is a heuristic net for
- * the common layout (one translator per scope), not a full static analysis;
- * the runtime MISSING_MESSAGE console check (P2-371 Playwright audit) is the
- * second, authoritative layer.
+ * declaration at-or-above the call line". KNOWN UNCOVERED PATTERNS (all
+ * verified ZERO-HIT in this repo at run-#208 time — the scanner covers 100%
+ * of actual usage):
+ *   - destructured translators: `const { t } = useTranslations('ns')`
+ *   - object-form server API: `getTranslations({ namespace })`
+ *   - dynamic/template-literal keys (covered by verb-parity + i18n parity
+ *     tests instead)
+ * A shadowed translator id could also be validated against the wrong
+ * namespace (false NEGATIVE). This tripwire is a heuristic net for the
+ * repo's real layout, not full static analysis; the runtime
+ * MISSING_MESSAGE console check (P2-371 Playwright audit) is the second,
+ * authoritative layer. Extend the patterns ABOVE only when the repo
+ * actually adopts them.
  */
 
 type NestedRecord = { [key: string]: string | NestedRecord };
