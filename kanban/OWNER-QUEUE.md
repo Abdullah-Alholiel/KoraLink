@@ -1,10 +1,10 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #255 topup-intent expiry, sibling worker t_d85186ed, checks green)
-- Commits ahead of main: **453** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62, re-verified live run #207 (run #206's "zero pending" had read staging)**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
-- Services: API/PWA/Admin UP — API = notification email LIVE via Brevo (PR #258 `274ddb3`, email-sender port; "delivered via BrevoService" in journald) + receipt MVP; PWA = run-#206 receipt sheet + consent a11y; Admin = run-#199 filters
-- Factory loop status: **HEALTHY 2026-11-14** — run #207 shipped F6 rate-limit review (A6 precondition CLOSED — verdict READY; residual gate: prod env MUST carry TRUST_PROXY=1 at cutover, folded into F7) + lawyer brief (docs/legal/lawyer-brief.md — 3 false-today legal claims pinned, incl. undisclosed PostHog) + PR #258 mailer port. F1 Turnstile owner-blocked (keys); F2 webhook owner-gated (dashboard URL); F7–F10 need the owner's A2 Coolify session. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #259 run-#208 owner UI defects Part 1, checks green pending final review)
+- Commits ahead of main: **457** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
+- Services: API/PWA/Admin UP — API = notification email LIVE via Brevo (PR #258 `274ddb3`) + topup-intent expiry (PR #255 `dfa969a`, merged run #208 — stale amber banner now self-clears); PWA = run-#208 UI-defects fixes pending PR #259 merge; Admin = run-#199 filters
+- Factory loop status: **HEALTHY 2026-11-15** — run #208 shipped owner UI defects Part 1 (D-20261113-32: 5 missing i18n keys + repo-wide tripwire test, consent into pinned footer, RTL wrap, Moyasar brand) + merged PR #255. F1 Turnstile owner-blocked (keys); F2 webhook owner-gated (dashboard URL); F7–F10 need the owner's A2 Coolify session. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
 
 ## Active owner actions
 
@@ -47,10 +47,10 @@
 - **Close line:** "P0-11: plan approved, start A2" OR "P0-11: amend — <notes>" OR "P0-11: defer".
 - **Deadline:** Owner-paced; nothing executes without your A1.
 
-### 2. Promote PR #178 merge (owner-only, remaining step)
-- **Owner decision (Life OS 2026-11-07, D-20261106-02):** Wait for Coolify cutover
-- **Status (2026-11-06, run #191):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Checks now **11/11 GREEN** (gate, fresh-apply, semgrep, review, Dependency Audit, gitleaks, Vercel ×2 + previews). NOTHING blocks the merge technically; the promote now also carries the run-#191 dependency-security work (0 prod criticals).
-- **Your one click:** GitHub → PR #178 → Squash merge → auto-deploys Render + Vercel ×2. Then `/api/v1/health` 200.
+### 2. Promote PR #178 merge (owner GO → AI executes, per D-20261113-28)
+- **Owner decision (Life OS 2026-11-07, D-20261106-02 + chat 2026-11-13, D-20261113-28):** owner checks UI/UX on staging and says GO in chat; the AI then executes migrate-first + the merge + deploy, and reports back.
+- **Status (2026-11-06, run #191):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Checks GREEN (gate, fresh-apply, semgrep, review, Dependency Audit, gitleaks, Vercel ×2 + previews). Two NEW additive migrations (0059, 0060) ride this promote — the AI applies them to Neon BEFORE the merge (migrate-first).
+- **Your one word:** "GO" on PR #178 in chat (after your own staging check). The AI does the rest and reports SHA + health.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
 - **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
 
