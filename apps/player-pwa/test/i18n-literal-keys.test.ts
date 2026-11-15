@@ -15,6 +15,16 @@ import ar from '@/messages/ar.json';
  * Scope: literal string args only. Dynamic keys (t(errorKey(...)),
  * t(VERB_LABEL[v])) are covered by their own parity tests (verb-parity,
  * i18n key parity) and are deliberately out of scope here.
+ *
+ * STATED LIMITATION (PR-Agent r4, run #208 — accepted, not a defect in
+ * practice): namespace resolution is "nearest same-named useTranslations
+ * declaration at-or-above the call line". A shadowed translator id (e.g. a
+ * function parameter named t) or a helper defined AFTER a component-level
+ * redeclaration could be validated against the wrong namespace — a false
+ * NEGATIVE (a real missing key passes). The tripwire is a heuristic net for
+ * the common layout (one translator per scope), not a full static analysis;
+ * the runtime MISSING_MESSAGE console check (P2-371 Playwright audit) is the
+ * second, authoritative layer.
  */
 
 type NestedRecord = { [key: string]: string | NestedRecord };

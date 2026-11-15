@@ -68,7 +68,7 @@ the gate is green and stays green.
 |---|---|
 | apps/player-pwa/src/app/[locale]/match/[id]/page.tsx | D1 (aria-label key), D3 (2× flex-wrap, Banknote icon) |
 | apps/player-pwa/src/app/[locale]/(main)/profile/page.tsx | D1 (2× key repoint te→t/common ns) |
-| apps/player-pwa/src/components/host/HostOnboarding.tsx | D1 (guideClose → common.close) |
+| apps/player-pwa/src/components/host/HostOnboarding.tsx | D1 (guideClose → close — NEW hostOnboarding.close key; see D1 table note) |
 | apps/player-pwa/src/components/wallet/ReceiptSheet.tsx | D1 (errors.offline → common.offline) |
 | apps/player-pwa/src/components/payment/PaymentSheet.tsx | D2 (consent → pinned footer; 2 label keys) |
 | apps/player-pwa/src/components/wallet/TopupSheet.tsx | D4 (brand-themed Moyasar button) |
