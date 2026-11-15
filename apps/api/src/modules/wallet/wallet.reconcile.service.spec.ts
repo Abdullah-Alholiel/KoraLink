@@ -1,5 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 import { WalletReconcileService } from './wallet.reconcile.service';
 import {
   listMoyasarPayments,
@@ -58,15 +60,51 @@ function payment(partial: Partial<MoyasarPayment>): MoyasarPayment {
   };
 }
 
-function makeDb(pendingRows: unknown[]): unknown {
+function makeDb(opts: {
+  pendingRows?: unknown[];
+  /** Rows resolved by the expiry pass's credited-since-cutoff probe. */
+  creditedRows?: { id: string }[];
+  /** Rows returned by the expiry UPDATE (empty = nothing matched). */
+  expiredReturning?: { id: string }[];
+  captured?: { updateSet?: unknown; catchPred?: unknown };
+} = {}): unknown {
+  const o = {
+    pendingRows: opts.pendingRows ?? PENDING_ROWS,
+    creditedRows: opts.creditedRows ?? [],
+    expiredReturning: opts.expiredReturning ?? [],
+    captured: opts.captured,
+  };
+  const isIntents = (table: unknown) => {
+    const cols = (table as Record<string, unknown>) ?? {};
+    return 'status' in cols && 'idempotency_key' in cols;
+  };
   return {
     select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => ({
-            limit: () => Promise.resolve(pendingRows),
-          }),
-        }),
+      from: (table: unknown) => ({
+        where: () => {
+          // The pending scan chains orderBy().limit() and must resolve the
+          // pending rows; the expiry credited-probe awaits the where-chain
+          // directly (drizzle builders are thenable). One object serves both.
+          const scan = { limit: () => Promise.resolve(isIntents(table) ? o.pendingRows : []) };
+          return Object.assign(Promise.resolve(isIntents(table) ? o.creditedRows : []), {
+            orderBy: () => scan,
+          });
+        },
+      }),
+    }),
+    update: () => ({
+      set: (v: unknown) => ({
+        where: (pred: unknown) => {
+          if (o.captured) {
+            o.captured.updateSet = v;
+            o.captured.catchPred = pred;
+          }
+          // Drizzle shape: where() chains into returning() (the sweep's expiry
+          // UPDATE reads back the ids it flipped).
+          return {
+            returning: async () => o.expiredReturning,
+          };
+        },
       }),
     }),
   };
@@ -80,6 +118,7 @@ function makeService(opts: {
   enabled?: boolean;
   hasKey?: boolean;
   pendingRows?: unknown[];
+  db?: unknown;
   verify?: (userId: string, dto: { intentId: string; paymentId: string }) => Promise<unknown>;
 }) {
   const verify = opts.verify ?? jest.fn().mockResolvedValue({ credited: true, paymentId: 'pay_x', amountSar: 50 });
@@ -89,7 +128,7 @@ function makeService(opts: {
     MOYASAR_SECRET_KEY: opts.hasKey === false ? undefined : 'sk_test_x',
   });
   const service = new WalletReconcileService(
-    makeDb(opts.pendingRows ?? PENDING_ROWS) as never,
+    (opts.db ?? makeDb({ pendingRows: opts.pendingRows })) as never,
     config,
     topupService,
   );
@@ -106,7 +145,7 @@ describe('WalletReconcileService — gating', () => {
   it('no-ops without touching Moyasar or the DB when the topup flag is off', async () => {
     const { service, verify } = makeService({ enabled: false });
     const out = await service.reconcileOnce();
-    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0, expired: 0 });
     expect(mockList).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled();
   });
@@ -148,7 +187,7 @@ describe('WalletReconcileService — discovery', () => {
       intentId: '11111111-1111-4111-8111-111111111111',
       paymentId: 'pay_test1234567890',
     });
-    expect(out).toEqual({ scanned: 2, credited: 1, skipped: 1, failed: 0, agedOut: 0 });
+    expect(out).toEqual({ scanned: 2, credited: 1, skipped: 1, failed: 0, agedOut: 0, expired: 0 });
   });
 
   it('prefers the PAID payment when an intent carries several (stale 3DS then paid retry)', async () => {
@@ -186,7 +225,7 @@ describe('WalletReconcileService — discovery', () => {
     ]);
     const out = await service.reconcileOnce();
     expect(verify).not.toHaveBeenCalled();
-    expect(out).toEqual({ scanned: 2, credited: 0, skipped: 2, failed: 0, agedOut: 0 });
+    expect(out).toEqual({ scanned: 2, credited: 0, skipped: 2, failed: 0, agedOut: 0, expired: 0 });
   });
 
   it('never delegates a payment that is not paid (3DS pending/failed/authorized)', async () => {
@@ -205,7 +244,7 @@ describe('WalletReconcileService — discovery', () => {
     const { service, verify } = makeService({ pendingRows: [] });
     const out = await service.reconcileOnce();
     expect(mockList).not.toHaveBeenCalled();
-    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0, expired: 0 });
     expect(verify).not.toHaveBeenCalled();
   });
 });
@@ -225,7 +264,7 @@ describe('WalletReconcileService — delegation outcomes', () => {
   });
 
   it('swallows ConflictException (payment_not_paid = 3DS in flight) as a skip', async () => {
-    const { service, verify } = makeService({
+    const { service } = makeService({
       pendingRows: [PENDING_ROWS[0]],
       verify: jest.fn().mockRejectedValue(new ConflictException('payment_not_paid: x')),
     });
@@ -248,7 +287,7 @@ describe('WalletReconcileService — delegation outcomes', () => {
   });
 
   it('surfaces anomalous conflicts (binding/amount mismatch) as failures with Sentry, only payment_not_paid stays silent', async () => {
-    const { service, verify } = makeService({
+    const { service } = makeService({
       pendingRows: [PENDING_ROWS[0]],
       verify: jest.fn().mockRejectedValue(
         new ConflictException('payment_intent_mismatch: not created for this intent'),
@@ -317,19 +356,11 @@ describe('WalletReconcileService — P2-314 age-out visibility', () => {
 
   it('evicts resolved intents from the dedup Set — a resurfaced pending intent re-alerts (PR-Agent r1 run #198)', async () => {
     // Mutable db stub: rows change between sweeps to simulate an intent that
-    // resolves (leaves the pending scan) and later resurfaces.
+    // resolves (leaves the pending scan) and later resurfaces. t_b8468d98:
+    // makeDb serves BOTH chains (pending scan + expiry probes) from the same
+    // array, so the mutation is visible to every chain each tick.
     const rows: unknown[] = [agedRow(10 * 60 * 1000, '33333333-3333-4333-8333-333333333333')];
-    const mutableDb = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            orderBy: () => ({
-              limit: () => Promise.resolve(rows),
-            }),
-          }),
-        }),
-      }),
-    };
+    const mutableDb = makeDb({ pendingRows: rows });
     const config = makeConfig({ WALLET_TOPUP_ENABLED: 'true', MOYASAR_SECRET_KEY: 'sk_test_x' });
     const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
     const service = new WalletReconcileService(mutableDb as never, config, topupService);
@@ -384,7 +415,7 @@ describe('WalletReconcileService — P2-314 age-out visibility', () => {
   it('disables the whole sweep with the topup flag (age-out alerts included)', async () => {
     const { service } = makeService({ enabled: false, pendingRows: [agedRow(60 * 60 * 1000, '33333333-3333-4333-8333-333333333333')] });
     const out = await service.reconcileOnce();
-    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0 });
+    expect(out).toEqual({ scanned: 0, credited: 0, skipped: 0, failed: 0, agedOut: 0, expired: 0 });
     expect(mockCaptureMessage).not.toHaveBeenCalled();
   });
 });
@@ -402,5 +433,143 @@ describe('WalletReconcileService — cron wrapper', () => {
     mockList.mockRejectedValue(new Error('moyasar 503'));
     await expect(service.handleReconcileTick()).resolves.toBeUndefined();
     expect(mockCapture).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WalletReconcileService — abandoned-intent expiry (t_b8468d98)', () => {
+  // Aged well past the default 24h expiry window.
+  const ABANDONED_ID = '77777777-7777-4777-8777-777777777777';
+  const abandonedRow = {
+    id: ABANDONED_ID,
+    user_id: 'user-7',
+    created_at: new Date(NOW - 25 * HOUR_MS),
+  };
+
+  function makeExpiryDb(opts: {
+    pendingRows?: unknown[];
+    expiredReturning?: { id: string }[];
+    captured?: { updateSet?: unknown; catchPred?: unknown };
+  } = {}) {
+    const captured = opts.captured ?? {};
+    const db = makeDb({
+      pendingRows: opts.pendingRows ?? [abandonedRow],
+      expiredReturning: opts.expiredReturning ?? [{ id: ABANDONED_ID }],
+      captured,
+    });
+    return { db, captured };
+  }
+
+  it('expires a pending intent older than the window with no paid payment bound', async () => {
+    const { db, captured } = makeExpiryDb();
+    mockList.mockResolvedValue([]); // discovery finds nothing for the intent
+    const { service } = makeService({ db });
+    const out = await service.reconcileOnce();
+    expect(out.expired).toBe(1);
+    expect(out.agedOut).toBe(1); // the same intent is >1h, age-out alert fires too
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      'Wallet top-up intents expired (abandoned)',
+      expect.objectContaining({ level: 'warning', extra: expect.objectContaining({ count: 1, expiryHours: 24 }) }),
+    );
+    // Money-truth invariants reach the DB (render-level, wallet.topup-latest
+    // pattern): pending-only status guard + age cutoff; the empty exclusion
+    // sets collapse to neutral `true` (verified drizzle behavior, probe).
+    const dialect = new PgDialect();
+    const { sql, params } = dialect.sqlToQuery(captured.catchPred as SQL);
+    expect(sql).toContain('"wallet_topup_intents"."status"');
+    expect(params).toContain('pending');
+    expect(sql).toContain('"wallet_topup_intents"."created_at" <');
+    expect(sql).not.toContain('not in'); // nothing paid is bound → no exclusions
+    expect(params).not.toContain(ABANDONED_ID);
+    expect(captured.updateSet).toEqual({ status: 'failed', updated_at: expect.any(Date) });
+  });
+
+  it('never expires an intent whose discovery found a PAID payment (credit first)', async () => {
+    // expiredReturning [] models the real DB: the paid-bound exclusion removes
+    // the row from the UPDATE. The render check below proves the exclusion is
+    // actually in the predicate.
+    const { db, captured } = makeExpiryDb({ expiredReturning: [] });
+    mockList.mockResolvedValue([
+      payment({ description: `wallet-topup:${ABANDONED_ID}` }),
+    ]);
+    const { service } = makeService({
+      db,
+      verify: jest.fn().mockResolvedValue({ credited: true, paymentId: 'pay_x', amountSar: 50 }),
+    });
+    const out = await service.reconcileOnce();
+    expect(out.credited).toBe(1);
+    expect(out.expired).toBe(0); // paid-hit intents are excluded from the UPDATE
+    const { params } = new PgDialect().sqlToQuery(captured.catchPred as SQL);
+    expect(params).toContain(ABANDONED_ID); // bound as a not-in exclusion value
+  });
+
+  it('leaves a sweep-eligible intent pending when its paid verify FAILED this pass (retry next tick)', async () => {
+    const { db, captured } = makeExpiryDb({ expiredReturning: [] });
+    mockList.mockResolvedValue([
+      payment({ description: `wallet-topup:${ABANDONED_ID}` }),
+    ]);
+    const { service } = makeService({
+      db,
+      verify: jest.fn().mockRejectedValue(new Error('moyasar 503')),
+    });
+    const out = await service.reconcileOnce();
+    expect(out.failed).toBe(1);
+    expect(out.expired).toBe(0); // excluded: possibly charged — must retry, not expire
+    const { params } = new PgDialect().sqlToQuery(captured.catchPred as SQL);
+    expect(params).toContain(ABANDONED_ID); // paid exclusion, not expiry fodder
+  });
+
+  it('leaves a fresh (young) pending intent alone', async () => {
+    const { db, captured } = makeExpiryDb({ pendingRows: [PENDING_ROWS[0]], expiredReturning: [] });
+    mockList.mockResolvedValue([]);
+    const { service } = makeService({ db });
+    const out = await service.reconcileOnce();
+    expect(out.expired).toBe(0);
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+    // The age cutoff is a real bound parameter (< cutoff), not a no-op.
+    // drizzle's sqlToQuery serializes Date params to ISO strings.
+    const { sql, params } = new PgDialect().sqlToQuery(captured.catchPred as SQL);
+    expect(sql).toContain('"wallet_topup_intents"."created_at" <');
+    expect(params.some((p) => p instanceof Date || (typeof p === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(p)))).toBe(true);
+  });
+
+  it('respects the WALLET_TOPUP_INTENT_EXPIRY_HOURS override (integer hours)', async () => {
+    const { db, captured } = makeExpiryDb();
+    // Stub config read happens inside the service; assert via Sentry payload
+    // after configuring the override through makeConfig in a bespoke service.
+    const config = makeConfig({
+      WALLET_TOPUP_ENABLED: 'true',
+      MOYASAR_SECRET_KEY: 'sk_test_x',
+      WALLET_TOPUP_INTENT_EXPIRY_HOURS: '6',
+    });
+    const topupService = { verifyTopup: jest.fn() } as unknown as WalletTopupService;
+    const service = new WalletReconcileService(db as never, config, topupService);
+    mockList.mockResolvedValue([]);
+    const out = await service.reconcileOnce();
+    expect(out.expired).toBe(1);
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      'Wallet top-up intents expired (abandoned)',
+      expect.objectContaining({ extra: expect.objectContaining({ expiryHours: 6 }) }),
+    );
+    void captured;
+  });
+
+  it('an expiry UPDATE failure is contained: outcome keeps counters, Sentry captures, no throw', async () => {
+    // Selects work (makeDb shape); only the expiry UPDATE explodes.
+    const boomDb = {
+      ...(makeDb({ pendingRows: [abandonedRow] }) as Record<string, unknown>),
+      update: () => ({
+        set: () => ({
+          where: () => {
+            throw new Error('db down');
+          },
+        }),
+      }),
+    };
+    const { service } = makeService({ db: boomDb });
+    mockList.mockResolvedValue([]);
+    const out = await service.reconcileOnce();
+    expect(out.expired).toBe(0);
+    expect(out.agedOut).toBe(1);
+    expect(mockCapture).toHaveBeenCalledTimes(1); // expiry failure, not the age-out message path
   });
 });
