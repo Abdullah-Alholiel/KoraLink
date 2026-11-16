@@ -2158,9 +2158,10 @@ export class MatchesService {
     // host accepting the hosting terms — enforced BEFORE any write, BOTH modes
     // (self-booked hosts run everything; koralink-booked hosts run the match).
     if (!dto.acceptedHostingTerms) {
-      throw new BadRequestException(
-        'Hosting terms must be accepted before booking.',
-      );
+      throw new BadRequestException({
+        message: 'Hosting terms must be accepted before booking.',
+        code: 'HOSTING_TERMS_REQUIRED',
+      });
     }
 
     // P1-64: recurring matches reuse KoraLink-managed pitch_slots — a
@@ -2269,7 +2270,10 @@ export class MatchesService {
         }
 
         if (slot.is_booked) {
-          throw new ConflictException('This slot has already been booked by another host');
+          throw new ConflictException({
+            message: 'This slot has already been booked by another host',
+            code: 'SLOT_TAKEN',
+          });
         }
 
         // Publish-time past-slot guard (owner directive 2026-09-18): a slot
@@ -2284,9 +2288,10 @@ export class MatchesService {
           slot.slot_date < todayKey ||
           (slot.slot_date === todayKey && slotStartMin <= riyadhTimeNow());
         if (started) {
-          throw new ConflictException(
-            `This slot has already started. Pick an upcoming slot (slot_date=${slot.slot_date}, start=${slotStartMin}, now=${riyadhTimeNow()} Riyadh).`,
-          );
+          throw new ConflictException({
+            message: `This slot has already started. Pick an upcoming slot (slot_date=${slot.slot_date}, start=${slotStartMin}, now=${riyadhTimeNow()} Riyadh).`,
+            code: 'SLOT_STARTED',
+          });
         }
       }
 
@@ -2364,9 +2369,12 @@ export class MatchesService {
               MatchesService.name,
             );
 
-            throw new BadRequestException(
-              `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
-            );
+            // P2-373: stable machine code — the PWA classifies on this, never
+            // on the English message (stale bundles / copy edits can't break it).
+            throw new BadRequestException({
+              message: `Insufficient wallet balance. Required: SAR ${pitchCostSar.toFixed(2)}, Available: SAR ${parseFloat(user?.wallet_balance ?? '0').toFixed(2)}`,
+              code: 'WALLET_INSUFFICIENT',
+            });
           }
 
           // Record ledger entry — only reached when the deduct succeeded,
@@ -2521,10 +2529,16 @@ export class MatchesService {
         throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
       }
       if (candidate.is_booked) {
-        throw new ConflictException(`Slot on ${date} is already booked.`);
+        throw new ConflictException({
+          message: `Slot on ${date} is already booked.`,
+          code: 'SLOT_TAKEN',
+        });
       }
       if (!isFuture(candidate)) {
-        throw new BadRequestException(`Slot on ${date} has already started.`);
+        throw new BadRequestException({
+          message: `Slot on ${date} has already started.`,
+          code: 'SLOT_STARTED',
+        });
       }
       resolved.push(candidate);
     }
@@ -2547,10 +2561,16 @@ export class MatchesService {
           throw new BadRequestException(`No slot available on ${date} for a weekly repeat.`);
         }
         if (slot.is_booked) {
-          throw new ConflictException(`Slot on ${date} is already booked.`);
+          throw new ConflictException({
+            message: `Slot on ${date} is already booked.`,
+            code: 'SLOT_TAKEN',
+          });
         }
         if (!isFuture(slot)) {
-          throw new BadRequestException(`Slot on ${date} has already started.`);
+          throw new BadRequestException({
+            message: `Slot on ${date} has already started.`,
+            code: 'SLOT_STARTED',
+          });
         }
       }
 
@@ -2620,11 +2640,13 @@ export class MatchesService {
               MatchesService.name,
             );
 
-            throw new BadRequestException(
-              `Insufficient wallet balance for ${repeatWeeks} weekly bookings. ` +
+            throw new BadRequestException({
+              message:
+                `Insufficient wallet balance for ${repeatWeeks} weekly bookings. ` +
                 `Required: SAR ${(pitchCostSar * repeatWeeks).toFixed(2)} (${pitchCostSar.toFixed(2)}/week × ${repeatWeeks}; week ${weekIdx + 1} failed), ` +
                 `Available: SAR ${parseFloat(balanceAfterRollback[0]?.wallet_balance ?? '0').toFixed(2)}`,
-            );
+              code: 'WALLET_INSUFFICIENT',
+            });
           }
 
           await tx.insert(schema.transactions).values({
@@ -3580,7 +3602,10 @@ export class MatchesService {
         );
       }
       if (dto.booking_slot_id === match.booking_slot_id) {
-        throw new BadRequestException('The match is already booked on that slot.');
+        throw new BadRequestException({
+          message: 'The match is already booked on that slot.',
+          code: 'SLOT_TAKEN',
+        });
       }
 
       // ── 1. Lock BOTH slots FOR UPDATE (old + new, ordered by id — no
@@ -3611,7 +3636,10 @@ export class MatchesService {
         throw new BadRequestException('Slots can only be swapped within the same pitch.');
       }
       if (newSlot.is_booked) {
-        throw new ConflictException('This slot has already been booked by another host');
+        throw new ConflictException({
+          message: 'This slot has already been booked by another host',
+          code: 'SLOT_TAKEN',
+        });
       }
 
       // ── 2. Derive the new schedule exactly like createMatch does ──────
@@ -3730,9 +3758,10 @@ export class MatchesService {
             centsFromMoneyString(wallet.wallet_balance) <
               centsFromMoneyString(walletDeltaSar))
         ) {
-          throw new BadRequestException(
-            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(wallet?.wallet_balance))}`,
-          );
+          throw new BadRequestException({
+            message: `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(wallet?.wallet_balance))}`,
+            code: 'WALLET_INSUFFICIENT',
+          });
         }
 
         // Guarded increment when charging (delta > 0): zero rows updated =
@@ -3770,9 +3799,10 @@ export class MatchesService {
             MatchesService.name,
           );
 
-          throw new BadRequestException(
-            `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(user?.wallet_balance))}`,
-          );
+          throw new BadRequestException({
+            message: `Insufficient wallet balance for the reschedule. Required: SAR ${centsToMoneyString(centsFromMoneyString(walletDeltaSar))}, Available: SAR ${centsToMoneyString(centsFromMoneyString(user?.wallet_balance))}`,
+            code: 'WALLET_INSUFFICIENT',
+          });
         }
       }
 

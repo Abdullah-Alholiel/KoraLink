@@ -3,7 +3,30 @@ import { classifyPublishError, PUBLISH_ERROR_KEYS, parseWalletShortfall } from '
 import enMessages from '@/messages/en.json';
 import arMessages from '@/messages/ar.json';
 
+// P2-373: the API now stamps stable machine codes on business failures
+// (matches.service.ts `{ message, code }` bodies). A FetchError carries it as
+// `.code` — build code-carrying fixtures the way fetcher.ts does.
+function codedError(message: string, code: string): Error {
+  return Object.assign(new Error(message), { name: 'FetchError', code });
+}
+
 describe('classifyPublishError', () => {
+  it('P2-373: classifies on the STABLE CODE — copy edits can no longer break the branch', () => {
+    // The server could reword these messages arbitrarily; the code is contract.
+    expect(
+      classifyPublishError(codedError('رصيد المحفظة غير كافٍ — نص عربي بالكامل', 'WALLET_INSUFFICIENT')),
+    ).toBe('insufficient_balance');
+    expect(
+      classifyPublishError(codedError('شروط الاستضافة مطلوبة', 'HOSTING_TERMS_REQUIRED')),
+    ).toBe('hosting_terms');
+    expect(classifyPublishError(codedError('any copy at all', 'SLOT_TAKEN'))).toBe('slot_taken');
+    expect(classifyPublishError(codedError('any copy at all', 'SLOT_STARTED'))).toBe('slot_started');
+  });
+
+  it('P2-373: an UNKNOWN code falls through to the generic kind (no false business match)', () => {
+    expect(classifyPublishError(codedError('New server failure', 'SOME_FUTURE_CODE'))).toBe('generic');
+  });
+
   it('classifies insufficient wallet balance', () => {
     const err = new Error(
       'Insufficient wallet balance. Required: SAR 200.00, Available: SAR 100.00',

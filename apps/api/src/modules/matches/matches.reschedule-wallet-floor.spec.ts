@@ -219,4 +219,13 @@ describe('MatchesService.rescheduleMatch — wallet floor atomicity (run #105)',
     );
     expect(warnings).toHaveLength(0);
   });
+
+  it('P2-373: the insufficient-balance 400 carries the stable WALLET_INSUFFICIENT code (PWA classifies on code, not copy)', async () => {
+    const { service } = makeHarness({ walletBalance: '5', updateRows: 0 });
+    const err = await service.rescheduleMatch(HOST, MATCH_ID, dto).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(
+      ((err as BadRequestException).getResponse() as Record<string, unknown>).code,
+    ).toBe('WALLET_INSUFFICIENT');
+  });
 });

@@ -325,4 +325,27 @@ describe('useRescheduleMatch', () => {
     expect(toast?.type).toBe('error');
     expect(toast?.message).toBe(enMessages.errors.rescheduleFailed);
   });
+
+  it('P2-373 + PR-Agent #262: WALLET_INSUFFICIENT code with UNPARSEABLE amounts shows the no-amount copy — never a fabricated SAR 0.00', async () => {
+    const { wrapper } = createWrapper();
+    // Deploy-skew case the code path is copy-proof against: the API reworded
+    // its message (no Required/Available to parse) but the code is contract.
+    const err = Object.assign(
+      new Error('رصيد المحفظة غير كافٍ لإعادة الجدولة'),
+      { name: 'FetchError', code: 'WALLET_INSUFFICIENT' },
+    );
+    mockFetcher.mockRejectedValueOnce(err);
+
+    const { result } = renderHook(() => useRescheduleMatch(), { wrapper });
+    act(() => {
+      result.current.mutate({ matchId: 'm1', bookingSlotId: 'slot-2' });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const toast = useAppStore.getState().toast;
+    expect(toast?.type).toBe('error');
+    expect(toast?.message).toBe(enMessages.errors.rescheduleWalletShortfallUnknown);
+    expect(toast?.message).not.toMatch(/SAR 0\.00|0\.00/);
+    expect(toast?.meta?.detail).toBe(enMessages.errors.rescheduleWalletDetail);
+  });
 });
