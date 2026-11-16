@@ -24,10 +24,13 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-// Resolve @sentry/node from the API app's node_modules (it's a dep there).
+// Resolve @sentry/node by package NAME from the API app's package.json
+// (D-20261113-40): works whether npm hoists it to the root node_modules or
+// keeps it nested in apps/api/node_modules — never a fixed folder path.
 // No new install; we never duplicate a 200-package tree on the VPS.
 const requireHere = createRequire(import.meta.url);
-const Sentry = requireHere('/home/ubuntu/projects/koralink/apps/api/node_modules/@sentry/node');
+const requireApi = createRequire('/home/ubuntu/projects/koralink/apps/api/package.json');
+const Sentry = requireApi('@sentry/node');
 
 const STATE_DIR = '/home/ubuntu/.local/state';
 const LOG = `${STATE_DIR}/koralink-keepwarm.log`;
