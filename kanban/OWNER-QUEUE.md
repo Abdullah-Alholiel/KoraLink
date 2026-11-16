@@ -1,10 +1,10 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #259 run-#208 owner UI defects Part 1, checks green pending final review)
-- Commits ahead of main: **457** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
-- Services: API/PWA/Admin UP — API = notification email LIVE via Brevo (PR #258 `274ddb3`) + topup-intent expiry (PR #255 `dfa969a`, merged run #208 — stale amber banner now self-clears); PWA = run-#208 UI-defects fixes pending PR #259 merge; Admin = run-#199 filters
-- Factory loop status: **HEALTHY 2026-11-15** — run #208 shipped owner UI defects Part 1 (D-20261113-32: 5 missing i18n keys + repo-wide tripwire test, consent into pinned footer, RTL wrap, Moyasar brand) + merged PR #255. F1 Turnstile owner-blocked (keys); F2 webhook owner-gated (dashboard URL); F7–F10 need the owner's A2 Coolify session. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #262 P2-373 stable error codes, r1 fix pushed, re-review in flight — factory merges when green)
+- Commits ahead of main: **464** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
+- Services: API/PWA/Admin UP — API = wallet reconcile hardening LIVE (PR #260 `61c2b83`); PWA = ReportSheet localized errors LIVE (PR #261 `1fc6e8c`) + owner UI defects (PR #259 `d976f68`); Admin = payout error buckets (PR #263 `7a883b6`) + run-#199 filters
+- Factory loop status: **HEALTHY 2026-11-16** — run #210 shipped the 3-item error-copy cycle (P2-372/373/343, two merged + one merging) and REFUTED 3 phantom reviewer gaps. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
 
 ## Active owner actions
 
