@@ -70,14 +70,14 @@ describe('ReportSheet — chat message reporting (P1-31)', () => {
     expect(await screen.findByText('Report submitted')).toBeInTheDocument();
   });
 
-  it('shows the API error inline when the submission fails', async () => {
+  it('shows localized classified error copy (not the raw API message) when the submission fails', async () => {
     const user = userEvent.setup();
     vi.mocked(fetcher).mockRejectedValueOnce(new Error('You cannot report your own message.'));
     renderSheet({ subjectId: 'own-msg' });
     await user.type(screen.getByPlaceholderText(/abusive/i), 'inappropriate content');
     await user.click(screen.getByRole('button', { name: /submit report/i }));
-    expect(
-      await screen.findByText(/You cannot report your own message/i),
-    ).toBeInTheDocument();
+    // A plain Error with no HTTP status classifies as 'unknown' → errors.unknown.
+    expect(await screen.findByText(enMessages.errors.unknown)).toBeInTheDocument();
+    expect(screen.queryByText(/You cannot report your own message/i)).toBeNull();
   });
 });

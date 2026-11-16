@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { CheckCircle2, Flag, Loader2, X } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
 import { useReport, type ReportSubjectType } from '@/hooks/useReports';
+import { classifyError, errorKey } from '@/lib/error-classify';
 
 interface ReportSheetProps {
   open: boolean;
@@ -31,6 +32,9 @@ export default function ReportSheet({
   const t = useTranslations('report');
   // P2-87 rider (run #67): close-button aria-label lives under common.*.
   const tCommon = useTranslations('common');
+  // P2-372: errorKey() returns fully-qualified keys (`errors.server`), so the
+  // error copy resolves against the root namespace (PaymentSheet/ReceiptSheet).
+  const tErrors = useTranslations();
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const report = useReport();
@@ -112,7 +116,7 @@ export default function ReportSheet({
 
             {report.isError && (
               <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2">
-                {report.error?.message}
+                {tErrors(errorKey(classifyError(report.error)))}
               </p>
             )}
           </div>
