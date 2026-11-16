@@ -33,7 +33,10 @@ export type ErrorKind =
    * login shows a localized "SMS is unavailable — use email" message with a
    * one-tap switch to the email channel instead of a generic send failure.
    */
-  | 'smsUnavailable';
+  | 'smsUnavailable'
+  /** Cutover Card 2 (2026-11-16): every free handle was taken — the save
+   *  failed and the user should retry (transient contention, not validation). */
+  | 'handleTaken';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -52,6 +55,7 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   chatClosed: 'errors.chatClosed',
   blockedByRecipient: 'errors.blockedByRecipient',
   smsUnavailable: 'errors.smsUnavailable',
+  handleTaken: 'errors.handleTaken',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -65,6 +69,9 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   BLOCKED_BY_RECIPIENT: 'blockedByRecipient',
   // 2026-11-16 P0: SMS provider not configured (prod-like) — 503 body code.
   SMS_UNAVAILABLE: 'smsUnavailable',
+  // Cutover Card 2 (2026-11-16): handle contention survived every auto-pick
+  // retry (409 body code) — retryable, never a generic "invalid details".
+  HANDLE_TAKEN: 'handleTaken',
 };
 
 /** i18n key for a classified error. */

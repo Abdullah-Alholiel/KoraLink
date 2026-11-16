@@ -131,7 +131,6 @@ describe('useAuth hooks', () => {
         method: 'PATCH',
         body: JSON.stringify({
           full_name: 'Ahmed Al-Rashid',
-          handle: 'ahmed_al-rashid',
           preferred_location: 'Riyadh',
           preferred_position: 'Forward',
         }),

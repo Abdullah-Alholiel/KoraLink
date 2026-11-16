@@ -40,6 +40,7 @@
     "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue.",
     "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going.",
     "blockedByRecipient": "You can't message this user anymore. One of you blocked the other. You can unblock them from their profile.",
+    "handleTaken": "That username is taken and we couldn't find a free alternative. Try saving again, or change your name slightly.",
     "blockFailed": "Couldn't block this user. Check your connection and try again.",
     "unblockFailed": "Couldn't unblock this user. Check your connection and try again.",
     "favoriteFailed": "Couldn't update your favorites — nothing was changed. Check your connection and try again."

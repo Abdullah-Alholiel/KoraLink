@@ -31,7 +31,10 @@ export class UnifonicService {
   private readonly logger = new Logger(UnifonicService.name);
 
   constructor(private readonly config: ConfigService) {
-    this.appSid = config.get<string>('UNIFONIC_APP_SID', '');
+    // Trim: a whitespace-only SID must count as UNCONFIGURED (PR-Agent r1 on
+    // PR #268 — truthiness alone would pass the fail-closed gate and fire a
+    // doomed real-provider call, storing an OTP that can never be delivered).
+    this.appSid = (config.get<string>('UNIFONIC_APP_SID', '') ?? '').trim();
     this.senderId = config.get<string>('UNIFONIC_SENDER_ID', 'KoraLink');
   }
 

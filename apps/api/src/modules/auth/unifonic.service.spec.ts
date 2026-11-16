@@ -18,12 +18,20 @@ import { assertNoSecrets } from '../../common/utils/pii-safe-logging';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('UnifonicService — no-credentials fallback (2026-11-16 P0)', () => {
-  function makeService(nodeEnv: string | undefined): {
+  function makeService(
+    nodeEnv: string | undefined,
+    appSid?: string,
+  ): {
     service: UnifonicService;
     logLines: string[];
   } {
     const config = {
-      get: (key: string) => (key === 'NODE_ENV' ? nodeEnv : undefined),
+      get: (key: string) =>
+        key === 'NODE_ENV'
+          ? nodeEnv
+          : key === 'UNIFONIC_APP_SID'
+            ? appSid
+            : undefined,
     };
     const service = new UnifonicService(config as unknown as ConfigService);
     // Spy on the REAL Nest Logger instance of this service: every line the
@@ -128,6 +136,25 @@ describe('UnifonicService — no-credentials fallback (2026-11-16 P0)', () => {
       } as unknown as ConfigService);
       expect(configured.isConfigured()).toBe(true);
       expect(unconfigured.isConfigured()).toBe(false);
+    });
+
+    // PR-Agent r1 on PR #268: a whitespace-only SID is NOT a configured
+    // provider — truthiness alone would pass the fail-closed gate and fire a
+    // doomed real-provider call (stored OTP, never delivered).
+    it('a whitespace-only SID counts as unconfigured (gate NOT bypassed)', () => {
+      const whitespaceSid = new UnifonicService({
+        get: (key: string) => (key === 'UNIFONIC_APP_SID' ? '   ' : undefined),
+      } as unknown as ConfigService);
+      expect(whitespaceSid.isConfigured()).toBe(false);
+    });
+
+    it('whitespace-only SID + prod-like env still fails closed with 503', async () => {
+      const { service } = makeService('production', '   ');
+      const err = await service
+        .sendSms('+966****4567', 'Your KoraLink code: 123456')
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(ServiceUnavailableException);
+      expect(err.getResponse()).toMatchObject({ code: 'SMS_UNAVAILABLE' });
     });
   });
 });
