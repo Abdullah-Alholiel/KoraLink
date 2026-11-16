@@ -32,6 +32,20 @@ export function isSwaggerEnabled(config: ConfigService): boolean {
   return config.get<string>('NODE_ENV') !== 'production';
 }
 
+/**
+ * Prod-like posture for DELIVERY FAIL-CLOSED gates (2026-11-16 owner P0).
+ *
+ * `NODE_ENV === 'production'` alone is not enough on this stack: staging runs
+ * NODE_ENV=staging but is public-facing (`:10000` funnel + `:8443` API), so
+ * "fake success" behaviors that are tolerable on a laptop are NOT tolerable
+ * there. Render prod is production; VPS prod runs production; staging and
+ * local dev stay non-prod-like.
+ */
+export function isProdLike(config: ConfigService): boolean {
+  const nodeEnv = config.get<string>('NODE_ENV');
+  return nodeEnv === 'production' || nodeEnv === 'staging';
+}
+
 // PR-Agent r1 on PR #216 (run #188): silent fallthrough on typo'd values
 // (`COOKIE_SECURE=True` — capital T — would quietly keep cookies insecure) and
 // no guard against COOKIE_SECURE=false in production, which would violate the

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   assertEnvFlags,
   isCookieSecure,
+  isProdLike,
   isSwaggerEnabled,
 } from './env-flags';
 
@@ -146,6 +147,20 @@ describe('env-flags (P1-72)', () => {
       expect(isSwaggerEnabled(makeConfig({ SWAGGER_ENABLED: 'no', NODE_ENV: 'staging' }))).toBe(
         true,
       );
+    });
+  });
+
+  // 2026-11-16 owner P0: delivery fail-closed gates treat staging as
+  // prod-like (public-facing funnel + API) even though NODE_ENV=staging.
+  describe('isProdLike', () => {
+    it.each([
+      ['production', true],
+      ['staging', true],
+      ['development', false],
+      ['test', false],
+      [undefined, false],
+    ])('NODE_ENV=%j → %s', (nodeEnv, expected) => {
+      expect(isProdLike(makeConfig({ NODE_ENV: nodeEnv }))).toBe(expected);
     });
   });
 });

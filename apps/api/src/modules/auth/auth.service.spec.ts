@@ -1,9 +1,16 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpStoreService } from './otp-store.service';
+import { assertNoSecrets } from '../../common/utils/pii-safe-logging';
 
 describe('AuthService OTP abuse protection', () => {
   function setup(overrides: {
+    nodeEnv?: string;
+    smsConfigured?: boolean;
     isCooldownActive?: jest.Mock;
     getCooldownRemaining?: jest.Mock;
     getDailyCount?: jest.Mock;
@@ -55,9 +62,19 @@ describe('AuthService OTP abuse protection', () => {
 
     const jwt = { sign: jest.fn().mockReturnValue('signed-token') };
     const config = {
-      get: jest.fn((key: string) => (key === 'JWT_EXPIRY' ? '7d' : undefined)),
+      get: jest.fn((key: string) => {
+        if (key === 'JWT_EXPIRY') return '7d';
+        if (key === 'NODE_ENV') return overrides.nodeEnv;
+        return undefined;
+      }),
     };
-    const unifonic = { sendSms: jest.fn().mockResolvedValue(undefined) };
+    const unifonic = {
+      sendSms: jest.fn().mockResolvedValue(undefined),
+      // 2026-11-16 P0: the fail-closed gate reads isConfigured().
+      isConfigured: jest
+        .fn()
+        .mockReturnValue(overrides.smsConfigured ?? true),
+    };
 
     const service = new AuthService(
       db as never,
@@ -67,8 +84,111 @@ describe('AuthService OTP abuse protection', () => {
       otpStore as never,
     );
 
-    return { service, otpStore, unifonic };
+    return { service, otpStore, unifonic, config, db };
   }
+
+  // ── 2026-11-16 owner P0: prod + empty UNIFONIC_APP_SID fails CLOSED ──
+  describe('send-otp fail-closed when SMS is unconfigured (SMS_UNAVAILABLE)', () => {
+    it.each(['production', 'staging'])(
+      'NODE_ENV=%s + unconfigured SMS → 503 SMS_UNAVAILABLE, NOTHING written',
+      async (nodeEnv) => {
+        const { service, otpStore, unifonic, db } = setup({
+          nodeEnv,
+          smsConfigured: false,
+        });
+        const err = await service.sendOtp('+966****0001').catch((e) => e);
+
+        expect(err).toBeInstanceOf(ServiceUnavailableException);
+        expect((err as ServiceUnavailableException).getStatus()).toBe(503);
+        expect((err as ServiceUnavailableException).getResponse()).toMatchObject({
+          code: 'SMS_UNAVAILABLE',
+        });
+        // No user row, no OTP entry, no cooldown, no counters, no SMS attempt:
+        // the channel must be cleanly retryable once the provider is configured.
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(otpStore.setOtp).not.toHaveBeenCalled();
+        expect(otpStore.setCooldown).not.toHaveBeenCalled();
+        expect(otpStore.incrementDaily).not.toHaveBeenCalled();
+        expect(unifonic.sendSms).not.toHaveBeenCalled();
+      },
+    );
+
+    it('fake success is dead in prod: the 503 fires BEFORE any DB/cache write', async () => {
+      const { service, otpStore, unifonic } = setup({
+        nodeEnv: 'production',
+        smsConfigured: false,
+      });
+      await expect(service.sendOtp('+966****0001')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(otpStore.getDailyCount).not.toHaveBeenCalled();
+      expect(otpStore.getIpDailyCount).not.toHaveBeenCalled();
+      expect(unifonic.sendSms).not.toHaveBeenCalled();
+    });
+
+    it.each(['development', 'test'])(
+      'NODE_ENV=%s + unconfigured SMS keeps the log-only dev fallback (send proceeds)',
+      async (nodeEnv) => {
+        const { service, otpStore, unifonic } = setup({
+          nodeEnv,
+          smsConfigured: false,
+        });
+        await service.sendOtp('+966****0001');
+        expect(otpStore.setOtp).toHaveBeenCalled();
+        expect(unifonic.sendSms).toHaveBeenCalled();
+      },
+    );
+
+    it('configured SMS bypasses the gate even in production', async () => {
+      const { service, otpStore, unifonic } = setup({
+        nodeEnv: 'production',
+        smsConfigured: true,
+      });
+      await service.sendOtp('+966****0001');
+      expect(otpStore.setOtp).toHaveBeenCalled();
+      expect(unifonic.sendSms).toHaveBeenCalled();
+    });
+
+    // Done-when: "unit tests prove no code or body is ever logged (spy on the
+    // logger)". Every log call the service makes is captured and run through
+    // the secret scanner — including the cooldown/lockout warn paths, which
+    // are the only lines the OTP flow actually emits.
+    it('no log line during the whole send/verify flow ever carries a code, body, or raw phone', async () => {
+      const { service, otpStore } = setup();
+      const logLines: string[] = [];
+      const capture =
+        (level: string) =>
+          jest.fn((message: unknown) => {
+            logLines.push(`[${level}] ${String(message)}`);
+          });
+      const svc = service as unknown as { logger: Record<string, jest.Mock> };
+      svc.logger = {
+        log: capture('log'),
+        warn: capture('warn'),
+        error: capture('error'),
+        debug: capture('debug'),
+        verbose: capture('verbose'),
+      };
+
+      await service.sendOtp('+966****0001', '203.0.113.5'); // happy path
+      // Cooldown active → the send-otp blocked warn fires.
+      (otpStore.getCooldownRemaining as jest.Mock).mockResolvedValue(60);
+      await service.sendOtp('+966****0001').catch(() => undefined);
+      // Fail lockout reached → the verify-otp blocked warn fires.
+      (otpStore.getCooldownRemaining as jest.Mock).mockResolvedValue(0);
+      (otpStore.getFailCount as jest.Mock).mockResolvedValue(
+        OtpStoreService.FAIL_LIMIT,
+      );
+      await service.verifyOtp('+966****0001', '000000').catch(() => undefined);
+
+      expect(logLines.length).toBeGreaterThanOrEqual(2); // both blocked warns captured
+      for (const line of logLines) {
+        expect(assertNoSecrets(line)).toBe(true);
+      }
+      // The masked phone is the ONLY destination form that may appear.
+      expect(logLines.join('\n')).toContain('+966*****001');
+    });
+  });
 
   it('sendOtp throws 429 when resend cooldown is active', async () => {
     const { service, unifonic } = setup({

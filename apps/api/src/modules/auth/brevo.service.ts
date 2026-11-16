@@ -2,6 +2,7 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config';
 
 import { EmailSender } from './email-sender.port';
+import { deliveryUnavailable, maskEmail } from '../../common/utils/pii-safe-logging';
 
 /**
  * Brevo transactional-email adapter (no-domain email unblock cycle).
@@ -43,13 +44,11 @@ export class BrevoService implements EmailSender {
   ): Promise<void> {
     const apiKey = this.config.get<string>('BREVO_API_KEY');
     if (!apiKey) {
-      // Dev/staging parity with ResendService: no provider key → log only.
-      // The OTP code rides the log line (debugCode) so staging E2E can verify
-      // the full flow without a real mailbox — NEVER logged when a key is set.
-      this.logger.warn(
-        `BREVO_API_KEY empty — logging email instead to=${to} subject="${subject}"` +
-          (debugCode ? ` code=${debugCode}` : ''),
-      );
+      // Dev fallback: no provider key → log only. The OTP code (debugCode)
+      // and the message body are NEVER logged — 2026-11-16 owner P0: codes
+      // in logs let anyone with log access log in as any user. Only the
+      // masked destination appears.
+      this.logger.warn(deliveryUnavailable('BREVO_API_KEY', maskEmail(to)));
       return;
     }
 

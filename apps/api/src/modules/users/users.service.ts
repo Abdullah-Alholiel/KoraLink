@@ -27,6 +27,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
+import { maskPhone } from '../../common/utils/pii-safe-logging';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
 import { MediaService } from '../media/media.service';
@@ -702,7 +703,7 @@ export class UsersService {
       // applied to credential flows.
       await otp.deleteChangeOtp(newPhone);
       this.logger.error(
-        { event: 'phone_change_sms_failed', new_phone: newPhone, err },
+        { event: 'phone_change_sms_failed', new_phone: maskPhone(newPhone), err },
         'phone-change SMS dispatch failed; stored code rolled back',
       );
       Sentry.captureException(err, {

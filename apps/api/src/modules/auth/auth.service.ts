@@ -8,6 +8,7 @@ import {
   Logger,
   Inject,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +26,8 @@ import {
   slugifyHandle,
 } from '../../common/utils/handle-suggest';
 import { otpMatches } from '../../common/security/otp-compare';
+import { isProdLike } from '../../common/utils/env-flags';
+import { maskPhone } from '../../common/utils/pii-safe-logging';
 import { randomInt } from 'node:crypto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -62,6 +65,21 @@ export class AuthService {
   }
 
   async sendOtp(phone: string, ip?: string): Promise<void> {
+    // ── 2026-11-16 owner P0: fail CLOSED when SMS is not configured ──
+    // Prod + empty UNIFONIC_APP_SID must NEVER fake success: the old path
+    // upserted the user row, stored an OTP the user never received, and
+    // returned 200 — "code sent" followed by an eternal wait. The service
+    // throws 503 SMS_UNAVAILABLE; nothing is written (no user row, no OTP
+    // entry, no counter) so the channel is cleanly retryable once SMS is
+    // configured. Non-prod environments keep the log-only dev fallback.
+    if (!this.unifonic.isConfigured() && isProdLike(this.config)) {
+      this.logger.error('send-otp unavailable: SMS provider not configured (prod-like env)');
+      throw new ServiceUnavailableException({
+        message: 'SMS login is not available right now.',
+        code: 'SMS_UNAVAILABLE',
+      });
+    }
+
     // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
     // P2-194: one cache read gates AND sizes the 429 — if the key's TTL
     // expires between a guard read and a second read, the old two-read shape
@@ -70,7 +88,7 @@ export class AuthService {
     // send proceeds.
     const cooldownRemaining = await this.otpStore.getCooldownRemaining(phone);
     if (cooldownRemaining > 0) {
-      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${cooldownRemaining}s)`);
+      this.logger.warn(`send-otp blocked (cooldown) for ${maskPhone(phone)} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -85,7 +103,7 @@ export class AuthService {
     const dailyCount = await this.otpStore.getDailyCount(phone);
     if (dailyCount >= OtpStoreService.DAILY_CAP) {
       this.logger.warn(
-        `send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${phone}`,
+        `send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${maskPhone(phone)}`,
       );
       throw new HttpException(
         {
@@ -142,7 +160,7 @@ export class AuthService {
       .limit(1);
     if (existingUser?.deleted_at) {
       this.logger.warn(
-        `send-otp blocked (deleted_at IS NOT NULL) for phone ${phone}`,
+        `send-otp blocked (deleted_at IS NOT NULL) for phone ${maskPhone(phone)}`,
       );
       throw new HttpException(
         {
@@ -184,7 +202,7 @@ export class AuthService {
         // 0 — the PWA falls back to the generic rate-limited copy.
         const retryAfter = await this.otpStore.getLockoutRemaining(phone);
         this.logger.warn(
-          `verify-otp blocked (lockout after ${failCount} fails) for ${phone} (retryAfter ${retryAfter}s)`,
+          `verify-otp blocked (lockout after ${failCount} fails) for ${maskPhone(phone)} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {
