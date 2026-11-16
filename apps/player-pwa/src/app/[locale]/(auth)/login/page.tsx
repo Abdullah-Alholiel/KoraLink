@@ -20,6 +20,9 @@ export default function LoginPage() {
     const tErrors = useTranslations('errors');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
+    // 2026-11-16 P0: when SMS is unavailable, the error carries a one-tap
+    // "switch to email" action rendered right under the message.
+    const [errorAction, setErrorAction] = useState<'switchEmail' | null>(null);
 
     // email-otp-login (run #46): phone-first by default; a subtle toggle
     // swaps the input to email. Both channels share the verify screen.
@@ -91,6 +94,7 @@ export default function LoginPage() {
     const handleContinue = () => {
         if (submitting) return;
         setError(null);
+        setErrorAction(null);
         if (mode === 'email') {
             if (!EMAIL_RE.test(email)) {
                 setError(t('invalidEmail'));
@@ -126,6 +130,14 @@ export default function LoginPage() {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
                 onError: (err) => {
                     const kind = classifyError(err);
+                    if (kind === 'smsUnavailable') {
+                        // 2026-11-16 P0: SMS not configured (prod-like) — a
+                        // specific, localized message + a ONE-TAP switch to
+                        // the email channel rendered with the error.
+                        setError(tErrors('smsUnavailable'));
+                        setErrorAction('switchEmail');
+                        return;
+                    }
                     setError(
                         kind === 'banned' || kind === 'suspended' || kind === 'deleted'
                             ? tErrors(kind)
@@ -292,11 +304,30 @@ export default function LoginPage() {
 
             {/* ── Bottom Section ────────────────────── */}
             <div className="pb-8 pb-safe">
-                {/* Error */}
+                {/* Error (2026-11-16 P0: SMS-unavailable carries a one-tap
+                    "switch to email" action inside the error block). */}
                 {error && (
-                    <p className="text-center text-sm text-brand-red mb-3">
-                        {error}
-                    </p>
+                    <div className="mb-3 flex flex-col items-center gap-2">
+                        <p className="text-center text-sm text-brand-red">
+                            {error}
+                        </p>
+                        {errorAction === 'switchEmail' && (
+                            <button
+                                type="button"
+                                data-testid="switch-to-email"
+                                onClick={() => {
+                                    setError(null);
+                                    setErrorAction(null);
+                                    setMode('email');
+                                    setAuthChannel('email'); // survives reloads + verify round-trips
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-green/40 text-brand-green text-sm font-semibold active:scale-[0.98] transition-transform"
+                            >
+                                <Mail className="w-4 h-4" strokeWidth={2} />
+                                {t('switchToEmail')}
+                            </button>
+                        )}
+                    </div>
                 )}
 
                 <button

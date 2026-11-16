@@ -22,6 +22,7 @@ import { otpMatches } from '../../common/security/otp-compare';
 import { EMAIL_SENDER, EmailSender } from './email-sender.port';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { assertSurfaceRole } from './auth.service';
+import { maskEmail } from '../../common/utils/pii-safe-logging';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -61,7 +62,7 @@ export class EmailOtpService {
     // P2-194: single-read gate (see auth.service sendOtp comment).
     const cooldownRemaining = await this.otpStore.getCooldownRemaining(key);
     if (cooldownRemaining > 0) {
-      this.logger.warn(`email send-otp blocked (cooldown) for ${email} (retryAfter ${cooldownRemaining}s)`);
+      this.logger.warn(`email send-otp blocked (cooldown) for ${maskEmail(email)} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -76,7 +77,7 @@ export class EmailOtpService {
     const dailyCount = await this.otpStore.getDailyCount(key);
     if (dailyCount >= OtpStoreService.DAILY_CAP) {
       this.logger.warn(
-        `email send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${email}`,
+        `email send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${maskEmail(email)}`,
       );
       throw new HttpException(
         {
@@ -119,7 +120,7 @@ export class EmailOtpService {
       // so the drop is SILENT — externally identical to a send to an unknown
       // address (a 403 here would confirm the address exists).
       this.logger.warn(
-        `email send-otp silently dropped (deleted_at IS NOT NULL) for ${email}`,
+        `email send-otp silently dropped (deleted_at IS NOT NULL) for ${maskEmail(email)}`,
       );
       return;
     }
@@ -142,7 +143,7 @@ export class EmailOtpService {
       renderOtpEmail(code),
       code,
     );
-    this.logger.log(`email OTP dispatched to ${email}`);
+    this.logger.log(`email OTP dispatched to ${maskEmail(email)}`);
   }
 
   async verifyEmailOtp(
@@ -166,7 +167,7 @@ export class EmailOtpService {
         // deadline reports 0 and the client falls back to generic copy.
         const retryAfter = await this.otpStore.getLockoutRemaining(key);
         this.logger.warn(
-          `email verify-otp blocked (lockout after ${failCount} fails) for ${email} (retryAfter ${retryAfter}s)`,
+          `email verify-otp blocked (lockout after ${failCount} fails) for ${maskEmail(email)} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {

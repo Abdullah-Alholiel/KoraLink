@@ -26,7 +26,14 @@ export type ErrorKind =
   /** P2-111: the match lobby chat is closed (match terminal / expired). */
   | 'chatClosed'
   /** P1-53: the recipient has blocked the sender (DM send, either direction). */
-  | 'blockedByRecipient';
+  | 'blockedByRecipient'
+  /**
+   * 2026-11-16 owner P0: SMS delivery is not configured in this environment
+   * (prod-like + empty UNIFONIC_APP_SID → 503 `SMS_UNAVAILABLE`). The phone
+   * login shows a localized "SMS is unavailable — use email" message with a
+   * one-tap switch to the email channel instead of a generic send failure.
+   */
+  | 'smsUnavailable';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -44,6 +51,7 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   deleted: 'errors.deleted',
   chatClosed: 'errors.chatClosed',
   blockedByRecipient: 'errors.blockedByRecipient',
+  smsUnavailable: 'errors.smsUnavailable',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -55,6 +63,8 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   MATCH_CHAT_CLOSED: 'chatClosed',
   // P1-53: DM recipient has blocked the sender (403 body code).
   BLOCKED_BY_RECIPIENT: 'blockedByRecipient',
+  // 2026-11-16 P0: SMS provider not configured (prod-like) — 503 body code.
+  SMS_UNAVAILABLE: 'smsUnavailable',
 };
 
 /** i18n key for a classified error. */

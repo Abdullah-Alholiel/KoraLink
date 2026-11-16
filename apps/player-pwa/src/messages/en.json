@@ -33,6 +33,7 @@
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
     "otpSendFailed": "Couldn't send a new code just now. If you recently requested one, wait about a minute and try again.",
+    "smsUnavailable": "SMS login isn’t available right now. Use your email instead.",
     "genericRetry": "Try again",
     "banned": "Your account has been banned. If you think this is a mistake, contact support.",
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
@@ -128,6 +129,7 @@
     "channelPhone": "Phone",
     "channelEmail": "Email",
     "channelSelector": "Login method",
+    "switchToEmail": "Switch to email login",
     "invalidEmail": "Enter a valid email address",
     "changeLanguage": "Change language"
   },
