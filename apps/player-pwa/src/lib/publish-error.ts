@@ -16,7 +16,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { classifyError } from './error-classify';
-import type { FetchError } from './fetcher';
 
 export type PublishErrorKind =
   | 'insufficient_balance'
