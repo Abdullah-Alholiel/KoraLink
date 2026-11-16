@@ -313,6 +313,11 @@ describe('MatchesService.createMatch — recurring weekly booking (P1-64)', () =
     // PWA parser contract must keep working (Required:/Available: extracts).
     expect(err.message).toMatch(/Insufficient wallet balance/i);
     expect(err.message).toMatch(/Required:\s*SAR\s*640\.00/);
+    // P2-373: the stable machine code rides the RESPONSE BODY — the PWA
+    // classifies on code (copy-proof), the amounts stay parser-visible.
+    expect(
+      ((err as BadRequestException).getResponse() as Record<string, unknown>).code,
+    ).toBe('WALLET_INSUFFICIENT');
     // Nothing persisted — the failing debit threw inside the tx.
     expect(calls.filter((c) => c.op === 'ledger')).toHaveLength(0);
   });

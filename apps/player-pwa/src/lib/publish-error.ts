@@ -6,9 +6,17 @@
 // (network / validation) are derived from the shared classifier in
 // `error-classify.ts`; only the host-publish-specific business kinds remain
 // here. Public API is unchanged for all consumers.
+//
+// P2-373 (run #210): business kinds classify on the API's STABLE MACHINE CODE
+// first (FetchError.code — `{ message, code }` exception bodies, same
+// convention as ACCOUNT_BANNED). The English-copy regexes remain ONLY as a
+// stale-bundle fallback for cached clients talking to the new API — any copy
+// edit or locale change on the server can no longer silently break
+// classification.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { classifyError } from './error-classify';
+import type { FetchError } from './fetcher';
 
 export type PublishErrorKind =
   | 'insufficient_balance'
@@ -18,6 +26,14 @@ export type PublishErrorKind =
   | 'network'
   | 'validation'
   | 'generic';
+
+/** Stable API machine codes → publish kinds (P2-373). */
+const PUBLISH_CODE_KINDS: Record<string, PublishErrorKind> = {
+  WALLET_INSUFFICIENT: 'insufficient_balance',
+  HOSTING_TERMS_REQUIRED: 'hosting_terms',
+  SLOT_TAKEN: 'slot_taken',
+  SLOT_STARTED: 'slot_started',
+};
 
 /** Exact amounts extracted from the API's insufficient-balance 400 message.
  *  The API emits: "Insufficient wallet balance. Required: SAR 375.00, Available: SAR 120.00" */
@@ -72,26 +88,27 @@ export const PUBLISH_ERROR_KEYS: Record<PublishErrorKind, string> = {
 
 /** Classify a publish (createMatch) failure into a localized error kind. */
 export function classifyPublishError(err: unknown): PublishErrorKind {
+  // P2-373: the stable machine code wins — classification no longer depends
+  // on English server copy. (code rides FetchError.code from the API's
+  // `{ message, code }` exception body.)
+  const code = (err as { code?: unknown })?.code;
+  if (typeof code === 'string' && PUBLISH_CODE_KINDS[code]) {
+    return PUBLISH_CODE_KINDS[code];
+  }
+
   const message = ((err as { message?: string })?.message ?? '').toString();
 
-  // Business-specific checks FIRST — a 409 carrying "insufficient wallet
-  // balance" must map to the balance copy, not generic conflict copy.
+  // Stale-bundle fallbacks (old API / cached client): keep the historical
+  // copy matching so an in-flight deploy never mislabels a failure.
   if (/insufficient wallet balance/i.test(message)) {
     return 'insufficient_balance';
   }
-  // Consent gate (player-host-responsibility). The normal UI path can't hit
-  // this (Confirm is disabled until the checkbox is accepted and the Zod
-  // schema forwards the flag) — it fires only for stale bundles / stale
-  // sessions. Message: "Hosting terms must be accepted before booking."
   if (/hosting terms must be accepted/i.test(message)) {
     return 'hosting_terms';
   }
   if (/slot.*booked|already been booked/i.test(message)) {
     return 'slot_taken';
   }
-  // Publish-time past-slot guard (2026-09-18): "This slot has already
-  // started. Pick an upcoming slot (…)". Checked AFTER slot_taken — a
-  // message can only carry one business cause.
   if (/slot has already started/i.test(message)) {
     return 'slot_started';
   }

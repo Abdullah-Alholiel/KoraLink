@@ -389,19 +389,27 @@ export function useRescheduleMatch() {
     },
     onError: (error) => {
       // Server-confirmed wallet shortfall (run #105's guarded reschedule floor
-      // returns 400 with exact Required/Available amounts). Classify FIRST —
-      // the generic rescheduleFailed copy blames the slot, which is wrong for
-      // this cause and leaves the host without the top-up next step
-      // (error-message standard: what happened + why + what next).
+      // returns 400 with exact Required/Available amounts). P2-373: the STABLE
+      // machine code (WALLET_INSUFFICIENT) is authoritative — copy edits on
+      // the server can no longer break this branch; the legacy message-parse
+      // covers deploy skew (fresh bundle + an API that predates the code),
+      // the same layering as lib/publish-error.ts. The generic
+      // rescheduleFailed copy blames the slot, which is wrong for this cause
+      // and leaves the host without the top-up next step (error-message
+      // standard: what happened + why + what next).
       const shortfall = parseWalletShortfall(String(error?.message ?? ''));
-      if (shortfall) {
+      const isWalletShortfall =
+        error?.code === 'WALLET_INSUFFICIENT' || shortfall !== null;
+      if (isWalletShortfall) {
         trackEvent('reschedule_blocked_insufficient_balance', {
-          required_sar: shortfall.requiredSar,
-          wallet_balance_sar: shortfall.availableSar,
-          shortfall_sar: shortfall.shortfallSar,
+          required_sar: shortfall?.requiredSar ?? null,
+          wallet_balance_sar: shortfall?.availableSar ?? null,
+          shortfall_sar: shortfall?.shortfallSar ?? null,
         });
         showToast(
-          t('rescheduleWalletShortfall', { amount: formatAmount(shortfall.shortfallSar, appLocale) }),
+          t('rescheduleWalletShortfall', {
+            amount: formatAmount(shortfall?.shortfallSar ?? 0, appLocale),
+          }),
           'error',
           { detail: t('rescheduleWalletDetail') },
         );
