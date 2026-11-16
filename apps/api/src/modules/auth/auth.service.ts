@@ -1,6 +1,6 @@
 import {
   Injectable,
-  BadRequestException,
+  ConflictException,
   HttpException,
   HttpStatus,
   UnauthorizedException,
@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
@@ -19,6 +19,11 @@ import { UnifonicService } from './unifonic.service';
 import { OtpStoreService } from './otp-store.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import {
+  pickFreeHandle,
+  pgUniqueViolationCode,
+  slugifyHandle,
+} from '../../common/utils/handle-suggest';
 import { otpMatches } from '../../common/security/otp-compare';
 import { randomInt } from 'node:crypto';
 
@@ -258,54 +263,107 @@ export class AuthService {
   }
 
   async completeProfile(userId: string, dto: CompleteProfileDto) {
-    const [existing] = await this.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.handle, dto.handle))
-      .limit(1);
-
-    if (existing && existing.id !== userId) {
-      throw new BadRequestException('Handle already taken.');
-    }
-
-    // P2-238 (run #153, Reviewer A): the pre-check above is check-then-act
-    // against a UNIQUE column (users.handle). Two concurrent claims of the
-    // same handle: the loser 500s with a raw 23505. Catch the race the same
-    // way the other create paths do (conversations :111-131, email-otp
-    // :196-223): 23505 → re-select → clean 400 identical to the pre-check.
-    try {
-      const [updated] = await this.db
-        .update(users)
-        .set(withTimestamp(dto))
-        .where(eq(users.id, userId))
-        .returning({
-          id: users.id,
-          phone: users.phone,
-          full_name: users.full_name,
-          handle: users.handle,
-          avatar_url: users.avatar_url,
-          preferred_location: users.preferred_location,
-          preferred_position: users.preferred_position,
-          role: users.role,
-        });
-
-      return updated;
-    } catch (err) {
-      const pgCode = (err as { code?: string; cause?: { code?: string } })?.code ??
-        (err as { cause?: { code?: string } })?.cause?.code;
-      if (pgCode !== '23505') throw err;
-      // Lost a handle race → verify it was really the handle (never another
-      // user's unique column) and return the SAME 400 the pre-check throws.
-      const [winner] = await this.db
+    // Cutover Card 2 (2026-11-16, P1): a taken auto-derived handle must never
+    // block sign-up. The handle may be omitted entirely (the server derives it
+    // from full_name via slugifyHandle) or derived client-side (legacy PWA);
+    // either way a collision with ANOTHER user auto-picks a free suffixed
+    // handle. The user can change it later in profile settings.
+    const requested = dto.handle?.trim() ? dto.handle.trim() : null;
+    const ownsHandle =
+      requested !== null &&
+      (await this.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.handle, dto.handle))
-        .limit(1);
-      if (winner && winner.id !== userId) {
-        throw new BadRequestException('Handle already taken.');
-      }
-      throw err;
+        .where(eq(users.handle, requested))
+        .limit(1)
+        .then((rows) => rows.length > 0 && rows[0].id === userId));
+
+    const finalHandle = ownsHandle
+      ? requested
+      : await pickFreeHandle(
+          requested ?? slugifyHandle(dto.full_name ?? ''),
+          false,
+          (handles) =>
+            this.db
+              .select({ id: users.id, handle: users.handle })
+              .from(users)
+              .where(inArray(users.handle, handles)),
+        );
+
+    if (!finalHandle) {
+      // Every candidate lost the UNIQUE-index race in one round — vanishingly
+      // rare. Same stable code + shape as the conflict path below so the PWA
+      // copy applies ("handle taken, another was picked" is false here; the
+      // generic one-shot retry guidance is correct).
+      throw new ConflictException({
+        message: 'Handle already taken.',
+        code: 'HANDLE_TAKEN',
+      });
     }
+
+    // P2-238 (run #153, Reviewer A): the pre-checks are check-then-act against
+    // a UNIQUE column (users.handle). A concurrent claim the pre-check missed
+    // makes the UPDATE lose with a raw 23505 → previously HTTP 500. Now:
+    // 23505 = our candidate was taken mid-flight → retry the auto-pick (the
+    // winner moved on); a changed request loses with 409 HANDLE_TAKEN.
+    const MAX_HANDLE_ATTEMPTS = 3;
+    let payloadHandle = finalHandle;
+    for (let attempt = 1; attempt <= MAX_HANDLE_ATTEMPTS; attempt++) {
+      try {
+        const [updated] = await this.db
+          .update(users)
+          .set(
+            withTimestamp({
+              ...dto,
+              handle: payloadHandle,
+            }),
+          )
+          .where(eq(users.id, userId))
+          .returning({
+            id: users.id,
+            phone: users.phone,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+            preferred_location: users.preferred_location,
+            preferred_position: users.preferred_position,
+            role: users.role,
+          });
+
+        return updated;
+      } catch (err) {
+        if (pgUniqueViolationCode(err) !== '23505') throw err;
+        if (attempt === MAX_HANDLE_ATTEMPTS) {
+          throw new ConflictException({
+            message: 'Handle already taken.',
+            code: 'HANDLE_TAKEN',
+          });
+        }
+        // Winner moved on — pick fresh and loop.
+        const retryHandle = await pickFreeHandle(
+          finalHandle,
+          false,
+          (handles) =>
+            this.db
+              .select({ id: users.id, handle: users.handle })
+              .from(users)
+              .where(inArray(users.handle, handles)),
+        );
+        if (!retryHandle) {
+          throw new ConflictException({
+            message: 'Handle already taken.',
+            code: 'HANDLE_TAKEN',
+          });
+        }
+        // Rebind for the next iteration (payloadHandle is `let`).
+        payloadHandle = retryHandle;
+      }
+    }
+    // Unreachable: the loop returns or throws on every path.
+    throw new ConflictException({
+      message: 'Handle already taken.',
+      code: 'HANDLE_TAKEN',
+    });
   }
 
   private generateOtp(): string {

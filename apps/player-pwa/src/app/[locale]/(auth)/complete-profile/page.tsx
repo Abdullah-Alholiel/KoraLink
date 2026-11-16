@@ -16,6 +16,12 @@ import { useCompleteProfile } from '@/hooks/useAuth';
 import { classifyError } from '@/lib/error-classify';
 import { clearAuthFlow } from '@/lib/auth-flow';
 
+// Cutover Card 2 (2026-11-16): field-specific errors render ON the field they
+// belong to (the brief's general rule: localized field errors, generic copy
+// only for errors that truly have no field). `handleTaken` is the code-level
+// kind for handle contention that survived every server-side auto-pick retry.
+const FIELD_ERROR_KINDS = new Set(['handleTaken']);
+
 export default function CompleteProfilePage() {
     const router = useRouter();
     const pathname = usePathname();
@@ -27,7 +33,20 @@ export default function CompleteProfilePage() {
     const [fullName, setFullName] = useState('');
     const [location, setLocation] = useState('');
     const [position, setPosition] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    // Classified error kind — null when clean. Field-scoped kinds (FIELD_ERROR_KINDS)
+    // render on their field; everything else renders the generic block above the CTA.
+    const [errorKind, setErrorKind] = useState<string | null>(null);
+
+    // The handle has NO visible field on this screen — it is derived from the
+    // full name, so handle-scoped errors surface ON the name field (the field
+    // the user can actually change). Values are BARE kind keys: tErrors is
+    // scoped to the `errors` namespace, so the kind itself is the key
+    // (tErrors('handleTaken') → errors.handleTaken — never the full-path
+    // errorKey() string, which would double the namespace).
+    const nameFieldError =
+        errorKind && FIELD_ERROR_KINDS.has(errorKind) ? errorKind : null;
+    const genericErrorKey =
+        errorKind && !FIELD_ERROR_KINDS.has(errorKind) ? errorKind : null;
 
     const completeProfile = useCompleteProfile();
 
@@ -49,7 +68,7 @@ export default function CompleteProfilePage() {
 
     const handleFinish = () => {
         if (!fullName.trim() || submitting) return;
-        setError(null);
+        setErrorKind(null);
         setSubmitting(true);
         completeProfile.mutate(
             {
@@ -67,12 +86,7 @@ export default function CompleteProfilePage() {
                     clearAuthFlow();
                     router.push(`/${locale}/play`);
                 },
-                onError: (err) =>
-                    setError(
-                        classifyError(err) === 'validation'
-                            ? tErrors('validation')
-                            : tErrors('unknown')
-                    ),
+                onError: (err) => setErrorKind(classifyError(err)),
                 onSettled: () => setSubmitting(false),
             },
         );
@@ -116,17 +130,27 @@ export default function CompleteProfilePage() {
                 {/* Full Name */}
                 <div className="mt-6">
                     <label className="text-sm font-semibold text-brand-black">{t('fullName')}</label>
-                    <div className="flex items-center gap-2 mt-2 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-brand-green transition-colors">
+                    <div className={`flex items-center gap-2 mt-2 border rounded-xl px-4 py-3 focus-within:border-brand-green transition-colors ${
+                        nameFieldError ? 'border-brand-red' : 'border-gray-200'
+                    }`}>
                         <span className="text-gray-400">👤</span>
                         <input
                             type="text"
                             value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
+                            onChange={(e) => {
+                                setFullName(e.target.value);
+                                if (errorKind) setErrorKind(null);
+                            }}
                             placeholder={t('fullNamePlaceholder')}
                             className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                             disabled={completeProfile.isPending}
                         />
                     </div>
+                    {nameFieldError && (
+                        <p role="alert" data-testid="handle-error" className="text-xs text-brand-red mt-1.5">
+                            {tErrors(nameFieldError)}
+                        </p>
+                    )}
                 </div>
 
                 {/* Preferred Location */}
@@ -175,9 +199,11 @@ export default function CompleteProfilePage() {
 
             {/* ── Bottom Section ────────────────────── */}
             <div className="absolute bottom-0 left-0 right-0 px-6 pb-8 pb-safe bg-white">
-                {/* Error */}
-                {error && (
-                    <p className="text-center text-sm text-brand-red mb-3">{error}</p>
+                {/* Generic error — only for kinds with NO field to attach to */}
+                {genericErrorKey && (
+                    <p role="alert" data-testid="profile-error" className="text-center text-sm text-brand-red mb-3">
+                        {tErrors(genericErrorKey)}
+                    </p>
                 )}
 
                 <button
