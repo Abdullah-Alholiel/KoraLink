@@ -393,10 +393,14 @@ export function useRescheduleMatch() {
       // machine code (WALLET_INSUFFICIENT) is authoritative — copy edits on
       // the server can no longer break this branch; the legacy message-parse
       // covers deploy skew (fresh bundle + an API that predates the code),
-      // the same layering as lib/publish-error.ts. The generic
-      // rescheduleFailed copy blames the slot, which is wrong for this cause
-      // and leaves the host without the top-up next step (error-message
-      // standard: what happened + why + what next).
+      // the same layering as lib/publish-error.ts. PR-Agent #262 r1 (run #210):
+      // when the code matches but the amounts are unparseable (reworded or
+      // localized copy — the exact deploy-skew case this branch is copy-proof
+      // against), fall back to the no-amount copy instead of rendering a
+      // literal "SAR 0.00" shortfall. The generic rescheduleFailed copy blames
+      // the slot, which is wrong for this cause and leaves the host without
+      // the top-up next step (error-message standard: what happened + why +
+      // what next).
       const shortfall = parseWalletShortfall(String(error?.message ?? ''));
       const isWalletShortfall =
         error?.code === 'WALLET_INSUFFICIENT' || shortfall !== null;
@@ -406,13 +410,21 @@ export function useRescheduleMatch() {
           wallet_balance_sar: shortfall?.availableSar ?? null,
           shortfall_sar: shortfall?.shortfallSar ?? null,
         });
-        showToast(
-          t('rescheduleWalletShortfall', {
-            amount: formatAmount(shortfall?.shortfallSar ?? 0, appLocale),
-          }),
-          'error',
-          { detail: t('rescheduleWalletDetail') },
-        );
+        if (shortfall) {
+          showToast(
+            t('rescheduleWalletShortfall', {
+              amount: formatAmount(shortfall.shortfallSar, appLocale),
+            }),
+            'error',
+            { detail: t('rescheduleWalletDetail') },
+          );
+        } else {
+          // Amounts unavailable (copy-proof path with reworded server copy):
+          // no-amount copy names the cause + fix; never a fabricated 0.00.
+          showToast(t('rescheduleWalletShortfallUnknown'), 'error', {
+            detail: t('rescheduleWalletDetail'),
+          });
+        }
         return;
       }
       showToast(t('rescheduleFailed'), 'error', { detail: kindDetail(t, error) });
