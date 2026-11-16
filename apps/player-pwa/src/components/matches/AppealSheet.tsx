@@ -4,13 +4,15 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Loader2, ShieldQuestion, X } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
+import { classifyError, errorKey } from '@/lib/error-classify';
 
 interface AppealSheetProps {
     isOpen: boolean;
     onClose: () => void;
     matchTitle: string;
     isPending: boolean;
-    error?: string | null;
+    /** P2-375: raw mutation error — classified into localized errors.* copy, never rendered verbatim. */
+    error?: unknown;
     onSubmit: (reason: string) => void;
 }
 
@@ -29,6 +31,9 @@ export default function AppealSheet({
     const t = useTranslations('appeal');
     // a11y (run #80, P2-101): localized close label (was hardcoded "Close").
     const tCommon = useTranslations('common');
+    // P2-375: errorKey() returns fully-qualified keys (`errors.server`), so the
+    // error copy resolves against the root namespace (mirrors ReportSheet).
+    const tErrors = useTranslations();
     const [reason, setReason] = useState('');
 
     if (!isOpen) return null;
@@ -75,8 +80,10 @@ export default function AppealSheet({
                     </div>
                 </div>
 
-                {error && (
-                    <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2">{error}</p>
+                {error != null && (
+                    <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2">
+                        {tErrors(errorKey(classifyError(error)))}
+                    </p>
                 )}
             </div>
 

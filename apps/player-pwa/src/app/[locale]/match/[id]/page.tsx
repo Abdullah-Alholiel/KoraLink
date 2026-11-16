@@ -1179,7 +1179,7 @@ export default function MatchDetailPage({
                     onClose={() => setShowAppealSheet(false)}
                     matchTitle={match.title}
                     isPending={appeal.isPending}
-                    error={appeal.isError ? appeal.error?.message ?? null : null}
+                    error={appeal.isError ? appeal.error : undefined}
                     onSubmit={(reason) => {
                         appeal.mutate({ reason }, {
                             onSuccess: () => {
