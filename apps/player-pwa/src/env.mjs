@@ -25,4 +25,9 @@ export const env = createEnv({
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
   },
+  // Docker builds: `ENV X=$ARG` with an unset ARG bakes an EMPTY STRING, not
+  // an unset var (cutover brief Card 3, 2026-11-16). Empty strings then fail
+  // the .min(1)/.url() schemas with "Invalid environment variables" and kill
+  // the build. Treat "" as unset so the zod defaults above apply instead.
+  emptyStringAsUndefined: true,
 });
