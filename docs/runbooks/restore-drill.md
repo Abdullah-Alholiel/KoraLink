@@ -6,9 +6,10 @@ launch condition 5. Repeat quarterly or after any schema/migration change.
 ## What this proves
 The nightly prod dump (`koralink-prod-YYYYMMDD-HHMMSS.sql.gz`,
 `koralink-backup-prod.timer` 03:20 UTC → `/home/ubuntu/backups/koralink-prod/`)
-restores cleanly into a throwaway Postgres container with **exactly 60 Drizzle
-journal rows**, all 30+ tables, and PostGIS live. Restoring prod is possible; the
-procedure below is the tested path.
+restores cleanly into a throwaway Postgres container with the **full Drizzle
+journal** (row count = `python3 -c "import json;print(len(json.load(open('apps/api/drizzle/meta/_journal.json'))['entries']))"`
+from the repo — was 60 on 2026-11-15, 62 from 0059/0060), all 30+ tables, and
+PostGIS live. Restoring prod is possible; the procedure below is the tested path.
 
 ## Preconditions
 - Docker on the VPS (rootless agent user can run containers).
@@ -41,6 +42,8 @@ sleep 35 && docker exec koralink-restore-drill pg_isready -U postgres
 docker network connect momentum-supabase_default koralink-restore-drill
 
 # 4. Restore via the momentum-db client (17.6 — handles \restrict)
+#    pipefail: a mid-stream zcat failure must NOT be masked by psql exiting 0
+set -o pipefail
 zcat "$DUMP" | docker exec -i -e PGPASSWORD=drill momentum-db bash -c \
   "psql -h koralink-restore-drill -U postgres -d drill -v ON_ERROR_STOP=1 -q"
 ```
@@ -49,7 +52,7 @@ zcat "$DUMP" | docker exec -i -e PGPASSWORD=drill momentum-db bash -c \
 ```bash
 docker exec -e PGPASSWORD=drill momentum-db psql -h koralink-restore-drill \
   -U postgres -d drill -At -c "
-SELECT 'journal: '||(SELECT COUNT(*) FROM drizzle.__drizzle_migrations);  -- expect 60
+SELECT 'journal: '||(SELECT COUNT(*) FROM drizzle.__drizzle_migrations);  -- must equal the repo journal count (see above); 62 as of 0060
 SELECT 'tables: '||(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public');
 SELECT 'users: '||(SELECT COUNT(*) FROM users);
 SELECT 'postgis: '||(SELECT PostGIS_Full_Version() LIKE '%POSTGIS%');"

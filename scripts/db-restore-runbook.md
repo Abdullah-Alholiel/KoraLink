@@ -1,5 +1,12 @@
 # KoraLink DB Restore Runbook (P1-18)
 
+> **⚠️ SUPERSEDED (run #211, 2026-11-16):** the tested, current restore path
+> lives at **`docs/runbooks/restore-drill.md`** (nightly PROD dumps,
+> `koralink-backup-prod.timer` 03:20 UTC → `/home/ubuntu/backups/koralink-prod/`).
+> This file describes the older STAGING backup lane (`koralink-backup.timer`
+> 03:00 UTC → `/home/ubuntu/backups/koralink/`) and its counts are stale — kept
+> for the staging-restore case only. Do not use it for prod-restore drills.
+
 > Restore = DESTRUCTIVE to the target database. Never run against the live
 > `koralink` DB without Abdullah's explicit go (stop API first:
 > `cd apps/api && npm run restart` is NOT enough — stop the service).
