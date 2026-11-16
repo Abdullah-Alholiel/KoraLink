@@ -13,6 +13,7 @@ import {
   mailFooter,
   mailBrand,
 } from './mailer.copy';
+import { EMAIL_SENDER, EmailSender } from '../auth/email-sender.port';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -62,23 +63,45 @@ export class MailerService {
   constructor(
     @Inject('DB_CONNECTION') private readonly db: DB,
     config: ConfigService,
+    // D-20261114-02 (run #207): notification email routes through the SAME
+    // transport-agnostic port as auth OTP email — EMAIL_PROVIDER=brevo makes
+    // Brevo cover notification mail too (no second provider key needed).
+    @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {
+    // Kept as a CONFIGURATION HEURISTIC ONLY (isConfigured gate below). The
+    // transport itself is the injected EmailSender port; a Brevo-configured
+    // deployment (BREVO_API_KEY, no RESEND_API_KEY) correctly passes this
+    // gate and delivers through the port.
     this.apiKey = config.get<string>('RESEND_API_KEY', '') ?? '';
     this.from = config.get<string>('MAIL_FROM', '') ?? '';
     this.playerUrl = (
       config.get<string>('PLAYER_URL', 'https://koralink.app') ?? ''
     ).replace(/\/+$/, '');
-    if (!this.apiKey || !this.from) {
-      // Deliberate: email self-disables without configuration (plan §Gate 2).
+    if (!this.apiKey && !this.from) {
+      // Deliberate: email self-disables without ANY transport configuration
+      // (plan §Gate 2). D-20261114-02: the TRANSPORT is the injected port —
+      // this heuristic only gates the warn line; the authoritative
+      // "can we send?" answer is emailSender.isConfigured() in deliver().
       this.logger.warn(
-        'mailer: RESEND_API_KEY/MAIL_FROM not set — transactional email DISABLED (log-only mode)',
+        'mailer: no RESEND_API_KEY/MAIL_FROM env (legacy fields) — port transport still selected via EMAIL_PROVIDER; delivery ability = emailSender.isConfigured()',
       );
     }
   }
 
-  /** Feature flag: true when a transport is actually configured. */
+  /** Feature flag: true when the SELECTED transport can actually deliver.
+   *  D-20261114-02: delegates to the injected EmailSender port (the same
+   *  adapter auth OTP uses) — a Brevo-configured deployment is "configured"
+   *  without any RESEND_API_KEY. The legacy apiKey/from fields stay only as
+   *  a fallback for legacy spec doubles.
+   */
   get isConfigured(): boolean {
-    return this.apiKey.length > 0 && this.from.length > 0;
+    try {
+      return this.emailSender.isConfigured();
+    } catch {
+      // Port not available in a legacy double → fall back to env-field probe
+      // so old specs keep their semantics instead of crashing.
+      return this.apiKey.length > 0 && this.from.length > 0;
+    }
   }
 
   /**
@@ -96,6 +119,7 @@ export class MailerService {
         deleted_at: users.deleted_at,
         email_verified_at: users.email_verified_at,
         email_muted: users.email_muted,
+        locale: users.locale,
       })
       .from(users)
       .where(inArray(users.id, userIds));
@@ -106,7 +130,15 @@ export class MailerService {
       if (!r.email_verified_at) continue;
       if (r.email_muted) continue;
       if (r.deleted_at) continue; // PDPL ghosts are never addressed
-      out.push({ userId: r.id, email: r.email, locale: 'ar' }); // Saudi market default (plan §Gate 2)
+      // P2-264 (run #168): per-recipient locale from users.locale. The column
+      // is NOT NULL DEFAULT 'ar' (Saudi market default, matching the historical
+      // hardcode); the ternary is default-protective against any unexpected
+      // value (e.g. a pre-0055 row patched by hand).
+      out.push({
+        userId: r.id,
+        email: r.email,
+        locale: r.locale === 'en' ? 'en' : 'ar',
+      });
     }
     return out;
   }
@@ -159,7 +191,11 @@ export class MailerService {
     template: Extract<MailTemplateKey, 'welcome_verify' | 'email_verify'>,
   ): Promise<SendOutcome> {
     const [row] = await this.db
-      .select({ deleted_at: users.deleted_at, email_muted: users.email_muted })
+      .select({
+        deleted_at: users.deleted_at,
+        email_muted: users.email_muted,
+        locale: users.locale,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -170,7 +206,13 @@ export class MailerService {
       return { userId, status: 'skipped', reason: 'muted' };
     }
     return this.deliver(
-      { userId, email: to, locale: 'ar' },
+      {
+        userId,
+        email: to,
+        // P2-264 (run #168): resolve from users.locale (NOT NULL default 'ar'),
+        // same default-protective rule as recipientsFor().
+        locale: row.locale === 'en' ? 'en' : 'ar',
+      },
       template,
       { verifyUrl },
       {},
@@ -208,39 +250,36 @@ export class MailerService {
       return { userId: recipient.userId, status: 'failed', reason: 'render-error' };
     }
     const { subject, html, text } = rendered;
+    // D-20261114-02 (run #207): deliver through the EMAIL_SENDER port (the
+    // same adapter the auth OTP path uses — EMAIL_PROVIDER selects it) instead
+    // of a hard-coded Resend fetch. Errors from the adapter degrade exactly
+    // like the old inline fetch path: one 'failed' outcome for THIS recipient,
+    // never an upward throw (transport rejections arrive as
+    // ServiceUnavailableException → caught below as transport-error).
     try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: this.from,
-          to: [recipient.email],
-          subject,
-          html,
-          text,
-        }),
-      });
-      if (!res.ok) {
-        const body = (await res.text()).slice(0, 300);
-        this.logger.warn(
-          `mailer: transport ${res.status} for ${template} → ${recipient.userId}: ${body}`,
-        );
-        Sentry.captureException(new Error(`mail transport ${res.status}`), {
-          tags: { component: 'mailer', template },
-          extra: { status: res.status, userId: recipient.userId },
-        });
-        return { userId: recipient.userId, status: 'failed', reason: `transport-${res.status}` };
-      }
+      await this.emailSender.send(recipient.email, subject, html, undefined, text);
+      // D-20261114-02 proof line: names the ADAPTER that carried the mail
+      // (BrevoService/ResendService) — ops can confirm the chosen send path
+      // from journald alone.
+      this.logger.log(
+        `mailer: ${template} → user ${recipient.userId} delivered via ${this.emailSender.constructor.name}`,
+      );
       return { userId: recipient.userId, status: 'sent' };
     } catch (err) {
       this.logger.warn(
         `mailer: transport error for ${template} → ${recipient.userId}: ${(err as Error).message}`,
       );
       Sentry.captureException(err, { tags: { component: 'mailer', template } });
-      return { userId: recipient.userId, status: 'failed', reason: 'transport-error' };
+      // PR-Agent r1 #258 MINOR fix: keep failure context machine-readable —
+      // fold the adapter's error text (e.g. 'Email provider error.' vs
+      // 'Email sender misconfigured.') into the outcome reason, restoring the
+      // observability the old transport-<status> reason carried.
+      const detail = ((err as Error).message ?? '').slice(0, 80);
+      return {
+        userId: recipient.userId,
+        status: 'failed',
+        reason: detail ? `transport-error: ${detail}` : 'transport-error',
+      };
     }
   }
 }

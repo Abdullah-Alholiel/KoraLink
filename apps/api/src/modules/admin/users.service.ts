@@ -6,18 +6,36 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SQL, and, asc, desc, eq, sql } from 'drizzle-orm';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
+import type { PostgresJsDatabase, PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
+import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
 import { users } from '../../database/schema';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserAdminDto } from './dto/update-user.dto';
+import { BulkModerateUsersDto } from './dto/bulk-moderate.dto';
 import { AuditService } from './audit.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
 
 type DB = PostgresJsDatabase<typeof schema>;
+
+/**
+ * A drizzle transaction — same query-builder surface as `db` (P2-141).
+ * Methods that must run INSIDE a caller-owned tx take this so every
+ * statement shares one connection and commits (or rolls back) together;
+ * opening `this.db.transaction` inside such a method would ride a DIFFERENT
+ * pool connection and escape the caller's rollback scope.
+ */
+export type TxExecutor = PgTransaction<
+  PostgresJsQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>;
 
 const userColumns = {
   id: users.id,
@@ -52,9 +70,9 @@ export class AdminUsersService {
     const conds: SQL[] = [];
 
     if (dto.search) {
-      const q = `%${dto.search.trim()}%`;
+      const q = '%' + escapeLikePattern(dto.search.trim()) + '%';
       conds.push(
-        sql`(${users.full_name} ILIKE ${q} OR ${users.phone} ILIKE ${q} OR ${users.handle} ILIKE ${q})`,
+        sql`(${users.full_name} ILIKE ${q} ESCAPE '\\' OR ${users.phone} ILIKE ${q} ESCAPE '\\' OR ${users.handle} ILIKE ${q} ESCAPE '\\')`,
       );
     }
     if (dto.role) conds.push(eq(users.role, dto.role));
@@ -113,7 +131,17 @@ export class AdminUsersService {
   }
 
   async findOne(id: string) {
-    const [user] = await this.db
+    return this.findOneOn(id, this.db);
+  }
+
+  /**
+   * findOne against an explicit executor (db or tx) — P2-141: on the
+   * caller-owned-tx path the outer-db read would return PRE-commit state
+   * (moderation columns still null), so the post-write re-read must run
+   * THROUGH the same tx.
+   */
+  private async findOneOn(id: string, exec: DB | TxExecutor) {
+    const [user] = await exec
       .select(userColumns)
       .from(users)
       .where(eq(users.id, id))
@@ -123,14 +151,14 @@ export class AdminUsersService {
       throw new NotFoundException('User not found.');
     }
 
-    const [{ matchesPlayed }] = await this.db.execute(sql`
+    const [{ matchesPlayed }] = await exec.execute(sql`
       SELECT COUNT(*)::int AS "matchesPlayed"
       FROM match_players mp
       INNER JOIN matches m ON m.id = mp.match_id
       WHERE mp.user_id = ${id}::text AND m.status = 'Completed'
     `) as unknown as Array<{ matchesPlayed: number }>;
 
-    const [{ totalSpent }] = await this.db.execute(sql`
+    const [{ totalSpent }] = await exec.execute(sql`
       SELECT COALESCE(SUM(amount), 0)::text AS "totalSpent"
       FROM transactions
       WHERE user_id = ${id}::text AND type = 'DEBIT' AND status = 'Completed'
@@ -139,7 +167,14 @@ export class AdminUsersService {
     return { ...user, matchesPlayed: matchesPlayed ?? 0, totalSpent: totalSpent ?? 0 };
   }
 
-  async update(id: string, dto: UpdateUserAdminDto, adminId: string, ip?: string) {
+  async update(
+    id: string,
+    dto: UpdateUserAdminDto,
+    adminId: string,
+    ip?: string,
+    /** P2-141: run the moderation write INSIDE the caller's tx (reports.resolve ban path). */
+    inTx?: TxExecutor,
+  ) {
     const before = await this.findOne(id);
 
     // ── PDPL ghost guard (run #32) ──
@@ -166,35 +201,17 @@ export class AdminUsersService {
       }
     }
 
-    // ── Last-admin protection ──
+    // ── Last-admin protection + the write, ONE transaction (P2-116) ──
     // Demoting or banning the final Admin would lock everyone out of the HQ
-    // console — block both mutations.
-    if (
-      before.role === 'Admin' &&
-      ((dto.role !== undefined && dto.role !== 'Admin') || dto.banned === true)
-    ) {
-      const [{ count }] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(users)
-        .where(
-          and(
-            eq(users.role, 'Admin'),
-            // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
-            // are NOT living admins — counting them let the last LIVING admin
-            // be demoted/banned while only ghosts remained (run #34, found by
-            // Reviewer A). Same rationale as the status=active fix in f40acd9.
-            sql`${users.deleted_at} IS NULL`,
-            sql`${users.banned_at} IS NULL`,
-            sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
-          ),
-        );
-      if (count <= 1) {
-        throw new BadRequestException(
-          'Cannot demote or ban the last active admin account.',
-        );
-      }
-    }
-
+    // console — block both mutations. Race discipline: when the mutation
+    // targets an Admin row, the guard AND the write run inside one tx that
+    // first locks ALL living-admin rows FOR UPDATE, so two concurrent demotes
+    // of the last two admins serialize end-to-end: the loser re-counts against
+    // post-winner committed state and sees count 1 → 400. (First attempt
+    // released the locks at guard-commit and wrote on the outer db after —
+    // PR-Agent run #79 CRITICAL: the second demote could still re-count
+    // pre-write state. The write MUST share the tx that holds the locks.)
+    // Non-admin targets keep the plain single-statement update.
     const updates: {
       role?: 'Player' | 'VenueOwner' | 'Admin';
       banned_at?: Date | null;
@@ -220,21 +237,99 @@ export class AdminUsersService {
       throw new BadRequestException('No changes provided.');
     }
 
-    await this.db
-      .update(users)
-      .set(withTimestamp(updates))
-      .where(eq(users.id, id));
+    const adminTargeted =
+      before.role === 'Admin' &&
+      ((dto.role !== undefined && dto.role !== 'Admin') ||
+        dto.banned === true ||
+        // PR-Agent run #79 v2 residual: a NEW suspension also converts a
+        // living admin into a non-living row (guard predicate:
+        // suspended_until <= now()), so suspend-vs-demote can race to the
+        // same zero-living-admins lockout. Lifting/shortening a suspension
+        // only ADDS living admins — safe on the plain path.
+        (dto.suspendedUntil !== undefined && dto.suspendedUntil !== null));
 
-    const after = await this.findOne(id);
-    await this.audit.log({
-      adminId,
-      action: 'user.update',
-      entityType: 'user',
-      entityId: id,
-      before,
-      after,
-      ip,
-    });
+    if (inTx) {
+      // P2-141: caller-owned tx (reports.resolve ban path). Every statement
+      // runs on the CALLER's transaction so the ban commits or rolls back
+      // together with the caller's write — opening this.db.transaction here
+      // would ride a DIFFERENT pool connection and escape the caller's
+      // rollback scope. Reports.resolve only reaches this path with
+      // { banned: true } on a player subject (banSubject is user-subject
+      // only), so the last-admin guard does not apply here.
+      await inTx
+        .update(users)
+        .set(withTimestamp(updates))
+        .where(eq(users.id, id));
+    } else if (adminTargeted) {
+      await this.db.transaction(async (tx) => {
+        // Lock order: every LIVING admin row, deterministic by id (mirrors
+        // rescheduleMatch's ORDER BY id slot locks — same order in every tx,
+        // no lock-cycle). PDPL ghosts (deleted/banned/expired-suspended) hold
+        // role='Admin' but are not living admins; locking them is harmless and
+        // keeps the lock shape identical to the guarded count below.
+        await tx.execute(
+          sql`SELECT id FROM ${users} WHERE ${users.role} = 'Admin'
+              AND ${users.deleted_at} IS NULL
+              AND ${users.banned_at} IS NULL
+              AND (${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())
+              ORDER BY id
+              FOR UPDATE`,
+        );
+
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(users)
+          .where(
+            and(
+              eq(users.role, 'Admin'),
+              // PDPL ghosts (soft-deleted + hard-purged rows keep role='Admin')
+              // are NOT living admins — counting them let the last LIVING admin
+              // be demoted/banned while only ghosts remained (run #34, found by
+              // Reviewer A). Same rationale as the status=active fix in f40acd9.
+              sql`${users.deleted_at} IS NULL`,
+              sql`${users.banned_at} IS NULL`,
+              sql`(${users.suspended_until} IS NULL OR ${users.suspended_until} <= now())`,
+            ),
+          );
+        if (count <= 1) {
+          // Thrown INSIDE the tx → drizzle rolls back (nothing written) and
+          // the 400 propagates to the controller unchanged.
+          throw new BadRequestException(
+            'Cannot demote or ban the last active admin account.',
+          );
+        }
+
+        // The write lives INSIDE the lock-holding tx — the actual race fix.
+        await tx
+          .update(users)
+          .set(withTimestamp(updates))
+          .where(eq(users.id, id));
+      });
+    } else {
+      await this.db
+        .update(users)
+        .set(withTimestamp(updates))
+        .where(eq(users.id, id));
+    }
+
+    // P2-141: on the caller-tx path the post-write re-read runs THROUGH the
+    // tx — an outer-db read would see pre-commit state (banned_at still
+    // null) and the force-disconnect gate below would skip the ban.
+    const after = await this.findOneOn(id, inTx ?? this.db);
+    // P2-141: when the write rode a caller's tx, the audit entry rides the
+    // SAME tx — "banned + audited" commit (or roll back) as one unit.
+    await this.audit.log(
+      {
+        adminId,
+        action: 'user.update',
+        entityType: 'user',
+        entityId: id,
+        before,
+        after,
+        ip,
+      },
+      inTx,
+    );
     this.realtime.broadcastOps('users');
 
     // ── P1-50 (run #57) + P2-77 (run #60): force-disconnect live sockets on
@@ -285,5 +380,177 @@ export class AdminUsersService {
     }
 
     return after;
+  }
+
+  /**
+   * P2-107 (run #116): bulk ban / bulk suspend — HQ users list checkbox path.
+   *
+   * Default+48h-veto (proposed run #110, clock elapsed 2026-10-09T11:00Z, no
+   * veto): bulk BAN + SUSPEND only, ≤50 ids/batch, ONE batch audit entry per
+   * action (`admin_bulk_ban` / `admin_bulk_suspend` with the id array).
+   * Purge/restore/delete are NEVER bulk (PDPL irreversible).
+   *
+   * Design: each row goes through the SAME guarded `update()` as the
+   * single-row drawer action, so the PDPL ghost guard, self-moderation guard,
+   * last-admin FOR UPDATE lock, socket force-disconnect and player
+   * notification all apply per row. Per-row failures do NOT abort the batch —
+   * they are reported in `skipped` (partial-success contract). The batch audit
+   * entry records exactly what was applied so the trail shows one ops action,
+   * not N silent rows.
+   */
+  async bulkModerate(
+    dto: BulkModerateUsersDto,
+    adminId: string,
+    ip?: string,
+  ): Promise<{
+    action: 'ban' | 'suspend';
+    requested: number;
+    updated: number;
+    skipped: Array<{ id: string; reason: string }>;
+  }> {
+    // Bulk scope is other accounts — mirror the single-row self-guard intent
+    // at the batch boundary (a batch containing the caller 400s wholesale).
+    if (dto.ids.includes(adminId)) {
+      throw new BadRequestException('You cannot moderate your own account in bulk.');
+    }
+
+    const skipped: Array<{ id: string; reason: string }> = [];
+    const applied: string[] = [];
+
+    for (const id of dto.ids) {
+      try {
+        if (dto.action === 'ban') {
+          await this.update(id, { banned: true }, adminId, ip);
+        } else {
+          // 7-day suspension — same default as the single-row drawer action.
+          await this.update(
+            id,
+            { suspendedUntil: new Date(Date.now() + 7 * 86_400_000).toISOString() },
+            adminId,
+            ip,
+          );
+        }
+        applied.push(id);
+      } catch (err) {
+        // Per-row isolation applies ONLY to the known guard rejections: 400
+        // (self/last-admin), 404 (vanished), 409 (PDPL ghost). Anything else
+        // is an infrastructure failure (driver/SQL) — rethrow so the batch
+        // fails loudly (500) instead of masquerading as a partial success,
+        // and no internal driver/SQL text reaches the client or audit trail
+        // (PR-Agent run #116). Rows already applied keep their per-row
+        // `user.update` audit entries from update(); only the BATCH entry is
+        // skipped, so a retry reconciles cleanly.
+        if (
+          err instanceof BadRequestException ||
+          err instanceof NotFoundException ||
+          err instanceof ConflictException
+        ) {
+          skipped.push({ id, reason: err.message });
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    await this.audit.log({
+      adminId,
+      action: dto.action === 'ban' ? 'admin_bulk_ban' : 'admin_bulk_suspend',
+      entityType: 'user',
+      entityId: null,
+      after: { ids: dto.ids, updated: applied, skipped },
+      ip,
+    });
+    this.realtime.broadcastOps('users');
+
+    return {
+      action: dto.action,
+      requested: dto.ids.length,
+      updated: applied.length,
+      skipped,
+    };
+  }
+
+  /**
+   * P2-47(b) (run #167): admin restore-on-behalf — cancel a scheduled PDPL
+   * purge / un-delete a soft-deleted account inside its grace window.
+   * Owner decision 2026-10-25 (option b, full restore-on-behalf).
+   *
+   * Scope: ONLY soft-deleted rows (deleted_at IS NOT NULL, past data intact).
+   * Hard-purged ghosts (phone LIKE 'purged-%') are IRREVERSIBLE — migration
+   * 0031 anonymized their PII; there is nothing left to restore → 409.
+   * Never bulk (PDPL doctrine at bulkModerate). No schema change: the
+   * self-restore token is a client-held JWT; nulling deleted_at removes the
+   * row from purgeExpiredAccounts()' candidate set (`deleted_at <
+   * now() - 30d`), so one verb covers cancel-purge AND restore-on-behalf.
+   *
+   * Race discipline: the state check, the write and the audit entry share ONE
+   * transaction holding the row FOR UPDATE — a concurrent self-restore, admin
+   * restore or purge tick serializes against this tx; the loser gets the
+   * explicit already-restored / purged rejection instead of double-writing.
+   */
+  async restoreByAdmin(
+    id: string,
+    adminId: string,
+    ip?: string,
+  ): Promise<{ message: string }> {
+    await this.db.transaction(async (tx) => {
+      // Lock the target row first — deterministic single-row lock, no cycle
+      // risk (mirrors the update() admin-path lock ordering).
+      const locked = await tx.execute(
+        sql`SELECT deleted_at, phone FROM ${users} WHERE ${users.id} = ${id} FOR UPDATE`,
+      );
+      type LockedRow = { deleted_at: Date | string | null; phone: string };
+      // postgres-js RowList is array-shaped; drizzle node-postgres paths wrap
+      // in { rows } — accept both (matches the findOneOn execute() cast).
+      const lockedRes = locked as unknown as { rows?: LockedRow[] } | LockedRow[];
+      const rows: LockedRow[] = Array.isArray(lockedRes)
+        ? lockedRes
+        : (lockedRes.rows ?? []);
+      const row = rows[0];
+      if (!row) throw new NotFoundException('User not found.');
+
+      if (!row.deleted_at) {
+        // Covers both "never deleted" and "restored a moment ago" (by the
+        // player's own token or another admin) — one predicate, one status.
+        throw new BadRequestException('Account is not deleted.');
+      }
+      if (row.phone.startsWith('purged-')) {
+        throw new ConflictException(
+          'Account was hard-purged; restoration is not possible.',
+        );
+      }
+      // PR-Agent r1 (run #167): the erasure DEADLINE is authoritative, not
+      // purge-cron health — a delayed/failed cron tick must not let an admin
+      // restore an account past its PDPL erasure deadline and cancel the
+      // purge indefinitely. The window matches JwtCookieStrategy's gate
+      // (both derive from PDPL_GRACE_DAYS).
+      const purgeAt = new Date(row.deleted_at).getTime() + PDPL_GRACE_DAYS * 86_400_000;
+      if (Date.now() >= purgeAt) {
+        throw new ConflictException(
+          'Account is past its erasure deadline; restoration is no longer possible.',
+        );
+      }
+
+      await tx
+        .update(users)
+        .set(withTimestamp({ deleted_at: null }))
+        .where(eq(users.id, id));
+
+      await this.audit.log(
+        {
+          adminId,
+          action: 'user.restore',
+          entityType: 'user',
+          entityId: id,
+          before: { deleted_at: row.deleted_at },
+          after: { deleted_at: null },
+          ip,
+        },
+        tx,
+      );
+    });
+
+    this.realtime.broadcastOps('users');
+    return { message: 'Account restored.' };
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
@@ -20,13 +20,34 @@ import { riyadhDateKey } from '@/lib/venue-hours';
  * runner timezone at any hour.
  */
 
-const { usePitchSlotsMock } = vi.hoisted(() => ({
+const { usePitchSlotsMock, queryClientMock } = vi.hoisted(() => ({
     usePitchSlotsMock: vi.fn(),
+    queryClientMock: {
+        refetchQueries: vi.fn(),
+        getQueryState: vi.fn(),
+    },
 }));
 
 vi.mock('@/hooks/usePitchSlots', () => ({
     usePitchSlots: usePitchSlotsMock,
+    PITCH_SLOTS_BASE_KEY: 'pitch-slots',
+    pitchSlotsQueryKey: (p: string | null, d: string | null) => [
+        'pitch-slots', p, d,
+    ],
 }));
+
+// The tap-revalidation hook (P2-234) reads the query client directly. Default
+// state: a pre-existing read whose dataUpdateCount never advances across the
+// hook's refetch attempt → "no fresh read landed" → taps are never accused.
+// Individual tests override getQueryState to simulate a fresh read.
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import('@tanstack/react-query')>();
+    return {
+        ...actual,
+        useQueryClient: () => queryClientMock,
+    };
+});
 
 // Deterministic "now": the REAL Riyadh day at 16:00Z == 19:00 Riyadh (the
 // exact hour from Abdullah's report — 16:00–17:00 and 17:00–18:00 are past).
@@ -100,6 +121,14 @@ describe('SlotPicker — today-first, time-aware slots', () => {
         usePitchSlotsMock.mockReset();
         usePitchSlotsMock.mockReturnValue({
             data: [], isLoading: false, isError: false, refetch: vi.fn(),
+        });
+        queryClientMock.refetchQueries.mockReset();
+        queryClientMock.refetchQueries.mockResolvedValue(undefined);
+        queryClientMock.getQueryState.mockReset();
+        // Default: a read exists whose dataUpdateCount stays put → no fresh
+        // read → tap-revalidation never accuses. state.data is irrelevant.
+        queryClientMock.getQueryState.mockReturnValue({
+            data: [], dataUpdateCount: 1,
         });
     });
 
@@ -251,5 +280,86 @@ describe('SlotPicker — today-first, time-aware slots', () => {
         const statuses = Array.from(container.querySelectorAll('[role="status"]'));
         expect(statuses.length).toBe(1);
         expect(statuses[0].textContent).toMatch(/no slots available for this date/i);
+    });
+
+    // ── P2-234: tap-time revalidation (run #152) ──
+
+    it('P2-234: a fresh read showing the tapped slot booked refuses the pick with the localized error', async () => {
+        const taken = slotOn(TODAY_KEY, 's4', '21:00:00', '22:00:00');
+        usePitchSlotsMock.mockReturnValue({
+            data: [taken], // STALE snapshot — slot still looks free
+            isLoading: false, isError: false, refetch: vi.fn(),
+        });
+        // Simulate a real client: countBefore reads 1, the refetch LANDS a
+        // fresh read (count advances to 2) showing the slot now booked.
+        queryClientMock.getQueryState
+            .mockReturnValueOnce({ data: [taken], dataUpdateCount: 1 })
+            .mockReturnValue({
+                data: [{ ...taken, is_booked: true }],
+                dataUpdateCount: 2,
+            });
+
+        const { onSelectSlot } = renderPicker();
+        fireEvent.click(screen.getByRole('button', { name: /Book slot from 21:00 to 22:00/ }));
+        await waitFor(() => expect(onSelectSlot).toHaveBeenCalledWith(null));
+
+        // The 0s-latest refetch targets the exact pitch+day query.
+        expect(queryClientMock.refetchQueries).toHaveBeenCalledWith({
+            queryKey: ['pitch-slots', 'pitch-1', TODAY_KEY],
+        });
+        // The optimistic select happened first…
+        expect(onSelectSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 's4' }),
+        );
+        // …then the refusal cleared it, with the localized alert on screen.
+        expect(screen.getByTestId('slot-taken-error')).toHaveTextContent(
+            'This time slot was just booked by another host. Pick a different slot and try again.',
+        );
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    it('P2-234: a fresh read confirming the slot free keeps the selection (no alert)', async () => {
+        const free = slotOn(TODAY_KEY, 's4', '21:00:00', '22:00:00');
+        usePitchSlotsMock.mockReturnValue({
+            data: [free],
+            isLoading: false, isError: false, refetch: vi.fn(),
+        });
+        // Fresh read LANDS (count 1 → 2) and still shows the slot free.
+        queryClientMock.getQueryState
+            .mockReturnValueOnce({ data: [free], dataUpdateCount: 1 })
+            .mockReturnValue({ data: [free], dataUpdateCount: 2 });
+
+        const { onSelectSlot } = renderPicker();
+        fireEvent.click(screen.getByRole('button', { name: /Book slot from 21:00 to 22:00/ }));
+        await waitFor(() => expect(queryClientMock.refetchQueries).toHaveBeenCalled());
+
+        expect(onSelectSlot).toHaveBeenCalledTimes(1);
+        expect(onSelectSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 's4' }),
+        );
+        expect(screen.queryByTestId('slot-taken-error')).not.toBeInTheDocument();
+        expect(onSelectSlot).not.toHaveBeenCalledWith(null);
+    });
+
+    it('P2-234: no fresh read landed (refetch failed) — the pick stands, no accusation', async () => {
+        const free = slotOn(TODAY_KEY, 's4', '21:00:00', '22:00:00');
+        usePitchSlotsMock.mockReturnValue({
+            data: [free],
+            isLoading: false, isError: false, refetch: vi.fn(),
+        });
+        // dataUpdateCount does NOT advance — the refetch failed offline.
+        queryClientMock.getQueryState.mockReturnValue({
+            data: [free],
+            dataUpdateCount: 1,
+        });
+
+        const { onSelectSlot } = renderPicker();
+        fireEvent.click(screen.getByRole('button', { name: /Book slot from 21:00 to 22:00/ }));
+        await waitFor(() => expect(queryClientMock.refetchQueries).toHaveBeenCalled());
+
+        // Optimistic pick survives; no taken-clear, no alert.
+        expect(onSelectSlot).toHaveBeenCalledTimes(1);
+        expect(onSelectSlot).not.toHaveBeenCalledWith(null);
+        expect(screen.queryByTestId('slot-taken-error')).not.toBeInTheDocument();
     });
 });

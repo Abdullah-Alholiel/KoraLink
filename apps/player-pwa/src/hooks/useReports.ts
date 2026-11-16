@@ -8,7 +8,7 @@ import { captureError, trackEvent } from '@/providers/ObservabilityProvider';
 /** P2-23 (run #17): reporter closure — the caller's own reports + outcomes. */
 
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
-export type ReportSubjectType = 'user' | 'match' | 'venue' | 'message';
+export type ReportSubjectType = 'user' | 'match' | 'venue' | 'message' | 'review';
 
 export interface MyReportApi {
   id: string;

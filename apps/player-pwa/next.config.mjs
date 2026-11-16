@@ -25,7 +25,12 @@ const withPWA = withPWAInit({
     document: '/ar/offline',
   },
   workboxOptions: {
-    skipWaiting: true,
+    // P2-126 (run #89): activation is CONSENT-GATED — a new worker waits until
+    // ServiceWorkerUpdater posts SKIP_WAITING (user tapped "Reload now", or a
+    // first install with no controller). Never auto-reload the app mid-session.
+    // clientsClaim stays on: claiming on activation is fine.
+    skipWaiting: false,
+    clientsClaim: true,
     runtimeCaching: [
       // NetworkOnly money/auth recipes are registered FIRST on purpose: workbox
       // matches routes in registration order, and the static-assets CacheFirst
@@ -150,9 +155,11 @@ const withPWA = withPWAInit({
       {
         // P2-102 (run #75): conversations LIST — NetworkFirst so the Messages
         // screen has an offline fallback (last-seen list) instead of an empty
-        // state. Thread reads (`/conversations/:id/messages`) deliberately
-        // match NOTHING (end-anchored collection pattern) — chat freshness is
-        // React Query's job, same policy as match-chat sub-resources.
+        // state. Thread reads (/:id/messages) get their OWN recipe (P2-121,
+        // run #83 — mirrors the match-detail recipe): offline chat-open serves
+        // the last-fetched thread instead of a raw error. Chat freshness while
+        // ONLINE stays React Query's job (staleTime < cache window); the cache
+        // is only ever read as a fallback.
         urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations(?:\?.*)?$/,
         handler: 'NetworkFirst',
         options: {
@@ -166,6 +173,26 @@ const withPWA = withPWAInit({
             // Run #43: status 0 = opaque response — same-origin routes never
             // legitimately produce one, and caching it poisons the entry until
             // maxAge expiry. [200] only.
+            statuses: [200],
+          },
+        },
+      },
+      {
+        // P2-121 (run #83): conversation THREAD reads (/:id/messages) —
+        // NetworkFirst with a 1h window, mirroring match-detail. Registered
+        // AFTER the list recipe; workbox matches first-registered-first, and
+        // the list pattern is end-anchored so threads fall through to here.
+        urlPattern: /^https?:\/\/[^/]+\/api\/v1\/conversations\/[^/?#]+\/messages(?:\?.*)?$/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'conversation-messages-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxAgeSeconds: 60 * 60, // 1 hour — same offline window as match detail
+            maxEntries: 30,
+          },
+          cacheableResponse: {
+            // [200] only — see the run #43 opaque-response note above.
             statuses: [200],
           },
         },
@@ -251,6 +278,9 @@ const nextConfig = {
           "'unsafe-eval'",
           'https://api.mapbox.com',
           'https://cdn.moyasar.com',
+          // P0-2 (run #169): moyasar-payment-form UMD bundle loads at submit
+          // time (hosted form — card data never touches our servers).
+          'https://cdn.jsdelivr.net',
           'https://*.posthog.com',
           // doop design-sync: loads the capture snippet from the internal design canvas
           'https://aa.tail2948f9.ts.net:9460',
@@ -261,6 +291,8 @@ const nextConfig = {
           // nonce pipeline lands; eval is BANNED in prod (verified unused).
           "'unsafe-inline'",
           'https://*.posthog.com',
+          // P0-2 (run #169): Moyasar hosted payment form library (wallet top-up).
+          'https://cdn.jsdelivr.net',
           // doop design-sync: loads the capture snippet from the internal design canvas
           'https://aa.tail2948f9.ts.net:9460',
         ].join(' ');
@@ -274,6 +306,9 @@ const nextConfig = {
       'https://app.posthog.com',
       'https://*.posthog.com',
       apiOrigin,
+      // P0-2 (run #169): the Moyasar form tokenizes card data directly
+      // browser→Moyasar (PCI-minimal) — the XHRs need this allowance.
+      'https://api.moyasar.com',
       // WS: prod allows ONLY wss: (cleartext ws: is dev-only — the API origin
       // is https in every deployed environment, so wss: covers it).
       ...(isDev ? ['ws:'] : []),
@@ -311,7 +346,10 @@ const nextConfig = {
               // (dead — zero mapbox code/deps; evidence in the connectSrc block
               // comment above). inline styles stay (Tailwind runtime styles).
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              // P2-269 (run #171): img-src += API origin — venue photos are
+              // served cross-origin by the media route (:8443) while the PWA
+              // runs on :9450; same derivation connect-src already uses.
+              `img-src 'self' data: blob: ${apiOrigin}`,
               `connect-src ${connectSrc}`,
               "worker-src 'self' blob:",
               "font-src 'self' data:",

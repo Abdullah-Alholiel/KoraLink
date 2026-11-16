@@ -38,6 +38,10 @@ export type MailTemplateKey =
   | 'venue_ownership_added'
   | 'venue_ownership_removed'
   | 'host_underfilled_nudge'
+  // ── Partner money flows (P1-67, run #141) ──
+  | 'payout_paid'
+  // ── Partner email lane (run #165): payout request receipt ──
+  | 'payout_requested'
   // ── direct call sites (no activity row exists) ──
   | 'match_reminder' // scheduler, sendMatchStartReminders (T-45m leg)
   | 'match_reminder_24h' // scheduler, sendMatchStartReminders (P2-100 T-24h leg)
@@ -313,6 +317,41 @@ export const MAIL_TEMPLATES: Record<MailTemplateKey, { en: MailCopy; ar: MailCop
       cta: 'فتح بوابة الشركاء',
     },
   },
+  // P1-67 (run #141): settlement marked paid → venue owner mirror. Amounts are
+  // preformatted SAR strings; the generic body keeps the template vars-free
+  // (email mirror carries no vars today — the push + bell carry the specifics).
+  payout_paid: {
+    en: {
+      subject: 'Your payout has been sent',
+      heading: 'Payout sent',
+      body: 'KoraLink has sent your venue payout. Check your settlements page for the reference and amount.',
+      cta: 'Open partner portal',
+    },
+    ar: {
+      subject: 'تم إرسال مستحقاتك',
+      heading: 'تم إرسال الدفعة',
+      body: 'أرسلت كورا لينك مستحقات ملعبك. راجع صفحة التسويات لمعرفة المرجع والمبلغ.',
+      cta: 'فتح بوابة الشركاء',
+    },
+  },
+  // Partner email lane (run #165): receipt for a payout the partner requested.
+  // No {{vars}} — activities.record() mirrors verbs with empty vars, so the
+  // copy counts settlements generically; exact amounts live in the console
+  // and the later payout_paid email.
+  payout_requested: {
+    en: {
+      subject: 'Payout request received',
+      heading: 'Payout request received',
+      body: 'We received your payout request. Your settlements are now pending review — check the partner portal for the venues, amounts and period covered.',
+      cta: 'Open partner portal',
+    },
+    ar: {
+      subject: 'تم استلام طلب المستحقات',
+      heading: 'تم استلام طلب المستحقات',
+      body: 'استلمنا طلبك للمستحقات. تسوياتك الآن قيد المراجعة — راجع بوابة الشركاء لمعرفة الملاعب والمبالغ والفترة المشمولة.',
+      cta: 'فتح بوابة الشركاء',
+    },
+  },
   host_underfilled_nudge: {
     en: {
       subject: 'Your match needs players',
@@ -383,4 +422,11 @@ export const EMAIL_ACTIVITY_VERBS: ReadonlySet<string> = new Set<MailTemplateKey
   'venue_ownership_added',
   'venue_ownership_removed',
   'host_underfilled_nudge',
+  // P1-67 (run #141): partner payout-paid mirror. Log-only until the P1-41
+  // email provider keys land, then rides the transactional mirror for free.
+  'payout_paid',
+  // NOTE (run #165): `payout_requested` is deliberately NOT here — it is a
+  // DIRECT-send template (partner.service calls sendToUsers after the tx);
+  // no ActivityVerb of that name exists, and adding one to this set later
+  // must come with a decision about the choke-point route, not silently.
 ]);

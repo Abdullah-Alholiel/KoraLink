@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
+// P1-66 (run #135): the VAPID public key is env-configured
+// (NEXT_PUBLIC_VAPID_PUBLIC_KEY via env.mjs, read at import time) — set a
+// SYNTHETIC test key before any module import resolves. Never the codelab
+// demo key (its private half is published).
+const TEST_VAPID_KEY = vi.hoisted(() => {
+  const key =
+    'BJzP5O7DEW1arpTcRibmBqaAZgS5K5IcmOqP8_lIF48_ozS0NwEvuwoR6MttW5P-O8wzeKmK0fo2g_NElGqFoQ8';
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = key;
+  return key;
+});
+
 // Mock fetcher (house pattern, cf. test/hooks/useAuth.test.tsx)
 const mockFetcher = vi.fn();
 vi.mock('@/lib/fetcher', () => ({
@@ -368,9 +379,54 @@ describe('usePushNotifications — P2-91 subscribe outcome contract (run #69)', 
     const vapidBody = (await calls[2][1].json()) as { k: string };
     // Must be the SAME public key the page subscribes with (the rotation
     // must re-subscribe against the key the server actually has).
-    expect(vapidBody.k).toBe(
-      'BEl62iUYgU4x0mQDmvYFz9xSYmIqtrmHQ0IKcJqH2m5RjNK0QPlZcR-JxpjMQm4oBmSmmCm8FzWcMjQBjNt2jJc',
-    );
+    // P1-66 (run #135): pinned to the env-provided synthetic key.
+    expect(vapidBody.k).toBe(TEST_VAPID_KEY);
+  });
+
+  it("P1-66 (run #135): no VAPID key deployed → 'not-configured' with no permission prompt and no SW access", async () => {
+    // Fresh module graph with the env var removed (env.mjs reads
+    // process.env at import time).
+    const saved = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    vi.resetModules();
+    try {
+      const fresh = await import('@/hooks/usePushNotifications');
+
+      const requestPermission = vi.fn(async () => 'granted');
+      class SpyNotification {
+        static permission = 'default';
+        static requestPermission = requestPermission;
+      }
+      Object.defineProperty(window, 'Notification', {
+        configurable: true,
+        value: SpyNotification,
+      });
+      // Any touch of navigator.serviceWorker (incl. `.ready`) is recorded.
+      const swTouched = vi.fn();
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get() {
+          swTouched();
+          return { ready: new Promise(() => {}) };
+        },
+      });
+      window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as never;
+
+      // Mount-effect gating ('serviceWorker' in navigator) runs on render —
+      // reset the spy so only subscribe() is measured.
+      const { result } = renderHook(() => fresh.usePushNotifications('en'));
+      swTouched.mockClear();
+
+      const outcome = await result.current.subscribe();
+
+      expect(outcome).toBe('not-configured');
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(swTouched).not.toHaveBeenCalled();
+      expect(mockFetcher).not.toHaveBeenCalled();
+    } finally {
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = saved;
+      vi.resetModules();
+    }
   });
 
   it('P2-96: a failed server POST rolls the browser subscription back (toggle never lies)', async () => {

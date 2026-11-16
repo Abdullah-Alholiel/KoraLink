@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, ApiError, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -19,6 +21,8 @@ interface DisputeDetail {
   decision: string | null;
   internal_note: string | null;
   policy_ref: string | null;
+  sla_escalated: boolean;
+  version: number;
   evidence: { action?: string; reason?: string; by?: string; at?: string }[] | unknown;
   created_at: string;
   reporter: { full_name: string | null; phone: string | null } | null;
@@ -34,6 +38,29 @@ function parseEvidence(evidence: unknown): { action?: string; reason?: string; a
 
 const CLOSED = new Set(['resolved', 'rejected']);
 
+// P2-283: ApiError→bucket mapping for the dispute actions (settlements
+// moneyActionFailure pattern); raw backend text is never rendered. Unlike
+// settlements, 400 needs a message check (PR-Agent r1 #199): the service
+// answers a state race ("already been decided", "Only decided disputes can
+// be reopened") with 400 → 'conflict', while every OTHER 400 is payload
+// validation (e.g. an over-long note) → 'invalid', so the admin gets
+// "check your entries" instead of a refresh loop.
+type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'invalid' | 'server' | 'network';
+function disputeActionFailure(err: unknown): DisputeActionFailure {
+  if (!(err instanceof ApiError)) return 'network';
+  const status = err.status;
+  if (status === 401) return 'auth';
+  if (status === 403 || status === 404) return 'access';
+  if (status === 409) return 'conflict';
+  if (status === 400) {
+    return /already been decided|Only decided disputes can be reopened/.test(err.message)
+      ? 'conflict'
+      : 'invalid';
+  }
+  if (status === 429 || status >= 500) return 'server';
+  return 'network';
+}
+
 export default function DisputeDetailPage() {
   const t = useTranslations('adminDisputes');
   const tc = useTranslations('common');
@@ -44,16 +71,44 @@ export default function DisputeDetailPage() {
 
   const { data, loading, error, reload } = useLiveAdminData<DisputeDetail>(`/admin/disputes/${id}`, ['disputes']);
 
+  // RBAC (P2-106): getRole() reads browser storage, so resolve it once on
+  // mount (layout.tsx pattern). null (SSR / pre-mount) = not permitted, so
+  // privileged actions never flash and server/client markup never diverges.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canResolve = can(role, 'dispute.resolve');
+  const canReopen = can(role, 'dispute.reopen');
+
   const [outcome, setOutcome] = useState<'resolved' | 'rejected'>('resolved');
   const [decision, setDecision] = useState('');
   const [internalNote, setInternalNote] = useState('');
+  // P1-29 (run #173): optional wallet refund credited on resolve (SAR).
+  const [refundAmount, setRefundAmount] = useState('');
+  // P2-273 (run #174): inline gate — a non-empty but unparseable/≤0 refund
+  // entry blocks submit instead of being silently dropped (Reviewer A MINOR 2:
+  // the admin must never believe a refund was issued when it was not).
+  const [refundInvalid, setRefundInvalid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSeq, setSaveSeq] = useState(0);
 
   // ── Admin reply on the dispute thread (P2-2, run #24) ──
   const [reply, setReply] = useState('');
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [replySeq, setReplySeq] = useState(0);
+
+  function failureCopy(err: unknown): string {
+    const failure = disputeActionFailure(err);
+    return failure === 'auth' ? t('disputeFailedAuth')
+      : failure === 'access' ? t('disputeFailedAccess')
+        : failure === 'conflict' ? t('disputeFailedConflict')
+          : failure === 'invalid' ? t('disputeFailedInvalid')
+            : failure === 'server' ? t('disputeFailedServer')
+              : t('disputeFailedNetwork');
+  }
 
   async function sendReply() {
     const content = reply.trim();
@@ -65,7 +120,8 @@ export default function DisputeDetailPage() {
       reload();
       setReply('');
     } catch (e) {
-      setReplyError(e instanceof Error ? e.message : t('replyFailed'));
+      setReplyError(failureCopy(e));
+      setReplySeq((s) => s + 1);
     } finally {
       setReplySending(false);
     }
@@ -80,13 +136,53 @@ export default function DisputeDetailPage() {
   async function resolve() {
     setSaving(true);
     setSaveError(null);
+    // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
+    // (min 0.01, max 999999, ≤2dp — PR-Agent r1 #192) so EVERY invalid entry
+    // gets the localized inline error instead of an untranslated English 400
+    // via saveError. PR-Agent r2 #192: the input is type="text" +
+    // inputMode="decimal" (a type="number" field reports sanitized '' for
+    // comma decimals / Arabic-Indic digits, which would bypass this gate and
+    // silently drop the refund intent again) — so the RAW text always arrives
+    // here. PR-Agent r3 #192: Arabic-Indic digits (٣٧٫٥٠) are NORMALIZED to
+    // ASCII before validating AND the same normalized value feeds the payload —
+    // the console is EN+AR first-class and inputMode=decimal surfaces native
+    // digits on Arabic keyboards.
+    const normalizedRefund = refundAmount
+      .trim()
+      .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/\u066b/g, '.');
+    if (outcome === 'resolved' && normalizedRefund !== '') {
+      const valid = /^\d{1,6}(\.\d{1,2})?$/.test(normalizedRefund);
+      const refundSar = parseFloat(normalizedRefund);
+      if (!valid || !Number.isFinite(refundSar) || refundSar < 0.01 || refundSar > 999999) {
+        setRefundInvalid(true);
+        setSaving(false);
+        return;
+      }
+    }
+    setRefundInvalid(false);
     try {
-      await api.post(`/admin/disputes/${id}/resolve`, { outcome, decision, internalNote });
+      // P1-29: refund rides the resolve body only when outcome=resolved AND a
+      // positive amount is entered (validated above against the normalized
+      // value — the API now 400s a refund on a rejected outcome, run-#174
+      // contract).
+      const refundSar = outcome === 'resolved' ? parseFloat(normalizedRefund) : NaN;
+      await api.post(`/admin/disputes/${id}/resolve`, {
+        outcome,
+        decision,
+        internalNote,
+        ...(outcome === 'resolved' && Number.isFinite(refundSar) && refundSar > 0
+          ? { refundAmountSar: refundSar }
+          : {}),
+      });
       reload();
       setDecision('');
       setInternalNote('');
+      setRefundAmount('');
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(failureCopy(e));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
     }
@@ -99,7 +195,8 @@ export default function DisputeDetailPage() {
       await api.post(`/admin/disputes/${id}/reopen`);
       reload();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(failureCopy(e));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
       setConfirmReopen(false);
@@ -113,11 +210,22 @@ export default function DisputeDetailPage() {
       await api.patch(`/admin/disputes/${id}`, {
         decision: editDecision,
         internalNote: editNote,
+        version: d.version,
       });
       setEditing(false);
       reload();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveSeq((s) => s + 1);
+      if (isStaleEditError(e)) {
+        // P2-192: another admin saved while this editor was open. Keep the
+        // editor OPEN (the typed draft is not lost), say what happened +
+        // what to do next, and refresh the row in the background so the
+        // next save carries the fresh version.
+        setSaveError(tc('editStale'));
+        reload();
+      } else {
+        setSaveError(failureCopy(e));
+      }
     } finally {
       setSaving(false);
     }
@@ -152,6 +260,7 @@ export default function DisputeDetailPage() {
     if (action === 'marked_no_show') return t('noShowMarked');
     if (action === 'appeal') return t('appeal');
     if (action === 'reopened') return t('reopened');
+    if (action === 'sla_escalated') return t('slaTimeline');
     return t('evidence');
   }
 
@@ -193,7 +302,14 @@ export default function DisputeDetailPage() {
               <div>
                 <dt className="text-xs text-gray-500">{t('status')}</dt>
                 <dd className="mt-0.5">
-                  <StatusBadge status={data.status} />
+                  <span className="inline-flex items-center gap-1.5">
+                    <StatusBadge status={data.status} />
+                    {data.sla_escalated ? (
+                      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                        {t('slaBadge')}
+                      </span>
+                    ) : null}
+                  </span>
                 </dd>
               </div>
               {data.policy_ref && (
@@ -230,7 +346,9 @@ export default function DisputeDetailPage() {
                             ? 'bg-blue-500'
                             : e.action === 'reopened'
                               ? 'bg-purple-500'
-                              : 'bg-amber-500'
+                              : e.action === 'sla_escalated'
+                                ? 'bg-red-500'
+                                : 'bg-amber-500'
                         }`}
                       />
                       {evidenceLabel(e.action)}
@@ -276,7 +394,7 @@ export default function DisputeDetailPage() {
                 maxLength={2000}
                 className="w-full rounded-lg border border-gray-300 p-2 text-sm"
               />
-              {replyError && <p className="mt-2 text-sm text-brand-red">{replyError}</p>}
+              {replyError && <p role="alert" key={`reply-${replySeq}`} className="mt-2 text-sm text-brand-red">{replyError}</p>}
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-gray-400">{reply.length}/2000</span>
                 <button
@@ -312,7 +430,7 @@ export default function DisputeDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={2}
                 />
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setEditing(false)}
@@ -334,13 +452,15 @@ export default function DisputeDetailPage() {
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">{t('closedAs', { status: statusLabel })}</p>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setConfirmReopen(true)}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-                  >
-                    <RotateCcw className="h-4 w-4" /> {t('reopen')}
-                  </button>
+                  {canReopen && (
+                    <button
+                      onClick={() => setConfirmReopen(true)}
+                      disabled={saving}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4" /> {t('reopen')}
+                    </button>
+                  )}
                   <button
                     onClick={startEdit}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -348,9 +468,9 @@ export default function DisputeDetailPage() {
                     <Pencil className="h-4 w-4" /> {t('editOutcome')}
                   </button>
                 </div>
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
               </div>
-            ) : (
+            ) : canResolve ? (
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <button
@@ -384,7 +504,35 @@ export default function DisputeDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={2}
                 />
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {outcome === 'resolved' && (
+                  <div>
+                    <label
+                      htmlFor="refund-amount"
+                      className="mb-1 block text-xs font-medium text-gray-600"
+                    >
+                      {t('refundAmount')}
+                    </label>
+                    <input
+                      id="refund-amount"
+                      type="text"
+                      inputMode="decimal"
+                      aria-invalid={refundInvalid}
+                      value={refundAmount}
+                      onChange={(e) => {
+                        setRefundAmount(e.target.value);
+                        if (refundInvalid) setRefundInvalid(false);
+                      }}
+                      placeholder={t('refundAmountHint')}
+                      className="w-full rounded-lg border border-gray-300 p-2 text-sm"
+                    />
+                    {refundInvalid && (
+                      <p role="status" className="mt-1 text-sm text-brand-red">
+                        {t('refundInvalid')}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={resolve}
                   disabled={saving}
@@ -394,7 +542,7 @@ export default function DisputeDetailPage() {
                   {t('submit')}
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

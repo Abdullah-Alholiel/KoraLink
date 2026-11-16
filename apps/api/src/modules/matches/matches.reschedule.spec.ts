@@ -85,7 +85,9 @@ describe('MatchesService.rescheduleMatch', () => {
       },
       select: () => ({
         from: (table: unknown) => {
-          const chain: any = { where: () => chain, limit: () => chain };
+          // Run #105: the reschedule wallet read is now `.for('update')` —
+          // the chain must survive the extra link.
+          const chain: any = { where: () => chain, limit: () => chain, for: () => chain };
           chain.then = (resolve: (v: unknown) => void) => {
             if (table === pitches) resolve([{ hourly_rate: '100' }]);
             else if (table === users) resolve([{ wallet_balance: overrides.walletBalance ?? '500' }]);
@@ -98,7 +100,12 @@ describe('MatchesService.rescheduleMatch', () => {
         set: (setArg: Record<string, unknown>) => ({
           where: () => {
             if (table === pitch_slots) slotUpdates.push(setArg);
-            return { then: (r: (v: unknown) => void) => r([]) };
+            return {
+              // Run #105: the wallet update now `.returning()`s the new
+              // balance (zero-rows = race-loser insufficient-floor path).
+              returning: () => (table === users ? [{ wallet_balance: '500' }] : []),
+              then: (r: (v: unknown) => void) => r([]),
+            };
           },
         }),
       }),

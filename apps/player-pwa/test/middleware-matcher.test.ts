@@ -33,6 +33,13 @@ describe('middleware matcher — PWA artifacts bypass locale routing', () => {
     expect(matcherExcludes('/landing/draft-a-player/index.html')).toBe(true);
   });
 
+  it('excludes self-hosted vendor assets (Moyasar payment form) — 307→404 broke the top-up form', () => {
+    expect(matcherExcludes('/vendor/moyasar/moyasar.umd.js')).toBe(true);
+    expect(matcherExcludes('/vendor/moyasar/moyasar.css')).toBe(true);
+    // a PAGE that merely starts with the word must still be localized
+    expect(matcherExcludes('/vendors')).toBe(false);
+  });
+
   it('still routes pages through the locale middleware', () => {
     expect(matcherExcludes('/en/play')).toBe(false);
     expect(matcherExcludes('/ar/match/abc')).toBe(false);

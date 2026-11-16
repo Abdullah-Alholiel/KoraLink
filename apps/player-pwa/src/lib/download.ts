@@ -7,11 +7,19 @@
  * Safe to call on the client only (no-op server-side).
  */
 export function downloadJsonAsFile(data: unknown, filename: string): void {
+  downloadTextAsFile(JSON.stringify(data, null, 2), filename, 'application/json');
+}
+
+/** Same pattern for arbitrary text (e.g. the wallet CSV export, P2-119). */
+export function downloadTextAsFile(
+  text: string,
+  filename: string,
+  mimeType: string,
+): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return;
   }
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
+  const blob = new Blob([text], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

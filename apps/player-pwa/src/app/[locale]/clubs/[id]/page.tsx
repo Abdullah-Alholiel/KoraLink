@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -18,6 +18,12 @@ import {
   X,
 } from 'lucide-react';
 import { useVenue } from '@/hooks/useVenues';
+import { firstVenueImage } from '@/lib/media-url';
+import {
+    useVenueFavoriteIds,
+    useVenueFavoriteToggle,
+} from '@/hooks/useVenueFavorites';
+import { Heart } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
 import { useNow } from '@/hooks/useNow';
 import MatchDateSections from '@/components/matches/MatchDateSections';
@@ -29,17 +35,12 @@ import { classifyError, errorKey } from '@/lib/error-classify';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { isVenueOpenNow } from '@/lib/venue-hours';
+import { formatMoney } from '@/lib/format';
 import { selectUser, useAppStore } from '@/store/useAppStore';
 import BottomSheet from '@/components/layout/BottomSheet';
+import VenueReviewsSection from '@/components/venues/VenueReviewsSection';
 
 // ── Helpers ────────────────────────────────────────────────
-
-/** Hourly pitch rate display (numeric column arrives as string from Drizzle). */
-const hourlyRateFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'SAR',
-  maximumFractionDigits: 2,
-});
 
 function formatDateLabel(
   date: Date,
@@ -77,7 +78,18 @@ const AMENITY_ICONS: Record<string, string> = {
   gym: '🏋️',
   indoor: '🏠',
   wifi: '📶',
+  prayer_room: '🕌',
 };
+
+// Localized amenity label with graceful fallback for unknown future codes
+// (P2-187, run #128): t(`clubs.amenity.<code>`) when the code has a key,
+// generic `clubs.amenity.unknown` otherwise (never blank, never raw code).
+// Key set derives from AMENITY_ICONS — one list, no duplicate drift.
+const AMENITY_LABEL_KEYS = new Set(Object.keys(AMENITY_ICONS));
+function amenityLabel(code: string, t: (key: string) => string): string {
+  if (AMENITY_LABEL_KEYS.has(code)) return t(`clubs.amenity.${code}`);
+  return t('clubs.amenity.unknown');
+}
 
 export default function ClubPage() {
   const params = useParams<{ id: string }>();
@@ -92,11 +104,34 @@ export default function ClubPage() {
   // to the plain localized date until the clock effect lands.
   const clubNowMs = useNow() ?? 0;
 
-  const { data: venue, isLoading, error } = useVenue(id);
+  // P2-160: venue-level failures get the same classify + retry treatment as
+  // match detail — a transient network blip on a booking-entry surface must
+  // offer recovery, not a dead end.
+  const { data: venue, isLoading, error, refetch: refetchVenue } = useVenue(id);
+
+  // ── P2-161: favorite heart state (run #109) ──────────────────────────
+  // Run #110: onError the heart is inert (unknown state must not toggle) —
+  // the compact strip below the hero says why + offers Retry (PR-Agent r2:
+  // a dead control needs an explanation on THIS page, not only the list).
+  const { data: favIds, isLoading: favIdsLoading, isError: favIdsError, refetch: refetchFavIds } = useVenueFavoriteIds();
+  const favSet = favIds ?? [];
+  const favoriteToggle = useVenueFavoriteToggle();
+  const showToast = useAppStore((s) => s.showToast);
 
   // ── Date filter state — null = "all games" first-look (matches Play) ──
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+
+  // ── P2-269: hero photo (run #171) — venue's first managed image; a load
+  // failure degrades to the stadium art for the rest of the session ──
+  const [heroBroken, setHeroBroken] = useState(false);
+  // PR-Agent r1 (run #171): reset when the venue changes — client-side
+  // navigation reuses this component instance (dynamic route), so a stale
+  // heroBroken would keep venue B on stadium art though it has a photo.
+  useEffect(() => {
+    setHeroBroken(false);
+  }, [venue?.id]);
+  const heroPhotoUrl = heroBroken ? null : firstVenueImage(venue?.images);
 
   // Use Asia/Riyadh local day (NOT UTC) — same as the Play feed's dateInRiyadh.
   const dateStr = selectedDate ? dateInRiyadh(selectedDate) : null;
@@ -118,6 +153,9 @@ export default function ClubPage() {
 
   const storeUser = useAppStore(selectUser);
   const currentUserId = storeUser?.id;
+  // Run #110 (PR-Agent r6): auth-ready signal — hearts + ids-dependent UI
+  // stay inert until the persisted store rehydrates (user known vs guest).
+  const isHydrated = useAppStore((s) => s.isHydrated);
 
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
@@ -143,9 +181,10 @@ export default function ClubPage() {
       <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 pt-[var(--top-safe-inset)] pb-3">
         <button
           onClick={() => router.back()}
+          aria-label={t('common.back')}
           className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
         >
-          <ArrowLeft className="w-5 h-5 text-white" strokeWidth={2} />
+          <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
         </button>
         <h1 className="text-base font-bold text-white absolute left-1/2 -translate-x-1/2 truncate max-w-[60%]">
           {isLoading ? '' : venue?.name ?? t('clubs.venue')}
@@ -161,26 +200,111 @@ export default function ClubPage() {
           </div>
         )}
 
-        {/* ── Error ── */}
-        {error && !isLoading && (
+        {/* ── Error (classified copy + retry, P2-160) ── */}
+        {error && !isLoading && !venue && (
           <div className="flex flex-col items-center py-20 px-8">
-            <AlertTriangle className="w-10 h-10 text-brand-red" strokeWidth={1.5} />
-            <p className="text-sm text-gray-400 mt-3">{t('clubs.error')}</p>
+            <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-bold text-brand-black mb-6 text-center">
+              {t(errorKey(classifyError(error)))}
+            </h3>
+            <button
+              onClick={() => refetchVenue()}
+              className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+            >
+              {t('common.retry')}
+            </button>
           </div>
         )}
 
         {venue && (
           <>
-            {/* ════ HERO — Stadium Background ════ */}
+            {/* ════ HERO — venue photo (P2-269) with stadium-art fallback ════ */}
             <div className="relative h-48 overflow-hidden">
-              <Image
-                src="/images/stadium-bg.png"
-                alt={venue.name}
-                fill
-                className="object-cover"
-                priority
-              />
+              {heroPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- cross-origin API-served path; plain img keeps CSP + next/image optimizer out of the media route
+                <img
+                  src={heroPhotoUrl}
+                  alt={venue.name}
+                  onError={() => setHeroBroken(true)}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <Image
+                  src="/images/stadium-bg.png"
+                  alt={venue.name}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
+
+              {/* ── P2-161: favorite heart on the hero (run #109) ── */}
+              <button
+                  type="button"
+                  aria-pressed={favSet.includes(venue.id)}
+                  aria-label={
+                      favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')
+                  }
+                  disabled={
+                      // Run #110 (PR-Agent r1+r2+r6+r7): unknown heart state
+                      // must be inert — ids loading, auth store not yet
+                      // rehydrated, a signed-out visitor, or error with NO
+                      // usable cached ids. A tap on a mislabeled heart would
+                      // silently UNfavorite a saved venue (a guest tap can
+                      // only 401). Stale cached ids stay usable (strip
+                      // warns).
+                      (favoriteToggle.isPending &&
+                          favoriteToggle.variables?.venueId === venue.id) ||
+                      !isHydrated ||
+                      !storeUser ||
+                      favIdsLoading ||
+                      (favIdsError && !favIds)
+                  }
+                  onClick={() =>
+                      favoriteToggle.mutate(
+                          // Ids only — the onSettled invalidation refetches the
+                          // list cache; injecting the detail shape (superset
+                          // with pitches) into the VenueApi[] cache via a cast
+                          // was PR-Agent run-#109's type-safety finding.
+                          { venueId: venue.id },
+                          { onError: () => showToast(t('errors.favoriteFailed'), 'error') },
+                      )
+                  }
+                  className="absolute top-4 end-5 z-10 w-10 h-10 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+              >
+                  <Heart
+                      className={`w-5 h-5 transition-colors ${
+                          favSet.includes(venue.id)
+                              ? 'fill-brand-red text-brand-red'
+                              : 'text-gray-500'
+                      }`}
+                      strokeWidth={2}
+                  />
+              </button>
+
+              {/* Run #110 (PR-Agent r2, gated r6): compact ids-error strip on
+                  the detail page — the inert heart must explain itself + offer
+                  Retry here, not only on the clubs list. Only for signed-in
+                  users (r6: guests never query, so a strip here would be a
+                  false "couldn't load" for a feature they don't have). */}
+              {isHydrated && storeUser && favIdsError && !favIdsLoading && (
+                  <div
+                      role="status"
+                      className="absolute top-16 start-4 end-4 flex items-center justify-between gap-2 rounded-xl bg-black/60 backdrop-blur px-3 py-2"
+                  >
+                      <p className="text-xs text-amber-200">{t('clubs.favoritesError')}</p>
+                      <button
+                          type="button"
+                          onClick={() => refetchFavIds()}
+                          className="text-xs font-bold text-white underline underline-offset-2 active:scale-95 transition-transform whitespace-nowrap"
+                      >
+                          {t('common.retry')}
+                      </button>
+                  </div>
+              )}
 
               {/* Bottom text on hero */}
               <div className="absolute bottom-4 start-5 end-5 text-white">
@@ -298,7 +422,7 @@ export default function ClubPage() {
                                 key={code}
                                 className="text-[10px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-medium"
                               >
-                                {AMENITY_ICONS[code] || '✓'} {code.replace(/_/g, ' ')}
+                                {AMENITY_ICONS[code] || '✓'} {amenityLabel(code, t)}
                               </span>
                             ))}
                           </div>
@@ -308,6 +432,9 @@ export default function ClubPage() {
                   })()}
                 </div>
               </div>
+
+              {/* ── P1-55: booking-verified reviews ── */}
+              <VenueReviewsSection venueId={id} locale={locale} />
 
               {/* ── P1-32: Pitches (what you can actually book here) ── */}
               {(venue.pitches?.length ?? 0) > 0 && (
@@ -328,7 +455,7 @@ export default function ClubPage() {
                           </p>
                         </div>
                         <span className="text-sm font-bold text-brand-green flex-shrink-0" dir="ltr">
-                          {hourlyRateFormatter.format(Number(pitch.hourly_rate))}
+                          {formatMoney(Number(pitch.hourly_rate), locale === 'ar' ? 'ar' : 'en')}
                           <span className="block text-[10px] font-medium text-gray-400 text-end">
                             / {t('clubs.perHour')}
                           </span>

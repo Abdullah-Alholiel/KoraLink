@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, Inject, NotFoundException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { Injectable, BadRequestException, ForbiddenException, Inject, NotFoundException } from '@nestjs/common';
+import { and, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { venues } from '../../database/schema';
+import { venues, venue_favorites, venue_reviews } from '../../database/schema';
+import { escapeLikePattern } from '../../common/utils/escape-like';
 import { GetVenuesDto } from './dto/get-venues.dto';
 
 /** Row shape returned by VenuesService.findSuggestions. */
@@ -16,6 +17,33 @@ export interface VenueSuggestionRow {
   neighborhood: string;
   /** Number of approved venues at this city + neighborhood pair. */
   venue_count: number;
+}
+
+/** P2-161: idempotent favorite/unfavorite response contract. */
+export interface FavoriteMutationResult {
+  /** True when favorited, false when not favorited. */
+  favorited: boolean;
+  /** addFavorite: a row was actually inserted (false = already favorited). */
+  created?: boolean;
+  /** removeFavorite: a row was actually deleted (false = was not favorited). */
+  removed?: boolean;
+}
+
+/** P1-55: review submit response contract (upsert analog of the
+ *  return-findOne-after-tx rule — aggregates are computed from THIS tx, so
+ *  they are exactly the state the write produced, without a re-read). */
+export interface ReviewMutationResult {
+  review: {
+    id: string;
+    venue_id: string;
+    user_id: string;
+    match_id: string;
+    rating: number;
+    comment: string | null;
+    created_at: Date;
+    updated_at: Date;
+  };
+  venueRating: { average: number; count: number };
 }
 
 /**
@@ -93,6 +121,14 @@ export interface NearbyVenueRow {
   closed_day_4: boolean;
   closed_day_5: boolean;
   closed_day_6: boolean;
+  // P2-173 (run #119): P1-55 review aggregates on every list row (NOT NULL
+  // DEFAULT 0 per migration 0048 — 0/0 means "no approved reviews yet").
+  rating_avg: number;
+  rating_count: number;
+  // P2-269 (run #171): managed photo paths (/media/venues/<venueId>/<sha>.<ext>)
+  // — migration 0057 jsonb NOT NULL DEFAULT '[]'; consumed by the PWA as
+  // card/hero cover images with letter-avatar/stadium fallbacks.
+  images: unknown;
 }
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -106,7 +142,7 @@ export class VenuesService {
    * Uses PostGIS ST_DWithin for geo-filtering (same pattern as matches service).
    */
   async findNearby(dto: GetVenuesDto): Promise<NearbyVenueRow[]> {
-    const { lat, lng, radius_km = 50, city, is_koralink_partner, search } = dto;
+    const { lat, lng, radius_km = 50, city, is_koralink_partner, search, sort } = dto;
 
     if ((lat === undefined) !== (lng === undefined)) {
       throw new BadRequestException('Both lat and lng must be provided together.');
@@ -125,7 +161,7 @@ export class VenuesService {
       : sql``;
 
     const cityClause = city
-      ? sql`AND v.city ILIKE ${'%' + city + '%'}`
+      ? sql`AND v.city ILIKE ${'%' + escapeLikePattern(city) + '%'} ESCAPE '\\'`
       : sql``;
 
     // P1-28 (run #21): server-side free-text search — additive AND, never
@@ -133,7 +169,7 @@ export class VenuesService {
     // city; pg_trgm similarity ranking is a later perf/ranking option.
     const searchTerm = search?.trim();
     const searchClause = searchTerm
-      ? sql`AND (v.name ILIKE ${'%' + searchTerm + '%'} OR v.city ILIKE ${'%' + searchTerm + '%'} OR v.address ILIKE ${'%' + searchTerm + '%'})`
+      ? sql`AND (v.name ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\' OR v.city ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\' OR v.address ILIKE ${'%' + escapeLikePattern(searchTerm) + '%'} ESCAPE '\\')`
       : sql``;
 
     const partnerClause = is_koralink_partner !== undefined
@@ -147,6 +183,25 @@ export class VenuesService {
           )`
       : sql`NULL`;
 
+    // P2-173 (run #119): "Top Rated" ordering. Contract:
+    //   * default (no sort) = today's exact behavior: [distance_m ASC,] name ASC
+    //   * sort=top_rated    = rating_avg DESC, rating_count DESC, name ASC —
+    //     COORDS-INDEPENDENT (the user picked rating over proximity;
+    //     distance_m is still SELECTed but does not order rows).
+    //   * sort NEVER changes the WHERE (additive-only rule — the pills'
+    //     filters keep composing; ordering is not a predicate).
+    //   * The two rating columns are ALWAYS in the SELECT (additive row-shape
+    //     keys, cards can show stars on every tab); only ordering flips.
+    //   * rating_avg/rating_count are NOT NULL DEFAULT 0 per 0048, so unrated
+    //     venues sort last naturally (0 first ascending = last descending).
+    //     No index needed at ~50 venues (seq scan wins at this scale —
+    //     Reviewer A run #119).
+    const orderBy =
+      sort === 'top_rated'
+        ? sql`v.rating_avg DESC, v.rating_count DESC, v.name ASC`
+        : sql`${hasCoords ? sql`distance_m ASC,` : sql``}
+        v.name ASC`;
+
     const rows = await this.db.execute(sql`
       SELECT
         v.id,
@@ -158,14 +213,17 @@ export class VenuesService {
         v.is_koralink_partner,
         ${distanceExpr} AS distance_m,
         v.owner_id,
-        u.full_name AS owner_name,
+        COALESCE(u.full_name, '') AS owner_name,
         COUNT(p.id)::int AS pitch_count,
         v.open_hour::int,
         v.close_hour::int,
         v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
-        v.closed_day_4, v.closed_day_5, v.closed_day_6
+        v.closed_day_4, v.closed_day_5, v.closed_day_6,
+        v.rating_avg::float8 AS rating_avg,
+        v.rating_count::int AS rating_count,
+        v.images
       FROM venues v
-      INNER JOIN users u ON u.id = v.owner_id
+      LEFT JOIN users u ON u.id = v.owner_id
       LEFT JOIN pitches p ON p.venue_id = v.id
       WHERE v.is_approved = true
         ${searchClause}
@@ -174,8 +232,7 @@ export class VenuesService {
         ${geoClause}
       GROUP BY v.id, u.id
       ORDER BY
-        ${hasCoords ? sql`distance_m ASC,` : sql``}
-        v.name ASC
+        ${orderBy}
       LIMIT 50
     `);
 
@@ -286,6 +343,295 @@ export class VenuesService {
       closed_day_4: venue.closed_day_4,
       closed_day_5: venue.closed_day_5,
       closed_day_6: venue.closed_day_6,
+    };
+  }
+
+  // ── P2-161: venue favorites (run #109) ──────────────────────────────────
+  // Composite PK (user_id, venue_id) makes both directions idempotent.
+  // Listing mirrors findNearby's EXACT row shape (adapt-by-extending rule) so
+  // the PWA consumes VenueApi[] with zero new adapter code; distance is
+  // always NULL (favorites are not geo-ranked) and ordering is newest-first.
+
+  /** The favorited ids for a user — the PWA heart-state source. Only ids the
+   *  list endpoint would also return (approved venues); a venue unapproved
+   *  after favoriting disappears from BOTH rather than half-existing. */
+  async listFavoriteIds(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ venue_id: venue_favorites.venue_id })
+      .from(venue_favorites)
+      .innerJoin(venues, eq(venues.id, venue_favorites.venue_id))
+      .where(and(eq(venue_favorites.user_id, userId), eq(venues.is_approved, true)))
+      // Run #111: name tiebreaker — mirrors listFavoriteVenues' ordering so
+      // the ids list and the venues list can never disagree on tie order.
+      .orderBy(sql`venue_favorites.created_at DESC`, sql`venues.name ASC`);
+    return rows.map((r) => r.venue_id);
+  }
+
+  /** Full venue rows for the user's favorites, newest-first, findNearby shape. */
+  async listFavoriteVenues(userId: string) {
+    const res = await this.db.execute(sql`
+      SELECT
+        v.id,
+        v.name,
+        v.city,
+        v.address,
+        v.amenities,
+        v.is_approved,
+        v.is_koralink_partner,
+        NULL::float8 AS distance_m,
+        v.owner_id,
+        COALESCE(u.full_name, '') AS owner_name,
+        COUNT(p.id)::int AS pitch_count,
+        v.open_hour::int,
+        v.close_hour::int,
+        v.closed_day_0, v.closed_day_1, v.closed_day_2, v.closed_day_3,
+        v.closed_day_4, v.closed_day_5, v.closed_day_6,
+        v.images
+      FROM venue_favorites vf
+      INNER JOIN venues v ON v.id = vf.venue_id
+      LEFT JOIN users u ON u.id = v.owner_id
+      LEFT JOIN pitches p ON p.venue_id = v.id
+      WHERE vf.user_id = ${userId}
+        AND v.is_approved = true
+      GROUP BY v.id, u.id, vf.created_at
+      ORDER BY vf.created_at DESC, v.name ASC
+    `);
+    return res as unknown as Record<string, unknown>[];
+  }
+
+  /** Idempotent favorite. `created` is true only when a row was inserted. */
+  async addFavorite(userId: string, venueId: string): Promise<FavoriteMutationResult> {
+    // PR-Agent run-#109: is_approved required — a 404-vs-success split on
+    // unapproved ids would let any authed user enumerate the unapproved
+    // catalog; and favoriting an unapproved venue would strand the id in the
+    // ids list while the list query (is_approved=true) drops it.
+    //
+    // Run #111 (Reviewer A IMPORTANT): the check and the insert share ONE
+    // transaction with a FOR UPDATE row lock on the venue row — run as two
+    // bare statements, a venue unapproved between them left an ORPHAN
+    // favorite row that BOTH list queries (join venues.is_approved = true)
+    // never return: an invisible heart the UI cannot even un-favorite.
+    // The lock serializes against admin unapprove (admin/venues transfer
+    // pattern, :241) so the approval state cannot flip mid-transaction.
+    return this.db.transaction(async (tx) => {
+      const [venue] = await tx
+        .select({ id: venues.id })
+        .from(venues)
+        .where(and(eq(venues.id, venueId), eq(venues.is_approved, true)))
+        .for('update')
+        .limit(1);
+      if (!venue) {
+        throw new NotFoundException(`Venue ${venueId} not found.`);
+      }
+
+      const inserted = await tx
+        .insert(venue_favorites)
+        .values({ user_id: userId, venue_id: venueId })
+        .onConflictDoNothing()
+        .returning({ venue_id: venue_favorites.venue_id });
+
+      return { favorited: true, created: inserted.length > 0 };
+    });
+  }
+
+  /** Idempotent unfavorite. Never 404s on a missing row (mirror of unblock). */
+  async removeFavorite(userId: string, venueId: string): Promise<FavoriteMutationResult> {
+    const deleted = await this.db
+      .delete(venue_favorites)
+      .where(
+        and(eq(venue_favorites.user_id, userId), eq(venue_favorites.venue_id, venueId)),
+      )
+      .returning({ venue_id: venue_favorites.venue_id });
+
+    return { favorited: false, removed: deleted.length > 0 };
+  }
+
+  // ── P1-55: booking-verified venue reviews (run #117) ────────────────────
+  // The verified-booking predicate is the SINGLE source of truth for both the
+  // 403 on submit and the GET's can_review flag (the UI CTA must never claim
+  // eligibility the server would refuse). A review's match_id is a PROOF ID
+  // only — no FK, so match purge/cancel flows can never cascade-delete
+  // historical reviews (P2-47 decision pending).
+
+  /** TRUE when the user has ≥1 Completed match at this venue (any pitch).
+   *  Returns the LATEST completed match id — stored as the review's proof. */
+  private async verifiedBooking(
+    userId: string,
+    venueId: string,
+  ): Promise<string | null> {
+    const res = await this.db.execute(sql`
+      SELECT m.id
+      FROM matches m
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN match_players mp ON mp.match_id = m.id AND mp.user_id = ${userId}
+      WHERE p.venue_id = ${venueId}
+        AND m.status = 'Completed'
+      ORDER BY m.completed_at DESC NULLS LAST, m.scheduled_at DESC
+      LIMIT 1
+    `);
+    const rows = res as unknown as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  }
+
+  /**
+   * Submit (or re-submit) a review. Re-submission UPSERTs — UNIQUE
+   * (venue_id, user_id), latest verdict wins. The aggregate recompute and the
+   * write share ONE transaction guarded by FOR UPDATE on the venue row, so
+   * two concurrent submissions serialize (mirrors addFavorite's lock pattern,
+   * run #111) and rating_avg/rating_count can never drift from the rows.
+   */
+  async submitVenueReview(
+    userId: string,
+    venueId: string,
+    rating: number,
+    comment: string | null,
+  ): Promise<ReviewMutationResult> {
+    return this.db.transaction(async (tx) => {
+      // Lock the venue row: serializes concurrent aggregates + 404s unknown
+      // ids (UuidParamPipe has already shape-checked the id).
+      const [venue] = await tx
+        .select({ id: venues.id })
+        .from(venues)
+        .where(eq(venues.id, venueId))
+        .for('update')
+        .limit(1);
+      if (!venue) {
+        throw new NotFoundException(`Venue ${venueId} not found.`);
+      }
+
+      const proofMatchId = await this.verifiedBookingTx(tx, userId, venueId);
+      if (!proofMatchId) {
+        throw new ForbiddenException(
+          'Only players who completed a game at this venue can review it.',
+        );
+      }
+
+      // Upsert — one review per (venue, user); updated_at rides the table's
+      // $onUpdateFn. comment explicitly NULLable (isNull on update set).
+      const [row] = await tx
+        .insert(venue_reviews)
+        .values({
+          venue_id: venueId,
+          user_id: userId,
+          match_id: proofMatchId,
+          rating,
+          comment: comment ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [venue_reviews.venue_id, venue_reviews.user_id],
+          set: {
+            rating,
+            comment: comment ?? null,
+            match_id: proofMatchId,
+            updated_at: new Date(),
+          },
+        })
+        .returning();
+
+      // Recompute aggregates from the rows inside the same tx.
+      const [agg] = await tx
+        .select({
+          average: sql<string>`COALESCE(round(AVG(${venue_reviews.rating})::numeric, 1), 0)`,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(venue_reviews)
+        .where(eq(venue_reviews.venue_id, venueId));
+
+      await tx
+        .update(venues)
+        .set({ rating_avg: Number(agg.average), rating_count: agg.count })
+        .where(eq(venues.id, venueId));
+
+      // P2-291: hidden_at is moderation state — never echoed to the author.
+      const { hidden_at: _hiddenAt, ...review } = row;
+      return {
+        review: {
+          ...review,
+          rating: Number(row.rating),
+        },
+        venueRating: { average: Number(agg.average), count: agg.count },
+      };
+    });
+  }
+
+  /** tx-scoped verified-booking probe (runs inside the submit transaction). */
+  private async verifiedBookingTx(
+    tx: Parameters<Parameters<typeof this.db.transaction>[0]>[0],
+    userId: string,
+    venueId: string,
+  ): Promise<string | null> {
+    const res = await tx.execute(sql`
+      SELECT m.id
+      FROM matches m
+      INNER JOIN pitches p ON p.id = m.pitch_id
+      INNER JOIN match_players mp ON mp.match_id = m.id AND mp.user_id = ${userId}
+      WHERE p.venue_id = ${venueId}
+        AND m.status = 'Completed'
+      ORDER BY m.completed_at DESC NULLS LAST, m.scheduled_at DESC
+      LIMIT 1
+    `);
+    const rows = res as unknown as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  }
+
+  /** Public reviews page for a venue: latest 20 + aggregates + can_review.
+   *  userId is ALWAYS a defined jwt sub — the class-level JwtCookieAuthGuard
+   *  on VenuesController precedes this route (guest calls 401, never reach
+   *  here), and the PWA hook is enabled only for signed-in users — so the
+   *  `(vr.user_id = ${userId})` bind can never be NULL/undefined. */
+  async listVenueReviews(userId: string, venueId: string) {
+    const res = await this.db.execute(sql`
+      SELECT
+        vr.id, vr.rating, vr.comment, vr.created_at, vr.updated_at,
+        u.id AS user_id, u.full_name AS user_full_name, u.avatar_url AS user_avatar_url,
+        (vr.user_id = ${userId}) AS mine
+      FROM venue_reviews vr
+      LEFT JOIN users u ON u.id = vr.user_id
+      WHERE vr.venue_id = ${venueId}
+        AND vr.hidden_at IS NULL
+      ORDER BY vr.updated_at DESC
+      LIMIT 20
+    `);
+    const rows = res as unknown as Array<{
+      id: string;
+      rating: number;
+      comment: string | null;
+      created_at: string;
+      updated_at: string;
+      user_id: string;
+      user_full_name: string | null;
+      user_avatar_url: string | null;
+      mine: boolean;
+    }>;
+
+    const [venue] = await this.db
+      .select({ average: venues.rating_avg, count: venues.rating_count })
+      .from(venues)
+      .where(eq(venues.id, venueId))
+      .limit(1);
+    if (!venue) {
+      throw new NotFoundException(`Venue ${venueId} not found.`);
+    }
+
+    const canReview = await this.verifiedBooking(userId, venueId);
+
+    return {
+      reviews: rows.map((r) => ({
+        id: r.id,
+        rating: Number(r.rating),
+        comment: r.comment,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        user: {
+          id: r.user_id,
+          full_name: r.user_full_name,
+          avatar_url: r.user_avatar_url,
+        },
+        mine: r.mine,
+      })),
+      average: Number(venue.average),
+      count: venue.count,
+      can_review: canReview !== null,
     };
   }
 }

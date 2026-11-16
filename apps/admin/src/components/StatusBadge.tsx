@@ -18,6 +18,7 @@ const styles: Record<string, string> = {
   rejected: 'bg-red-100 text-red-700',
   banned: 'bg-red-100 text-red-700',
   failed: 'bg-red-100 text-red-700',
+  voided: 'bg-gray-100 text-gray-600',
   reversed: 'bg-gray-100 text-gray-600',
   cancelled: 'bg-gray-100 text-gray-600',
   suspended: 'bg-orange-100 text-orange-700',
@@ -27,7 +28,7 @@ const styles: Record<string, string> = {
 const KNOWN = new Set([
   'approved', 'active', 'completed', 'paid', 'resolved', 'pending', 'opened', 'open',
   'under_review', 'full', 'inprogress', 'rejected', 'banned', 'failed', 'reversed',
-  'cancelled', 'suspended', 'booked', 'available', 'inactive',
+  'cancelled', 'suspended', 'booked', 'available', 'inactive', 'voided',
 ]);
 
 export default function StatusBadge({ status }: { status: string | null | undefined }) {

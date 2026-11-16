@@ -11,7 +11,7 @@ import { classifyError } from '@/lib/error-classify';
 import { clearAuthFlow, getAuthChannel, getAuthEmailDraft, getAuthPhoneDraft, setAuthChannel, setAuthEmailDraft, setAuthPhoneDraft } from '@/lib/auth-flow';
 import BlockedCard, { extractSuspendedUntil } from '@/components/auth/BlockedCard';
 import type { BlockedReason } from '@/components/auth/BlockedCard';
-import type { AppLocale } from '@/lib/format';
+import { formatCount, type AppLocale } from '@/lib/format';
 import type { UserProfileApi } from '@/hooks/useUser';
 
 const OTP_LENGTH = 6;
@@ -217,11 +217,7 @@ function VerifyContent() {
                             clearAuthFlow();
                             return;
                         }
-                        setError(
-                            kind === 'rateLimited'
-                                ? tErrors('rateLimited')
-                                : tErrors('otpFailed'),
-                        );
+                        setError(verifyErrorCopy(err));
                     },
                 },
             );
@@ -244,14 +240,32 @@ function VerifyContent() {
                         clearAuthFlow();
                         return;
                     }
-                    setError(
-                        kind === 'rateLimited'
-                            ? tErrors('rateLimited')
-                            : tErrors('otpFailed'),
-                    );
+                    setError(verifyErrorCopy(err));
                 },
             },
         );
+    };
+
+    // P2-198 (run #131): the verify LOCKOUT 429 now carries retryAfter
+    // (server truth). One helper drives BOTH verify onError paths so the
+    // copy and the countdown can never disagree; the retry-in copy reuses
+    // the P2-194 ICU key. The resend button is pinned to the same window
+    // (capped at RESEND_COOLDOWN, its natural max) — resends are pointless
+    // while locked out.
+    const verifyErrorCopy = (err: unknown): string => {
+        const kind = classifyError(err);
+        const retryAfter = (err as { retryAfter?: number })?.retryAfter;
+        if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
+            const wait = Math.ceil(retryAfter);
+            // Copy shows SERVER truth (PR-Agent run #131: clamping a 15-min
+            // lockout into a 60s message loops the user through blind
+            // retries that always 429 again). The resend button keeps its
+            // natural 60s window — an early resend mid-lockout is harmless,
+            // the send-path cooldown still guards it server-side.
+            setResendCountdown(Math.min(wait, RESEND_COOLDOWN));
+            return tErrors('rateLimitedRetryIn', { seconds: wait });
+        }
+        return kind === 'rateLimited' ? tErrors('rateLimited') : tErrors('otpFailed');
     };
 
     const handleResend = () => {
@@ -267,6 +281,21 @@ function VerifyContent() {
         // localized moderation copy instead of a generic "send failed".
         const onSendError = (err: unknown) => {
             const kind = classifyError(err);
+            // P2-194: the cooldown 429 carries retryAfter (server truth).
+            // Self-heal the countdown (multi-device sends drift past the
+            // client's local 60s guess) and show a retry-in copy instead of
+            // a generic failure — the button re-enables exactly when the
+            // server will accept the send again.
+            const retryAfter = (err as { retryAfter?: number })?.retryAfter;
+            if (kind === 'rateLimited' && typeof retryAfter === 'number' && retryAfter > 0) {
+                // One capped value drives BOTH the countdown and the copy so
+                // the text can never promise a wait longer than the disable
+                // (PR-Agent run #129 MINOR: copy/countdown mismatch).
+                const capped = Math.min(retryAfter, RESEND_COOLDOWN);
+                setResendCountdown(capped);
+                setError(tErrors('rateLimitedRetryIn', { seconds: capped }));
+                return;
+            }
             setError(
                 kind === 'rateLimited'
                     ? tErrors('rateLimited')
@@ -414,7 +443,7 @@ function VerifyContent() {
                         <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
                     )}
                     {resendCountdown > 0
-                        ? `${t('resendIn')} ${resendCountdown} ${t('seconds')}`
+                        ? `${t('resendIn')} ${formatCount(resendCountdown, (locale === 'ar' ? 'ar' : 'en') as AppLocale)} ${t('seconds')}`
                         : t('resend')}
                 </button>
             </div>

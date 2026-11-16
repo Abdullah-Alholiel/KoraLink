@@ -7,6 +7,13 @@ interface OfflineBannerProps {
     /** Renders nothing when false (caller's `useOnlineStatus()` result). */
     isOffline: boolean;
     /**
+     * Optional context-specific copy overriding the generic
+     * `common.offlineBanner` line (P2-177: the host form says what CAN'T
+     * load, not "showing cached data"). Still routed through this ONE
+     * component so the amber-strip idiom never forks.
+     */
+    message?: string;
+    /**
      * Layout idiom: `inline` = the canonical amber strip (mx-4 mt-2, icon row)
      * used by feed/clubs/my-games/messages/reports; `plain` = the compact
      * text-only strip — margins are the CALLER's (used inside padded
@@ -26,15 +33,17 @@ interface OfflineBannerProps {
  */
 export default function OfflineBanner({
     isOffline,
+    message,
     variant = 'inline',
     className = '',
 }: OfflineBannerProps) {
     const t = useTranslations('common');
     if (!isOffline) return null;
+    const text = message ?? t('offlineBanner');
     if (variant === 'plain') {
         return (
             <div role="status" className={`bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 ${className}`}>
-                <p className="text-xs text-amber-700 font-medium">{t('offlineBanner')}</p>
+                <p className="text-xs text-amber-700 font-medium">{text}</p>
             </div>
         );
     }
@@ -44,7 +53,7 @@ export default function OfflineBanner({
             className={`mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800 ${className}`}
         >
             <WifiOff className="w-4 h-4 flex-shrink-0" aria-hidden />
-            <span>{t('offlineBanner')}</span>
+            <span>{text}</span>
         </div>
     );
 }

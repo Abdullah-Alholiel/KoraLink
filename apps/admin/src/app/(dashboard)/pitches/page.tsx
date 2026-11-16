@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { weekEnd, weekStart } from '@/lib/week';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import Pagination from '@/components/Pagination';
@@ -58,19 +59,20 @@ export default function AdminPitchesPage() {
   // Venue options for the edit drawer (cross-venue move / ownership hand-off).
   const venues = useLiveAdminData<{ venues: AdminVenueListRow[] }>('/admin/venues?perPage=100', ['venues']);
 
-  // Slots for the schedule drawer (admin slot endpoints).
-  function weekStart(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    return d.toISOString().slice(0, 10);
-  }
-  function weekEnd(): string {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6);
-    return d.toISOString().slice(0, 10);
+  // P2-124 (run #86): resolved once per mount + re-synced whenever the schedule
+  // drawer opens — synchronously in the open handler (PR-Agent MINOR on #51:
+  // an effect-after-render still fires the first fetch with the stale range;
+  // openSchedule writes the fresh window BEFORE the URL derives, so the very
+  // first slots fetch already carries the current week).
+  const [weekFrom, setWeekFrom] = useState(() => weekStart());
+  const [weekTo, setWeekTo] = useState(() => weekEnd());
+  function openSchedule(id: string) {
+    setWeekFrom(weekStart());
+    setWeekTo(weekEnd());
+    setSchedulePitchId(id);
   }
   const scheduleState = useLiveAdminData<SlotsResponse>(
-    schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekStart()}&to=${weekEnd()}` : '/admin/pitches',
+    schedulePitchId ? `/admin/pitches/${schedulePitchId}/slots?from=${weekFrom}&to=${weekTo}` : '/admin/pitches',
     [],
     { pollMs: 60_000 },
   );
@@ -238,7 +240,7 @@ export default function AdminPitchesPage() {
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setSchedulePitchId(selected.id)}
+                  onClick={() => openSchedule(selected.id)}
                   className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}

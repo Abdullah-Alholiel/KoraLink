@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsIn, IsNumber, IsString, Min } from 'class-validator';
 
 export class CreatePitchDto {
   @ApiProperty()

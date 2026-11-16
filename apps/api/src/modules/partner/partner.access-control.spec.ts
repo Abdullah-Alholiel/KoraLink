@@ -1,4 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 import { PartnerService } from './partner.service';
 import { venues, pitches, settlements, pitch_slots, matches } from '../../database/schema';
 
@@ -74,10 +76,14 @@ interface StubRows {
   settlements?: unknown[];
   pitch_slots?: unknown[];
   matches?: unknown[];
+  /** Rows the UPDATE ... RETURNING resolves (default: one row, i.e. a hit). */
+  updateReturning?: unknown[];
 }
 
 function makeService(rows: StubRows) {
   const captured = new Map<unknown, unknown>();
+  // WHERE predicate of each UPDATE, keyed by table (P2-118 scoped writes).
+  const capturedUpdates = new Map<unknown, unknown>();
   const tableRows: Array<[unknown, unknown[]]> = [
     [venues, rows.venues ?? []],
     [pitches, rows.pitches ?? []],
@@ -117,13 +123,44 @@ function makeService(rows: StubRows) {
     // Raw-SQL path (run #22): getDashboard's weekly-revenue query resolves to
     // a bare rows array (postgres-js). The tests assert venue scoping only,
     // so an empty week trend is fine.
-    execute: async () => [],
+    // Run #163 (P2-216): getEarnings totals are a Postgres SUM aggregate —
+    // emulate it over the stub settlements so the scoped-total assertion
+    // keeps biting through the real query path.
+    execute: async (q?: { queryChunks?: unknown[] }) => {
+      const text = (q?.queryChunks ?? [])
+        .map((c) =>
+          typeof c === 'string'
+            ? c
+            : c && typeof c === 'object' && 'value' in (c as { value?: unknown[] })
+              ? ((c as { value: unknown[] }).value ?? []).join('')
+              : '',
+        )
+        .join(' ');
+      if (text.includes('filter (where status')) {
+        const scoped = (rows.settlements ?? []) as Array<{ status?: string; amount?: string }>;
+        const sum = (status: string) =>
+          scoped
+            .filter((r) => r.status === status)
+            .reduce((acc: number, r) => acc + Number(r.amount ?? '0'), 0);
+        return [
+          { pending: sum('pending').toFixed(2), paid: sum('paid').toFixed(2) },
+        ];
+      }
+      return [];
+    },
     select: () => ({ from: (table: unknown) => chainFor(table) }),
-    update: () => ({
+    update: (table: unknown) => ({
       set: () => ({
-        where: () => {
-          const t: { then: (r: (v: unknown) => void) => void } = {
+        where: (cond: unknown) => {
+          capturedUpdates.set(table, cond);
+          const t: {
+            then: (r: (v: unknown) => void) => void;
+            returning: () => { then: (r: (v: unknown) => void) => void };
+          } = {
             then: (r: (v: unknown) => void) => r([]),
+            returning: () => ({
+              then: (r: (v: unknown) => void) => r(rows.updateReturning ?? [{ id: PITCH_1 }]),
+            }),
           };
           return t;
         },
@@ -135,6 +172,7 @@ function makeService(rows: StubRows) {
   return {
     service: new PartnerService(db as never, realtime as never),
     captured,
+    capturedUpdates,
   };
 }
 
@@ -176,7 +214,8 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
       });
       const earnings = await service.getEarnings(ADMIN, 'Admin');
       expect(ownerFilterValue(captured.get(venues))).toBeUndefined();
-      expect(earnings.totalPaid).toBe(10);
+      // Run #163 (P2-216): totals are exact-decimal strings from the SQL SUM.
+      expect(earnings.totalPaid).toBe('10.00');
     });
 
     it('scopes an owner to their own venues only', async () => {
@@ -191,7 +230,13 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
     it('returns an empty ledger for an owner with no venues', async () => {
       const { service } = makeService({ venues: [otherVenue], settlements: [] });
       const earnings = await service.getEarnings(OWNER, 'VenueOwner');
-      expect(earnings).toEqual({ settlements: [], totalPending: 0, totalPaid: 0 });
+      // Legacy fields stay byte-compatible; P1-65 adds the zeroed revenue view.
+      // Run #163 (P2-216): totals are the '0.00' string contract on empty scopes.
+      expect(earnings).toMatchObject({ settlements: [], totalPending: '0.00', totalPaid: '0.00' });
+      expect(earnings.perVenue).toEqual([]);
+      expect(earnings.fourWeekTrend).toHaveLength(4);
+      expect(earnings.fourWeekTrend.every((w) => w.revenue === '0.00' && w.bookedCount === 0)).toBe(true);
+      expect(earnings.utilizationPct).toBe(0);
     });
   });
 
@@ -215,6 +260,45 @@ describe('PartnerService partner-portal Admin scope (P1-6)', () => {
       const { service } = makeService(dashboardRows);
       const dash = await service.getDashboard(OWNER, 'VenueOwner');
       expect(dash.venueNames).toEqual(['Owner Venue']);
+    });
+  });
+  // ── P2-118: the UPDATE itself is owner-scoped ─────────────────────────────
+  // The pre-check read alone left a window where ownership could move before
+  // the write; folding the scope into the UPDATE WHERE closes it.
+  describe('scoped UPDATEs (P2-118)', () => {
+    it('updateVenue: non-Admin UPDATE carries owner_id = actor in the WHERE', async () => {
+      const { service, capturedUpdates } = makeService({ venues: [ownerVenue] });
+      await service.updateVenue(OWNER, 'VenueOwner', 'venue-1', { name: 'Renamed' });
+      expect(capturedUpdates.has(venues)).toBe(true);
+      expect(ownerFilterValue(capturedUpdates.get(venues))).toBe(OWNER);
+    });
+
+    it('updateVenue: Admin UPDATE has no owner predicate', async () => {
+      const { service, capturedUpdates } = makeService({ venues: [otherVenue] });
+      await service.updateVenue(ADMIN, 'Admin', 'venue-2', { name: 'Renamed' });
+      expect(capturedUpdates.has(venues)).toBe(true);
+      expect(ownerFilterValue(capturedUpdates.get(venues))).toBeUndefined();
+    });
+
+    it('updatePitch: non-Admin UPDATE WHERE references the venues-owner scope', async () => {
+      const { service, capturedUpdates } = makeService({ pitches: [{ ...pitchOther, owner_id: OWNER }] });
+      await service.updatePitch(OWNER, 'VenueOwner', PITCH_1, { name: 'Renamed' });
+      const q = new PgDialect().sqlToQuery(capturedUpdates.get(pitches) as SQL);
+      expect(q.sql).toContain('owner_id');
+      expect(q.params).toContain(OWNER);
+      expect(q.sql).not.toContain('::uuid');
+    });
+
+    it('updatePitch: a scoped UPDATE that hits zero rows is a NotFound', async () => {
+      // Pre-check + read-back both find the pitch; only the scoped write
+      // misses (ownership moved mid-flight), so the 0-rows branch throws.
+      const { service } = makeService({
+        pitches: [{ ...pitchOther, owner_id: OWNER }],
+        updateReturning: [],
+      });
+      await expect(
+        service.updatePitch(OWNER, 'VenueOwner', PITCH_1, { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

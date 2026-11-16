@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import type { Match } from '@/types';
 import {
   type NearbyMatchApi,
@@ -18,6 +19,7 @@ import {
 } from '@/lib/api-adapter';
 import { z } from 'zod';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
+import { useLocale } from 'next-intl';
 
 // ─── API Response Types (snake_case raw) ──────────────
 
@@ -42,6 +44,8 @@ export const hostMatchSchema = z.object({
   booking_mode: z.enum(['koralink', 'self']).default('koralink'),
   booking_slot_id: z.string().min(1).optional(),
   visibility: z.enum(['public', 'private']).default('public'),
+  // P1-64: N weekly instances (koralink only). Omit = single match.
+  repeat_weeks: z.number().int().min(1).max(8).optional(),
   // Hosting-terms consent (player-host-responsibility). MUST be listed here:
   // Zod strips unknown keys in .parse(), so an unlisted field never reaches
   // the API and every publish 400s with "Hosting terms must be accepted".
@@ -88,6 +92,10 @@ export function useMatches(filters?: {
   /** Free-text venue-address filter (search-suggestions feature). */
   neighborhood?: string | null;
 }): UseMatchesResult {
+  // P2-rider (run #133): clock-time rendering follows the active locale
+  // (ar → Arabic-Indic "٧:٠٠ م"). Locale switches remount the [locale] tree,
+  // so the closure cannot outlive its locale — no queryKey churn needed.
+  const locale = useLocale() as 'ar' | 'en';
   const query = useInfiniteQuery({
     queryKey: ['matches', filters],
     initialPageParam: 0,
@@ -128,7 +136,7 @@ export function useMatches(filters?: {
 
       const { total, hasMore } = !Array.isArray(raw) ? raw : {};
       return {
-        matches: adaptMatchList(rows),
+        matches: adaptMatchList(rows, undefined, locale),
         total,
         // Legacy array shape carries no hasMore — never page on it.
         hasMore: hasMore ?? false,
@@ -140,6 +148,12 @@ export function useMatches(filters?: {
     },
     // Keep prior page data visible while the next page loads.
     maxPages: 10,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const matches = useMemo(
@@ -170,6 +184,7 @@ export function useMatches(filters?: {
 
 export function useMatch(id: string, currentUserId?: string) {
   const queryClient = useQueryClient();
+  const locale = useLocale() as 'ar' | 'en';
 
   useEffect(() => {
     if (!id) return;
@@ -208,7 +223,7 @@ export function useMatch(id: string, currentUserId?: string) {
     queryKey: ['match', id, { currentUserId }],
     queryFn: async () => {
       const raw = await fetcher<MatchDetailApi>(`/matches/${id}`);
-      return adaptMatchDetail(raw, currentUserId);
+      return adaptMatchDetail(raw, currentUserId, locale);
     },
     enabled: !!id,
   });

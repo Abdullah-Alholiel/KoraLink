@@ -11,7 +11,13 @@ vi.mock('socket.io-client', () => ({
   io: (...args: unknown[]) => ioMock(...args),
 }));
 
-import { socketBaseUrl, createLobbySocket, LOBBY_NAMESPACE } from '@/lib/socket';
+import {
+  socketBaseUrl,
+  createLobbySocket,
+  LOBBY_NAMESPACE,
+  isSameSiteSocketOrigin,
+  buildSocketAuth,
+} from '@/lib/socket';
 
 describe('socketBaseUrl', () => {
   it('strips the /api/v1 path from an http base (the production namespace bug)', () => {
@@ -84,5 +90,73 @@ describe('createLobbySocket', () => {
 
   it('namespace constant matches the gateway registration', () => {
     expect(LOBBY_NAMESPACE).toBe('/lobby');
+  });
+});
+
+describe('P2-240 socket auth policy (cookie-first, token fallback)', () => {
+  const realLocation = window.location;
+
+  beforeEach(() => {
+    ioMock.mockReset();
+  });
+
+  /** Point the jsdom page at an arbitrary origin (the code reads only href). */
+  function atPageOrigin(href: string): void {
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { href } as unknown as Location,
+    });
+  }
+
+  afterEach(() => {
+    // Unstub BEFORE touching window — the SSR test stubs it to undefined.
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: realLocation,
+    });
+  });
+
+  it('same-site (host equal, port differs — the staging :9450 ↔ :3001 shape) sends NO auth.token even with a token stored: the httpOnly cookie rides the handshake', () => {
+    atPageOrigin('http://100.93.99.24:9450/en/play');
+    window.localStorage.setItem('koralink_token', 'tok-123');
+    expect(isSameSiteSocketOrigin()).toBe(true);
+    createLobbySocket();
+    expect(ioMock.mock.calls[0][1].auth).toBeUndefined();
+  });
+
+  it('cross-site (different host — prod vercel.app ↔ onrender, laptop dev) falls back to the stored Bearer token', () => {
+    atPageOrigin('https://koralink.vercel.app/en/play');
+    window.localStorage.setItem('koralink_token', 'tok-123');
+    expect(isSameSiteSocketOrigin()).toBe(false);
+    createLobbySocket();
+    expect(ioMock.mock.calls[0][1].auth).toEqual({ token: 'tok-123' });
+  });
+
+  it('cross-site with no stored token sends no auth (logged-out handshake — the gateway rejects it)', () => {
+    atPageOrigin('https://koralink.vercel.app/en/play');
+    window.localStorage.removeItem('koralink_token');
+    createLobbySocket();
+    expect(ioMock.mock.calls[0][1].auth).toBeUndefined();
+  });
+
+  it('scheme mismatch (https page, http API) is NOT same-site — the cookie would not be delivered', () => {
+    atPageOrigin('https://100.93.99.24:9450/en/play');
+    window.localStorage.setItem('koralink_token', 'tok-123');
+    expect(isSameSiteSocketOrigin()).toBe(false);
+    createLobbySocket();
+    expect(ioMock.mock.calls[0][1].auth).toEqual({ token: 'tok-123' });
+  });
+
+  it('same-origin (identical URL) is same-site', () => {
+    atPageOrigin('http://100.93.99.24:3001/en/play');
+    expect(isSameSiteSocketOrigin()).toBe(true);
+  });
+
+  it('SSR (no window) is never same-site and builds no auth', async () => {
+    vi.stubGlobal('window', undefined as unknown as Window & typeof globalThis);
+    const mod = (await import('@/lib/socket')) as typeof import('@/lib/socket');
+    expect(mod.isSameSiteSocketOrigin()).toBe(false);
+    expect(mod.buildSocketAuth()).toBeUndefined();
   });
 });

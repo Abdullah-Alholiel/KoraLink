@@ -3,10 +3,10 @@ import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListSettlementsDto {
-  @ApiPropertyOptional({ enum: ['pending', 'paid', 'failed'] })
+  @ApiPropertyOptional({ enum: ['pending', 'paid', 'failed', 'voided'] })
   @IsOptional()
-  @IsIn(['pending', 'paid', 'failed'])
-  status?: 'pending' | 'paid' | 'failed';
+  @IsIn(['pending', 'paid', 'failed', 'voided'])
+  status?: 'pending' | 'paid' | 'failed' | 'voided';
 
   @ApiPropertyOptional({ description: 'Sort key (whitelist enforced server-side; unknown → default order)' })
   @IsOptional()

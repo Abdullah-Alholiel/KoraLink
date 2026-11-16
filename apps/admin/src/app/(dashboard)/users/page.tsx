@@ -2,9 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Ban, CheckCircle2, Loader2, Search, TimerOff } from 'lucide-react';
+import { Ban, CheckCircle2, Download, Loader2, RotateCcw, Search, TimerOff } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
@@ -18,9 +18,21 @@ import Pagination from '@/components/Pagination';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import SortSelect from '@/components/SortSelect';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import { csvAmount, csvDate } from '@/lib/csv-export';
+import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
+
+/** P2-107: hard cap on a bulk moderation batch (server enforces the same). */
+const BULK_CAP = 50;
+
+/** P2-107: rows eligible for bulk moderation — the same rule the drawer uses:
+ *  PDPL-deleted accounts are frozen (purge/restore/delete never in bulk). */
+function bulkEligible(u: AdminUser): boolean {
+  return !u.deleted_at;
+}
 
 function userStatus(u: AdminUser): string {
   // P1-37 (run #31): PDPL state first — a deleted account is neither
@@ -61,7 +73,18 @@ export default function UsersPage() {
   const [sort, setSort] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+
+  // ── P2-107: bulk selection state (current page only) ──
+  const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'ban' | 'suspend' | null>(null);
+  // P2-47(b) restore-on-behalf (run #167) — sensitive PDPL action: confirm
+  // step + localized success line (role=status) beside the error banner.
+  const [restoreOk, setRestoreOk] = useState<string | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
 
   const sortParts = sort ? sort.split(':') : null;
   const sortField = sortParts?.[0] ?? '';
@@ -76,12 +99,137 @@ export default function UsersPage() {
 
   const { data, loading, error, reload, live, stale } = useLiveAdminData<UsersResponse>(`/admin/users?${qs.toString()}`);
 
+  const rows = data?.users ?? [];
+  const exportFeedback = useExportFeedback();
+  const exportDisabled = loading || !!error || rows.length === 0 || exportFeedback.exporting;
+
+  // ── P2-107: selection derived state ──
+  const eligibleRows = useMemo(() => rows.filter(bulkEligible), [rows]);
+  const selectableIds = useMemo(
+    () => new Set(eligibleRows.map((u) => u.id)),
+    [eligibleRows],
+  );
+  const checkedCount = useMemo(
+    () => [...checkedIds].filter((id) => selectableIds.has(id)).length,
+    [checkedIds, selectableIds],
+  );
+  const allSelected = eligibleRows.length > 0 && checkedCount === eligibleRows.length;
+  const someSelected = checkedCount > 0 && !allSelected;
+  // Over the cap: the server 400s >50, so block the action client-side and say why.
+  const overCap = checkedCount > BULK_CAP;
+
+  function toggleRow(u: AdminUser) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(u.id)) next.delete(u.id);
+      else next.add(u.id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setCheckedIds(allSelected ? new Set() : new Set(selectableIds));
+  }
+  // Page/filter/sort change invalidates the visual selection — clear it so the
+  // action bar can never act on rows that are no longer visible.
+  function clearSelection() {
+    setCheckedIds(new Set());
+    setBulkNote(null);
+  }
+
+  async function runBulk(action: 'ban' | 'suspend') {
+    setBulkAction(null);
+    setBulkRunning(true);
+    setActionError(null);
+    try {
+      const res = await api.post<{ updated: number; requested: number; skipped: Array<{ id: string; reason: string }> }>(
+        '/admin/users/bulk',
+        { action, ids: [...checkedIds].filter((id) => selectableIds.has(id)) },
+      );
+      setBulkNote(
+        t('bulkResult', { updated: res.updated, requested: res.requested }) +
+          (res.skipped.length > 0 ? ` — ${t('bulkSkipped', { count: res.skipped.length })}` : ''),
+      );
+      trackEvent('admin_bulk_moderation', { page: 'admin.users', action, requested: res.requested, updated: res.updated });
+      clearSelectionIds();
+      reload();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : ts('failed'));
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
+  /**
+   * P2-47(b) (run #167): restore-on-behalf — separate runner (NOT via act()).
+   * PR-Agent r1: on success the drawer CLOSES (the refreshed table already
+   * shows the row as restored) so the stale snapshot — and with it the
+   * now-invalid Restore button — can never be re-clicked into a confusing
+   * 400. Success/error banners clear on drawer close.
+   */
+  async function restoreSelected() {
+    if (!selected) return;
+    setBusyId(selected.id);
+    setActionError(null);
+    setRestoreOk(null);
+    setConfirmRestore(false);
+    try {
+      await api.patch(`/admin/users/${selected.id}/restore`);
+      setRestoreOk(t('restoreSuccess'));
+      reload();
+      setSelected(null);
+    } catch (e) {
+      // API copy is plain (400/409): mirror the act() convention of showing
+      // the API reason instead of a generic failure.
+      setActionError(e instanceof Error ? e.message : t('restoreFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function clearSelectionIds() {
+    setCheckedIds(new Set());
+  }
+
+
+  // P2-147: export the FULL filtered set (same filters/sort as the table),
+  // not just the rendered page.
+  async function onExport() {
+    const exported = await exportFeedback.runFullExport<UsersResponse, AdminUser>({
+      url: `/admin/users?${qs.toString()}`,
+      rowKey: 'users',
+      build: (allRows) => ({
+        columns: [
+          { key: 'user', header: t('thUser'), value: (u: AdminUser) => u.full_name ?? '' },
+          { key: 'handle', header: t('thHandle'), value: (u: AdminUser) => u.handle ?? '' },
+          { key: 'phone', header: t('thPhone'), value: (u: AdminUser) => u.phone ?? '' },
+          { key: 'role', header: t('thRole'), value: (u: AdminUser) => u.role ?? '' },
+          { key: 'status', header: t('thStatus'), value: (u: AdminUser) => userStatus(u) },
+          { key: 'wallet', header: t('thWallet'), value: (u: AdminUser) => csvAmount(u.wallet_balance) },
+          { key: 'karma', header: t('thKarma'), value: (u: AdminUser) => String(u.karma_score ?? 0) },
+          { key: 'noShows', header: t('thNoShows'), value: (u: AdminUser) => String(u.no_show_count ?? 0) },
+          { key: 'joined', header: t('thJoined'), value: (u: AdminUser) => csvDate(u.created_at) },
+          { key: 'id', header: t('thId') },
+        ],
+        rows: allRows,
+        filePrefix: 'koralink-users',
+        timestamp: new Date(),
+      }),
+    });
+    if (exported !== null) trackEvent('admin_csv_export', { page: 'admin.users', rows: exported });
+  }
+
   async function act(id: string, body: Record<string, unknown>) {
     setBusyId(id);
+    setActionError(null);
     try {
       await api.patch(`/admin/users/${id}`, body);
       reload();
       setSelected(null);
+    } catch (e) {
+      // What + why + next: surface the API reason (e.g. last-admin guard)
+      // instead of silently swallowing the rejection — the banner stays until
+      // the next attempt.
+      setActionError(e instanceof Error ? e.message : ts('failed'));
     } finally {
       setBusyId(null);
     }
@@ -205,7 +353,7 @@ export default function UsersPage() {
             type="submit"
             className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700"
           >
-            Search
+            {tc('search')}
           </button>
         </form>
 
@@ -240,8 +388,67 @@ export default function UsersPage() {
           <option value="deleted">{ts('deleted')}</option>
         </select>
 
-        <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
-      </div>
+          <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={exportDisabled}
+            aria-label={tc('exportCsv')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {t('exportUsers')}
+          </button>
+        </div>
+
+        {/* ── P2-107: bulk action bar (visible when a selection exists) ── */}
+        {checkedCount > 0 && (
+          <div
+            role="toolbar"
+            aria-label={t('bulkBarLabel')}
+            className="mx-8 mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-brand-50/60 px-4 py-2.5"
+          >
+            <span className="text-sm font-semibold text-gray-800">
+              {t('bulkSelectedCount', { count: checkedCount })}
+              {overCap && (
+                <span className="ms-2 font-normal text-red-600">{t('bulkCapNote', { cap: BULK_CAP })}</span>
+              )}
+            </span>
+            <button
+              type="button"
+              disabled={bulkRunning || overCap}
+              onClick={() => setBulkAction('ban')}
+              className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Ban className="h-3.5 w-3.5" /> {t('bulkBan')}
+            </button>
+            <button
+              type="button"
+              disabled={bulkRunning || overCap}
+              onClick={() => setBulkAction('suspend')}
+              className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <TimerOff className="h-3.5 w-3.5" /> {t('bulkSuspend')}
+            </button>
+            {bulkRunning && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="ms-auto text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              {t('bulkClear')}
+            </button>
+          </div>
+        )}
+        {bulkNote && (
+          <p role="status" className="mx-8 mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+            {bulkNote}
+          </p>
+        )}
+
+      {/* shared always-mounted live-region pair (success polite /
+           error assertive) — markup lives beside the hook */}
+      <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
         <div className="px-8 py-10 text-sm text-gray-500">{t('loadingUsers')}</div>
@@ -249,22 +456,60 @@ export default function UsersPage() {
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
         <>
+          {restoreOk && (
+            <p role="status" className="mx-8 mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+              {restoreOk}
+            </p>
+          )}
+          {actionError && (
+            <p role="alert" className="mx-8 mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {t('actionFailed', { error: actionError })}
+            </p>
+          )}
           <div className="px-8">
             <DataTable
               columns={columns}
-              rows={data?.users ?? []}
+              rows={rows}
               rowKey={(u) => u.id}
-              onRowClick={(u) => setSelected(u)}
+              onRowClick={(u) => {
+                setSelected(u);
+                // P2-47(b): a fresh row opens with clean action state — the
+                // restore success line never bleeds onto another account.
+                setRestoreOk(null);
+              }}
               empty={<EmptyState message={tc('noData')} />}
+              selection={{
+                selectedIds: checkedIds,
+                isRowSelectable: bulkEligible,
+                onToggle: toggleRow,
+                onToggleAll: toggleAll,
+                allSelected,
+                someSelected,
+                selectAllLabel: t('bulkSelectAll'),
+                rowLabel: (u) => t('bulkSelectRow', { name: u.full_name ?? u.handle ?? u.id }),
+              }}
             />
           </div>
-          <Pagination page={page} perPage={20} total={data?.total ?? 0} onPage={setPage} />
+          <Pagination
+            page={page}
+            perPage={20}
+            total={data?.total ?? 0}
+            onPage={(p) => {
+              setPage(p);
+              clearSelection();
+            }}
+          />
         </>
       )}
 
       <RecordDrawer
         open={!!selected}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          // P2-47(b): the success line belongs to the closed restore flow —
+          // never bleed onto the next opened row.
+          setRestoreOk(null);
+        }}
         page="admin.users"
         title={selected?.full_name ?? t('thUser')}
         recordId={selected?.id}
@@ -294,9 +539,26 @@ export default function UsersPage() {
             : []
         }
         actions={
-          selected && userStatus(selected) !== 'deleted' ? (
+          !selected ? undefined : (
             busyId === selected.id ? (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : userStatus(selected) === 'deleted' ? (
+              /* P2-47(b) (run #167): deleted rows get the restore action
+                 ONLY — grace-window ghosts; purged rows show nothing. */
+              (() => {
+                const info = purgeInfo(selected);
+                if (info.purged || info.daysRemaining === undefined) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setConfirmRestore(true)}
+                      className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> {t('restoreAction')}
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 {userStatus(selected) === 'banned' ? (
@@ -335,8 +597,43 @@ export default function UsersPage() {
                 )}
               </div>
             )
-          ) : undefined
+          )
         }
+      />
+
+      {/* ── P2-107: bulk confirmation — names the action + affected count ── */}
+      <ConfirmDialog
+        open={bulkAction !== null}
+        danger={bulkAction === 'ban'}
+        title={
+          bulkAction === 'ban'
+            ? t('bulkConfirmBanTitle')
+            : t('bulkConfirmSuspendTitle')
+        }
+        message={
+          bulkAction === 'ban'
+            ? t('bulkConfirmBanBody', { count: checkedCount })
+            : t('bulkConfirmSuspendBody', { count: checkedCount })
+        }
+        confirmLabel={bulkAction === 'ban' ? t('bulkBan') : t('bulkSuspend')}
+        onConfirm={() => bulkAction && runBulk(bulkAction)}
+        onClose={() => setBulkAction(null)}
+      />
+
+      {/* ── P2-47(b): restore confirmation — names the account + grace window ── */}
+      <ConfirmDialog
+        open={confirmRestore}
+        title={t('restoreConfirmTitle')}
+        message={
+          selected
+            ? t('restoreConfirmMessage', {
+                name: selected.full_name ?? selected.handle ?? selected.id,
+              })
+            : undefined
+        }
+        confirmLabel={t('restoreAction')}
+        onConfirm={restoreSelected}
+        onClose={() => setConfirmRestore(false)}
       />
     </div>
   );

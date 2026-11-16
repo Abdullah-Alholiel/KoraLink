@@ -1,8 +1,10 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, X, Play, ShieldAlert } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
+import { formatMoney, type AppLocale } from '@/lib/format';
 
 interface OngoingGameJoinSheetProps {
     isOpen: boolean;
@@ -27,6 +29,9 @@ export default function OngoingGameJoinSheet({
     bookingMode,
 }: OngoingGameJoinSheetProps) {
     const t = useTranslations();
+    const pathname = usePathname();
+    const locale = (pathname ?? '').split('/')[1] || 'en';
+    const appLocale: AppLocale = locale === 'ar' ? 'ar' : 'en';
 
     if (!isOpen) return null;
 
@@ -105,7 +110,7 @@ export default function OngoingGameJoinSheet({
                 >
                     <span>{t('matchDetail.ongoingGameConfirm')}</span>
                     <span className="font-extrabold">
-                        {price === 0 ? t('gameDetails.free') : `${price} ${currency}`}
+                        {price === 0 ? t('gameDetails.free') : formatMoney(price, appLocale, currency)}
                     </span>
                 </button>
                 <button

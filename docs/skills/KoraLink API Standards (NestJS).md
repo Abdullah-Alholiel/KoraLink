@@ -403,9 +403,8 @@ See `references/schema-alignment-checklist.md` for the full verification workflo
 |----------|-------------------|----------------------|
 | `GET /wallet/balance` | `{ balance: string }` (numeric string from Postgres) | `{ balance: number, currency: string }` |
 | `GET /wallet/history` | `transactions[]` (raw Drizzle rows) | `{ transactions: Transaction[], total: number, hasMore: boolean }` |
-| `POST /wallet/topup` | `{ ledgerEntry, wallet_balance: string }` | Transaction object |
+| `POST /wallet/topup/intent` → `POST /wallet/topup/verify` | Moyasar intent / credit result | `useTopup` hooks (legacy `POST /wallet/topup` REMOVED — P2-331) |
 
-**`TopupWalletDto`**: `amount: number`, `referenceId?: string`, `idempotencyKey: string`.
 **`WalletHistoryDto`**: `page?: number` (default 1), `perPage?: number` (default 20, max 100).
 
 ---

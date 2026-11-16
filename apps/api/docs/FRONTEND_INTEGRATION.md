@@ -370,7 +370,7 @@ The wallet ledger is used internally when a player joins a match (debit) or rece
 |--------|------------------------------|------------------------------------|
 | `GET`  | `/api/v1/wallet/balance`     | Get authenticated user's balance   |
 | `GET`  | `/api/v1/wallet/history`     | Paginated transaction history      |
-| `POST` | `/api/v1/wallet/topup`       | Add funds (Moyasar payment gateway)|
+| `POST` | `/api/v1/wallet/topup/intent` + `/verify` | Add funds (Moyasar hosted form; legacy `POST /wallet/topup` removed in P2-331) |
 
 ---
 

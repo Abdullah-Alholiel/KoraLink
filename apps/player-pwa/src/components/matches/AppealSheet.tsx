@@ -4,13 +4,15 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Loader2, ShieldQuestion, X } from 'lucide-react';
 import BottomSheet from '@/components/layout/BottomSheet';
+import { classifyError, errorKey } from '@/lib/error-classify';
 
 interface AppealSheetProps {
     isOpen: boolean;
     onClose: () => void;
     matchTitle: string;
     isPending: boolean;
-    error?: string | null;
+    /** P2-375: raw mutation error — classified into localized errors.* copy, never rendered verbatim. */
+    error?: unknown;
     onSubmit: (reason: string) => void;
 }
 
@@ -27,6 +29,11 @@ export default function AppealSheet({
     onSubmit,
 }: AppealSheetProps) {
     const t = useTranslations('appeal');
+    // a11y (run #80, P2-101): localized close label (was hardcoded "Close").
+    const tCommon = useTranslations('common');
+    // P2-375: errorKey() returns fully-qualified keys (`errors.server`), so the
+    // error copy resolves against the root namespace (mirrors ReportSheet).
+    const tErrors = useTranslations();
     const [reason, setReason] = useState('');
 
     if (!isOpen) return null;
@@ -40,7 +47,7 @@ export default function AppealSheet({
             <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
                 <div className="w-8" />
                 <h2 className="text-lg font-bold text-brand-black">{t('title')}</h2>
-                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" aria-label="Close">
+                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" aria-label={tCommon('close')}>
                     <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
                 </button>
             </div>
@@ -73,8 +80,10 @@ export default function AppealSheet({
                     </div>
                 </div>
 
-                {error && (
-                    <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2">{error}</p>
+                {error != null && (
+                    <p className="text-xs text-brand-red mt-2 bg-brand-red/5 rounded-xl px-3 py-2">
+                        {tErrors(errorKey(classifyError(error)))}
+                    </p>
                 )}
             </div>
 

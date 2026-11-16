@@ -17,6 +17,9 @@ const ALL_KEYS: PushKey[] = [
   'pom_decided',
   'report_resolved',
   'report_dismissed',
+  'refund_credited',
+  'payout_released',
+  'waitlist_removed',
 ];
 
 describe('normalizePushLocale (P2-8)', () => {
@@ -88,5 +91,68 @@ describe('renderPushText per-locale content (P2-8)', () => {
     const { title, body } = renderPushText('players_needed_renudge', {}, 'ar');
     expect(title).toBe('📣 لاعبون مطلوبون');
     expect(body).toContain('مباراتك'); // title fallback
+  });
+
+  // P2-193 (run #155): player money flows — wallet credits get a voice.
+  // NOTE: Intl narrowSymbol separates the code/symbol from the digits with
+  // U+00A0 (non-breaking space) — the expected strings below use \u00A0.
+  it('refund_credited: quotes the exact per-locale amount + match title', () => {
+    const en = renderPushText('refund_credited', { title: 'Friday 7s', amount: '37' }, 'en');
+    expect(en.title).toBe('💸 Money returned');
+    expect(en.body).toContain('SAR\u00A037.00'); // Intl narrowSymbol, en
+    expect(en.body).toContain('"Friday 7s"');
+
+    const ar = renderPushText('refund_credited', { title: 'Friday 7s', amount: '37' }, 'ar');
+    expect(ar.title).toBe('💸 تم إرجاع المبلغ');
+    expect(ar.body).toContain('٣٧٫٠٠'); // Arabic-Indic digits (marketing standard)
+    expect(ar.body).toContain('ر.س');
+    expect(ar.body).toContain('"Friday 7s"');
+  });
+
+  it('payout_released: host copy quotes the released amount', () => {
+    const en = renderPushText('payout_released', { title: 'Cup night', amount: '3150' }, 'en');
+    expect(en.title).toBe('💸 Payout released');
+    expect(en.body).toContain('SAR\u00A03,150.00');
+
+    const ar = renderPushText('payout_released', { title: 'Cup night', amount: '3150' }, 'ar');
+    expect(ar.title).toBe('💸 تم صرف المستحقات');
+    expect(ar.body).toContain('٣٬١٥٠٫٠٠');
+  });
+
+  it('refund_credited/payout_released: missing amount renders the zero datum, never throws', () => {
+    // payoutAmount's TOTAL contract (P1-67): a MISSING amount is a data bug →
+    // bare localized "0.00", never a fabricated currency-prefixed value.
+    expect(renderPushText('refund_credited', { title: 'T' }, 'en').body).toContain('0.00');
+    // Missing amount = the passthrough raw string (P1-67 contract), ASCII here.
+    expect(renderPushText('payout_released', {}, 'ar').body).toContain('0.00');
+  });
+
+  it('waitlist_promoted: charged variant names the exact debit (run #200, P2-333)', () => {
+    const en = renderPushText(
+      'waitlist_promoted',
+      { title: 'Tuesday Padel', amount: '37' },
+      'en',
+    );
+    expect(en.body).toContain('SAR\u00A037.00');
+    expect(en.body).toContain('charged to your wallet');
+
+    const ar = renderPushText(
+      'waitlist_promoted',
+      { title: 'Tuesday Padel', amount: '37' },
+      'ar',
+    );
+    expect(ar.body).toContain('٣٧٫٠٠'); // Arabic-Indic digits
+    expect(ar.body).toContain('ر.س');
+    expect(ar.body).toContain('تم خصم');
+  });
+
+  it('waitlist_promoted: free promotion keeps the plain invite copy (no charge line)', () => {
+    const en = renderPushText('waitlist_promoted', { title: 'Tuesday Padel' }, 'en');
+    expect(en.body).not.toContain('charged');
+    expect(en.body).toContain('moved off the waitlist');
+
+    const ar = renderPushText('waitlist_promoted', { title: 'Tuesday Padel' }, 'ar');
+    expect(ar.body).not.toContain('تم خصم');
+    expect(ar.body).toContain('من قائمة الانتظار');
   });
 });

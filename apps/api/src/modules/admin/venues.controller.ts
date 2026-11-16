@@ -16,6 +16,7 @@ import { VenueDecisionDto } from './dto/venue-decision.dto';
 import { TransferVenueDto } from './dto/transfer-venue.dto';
 import { UpdateVenueAdminDto } from './dto/update-venue-admin.dto';
 import { AdminVenuesService } from './venues.service';
+import { UuidParamPipe } from '../../common/pipes/uuid-param.pipe';
 
 @Controller('admin/venues')
 @UseGuards(AdminAuthGuard)
@@ -28,18 +29,18 @@ export class AdminVenuesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UuidParamPipe) id: string) {
     return this.venues.findOne(id);
   }
 
   @Get(':id/verification')
-  getVerification(@Param('id') id: string) {
+  getVerification(@Param('id', UuidParamPipe) id: string) {
     return this.venues.getVerification(id);
   }
 
   @Post(':id/decision')
   decide(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: VenueDecisionDto,
     @Req() req: Request,
   ) {
@@ -49,7 +50,7 @@ export class AdminVenuesController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: UpdateVenueAdminDto,
     @Req() req: Request,
   ) {
@@ -59,7 +60,7 @@ export class AdminVenuesController {
 
   @Post(':id/transfer-ownership')
   transferOwnership(
-    @Param('id') id: string,
+    @Param('id', UuidParamPipe) id: string,
     @Body() dto: TransferVenueDto,
     @Req() req: Request,
   ) {

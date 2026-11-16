@@ -19,6 +19,7 @@ import {
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { BlocksService } from '../users/blocks.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -62,6 +63,7 @@ export class ConversationsService {
     private readonly activitiesService: ActivitiesService,
     private readonly notificationsService: NotificationsService,
     private readonly realtime: RealtimeService,
+    private readonly blocksService: BlocksService,
   ) {}
 
   async findOrCreateDirect(userId: string, targetUserId: string): Promise<Conversation> {
@@ -229,23 +231,35 @@ export class ConversationsService {
         u.id AS sender_id,
         u.full_name AS sender_name,
         u.handle AS sender_handle,
-        u.avatar_url AS sender_avatar
+        u.avatar_url AS sender_avatar,
+        COUNT(*) OVER()::int AS total_count
       FROM ${personal_messages} pm
       INNER JOIN ${users} u ON u.id = pm.sender_id
       WHERE pm.conversation_id = ${conversationId}::text
-      ORDER BY pm.created_at DESC
+      ORDER BY pm.created_at DESC, pm.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `)) as unknown as RawMessageRow[];
 
-    const [count] = (await this.db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM ${personal_messages}
-      WHERE conversation_id = ${conversationId}::text
-    `)) as unknown as Array<{ total: number }>;
+    // P2-241: authoritative total from the window function (same shape as
+    // listForUser) — the separate COUNT query was a second full scan of the
+    // same rows. `pm.id` breaks same-timestamp ties so rows can never
+    // straddle a page boundary between fetches.
+    let total = rows[0]?.total_count ?? 0;
+    if (rows.length === 0) {
+      // PR-Agent r1 (PR #161): a beyond-end page (stale offset, pruned
+      // messages) returns no rows, so the window count never materializes —
+      // fall back to ONE degenerate COUNT instead of reporting total 0 for
+      // a conversation that still has messages (pre-change truthfulness).
+      const [c] = (await this.db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM ${personal_messages}
+        WHERE conversation_id = ${conversationId}::text
+      `)) as unknown as Array<{ total: number }>;
+      total = c?.total ?? 0;
+    }
 
     // Fetch DESC + reverse → chronological ascending for display.
     const messages = rows.reverse().map((r) => this.mapMessage(r));
-    const total = count?.total ?? 0;
 
     return { messages, total, hasMore: offset + messages.length < total };
   }
@@ -260,104 +274,146 @@ export class ConversationsService {
     if (!trimmed) {
       throw new BadRequestException('Message cannot be empty.');
     }
-    await this.assertParticipant(userId, conversationId);
-
     const clientMessageIdValue = clientMessageId?.trim() || null;
 
-    // Idempotency — a retried send with the same clientMessageId returns the
-    // already-persisted message instead of inserting a duplicate.
-    if (clientMessageIdValue) {
-      const existing = await this.db.query.personal_messages.findFirst({
-        where: and(
-          eq(personal_messages.sender_id, userId),
-          eq(personal_messages.conversation_id, conversationId),
-          eq(personal_messages.client_message_id, clientMessageIdValue),
-        ),
-      });
-      if (existing) {
-        const [sender] = await this.db
-          .select({
-            id: users.id,
-            full_name: users.full_name,
-            handle: users.handle,
-            avatar_url: users.avatar_url,
-          })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        return { ...existing, sender };
+    // P2-227 (run #149): the conversation lookup, membership proof, block
+    // checks, idempotency re-read and the INSERT share ONE transaction guarded
+    // by a `SELECT … FOR UPDATE` on the conversation row — the same
+    // serialization match chat has had since P2-220 (runs #146–#148).
+    // Previously these checks ran as independent statements beside the INSERT.
+    // LOCK INVARIANT: every mutation of a conversation's participant set must
+    // take this same conversation-row lock. Today the participant set is
+    // written exactly once — the create-time insert in startConversation —
+    // and has NO removal path (grep-verified run #149), so there is nothing
+    // to serialize against yet; if a leave/remove endpoint is ever added it
+    // MUST lock the conversation row first or the mid-flight window reopens.
+    // RESIDUAL (documented): user_blocks is READ (not locked) inside the tx —
+    // a block created between the check and the insert lets exactly one
+    // message through; the block rejects every subsequent send. Accepted as a
+    // benign one-message race (docs/plans/run149-dm-chat-hardening/).
+    const outcome = await this.db.transaction(async (tx) => {
+      // Unknown conversation → clean 404 (explicit lookup under the lock; was
+      // a membership-check 403 on a nonexistent id before).
+      const [convRow] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1)
+        .for('update');
+      if (!convRow) {
+        throw new NotFoundException('Conversation not found.');
       }
-    }
 
-    const [inserted] = await this.db
-      .insert(personal_messages)
-      .values({
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: trimmed,
-        client_message_id: clientMessageIdValue,
-      })
-      .onConflictDoNothing()
-      .returning();
+      const [participant] = await tx
+        .select({ id: conversation_participants.id })
+        .from(conversation_participants)
+        .where(
+          and(
+            eq(conversation_participants.conversation_id, conversationId),
+            eq(conversation_participants.user_id, userId),
+          ),
+        )
+        .limit(1);
+      if (!participant) {
+        throw new ForbiddenException('You are not a participant in this conversation.');
+      }
 
-    // Concurrent retry won the race (unique index personal_messages_client_msg_uidx
-    // on (sender_id, conversation_id, client_message_id) WHERE client_message_id
-    // IS NOT NULL): return the row the winner inserted instead of raising a
-    // unique-violation 500 — and skip the side effects below (read receipt,
-    // "messaged" activity, push) so a duplicate retry never double-fires them.
-    if (!inserted) {
-      if (!clientMessageIdValue) {
-        // Lost the unique-key race without an idempotency key — surface
-        // a 409 so the caller retries the send.
+      // P1-53: refuse the send when a block exists in either direction between
+      // the sender and any other participant (403 BLOCKED_BY_RECIPIENT). The
+      // participant list rides the outcome for the activity/push side effects.
+      // user_blocks is READ (not locked) inside the tx: a block created in the
+      // residual window rejects the NEXT send — a benign one-message race,
+      // accepted and documented in docs/plans/run149-dm-chat-hardening/.
+      const others = await tx
+        .select({ user_id: conversation_participants.user_id })
+        .from(conversation_participants)
+        .where(
+          and(
+            eq(conversation_participants.conversation_id, conversationId),
+            sql`${conversation_participants.user_id} != ${userId}::text`,
+          ),
+        );
+      const othersIds = others.map((o) => o.user_id);
+      // P2-241 (Reviewer A run #153): ONE set-based block check covering all
+      // other participants — was a per-participant await inside the loop
+      // (N queries in-tx; identical verdict and 403 contract at 1:1, but the
+      // loop would scale linearly if group conversations ever land).
+      await this.blocksService.assertNotBlockedBetweenMany(userId, othersIds);
+
+      // Idempotency — a retried send with the same clientMessageId returns the
+      // already-persisted message instead of inserting a duplicate.
+      if (clientMessageIdValue) {
+        const existing = await tx.query.personal_messages.findFirst({
+          where: and(
+            eq(personal_messages.sender_id, userId),
+            eq(personal_messages.conversation_id, conversationId),
+            eq(personal_messages.client_message_id, clientMessageIdValue),
+          ),
+        });
+        if (existing) {
+          return { kind: 'winner' as const, row: existing, othersIds };
+        }
+      }
+
+      const [inserted] = await tx
+        .insert(personal_messages)
+        .values({
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: trimmed,
+          client_message_id: clientMessageIdValue,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // Concurrent retry won the race (unique index
+      // personal_messages_client_msg_uidx on (sender_id, conversation_id,
+      // client_message_id) WHERE client_message_id IS NOT NULL): return the
+      // row the winner inserted instead of raising a unique-violation 500 —
+      // and skip the side effects below (read receipt, "messaged" activity,
+      // push) so a duplicate retry never double-fires them.
+      if (!inserted) {
+        if (clientMessageIdValue) {
+          const winner = await tx.query.personal_messages.findFirst({
+            where: and(
+              eq(personal_messages.sender_id, userId),
+              eq(personal_messages.conversation_id, conversationId),
+              eq(personal_messages.client_message_id, clientMessageIdValue),
+            ),
+          });
+          if (winner) {
+            return { kind: 'winner' as const, row: winner, othersIds };
+          }
+        }
+        // Lost the unique-key race with no reconcilable winner — surface a 409
+        // so the caller retries the send.
         throw new ConflictException('Message send conflicted; retry.');
       }
-      const existing = await this.db.query.personal_messages.findFirst({
-        where: and(
-          eq(personal_messages.sender_id, userId),
-          eq(personal_messages.conversation_id, conversationId),
-          eq(personal_messages.client_message_id, clientMessageIdValue),
-        ),
-      });
-      if (existing) {
-        const [sender] = await this.db
-          .select({
-            id: users.id,
-            full_name: users.full_name,
-            handle: users.handle,
-            avatar_url: users.avatar_url,
-          })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        return { ...existing, sender };
-      }
-      throw new ConflictException('Message send conflicted; retry.');
+
+      return { kind: 'inserted' as const, row: inserted, othersIds };
+    });
+
+    // Idempotent/lost-race path: no side effects (a duplicate retry must never
+    // re-fire the read receipt, "messaged" activity, or push).
+    if (outcome.kind === 'winner') {
+      return { ...outcome.row, sender: await this.fetchSenderView(userId) };
     }
+
+    const inserted = outcome.row;
+    const othersIds = outcome.othersIds;
 
     // Sender has read up to this point.
     await this.markRead(userId, conversationId);
 
-    const others = await this.db
-      .select({ user_id: conversation_participants.user_id })
-      .from(conversation_participants)
-      .where(
-        and(
-          eq(conversation_participants.conversation_id, conversationId),
-          sql`${conversation_participants.user_id} != ${userId}::text`,
-        ),
-      );
-
     await this.activitiesService.record({
       actorId: userId,
       verb: 'messaged',
-      subjectId: others[0]?.user_id,
-      recipients: others.map((o) => o.user_id),
+      subjectId: othersIds[0],
+      recipients: othersIds,
     });
 
     // Web push for recipients with no live socket (PWA closed, US10).
-    const offline = others
-      .map((o) => o.user_id)
-      .filter((uid) => !this.realtime.isUserOnline(uid));
+    const offline = othersIds.filter((uid) => !this.realtime.isUserOnline(uid));
     if (offline.length > 0) {
       const [sender] = await this.db
         .select({ full_name: users.full_name })
@@ -380,6 +436,35 @@ export class ConversationsService {
         .catch(() => 0);
     }
 
+    return { ...inserted, sender: await this.fetchSenderView(userId) };
+  }
+
+  /**
+   * P2-172 reconcile pre-read shared read-model (P2-230, run #154): ONE copy
+   * of the sender-view lookup used by BOTH the gateway's pre-read ack path
+   * (app.gateway.ts) and sendMessage's winner path — previously two inline
+   * SELECTs had to stay in sync by hand. Returns the ORIGINAL row (with
+   * sender view) when `clientMessageId` was already accepted, else null
+   * (miss → caller falls through to the limiter / insert path).
+   */
+  async findReconcilableMessage(
+    userId: string,
+    conversationId: string,
+    clientMessageId: string,
+  ): Promise<PersonalMessage | null> {
+    const existing = await this.db.query.personal_messages.findFirst({
+      where: and(
+        eq(personal_messages.sender_id, userId),
+        eq(personal_messages.conversation_id, conversationId),
+        eq(personal_messages.client_message_id, clientMessageId),
+      ),
+    });
+    if (!existing) return null;
+    return { ...existing, sender: await this.fetchSenderView(userId) };
+  }
+
+  /** Sender view ({ id, full_name, handle, avatar_url }) for message payloads. */
+  private async fetchSenderView(userId: string) {
     const [sender] = await this.db
       .select({
         id: users.id,
@@ -390,8 +475,7 @@ export class ConversationsService {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-
-    return { ...inserted, sender };
+    return sender;
   }
 
   async markRead(userId: string, conversationId: string): Promise<void> {
@@ -487,4 +571,5 @@ interface RawMessageRow {
   sender_name: string | null;
   sender_handle: string | null;
   sender_avatar: string | null;
+  total_count?: number;
 }

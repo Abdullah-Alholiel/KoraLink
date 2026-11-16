@@ -1,39 +1,63 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Search, MapPin, Users, X } from 'lucide-react';
+import { classifyError, errorKey } from '@/lib/error-classify';
+import { Search, MapPin, Users, X, Heart, Loader2, Star } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import OfflineBanner from '@/components/layout/OfflineBanner';
 import SuggestionChips from '@/components/search/SuggestionChips';
 import { useSearchSuggestions } from '@/hooks/useSearchSuggestions';
 import { filterSuggestions } from '@/lib/search-suggestions';
 import { useVenues } from '@/hooks/useVenues';
+import {
+    useVenueFavoriteIds,
+    useVenueFavoriteToggle,
+} from '@/hooks/useVenueFavorites';
 import { useLocation } from '@/providers/LocationProvider';
-import { formatDistance } from '@/lib/format';
-import { isVenueOpenNow } from '@/lib/venue-hours';
+import { formatDistance, formatCount } from '@/lib/format';
+import { isVenueOpenNow, venueTodayHours, formatVenueHoursWindow } from '@/lib/venue-hours';
+import { useAppStore } from '@/store/useAppStore';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
+import { firstVenueImage } from '@/lib/media-url';
 
-// Run #68 (P2-13 residual): the dead "Top Rated" pill is REMOVED — the product
-// has no ratings pipeline (venues.rating is all-zero, no write path), so the
-// pill filtered nothing. Nearby is now a real distance sort (see below).
-const FILTER_KEYS = ['Nearby', 'Indoor', 'Available Now'] as const;
+// Run #68 (P2-13 residual) removed the dead "Top Rated" pill when venues.rating
+// was all-zero with no write path. P1-55 (run #117) shipped booking-verified
+// reviews; P2-173 (run #119) brings the pill BACK as a real server-side sort:
+// `?sort=top_rated` orders findNearby by rating_avg DESC / rating_count DESC /
+// name ASC (coords-independent — the user picked rating over proximity).
+// Per-card stars render whenever a venue has approved reviews (rating_count>0).
+// P2-161 (run #109): 'Favorites' joins as a real filter — it narrows to the
+// caller's saved venues (server list), independent of the geo sort.
+const FILTER_KEYS = ['Nearby', 'Top Rated', 'Favorites', 'Indoor', 'Available Now'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL_MAP: Record<FilterKey, string> = {
     Nearby: 'clubs.filters.nearby',
+    'Top Rated': 'clubs.filters.topRated',
+    Favorites: 'clubs.favorites',
     Indoor: 'clubs.filters.indoor',
     'Available Now': 'clubs.filters.availableNow',
 };
 
-export default function ClubsPage() {
+function ClubsContent() {
+    // P2-165 (run #111): `?tab=favorites` deep-links (profile "My favorite
+    // clubs" row, share links) land on the Favorites filter. One-shot read —
+    // the pills remain the runtime control; no bidirectional URL sync.
+    // useSearchParams needs a Suspense boundary (verify-page precedent).
+    const searchParams = useSearchParams();
+    const deepLinkTab = searchParams.get('tab');
+    const initialFilter: FilterKey =
+        deepLinkTab === 'favorites' ? 'Favorites' : 'Nearby';
+    const [activeFilter, setActiveFilter] = useState<FilterKey>(initialFilter);
+    const [searchQuery, setSearchQuery] = useState('');
     const t = useTranslations();
     const isOnline = useOnlineStatus();
     const pathname = usePathname();
     const locale = (pathname ?? '').split('/')[1] || 'en';
-    const [activeFilter, setActiveFilter] = useState<FilterKey>('Nearby');
-    const [searchQuery, setSearchQuery] = useState('');
     // Search suggestions (2026-09-18): picking a city/neighborhood chip pins
     // `suggestedFilter` — the club list then shows ONLY venues in that
     // suggestion (server ?search= + client neighborhood pin). Typing free
@@ -67,17 +91,65 @@ export default function ClubsPage() {
     } = useVenues({
         ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
         search: debouncedSearch || undefined,
+        // P2-173 (run #119): the Top Rated pill flips the SERVER sort —
+        // rating order arrives pre-sorted and coords-independent. Absent on
+        // every other pill = today's default ordering, unchanged.
+        sort: activeFilter === 'Top Rated' ? 'top_rated' : undefined,
     });
+
+    // ── P2-161: favorites (run #109) ──────────────────────────────────────
+    // Id set drives the card hearts; the toggle is optimistic with rollback.
+    // The 'Favorites' pill narrows to the ids ∩ fetched list (search still
+    // applies server-side, so typing inside the pill searches saved clubs).
+    // PR-Agent run-#109: ids LOADING is distinct from EMPTY — while the ids
+    // query is in flight the pill shows the full list instead of flashing the
+    // onboarding empty state at users who have favorites.
+    const {
+        data: favIds,
+        isLoading: favIdsLoading,
+        isError: favIdsError,
+        refetch: refetchFavIds,
+    } = useVenueFavoriteIds();
+    const favSet = favIds ?? [];
+    const favoriteToggle = useVenueFavoriteToggle();
+    const showToast = useAppStore((s) => s.showToast);
+    const isHydrated = useAppStore((s) => s.isHydrated);
+    const storeUser = useAppStore((s) => s.user);
+
+    // ── P2-269: venue photos (run #171) ───────────────────────────────────
+    // firstVenueImage resolves the managed media URL (null = no photo);
+    // ids whose <img> failed to load fall back to the letter avatar for the
+    // rest of the session (offline flips, deleted objects, storage blips).
+    const [brokenPhotos, setBrokenPhotos] = useState<Set<string>>(new Set());
 
     // Pills filter the (already server-searched) fetched set client-side, then
     // Nearby applies a stable ascending distance sort — null/missing distance
     // (location denied / non-geo rows) always sorts LAST, ties keep API order.
     // (Run #68, P2-13 residual: Nearby was previously a no-op pill.)
+    // P2-161: 'Favorites' narrows to saved venues (ids ∩ fetched list).
     const filteredVenues = (venues ?? []).filter((v) => {
         // A tapped suggestion pins the list to its neighborhood (server search
         // already matched city/address; this narrows to the exact district).
         if (suggestedFilter && !v.address.toLowerCase().includes(suggestedFilter.toLowerCase())) {
             return false;
+        }
+        if (activeFilter === 'Favorites') {
+            // PR-Agent run-#109: while the ids query loads, show all (no
+            // false "no favorites" flash). Run #110: an ids ERROR with NO
+            // data fail-opens (an empty favSet must never render the "No
+            // favorites yet" onboarding at users whose favorites merely
+            // failed to load) — but an error WITH stale cached ids keeps
+            // narrowing per that usable set (PR-Agent r3: React Query
+            // retains data across background-refetch failures; r4: `[]` is
+            // a KNOWN empty set, so only `undefined` ids fail open —
+            // matching the heart-disabled condition). The amber strip
+            // warns in both error cases. r6: BEFORE the store rehydrates
+            // (isHydrated=false) auth state is unknown and the ids query
+            // is auth-disabled — fail-open then too (r6 finding 1: a
+            // logged-in user's first paint must not show the false-empty).
+            if (!isHydrated || favIdsLoading) return true;
+            if (favIdsError && !favIds) return true;
+            return favSet.includes(v.id);
         }
         if (activeFilter === 'Indoor') {
             const amenities = Array.isArray(v.amenities) ? (v.amenities as string[]) : [];
@@ -108,7 +180,7 @@ export default function ClubsPage() {
                     <h1 className="text-2xl font-bold text-brand-black">{t('clubs.title')}</h1>
                     {filteredVenues.length > 0 && (
                         <p className="text-xs text-gray-400 mt-0.5">
-                            {filteredVenues.length} {t('clubs.venues')}
+                            {formatCount(filteredVenues.length, locale === 'ar' ? 'ar' : 'en')} {t('clubs.venues')}
                         </p>
                     )}
                 </div>
@@ -186,6 +258,7 @@ export default function ClubsPage() {
                     <button
                         key={filter}
                         onClick={() => setActiveFilter(filter)}
+                        aria-pressed={activeFilter === filter}
                         className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all active:scale-95 ${
                             activeFilter === filter
                                 ? 'bg-brand-black text-white'
@@ -196,6 +269,28 @@ export default function ClubsPage() {
                     </button>
                 ))}
             </div>
+
+            {/* ── Favorites ids error strip (run #110) ──
+                role=status (a11y lens): an ids fetch failure must say so —
+                the fail-open filter keeps the list visible, this tells the
+                user WHY hearts are inert (PR-Agent r2: on EVERY tab, since
+                the disabled-hearts guard is tab-independent) and offers
+                Retry. ── */}
+            {isHydrated && storeUser && favIdsError && !favIdsLoading && (
+                <div
+                    role="status"
+                    className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
+                >
+                    <p className="text-sm text-amber-900">{t('clubs.favoritesError')}</p>
+                    <button
+                        type="button"
+                        onClick={() => refetchFavIds()}
+                        className="text-sm font-bold text-brand-green active:scale-95 transition-transform whitespace-nowrap"
+                    >
+                        {t('common.retry')}
+                    </button>
+                </div>
+            )}
 
             {/* ── Loading ── */}
             {isLoading && (
@@ -216,58 +311,145 @@ export default function ClubsPage() {
             )}
 
             {/* ── Error ── */}
-            {error && !isLoading && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-4">
-                        <span className="text-brand-red text-2xl">!</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-1">{t('common.error')}</h3>
-                    <p className="text-sm text-gray-400 text-center mb-6">{t('common.errorDescription')}</p>
-                    <button
-                        onClick={() => refetch()}
-                        className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
-                    >
-                        {t('common.retry')}
-                    </button>
-                </div>
+            {!isLoading && error && (
+                <ErrorState
+                    title={t(errorKey(classifyError(error)))}
+                    onRetry={() => refetch()}
+                    retryLabel={t('common.retry')}
+                />
             )}
 
             {/* ── Empty ── */}
             {!isLoading && !error && filteredVenues.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 px-8">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                        <MapPin className="w-10 h-10 text-gray-300" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-black mb-1">
-                        {venues && venues.length > 0 ? t('common.noResults') : t('clubs.noClubs')}
-                    </h3>
-                    {/* Run #68: split the advice line — "adjust your filters" is
-                        only true when venues exist but none match the filter;
-                        a truly empty table needs the no-clubs copy instead. */}
-                    <p className="text-sm text-gray-400 text-center mb-6">
-                        {venues && venues.length > 0
-                            ? t('clubs.noClubsDescription')
-                            : t('clubs.noClubsEmpty')}
-                    </p>
-                </div>
+                <EmptyState
+                    icon={activeFilter === 'Favorites' ? Heart : MapPin}
+                    // P2-165 (run #111): a hydrated GUEST on Favorites sees the
+                    // sign-in prompt AS the title — the "No favorites yet"
+                    // onboarding copy would read as "you have none" (FAV-13).
+                    // Signed-in users keep the original copy.
+                    title={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser
+                            ? t('clubs.favoritesSignInTitle')
+                            : activeFilter === 'Favorites'
+                              ? t('clubs.favoritesEmptyTitle')
+                              : venues && venues.length > 0
+                                ? t('common.noResults')
+                                : t('clubs.noClubs')
+                    }
+                    // Run #68: split the advice line — "adjust your filters" is
+                    // only true when venues exist but none match the filter; a
+                    // truly empty table needs the no-clubs copy instead.
+                    // P2-161: the Favorites pill gets its own onboarding copy.
+                    // Guest favorites swap it for the CTA below (no double
+                    // messaging).
+                    description={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser
+                            ? undefined
+                            : activeFilter === 'Favorites'
+                              ? t('clubs.favoritesEmptyDesc')
+                              : venues && venues.length > 0
+                                ? t('clubs.noClubsDescription')
+                                : t('clubs.noClubsEmpty')
+                    }
+                    // P2-165 (run #111): guest CTA — the ids query is
+                    // auth-disabled for guests, so the empty state would
+                    // otherwise dead-end them (run #110 follow-up).
+                    action={
+                        activeFilter === 'Favorites' && isHydrated && !storeUser && (
+                            <Link
+                                href={`/${locale}/login`}
+                                className="bg-brand-green text-white px-6 py-3 rounded-full text-sm font-bold active:scale-95 transition-transform"
+                            >
+                                {t('clubs.favoritesSignInCta')}
+                            </Link>
+                        )
+                    }
+                />
             )}
 
             {/* ── Populated ── */}
             {!isLoading && !error && filteredVenues.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-5">
-                    {filteredVenues.map((venue) => (
-                        <Link
+                    {filteredVenues.map((venue) => {
+                        // P2-269: per-card photo URL (managed path → API
+                        // origin); broken loads degrade to the letter avatar.
+                        const photoUrl = brokenPhotos.has(venue.id)
+                            ? null
+                            : firstVenueImage(venue.images);
+                        return (
+                        <div
                             key={venue.id}
-                            href={`/${locale}/clubs/${venue.id}`}
-                            className="block bg-white rounded-2xl shadow-card p-4 animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+                            className="relative bg-white rounded-2xl shadow-card animate-fade-in-up transition-shadow hover:shadow-card-hover active:scale-[0.99]"
                         >
+                            {/* ── P2-161: favorite heart as a SIBLING overlay
+                                (PR-Agent run-#109: button inside <a> violates
+                                the HTML content model / validateDOMNesting) ── */}
+                            <button
+                                type="button"
+                                aria-pressed={favSet.includes(venue.id)}
+                                aria-label={favSet.includes(venue.id) ? t('clubs.favoriteRemove') : t('clubs.favoriteAdd')}
+                                disabled={
+                                    // Run #110 (PR-Agent r1+r2+r6+r7): unknown
+                                    // heart state must be inert — ids
+                                    // loading, auth store not yet
+                                    // rehydrated, a signed-out visitor, or
+                                    // error with NO usable cached ids. A tap
+                                    // on a mislabeled heart would silently
+                                    // UNfavorite a saved venue (a guest tap
+                                    // can only 401). Stale cached ids stay
+                                    // usable (strip warns). Strip+Retry below
+                                    // explains dead hearts on every tab.
+                                    (favoriteToggle.isPending &&
+                                        favoriteToggle.variables?.venueId === venue.id) ||
+                                    !isHydrated ||
+                                    !storeUser ||
+                                    favIdsLoading ||
+                                    (favIdsError && !favIds)
+                                }
+                                onClick={() => {
+                                    favoriteToggle.mutate(
+                                        { venueId: venue.id },
+                                        {
+                                            onError: () =>
+                                                showToast(t('errors.favoriteFailed'), 'error'),
+                                        },
+                                    );
+                                }}
+                                className="absolute top-3 end-3 z-10 w-9 h-9 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+                            >
+                                <Heart
+                                    className={`w-[18px] h-[18px] transition-colors ${
+                                        favSet.includes(venue.id)
+                                            ? 'fill-brand-red text-brand-red'
+                                            : 'text-gray-400'
+                                    }`}
+                                    strokeWidth={2}
+                                />
+                            </button>
+                            <Link
+                                href={`/${locale}/clubs/${venue.id}`}
+                                className="block p-4"
+                            >
                             <div className="flex items-start justify-between gap-3">
-                                {/* Venue avatar */}
-                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-lg font-bold text-brand-green">
-                                        {venue.name.charAt(0).toUpperCase()}
-                                    </span>
-                                </div>
+                                {/* Venue avatar — P2-269: venue photo when it
+                                    has one (managed path via mediaUrl), letter
+                                    avatar fallback otherwise + on load error. */}
+                                {photoUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- cross-origin API-served path; plain img keeps CSP + next/image optimizer out of the media route
+                                    <img
+                                        src={photoUrl}
+                                        alt={venue.name}
+                                        loading="lazy"
+                                        onError={() => setBrokenPhotos((s) => new Set(s).add(venue.id))}
+                                        className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 bg-gray-100"
+                                    />
+                                ) : (
+                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green/20 to-brand-green/5 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-lg font-bold text-brand-green">
+                                            {venue.name.charAt(0).toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
@@ -286,16 +468,25 @@ export default function ClubsPage() {
                                         </span>
                                     </div>
 
-                                    {/* Pitch count + P1-25 open/closed badge */}
+                                    {/* Pitch count + P1-25 open/closed badge + P2-173 rating */}
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="flex items-center gap-0.5">
                                             <Users className="w-3.5 h-3.5 text-brand-green" />
                                             <span className="text-xs font-semibold text-brand-green">
-                                                {venue.pitch_count} {t('clubs.pitches')}
+                                                {formatCount(venue.pitch_count, locale === 'ar' ? 'ar' : 'en')} {t('clubs.pitches')}
                                             </span>
                                         </div>
                                         {(() => {
                                             const openNow = isVenueOpenNow(venue);
+                                            // P2-281 M-1: under "Available Now" the card
+                                            // also shows TODAY's pitch hours — players
+                                            // booking late slots need the closing time
+                                            // without a detour to the detail page. Only
+                                            // the open state carries it (closed venues
+                                            // have no slot to book today).
+                                            const todayHours = openNow && activeFilter === 'Available Now'
+                                                ? venueTodayHours(venue)
+                                                : null;
                                             return (
                                                 <span
                                                     role="status"
@@ -305,10 +496,34 @@ export default function ClubsPage() {
                                                             : 'text-gray-500 bg-gray-100'
                                                     }`}
                                                 >
-                                                    {openNow ? t('clubs.openNow') : t('clubs.closed')}
+                                                    {openNow
+                                                        ? todayHours
+                                                            ? formatVenueHoursWindow(todayHours, locale === 'ar' ? 'ar' : 'en', t)
+                                                            : t('clubs.openNow')
+                                                        : t('clubs.closed')}
                                                 </span>
                                             );
                                         })()}
+                                        {/* P2-173 (run #119): booking-verified review
+                                            aggregates (P1-55) — stars on EVERY tab,
+                                            not just Top Rated; hidden until the
+                                            venue has approved reviews (count 0).
+                                            formatCount renders Arabic-Indic digits
+                                            for ar; the average is 1-decimal. */}
+                                        {(venue.rating_count ?? 0) > 0 && (
+                                            <span
+                                                className="flex items-center gap-0.5 flex-shrink-0"
+                                                aria-label={`${t('clubs.filters.rating')}: ${formatCount(Math.round((venue.rating_avg ?? 0) * 10) / 10, locale === 'ar' ? 'ar' : 'en')} (${formatCount(venue.rating_count ?? 0, locale === 'ar' ? 'ar' : 'en')})`}
+                                            >
+                                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                                <span className="text-xs font-semibold text-brand-black">
+                                                    {formatCount(Math.round((venue.rating_avg ?? 0) * 10) / 10, locale === 'ar' ? 'ar' : 'en')}
+                                                </span>
+                                                <span className="text-[11px] text-gray-400">
+                                                    ({formatCount(venue.rating_count ?? 0, locale === 'ar' ? 'ar' : 'en')})
+                                                </span>
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Amenities badges */}
@@ -324,7 +539,21 @@ export default function ClubsPage() {
                                             cafe: '☕',
                                             water_cooler: '💧',
                                             gym: '🏋️',
+                                            indoor: '🏠',
+                                            wifi: '📶',
+                                            prayer_room: '🕌',
                                         };
+                                        // Localized amenity chips (P2-187, run #128):
+                                        // known code → icon + localized label; unknown → generic
+                                        // localized label (same fallback as the detail page).
+                                        // Key set derives from AMENITY_ICONS — one list, no drift.
+                                        const AMENITY_LABEL_KEYS = new Set(Object.keys(AMENITY_ICONS));
+                                        const amenityLabel = (code: string): string =>
+                                            AMENITY_LABEL_KEYS.has(code)
+                                                ? t(`clubs.amenity.${code}`)
+                                                : t('clubs.amenity.unknown');
+                                        const amenityIcon = (code: string): string =>
+                                            AMENITY_ICONS[code] || '✓';
                                         const shown = amenities.slice(0, 3);
                                         const overflow = amenities.length - 3;
                                         return (
@@ -334,7 +563,7 @@ export default function ClubsPage() {
                                                         key={code}
                                                         className="text-[9px] px-1.5 py-px rounded-full bg-gray-100 text-gray-500 font-medium"
                                                     >
-                                                        {AMENITY_ICONS[code] || code}
+                                                        {amenityIcon(code)} {amenityLabel(code)}
                                                     </span>
                                                 ))}
                                                 {overflow > 0 && (
@@ -345,10 +574,28 @@ export default function ClubsPage() {
                                     })()}
                                 </div>
                             </div>
-                        </Link>
-                    ))}
+                            </Link>
+                        </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
+    );
+}
+
+// P2-165 (run #111): useSearchParams requires a Suspense boundary (bails the
+// prerender otherwise — verify-page pattern). The list is the fallback shape.
+export default function ClubsPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex flex-col min-h-full items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-green" />
+                </div>
+            }
+        >
+            <ClubsContent />
+        </Suspense>
     );
 }

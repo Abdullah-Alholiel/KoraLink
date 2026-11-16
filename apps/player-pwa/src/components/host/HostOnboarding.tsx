@@ -162,7 +162,7 @@ export default function HostOnboarding({
                     <button
                         type="button"
                         onClick={() => finish('skip')}
-                        aria-label={t('guideClose')}
+                        aria-label={t('close')}
                         className="flex h-11 min-w-[44px] items-center justify-center rounded-full text-gray-500 transition-colors hover:text-brand-black active:scale-95"
                         data-testid="onboarding-guide-back"
                     >

@@ -1,6 +1,7 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsNumber, Min, Max, IsIn, Validate } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsManagedAvatarUrlConstraint } from '../../../common/utils/managed-avatar';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ description: 'User full name', minLength: 2, maxLength: 255 })
@@ -16,9 +17,11 @@ export class UpdateProfileDto {
   @MaxLength(50)
   handle?: string;
 
-  @ApiPropertyOptional({ description: 'Avatar URL' })
+  @ApiPropertyOptional({ description: 'Managed avatar path (/media/avatars/...) or empty string to clear' })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  @Validate(IsManagedAvatarUrlConstraint)
   avatar_url?: string;
 
   @ApiPropertyOptional({ description: 'Preferred location', maxLength: 255 })
@@ -48,4 +51,12 @@ export class UpdateProfileDto {
   @Min(-180)
   @Max(180)
   home_lng?: number;
+
+  @ApiPropertyOptional({
+    description: 'Preferred content locale for transactional email',
+    enum: ['ar', 'en'],
+  })
+  @IsOptional()
+  @IsIn(['ar', 'en'])
+  locale?: 'ar' | 'en';
 }

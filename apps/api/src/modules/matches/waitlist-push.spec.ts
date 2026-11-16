@@ -18,6 +18,7 @@ const promotion: WaitlistPromotion = {
   userId: 'user-1',
   previousPosition: 2,
   matchTitle: 'Tuesday Padel @ KSU',
+  chargedSar: null,
 };
 
 function makeService(overrides: {
@@ -40,6 +41,41 @@ function makeService(overrides: {
   );
   return { svc, activities, gateway, notifications };
 }
+
+describe('MatchWaitlistService.notifyPromotion — charged-amount surface (run #200, P2-333)', () => {
+  const chargedPromotion: WaitlistPromotion = {
+    userId: 'user-1',
+    previousPosition: 2,
+    matchTitle: 'Tuesday Padel @ KSU',
+    chargedSar: 37,
+  };
+
+  it('a CHARGED promotion names the exact amount in the push vars', async () => {
+    const { svc, notifications } = makeService();
+
+    await svc.notifyPromotion(chargedPromotion, 'match-1');
+
+    expect(notifications.sendPushToUsers).toHaveBeenCalledWith(['user-1'], {
+      key: 'waitlist_promoted',
+      vars: { title: 'Tuesday Padel @ KSU', amount: '37.00' },
+      data: { type: 'waitlist-promoted', matchId: 'match-1' },
+      category: 'match',
+    });
+  });
+
+  it('a FREE promotion (chargedSar null) keeps the plain invite copy — no amount var', async () => {
+    const { svc, notifications } = makeService();
+
+    await svc.notifyPromotion({ ...promotion, chargedSar: null }, 'match-1');
+
+    expect(notifications.sendPushToUsers).toHaveBeenCalledWith(['user-1'], {
+      key: 'waitlist_promoted',
+      vars: { title: 'Tuesday Padel @ KSU' },
+      data: { type: 'waitlist-promoted', matchId: 'match-1' },
+      category: 'match',
+    });
+  });
+});
 
 describe('MatchWaitlistService.notifyPromotion — P2-95 push fan-out (run #70)', () => {
   it('sends the waitlist_promoted push with the semantic key + match deep-link data', async () => {

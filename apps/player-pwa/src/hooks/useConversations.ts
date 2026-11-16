@@ -4,8 +4,19 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient, type InfiniteData } from '@tanstack/react-query';
 import { getRealtime } from '@/lib/realtime';
 import { fetcher, FetchError } from '@/lib/fetcher';
+import { listRefetchInterval, deepestPageParam } from '@/lib/query-schedule';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { trackEvent, captureError } from '@/providers/ObservabilityProvider';
+import {
+  OfflineDmSendSignal,
+  enqueueOfflineDm,
+  discardOfflineDm,
+  getQueuedDmsForConversation,
+  getOfflineDmQueueCount,
+  registerOfflineDmFlushListener,
+  startOfflineDmQueueWatcher,
+  type QueuedDmMessage,
+} from '@/lib/offline-dm-queue';
 import type { MessageStatus } from '@/hooks/useMessages';
 import type { DiscussionsResponse } from '@/hooks/useMessages';
 
@@ -94,6 +105,12 @@ function mapMessage(r: MessageApi): PersonalMessage {
 /** How long an optimistic message waits for the authoritative echo before failing. */
 const ACK_TIMEOUT_MS = 10_000;
 
+/** P2-224: navigator.onLine probe — SSR-safe default (online). */
+function isNetworkOnline(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine !== false;
+}
+
 function mergePersonalMessages(
   history: PersonalMessage[],
   local: PersonalMessage[],
@@ -140,6 +157,12 @@ export function useConversations() {
       lastPage.hasMore ? allPages.length + 1 : undefined,
     maxPages: 10,
     staleTime: 30_000,
+    // Freshness poll — page-1 only (see listRefetchInterval / F4 fan-out).
+    refetchInterval: ({ state }) =>
+      listRefetchInterval({
+        isFetching: state.fetchStatus === 'fetching',
+        pageParam: deepestPageParam(state.data),
+      }),
   });
 
   const conversations = useMemo(
@@ -260,6 +283,30 @@ export function useConversationMessages(conversationId: string | null) {
   // cleared by emitting mark-read once the socket confirms delivery.
   const [unreadIncomingIds, setUnreadIncomingIds] = useState<Set<string>>(new Set());
   const ackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // P2-225 (run #149): DM typing indicator — mirrors useMatchChat (P2-99).
+  // Stateless: the peer's client re-emits every ~2.5s while typing; receivers
+  // expire the signal after 4s of silence. WS-only, no REST fallback.
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastTypingSentRef = useRef(0);
+  const TYPING_EMIT_INTERVAL_MS = 2_500;
+  const TYPING_EXPIRE_MS = 4_000;
+  // P2-224: fired when a send parks in the offline queue — the page shows the
+  // queued-confirmation toast (same affordance as ChatSheet's P2-172 toast).
+  const [queuedToast, setQueuedToast] = useState(false);
+  const queuedToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onQueuedRef = useRef<(() => void) | null>(null);
+  onQueuedRef.current = useCallback(() => {
+    setQueuedToast(true);
+    if (queuedToastTimerRef.current) clearTimeout(queuedToastTimerRef.current);
+    queuedToastTimerRef.current = setTimeout(() => setQueuedToast(false), 4_000);
+  }, []);
+  // P2-224 (PR-Agent run #148 MINOR): the queued backfill reads
+  // window.localStorage — gate it on mount so the first client render matches
+  // the server markup (run #49 hydration-safety pattern); parked bubbles
+  // appear immediately after hydration.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
 
   const historyQuery = useQuery<PersonalMessage[], FetchError>({
     queryKey: ['conversation', conversationId, 'messages'],
@@ -350,19 +397,54 @@ export function useConversationMessages(conversationId: string | null) {
     };
     const offNewDm = rt.on('new-dm', onNewDm);
 
+    // P2-225: peer typing signals — add the userId, re-arm the 4s expiry on
+    // every signal, ignore the own-user echo (server skips the sender;
+    // belt+braces) and unknown payloads.
+    const onConvTyping = (payload: { userId?: string }) => {
+      const userId = payload?.userId;
+      if (!userId || userId === currentUser?.id) return;
+      setTypingUserIds((prev) => {
+        if (prev.has(userId)) return prev;
+        const next = new Set(prev);
+        next.add(userId);
+        return next;
+      });
+      const existing = typingTimersRef.current.get(userId);
+      if (existing) clearTimeout(existing);
+      typingTimersRef.current.set(
+        userId,
+        setTimeout(() => {
+          typingTimersRef.current.delete(userId);
+          setTypingUserIds((prev) => {
+            if (!prev.has(userId)) return prev;
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }, TYPING_EXPIRE_MS),
+      );
+    };
+    const offConvTyping = rt.on('conv-typing', onConvTyping);
+
     // NOTE: no manual 'join-conversation' emit here — joinRoom() above already
     // emits it (first ref) and socket.io buffers it until the socket connects.
     // A second emit double-fires the server's markRead-on-join (Slice 2 review).
 
     return () => {
       offNewDm();
+      offConvTyping();
       rt.leaveRoom('conversation', conversationId);
       rt.disconnect();
       setLocalMessages([]);
+      // P2-225: clear all typing expiry timers + state on unmount/switch
+      // (no setState-after-unmount; a new thread starts signal-free).
+      typingTimersRef.current.forEach(clearTimeout);
+      typingTimersRef.current.clear();
+      setTypingUserIds(new Set());
       ackTimers.forEach(clearTimeout);
       ackTimers.clear();
     };
-  }, [conversationId, reconcile, rt]);
+  }, [conversationId, reconcile, rt, currentUser?.id]);
 
   const sendMessage = useMutation<
     PersonalMessage | undefined,
@@ -370,6 +452,10 @@ export function useConversationMessages(conversationId: string | null) {
     { content: string; clientMessageId: string }
   >({
     mutationFn: async ({ content, clientMessageId }) => {
+      // P2-224: an offline send never reaches the wire — the onError branch
+      // parks it in the persisted DM queue; flushOfflineDmQueue replays it
+      // with the SAME clientMessageId on reconnect (server dedupes replays).
+      if (!isNetworkOnline()) throw new OfflineDmSendSignal();
       if (rt.isConnected()) {
         rt.emit('send-dm', { conversationId, content, clientMessageId });
         // Authoritative message arrives via the `new-dm` echo.
@@ -417,14 +503,67 @@ export function useConversationMessages(conversationId: string | null) {
       ackTimersRef.current.set(clientMessageId, timer);
     },
     onSuccess: (data, { clientMessageId }) => {
+      // P2-224: any successful delivery (including a manual retry of a
+      // flush-failed message) retires the queue entry — retry is the
+      // user-driven escape hatch from a failed flush.
+      discardOfflineDm(clientMessageId);
       if (data && data.clientMessageId === clientMessageId) {
         reconcile(data);
       }
       queryClient.invalidateQueries({ queryKey: ['conversation', conversationId, 'messages'] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    onError: (_err, { clientMessageId }) => {
-      captureError(_err, { scope: 'dmSend', conversationId, clientMessageId });
+    onError: (err, { content, clientMessageId }) => {
+      // P2-224: offline send — park the message in the persisted queue and
+      // keep the bubble `queued` (no failure UX). The flusher replays it with
+      // the SAME clientMessageId on reconnect.
+      if (err instanceof OfflineDmSendSignal) {
+        // Orphan guard (P2-172 parity): an entry parked with no owner can
+        // never replay (the flusher bails without a user) nor backfill — it
+        // would sit as a dead bubble forever. Fail LOUDLY instead.
+        const currentUserId = currentUser?.id;
+        if (!currentUserId) {
+          setLocalMessages((prev) =>
+            prev.map((m) =>
+              m.clientMessageId === clientMessageId ? { ...m, status: 'failed' } : m,
+            ),
+          );
+          const timer = ackTimersRef.current.get(clientMessageId);
+          if (timer) {
+            clearTimeout(timer);
+            ackTimersRef.current.delete(clientMessageId);
+          }
+          return;
+        }
+        const entry: QueuedDmMessage = {
+          conversationId: conversationId ?? '',
+          content,
+          clientMessageId,
+          queuedAt: new Date().toISOString(),
+          // Owner binding: entries replay only under the authoring session —
+          // never under a different account.
+          userId: currentUserId,
+        };
+        enqueueOfflineDm(entry);
+        // Stand down the 10s ack timer: a parked bubble waits for RECONNECT,
+        // not an echo — left running it silently flipped queued → failed
+        // after 10s while the message was still safely queued (P2-172
+        // run-#145 finding). The flusher owns queued → sent/failed from here.
+        const queuedTimer = ackTimersRef.current.get(clientMessageId);
+        if (queuedTimer) {
+          clearTimeout(queuedTimer);
+          ackTimersRef.current.delete(clientMessageId);
+        }
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.clientMessageId === clientMessageId ? { ...m, status: 'queued' } : m,
+          ),
+        );
+        startOfflineDmQueueWatcher();
+        onQueuedRef.current?.();
+        return;
+      }
+      captureError(err, { scope: 'dmSend', conversationId, clientMessageId });
       setLocalMessages((prev) =>
         prev.map((m) =>
           m.clientMessageId === clientMessageId ? { ...m, status: 'failed' } : m,
@@ -445,7 +584,165 @@ export function useConversationMessages(conversationId: string | null) {
     [sendMessage],
   );
 
-  const messages = mergePersonalMessages(historyQuery.data ?? [], localMessages);
+  // ── P2-224: offline-queue backfill + flush reconciliation ────────────────
+  // Queued DMs from a PREVIOUS session (page closed before reconnect)
+  // backfill into the view as `queued` so they never vanish — filtered
+  // against local + history clientMessageIds.
+  const currentUserId = currentUser?.id;
+  const queuedForConversation: PersonalMessage[] =
+    isMounted && conversationId && currentUserId
+      ? getQueuedDmsForConversation(conversationId, currentUserId)
+          .filter(
+            (q) =>
+              !localMessages.some((m) => m.clientMessageId === q.clientMessageId) &&
+              !(historyQuery.data ?? []).some(
+                (m) => m.clientMessageId === q.clientMessageId,
+              ),
+          )
+          .map((q) => ({
+            id: `queued-${q.clientMessageId}`,
+            conversationId: q.conversationId,
+            sender: {
+              id: currentUser?.id ?? '',
+              fullName: currentUser?.fullName ?? null,
+              handle: currentUser?.handle ?? null,
+              avatarUrl: currentUser?.avatarUrl ?? null,
+            },
+            content: q.content,
+            createdAt: q.queuedAt,
+            clientMessageId: q.clientMessageId,
+            status: (q.retiredAt ? 'failed' : 'queued') as 'failed' | 'queued',
+          }))
+    : [];
 
-  return { ...historyQuery, messages, sendMessage, retryMessage };
+  // While this thread is open, a flush delivery for ANY conversation
+  // reconciles into the local view (dedup on clientMessageId); a delivery
+  // for a backfilled entry is APPENDED — otherwise discarding the queue
+  // entry would make the delivered bubble vanish. ONLY this conversation's
+  // deliveries land in this view (the flusher fans out for every
+  // conversation). A flush FAILURE flips the bubble to `failed`.
+  const threadIdRef = useRef<string | null>(conversationId);
+  threadIdRef.current = conversationId;
+  useEffect(
+    () =>
+      registerOfflineDmFlushListener((delivery, failedEntry) => {
+        if (delivery) {
+          setLocalMessages((prev) => {
+            const index = prev.findIndex(
+              (m) => m.clientMessageId === delivery.clientMessageId,
+            );
+            if (index >= 0) {
+              const next = [...prev];
+              next[index] = { ...next[index], status: 'sent' };
+              return next;
+            }
+            // Backfilled (previous-session) entry: persist the delivery with
+            // its REAL content (carried by the delivery) — but ONLY for this
+            // thread's conversation.
+            if (delivery.conversationId === threadIdRef.current) {
+              return [
+                ...prev,
+                {
+                  id: `flushed-${delivery.clientMessageId}`,
+                  conversationId: delivery.conversationId,
+                  sender: {
+                    id: currentUser?.id ?? '',
+                    fullName: currentUser?.fullName ?? null,
+                    handle: currentUser?.handle ?? null,
+                    avatarUrl: currentUser?.avatarUrl ?? null,
+                  },
+                  content: delivery.content,
+                  createdAt: delivery.queuedAt,
+                  clientMessageId: delivery.clientMessageId,
+                  status: 'sent' as const,
+                },
+              ];
+            }
+            return prev;
+          });
+          queryClient.invalidateQueries({ queryKey: ['conversation', threadIdRef.current, 'messages'] });
+          return;
+        }
+        if (failedEntry) {
+          setLocalMessages((prev) => {
+            const index = prev.findIndex(
+              (m) => m.clientMessageId === failedEntry.clientMessageId,
+            );
+            if (index >= 0) {
+              return prev.map((m) =>
+                m.clientMessageId === failedEntry.clientMessageId
+                  ? { ...m, status: 'failed' }
+                  : m,
+              );
+            }
+            // A backfilled (previous-session) entry that fails its flush is
+            // NOT in localMessages (it renders via queuedForConversation) —
+            // append the failed bubble so it never stays a stuck spinner.
+            // It shadows the queued backfill via the clientMessageId filter.
+            if (failedEntry.conversationId === threadIdRef.current) {
+              return [
+                ...prev,
+                {
+                  id: `flushed-${failedEntry.clientMessageId}`,
+                  conversationId: failedEntry.conversationId,
+                  sender: {
+                    id: currentUser?.id ?? '',
+                    fullName: currentUser?.fullName ?? null,
+                    handle: currentUser?.handle ?? null,
+                    avatarUrl: currentUser?.avatarUrl ?? null,
+                  },
+                  content: failedEntry.content,
+                  createdAt: failedEntry.queuedAt,
+                  clientMessageId: failedEntry.clientMessageId,
+                  status: 'failed' as const,
+                },
+              ];
+            }
+            return prev;
+          });
+        }
+      }),
+    [currentUser?.id, queryClient],
+  );
+
+  // Arm the module flusher once per session (idempotent).
+  useEffect(() => {
+    startOfflineDmQueueWatcher();
+  }, []);
+
+  // ── Typing emitter (P2-225) ────────────────────────────────────────────────
+  // Throttled: at most one WS emit per 2.5s while the user keeps typing. The
+  // server relays to everyone except the typer; receivers expire the signal
+  // after 4s of silence. WS-only: typing is ephemeral presence — silently
+  // dropped when offline. Sent even before history resolves (typing is
+  // presence, not data).
+  const emitTyping = useCallback(() => {
+    if (!rt.isConnected() || !conversationId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_EMIT_INTERVAL_MS) return;
+    lastTypingSentRef.current = now;
+    rt.emit('conv-typing', { conversationId });
+  }, [conversationId, rt]);
+
+  const messages = mergePersonalMessages(historyQuery.data ?? [], [
+    ...localMessages,
+    ...queuedForConversation,
+  ]);
+
+  return {
+    ...historyQuery,
+    messages,
+    sendMessage,
+    retryMessage,
+    // P2-224 offline-queue surface: queued toast flag + THIS user's entries
+    // still parked for THIS conversation (the authoritative retry backlog).
+    queuedToast,
+    queuedCount:
+      conversationId && currentUserId
+        ? getOfflineDmQueueCount(conversationId, currentUserId)
+        : 0,
+    // P2-225 typing surface: peer userIds typing now + throttled emit fn.
+    typingUserIds,
+    emitTyping,
+  };
 }

@@ -26,7 +26,16 @@ export type PushKey =
   | 'report_resolved'
   | 'report_dismissed'
   | 'waitlist_promoted'
-  | 'waitlist_closed';
+  | 'waitlist_closed'
+  // Run #200 (P2-347): a paid backfill skip removes an underfunded head from
+  // the queue — the player MUST be told (silent eviction was PR-Agent r2's
+  // IMPORTANT on PR #238).
+  | 'waitlist_removed'
+  // ── Partner money flows (P1-67, run #141): settlement paid → venue owner ──
+  | 'payout_paid'
+  // ── Player money flows (P2-193, run #155): wallet credits get a voice ──
+  | 'refund_credited'
+  | 'payout_released';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -47,6 +56,12 @@ export type PushVars = {
   kickoffDateISO?: string;
   /** New queue position (waitlist_promoted only). */
   position?: number;
+  /** Venue display name (payout_paid only) — embedded as-is. */
+  venueName?: string;
+  /** Exact 2dp SAR amount string, e.g. "3150.00". Rendered through
+   *  Intl.NumberFormat per locale (ar → Arabic-Indic digits + ر.س). Used by
+   *  payout_paid (P1-67), refund_credited + payout_released (P2-193). */
+  amount?: string;
 };
 
 type Entry = { title: string; body: (v: PushVars) => string };
@@ -90,6 +105,26 @@ function kickoffDate(iso: string | undefined, locale: 'en-GB' | 'ar-SA'): string
     dateStyle: 'long',
     timeZone: 'Asia/Riyadh',
   }).format(d);
+}
+
+/**
+ * P1-67 (run #141): render an exact 2dp SAR amount string per push locale —
+ * en → "SAR 3,150.00", ar → Arabic-Indic digits + "ر.س". TOTAL (never throws):
+ * a MISSING amount renders the localized zero datum "0.00" (pay() always
+ * passes `s.amount::text`, so this can only fire from a data bug — a payout
+ * push without a number is meaningless); a PROVIDED-but-unparseable value
+ * renders the raw string as-is (display-only passthrough — this formatter
+ * NEVER does money math and must not silently re-quantize).
+ */
+function payoutAmount(amount: string | undefined, locale: 'en-GB' | 'ar-SA'): string {
+  if (!amount) return '0.00';
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'SAR',
+    currencyDisplay: 'narrowSymbol',
+  }).format(n);
 }
 
 const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
@@ -215,12 +250,28 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
     en: {
       title: '🎉 You’re in!',
       body: (v) =>
-        `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game.`,
+        v.amount != null
+          ? `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game. ${payoutAmount(v.amount, 'en-GB')} was charged to your wallet.`
+          : `A spot opened up in "${v.title ?? 'your match'}" — you’ve been moved off the waitlist and into the game.`,
     },
     ar: {
       title: '🎉 مبروك، أنت داخل!',
       body: (v) =>
-        `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
+        v.amount != null
+          ? `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة. تم خصم ${payoutAmount(v.amount, 'ar-SA')} من محفظتك.`
+          : `انفتح مكان في "${v.title ?? 'مباراتك'}" — تم نقلك من قائمة الانتظار إلى المباراة.`,
+    },
+  },
+  waitlist_removed: {
+    en: {
+      title: '⏳ You left the waitlist',
+      body: (v) =>
+        `You were removed from the waitlist for "${v.title ?? 'a match'}" — the join fee is more than your current wallet balance. Top up and join again to claim a spot.`,
+    },
+    ar: {
+      title: '⏳ خرجت من قائمة الانتظار',
+      body: (v) =>
+        `تم إزالتك من قائمة الانتظار لمباراة "${v.title ?? 'غير محددة'}" — رسوم المشاركة أكبر من رصيد محفظتك الحالي. اشحن محفظتك وسجّل مرة أخرى لحجز مكانك.`,
     },
   },
   waitlist_closed: {
@@ -233,6 +284,52 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
       title: 'تحديث قائمة الانتظار',
       body: (v) =>
         `انتهت "${v.title ?? 'المباراة'}" قبل أن يفضي مكان. حظًا أوفر في المباراة القادمة!`,
+    },
+  },
+  // P1-67 (run #141): settlement marked paid → venue owner. Money-specifics in
+  // the body (venue + per-locale amount); title stays generic so the lock
+  // screen never truncates the part that matters.
+  payout_paid: {
+    en: {
+      title: '💸 Payout sent',
+      body: (v) =>
+        `${v.venueName ?? 'Your venue'}: your payout of ${payoutAmount(v.amount, 'en-GB')} has been sent by KoraLink.`,
+    },
+    ar: {
+      title: '💸 تم إرسال الدفعة',
+      body: (v) =>
+        `${v.venueName ?? 'ملعبك'}: تم إرسال دفعتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} من كورا لينك.`,
+    },
+  },
+  // P2-193 (run #155): wallet credits get a voice. Copy is deliberately NEUTRAL
+  // about WHY the money came back (cancel / auto-cancel / leave-refund /
+  // backfill / host-removal all share one body) — the match deep-link carries
+  // the context. Amount renders through the same per-locale Intl SAR formatter
+  // as payout_paid (one source of truth for money copy).
+  refund_credited: {
+    en: {
+      title: '💸 Money returned',
+      body: (v) =>
+        `${payoutAmount(v.amount, 'en-GB')} was refunded to your wallet — see "${v.title ?? 'your match'}".`,
+    },
+    ar: {
+      title: '💸 تم إرجاع المبلغ',
+      body: (v) =>
+        `تم إرجاع ${payoutAmount(v.amount, 'ar-SA')} إلى محفظتك — راجع "${v.title ?? 'مباراتك'}".`,
+    },
+  },
+  // Host side of the same rule (P2-193): a released player-host payout tells
+  // the host the money landed — previously a log line only.
+  payout_released: {
+    en: {
+      title: '💸 Payout released',
+      body: (v) =>
+        `Your payout of ${payoutAmount(v.amount, 'en-GB')} for "${v.title ?? 'your match'}" is in your wallet.`,
+    },
+    ar: {
+      title: '💸 تم صرف المستحقات',
+      body: (v) =>
+        `تم إيداع مستحقاتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} عن "${v.title ?? 'مباراتك'}" في محفظتك.`,
     },
   },
 };

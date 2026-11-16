@@ -33,6 +33,9 @@ const fetcherMock = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
     usePathname: () => '/en/play',
+    // Run #111: this file renders ClubsPage too — it reads ?tab= behind
+    // useSearchParams (P2-165); Play never calls it, the export is harmless.
+    useSearchParams: () => ({ get: () => null }),
     useRouter: () => ({ push: pushMock, replace: replaceMock, back: vi.fn() }),
 }));
 

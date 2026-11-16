@@ -11,6 +11,9 @@ export const env = createEnv({
     NEXT_PUBLIC_SENTRY_DSN: z.string().default(''),
     NEXT_PUBLIC_POSTHOG_KEY: z.string().default(''),
     NEXT_PUBLIC_POSTHOG_HOST: z.string().default('https://app.posthog.com'),
+    // P1-66 (run #135): public VAPID key for web push — empty = push not
+    // configured (the hook reports 'not-configured' instead of subscribing).
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().default(''),
   },
   runtimeEnv: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
@@ -20,5 +23,6 @@ export const env = createEnv({
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
   },
 });

@@ -2,7 +2,6 @@ import { MatchesService } from './matches.service';
 import {
   match_players,
   pitch_slots,
-  transactions,
   users,
 } from '../../database/schema';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -69,19 +68,40 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
         from: () => {
           const chain: Record<string, unknown> = {};
           chain.where = () => chain;
+          // P2-244: creditWalletTx's replay pre-select ends in .limit(1).
+          chain.limit = () => chain;
           chain.then = (resolve: (v: unknown) => void) => resolve([]);
           return chain;
         },
       }),
       update: (table: unknown) => ({
-        set: (setArg: Record<string, unknown>) => ({
-          where: () =>
-            record(
-              table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update',
-              table,
-              setArg,
-            ),
-        }),
+        set: (setArg: Record<string, unknown>) => {
+          // P2-244 (run #158): creditWalletTx awaits
+          // `.where(...).returning(...)` (a plain array) — record at
+          // returning() call time with a once-guard; other awaiters
+          // (slot release) record via then.
+          let recorded = false;
+          const op =
+            table === users ? 'tx:credit' : table === pitch_slots ? 'tx:slot' : 'tx:update';
+          const rec = () => {
+            if (!recorded) {
+              recorded = true;
+              record(op, table, setArg);
+            }
+          };
+          return {
+            where: () => ({
+              returning: () => {
+                rec();
+                return [{ wallet_balance: '200.00' }];
+              },
+              then: (resolve: (v: unknown) => void) => {
+                rec();
+                resolve(thenable());
+              },
+            }),
+          };
+        },
       }),
       insert: (table: unknown) => ({
         values: (valuesArg: Record<string, unknown>) => {
@@ -138,9 +158,11 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     const recordActivity = jest.fn(async () => {
       order.push('post:activity');
     });
-    const sendPush = jest.fn(async () => {
-      order.push('post:push');
-    });
+    const sendPush = jest.fn(
+      async (_users: string[], _payload?: Record<string, unknown>) => {
+        order.push('post:push');
+      },
+    );
 
     const svc = new MatchesService(
       db as never,
@@ -170,7 +192,8 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
     // + slot release, one transaction), and it committed BEFORE the bulk
     // complete statement ran.
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(txCalls.map((c) => c.op)).toEqual(['tx:credit', 'tx:ledger', 'tx:slot']);
+    // P2-244 (run #158): ledger-first order inside creditWalletTx.
+    expect(txCalls.map((c) => c.op)).toEqual(['tx:ledger', 'tx:credit', 'tx:slot']);
     expect(order.indexOf('tx:credit')).toBeGreaterThan(-1);
     expect(order.indexOf('bulk:complete')).toBeGreaterThan(order.indexOf('tx:slot'));
     expect(order).toContain('sweep:select');
@@ -181,7 +204,18 @@ describe('autoCompletePastMatches — overdue underfill net (KSU incident)', () 
         matchId: OVERDUE_KORALINK_ROW.id,
       }),
     );
-    expect(sendPush).toHaveBeenCalledTimes(1);
+    // P2-193 (run #155): TWO pushes now — the roster "cancelled" push plus
+    // the host's pitch-refund push quoting the 200 SAR credit (the row is
+    // koralink-booked, refunded=200). Both post-commit.
+    expect(sendPush).toHaveBeenCalledTimes(2);
+    const refundPush = sendPush.mock.calls.find(
+      (c) => c[1]?.key === 'refund_credited',
+    );
+    expect(refundPush).toBeDefined();
+    expect(refundPush?.[1]?.vars).toMatchObject({
+      title: OVERDUE_KORALINK_ROW.title,
+      amount: '200.00',
+    });
   });
 
   it('never completes an underfilled row even when the net missed it (bulk-guard belt)', async () => {

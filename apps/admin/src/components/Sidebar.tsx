@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings,
   ShieldAlert,
+  Star,
   Trophy,
   Users,
   Wallet,
@@ -23,6 +24,7 @@ import { clearToken, getRole } from '@/lib/api';
 import { SECTION_BY_ROLE, type ConsoleSection } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
 import LanguageToggle from '@/components/LanguageToggle';
+import { BellButton } from '@/components/NotificationCenter';
 
 const SECTION_META: Record<ConsoleSection, { href: string; labelKey: string; icon: typeof Users }> = {
   dashboard: { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
@@ -32,6 +34,7 @@ const SECTION_META: Record<ConsoleSection, { href: string; labelKey: string; ico
   pitches: { href: '/pitches', labelKey: 'pitches', icon: Goal },
   disputes: { href: '/disputes', labelKey: 'disputes', icon: ShieldAlert },
   reports: { href: '/reports', labelKey: 'reports', icon: Flag },
+  reviews: { href: '/reviews', labelKey: 'reviews', icon: Star },
   transactions: { href: '/transactions', labelKey: 'transactions', icon: CreditCard },
   settlements: { href: '/settlements', labelKey: 'settlements', icon: Wallet },
   settings: { href: '/settings', labelKey: 'settings', icon: Settings },
@@ -120,6 +123,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
   const footer = (
     <div className="border-t border-white/10 p-3">
+      {/* Notification bell + unread badge (t_8cdabf05) — same store the feed
+          drawer in the layout reads; badge clears when the feed opens. */}
+      <BellButton />
       <LanguageToggle />
       <button
         onClick={logout}
@@ -158,6 +164,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           )}
         />
         <aside
+          id="mobile-sidebar"
           className={cn(
             'absolute inset-y-0 left-0 flex w-64 flex-col bg-gray-900 text-gray-300 transition-transform duration-200',
             mobileOpen ? 'translate-x-0' : '-translate-x-full',

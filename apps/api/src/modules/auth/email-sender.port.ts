@@ -17,6 +17,23 @@ export interface EmailSender {
    * @param html rendered HTML body
    * @param debugCode OPTIONAL OTP code — logged ONLY in no-key dev mode,
    *        NEVER when a real provider key is configured.
+   * @param text OPTIONAL plain-text alternative (deliverability); adapters
+   *        forward it when the provider body supports it. Callers that only
+   *        have HTML omit it.
    */
-  send(to: string, subject: string, html: string, debugCode?: string): Promise<void>;
+  send(
+    to: string,
+    subject: string,
+    html: string,
+    debugCode?: string,
+    text?: string,
+  ): Promise<void>;
+
+  /**
+   * True when THIS adapter holds the keys/sender it needs to actually
+   * deliver (Brevo: API key + verified sender; Resend: API key). Consumers
+   * (mailer) gate their "configured" feature flag on this instead of
+   * probing one provider's env vars directly.
+   */
+  isConfigured(): boolean;
 }

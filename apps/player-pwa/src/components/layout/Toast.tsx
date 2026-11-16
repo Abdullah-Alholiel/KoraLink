@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, AlertCircle, Info, Bell, X } from 'lucide-react';
 import { useAppStore, selectToast } from '@/store/useAppStore';
 
@@ -15,6 +16,9 @@ export default function Toast() {
   const dismissToast = useAppStore((s) => s.dismissToast);
   const router = useRouter();
   const [visible, setVisible] = useState(false);
+  // a11y (run #80, P2-101): the dismiss control is user-facing to screen
+  // readers — localize it (was hardcoded "Dismiss").
+  const t = useTranslations();
 
   useEffect(() => {
     if (toast) {
@@ -83,7 +87,7 @@ export default function Toast() {
             setTimeout(() => dismissToast(), 300);
           }}
           className="flex-shrink-0 w-6 h-6 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
-          aria-label="Dismiss"
+          aria-label={t('common.dismiss')}
         >
           <X className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
         </button>

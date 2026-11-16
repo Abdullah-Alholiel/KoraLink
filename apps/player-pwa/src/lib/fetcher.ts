@@ -1,5 +1,6 @@
 import { env } from '@/env.mjs';
 import { addBreadcrumb } from '@/providers/ObservabilityProvider';
+import { clearUserRuntimeCaches, getLastRuntimeCachePurge } from '@/lib/sw-cache-hygiene';
 // Direct store access for the 401 self-heal — the store imports nothing from
 // this module, so no cycle (AuthBootstrap composes both, which is fine).
 import { useAppStore } from '@/store/useAppStore';
@@ -14,7 +15,9 @@ export class FetchError extends Error {
     public readonly status: number,
     public readonly url: string,
     /** Stable machine code from the API body (`{ message, code }`), if sent. */
-    public readonly code?: string
+    public readonly code?: string,
+    /** Seconds the client should wait before retrying (P2-194, 429 cooldown paths). */
+    public readonly retryAfter?: number
   ) {
     super(message);
     this.name = 'FetchError';
@@ -35,6 +38,12 @@ export function setAuthToken(token: string): void {
 export function clearAuthToken(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(TOKEN_KEY);
+    // P2-121 (run #83): EVERY session-ending path goes through here (profile
+    // sheet, 401 auto-logout, verify-page reset, account deletion, auth
+    // bootstrap healing) — so the SW runtime caches holding THIS user's
+    // chat/match/profile responses are wiped on sign-out regardless of which
+    // door was used (shared-device privacy; fire-and-forget by design).
+    void clearUserRuntimeCaches();
   }
 }
 
@@ -80,6 +89,14 @@ export async function fetcher<T>(
     path.startsWith('http') ? path : `${apiBase}${path}`
   );
 
+  // P2-278 (run #176, Hunt R4-1): the Bearer token must only ever leave the
+  // device for KoraLink's own API origin. Absolute-URL callers pointing at a
+  // foreign origin get NO Authorization header — so one compromised/buggy call
+  // site can no longer exfiltrate the localStorage JWT cross-origin.
+  // `credentials: 'include'` stays unconditional: the browser (not this file)
+  // enforces the cookie same-site policy, and prod is cookie-only (P2-240).
+  const isApiOrigin = url.origin === new URL(apiBase).origin;
+
   if (params) {
     Object.entries(params).forEach(([key, value]) =>
       url.searchParams.set(key, value)
@@ -90,19 +107,31 @@ export async function fetcher<T>(
 
   // Cross-origin dev via Tailscale: SameSite=Lax cookies are not forwarded,
   // so attach the JWT as a Bearer token when one is stored (dev-login).
+  // P2-278: ONLY for requests that target the API origin (see isApiOrigin).
   const sessionToken =
     typeof window !== 'undefined'
       ? localStorage.getItem(TOKEN_KEY)
       : null;
   // P0-6 (run #30): /users/me/restore falls back to the PDPL restore-token
   // Bearer when the session token is absent (after soft-delete logout).
+  // The restore path always targets the API, so it passes the origin gate.
   const token = getBearerForRequest(path, sessionToken);
+
+  // P2-50 (run #181): a FormData body is a multipart upload — the browser must
+  // set Content-Type itself (it carries the boundary). The default JSON header
+  // would corrupt the multipart body, so it is omitted for FormData requests.
+  const isFormData =
+    typeof restOptions.body !== 'undefined' &&
+    typeof FormData !== 'undefined' &&
+    restOptions.body instanceof FormData;
 
   const response = await fetch(url.toString(), {
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+                        ...(token && isApiOrigin
+                                ? { Authorization: `Bearer ${token}` }
+                                : {}),
       ...customHeaders,
     },
     ...restOptions,
@@ -114,6 +143,7 @@ export async function fetcher<T>(
     // status text when the body isn't JSON or has no message.
     let apiMessage = '';
     let apiCode: string | undefined;
+    let retryAfter: number | undefined;
     try {
       const body = await response.clone().json().catch(() => null);
       apiMessage =
@@ -122,6 +152,18 @@ export async function fetcher<T>(
       if (Array.isArray(body?.message)) apiMessage = body.message[0] ?? '';
       // P1-47: stable machine code (e.g. ACCOUNT_BANNED) for classification.
       if (body && typeof body.code === 'string') apiCode = body.code;
+      // P2-194: cooldown 429s carry retryAfter (seconds) — hoist to the error
+      // so rate-limit UIs can show an honest countdown instead of a guess.
+      const rawRetry = body?.retryAfter;
+      if (typeof rawRetry === 'number' && Number.isFinite(rawRetry) && rawRetry > 0) {
+        retryAfter = Math.ceil(rawRetry);
+      } else if (
+        typeof rawRetry === 'string' &&
+        Number.isFinite(Number(rawRetry)) &&
+        Number(rawRetry) > 0
+      ) {
+        retryAfter = Math.ceil(Number(rawRetry));
+      }
     } catch {
       apiMessage = '';
     }
@@ -164,6 +206,9 @@ export async function fetcher<T>(
           // snap an /en user back to Arabic (language-toggle incident).
           const seg = (p.split('/')[1] || '').toLowerCase();
           const localePrefix = seg === 'en' || seg === 'ar' ? `/${seg}` : '';
+          // RUN-#84 (Reviewer A IMPORTANT): await the fire-and-forget cache
+          // purge before the hard redirect so it cannot be aborted mid-flight.
+          await getLastRuntimeCachePurge();
           window.location.assign(`${localePrefix}/login`);
         }
       }
@@ -173,7 +218,8 @@ export async function fetcher<T>(
       apiMessage || `Request failed with status ${response.status}`,
       response.status,
       url.toString(),
-      apiCode
+      apiCode,
+      retryAfter
     );
   }
 

@@ -43,7 +43,6 @@ describe('UsersService P0-6 hard-purge (run #30)', () => {
         from: () => ({ where: () => ({ limit: () => [] }) }),
       }),
       update: (_table: unknown) => {
-        const idx = calls.length;
         calls.push({ method: 'update', payload: _table });
         const u: Record<string, unknown> = {
           set: (s: Record<string, unknown>) => {

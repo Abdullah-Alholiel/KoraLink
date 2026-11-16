@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
+import { isCookieSecure } from '../../common/utils/env-flags';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -65,8 +66,14 @@ export class AuthController {
   }
 
   // ── POST /auth/verify-otp ────────────────────────────────────────────────
+  // P2-241 (Reviewer A run #153): route-level cap mirroring send-otp. The
+  // global 60/min alone lets a distributed loop guess 60 codes/min per IP
+  // against a 6-digit space — the same 3/min/IP bound the send path has.
+  // Per-phone lockout (5 fails → 15 min) stays the primary defense; this
+  // bounds the noise per source.
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({
     summary: 'Verify OTP and receive an HttpOnly session cookie',
   })
@@ -86,8 +93,15 @@ export class AuthController {
       dto.surface,
     );
 
-    const isProd =
-      this.configService.get<string>('NODE_ENV') === 'production';
+    // P1-72 (run #188): EXPLICIT COOKIE_SECURE flag drives `secure` (Strix
+    // run-#183 MEDIUM: the old NODE_ENV string compare left staging's
+    // NODE_ENV=staging cookies secure:false). Unset = legacy derivation, so
+    // prod behavior is unchanged until the owner sets the flag.
+    const isProd = isCookieSecure(this.configService);
+    // sameSite stays NODE_ENV-derived (independent reviewer r2, PR #216):
+    // COOKIE_SECURE=true on staging must NOT silently flip SameSite to
+    // strict — the two cookie axes are independent.
+    const isProdEnv = this.configService.get<string>('NODE_ENV') === 'production';
 
     // Issue the JWT exclusively as an HttpOnly cookie — never in the body.
     // (Exception, documented: the email+OTP flow's opt-in `responseToken`,
@@ -95,7 +109,7 @@ export class AuthController {
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProdEnv ? 'strict' : 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',
     });
@@ -129,6 +143,10 @@ export class AuthController {
   // is now always signed with `expiresIn: JWT_EXPIRY` (defense in depth).
   @Post('dev-login')
   @HttpCode(HttpStatus.OK)
+  // run-3 audit (api-auth:dev-login-throttle, fixed run #129): route-level cap
+  // mirroring send-otp — the global 60/min throttle alone lets a script pump
+  // 3 token-mints/minute forever against a route that bypasses OTP entirely.
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @ApiOperation({
     summary:
       '[DEV ONLY] Login as a seeded user by phone. Sets auth cookie directly.',
@@ -147,9 +165,16 @@ export class AuthController {
 
     const token = await this.authService.devLogin(dto.phone, dto.surface);
 
+    // P1-72 (run #188): same EXPLICIT COOKIE_SECURE derivation as verify-otp.
+    const secureCookie = isCookieSecure(this.configService);
+
+    // P2-241 (Reviewer A run #153): secure cookie flag — now from the explicit
+    // COOKIE_SECURE flag (P1-72). dev-login only answers when DEV_LOGIN_ENABLED
+    // (default false), so this is dev ergonomics; the cookie must
+    // never ride an insecure connection in prod regardless.
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: false,
+      secure: secureCookie,
       sameSite: 'lax',
       maxAge: SEVEN_DAYS_MS,
       path: '/',

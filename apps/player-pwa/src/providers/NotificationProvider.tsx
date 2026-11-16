@@ -98,13 +98,18 @@ export default function NotificationProvider({ children }: { children: React.Rea
         player_removed: t('playerRemoved'),
         match_auto_cancelled: t('matchAutoCancelled'),
         report_resolved: t('reportResolved'),
+        // P1-67 (run #141): settlement paid → venue owner toast. Copy names
+        // the fact (money moved), not the amount (payload carries no vars).
+        payout_paid: t('payoutPaid'),
       };
       const message = copy[payload.verb] ?? t('newActivity');
       const href = payload.verb === 'followed'
         ? '/profile'
-        : payload.matchId
-          ? `/match/${payload.matchId}`
-          : '/messages';
+        : payload.verb === 'payout_paid'
+          ? '/wallet' // partner taps → their money surface; venue tools live in the admin portal
+          : payload.matchId
+            ? `/match/${payload.matchId}`
+            : '/messages';
 
       useAppStore.getState().showToast(message, 'notification', { href, avatarUrl: payload.actor?.avatarUrl });
     };

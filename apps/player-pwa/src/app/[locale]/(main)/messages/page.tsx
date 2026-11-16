@@ -3,12 +3,14 @@
 import { useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { classifyError, errorKey } from '@/lib/error-classify';
 import {
   Search,
   MessageSquare,
-  AlertTriangle,
 } from 'lucide-react';
 import { useDiscussions } from '@/hooks/useMessages';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useNow } from '@/hooks/useNow';
 
@@ -176,37 +178,26 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* ── Error State ── */}
+      {/* ── Error State (shared component — P2-247 adoption, run #172) ── */}
       {error && !isLoading && (
-        <div className="flex flex-col items-center justify-center py-20 px-8">
-          <div className="w-14 h-14 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
-            <AlertTriangle className="w-7 h-7 text-brand-red" strokeWidth={1.5} />
-          </div>
-          <p className="text-sm text-gray-400 text-center mb-4">{t('common.errorDescription')}</p>
-          <button
-            onClick={() => refetch()}
-            className="bg-brand-green text-white px-5 py-2 rounded-full text-sm font-bold active:scale-95 transition-transform"
-          >
-            {t('common.retry')}
-          </button>
-        </div>
+        <ErrorState
+          title={t(errorKey(classifyError(error)))}
+          onRetry={() => refetch()}
+          retryLabel={t('common.retry')}
+        />
       )}
 
-      {/* ── Empty State ── */}
+      {/* ── Empty State (shared component — P2-247 adoption, run #172) ── */}
       {!isLoading && !error && filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 px-8">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-            <MessageSquare className="w-8 h-8 text-gray-300" strokeWidth={1.5} />
-          </div>
-          <h3 className="text-base font-bold text-brand-black mb-1">
-            {searchQuery ? t('common.noResults') : t('messages.noDiscussions')}
-          </h3>
-          <p className="text-sm text-gray-400 text-center">
-            {searchQuery
+        <EmptyState
+          icon={MessageSquare}
+          title={searchQuery ? t('common.noResults') : t('messages.noDiscussions')}
+          description={
+            searchQuery
               ? t('common.noResults')
-              : t('messages.noDiscussionsDescription')}
-          </p>
-        </div>
+              : t('messages.noDiscussionsDescription')
+          }
+        />
       )}
 
       {/* ── Direct Messages (personal 1:1 chats — via shared DiscussionCard) ── */}
