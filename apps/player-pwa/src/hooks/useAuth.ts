@@ -146,12 +146,18 @@ export function useCompleteProfile() {
     CompleteProfileInput
   >({
     mutationFn: (data) =>
-      // API key names use snake_case
+      // API key names use snake_case.
+      // Cutover Card 2 (2026-11-16): `handle` is deliberately NOT sent — the
+      // SERVER derives it from full_name (slugifyHandle) and auto-picks a free
+      // one on collision (pickFreeHandle). The old client-side derivation
+      // (`name.toLowerCase().replace(/\s+/g,'_')`) collided on common names
+      // ("abdullah" was already taken in prod) and silently produced
+      // unusable handles for Arabic-script names. The authoritative handle
+      // comes back in the response and lands in the store below.
       fetcher<CompleteProfileResponse>('/auth/complete-profile', {
         method: 'PATCH',
         body: JSON.stringify({
           full_name: data.fullName,
-          handle: data.fullName.toLowerCase().replace(/\s+/g, '_'),
           preferred_location: data.preferredLocation,
           preferred_position: data.preferredPosition,
         }),

@@ -26,7 +26,10 @@ export type ErrorKind =
   /** P2-111: the match lobby chat is closed (match terminal / expired). */
   | 'chatClosed'
   /** P1-53: the recipient has blocked the sender (DM send, either direction). */
-  | 'blockedByRecipient';
+  | 'blockedByRecipient'
+  /** Cutover Card 2 (2026-11-16): every free handle was taken — the save
+   *  failed and the user should retry (transient contention, not validation). */
+  | 'handleTaken';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -44,6 +47,7 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   deleted: 'errors.deleted',
   chatClosed: 'errors.chatClosed',
   blockedByRecipient: 'errors.blockedByRecipient',
+  handleTaken: 'errors.handleTaken',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -55,6 +59,9 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   MATCH_CHAT_CLOSED: 'chatClosed',
   // P1-53: DM recipient has blocked the sender (403 body code).
   BLOCKED_BY_RECIPIENT: 'blockedByRecipient',
+  // Cutover Card 2 (2026-11-16): handle contention survived every auto-pick
+  // retry (409 body code) — retryable, never a generic "invalid details".
+  HANDLE_TAKEN: 'handleTaken',
 };
 
 /** i18n key for a classified error. */
