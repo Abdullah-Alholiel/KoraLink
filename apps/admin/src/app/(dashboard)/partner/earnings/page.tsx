@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLiveAdminData } from '@/lib/use-live-data';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
 import { cn, formatDate, formatMoney, formatPercent } from '@/lib/utils';
@@ -26,6 +26,23 @@ import {
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import * as Sentry from '@sentry/nextjs';
+
+// P2-343: payout-request failure buckets (error-message standard — what
+// happened + why + what next, localized EN+AR). Same shape as blackout.ts
+// pitchActionFailure: ApiError status → bucket; anything else is network.
+type PayoutFailure = 'auth' | 'access' | 'server' | 'conflict' | 'validation' | 'network';
+
+function payoutFailureKey(err: unknown): string {
+  let bucket: PayoutFailure = 'network';
+  if (err instanceof ApiError) {
+    if (err.status === 401) bucket = 'auth';
+    else if (err.status === 403 || err.status === 404) bucket = 'access';
+    else if (err.status === 409) bucket = 'conflict';
+    else if (err.status === 429 || err.status >= 500) bucket = 'server';
+    else if (err.status >= 400) bucket = 'validation';
+  }
+  return `payoutError${bucket.charAt(0).toUpperCase()}${bucket.slice(1)}`;
+}
 
 interface PartnerSettlement {
   id: string;
@@ -74,10 +91,14 @@ export default function PartnerEarningsPage() {
       trackEvent('partner_payout_request', { page: 'partner.earnings', requested: res.requested, total: res.totalAmount });
       reload();
     } catch (e) {
-      // Error-message standard: what happened + why + what to do next.
-      const msg = e instanceof Error ? e.message : t('payoutErrorFallback');
-      setRequestError(msg);
-      trackEvent('partner_payout_request_error', { page: 'partner.earnings' });
+      // P2-343 (error-message standard): localized what/why/next bucket —
+      // never the raw backend message (mirror of blackout pitchActionFailure).
+      const key = payoutFailureKey(e);
+      setRequestError(t(key));
+      trackEvent('partner_payout_request_error', {
+        page: 'partner.earnings',
+        bucket: key.replace('payoutError', ''),
+      });
     } finally {
       setRequesting(false);
     }
@@ -363,10 +384,10 @@ export default function PartnerEarningsPage() {
                   {requestNote}
                 </p>
               )}
-              {/* Error note (role=alert) — what happened + why + what next */}
+              {/* Error note (role=alert) — localized what/why/next (P2-343) */}
               {requestError && (
                 <p role="alert" className="mt-2 text-xs font-medium text-red-600">
-                  {t('payoutErrorPrefix')} {requestError}
+                  {requestError}
                 </p>
               )}
             </div>
