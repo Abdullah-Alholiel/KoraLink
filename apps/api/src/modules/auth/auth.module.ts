@@ -13,9 +13,11 @@ import { BrevoService } from './brevo.service';
 import { EMAIL_SENDER_PROVIDER } from './email-sender.provider';
 import { UnifonicService } from './unifonic.service';
 import { JwtCookieStrategy } from './jwt-cookie.strategy';
+import { CaptchaModule } from '../../common/captcha/captcha.module';
 
 @Module({
   imports: [
+    CaptchaModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

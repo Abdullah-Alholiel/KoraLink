@@ -126,6 +126,17 @@ export default async function RootLayout({
         <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1284x2778.png" />
         <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1170x2532.png" />
         <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)" href="/icons/splash-828x1792.png" />
+        {/* F1 (launch lane, run #212): Cloudflare Turnstile loader — DEFERRED
+            and harmless when unused: the login/verify screens mount the widget
+            only when the API's /health advertises turnstile.enabled=true, and
+            this script only DEFINES window.turnstile (zero render cost on
+            every other screen). `?onloadTurnstileCallback=` is not used — the
+            component polls for window.turnstile instead (no global callback
+            contract to race with Next's script loader). */}
+        <script
+            src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+            defer
+        />
         <QueryProvider>
           <ObservabilityProvider>
             <IntlClientProvider locale={locale} messages={messages}>

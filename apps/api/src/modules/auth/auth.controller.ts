@@ -22,6 +22,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { isCookieSecure } from '../../common/utils/env-flags';
+import { TurnstileService } from '../../common/captcha/turnstile.service';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -39,6 +40,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly turnstile: TurnstileService,
   ) {}
 
   // ── POST /auth/send-otp ──────────────────────────────────────────────────
@@ -61,6 +63,10 @@ export class AuthController {
     // is optional — when null (e.g. a unit-test caller) the per-IP cap is
     // simply skipped, leaving the per-phone + per-minute caps in force.
     const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    // ── F1 (launch lane, run #212): human-proof gate BEFORE any counter or
+    // OTP write. Fail-closed 400 CAPTCHA_REQUIRED when armed without a valid
+    // token; zero behavior change while TURNSTILE_ENABLED is unset.
+    await this.turnstile.verify(dto.turnstileToken, ip);
     await this.authService.sendOtp(dto.phone, ip);
     return { message: 'OTP sent.' };
   }
