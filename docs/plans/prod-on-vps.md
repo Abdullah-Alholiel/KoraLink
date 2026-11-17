@@ -189,6 +189,26 @@ retention trivial) — 42 GiB free is ample.
   here as a dated edit).
 - **A2** — Create the 3 Coolify apps + `koralink-prod-pg` (§2/§3 settings incl. memory
   cap; owner pastes secrets; factory never sees prod creds).
+
+  **A2 env checklist (names only — owner pastes values; gathered by run #213 per
+  Life-OS worker request D-20261117-03; mirrors apps/api/.env.example):**
+  - `TRUST_PROXY=1` — API sits behind exactly one ingress (Coolify proxy) that
+    OVERWRITES X-Forwarded-For; without it the per-IP OTP caps key on
+    attacker-controlled headers.
+  - `TURNSTILE_ENABLED` / `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` — real
+    Cloudflare widget keys (staging dummy keys are rejected at boot in prod since
+    D-20261117-04).
+  - `DEV_LOGIN_ENABLED=false` — dev-login must never answer in prod.
+  - `COOKIE_SECURE=true` — prod+COOKIE_SECURE=false fails boot loudly (env-flags
+    guard, P2-361).
+  - `EMAIL_PROVIDER=brevo` + `BREVO_API_KEY` + `BREVO_FROM` — Brevo delivers to any
+    recipient; Resend stays send-domain-verified-only.
+  - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (+ same public key as
+    `NEXT_PUBLIC_VAPID_PUBLIC_KEY` on the PWA) — push notifications stay disabled
+    without them.
+  - `NEXT_PUBLIC_POSTHOG_KEY=` (leave empty unless prod analytics is wanted).
+  - Same-day-with-DB-move line: **retarget `db-backup-prod.sh` to prod-pg the day
+    DATABASE_URL moves** (§7-C7; watchdog §8 alarms on a stale dump).
 - **A3** — Wire the GitHub webhook + first tag build (C2).
 - **A4** — Owner-executed Neon dump → restore → journal reconcile (§4, C3) — prod-DB
   action, owner-only per DECISIONS.md 2026-11-03.
