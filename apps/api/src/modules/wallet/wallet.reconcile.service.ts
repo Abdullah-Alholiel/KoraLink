@@ -290,7 +290,7 @@ export class WalletReconcileService {
             // protects credited rows) but invisible. Mirror the sibling expiry
             // catch (:318-323): warn + Sentry, degrade to empty, sweep lives.
             this.logger.warn(
-              `topup creditedIds read failed (degraded to empty; expiry predicate still protects credited rows): ${(err as Error).message}`,
+              `topup creditedIds read failed (degraded to empty; expiry predicate still protects credited rows): ${err instanceof Error ? err.message : String(err)}`,
             );
             Sentry.captureException(err, { tags: { scope: 'wallet.topupReconcile' } });
             return [] as { id: string }[];
