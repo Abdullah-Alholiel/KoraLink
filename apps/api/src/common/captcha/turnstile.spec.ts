@@ -6,11 +6,17 @@ type CfgStub = { get: (key: string, def?: string) => string | undefined };
 function makeService(env: {
   enabled?: string;
   secret?: string;
+  nodeEnv?: string;
+  siteKey?: string;
+  publicSiteKey?: string;
 }): TurnstileService {
   const config = {
     get: (key: string, def?: string) => {
       if (key === 'TURNSTILE_ENABLED') return env.enabled ?? def;
       if (key === 'TURNSTILE_SECRET_KEY') return env.secret ?? def;
+      if (key === 'NODE_ENV') return env.nodeEnv ?? def;
+      if (key === 'TURNSTILE_SITE_KEY') return env.siteKey ?? def;
+      if (key === 'NEXT_PUBLIC_TURNSTILE_SITE_KEY') return env.publicSiteKey ?? def;
       return undefined;
     },
   } as unknown as CfgStub;
@@ -19,6 +25,7 @@ function makeService(env: {
 
 const ALWAYS_PASS = '1x0000000000000000000000000000000AA';
 const ALWAYS_BLOCK = '2x0000000000000000000000000000000AA';
+const REAL_SHAPED = '0x4AAAAAAAreal-shaped-secret-for-tests';
 
 /** Route global fetch for one call; restores after each test via afterEach. */
 function stubFetch(impl: () => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>) {
@@ -31,9 +38,20 @@ describe('TurnstileService', () => {
 
   afterEach(() => {
     global.fetch = realFetch;
-    process.env.TURNSTILE_SITE_KEY = realEnv.TURNSTILE_SITE_KEY;
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY =
-      realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    // Assigning `process.env.X = undefined` would CREATE the key with the
+    // string 'undefined' (Node coercions) and leak it to sibling specs in the
+    // same worker — delete instead when the key was absent at snapshot time.
+    if (realEnv.TURNSTILE_SITE_KEY === undefined) {
+      delete process.env.TURNSTILE_SITE_KEY;
+    } else {
+      process.env.TURNSTILE_SITE_KEY = realEnv.TURNSTILE_SITE_KEY;
+    }
+    if (realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY === undefined) {
+      delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    } else {
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY =
+        realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    }
   });
 
   it('flag OFF: verify resolves without a token (zero behavior change) and status hides the site key', async () => {
@@ -101,14 +119,73 @@ describe('TurnstileService', () => {
     });
   });
 
-  it('getStatus: enabled + TURNSTILE_SITE_KEY set → exposes the site key for the health contract', () => {
-    process.env.TURNSTILE_SITE_KEY = '0x4AAA_site_key';
-    const svc = makeService({ enabled: 'true', secret: ALWAYS_PASS });
+  it('getStatus: enabled → site key read from ConfigService (TURNSTILE_SITE_KEY, then NEXT_PUBLIC_ fallback), not process.env', () => {
+    process.env.TURNSTILE_SITE_KEY = 'from-process-env-must-be-ignored';
+    const svc = makeService({ enabled: 'true', secret: ALWAYS_PASS, siteKey: '0x4AAA_site_key' });
     expect(svc.getStatus()).toEqual({ enabled: true, siteKey: '0x4AAA_site_key' });
-    delete process.env.TURNSTILE_SITE_KEY;
-    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    const svcPublic = makeService({ enabled: 'true', secret: ALWAYS_PASS, publicSiteKey: '0x4BBB_pub' });
+    expect(svcPublic.getStatus()).toEqual({ enabled: true, siteKey: '0x4BBB_pub' });
     const svcNoKey = makeService({ enabled: 'true', secret: ALWAYS_PASS });
     expect(svcNoKey.getStatus().siteKey).toBeNull();
+  });
+
+  it('getStatus: disabled → siteKey null even when ConfigService has a site key', () => {
+    const svc = makeService({ enabled: 'false', secret: ALWAYS_PASS, siteKey: '0x4AAA_site_key' });
+    expect(svc.getStatus()).toEqual({ enabled: false, siteKey: null });
+  });
+
+  describe('production dummy-secret boot guard (D-20261117-04)', () => {
+    it('production + dummy always-pass secret → constructor THROWS naming TURNSTILE_SECRET_KEY', () => {
+      expect(() =>
+        makeService({ enabled: 'true', secret: ALWAYS_PASS, nodeEnv: 'production' }),
+      ).toThrow(/TURNSTILE_SECRET_KEY/);
+      // Guard holds even with the flag off — a latent prod hole is still a hole.
+      expect(() =>
+        makeService({ enabled: 'false', secret: ALWAYS_PASS, nodeEnv: 'production' }),
+      ).toThrow(/TURNSTILE_SECRET_KEY/);
+    });
+
+    it.each(['staging', 'development', 'test', undefined])(
+      'non-production (%s) + dummy always-pass secret → no throw, verify still short-circuits',
+      async (nodeEnv) => {
+        let svc: TurnstileService | undefined;
+        expect(() => {
+          svc = makeService({ enabled: 'true', secret: ALWAYS_PASS, nodeEnv });
+        }).not.toThrow();
+        stubFetch(() => {
+          throw new Error('network must not be called for the always-pass dummy');
+        });
+        await expect(svc!.verify('dummy-token')).resolves.toBeUndefined();
+      },
+    );
+
+    it('production + real-shaped secret → no throw', () => {
+      expect(() =>
+        makeService({ enabled: 'true', secret: REAL_SHAPED, nodeEnv: 'production' }),
+      ).not.toThrow();
+    });
+
+    it('production + always-block dummy → no throw (fails closed, not a hole)', () => {
+      expect(() =>
+        makeService({ enabled: 'true', secret: ALWAYS_BLOCK, nodeEnv: 'production' }),
+      ).not.toThrow();
+    });
+  });
+
+  it('always-block dummy secret does NOT short-circuit — siteverify IS called', async () => {
+    const svc = makeService({ enabled: 'true', secret: ALWAYS_BLOCK });
+    let called = 0;
+    stubFetch(() => {
+      called += 1;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: false, 'error-codes': ['invalid-input-response'] }),
+      });
+    });
+    await expect(svc.verify('any-token')).rejects.toMatchObject({
+      response: { code: 'CAPTCHA_INVALID' },
+    });
+    expect(called).toBe(1);
   });
 
   it('enabled without secret → constructs (fail-loud boot log path; verify fails closed as unavailable)', async () => {
