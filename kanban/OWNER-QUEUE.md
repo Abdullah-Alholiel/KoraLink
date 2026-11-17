@@ -1,12 +1,19 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #262 P2-373 stable error codes, r1 fix pushed, re-review in flight — factory merges when green)
-- Commits ahead of main: **464** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
-- Services: API/PWA/Admin UP — API = wallet reconcile hardening LIVE (PR #260 `61c2b83`); PWA = ReportSheet localized errors LIVE (PR #261 `1fc6e8c`) + owner UI defects (PR #259 `d976f68`); Admin = payout error buckets (PR #263 `7a883b6`) + run-#199 filters
-- Factory loop status: **HEALTHY 2026-11-16** — run #210 shipped the 3-item error-copy cycle (P2-372/373/343, two merged + one merging) and REFUTED 3 phantom reviewer gaps. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Open PRs: 1 (#266 docker cutover — sibling WIP relocated to `/home/ubuntu/worktrees/koralink-docker-cutover` during run #212 so the VPS deployment checkout stays on `staging`)
+- Commits ahead of main: **474** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
+- Services: API/PWA/Admin UP — API = Cloudflare Turnstile OTP gate LIVE (PR #269 `448bfe7`, flag-off default); PWA = Turnstile CSP/script loader LIVE; Admin = rebuilt from staging
+- Factory loop status: **HEALTHY 2026-11-17** — run #212 shipped F1 Turnstile via private worktree + staging checkout recovery. Strix next window Dec 1–3. Swap full.
 
 ## Active owner actions
+
+### NEW-9. F1 — Arm Cloudflare Turnstile on staging (NEW run #212)
+- **What:** F1 OTP bot protection is built and LIVE, but flag-off by default (`TURNSTILE_ENABLED=false`). The PWA only renders the widget when `/api/v1/health` advertises a site key. Cloudflare dummy keys exist for CI/staging short-circuit; real keys are needed for actual protection.
+- **Your part:** Cloudflare dashboard → Turnstile → create widget for `aa.tail2948f9.ts.net:10000` and `koralink.app` (or the live domains) → copy **site key** + **secret key** into the staging API env (`apps/api/.env`): `TURNSTILE_SITE_KEY=...`, `TURNSTILE_SECRET_KEY=...`, then `TURNSTILE_ENABLED=true`. Restart API.
+- **Verify:** `/api/v1/health` returns `turnstile.enabled=true` and a siteKey; `/ar/login` renders the widget; a fake token fails with `CAPTCHA_INVALID`; a missing token fails with `CAPTCHA_REQUIRED`.
+- **Close line:** "F1: Turnstile armed on staging" — or report any blocker.
+- **Deadline:** Before A6 public go-live (launch-lane precondition).
 
 ### NEW-8. P1-66 — 2-minute browser subscribe test (NEW run #203)
 - **What:** VAPID keys are now generated + live (your D-20261106-15 decision, executed run #203). Server pushes are ENABLED and the PWA bundle carries the public key. Push needs one human test on a real device to close.
@@ -47,12 +54,12 @@
 - **Close line:** "P0-11: plan approved, start A2" OR "P0-11: amend — <notes>" OR "P0-11: defer".
 - **Deadline:** Owner-paced; nothing executes without your A1.
 
-### 2. Promote PR #178 merge (owner GO → AI executes, per D-20261113-28)
+### 2. Next promote staging→main (owner GO → AI executes, per D-20261113-28)
 - **Owner decision (Life OS 2026-11-07, D-20261106-02 + chat 2026-11-13, D-20261113-28):** owner checks UI/UX on staging and says GO in chat; the AI then executes migrate-first + the merge + deploy, and reports back.
-- **Status (2026-11-06, run #191):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Checks GREEN (gate, fresh-apply, semgrep, review, Dependency Audit, gitleaks, Vercel ×2 + previews). Two NEW additive migrations (0059, 0060) ride this promote — the AI applies them to Neon BEFORE the merge (migrate-first).
-- **Your one word:** "GO" on PR #178 in chat (after your own staging check). The AI does the rest and reports SHA + health.
+- **Status (run #212):** PR #178 **MERGED 2026-11-16T19:38Z** (0045–0058 promoted + deployed). Two NEW additive migrations (0059, 0060) ride the **NEXT** promote — the AI applies them to Neon BEFORE the merge (migrate-first). Commits ahead of main: **474**.
+- **Your one word:** "GO" in chat (after your own staging check). The AI assembles the promote PR, applies 0059+0060 to prod Neon, merges, and reports SHA + health.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
-- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
+- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. Nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod.
 
 ### 4. P0-2 sandbox → live Moyasar
 - **Owner decision (Life OS 2026-11-07, D-20261106-04):** Flip WALLET_TOPUP_ENABLED and test
