@@ -28,9 +28,15 @@ describe('AuthController — POST /auth/verify-otp responseToken contract', () =
     }),
   } as unknown as Response;
 
+  const turnstile = {
+    verify: jest.fn().mockResolvedValue(undefined),
+    getStatus: jest.fn().mockReturnValue({ enabled: false, siteKey: null }),
+  };
+
   const controller = new AuthController(
     service as never,
     config as never,
+    turnstile as never,
   );
 
   it('returns { isNewUser } only when the caller did NOT opt in (legacy shape)', async () => {
@@ -106,6 +112,10 @@ describe('AuthController — P2-241 route-level throttling + devLogin cookie har
           get: jest.fn((key: string) =>
             key === 'NODE_ENV' ? nodeEnv : key === 'DEV_LOGIN_ENABLED' ? 'true' : undefined,
           ),
+        } as never,
+        {
+          verify: jest.fn().mockResolvedValue(undefined),
+          getStatus: jest.fn().mockReturnValue({ enabled: false, siteKey: null }),
         } as never,
       );
     const makeRes = () => {

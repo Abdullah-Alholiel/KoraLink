@@ -36,7 +36,17 @@ export type ErrorKind =
   | 'smsUnavailable'
   /** Cutover Card 2 (2026-11-16): every free handle was taken — the save
    *  failed and the user should retry (transient contention, not validation). */
-  | 'handleTaken';
+  | 'handleTaken'
+  /**
+   * Launch-lane F1 (run #212): Cloudflare Turnstile armed (TURNSTILE_ENABLED)
+   * and the send was rejected — missing token (CAPTCHA_REQUIRED), failed
+   * challenge (CAPTCHA_INVALID), or the verify service unreachable
+   * (CAPTCHA_UNAVAILABLE). Copy: what happened + retry (transient, not a
+   * validation error on the user's input).
+   */
+  | 'captchaRequired'
+  | 'captchaFailed'
+  | 'captchaUnavailable';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -56,6 +66,9 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   blockedByRecipient: 'errors.blockedByRecipient',
   smsUnavailable: 'errors.smsUnavailable',
   handleTaken: 'errors.handleTaken',
+  captchaRequired: 'errors.captchaRequired',
+  captchaFailed: 'errors.captchaFailed',
+  captchaUnavailable: 'errors.captchaUnavailable',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -72,6 +85,10 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   // Cutover Card 2 (2026-11-16): handle contention survived every auto-pick
   // retry (409 body code) — retryable, never a generic "invalid details".
   HANDLE_TAKEN: 'handleTaken',
+  // Launch-lane F1 (run #212): Turnstile armed + reject (400 body codes).
+  CAPTCHA_REQUIRED: 'captchaRequired',
+  CAPTCHA_INVALID: 'captchaFailed',
+  CAPTCHA_UNAVAILABLE: 'captchaUnavailable',
 };
 
 /** i18n key for a classified error. */

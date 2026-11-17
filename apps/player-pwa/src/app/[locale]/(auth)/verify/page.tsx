@@ -5,6 +5,8 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
+import { useTurnstileEnabled } from '@/hooks/useTurnstileEnabled';
+import { Turnstile } from '@/components/auth/Turnstile';
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
@@ -78,6 +80,13 @@ function VerifyContent() {
     const sendOtp = useSendOtp();
     const verifyEmailOtp = useVerifyEmailOtp();
     const sendEmailOtp = useSendEmailOtp();
+
+    // ── F1 (launch lane, run #212): Turnstile for RESEND. The login screen
+    // consumed this session's first token; a resend is a NEW send-otp POST and
+    // needs a FRESH token when the flag is armed. Same health-driven mount.
+    const turnstileStatus = useTurnstileEnabled();
+    const turnstileArmed = turnstileStatus?.enabled === true && !!turnstileStatus.siteKey;
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
     // Resend countdown timer
     useEffect(() => {
@@ -271,6 +280,11 @@ function VerifyContent() {
     const handleResend = () => {
         if (resendCountdown > 0) return;
         if (channel === 'phone' && !phone) return;
+        // F1: armed captcha without a fresh token → show why + keep waiting.
+        if (turnstileArmed && !turnstileToken) {
+            setError(tErrors('captchaRequired'));
+            return;
+        }
         setError(null);
         setResendCountdown(RESEND_COOLDOWN);
         // A resend invalidates the PREVIOUS code server-side (the fresh code
@@ -296,6 +310,13 @@ function VerifyContent() {
                 setError(tErrors('rateLimitedRetryIn', { seconds: capped }));
                 return;
             }
+            if (kind === 'captchaRequired' || kind === 'captchaFailed' || kind === 'captchaUnavailable') {
+                // F1: token single-use — reset so the widget re-issues; copy
+                // names the human check, not a generic send failure.
+                setTurnstileToken(null);
+                setError(tErrors(kind));
+                return;
+            }
             setError(
                 kind === 'rateLimited'
                     ? tErrors('rateLimited')
@@ -306,13 +327,13 @@ function VerifyContent() {
         };
         if (channel === 'email') {
             sendEmailOtp.mutate(
-                { email },
+                { email, turnstileToken },
                 { onError: onSendError },
             );
             return;
         }
         sendOtp.mutate(
-            { phone },
+            { phone, turnstileToken },
             {
                 onError: onSendError,
             },
@@ -427,13 +448,24 @@ function VerifyContent() {
                     ))}
                 </div>
 
+                {/* F1 (launch lane, run #212): Turnstile for RESEND — mounts
+                    only when /health advertises the flag armed + keyed. */}
+                {turnstileArmed && turnstileStatus?.siteKey && (
+                    <Turnstile
+                        siteKey={turnstileStatus.siteKey}
+                        language={(locale === 'ar' ? 'ar' : 'en') as string}
+                        onToken={setTurnstileToken}
+                    />
+                )}
+
                 {/* Resend — pending/spinner keyed to the ACTIVE channel's
                     mutation (sendOtp always exists; email must watch its own). */}
                 <button
                     onClick={handleResend}
                     disabled={
                         resendCountdown > 0 ||
-                        (channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)
+                        (channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) ||
+                        (turnstileArmed && !turnstileToken)
                     }
                     className="flex items-center gap-1.5 mt-6 text-sm text-brand-green font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >

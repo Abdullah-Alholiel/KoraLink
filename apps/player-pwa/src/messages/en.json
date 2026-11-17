@@ -43,7 +43,13 @@
     "handleTaken": "That username is taken and we couldn't find a free alternative. Try saving again, or change your name slightly.",
     "blockFailed": "Couldn't block this user. Check your connection and try again.",
     "unblockFailed": "Couldn't unblock this user. Check your connection and try again.",
+    "captchaRequired": "Verification required — complete the human check, then try again.",
+    "captchaFailed": "Verification didn't pass — please try again.",
+    "captchaUnavailable": "Verification service is temporarily unavailable — please try again shortly.",
     "favoriteFailed": "Couldn't update your favorites — nothing was changed. Check your connection and try again."
+  },
+  "turnstile": {
+    "label": "Human verification"
   },
   "offline": {
     "backToPage": "Back to the page",
