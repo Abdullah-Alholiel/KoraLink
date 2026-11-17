@@ -283,7 +283,18 @@ export class WalletReconcileService {
           .select({ id: wallet_topup_intents.id })
           .from(wallet_topup_intents)
           .where(and(eq(wallet_topup_intents.status, 'credited'), gt(wallet_topup_intents.updated_at, expiryCutoff)))
-          .catch(() => [] as { id: string }[])).map((r) => r.id),
+          .catch((err: unknown) => {
+            // Reviewer A run #210 (P2-374): a DB failure reading credited rows
+            // must stay observable — silently emptying the exclusion set here
+            // is safe (the expiry UPDATE's status='pending' predicate still
+            // protects credited rows) but invisible. Mirror the sibling expiry
+            // catch (:318-323): warn + Sentry, degrade to empty, sweep lives.
+            this.logger.warn(
+              `topup creditedIds read failed (degraded to empty; expiry predicate still protects credited rows): ${err instanceof Error ? err.message : String(err)}`,
+            );
+            Sentry.captureException(err, { tags: { scope: 'wallet.topupReconcile' } });
+            return [] as { id: string }[];
+          })).map((r) => r.id),
       );
       const paidIntentIds = new Set<string>();
       for (const [intentId, hit] of byIntentId) {
