@@ -28,18 +28,22 @@ export class TurnstileService {
   private static readonly VERIFY_URL =
     'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
-  /** Official Cloudflare DUMMY secret keys (public test suite, docs.cloudflare.com). */
-  private static readonly DUMMY_SECRETS = new Set([
-    '1x0000000000000000000000000000000AA', // always passes
-    '2x0000000000000000000000000000000AA', // always blocks
-    '3x0000000000000000000000000000000AA', // yields a token timeout error
+  /**
+   * Official Cloudflare DUMMY secret keys that ALWAYS PASS (public test suite,
+   * docs.cloudflare.com). Only these short-circuit verify(); the other public
+   * dummies ('2x…AA' always-block, '3x…AA' token-spent) deliberately go
+   * through the full siteverify path so staging can probe real reject shapes.
+   * Rejected at boot when NODE_ENV=production (D-20261117-04).
+   */
+  private static readonly DUMMY_ALWAYS_PASS: ReadonlySet<string> = new Set([
+    '1x0000000000000000000000000000000AA',
   ]);
 
   private readonly logger = new Logger(TurnstileService.name);
   private readonly enabled: boolean;
   private readonly secretKey: string;
 
-  constructor(config: ConfigService) {
+  constructor(private readonly config: ConfigService) {
     this.enabled =
       (config.get<string>('TURNSTILE_ENABLED', 'false') ?? 'false')
         .trim()
@@ -56,13 +60,26 @@ export class TurnstileService {
         tags: { component: 'turnstile', misconfig: 'no-secret' },
       });
     }
+    // Fail-loud prod guard (D-20261117-04): a production deployment armed with
+    // the public always-pass dummy secret would silently accept EVERY token —
+    // the captcha gate would be decorative. Refuse to boot instead. Same
+    // NODE_ENV=production predicate as assertEnvFlags (env-flags.ts); staging
+    // (NODE_ENV=staging) keeps using the dummy keys by design.
+    if (
+      config.get<string>('NODE_ENV') === 'production' &&
+      TurnstileService.DUMMY_ALWAYS_PASS.has(this.secretKey)
+    ) {
+      throw new Error(
+        'TURNSTILE_SECRET_KEY is a public Cloudflare always-pass dummy secret — not allowed when NODE_ENV=production (every captcha token would pass). Set the real secret from the Cloudflare dashboard.',
+      );
+    }
   }
 
   /** Enablement + widget site key for the health contract. */
   getStatus(): { enabled: boolean; siteKey: string | null } {
     const siteKey = this.enabled
-      ? (process.env.TURNSTILE_SITE_KEY ??
-        process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ??
+      ? (this.config.get<string>('TURNSTILE_SITE_KEY') ??
+        this.config.get<string>('NEXT_PUBLIC_TURNSTILE_SITE_KEY') ??
         null)
       : null;
     return { enabled: this.enabled, siteKey };
@@ -85,10 +102,7 @@ export class TurnstileService {
     // Official dummy secrets short-circuit — no network call, deterministic
     // staging/CI behavior. '2x…AA' (always-block) still goes through the FULL
     // path below so staging can probe the real 400 CAPTCHA_INVALID shape.
-    if (
-      TurnstileService.DUMMY_SECRETS.has(this.secretKey) &&
-      this.secretKey.startsWith('1x')
-    ) {
+    if (TurnstileService.DUMMY_ALWAYS_PASS.has(this.secretKey)) {
       this.logger.warn('turnstile: dummy always-pass secret in use — verification BYPASSED (dev/test only)');
       return;
     }
