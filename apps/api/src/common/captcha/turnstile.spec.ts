@@ -38,9 +38,20 @@ describe('TurnstileService', () => {
 
   afterEach(() => {
     global.fetch = realFetch;
-    process.env.TURNSTILE_SITE_KEY = realEnv.TURNSTILE_SITE_KEY;
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY =
-      realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    // Assigning `process.env.X = undefined` would CREATE the key with the
+    // string 'undefined' (Node coercions) and leak it to sibling specs in the
+    // same worker — delete instead when the key was absent at snapshot time.
+    if (realEnv.TURNSTILE_SITE_KEY === undefined) {
+      delete process.env.TURNSTILE_SITE_KEY;
+    } else {
+      process.env.TURNSTILE_SITE_KEY = realEnv.TURNSTILE_SITE_KEY;
+    }
+    if (realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY === undefined) {
+      delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    } else {
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY =
+        realEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    }
   });
 
   it('flag OFF: verify resolves without a token (zero behavior change) and status hides the site key', async () => {
