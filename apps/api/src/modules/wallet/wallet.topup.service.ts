@@ -82,6 +82,23 @@ const SAR_TO_HALALAS = 100;
  * outcomes (paid-refusal anomalies always reach Sentry).
  */
 export const TOPUP_CONFLICT_NOT_PAID_PREFIX = 'payment_not_paid';
+
+/**
+ * P2-379 (run #214) — stable machine codes for the verify-reject bodies.
+ *
+ * The PWA classifies verify failures on `body.code` (hoisted to FetchError.code
+ * by lib/fetcher.ts), NEVER on the English message text (PR #262 P2-373
+ * precedent: copy edits / stale bundles must not break money-truth copy).
+ * The message keeps its `code:` prefix so log-greps and the PWA's
+ * deploy-skew fallback (message-prefix matching) keep working.
+ */
+export const TOPUP_VERIFY_CODES = {
+  ALREADY_CREDITED: 'topup_already_credited',
+  INTENT_MISMATCH: 'payment_intent_mismatch',
+  NOT_PAID: TOPUP_CONFLICT_NOT_PAID_PREFIX,
+  CURRENCY_MISMATCH: 'currency_mismatch',
+  AMOUNT_MISMATCH: 'amount_mismatch',
+} as const;
 const TOPUP_KEY_PREFIX = 'topup:';
 const INTENT_KEY_PREFIX = 'topup-intent:';
 
@@ -267,9 +284,11 @@ export class WalletTopupService {
     // bound to this intent is refused (never a second, untracked credit).
     if (intent.status === 'credited') {
       if (payment.id !== intent.payment_id) {
-        throw new ConflictException(
-          'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
-        );
+        throw new ConflictException({
+          message:
+            'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
+          code: TOPUP_VERIFY_CODES.ALREADY_CREDITED,
+        });
       }
       const replay = await this.findCreditReplay(userId, creditKey);
       if (replay) {
@@ -291,9 +310,11 @@ export class WalletTopupService {
     // user's same-amount intent (and replays can never cross intents).
     const expectedDescription = `wallet-topup:${intent.id}`;
     if ((payment.description ?? null) !== expectedDescription) {
-      throw new ConflictException(
-        'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
-      );
+      throw new ConflictException({
+        message:
+          'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
+        code: TOPUP_VERIFY_CODES.INTENT_MISMATCH,
+      });
     }
 
     // Sequential replay: this payment already credited (webhook-less retry) —
@@ -311,17 +332,22 @@ export class WalletTopupService {
     }
 
     if (payment.status !== 'paid') {
-      throw new ConflictException(
-        `${TOPUP_CONFLICT_NOT_PAID_PREFIX}: the payment is not completed yet — no money was credited`,
-      );
+      throw new ConflictException({
+        message: `${TOPUP_CONFLICT_NOT_PAID_PREFIX}: the payment is not completed yet — no money was credited`,
+        code: TOPUP_VERIFY_CODES.NOT_PAID,
+      });
     }
     if (payment.currency !== 'SAR') {
-      throw new ConflictException('currency_mismatch: payment currency is not SAR');
+      throw new ConflictException({
+        message: 'currency_mismatch: payment currency is not SAR',
+        code: TOPUP_VERIFY_CODES.CURRENCY_MISMATCH,
+      });
     }
     if (payment.amount !== intent.amount_halalas) {
-      throw new ConflictException(
-        `amount_mismatch: payment ${payment.amount} halalas != intent ${intent.amount_halalas} halalas — no money was credited`,
-      );
+      throw new ConflictException({
+        message: `amount_mismatch: payment ${payment.amount} halalas != intent ${intent.amount_halalas} halalas — no money was credited`,
+        code: TOPUP_VERIFY_CODES.AMOUNT_MISMATCH,
+      });
     }
 
     const amountSar = payment.amount / SAR_TO_HALALAS;
