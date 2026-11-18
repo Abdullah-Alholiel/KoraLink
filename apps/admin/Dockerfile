@@ -72,7 +72,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 # nested app dir. Static assets and public/ must sit next to the NESTED
 # server.js (/app/app), NOT next to WORKDIR (/app) — the standalone server
 # serves both relative to its own directory.
-COPY --from=builder /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/public ./app/public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./app/.next/static
 
