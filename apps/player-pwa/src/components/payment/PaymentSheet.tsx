@@ -116,13 +116,13 @@ export default function PaymentSheet({
 
             {/* Header */}
             <div className="flex items-center px-5 pb-4 relative flex-shrink-0">
-                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                <button onClick={onClose} className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50">
                     <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
                 </button>
                 <h2 className="text-lg font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
                     {t('payment.title')}
                 </h2>
-                <button onClick={onClose} className="ms-auto w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                <button onClick={onClose} className="ms-auto w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50">
                     <X className="w-5 h-5 text-gray-400" strokeWidth={2} />
                 </button>
             </div>
@@ -229,22 +229,31 @@ export default function PaymentSheet({
                 policy text stays collapsible (P2-235 contract: full text, an
                 in-place expander, never a code-side truncation). */}
             <div className="mx-5 mt-4 pb-8 flex-shrink-0">
-                {/* Agree Checkbox */}
-                <div className="flex items-start gap-3 mb-4">
+                {/* Agree Checkbox. P2-366: the role=checkbox button is the
+                    44x44 hit area (min-h-hit/min-w-hit); negative margins
+                    keep its layout footprint at the old 20px box (+2px top
+                    offset), and the 20px visual box is the inner span — the
+                    row looks identical, only the touch target grew. */}
+                <div className="flex items-start gap-3 mb-4 min-h-hit">
                     <button
                         onClick={() => setAgreed(!agreed)}
                         role="checkbox"
                         aria-checked={agreed}
                         aria-label={t('host.disclaimer')}
-                        className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
-                            agreed ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'
-                        }`}
+                        className="min-h-hit min-w-hit -ms-3 -me-3 -mt-2.5 -mb-3 flex-shrink-0 flex items-center justify-center"
                     >
-                        {agreed && (
-                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                <path d="M2 6l3 3 5-5" />
-                            </svg>
-                        )}
+                        <span
+                            aria-hidden="true"
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                agreed ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'
+                            }`}
+                        >
+                            {agreed && (
+                                <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                    <path d="M2 6l3 3 5-5" />
+                                </svg>
+                            )}
+                        </span>
                     </button>
                     <div className="min-w-0">
                         <p className="text-xs text-gray-500">

@@ -98,7 +98,7 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
                     </h2>
                     <button
                         onClick={() => setShowSheet(false)}
-                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:scale-95 transition-transform"
+                        className="w-8 h-8 min-h-hit min-w-hit rounded-full bg-gray-100 flex items-center justify-center active:scale-95 transition-transform"
                     >
                         <X className="w-4 h-4 text-gray-500" strokeWidth={2} />
                     </button>

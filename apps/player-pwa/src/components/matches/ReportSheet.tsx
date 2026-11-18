@@ -67,7 +67,7 @@ export default function ReportSheet({
         <h2 className="text-lg font-bold text-brand-black">{title ?? t('title')}</h2>
         <button
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+          className="w-8 h-8 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100"
           aria-label={tCommon('close')}
         >
           <X className="w-5 h-5 text-gray-500" strokeWidth={2} />

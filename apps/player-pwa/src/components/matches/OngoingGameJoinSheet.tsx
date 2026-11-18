@@ -48,7 +48,7 @@ export default function OngoingGameJoinSheet({
                 <h2 className="text-lg font-bold text-brand-black">{t('matchDetail.ongoingGameTitle')}</h2>
                 <button
                     onClick={onClose}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                    className="w-8 h-8 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                 >
                     <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
                 </button>
