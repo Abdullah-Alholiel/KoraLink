@@ -783,6 +783,8 @@
       "callbackSuccess": "Top-up successful",
       "callbackFailed": "We couldn't confirm this payment",
       "callbackRetry": "If money left your account it will be refunded by your bank automatically. You can retry from the wallet.",
+      "callbackOffline": "You're offline — we can't verify your payment right now. Retry once you reconnect; nothing is lost.",
+      "backToWalletAria": "Back to wallet",
       "lastAttemptPendingTitle": "Top-up not completed",
       "lastAttemptPendingBody": "Your last top-up attempt of {amount} didn’t finish — nothing has been added to your wallet. If your bank shows a charge, contact support.",
       "lastAttemptRetry": "Try again",
