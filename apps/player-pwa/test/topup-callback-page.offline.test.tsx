@@ -33,9 +33,10 @@ describe('topup callback page — offline state pins (P2-379)', () => {
 
   it('PR-Agent r1 races are pinned: offline latch + duplicate-verify guard', () => {
     // The late rejection of the doomed fetch must not clobber the offline
-    // state (offlineRef gate inside onError) …
+    // state (offlineRef gate inside onError — r3 kept the latch but made it
+    // observable: capture, then return) …
     expect(PAGE).toContain('offlineRef.current = true');
-    expect(PAGE).toContain('if (offlineRef.current) return;');
+    expect(PAGE).toContain('if (offlineRef.current) {');
     // … and the retry button must be inert while a verify is in flight.
     expect(PAGE).toContain('inFlight');
     expect(PAGE).toContain("phase !== 'failed' || inFlight");
