@@ -134,7 +134,7 @@ export default function ChangePhoneSheet({
           <h2 className="text-lg font-bold text-brand-black">{t('profile.changePhone')}</h2>
           <button
             onClick={close}
-            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100"
+            className="flex h-8 w-8 min-h-hit min-w-hit items-center justify-center rounded-full hover:bg-gray-100"
             aria-label={t('common.close')}
           >
             <X className="h-5 w-5 text-gray-500" strokeWidth={2} />
