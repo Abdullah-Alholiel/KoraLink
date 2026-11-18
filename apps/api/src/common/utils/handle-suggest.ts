@@ -82,11 +82,12 @@ export async function pickFreeHandle(
   const base = requested ? slugifyHandle(requested) : null;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const baseForSuffix = base ?? 'player';
-    const suffix = randInt(SUFFIX_MIN, SUFFIX_MAX);
+    const suffix = randInt(SUFFIX_MIN, SUFFIX_MAX + 1);
     candidates.push(`${baseForSuffix}_${suffix}`);
     if (i >= 4) {
       // Late attempts: widen the entropy with a 3-digit suffix.
-      candidates.push(`${baseForSuffix}_${randInt(100, 999)}`);
+      // (+1: randomInt's max is EXCLUSIVE — the +1 makes 999 reachable.)
+      candidates.push(`${baseForSuffix}_${randInt(100, 999 + 1)}`);
     }
   }
   const rows = await lookup(candidates);
