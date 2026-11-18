@@ -71,6 +71,9 @@ function CallbackInner() {
       setPhase('failed');
       setFailedKey('wallet.topup.callbackOffline');
       setCanRetry(true);
+      // PR-Agent r3 (observability): offline resolutions on this money-return
+      // surface must be visible — every other outcome already tracks.
+      trackEvent('topup_callback_result', { ok: false, reason: 'offline' });
       return;
     }
   }, [isOnline, phase]);
@@ -157,8 +160,15 @@ function CallbackInner() {
           setInFlight(false);
           // P2-379 (PR-Agent r1): the offline-resolved surface stays offline —
           // the doomed fetch's late rejection must not overwrite the offline
-          // state with the generic failure copy.
-          if (offlineRef.current) return;
+          // state with the generic failure copy. Still OBSERVABLE (PR-Agent
+          // r3): capture, then leave the state untouched.
+          if (offlineRef.current) {
+            captureError(err, {
+              area: 'wallet-topup-callback',
+              note: 'late-rejection-after-offline-resolution',
+            });
+            return;
+          }
           captureError(err, { area: 'wallet-topup-callback' });
           // P2-276/P2-379: classify on the stable body `code` first (the API
           // 409s now carry { message, code }) with the legacy message-prefix

@@ -55,11 +55,25 @@ describe('topup callback page — offline state pins (P2-379)', () => {
   it('back-to-wallet buttons carry localized aria-labels (a11y)', () => {
     expect((PAGE.match(/backToWalletAria/g) ?? []).length).toBe(2);
   });
+
+  it('offline resolutions are observable (PR-Agent r3: analytics + late-rejection capture)', () => {
+    // The offline watcher tracks the resolution…
+    expect(PAGE).toContain("reason: 'offline'");
+    // …and the doomed fetch's late rejection is still captured (state untouched).
+    expect(PAGE).toContain('late-rejection-after-offline-resolution');
+  });
 });
 
 describe('topup i18n — offline keys EN+AR parity (P2-379)', () => {
   const enTopup = (en as unknown as { wallet: { topup: Record<string, string> } }).wallet.topup;
   const arTopup = (ar as unknown as { wallet: { topup: Record<string, string> } }).wallet.topup;
+
+  it('retry CTA key exists in BOTH catalogs (PR-Agent r3 parity ask)', () => {
+    for (const cat of [enTopup, arTopup]) {
+      expect(typeof cat.recoveryRetry).toBe('string');
+      expect(cat.recoveryRetry.length).toBeGreaterThan(0);
+    }
+  });
 
   it('callbackOffline + backToWalletAria exist in both locales, non-empty', () => {
     for (const key of ['callbackOffline', 'backToWalletAria']) {
