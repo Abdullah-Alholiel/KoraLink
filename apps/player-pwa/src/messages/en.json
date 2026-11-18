@@ -154,7 +154,8 @@
     "needHelp": "Need help?",
     "contactSupport": "Contact Support",
     "profileFetchError": "Couldn't load your profile. Please try again.",
-    "emailSubtitle": "We sent a code to"
+    "emailSubtitle": "We sent a code to",
+    "offlineNotice": "You're offline — check your connection, then try again."
   },
   "completeProfile": {
     "title": "Complete your profile",
