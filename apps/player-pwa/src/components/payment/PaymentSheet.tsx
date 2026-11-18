@@ -231,10 +231,11 @@ export default function PaymentSheet({
             <div className="mx-5 mt-4 pb-8 flex-shrink-0">
                 {/* Agree Checkbox. P2-366: the role=checkbox button is the
                     44x44 hit area (min-h-hit/min-w-hit); negative margins
-                    keep its layout footprint at the old 20px box (+2px top
-                    offset), and the 20px visual box is the inner span — the
-                    row looks identical, only the touch target grew. */}
-                <div className="flex items-start gap-3 mb-4 min-h-hit">
+                    keep its LAYOUT footprint at the old ~22px box (+2px top
+                    offset) so the row height is unchanged — the 44px target
+                    overlaps only the non-interactive heading/policy text
+                    above/below. The 20px visual box is the inner span. */}
+                <div className="flex items-start gap-3 mb-4">
                     <button
                         onClick={() => setAgreed(!agreed)}
                         role="checkbox"

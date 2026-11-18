@@ -149,11 +149,30 @@ const P2366_SITES = [
 describe('P2-366 tap-target census (min-h-hit / min-w-hit on compact buttons)', () => {
   it('scans a real corpus (guards against a vacuous pass)', () => {
     expect(sources.length).toBeGreaterThan(50);
-    const compactButtons = sources.reduce(
-      (n, { src }) => n + (src.match(/w-[89] h-[89] min-h-hit min-w-hit/g)?.length ?? 0),
+    // Order-insensitive: count compact buttons that carry BOTH hit tokens,
+    // whatever the w/h/hit class order (PR-Agent r2: a literal-order regex
+    // both misses compliant sites and fails on harmless reorders).
+    const compliant = sources.reduce(
+      (n, { src }) => {
+        const re = /<button\b/g;
+        let m: RegExpExecArray | null;
+        let count = 0;
+        while ((m = re.exec(src))) {
+          const cls = classNameOf(openingTag(src, m.index));
+          if (!cls) continue;
+          if (
+            COMPACT_W_RE.test(cls) &&
+            COMPACT_H_RE.test(cls) &&
+            HIT_H_RE.test(cls) &&
+            HIT_W_RE.test(cls)
+          )
+            count++;
+        }
+        return n + count;
+      },
       0,
     );
-    expect(compactButtons).toBeGreaterThanOrEqual(14);
+    expect(compliant).toBeGreaterThanOrEqual(15);
   });
 
   it('detects a compact button lacking the hit tokens (single- and multi-line tags)', () => {
@@ -195,8 +214,10 @@ describe('P2-366 tap-target census (min-h-hit / min-w-hit on compact buttons)', 
     // Visual box (20px) lives inside the button, unchanged.
     const after = src.slice(start + tag.length, src.indexOf('</button>', start));
     expect(after).toMatch(/w-5 h-5 rounded border-2/);
-    // The label row itself also meets the 44px minimum.
+    // The label ROW stays plain (r2: no min-h-hit on the row — the layout
+    // footprint is unchanged; the BUTTON alone is the 44px target).
     const rowStart = src.lastIndexOf('<div', start);
-    expect(openingTag(src, rowStart)).toMatch(HIT_H_RE);
+    const rowTag = openingTag(src, rowStart);
+    expect(rowTag).not.toMatch(HIT_H_RE);
   });
 });
