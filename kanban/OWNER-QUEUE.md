@@ -1,10 +1,11 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 (#266 docker cutover — sibling WIP relocated to `/home/ubuntu/worktrees/koralink-docker-cutover` during run #212 so the VPS deployment checkout stays on `staging`)
-- Commits ahead of main: **474** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
-- Services: API/PWA/Admin UP — API = Cloudflare Turnstile OTP gate LIVE (PR #269 `448bfe7`, flag-off default); PWA = Turnstile CSP/script loader LIVE; Admin = rebuilt from staging
-- Factory loop status: **HEALTHY 2026-11-17** — run #212 shipped F1 Turnstile via private worktree + staging checkout recovery. Strix next window Dec 1–3. Swap full.
+- Open PRs: 1 (sibling #266 docker cutover, unrelated areas — held for the docker lane owner call).
+- Promote gap: staging ~481 commits ahead of main; last promote 2026-11-16 (PR #178). Pending migrations on next promote: NONE (repo journal 62 == live). Promote = owner GO per D-20261113-28 (owner checks staging UI, says go; AI merges+deploys).
+- Services: API :3001 healthy (turnstile flag-off), PWA :3000 (funnels :9450/:10000 200 via SNI), admin :3002 active. Zero journal errors 5h.
+- Built recently: #214 P2-378+P2-379 (verify + topup offline states, coded verify 409s); #213 P2-374+P2-377; #212 F1 Turnstile (flag-off).
+- Owner decisions waiting: none NEW this run. Standing: P2-325 webhook dashboard URL (go-live gated), F1 arming keys (NEW-9), Moyasar live keys = post-launch milestone (D-20261113-03), recurring-series identity re-review (D-20261106-11 owner note).
 
 ## Active owner actions
 
@@ -142,6 +143,8 @@
 - **Owner decision (Life OS 2026-11-13, D-20261113-40):** Fix the one line (recommended) — Owner said yes in chat 2026-11-13 (VPS session). Low priority: stopgap is live, nothing is broken now.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-14, D-20261114-01):** Write docs/legal/lawyer-brief.md for the Saudi lawyer: entity name and CR number still missing (D-20261113-03), processors list (Moyasar, Unifonic, Sentry, PostHog, Brevo/Resend, hosting), SAR 5 per-joiner fee, 30-day backup retention, and open questions (stored-value wallet and SAMA, VAT/ZATCA invoice for the fee, PDPL transfers). List claims in en.json that are false today, e.g. line 1167 'hosting inside the Kingdom' while prod is still Render/Vercel/Neon, and line 1175 cookies text vs PostHog. Add a TODO-lawyer marker beside each. No legal conclusions. Report back the PR and the file. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-14, D-20261114-02):** mailer.service.ts:66-67 reads only RESEND_API_KEY, so notification email is log-only on staging while OTP email already works via Brevo. Route MailerService through the existing email-sender port so Brevo covers notification mail too. No new dependency, no secrets in the report. Proof: PR number, a unit test, and one staging log line showing the Brevo send path chosen. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- ✅ **DONE (run #213 + verified #214) — D-20261117-03:** A2 env checklist in prod-on-vps.md landed with run #213's docs commit (84d99af); all requested env names present in-tree. No owner action needed.
+- ✅ **DONE (run #213 PR #271 + verified #214) — D-20261117-04:** Turnstile prod dummy-secret guard + config hygiene merged and LIVE. No owner action needed.
 
 ## Closed since last run
 - **D-20261113-09 restore drill:** CLOSED run #211 — premise stale (docs/runbooks/restore-drill.md exists since run #209 e575e58; drill PASSED). Runbook hardened same run. No owner action needed.
