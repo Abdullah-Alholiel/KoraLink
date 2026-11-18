@@ -116,13 +116,13 @@ export default function PaymentSheet({
 
             {/* Header */}
             <div className="flex items-center px-5 pb-4 relative flex-shrink-0">
-                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                <button onClick={onClose} className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50">
                     <ArrowLeft className="w-5 h-5 text-brand-black" strokeWidth={2} />
                 </button>
                 <h2 className="text-lg font-bold text-brand-black absolute left-1/2 -translate-x-1/2">
                     {t('payment.title')}
                 </h2>
-                <button onClick={onClose} className="ms-auto w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50">
+                <button onClick={onClose} className="ms-auto w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50">
                     <X className="w-5 h-5 text-gray-400" strokeWidth={2} />
                 </button>
             </div>
@@ -229,22 +229,35 @@ export default function PaymentSheet({
                 policy text stays collapsible (P2-235 contract: full text, an
                 in-place expander, never a code-side truncation). */}
             <div className="mx-5 mt-4 pb-8 flex-shrink-0">
-                {/* Agree Checkbox */}
+                {/* Agree Checkbox. P2-366: the role=checkbox button IS the
+                    44x44 target (h-11 w-11, in-row, no negative margins —
+                    r3 lesson: margin-overflow overlaps the adjacent
+                    disclaimer/policy text and mis-taps there silently
+                    toggle consent; r2 lesson: don't stretch the row via
+                    min-h-hit on the row div). Trade-off: collapsed policy
+                    state grows this row ~12px (2 text lines ~32px -> 44px);
+                    expanded state is text-driven and taller anyway. The
+                    20px visual box is the inner span. */}
                 <div className="flex items-start gap-3 mb-4">
                     <button
                         onClick={() => setAgreed(!agreed)}
                         role="checkbox"
                         aria-checked={agreed}
                         aria-label={t('host.disclaimer')}
-                        className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
-                            agreed ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'
-                        }`}
+                        className="h-11 w-11 flex-shrink-0 flex items-center justify-center"
                     >
-                        {agreed && (
-                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                <path d="M2 6l3 3 5-5" />
-                            </svg>
-                        )}
+                        <span
+                            aria-hidden="true"
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                agreed ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'
+                            }`}
+                        >
+                            {agreed && (
+                                <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                    <path d="M2 6l3 3 5-5" />
+                                </svg>
+                            )}
+                        </span>
                     </button>
                     <div className="min-w-0">
                         <p className="text-xs text-gray-500">

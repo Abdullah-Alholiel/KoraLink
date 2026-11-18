@@ -356,7 +356,7 @@ export default function HostMatchForm() {
             <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-1 relative flex-shrink-0">
                 <button
                     onClick={() => router.back()}
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 z-10"
+                    className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50 z-10"
                 >
                     <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
                 </button>

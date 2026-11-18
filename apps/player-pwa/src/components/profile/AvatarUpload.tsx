@@ -132,23 +132,32 @@ export default function AvatarUpload({
                 </div>
             )}
 
-            {/* Camera badge — the upload affordance (a11y: real button, named). */}
+            {/* Camera badge — the upload affordance (a11y: real button, named).
+                P2-366 follow-up (PR-Agent r5): the button is the 44x44 target
+                (min-h-hit/min-w-hit) but the VISIBLE badge stays 32px — the
+                bordered/bg circle is an inner span; the button box itself is
+                transparent so the avatar corner is not over-covered. */}
             <button
                 type="button"
                 onClick={pickFile}
                 disabled={uploading}
                 aria-label={t('avatarChange')}
                 aria-busy={uploading}
-                className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-brand-green-deep shadow-md transition active:scale-95 disabled:opacity-60"
+                className="group absolute -bottom-2 -right-2 flex min-h-hit min-w-hit items-center justify-center"
             >
-                {uploading ? (
-                    <span
-                        aria-hidden
-                        className="h-4 w-4 animate-spin rounded-full border-2 border-brand-green-deep border-t-transparent"
-                    />
-                ) : (
-                    <Camera className="h-4 w-4" aria-hidden />
-                )}
+                <span
+                    aria-hidden="true"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-brand-green-deep shadow-md transition group-active:scale-95 group-disabled:opacity-60"
+                >
+                    {uploading ? (
+                        <span
+                            aria-hidden
+                            className="h-4 w-4 animate-spin rounded-full border-2 border-brand-green-deep border-t-transparent"
+                        />
+                    ) : (
+                        <Camera className="h-4 w-4" aria-hidden />
+                    )}
+                </span>
             </button>
             <input
                 ref={inputRef}

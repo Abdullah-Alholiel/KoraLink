@@ -274,6 +274,54 @@ describe('verifyTopup', () => {
     const svc = makeService(makeDb(), ENV_ON);
     await expect(svc.verifyTopup('user-1', dto)).rejects.toThrow(/payment_intent_mismatch/);
   });
+  it('P2-379: every verify-reject 409 body carries its stable machine code', async () => {
+    const expectCode = async (
+      payment: Record<string, unknown>,
+      intentRows: unknown[] | undefined,
+      code: string,
+    ) => {
+      mockFetch.mockResolvedValue(payment);
+      // NB: makeDb defaults intentRows to [INTENT_ROW]; only pass the
+      // override when the case needs a different queue (undefined here
+      // would clobber the default via spread).
+      const svc = makeService(
+        makeDb(intentRows ? { intentRows } : {}),
+        ENV_ON,
+      );
+      const err = await svc.verifyTopup('user-1', { paymentId: payment.id as string, intentId: 'intent-1' }).catch((e) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      // PR #262 precedent: Nest serializes the object form, so getResponse()
+      // exposes { message, code } — the PWA classifies on `code`, never text.
+      expect((err as ConflictException).getResponse()).toMatchObject({ code });
+      // Message text unchanged (deploy-skew fallback + log-greps keep working).
+      expect((err as ConflictException).message).toContain(code);
+    };
+    await expectCode(
+      { ...PAID_PAYMENT, status: 'initiated' },
+      undefined,
+      'payment_not_paid',
+    );
+    await expectCode(
+      { ...PAID_PAYMENT, amount: 9999 },
+      undefined,
+      'amount_mismatch',
+    );
+    await expectCode(
+      { ...PAID_PAYMENT, currency: 'USD' },
+      undefined,
+      'currency_mismatch',
+    );
+    await expectCode(
+      { ...PAID_PAYMENT, description: 'wallet-topup:other-intent' },
+      undefined,
+      'payment_intent_mismatch',
+    );
+    await expectCode(
+      { ...PAID_PAYMENT, id: 'pay_second0987654321' },
+      [{ ...INTENT_ROW, status: 'credited', payment_id: 'pay_test1234567890' }],
+      'topup_already_credited',
+    );
+  });
   it('credits in one tx on a matching paid payment and flips the intent', async () => {
     mockFetch.mockResolvedValue(PAID_PAYMENT);
     const db = makeDb();

@@ -1,12 +1,20 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 2 (#178 promote staging→main — owner GO per D-20261113-28, then the AI executes migrate-first + merge · #262 P2-373 stable error codes, r1 fix pushed, re-review in flight — factory merges when green)
-- Commits ahead of main: **464** (last promote 2026-09-25; **0059 + 0060 PENDING ON PROD — prod Neon = 60 rows vs repo journal 62**; migrate-first runbook mandatory; both pending migrations are additive idempotent enum-adds — fast)
-- Services: API/PWA/Admin UP — API = wallet reconcile hardening LIVE (PR #260 `61c2b83`); PWA = ReportSheet localized errors LIVE (PR #261 `1fc6e8c`) + owner UI defects (PR #259 `d976f68`); Admin = payout error buckets (PR #263 `7a883b6`) + run-#199 filters
-- Factory loop status: **HEALTHY 2026-11-16** — run #210 shipped the 3-item error-copy cycle (P2-372/373/343, two merged + one merging) and REFUTED 3 phantom reviewer gaps. Strix next window Dec 1–3. Swap full (0 oom — monitor only).
+- Open PRs: 0 (sibling #266 docker cutover SQUASH-MERGED 192a0c0 run #215 per D-20261118-01; docker worktree auth edits = bridge in-flight, untouched).
+- Promote gap: staging ~485 commits ahead of main; last promote 2026-11-16 (PR #178). Pending migrations on next promote: NONE (repo journal 62 == live; no new migrations in #215's merges). Promote = owner GO per D-20261113-28 (owner checks staging UI, says go; AI merges+deploys).
+- Services: API :3001 healthy (turnstile flag-off), PWA :3000 (funnels :9450/:10000 200 via SNI), admin :3002 active. Zero journal errors across run #215's window.
+- Built recently: #215 P2-366 tap targets (PRs #274/#275) + docker cutover (#266); #214 P2-378+P2-379 (verify + topup offline states, coded verify 409s); #212 F1 Turnstile (flag-off).
+- Owner decisions waiting: none NEW this run. Standing: P2-325 webhook dashboard URL (go-live gated), F1 arming keys (NEW-9), Moyasar live keys = post-launch milestone (D-20261113-03), recurring-series identity re-review (D-20261106-11 owner note).
 
 ## Active owner actions
+
+### NEW-9. F1 — Arm Cloudflare Turnstile on staging (NEW run #212)
+- **What:** F1 OTP bot protection is built and LIVE, but flag-off by default (`TURNSTILE_ENABLED=false`). The PWA only renders the widget when `/api/v1/health` advertises a site key. Cloudflare dummy keys exist for CI/staging short-circuit; real keys are needed for actual protection.
+- **Your part:** Cloudflare dashboard → Turnstile → create widget for `aa.tail2948f9.ts.net:10000` and `koralink.app` (or the live domains) → copy **site key** + **secret key** into the staging API env (`apps/api/.env`): `TURNSTILE_SITE_KEY=...`, `TURNSTILE_SECRET_KEY=...`, then `TURNSTILE_ENABLED=true`. Restart API.
+- **Verify:** `/api/v1/health` returns `turnstile.enabled=true` and a siteKey; `/ar/login` renders the widget; a fake token fails with `CAPTCHA_INVALID`; a missing token fails with `CAPTCHA_REQUIRED`.
+- **Close line:** "F1: Turnstile armed on staging" — or report any blocker.
+- **Deadline:** Before A6 public go-live (launch-lane precondition).
 
 ### NEW-8. P1-66 — 2-minute browser subscribe test (NEW run #203)
 - **What:** VAPID keys are now generated + live (your D-20261106-15 decision, executed run #203). Server pushes are ENABLED and the PWA bundle carries the public key. Push needs one human test on a real device to close.
@@ -47,12 +55,12 @@
 - **Close line:** "P0-11: plan approved, start A2" OR "P0-11: amend — <notes>" OR "P0-11: defer".
 - **Deadline:** Owner-paced; nothing executes without your A1.
 
-### 2. Promote PR #178 merge (owner GO → AI executes, per D-20261113-28)
+### 2. Next promote staging→main (owner GO → AI executes, per D-20261113-28)
 - **Owner decision (Life OS 2026-11-07, D-20261106-02 + chat 2026-11-13, D-20261113-28):** owner checks UI/UX on staging and says GO in chat; the AI then executes migrate-first + the merge + deploy, and reports back.
-- **Status (2026-11-06, run #191):** prod Neon healthy and **fully migrated — 60/60 journal rows (0045–0058 applied + object-verified)**. Checks GREEN (gate, fresh-apply, semgrep, review, Dependency Audit, gitleaks, Vercel ×2 + previews). Two NEW additive migrations (0059, 0060) ride this promote — the AI applies them to Neon BEFORE the merge (migrate-first).
-- **Your one word:** "GO" on PR #178 in chat (after your own staging check). The AI does the rest and reports SHA + health.
+- **Status (run #212):** PR #178 **MERGED 2026-11-16T19:38Z** (0045–0058 promoted + deployed). Two NEW additive migrations (0059, 0060) ride the **NEXT** promote — the AI applies them to Neon BEFORE the merge (migrate-first). Commits ahead of main: **474**.
+- **Your one word:** "GO" in chat (after your own staging check). The AI assembles the promote PR, applies 0059+0060 to prod Neon, merges, and reports SHA + health.
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
-- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. ~~download a backup~~ → DONE 2026-11-03/04: nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod (P2-303, PR #210).
+- **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. Nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod.
 
 ### 4. P0-2 sandbox → live Moyasar
 - **Owner decision (Life OS 2026-11-07, D-20261106-04):** Flip WALLET_TOPUP_ENABLED and test
@@ -135,6 +143,10 @@
 - **Owner decision (Life OS 2026-11-13, D-20261113-40):** Fix the one line (recommended) — Owner said yes in chat 2026-11-13 (VPS session). Low priority: stopgap is live, nothing is broken now.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-14, D-20261114-01):** Write docs/legal/lawyer-brief.md for the Saudi lawyer: entity name and CR number still missing (D-20261113-03), processors list (Moyasar, Unifonic, Sentry, PostHog, Brevo/Resend, hosting), SAR 5 per-joiner fee, 30-day backup retention, and open questions (stored-value wallet and SAMA, VAT/ZATCA invoice for the fee, PDPL transfers). List claims in en.json that are false today, e.g. line 1167 'hosting inside the Kingdom' while prod is still Render/Vercel/Neon, and line 1175 cookies text vs PostHog. Add a TODO-lawyer marker beside each. No legal conclusions. Report back the PR and the file. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-14, D-20261114-02):** mailer.service.ts:66-67 reads only RESEND_API_KEY, so notification email is log-only on staging while OTP email already works via Brevo. Route MailerService through the existing email-sender port so Brevo covers notification mail too. No new dependency, no secrets in the report. Proof: PR number, a unit test, and one staging log line showing the Brevo send path chosen. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- ✅ **DONE (run #213 + verified #214) — D-20261117-03:** A2 env checklist in prod-on-vps.md landed with run #213's docs commit (84d99af); all requested env names present in-tree. No owner action needed.
+- ✅ **DONE (run #213 PR #271 + verified #214) — D-20261117-04:** Turnstile prod dummy-secret guard + config hygiene merged and LIVE. No owner action needed.
+- ✅ **DONE (run #215, PR #266 SQUASH-MERGED 192a0c0 + CI 8/8 + review CLEAN + image build/boot smoke green) — D-20261118-01:** PR #266 (commits 1a19fe5, 4395501: Node 22, admin start path, NEXT_PUBLIC build args, node:crypto import in handle-suggest.ts) is held and staging Dockerfiles are still node:20-alpine (Dockerfile:2,19; apps/api, admin, player-pwa). Rebase #266 on staging, run the three image builds and boot each container locally, merge through the normal PR-Agent cycle if green, and report PR number, build results and a one-line smoke per image. Do not touch Coolify, prod or the deployment checkout state. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- **Life OS WORKER request, not an owner decision (Life OS 2026-11-18, D-20261118-02):** (1) In en.json and ar.json fix the privacy and terms copy found wrong today: line 1189 says accounts need a Saudi phone number (email OTP login exists); lines 1183 and 1160 claim hosting inside the Kingdom (true only after cutover, prod is Render/Vercel/Neon today; reword to be true now or mark it as taking effect at launch); line 1191 says cookie is Secure (true only when COOKIE_SECURE=true). Keep the draft-pending-lawyer markers and i18n parity. (2) Make prod fail loud at boot when EMAIL_PROVIDER is unset or its key is missing (.env.example:45 defaults to resend while staging uses brevo), with a spec. Report PR number and spec output. No secrets. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 
 ## Closed since last run
 - **D-20261113-09 restore drill:** CLOSED run #211 — premise stale (docs/runbooks/restore-drill.md exists since run #209 e575e58; drill PASSED). Runbook hardened same run. No owner action needed.

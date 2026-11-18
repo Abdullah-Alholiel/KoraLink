@@ -18,6 +18,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { isCookieSecure } from '../../common/utils/env-flags';
+import { TurnstileService } from '../../common/captcha/turnstile.service';
 import { EmailOtpService } from './email-otp.service';
 import { EmailSendOtpDto, EmailVerifyOtpDto } from './dto/email-otp.dto';
 
@@ -39,6 +40,7 @@ export class EmailAuthController {
   constructor(
     private readonly emailOtpService: EmailOtpService,
     private readonly configService: ConfigService,
+    private readonly turnstile: TurnstileService,
   ) {}
 
   // ── POST /auth/email/send-otp ────────────────────────────────────────
@@ -55,6 +57,11 @@ export class EmailAuthController {
   @ApiBadRequestResponse({ description: 'Invalid email address.' })
   async sendEmailOtp(@Body() dto: EmailSendOtpDto, @Req() req: Request) {
     const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    // ── F1 (launch lane, run #212): same fail-closed gate as the phone flow.
+    // NOTE the documented asymmetry: unlike the phone flow, this route's
+    // 202 anti-enumeration contract means the captcha rejection surfaces as a
+    // 400 CAPTCHA_REQUIRED (it cannot leak send status).
+    await this.turnstile.verify(dto.turnstileToken, ip);
     await this.emailOtpService.requestEmailOtp(dto.email.toLowerCase(), ip);
     return {
       message:

@@ -33,15 +33,23 @@
     "waitlistLeaveFailed": "Couldn't leave the waitlist. Check your connection and try again.",
     "otpFailed": "That code didn't work — it may have expired. Request a new one.",
     "otpSendFailed": "Couldn't send a new code just now. If you recently requested one, wait about a minute and try again.",
+    "smsUnavailable": "SMS login isn’t available right now. Use your email instead.",
     "genericRetry": "Try again",
     "banned": "Your account has been banned. If you think this is a mistake, contact support.",
     "suspended": "Your account is temporarily suspended. You can sign in again once the suspension ends.",
     "deleted": "This account is scheduled for deletion. Restore it from the login screen to continue.",
     "chatClosed": "This match has ended, so the lobby chat is closed. Start a new match to keep the conversation going.",
     "blockedByRecipient": "You can't message this user anymore. One of you blocked the other. You can unblock them from their profile.",
+    "handleTaken": "That username is taken and we couldn't find a free alternative. Try saving again, or change your name slightly.",
     "blockFailed": "Couldn't block this user. Check your connection and try again.",
     "unblockFailed": "Couldn't unblock this user. Check your connection and try again.",
+    "captchaRequired": "Verification required — complete the human check, then try again.",
+    "captchaFailed": "Verification didn't pass — please try again.",
+    "captchaUnavailable": "Verification service is temporarily unavailable — please try again shortly.",
     "favoriteFailed": "Couldn't update your favorites — nothing was changed. Check your connection and try again."
+  },
+  "turnstile": {
+    "label": "Human verification"
   },
   "offline": {
     "backToPage": "Back to the page",
@@ -128,6 +136,7 @@
     "channelPhone": "Phone",
     "channelEmail": "Email",
     "channelSelector": "Login method",
+    "switchToEmail": "Switch to email login",
     "invalidEmail": "Enter a valid email address",
     "changeLanguage": "Change language"
   },
@@ -145,7 +154,8 @@
     "needHelp": "Need help?",
     "contactSupport": "Contact Support",
     "profileFetchError": "Couldn't load your profile. Please try again.",
-    "emailSubtitle": "We sent a code to"
+    "emailSubtitle": "We sent a code to",
+    "offlineNotice": "You're offline — check your connection, then try again."
   },
   "completeProfile": {
     "title": "Complete your profile",
@@ -774,6 +784,8 @@
       "callbackSuccess": "Top-up successful",
       "callbackFailed": "We couldn't confirm this payment",
       "callbackRetry": "If money left your account it will be refunded by your bank automatically. You can retry from the wallet.",
+      "callbackOffline": "You're offline — we can't verify your payment right now. Retry once you reconnect; nothing is lost.",
+      "backToWalletAria": "Back to wallet",
       "lastAttemptPendingTitle": "Top-up not completed",
       "lastAttemptPendingBody": "Your last top-up attempt of {amount} didn’t finish — nothing has been added to your wallet. If your bank shows a charge, contact support.",
       "lastAttemptRetry": "Try again",

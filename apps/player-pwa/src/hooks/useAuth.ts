@@ -67,12 +67,17 @@ export function useSendOtp() {
   return useMutation<
     SendOtpResponse,
     Error,
-    { phone: string }
+    { phone: string; turnstileToken?: string | null }
   >({
-    mutationFn: ({ phone }) =>
+    // F1 (run #212): turnstileToken rides along ONLY when the login screen
+    // armed the widget (health-advertised); undefined = flag-off legacy shape.
+    mutationFn: ({ phone, turnstileToken }) =>
       fetcher<SendOtpResponse>('/auth/send-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: `+966${phone}` }),
+        body: JSON.stringify({
+          phone: `+966${phone}`,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       }),
   });
 }
@@ -115,11 +120,14 @@ interface EmailVerifyOtpResponse {
 }
 
 export function useSendEmailOtp() {
-  return useMutation<EmailSendOtpResponse, Error, { email: string }>({
-    mutationFn: ({ email }) =>
+  return useMutation<EmailSendOtpResponse, Error, { email: string; turnstileToken?: string | null }>({
+    mutationFn: ({ email, turnstileToken }) =>
       fetcher<EmailSendOtpResponse>('/auth/email/send-otp', {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       }),
   });
 }
@@ -146,12 +154,18 @@ export function useCompleteProfile() {
     CompleteProfileInput
   >({
     mutationFn: (data) =>
-      // API key names use snake_case
+      // API key names use snake_case.
+      // Cutover Card 2 (2026-11-16): `handle` is deliberately NOT sent — the
+      // SERVER derives it from full_name (slugifyHandle) and auto-picks a free
+      // one on collision (pickFreeHandle). The old client-side derivation
+      // (`name.toLowerCase().replace(/\s+/g,'_')`) collided on common names
+      // ("abdullah" was already taken in prod) and silently produced
+      // unusable handles for Arabic-script names. The authoritative handle
+      // comes back in the response and lands in the store below.
       fetcher<CompleteProfileResponse>('/auth/complete-profile', {
         method: 'PATCH',
         body: JSON.stringify({
           full_name: data.fullName,
-          handle: data.fullName.toLowerCase().replace(/\s+/g, '_'),
           preferred_location: data.preferredLocation,
           preferred_position: data.preferredPosition,
         }),
