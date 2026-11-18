@@ -293,6 +293,8 @@ const nextConfig = {
           'https://*.posthog.com',
           // P0-2 (run #169): Moyasar hosted payment form library (wallet top-up).
           'https://cdn.jsdelivr.net',
+          // F1 (run #212): Cloudflare Turnstile widget script (login OTP gate).
+          'https://challenges.cloudflare.com',
           // doop design-sync: loads the capture snippet from the internal design canvas
           'https://aa.tail2948f9.ts.net:9460',
         ].join(' ');
@@ -309,6 +311,8 @@ const nextConfig = {
       // P0-2 (run #169): the Moyasar form tokenizes card data directly
       // browser→Moyasar (PCI-minimal) — the XHRs need this allowance.
       'https://api.moyasar.com',
+      // F1 (run #212): Turnstile token fetch + siteverify round-trip from the widget.
+      'https://challenges.cloudflare.com',
       // WS: prod allows ONLY wss: (cleartext ws: is dev-only — the API origin
       // is https in every deployed environment, so wss: covers it).
       ...(isDev ? ['ws:'] : []),
@@ -353,7 +357,10 @@ const nextConfig = {
               `connect-src ${connectSrc}`,
               "worker-src 'self' blob:",
               "font-src 'self' data:",
-              "frame-src 'none'",
+              // F1 (run #212): Turnstile renders its challenge inside a
+              // cross-origin iframe on challenges.cloudflare.com — frame-src
+              // was 'none'; the widget is the only sanctioned embed.
+              "frame-src https://challenges.cloudflare.com",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

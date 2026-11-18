@@ -1,6 +1,6 @@
 import {
   Injectable,
-  BadRequestException,
+  ConflictException,
   HttpException,
   HttpStatus,
   UnauthorizedException,
@@ -8,10 +8,11 @@ import {
   Logger,
   Inject,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { users } from '../../database/schema';
@@ -19,7 +20,14 @@ import { UnifonicService } from './unifonic.service';
 import { OtpStoreService } from './otp-store.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
+import {
+  pickFreeHandle,
+  pgUniqueViolationCode,
+  slugifyHandle,
+} from '../../common/utils/handle-suggest';
 import { otpMatches } from '../../common/security/otp-compare';
+import { isProdLike } from '../../common/utils/env-flags';
+import { maskPhone } from '../../common/utils/pii-safe-logging';
 import { randomInt } from 'node:crypto';
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -57,6 +65,21 @@ export class AuthService {
   }
 
   async sendOtp(phone: string, ip?: string): Promise<void> {
+    // ── 2026-11-16 owner P0: fail CLOSED when SMS is not configured ──
+    // Prod + empty UNIFONIC_APP_SID must NEVER fake success: the old path
+    // upserted the user row, stored an OTP the user never received, and
+    // returned 200 — "code sent" followed by an eternal wait. The service
+    // throws 503 SMS_UNAVAILABLE; nothing is written (no user row, no OTP
+    // entry, no counter) so the channel is cleanly retryable once SMS is
+    // configured. Non-prod environments keep the log-only dev fallback.
+    if (!this.unifonic.isConfigured() && isProdLike(this.config)) {
+      this.logger.error('send-otp unavailable: SMS provider not configured (prod-like env)');
+      throw new ServiceUnavailableException({
+        message: 'SMS login is not available right now.',
+        code: 'SMS_UNAVAILABLE',
+      });
+    }
+
     // ── Abuse protection: resend cooldown + per-phone daily + per-IP daily ──
     // P2-194: one cache read gates AND sizes the 429 — if the key's TTL
     // expires between a guard read and a second read, the old two-read shape
@@ -65,7 +88,7 @@ export class AuthService {
     // send proceeds.
     const cooldownRemaining = await this.otpStore.getCooldownRemaining(phone);
     if (cooldownRemaining > 0) {
-      this.logger.warn(`send-otp blocked (cooldown) for ${phone} (retryAfter ${cooldownRemaining}s)`);
+      this.logger.warn(`send-otp blocked (cooldown) for ${maskPhone(phone)} (retryAfter ${cooldownRemaining}s)`);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -80,7 +103,7 @@ export class AuthService {
     const dailyCount = await this.otpStore.getDailyCount(phone);
     if (dailyCount >= OtpStoreService.DAILY_CAP) {
       this.logger.warn(
-        `send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${phone}`,
+        `send-otp blocked (daily cap ${dailyCount}/${OtpStoreService.DAILY_CAP}) for ${maskPhone(phone)}`,
       );
       throw new HttpException(
         {
@@ -137,7 +160,7 @@ export class AuthService {
       .limit(1);
     if (existingUser?.deleted_at) {
       this.logger.warn(
-        `send-otp blocked (deleted_at IS NOT NULL) for phone ${phone}`,
+        `send-otp blocked (deleted_at IS NOT NULL) for phone ${maskPhone(phone)}`,
       );
       throw new HttpException(
         {
@@ -179,7 +202,7 @@ export class AuthService {
         // 0 — the PWA falls back to the generic rate-limited copy.
         const retryAfter = await this.otpStore.getLockoutRemaining(phone);
         this.logger.warn(
-          `verify-otp blocked (lockout after ${failCount} fails) for ${phone} (retryAfter ${retryAfter}s)`,
+          `verify-otp blocked (lockout after ${failCount} fails) for ${maskPhone(phone)} (retryAfter ${retryAfter}s)`,
         );
         throw new HttpException(
           {
@@ -258,54 +281,107 @@ export class AuthService {
   }
 
   async completeProfile(userId: string, dto: CompleteProfileDto) {
-    const [existing] = await this.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.handle, dto.handle))
-      .limit(1);
-
-    if (existing && existing.id !== userId) {
-      throw new BadRequestException('Handle already taken.');
-    }
-
-    // P2-238 (run #153, Reviewer A): the pre-check above is check-then-act
-    // against a UNIQUE column (users.handle). Two concurrent claims of the
-    // same handle: the loser 500s with a raw 23505. Catch the race the same
-    // way the other create paths do (conversations :111-131, email-otp
-    // :196-223): 23505 → re-select → clean 400 identical to the pre-check.
-    try {
-      const [updated] = await this.db
-        .update(users)
-        .set(withTimestamp(dto))
-        .where(eq(users.id, userId))
-        .returning({
-          id: users.id,
-          phone: users.phone,
-          full_name: users.full_name,
-          handle: users.handle,
-          avatar_url: users.avatar_url,
-          preferred_location: users.preferred_location,
-          preferred_position: users.preferred_position,
-          role: users.role,
-        });
-
-      return updated;
-    } catch (err) {
-      const pgCode = (err as { code?: string; cause?: { code?: string } })?.code ??
-        (err as { cause?: { code?: string } })?.cause?.code;
-      if (pgCode !== '23505') throw err;
-      // Lost a handle race → verify it was really the handle (never another
-      // user's unique column) and return the SAME 400 the pre-check throws.
-      const [winner] = await this.db
+    // Cutover Card 2 (2026-11-16, P1): a taken auto-derived handle must never
+    // block sign-up. The handle may be omitted entirely (the server derives it
+    // from full_name via slugifyHandle) or derived client-side (legacy PWA);
+    // either way a collision with ANOTHER user auto-picks a free suffixed
+    // handle. The user can change it later in profile settings.
+    const requested = dto.handle?.trim() ? dto.handle.trim() : null;
+    const ownsHandle =
+      requested !== null &&
+      (await this.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.handle, dto.handle))
-        .limit(1);
-      if (winner && winner.id !== userId) {
-        throw new BadRequestException('Handle already taken.');
-      }
-      throw err;
+        .where(eq(users.handle, requested))
+        .limit(1)
+        .then((rows) => rows.length > 0 && rows[0].id === userId));
+
+    const finalHandle = ownsHandle
+      ? requested
+      : await pickFreeHandle(
+          requested ?? slugifyHandle(dto.full_name ?? ''),
+          false,
+          (handles) =>
+            this.db
+              .select({ id: users.id, handle: users.handle })
+              .from(users)
+              .where(inArray(users.handle, handles)),
+        );
+
+    if (!finalHandle) {
+      // Every candidate lost the UNIQUE-index race in one round — vanishingly
+      // rare. Same stable code + shape as the conflict path below so the PWA
+      // copy applies ("handle taken, another was picked" is false here; the
+      // generic one-shot retry guidance is correct).
+      throw new ConflictException({
+        message: 'Handle already taken.',
+        code: 'HANDLE_TAKEN',
+      });
     }
+
+    // P2-238 (run #153, Reviewer A): the pre-checks are check-then-act against
+    // a UNIQUE column (users.handle). A concurrent claim the pre-check missed
+    // makes the UPDATE lose with a raw 23505 → previously HTTP 500. Now:
+    // 23505 = our candidate was taken mid-flight → retry the auto-pick (the
+    // winner moved on); a changed request loses with 409 HANDLE_TAKEN.
+    const MAX_HANDLE_ATTEMPTS = 3;
+    let payloadHandle = finalHandle;
+    for (let attempt = 1; attempt <= MAX_HANDLE_ATTEMPTS; attempt++) {
+      try {
+        const [updated] = await this.db
+          .update(users)
+          .set(
+            withTimestamp({
+              ...dto,
+              handle: payloadHandle,
+            }),
+          )
+          .where(eq(users.id, userId))
+          .returning({
+            id: users.id,
+            phone: users.phone,
+            full_name: users.full_name,
+            handle: users.handle,
+            avatar_url: users.avatar_url,
+            preferred_location: users.preferred_location,
+            preferred_position: users.preferred_position,
+            role: users.role,
+          });
+
+        return updated;
+      } catch (err) {
+        if (pgUniqueViolationCode(err) !== '23505') throw err;
+        if (attempt === MAX_HANDLE_ATTEMPTS) {
+          throw new ConflictException({
+            message: 'Handle already taken.',
+            code: 'HANDLE_TAKEN',
+          });
+        }
+        // Winner moved on — pick fresh and loop.
+        const retryHandle = await pickFreeHandle(
+          finalHandle,
+          false,
+          (handles) =>
+            this.db
+              .select({ id: users.id, handle: users.handle })
+              .from(users)
+              .where(inArray(users.handle, handles)),
+        );
+        if (!retryHandle) {
+          throw new ConflictException({
+            message: 'Handle already taken.',
+            code: 'HANDLE_TAKEN',
+          });
+        }
+        // Rebind for the next iteration (payloadHandle is `let`).
+        payloadHandle = retryHandle;
+      }
+    }
+    // Unreachable: the loop returns or throws on every path.
+    throw new ConflictException({
+      message: 'Handle already taken.',
+      code: 'HANDLE_TAKEN',
+    });
   }
 
   private generateOtp(): string {

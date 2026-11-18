@@ -27,6 +27,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePushPreferencesDto } from './dto/update-push-preferences.dto';
 import { withTimestamp } from '../../common/utils/timestamp';
 import { PDPL_GRACE_DAYS } from '../../common/constants/pdpl';
+import { maskPhone } from '../../common/utils/pii-safe-logging';
 import { MailerService } from '../mailer/mailer.service';
 import { OtpStoreService } from '../auth/otp-store.service';
 import { MediaService } from '../media/media.service';
@@ -484,6 +485,26 @@ export class UsersService {
         'avatar_url must be a managed media path under /media/avatars/',
       );
     }
+    // Handle-collision guard (cutover Card 2 companion, 2026-11-16): the
+    // profile-settings screen saves an explicit handle (POST /users/me
+    // equivalent — PATCH /users/me). A handle owned by ANOTHER user must
+    // surface as a clean 409 { code: 'HANDLE_TAKEN' } the PWA classifies —
+    // never the raw 23505 → HTTP 500 this path produced before. Self-owned
+    // and unchanged handles pass through (the UNIQUE index ignores them).
+    if (dto.handle && dto.handle.trim()) {
+      const requestedHandle = dto.handle.trim();
+      const [owner] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.handle, requestedHandle))
+        .limit(1);
+      if (owner && owner.id !== userId) {
+        throw new ConflictException({
+          message: 'Handle already taken.',
+          code: 'HANDLE_TAKEN',
+        });
+      }
+    }
     const [updated] = await this.db
       .update(users)
       .set(
@@ -682,7 +703,7 @@ export class UsersService {
       // applied to credential flows.
       await otp.deleteChangeOtp(newPhone);
       this.logger.error(
-        { event: 'phone_change_sms_failed', new_phone: newPhone, err },
+        { event: 'phone_change_sms_failed', new_phone: maskPhone(newPhone), err },
         'phone-change SMS dispatch failed; stored code rolled back',
       );
       Sentry.captureException(err, {

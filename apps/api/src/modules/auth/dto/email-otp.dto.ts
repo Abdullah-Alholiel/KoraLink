@@ -1,10 +1,20 @@
-import { IsEmail, IsString, Length, IsIn, IsOptional, IsBoolean } from 'class-validator';
+import { IsEmail, IsString, Length, IsIn, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class EmailSendOtpDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail({}, { message: 'Enter a valid email address.' })
   email: string;
+
+  // F1 (run #212): Turnstile token — armed-optional like the phone flow
+  // (controller fails closed 400 CAPTCHA_REQUIRED when TURNSTILE_ENABLED).
+  @ApiPropertyOptional({
+    description: 'Cloudflare Turnstile widget token (required when TURNSTILE_ENABLED)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  turnstileToken?: string;
 }
 
 export class EmailVerifyOtpDto {

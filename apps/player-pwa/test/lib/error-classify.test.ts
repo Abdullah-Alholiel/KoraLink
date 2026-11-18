@@ -113,6 +113,31 @@ describe('classifyError — moderation codes (P1-47)', () => {
   });
 });
 
+/**
+ * 2026-11-16 owner P0 — SMS provider not configured in a prod-like env.
+ * The API returns 503 `{ message, code: 'SMS_UNAVAILABLE' }` from
+ * /auth/send-otp; the phone login must show the localized
+ * "SMS unavailable — use email" copy (with the one-tap switch), never a
+ * generic send failure. A stable code beats the 503 status.
+ */
+describe('classifyError — SMS_UNAVAILABLE (2026-11-16 P0)', () => {
+  it('maps FetchError code SMS_UNAVAILABLE → "smsUnavailable" (beats 503 status)', () => {
+    const err = new FetchError(
+      'SMS login is not available right now.',
+      503,
+      '/auth/send-otp',
+      'SMS_UNAVAILABLE',
+    );
+    expect(classifyError(err)).toBe('smsUnavailable');
+    expect(errorKey('smsUnavailable')).toBe('errors.smsUnavailable');
+  });
+
+  it('a bare 503 WITHOUT the code still classifies as generic "server"', () => {
+    const err = new FetchError('Service Unavailable', 503, '/auth/send-otp');
+    expect(classifyError(err)).toBe('server');
+  });
+});
+
 describe('errorKey / ERROR_KEYS', () => {
   it('maps every kind to an errors.* key', () => {
     for (const kind of Object.keys(ERROR_KEYS) as ErrorKind[]) {

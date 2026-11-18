@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
+import { useTurnstileEnabled } from '@/hooks/useTurnstileEnabled';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
+import { Turnstile } from '@/components/auth/Turnstile';
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
 import { classifyError } from '@/lib/error-classify';
@@ -27,8 +31,13 @@ function normalizeDigits(value: string): string {
 
 function VerifyContent() {
     const router = useRouter();
-    const pathname = usePathname();
-    const locale = (pathname ?? '').split('/')[1] || 'en';
+    // Run #214 (reviewer IMPORTANT-1): locale comes from next-intl — the
+    // middleware's defaultLocale is 'ar', so a pathname-split fallback to
+    // 'en' wrote EN store/redirect paths while the UI rendered AR.
+    const locale = useLocale() as 'ar' | 'en';
+    // P2-378: offline is the 5th UX state — block doomed verify/resend
+    // requests and show the shared banner instead.
+    const isOnline = useOnlineStatus();
     const t = useTranslations('verify');
     const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
@@ -78,6 +87,13 @@ function VerifyContent() {
     const sendOtp = useSendOtp();
     const verifyEmailOtp = useVerifyEmailOtp();
     const sendEmailOtp = useSendEmailOtp();
+
+    // ── F1 (launch lane, run #212): Turnstile for RESEND. The login screen
+    // consumed this session's first token; a resend is a NEW send-otp POST and
+    // needs a FRESH token when the flag is armed. Same health-driven mount.
+    const turnstileStatus = useTurnstileEnabled();
+    const turnstileArmed = turnstileStatus?.enabled === true && !!turnstileStatus.siteKey;
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
     // Resend countdown timer
     useEffect(() => {
@@ -144,6 +160,12 @@ function VerifyContent() {
     const handleVerify = () => {
         if (!isComplete) return;
         if (channel === 'phone' && !phone) return;
+        // P2-378: offline → keep the entered code (the user only needs
+        // network), surface why, and skip the doomed request.
+        if (!isOnline) {
+            setError(t('offlineNotice'));
+            return;
+        }
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
@@ -171,7 +193,7 @@ function VerifyContent() {
                     phone: profile.phone,
                     preferredLocation: profile.preferred_location ?? '',
                     preferredPosition: profile.preferred_position ?? '',
-                    locale: locale as 'ar' | 'en',
+                    locale,
                 }, '');
             } catch (profileErr) {
                 // Profile fetch failed — show error instead of silently navigating
@@ -271,6 +293,16 @@ function VerifyContent() {
     const handleResend = () => {
         if (resendCountdown > 0) return;
         if (channel === 'phone' && !phone) return;
+        // P2-378: offline → no send attempt (and no cooldown burn / code clear).
+        if (!isOnline) {
+            setError(t('offlineNotice'));
+            return;
+        }
+        // F1: armed captcha without a fresh token → show why + keep waiting.
+        if (turnstileArmed && !turnstileToken) {
+            setError(tErrors('captchaRequired'));
+            return;
+        }
         setError(null);
         setResendCountdown(RESEND_COOLDOWN);
         // A resend invalidates the PREVIOUS code server-side (the fresh code
@@ -296,6 +328,13 @@ function VerifyContent() {
                 setError(tErrors('rateLimitedRetryIn', { seconds: capped }));
                 return;
             }
+            if (kind === 'captchaRequired' || kind === 'captchaFailed' || kind === 'captchaUnavailable') {
+                // F1: token single-use — reset so the widget re-issues; copy
+                // names the human check, not a generic send failure.
+                setTurnstileToken(null);
+                setError(tErrors(kind));
+                return;
+            }
             setError(
                 kind === 'rateLimited'
                     ? tErrors('rateLimited')
@@ -306,13 +345,13 @@ function VerifyContent() {
         };
         if (channel === 'email') {
             sendEmailOtp.mutate(
-                { email },
+                { email, turnstileToken },
                 { onError: onSendError },
             );
             return;
         }
         sendOtp.mutate(
-            { phone },
+            { phone, turnstileToken },
             {
                 onError: onSendError,
             },
@@ -378,6 +417,10 @@ function VerifyContent() {
                 </div>
             </div>
 
+            {/* P2-378: offline state — compact strip; margins are ours
+                (the page container already pads px-6). */}
+            <OfflineBanner isOffline={!isOnline} variant="plain" className="mt-2" />
+
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center pt-12">
                 <h1 className="text-2xl font-bold text-brand-black text-center">
@@ -427,13 +470,24 @@ function VerifyContent() {
                     ))}
                 </div>
 
+                {/* F1 (launch lane, run #212): Turnstile for RESEND — mounts
+                    only when /health advertises the flag armed + keyed. */}
+                {turnstileArmed && turnstileStatus?.siteKey && (
+                    <Turnstile
+                        siteKey={turnstileStatus.siteKey}
+                        language={(locale === 'ar' ? 'ar' : 'en') as string}
+                        onToken={setTurnstileToken}
+                    />
+                )}
+
                 {/* Resend — pending/spinner keyed to the ACTIVE channel's
                     mutation (sendOtp always exists; email must watch its own). */}
                 <button
                     onClick={handleResend}
                     disabled={
                         resendCountdown > 0 ||
-                        (channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)
+                        (channel === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) ||
+                        (turnstileArmed && !turnstileToken)
                     }
                     className="flex items-center gap-1.5 mt-6 text-sm text-brand-green font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >

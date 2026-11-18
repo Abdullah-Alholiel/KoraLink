@@ -5,6 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
+import { useTurnstileEnabled } from '@/hooks/useTurnstileEnabled';
+import { Turnstile } from '@/components/auth/Turnstile';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import LanguageToggle from '@/components/common/LanguageToggle';
 import { useRestoreAccount } from '@/hooks/useUser';
@@ -20,6 +22,9 @@ export default function LoginPage() {
     const tErrors = useTranslations('errors');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
+    // 2026-11-16 P0: when SMS is unavailable, the error carries a one-tap
+    // "switch to email" action rendered right under the message.
+    const [errorAction, setErrorAction] = useState<'switchEmail' | null>(null);
 
     // email-otp-login (run #46): phone-first by default; a subtle toggle
     // swaps the input to email. Both channels share the verify screen.
@@ -41,6 +46,14 @@ export default function LoginPage() {
 
     const sendOtp = useSendOtp();
     const sendEmailOtp = useSendEmailOtp();
+
+    // ── F1 (launch lane, run #212): Cloudflare Turnstile. The widget mounts
+    // ONLY when the API advertises it armed via /health; the submit button
+    // stays disabled until a fresh token exists (single-use tokens — expired
+    // ones reset the state to null via the widget's expired-callback).
+    const turnstileStatus = useTurnstileEnabled();
+    const turnstileArmed = turnstileStatus?.enabled === true && !!turnstileStatus.siteKey;
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
     // Double-send guard: mutation.isPending only flips on the NEXT render, so
     // a fast double-tap fired two send-otp requests (the second either 429'd
@@ -91,6 +104,14 @@ export default function LoginPage() {
     const handleContinue = () => {
         if (submitting) return;
         setError(null);
+        setErrorAction(null);
+        // F1: armed widget without a fresh token → complete the human check.
+        // (The submit button is disabled in this state too; this guard covers
+        // programmatic callers and the race between expiry and click.)
+        if (turnstileArmed && !turnstileToken) {
+            setError(tErrors('captchaRequired'));
+            return;
+        }
         if (mode === 'email') {
             if (!EMAIL_RE.test(email)) {
                 setError(t('invalidEmail'));
@@ -98,7 +119,7 @@ export default function LoginPage() {
             }
             setSubmitting(true);
             sendEmailOtp.mutate(
-                { email: email.trim().toLowerCase() },
+                { email: email.trim().toLowerCase(), turnstileToken },
                 {
                     onSuccess: () =>
                         router.push(`/${locale}/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`),
@@ -107,10 +128,19 @@ export default function LoginPage() {
                     // failure — the user must know WHY they cannot log in.
                     onError: (err) => {
                         const kind = classifyError(err);
+                        if (kind === 'captchaRequired' || kind === 'captchaFailed' || kind === 'captchaUnavailable') {
+                            // F1: token single-use — a consumed/failed token must
+                            // never be replayed; reset so the widget re-issues.
+                            setTurnstileToken(null);
+                        }
                         setError(
                             kind === 'banned' || kind === 'suspended' || kind === 'deleted'
                                 ? tErrors(kind)
-                                : tErrors('otpSendFailed'),
+                                : kind === 'captchaRequired' ||
+                                  kind === 'captchaFailed' ||
+                                  kind === 'captchaUnavailable'
+                                  ? tErrors(kind)
+                                  : tErrors('otpSendFailed'),
                         );
                     },
                     onSettled: () => setSubmitting(false),
@@ -121,15 +151,30 @@ export default function LoginPage() {
         if (phone.length < 7) return;
         setSubmitting(true);
         sendOtp.mutate(
-            { phone },
+            { phone, turnstileToken },
             {
                 onSuccess: () => router.push(`/${locale}/verify?phone=${phone}`),
                 onError: (err) => {
                     const kind = classifyError(err);
+                    if (kind === 'captchaRequired' || kind === 'captchaFailed' || kind === 'captchaUnavailable') {
+                        setTurnstileToken(null);
+                    }
+                    if (kind === 'smsUnavailable') {
+                        // 2026-11-16 P0: SMS not configured (prod-like) — a
+                        // specific, localized message + a ONE-TAP switch to
+                        // the email channel rendered with the error.
+                        setError(tErrors('smsUnavailable'));
+                        setErrorAction('switchEmail');
+                        return;
+                    }
                     setError(
                         kind === 'banned' || kind === 'suspended' || kind === 'deleted'
                             ? tErrors(kind)
-                            : tErrors('otpSendFailed'),
+                            : kind === 'captchaRequired' ||
+                              kind === 'captchaFailed' ||
+                              kind === 'captchaUnavailable'
+                              ? tErrors(kind)
+                              : tErrors('otpSendFailed'),
                     );
                 },
                 onSettled: () => setSubmitting(false),
@@ -288,24 +333,54 @@ export default function LoginPage() {
                     />
                 </div>
                 )}
+                {/* ── F1 (launch lane, run #212): Turnstile widget — mounts
+                    ONLY when /health advertises the flag armed + keyed. Sits
+                    between the channel input and the bottom section so the
+                    consent-scale spacing matches the auth screens. */}
+                {turnstileArmed && turnstileStatus?.siteKey && (
+                    <Turnstile
+                        siteKey={turnstileStatus.siteKey}
+                        language={locale === 'ar' ? 'ar' : 'en'}
+                        onToken={setTurnstileToken}
+                    />
+                )}
             </div>
 
             {/* ── Bottom Section ────────────────────── */}
             <div className="pb-8 pb-safe">
-                {/* Error */}
+                {/* Error (2026-11-16 P0: SMS-unavailable carries a one-tap
+                    "switch to email" action inside the error block). */}
                 {error && (
-                    <p className="text-center text-sm text-brand-red mb-3">
-                        {error}
-                    </p>
+                    <div className="mb-3 flex flex-col items-center gap-2">
+                        <p className="text-center text-sm text-brand-red">
+                            {error}
+                        </p>
+                        {errorAction === 'switchEmail' && (
+                            <button
+                                type="button"
+                                data-testid="switch-to-email"
+                                onClick={() => {
+                                    setError(null);
+                                    setErrorAction(null);
+                                    setMode('email');
+                                    setAuthChannel('email'); // survives reloads + verify round-trips
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-green/40 text-brand-green text-sm font-semibold active:scale-[0.98] transition-transform"
+                            >
+                                <Mail className="w-4 h-4" strokeWidth={2} />
+                                {t('switchToEmail')}
+                            </button>
+                        )}
+                    </div>
                 )}
 
                 <button
                     onClick={handleContinue}
-                    disabled={submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (mode === 'email' ? !EMAIL_RE.test(email) : phone.length < 7)}
+                    disabled={submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (mode === 'email' ? !EMAIL_RE.test(email) : phone.length < 7) || (turnstileArmed && !turnstileToken)}
                     className={`
             w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
             transition-all active:scale-[0.98]
-            ${!(submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending)) && (mode === 'email' ? EMAIL_RE.test(email) : phone.length >= 7)
+            ${!(submitting || (mode === 'email' ? sendEmailOtp.isPending : sendOtp.isPending) || (turnstileArmed && !turnstileToken)) && (mode === 'email' ? EMAIL_RE.test(email) : phone.length >= 7)
                             ? 'bg-brand-green text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }
