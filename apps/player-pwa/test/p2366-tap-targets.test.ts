@@ -20,7 +20,11 @@ import path from 'node:path';
 const appRoot = path.resolve(__dirname, '..');
 const SCAN_DIRS = ['src/components', 'src/app'];
 
-const COMPACT_RE = /(?:^|[\s`'"{])w-(?:8|9) h-(?:8|9)(?=[\s`'"}]|$)/;
+// PR-Agent r1: the census must be order-insensitive (className="h-8 w-8"
+// evades a source-order regex) and must catch Tailwind's size-8/size-9
+// shorthand (a single class that sets BOTH dimensions).
+const COMPACT_W_RE = /(?:^|[\s`'"{])(?:w-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
+const COMPACT_H_RE = /(?:^|[\s`'"{])(?:h-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
 const HIT_H_RE = /(?:^|[\s`'"{])min-h-hit(?=[\s`'"}]|$)/;
 const HIT_W_RE = /(?:^|[\s`'"{])min-w-hit(?=[\s`'"}]|$)/;
 
@@ -111,7 +115,7 @@ function censusOffenders(files: { rel: string; src: string }[]): Offender[] {
     let m: RegExpExecArray | null;
     while ((m = re.exec(src))) {
       const cls = classNameOf(openingTag(src, m.index));
-      if (!cls || !COMPACT_RE.test(cls)) continue;
+      if (!cls || !(COMPACT_W_RE.test(cls) && COMPACT_H_RE.test(cls))) continue;
       if (HIT_H_RE.test(cls) && HIT_W_RE.test(cls)) continue;
       const line = src.slice(0, m.index).split('\n').length;
       offenders.push({ file: rel, line, className: cls });

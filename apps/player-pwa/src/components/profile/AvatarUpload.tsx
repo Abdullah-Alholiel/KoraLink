@@ -139,7 +139,7 @@ export default function AvatarUpload({
                 disabled={uploading}
                 aria-label={t('avatarChange')}
                 aria-busy={uploading}
-                className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-brand-green-deep shadow-md transition active:scale-95 disabled:opacity-60"
+                className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 min-h-hit min-w-hit items-center justify-center rounded-full border-2 border-white bg-white text-brand-green-deep shadow-md transition active:scale-95 disabled:opacity-60"
             >
                 {uploading ? (
                     <span
