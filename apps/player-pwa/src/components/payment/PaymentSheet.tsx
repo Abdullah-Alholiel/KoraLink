@@ -229,19 +229,22 @@ export default function PaymentSheet({
                 policy text stays collapsible (P2-235 contract: full text, an
                 in-place expander, never a code-side truncation). */}
             <div className="mx-5 mt-4 pb-8 flex-shrink-0">
-                {/* Agree Checkbox. P2-366: the role=checkbox button is the
-                    44x44 hit area (min-h-hit/min-w-hit); negative margins
-                    keep its LAYOUT footprint at the old ~22px box (+2px top
-                    offset) so the row height is unchanged — the 44px target
-                    overlaps only the non-interactive heading/policy text
-                    above/below. The 20px visual box is the inner span. */}
+                {/* Agree Checkbox. P2-366: the role=checkbox button IS the
+                    44x44 target (h-11 w-11, in-row, no negative margins —
+                    r3 lesson: margin-overflow overlaps the adjacent
+                    disclaimer/policy text and mis-taps there silently
+                    toggle consent; r2 lesson: don't stretch the row via
+                    min-h-hit on the row div). Trade-off: collapsed policy
+                    state grows this row ~12px (2 text lines ~32px -> 44px);
+                    expanded state is text-driven and taller anyway. The
+                    20px visual box is the inner span. */}
                 <div className="flex items-start gap-3 mb-4">
                     <button
                         onClick={() => setAgreed(!agreed)}
                         role="checkbox"
                         aria-checked={agreed}
                         aria-label={t('host.disclaimer')}
-                        className="min-h-hit min-w-hit -ms-3 -me-3 -mt-2.5 -mb-3 flex-shrink-0 flex items-center justify-center"
+                        className="h-11 w-11 flex-shrink-0 flex items-center justify-center"
                     >
                         <span
                             aria-hidden="true"

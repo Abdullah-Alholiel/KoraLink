@@ -23,8 +23,11 @@ const SCAN_DIRS = ['src/components', 'src/app'];
 // PR-Agent r1: the census must be order-insensitive (className="h-8 w-8"
 // evades a source-order regex) and must catch Tailwind's size-8/size-9
 // shorthand (a single class that sets BOTH dimensions).
-const COMPACT_W_RE = /(?:^|[\s`'"{])(?:w-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
-const COMPACT_H_RE = /(?:^|[\s`'"{])(?:h-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
+// PR-Agent r3: breakpoint-prefixed variants (sm:w-8 sm:h-8) ship the same
+// sub-44px target on small screens — the optional `[\w-]+:` prefix eats
+// `sm:`/`md:`/etc. (min-w-8 style utilities have no colon and stay out).
+const COMPACT_W_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:w-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
+const COMPACT_H_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:h-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
 const HIT_H_RE = /(?:^|[\s`'"{])min-h-hit(?=[\s`'"}]|$)/;
 const HIT_W_RE = /(?:^|[\s`'"{])min-w-hit(?=[\s`'"}]|$)/;
 
@@ -209,8 +212,11 @@ describe('P2-366 tap-target census (min-h-hit / min-w-hit on compact buttons)', 
     const start = src.lastIndexOf('<button', idx);
     const tag = openingTag(src, start);
     const cls = classNameOf(tag) ?? '';
-    expect(cls).toMatch(HIT_H_RE);
-    expect(cls).toMatch(HIT_W_RE);
+    // r4 contract: the button IS the 44px box (h-11 w-11 = 2.75rem = 44px),
+    // realized IN-ROW — no min-h-hit tokens and no negative margins.
+    expect(cls).toMatch(/(?:^|[\s`'"{])h-11(?=[\s`'"}]|$)/);
+    expect(cls).toMatch(/(?:^|[\s`'"{])w-11(?=[\s`'"}]|$)/);
+    expect(cls).not.toMatch(/-m[seltbx]-/);
     // Visual box (20px) lives inside the button, unchanged.
     const after = src.slice(start + tag.length, src.indexOf('</button>', start));
     expect(after).toMatch(/w-5 h-5 rounded border-2/);
