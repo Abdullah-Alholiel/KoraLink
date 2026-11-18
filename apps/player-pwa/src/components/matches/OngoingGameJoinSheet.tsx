@@ -44,7 +44,7 @@ export default function OngoingGameJoinSheet({
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
-                <div className="w-8" />
+                <div className="w-11" />
                 <h2 className="text-lg font-bold text-brand-black">{t('matchDetail.ongoingGameTitle')}</h2>
                 <button
                     onClick={onClose}
