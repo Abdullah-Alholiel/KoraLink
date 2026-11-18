@@ -61,7 +61,13 @@ const VERIFY_MESSAGE_PREFIX_KEYS: Array<{ prefix: string; key: string }> = [
  */
 export function topupCallbackMessageKey(err: unknown): string {
   const code = (err as { code?: unknown })?.code;
-  if (typeof code === 'string' && VERIFY_CODE_KEYS[code]) {
+  // PR-Agent r2: hasOwnProperty guard — a bare record lookup is truthy for
+  // inherited keys ('constructor', 'toString'), which would return a
+  // function where an i18n key is expected.
+  if (
+    typeof code === 'string' &&
+    Object.prototype.hasOwnProperty.call(VERIFY_CODE_KEYS, code)
+  ) {
     return VERIFY_CODE_KEYS[code];
   }
   const message = ((err as { message?: string })?.message ?? '').toString();

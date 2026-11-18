@@ -96,6 +96,16 @@ function CallbackInner() {
         ? window.sessionStorage.getItem(TOPUP_INTENT_SESSION_KEY)
         : null;
 
+    // P2-379 (PR-Agent r2): returning from the offline-at-mount state — the
+    // auto-refire must clear the stale offline copy FIRST so the spinner is
+    // honest, and the offline watcher (gated on phase==='verifying') can
+    // catch a SECOND connection drop mid-attempt.
+    if (offlineRef.current) {
+      offlineRef.current = false;
+      setFailedKey('wallet.topup.callbackRetry');
+      setPhase('verifying');
+    }
+
     if (!paymentId || !intentId) {
       // PR-Agent r1 MINOR: sessionStorage is NOT cleared here anymore — the
       // ids survive a refresh so the verify can be retried (a refresh used
@@ -133,9 +143,10 @@ function CallbackInner() {
           window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
           setCanRetry(false);
           setPhase(res.credited || res.alreadyCredited ? 'success' : 'failed');
-          if (!(res.credited || res.alreadyCredited)) {
-            setFailedKey('wallet.topup.notPaid');
-          }
+          // PR-Agent r2: NO failure-copy override on the 200-not-credited
+          // branch — a both-false anomaly (if ever reachable) keeps the
+          // conditional-hedge default ('IF money left your account…'), which
+          // is the only copy truthful when the charge state is unclear.
           trackEvent('topup_callback_result', {
             ok: res.credited || res.alreadyCredited,
             alreadyCredited: res.alreadyCredited,
