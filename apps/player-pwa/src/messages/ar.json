@@ -154,7 +154,8 @@
     "needHelp": "تحتاج مساعدة؟",
     "contactSupport": "تواصل مع الدعم",
     "profileFetchError": "تعذر تحميل ملفك الشخصي. يرجى المحاولة مرة أخرى.",
-    "emailSubtitle": "أرسلنا الرمز إلى"
+    "emailSubtitle": "أرسلنا الرمز إلى",
+    "offlineNotice": "لا يوجد اتصال بالإنترنت — تحقق من الشبكة ثم أعد المحاولة."
   },
   "completeProfile": {
     "title": "أكمل ملفك الشخصي",

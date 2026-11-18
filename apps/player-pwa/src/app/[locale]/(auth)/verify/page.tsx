@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trophy, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useVerifyOtp, useSendOtp, useVerifyEmailOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useTurnstileEnabled } from '@/hooks/useTurnstileEnabled';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { Turnstile } from '@/components/auth/Turnstile';
 import { useAppStore } from '@/store/useAppStore';
 import { fetcher, setAuthToken, clearAuthToken } from '@/lib/fetcher';
@@ -29,8 +31,13 @@ function normalizeDigits(value: string): string {
 
 function VerifyContent() {
     const router = useRouter();
-    const pathname = usePathname();
-    const locale = (pathname ?? '').split('/')[1] || 'en';
+    // Run #214 (reviewer IMPORTANT-1): locale comes from next-intl — the
+    // middleware's defaultLocale is 'ar', so a pathname-split fallback to
+    // 'en' wrote EN store/redirect paths while the UI rendered AR.
+    const locale = useLocale() as 'ar' | 'en';
+    // P2-378: offline is the 5th UX state — block doomed verify/resend
+    // requests and show the shared banner instead.
+    const isOnline = useOnlineStatus();
     const t = useTranslations('verify');
     const tErrors = useTranslations('errors');
     const searchParams = useSearchParams();
@@ -153,6 +160,12 @@ function VerifyContent() {
     const handleVerify = () => {
         if (!isComplete) return;
         if (channel === 'phone' && !phone) return;
+        // P2-378: offline → keep the entered code (the user only needs
+        // network), surface why, and skip the doomed request.
+        if (!isOnline) {
+            setError(t('offlineNotice'));
+            return;
+        }
         setError(null);
 
         const onSuccess = async (data: { isNewUser: boolean; token?: string }) => {
@@ -180,7 +193,7 @@ function VerifyContent() {
                     phone: profile.phone,
                     preferredLocation: profile.preferred_location ?? '',
                     preferredPosition: profile.preferred_position ?? '',
-                    locale: locale as 'ar' | 'en',
+                    locale,
                 }, '');
             } catch (profileErr) {
                 // Profile fetch failed — show error instead of silently navigating
@@ -280,6 +293,11 @@ function VerifyContent() {
     const handleResend = () => {
         if (resendCountdown > 0) return;
         if (channel === 'phone' && !phone) return;
+        // P2-378: offline → no send attempt (and no cooldown burn / code clear).
+        if (!isOnline) {
+            setError(t('offlineNotice'));
+            return;
+        }
         // F1: armed captcha without a fresh token → show why + keep waiting.
         if (turnstileArmed && !turnstileToken) {
             setError(tErrors('captchaRequired'));
@@ -398,6 +416,10 @@ function VerifyContent() {
                     <span className="text-base font-bold text-brand-black">KoraLink</span>
                 </div>
             </div>
+
+            {/* P2-378: offline state — compact strip; margins are ours
+                (the page container already pads px-6). */}
+            <OfflineBanner isOffline={!isOnline} variant="plain" className="mt-2" />
 
             {/* ── Content ───────────────────────────── */}
             <div className="flex-1 flex flex-col items-center pt-12">
