@@ -26,7 +26,14 @@
 
 /** API verify-rejection codes → i18n keys under wallet.topup. */
 const VERIFY_CODE_KEYS: Record<string, string> = {
-  topup_already_credited: 'wallet.topup.notPaid',
+  // P2-379 PR-Agent r1 (IMPORTANT, money-truth): topup_already_credited is
+  // deliberately NOT mapped. The API throws it for a DIFFERENT payment on an
+  // already-credited intent WITHOUT checking that payment's status — it may
+  // be a failed/initiated duplicate ("no money was taken" would be true) or
+  // a PAID duplicate charge (it would be false reassurance, and the
+  // bank-auto-refund line would be wrong too — a paid duplicate needs a
+  // support refund). The conditional-hedge generic (callbackRetry: "IF money
+  // left your account…") is the only copy truthful for both.
   payment_intent_mismatch: 'wallet.topup.notPaid',
   payment_not_paid: 'wallet.topup.notPaid',
   // Charged-but-declined-by-KoraLink: the money LEFT the player's account —

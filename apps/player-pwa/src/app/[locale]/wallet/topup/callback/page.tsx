@@ -48,14 +48,26 @@ function CallbackInner() {
   // P2-379: a retry is offered only when the verify can actually re-run —
   // session ids present (they survive every offline/failed outcome).
   const [canRetry, setCanRetry] = useState(false);
+  // P2-379 (PR-Agent r1): set while the verify may still be in flight —
+  // the offline watcher must not clobber, and the retry button must not
+  // fire, a duplicate request during that window.
+  const [inFlight, setInFlight] = useState(false);
+  // P2-379 (PR-Agent r1): latched when the UI resolved to the offline state
+  // so the doomed fetch's late rejection cannot overwrite it with generic
+  // failure copy (the offline state is the truthful one).
+  const offlineRef = useRef(false);
   // Bumping this re-runs the verify effect (the retry button's mechanism).
   const [verifyNonce, setVerifyNonce] = useState(0);
   const startedRef = useRef(false);
 
   useEffect(() => {
-    // P2-379: an in-flight verify on a connection that just died hangs the
-    // spinner — resolve it honestly instead of waiting for a timeout.
+    // P2-379: offline while verifying (mount or mid-flight) — resolve to the
+    // offline state IMMEDIATELY instead of waiting out the doomed fetch. The
+    // offlineRef latch makes the late rejection/late success handlers
+    // non-clobbering (PR-Agent r1): onError returns early, onSuccess (a
+    // genuinely verified charge) still wins because money-truth outranks UI.
     if (!isOnline && phase === 'verifying') {
+      offlineRef.current = true;
       setPhase('failed');
       setFailedKey('wallet.topup.callbackOffline');
       setCanRetry(true);
@@ -66,11 +78,15 @@ function CallbackInner() {
   useEffect(() => {
     if (startedRef.current) return;
     // P2-379: offline at mount — resolve to the offline state WITHOUT firing
-    // a doomed request; the effect re-runs when connectivity returns.
+    // a doomed request. PR-Agent r1: startedRef stays FALSE here (the mount
+    // effect re-runs when connectivity returns and fires the verify then);
+    // canRetry stays false meanwhile so the button can never race that
+    // auto-refire into a duplicate request.
     if (!isOnline) {
+      offlineRef.current = true;
       setPhase('failed');
       setFailedKey('wallet.topup.callbackOffline');
-      setCanRetry(true);
+      setCanRetry(false);
       return;
     }
     startedRef.current = true;
@@ -100,11 +116,19 @@ function CallbackInner() {
       return;
     }
     setCanRetry(true);
+    setInFlight(true);
+    // Fresh attempt: the offline latch only protects the PREVIOUS attempt's
+    // resolution — clear it so a new failure renders its own truthful state.
+    offlineRef.current = false;
 
     verifyTopup.mutate(
       { paymentId, intentId },
       {
         onSuccess: (res) => {
+          setInFlight(false);
+          // Money-truth outranks UI: a LATE success (verified after the user
+          // went offline and the UI resolved to the offline state) must still
+          // win — the charge is real and credited.
           window.sessionStorage.removeItem(TOPUP_INTENT_SESSION_KEY);
           window.sessionStorage.removeItem(TOPUP_PAYMENT_SESSION_KEY);
           setCanRetry(false);
@@ -119,6 +143,11 @@ function CallbackInner() {
           });
         },
         onError: (err: unknown) => {
+          setInFlight(false);
+          // P2-379 (PR-Agent r1): the offline-resolved surface stays offline —
+          // the doomed fetch's late rejection must not overwrite the offline
+          // state with the generic failure copy.
+          if (offlineRef.current) return;
           captureError(err, { area: 'wallet-topup-callback' });
           // P2-276/P2-379: classify on the stable body `code` first (the API
           // 409s now carry { message, code }) with the legacy message-prefix
@@ -141,9 +170,12 @@ function CallbackInner() {
 
   /** P2-379: re-run the verify in place (ids persist in sessionStorage). */
   const retryVerify = () => {
-    if (!isOnline || phase !== 'failed') return;
+    // PR-Agent r1: never fire while a verify may still be in flight (the
+    // offline-at-mount auto-refire window) — duplicates re-verify a charge.
+    if (!isOnline || phase !== 'failed' || inFlight) return;
     verifyTopup.reset();
     startedRef.current = false;
+    offlineRef.current = false;
     setFailedKey('wallet.topup.callbackRetry');
     setPhase('verifying');
     setVerifyNonce((n) => n + 1);

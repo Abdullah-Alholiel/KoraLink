@@ -13,10 +13,16 @@ describe('topupCallbackMessageKey — code-first (P2-379)', () => {
     ['currency_mismatch', 'wallet.topup.callbackChargedDeclined'],
     ['payment_intent_mismatch', 'wallet.topup.notPaid'],
     ['payment_not_paid', 'wallet.topup.notPaid'],
-    ['topup_already_credited', 'wallet.topup.notPaid'],
   ])('classifies code=%s → %s', (code, expected) => {
     const err = Object.assign(new Error('untranslated backend text'), { code });
     expect(topupCallbackMessageKey(err)).toBe(expected);
+  });
+
+  it('topup_already_credited deliberately falls to the conditional-hedge generic (PR-Agent r1 money-truth)', () => {
+    // A different payment on a credited intent may be paid OR failed — no
+    // unconditional "no money was taken" / "you were charged" claim is safe.
+    const paid = Object.assign(new Error('topup_already_credited: x'), { code: 'topup_already_credited' });
+    expect(topupCallbackMessageKey(paid)).toBe('wallet.topup.callbackRetry');
   });
 
   it('prefers code over a foreign message (copy edits cannot break classification)', () => {

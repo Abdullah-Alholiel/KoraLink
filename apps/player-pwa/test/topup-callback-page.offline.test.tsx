@@ -31,6 +31,16 @@ describe('topup callback page — offline state pins (P2-379)', () => {
     expect(PAGE).toContain('wallet.topup.recoveryRetry');
   });
 
+  it('PR-Agent r1 races are pinned: offline latch + duplicate-verify guard', () => {
+    // The late rejection of the doomed fetch must not clobber the offline
+    // state (offlineRef gate inside onError) …
+    expect(PAGE).toContain('offlineRef.current = true');
+    expect(PAGE).toContain('if (offlineRef.current) return;');
+    // … and the retry button must be inert while a verify is in flight.
+    expect(PAGE).toContain('inFlight');
+    expect(PAGE).toContain("phase !== 'failed' || inFlight");
+  });
+
   it('classifies failures via the code-first matcher', () => {
     expect(PAGE).toContain("from '@/lib/topup-callback-messages'");
     expect(PAGE).toContain('topupCallbackMessageKey(err)');
