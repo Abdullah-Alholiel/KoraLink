@@ -1,10 +1,11 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 0 (sibling #266 docker cutover SQUASH-MERGED 192a0c0 run #215 per D-20261118-01; docker worktree auth edits = bridge in-flight, untouched).
-- Promote gap: staging ~485 commits ahead of main; last promote 2026-11-16 (PR #178). Pending migrations on next promote: NONE (repo journal 62 == live; no new migrations in #215's merges). Promote = owner GO per D-20261113-28 (owner checks staging UI, says go; AI merges+deploys).
-- Services: API :3001 healthy (turnstile flag-off), PWA :3000 (funnels :9450/:10000 200 via SNI), admin :3002 active. Zero journal errors across run #215's window.
-- Built recently: #215 P2-366 tap targets (PRs #274/#275) + docker cutover (#266); #214 P2-378+P2-379 (verify + topup offline states, coded verify 409s); #212 F1 Turnstile (flag-off).
+- Open PRs: 0 (both run-#216 PRs squash-merged: #277 storage boot guard `5a7fc88`, #278 RTL wrap guards — see "URGENT" below).
+- **⚠ URGENT (NEW run #216): PROD API IS STALE — Render deploy of promote #276 CRASHED (storage env boot throw). Prod API serves the SEP-25 build; Vercel PWA+admin deployed NEW. Fix is MERGED (#277) but prod heals only when the promote (staging→main) redeploys Render. Your one word "GO" (section 2) heals prod. Zero new migrations ride it (repo 62 == Neon 62).**
+- Promote gap: staging is 1 commit ahead of main (5a7fc88+board/docs commits ride the merge); last promote 2026-11-18 (PR #276, runs #187–#215, 487 commits). Pending migrations on next promote: NONE (repo journal 62 == live Neon 62). Promote = owner GO per D-20261113-28.
+- Services: API :3001 healthy on 5a7fc88 (storage fix live on staging; venuesConfigured=true), PWA :3000 + admin :3002 active. Zero journal errors across run #216's window.
+- Built recently: #216 P0-12 storage boot guard (PR #277) + P2-367 RTL wraps (PR #278); #215 P2-366 tap targets (PRs #274/#275) + docker cutover (#266); #214 P2-378+P2-379.
 - Owner decisions waiting: none NEW this run. Standing: P2-325 webhook dashboard URL (go-live gated), F1 arming keys (NEW-9), Moyasar live keys = post-launch milestone (D-20261113-03), recurring-series identity re-review (D-20261106-11 owner note).
 
 ## Active owner actions
@@ -55,10 +56,10 @@
 - **Close line:** "P0-11: plan approved, start A2" OR "P0-11: amend — <notes>" OR "P0-11: defer".
 - **Deadline:** Owner-paced; nothing executes without your A1.
 
-### 2. Next promote staging→main (owner GO → AI executes, per D-20261113-28)
+### 2. Next promote staging→main — ⚠ URGENT: this also HEALS PROD (run #216)
 - **Owner decision (Life OS 2026-11-07, D-20261106-02 + chat 2026-11-13, D-20261113-28):** owner checks UI/UX on staging and says GO in chat; the AI then executes migrate-first + the merge + deploy, and reports back.
-- **Status (run #212):** PR #178 **MERGED 2026-11-16T19:38Z** (0045–0058 promoted + deployed). Two NEW additive migrations (0059, 0060) ride the **NEXT** promote — the AI applies them to Neon BEFORE the merge (migrate-first). Commits ahead of main: **474**.
-- **Your one word:** "GO" in chat (after your own staging check). The AI assembles the promote PR, applies 0059+0060 to prod Neon, merges, and reports SHA + health.
+- **NEW run #216 (2026-11-19): the promote is no longer routine — it is the PROD HEAL.** Promote #276's Render deploy CRASHED at boot (Render logs: `Storage env incomplete: S3_* are required` — StorageModule boot throw; SeaweedFS is staging-only). Render rolled back to the Sep-25 build: **prod API has missed every release since Sep 25** while Vercel PWA+admin deployed new (players' apps now call endpoints prod doesn't have: receipts, waitlist chips, bell pagination, coded topup errors). Fix PR #277 is MERGED to staging; one owner "GO" triggers: assemble promote PR → verify Neon 62==62 (no migrations pending) → merge → Render deploys a post-fix SHA (boots clean without S3_*) → verify Render `live` + prod health `turnstile` block.
+- **Your one word:** "GO" in chat (after your own staging check).
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
 - **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. Nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod.
 
