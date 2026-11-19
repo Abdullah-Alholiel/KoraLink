@@ -281,11 +281,11 @@ function ClubsContent() {
                     role="status"
                     className="flex items-center justify-between gap-3 mx-5 mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
                 >
-                    <p className="text-sm text-amber-900">{t('clubs.favoritesError')}</p>
+                    <p className="text-sm text-amber-900 min-w-0">{t('clubs.favoritesError')}</p>
                     <button
                         type="button"
                         onClick={() => refetchFavIds()}
-                        className="text-sm font-bold text-brand-green active:scale-95 transition-transform whitespace-nowrap"
+                        className="text-sm font-bold text-brand-green active:scale-95 transition-transform whitespace-nowrap flex-shrink-0"
                     >
                         {t('common.retry')}
                     </button>
