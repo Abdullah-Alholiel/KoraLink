@@ -256,6 +256,7 @@
     "leaveFailed": "Couldn't leave the waitlist"
   },
   "matchDetail": {
+    "offlineNotice": "You're offline — check your connection, then try again.",
     "joinMatch": "Join Match",
     "playerHostedTitle": "Hosted by a player",
     "playerHostedBanner": "{host} booked this pitch through KoraLink and runs the match: timing, fairness, and game management. KoraLink handles the pitch booking and will step in to resolve any venue problem the host cannot solve.",

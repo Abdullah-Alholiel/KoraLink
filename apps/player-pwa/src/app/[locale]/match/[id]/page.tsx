@@ -207,6 +207,13 @@ export default function MatchDetailPage({
     const heroTranslateY = scrollY * 0.4;
 
     const handleJoinClick = () => {
+        // P2-384: joining (free mutate or PaymentSheet charge) needs the
+        // network — block offline with the localized notice instead of
+        // opening a sheet that can only fail. Online path is unchanged.
+        if (!isOnline) {
+            showToast(t('matchDetail.offlineNotice'), 'error');
+            return;
+        }
         if (isMatchStarted || match?.status === 'in_progress') {
             setShowOngoingJoinSheet(true);
             return;
@@ -272,7 +279,14 @@ export default function MatchDetailPage({
 
     return (
         <MobileFrame>
-            <OfflineBanner isOffline={!isOnline} className="mx-4 mt-2" />
+            {/* P2-384: with cached match data the generic "showing cached data"
+                strip is accurate; with NO data (cold load / fetch failed while
+                offline) say what to do instead. */}
+            <OfflineBanner
+                isOffline={!isOnline}
+                message={match ? undefined : t('matchDetail.offlineNotice')}
+                className="mx-4 mt-2"
+            />
             <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto scroll-container bg-brand-bg relative"
@@ -295,7 +309,9 @@ export default function MatchDetailPage({
                             <AlertTriangle className="w-8 h-8 text-brand-red" strokeWidth={1.5} />
                         </div>
                         <h3 className="text-lg font-bold text-brand-black mb-6">
-                            {t(errorKey(classifyError(error)))}
+                            {isOnline
+                                ? t(errorKey(classifyError(error)))
+                                : t('matchDetail.offlineNotice')}
                         </h3>
                         <button
                             onClick={() => refetch()}
