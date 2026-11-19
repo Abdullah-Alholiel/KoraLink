@@ -56,8 +56,9 @@ print("── release-verify matrix ──", flush=True)
 r = subprocess.run(['bash', 'scripts/release-verify.sh',
                     'https://koralink-api.onrender.com/api/v1',
                     'https://kora-link-player-pwa.vercel.app',
-                    'https://kora-link-admin.vercel.app'],
-                   capture_output=True, text=True, timeout=300)
+                    'https://kora-link-admin.vercel.app',
+                    SHA],
+                   capture_output=True, text=True, timeout=420)
 print(r.stdout, flush=True)
 if r.returncode != 0:
     print(r.stderr, flush=True)
