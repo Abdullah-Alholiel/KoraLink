@@ -1,20 +1,51 @@
 #!/usr/bin/env bash
 # release-verify.sh — post-release cutover matrix (devops-cycle §6), reusable
 # locally AND from CI (release-verify workflow). Public probes only; no tokens.
-# Usage: scripts/release-verify.sh <API_BASE> <PWA_URL> [ADMIN_URL]
+# Usage: scripts/release-verify.sh <API_BASE> <PWA_URL> [ADMIN_URL] [EXPECTED_SHA]
 #   e.g. scripts/release-verify.sh https://koralink-api.onrender.com/api/v1 \
-#          https://kora-link-player-pwa.vercel.app https://kora-link-admin.vercel.app
+#          https://kora-link-player-pwa.vercel.app https://kora-link-admin.vercel.app \
+#          "$GIT_SHA"
+# EXPECTED_SHA (D-20261119-03, run #217): when set, the API /health body must
+# carry `commit` EQUAL to it. Catches the run-#216 failure class — Render
+# rolled prod back to the Sep-25 build and every HTTP probe stayed 200 while
+# the WRONG build served for weeks. `commit` missing while EXPECTED_SHA is
+# set = old build predating the identity field = FAIL.
 set -uo pipefail
 API="${1:?api base url (…/api/v1)}"
 PWA="${2:?pwa url}"
 ADMIN="${3:-}"
+EXPECTED_SHA="${4:-}"
 FAIL=0
 ok()   { echo "  [ok] $1"; }
 bad()  { echo "  [FAIL] $1"; FAIL=1; }
 
-echo "── 1. API health ──"
-H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API/health")
-[ "$H" = "200" ] && ok "health 200" || bad "health got $H"
+echo "── 1. API health (+ build identity when EXPECTED_SHA given) ──"
+if [ -n "$EXPECTED_SHA" ]; then
+  # Bounded poll: Render cold-builds can lag the merge; 5 tries × 30s.
+  HEALTH_CODE=""
+  for i in 1 2 3 4 5; do
+    RESP=$(curl -s -w '\n%{http_code}' --max-time 30 "$API/health" || true)
+    HEALTH_CODE=$(printf '%s' "$RESP" | tail -n1)
+    if [ "$HEALTH_CODE" = "200" ]; then
+      BODY=$(printf '%s' "$RESP" | sed '$d')
+      COMMIT=$(printf '%s' "$BODY" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || true)
+      if [ -z "$COMMIT" ]; then
+        bad "health 200 but body has NO build SHA — API build predates the identity field (stale/rolled-back deploy)"
+      elif [ "$COMMIT" != "$EXPECTED_SHA" ]; then
+        bad "SERVING STALE BUILD: ${COMMIT:0:12} deployed, ${EXPECTED_SHA:0:12} expected — deploy rolled back or lagging"
+      else
+        ok "health 200 · build ${COMMIT:0:12} matches expected SHA"
+      fi
+      break
+    fi
+    echo "  [..] health got $HEALTH_CODE (try $i/5) — deploy may still be building; retry in 30s"
+    sleep 30
+  done
+  if [ "$HEALTH_CODE" != "200" ]; then bad "health never reached 200 (last: $HEALTH_CODE)"; fi
+else
+  H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API/health")
+  [ "$H" = "200" ] && ok "health 200" || bad "health got $H"
+fi
 
 echo "── 2. PWA reachable ──"
 P=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 30 "$PWA/")

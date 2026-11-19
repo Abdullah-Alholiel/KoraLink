@@ -32,7 +32,8 @@ jobs:
           bash scripts/release-verify.sh \
             https://koralink-api.onrender.com/api/v1 \
             https://kora-link-player-pwa.vercel.app \
-            https://kora-link-admin.vercel.app
+            https://kora-link-admin.vercel.app \
+            "${{ github.sha }}"
 
       - name: Stamp result on the commit
         if: always()
