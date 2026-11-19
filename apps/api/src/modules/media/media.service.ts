@@ -70,6 +70,11 @@ export class MediaService {
       stored = await this.storage.putVenueImage(venueId, file.buffer, file.mimetype);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('venues bucket not configured')) {
+        // Storage env absent (Render prod has no SeaweedFS — run #216): typed
+        // 503 instead of a misleading 500. Sentry stays quiet on config gaps.
+        throw new ServiceUnavailableException('Venue photo storage is not configured.');
+      }
       if (msg.includes('unsupported image type')) {
         throw new BadRequestException('Only JPEG, PNG or WebP images are accepted.');
       }

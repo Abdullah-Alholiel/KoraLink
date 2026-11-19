@@ -67,22 +67,25 @@ export class StorageService {
   private readonly region: string;
 
   constructor(config: ConfigService) {
-    // Boot-time hard requirements — same posture as JWT_SECRET (P0-3):
-    // a misconfigured storage env must fail loudly, not 502 every upload.
+    // Venues bucket is OPTIONAL at boot (P0 run #216): Render prod has no
+    // SeaweedFS on the box (staging-only infra), so a mandatory boot check
+    // crashed EVERY deploy of the media/storage promote (dep
+    // dep-dbuu8d59fdbs73b14bo0, 2026-11-18 17:45Z: StorageModule is @Global,
+    // the constructor throw killed Nest boot → Render update_failed → prod
+    // stuck on the old build). Same posture as the avatars bucket below and
+    // VAPID keys (notifications.service): misconfiguration surfaces at USE
+    // time as a typed, recoverable failure instead of killing the whole API.
     this.endpoint = (config.get<string>('S3_ENDPOINT') ?? 'http://127.0.0.1:8333').replace(/\/+$/, '');
     this.bucket = config.get<string>('S3_BUCKET_VENUES') ?? '';
     this.accessKey = config.get<string>('S3_ACCESS_KEY') ?? '';
     this.secretKey = config.get<string>('S3_SECRET_KEY') ?? '';
     this.region = config.get<string>('S3_REGION') ?? 'us-east-1';
-    if (!this.bucket || !this.accessKey || !this.secretKey) {
-      throw new Error(
-        'Storage env incomplete: S3_BUCKET_VENUES / S3_ACCESS_KEY / S3_SECRET_KEY are required (see docs/plans/upload-pipeline-vps/00-plan.md).',
-      );
-    }
-    // Avatars live in a SECOND bucket (P2-50, run #181). OPTIONAL at boot so a
-    // Render/Vercel deploy without the key still serves venues; the avatar
-    // endpoints map the empty bucket to a typed 503 instead of crashing boot.
     this.avatarBucket = config.get<string>('S3_BUCKET_AVATARS') ?? '';
+  }
+
+  /** True when the venues bucket is configured (else venue-media routes 503). */
+  get venuesConfigured(): boolean {
+    return this.bucket.length > 0 && this.accessKey.length > 0 && this.secretKey.length > 0;
   }
 
   /** True when the avatars bucket is configured (else avatar routes 503). */
@@ -101,9 +104,13 @@ export class StorageService {
 
   /**
    * Store an uploaded venue image. Returns the canonical /media/venues/... path.
-   * Throws BadRequest on bad mime/size; the caller maps storage failures.
+   * Throws Error('venues bucket not configured') when storage env is absent
+   * (the caller maps it to 503 — same contract as the avatars half below),
+   * Error('unsupported image type') / Error('file too large') / storage PUT errors.
    */
   async putVenueImage(venueId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
+    if (!this.venuesConfigured) throw new Error('venues bucket not configured');
+    void declaredMime; // never trusted — magic bytes only (same rule as avatars)
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_UPLOAD_BYTES) throw new Error('file too large');
     // Magic bytes ONLY (PR-Agent r1 run #170): a client-declared Content-Type
@@ -134,6 +141,7 @@ export class StorageService {
   async getVenueImage(
     key: string,
   ): Promise<{ body: Buffer; contentType: string; length: number } | null> {
+    if (!this.venuesConfigured) return null;
     const s3key = key.replace(/^\/media\//, '');
     if (!s3key.startsWith('venues/') || s3key.includes('..')) return null;
     try {
@@ -153,6 +161,7 @@ export class StorageService {
 
   /** Best-effort delete when an upload's venue record vanished mid-request. */
   async deleteVenueImage(path: string): Promise<void> {
+    if (!this.venuesConfigured) return;
     const s3key = path.replace(/^\/media\//, '');
     if (!s3key.startsWith('venues/') || s3key.includes('..')) return;
     try {
