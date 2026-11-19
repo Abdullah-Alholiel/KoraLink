@@ -21,27 +21,36 @@ bad()  { echo "  [FAIL] $1"; FAIL=1; }
 
 echo "── 1. API health (+ build identity when EXPECTED_SHA given) ──"
 if [ -n "$EXPECTED_SHA" ]; then
-  # Bounded poll: Render cold-builds can lag the merge; 5 tries × 30s.
+  # PR-Agent r1 (run #217): during a Render build window the OLD build keeps
+  # answering 200 — so missing/mismatched SHA is RETRYABLE, not an immediate
+  # FAIL. PASS only on an exact match; FAIL only when the budget is exhausted
+  # (that covers both "still building past the CI wait" and "rolled back").
+  # Parse with grep/sed only (no python3 dependency — r1 finding 2).
   HEALTH_CODE=""
+  MATCH_REASON=""
   for i in 1 2 3 4 5; do
     RESP=$(curl -s -w '\n%{http_code}' --max-time 30 "$API/health" || true)
     HEALTH_CODE=$(printf '%s' "$RESP" | tail -n1)
     if [ "$HEALTH_CODE" = "200" ]; then
       BODY=$(printf '%s' "$RESP" | sed '$d')
-      COMMIT=$(printf '%s' "$BODY" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || true)
-      if [ -z "$COMMIT" ]; then
-        bad "health 200 but body has NO build SHA — API build predates the identity field (stale/rolled-back deploy)"
-      elif [ "$COMMIT" != "$EXPECTED_SHA" ]; then
-        bad "SERVING STALE BUILD: ${COMMIT:0:12} deployed, ${EXPECTED_SHA:0:12} expected — deploy rolled back or lagging"
-      else
+      COMMIT=$(printf '%s' "$BODY" | grep -o '"commit":"[^"]*"' | head -1 | sed 's/.*:"//;s/"$//')
+      if [ "$COMMIT" = "$EXPECTED_SHA" ]; then
         ok "health 200 · build ${COMMIT:0:12} matches expected SHA"
+        MATCH_REASON="match"
+        break
       fi
-      break
+      if [ -z "$COMMIT" ]; then
+        MATCH_REASON="health 200 but body has NO build SHA — API build predates the identity field (stale/rolled-back deploy)"
+      else
+        MATCH_REASON="SERVING STALE BUILD: ${COMMIT:0:12} deployed, ${EXPECTED_SHA:0:12} expected — deploy rolled back or still building"
+      fi
+      echo "  [..] $MATCH_REASON (try $i/5) — new build may still be deploying; retry in 20s"
+    else
+      echo "  [..] health got $HEALTH_CODE (try $i/5) — deploy may still be building; retry in 20s"
     fi
-    echo "  [..] health got $HEALTH_CODE (try $i/5) — deploy may still be building; retry in 30s"
-    sleep 30
+    [ "$i" -lt 5 ] && sleep 20
   done
-  if [ "$HEALTH_CODE" != "200" ]; then bad "health never reached 200 (last: $HEALTH_CODE)"; fi
+  if [ "$MATCH_REASON" = "match" ]; then :; else bad "${MATCH_REASON:-health never reached 200 (last: $HEALTH_CODE)}"; fi
 else
   H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API/health")
   [ "$H" = "200" ] && ok "health 200" || bad "health got $H"

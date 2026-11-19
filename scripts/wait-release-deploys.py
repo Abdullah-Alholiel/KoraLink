@@ -58,7 +58,7 @@ r = subprocess.run(['bash', 'scripts/release-verify.sh',
                     'https://kora-link-player-pwa.vercel.app',
                     'https://kora-link-admin.vercel.app',
                     SHA],
-                   capture_output=True, text=True, timeout=300)
+                   capture_output=True, text=True, timeout=420)
 print(r.stdout, flush=True)
 if r.returncode != 0:
     print(r.stderr, flush=True)
