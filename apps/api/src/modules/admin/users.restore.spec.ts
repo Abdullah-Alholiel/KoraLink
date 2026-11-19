@@ -88,7 +88,11 @@ describe('AdminUsersService.restoreByAdmin — P2-47(b) contract (run #167)', ()
 
   it('happy path: soft-deleted grace-window row → deleted_at nulled, audited on the tx, ops broadcast', async () => {
     const { service, calls, rolledBack } = makeService({
-      row: { deleted_at: new Date('2026-10-20T00:00:00Z'), phone: '+966500000009' },
+      // RELATIVE, not fixed (run #216 CI lesson): a hardcoded deleted_at makes
+      // the fixture cross the 30-day PDPL deadline in real time and fail the
+      // suite forever after. 2 days ago is safely inside the window for any
+      // run date.
+      row: { deleted_at: new Date(Date.now() - 2 * 86_400_000), phone: '+966500000009' },
     });
 
     const res = await service.restoreByAdmin(USER_ID, ADMIN_ID, '10.0.0.9');
@@ -140,7 +144,8 @@ describe('AdminUsersService.restoreByAdmin — P2-47(b) contract (run #167)', ()
 
   it('audit failure rolls the restore back (one atomic unit)', async () => {
     const { service, rolledBack } = makeService({
-      row: { deleted_at: new Date('2026-10-20T00:00:00Z'), phone: '+966500000009' },
+      // Same relative-date rule as the happy path (run #216 CI lesson).
+      row: { deleted_at: new Date(Date.now() - 3 * 86_400_000), phone: '+966500000009' },
       auditThrows: true,
     });
     await expect(service.restoreByAdmin(USER_ID, ADMIN_ID)).rejects.toThrow('audit failed');
