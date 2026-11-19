@@ -378,13 +378,16 @@ export default function MatchChat({
                         })}
                         className="w-full flex items-center gap-2 px-4 py-2"
                       >
-                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                        {/* P2-367: min-w-0 lets the dividers shrink so the
+                            nowrap AR marker can never push this w-full row
+                            past the viewport at 360px. */}
+                        <span className="flex-1 min-w-0 h-px bg-brand-green/30" aria-hidden="true" />
                         <span className="text-[10px] font-semibold text-brand-green bg-brand-green/10 rounded-full px-3 py-0.5 whitespace-nowrap">
                           {t('messages.newWhileAway', {
                             count: formatCount(missedMarker.count, locale),
                           })}
                         </span>
-                        <span className="flex-1 h-px bg-brand-green/30" aria-hidden="true" />
+                        <span className="flex-1 min-w-0 h-px bg-brand-green/30" aria-hidden="true" />
                       </button>
                     )}
                     <div
