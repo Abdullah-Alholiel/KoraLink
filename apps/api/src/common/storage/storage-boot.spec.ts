@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { StorageService } from './storage.service';
+import { StorageService, StorageNotConfiguredError } from './storage.service';
 
 /**
  * Storage boot posture specs (run #216 P0 — Render prod deploy crash).
@@ -47,13 +47,14 @@ describe('StorageService boot posture (run #216)', () => {
     expect(partial.venuesConfigured).toBe(false);
   });
 
-  it('endpoint defaults apply for absent optional keys (constructor completes)', () => {
-    // Only S3_ENDPOINT-style optional keys omitted; nothing throws, getters
-    // reflect exactly what was provided.
+  it('constructor completes without endpoint, but venuesConfigured=false without an EXPLICIT S3_ENDPOINT (P2-385b)', () => {
+    // P2-385b posture change (run #217): the localhost default is a dev
+    // convenience, not configuration — bucket+creds without an explicit
+    // endpoint must degrade typed (503/404), not PUT against the default.
     const svc = new StorageService(
       makeConfig({ S3_BUCKET_VENUES: 'koralink-venues', S3_ACCESS_KEY: 'a', S3_SECRET_KEY: 'b' }),
     );
-    expect(svc.venuesConfigured).toBe(true);
+    expect(svc.venuesConfigured).toBe(false);
     expect(svc.avatarConfigured).toBe(false);
   });
 
@@ -62,6 +63,35 @@ describe('StorageService boot posture (run #216)', () => {
     await expect(
       svc.putVenueImage('v1', Buffer.from('x'), 'image/jpeg'),
     ).rejects.toThrow('venues bucket not configured');
+  });
+
+  it('putVenueImage throws the StorageNotConfiguredError SENTINEL class (P2-385a)', async () => {
+    const svc = new StorageService(makeConfig({}));
+    await expect(
+      svc.putVenueImage('v1', Buffer.from('x'), 'image/jpeg'),
+    ).rejects.toBeInstanceOf(StorageNotConfiguredError);
+  });
+
+  it('putAvatar throws the StorageNotConfiguredError SENTINEL class (P2-385a)', async () => {
+    const svc = new StorageService(makeConfig({}));
+    await expect(svc.putAvatar('u1', Buffer.from('x'), undefined)).rejects.toBeInstanceOf(
+      StorageNotConfiguredError,
+    );
+  });
+
+  it('bucket+creds WITHOUT S3_ENDPOINT: put degrades sentinel, get/delete degrade null/no-op (P2-385b+c)', async () => {
+    const svc = new StorageService(
+      makeConfig({ S3_BUCKET_VENUES: 'koralink-venues', S3_ACCESS_KEY: 'a', S3_SECRET_KEY: 'b' }),
+    );
+    await expect(svc.putVenueImage('v1', Buffer.from('x'), 'image/jpeg')).rejects.toBeInstanceOf(
+      StorageNotConfiguredError,
+    );
+    await expect(svc.getVenueImage('/media/venues/v1/abc.jpg')).resolves.toBeNull();
+    await expect(svc.deleteVenueImage('/media/venues/v1/abc.jpg')).resolves.toBeUndefined();
+  });
+
+  it('FULL_ENV including S3_ENDPOINT counts as configured (P2-385b positive pin)', () => {
+    expect(new StorageService(makeConfig(FULL_ENV)).venuesConfigured).toBe(true);
   });
 
   it('putVenueImage still rejects an empty body when storage IS configured', async () => {

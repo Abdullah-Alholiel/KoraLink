@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import * as Sentry from '@sentry/node';
@@ -28,6 +28,20 @@ const MIME_EXT: Record<string, string> = {
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 /** 2 MB — avatars are small square photos; the client downscale target. */
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Sentinel error for "this storage surface has no env configured" (P2-385a,
+ * run #217). The service↔media contract used to be matched by PROSE
+ * (`msg.includes('venues bucket not configured')`) — a copy tweak silently
+ * downgraded the typed 503 to a misleading 500. Both halves now throw this
+ * class and media.service.ts maps it by instanceof.
+ */
+export class StorageNotConfiguredError extends Error {
+  constructor(surface: 'venues' | 'avatars') {
+    super(`${surface} bucket not configured`);
+    this.name = 'StorageNotConfiguredError';
+  }
+}
 
 /** Magic-byte sniffing — never trust the client-declared Content-Type. */
 function sniffMime(buf: Buffer): string | null {
@@ -65,6 +79,12 @@ export class StorageService {
   private readonly accessKey: string;
   private readonly secretKey: string;
   private readonly region: string;
+  /** True when S3_ENDPOINT was EXPLICITLY set (the constructor default is a localhost convenience, not configuration). */
+  private readonly endpointExplicit: boolean;
+  /** First-occurrence guards so a misconfigured env warns once, not per photo read (P2-385c). */
+  private warnedVenueServe = false;
+  private warnedAvatarServe = false;
+  private readonly logger = new Logger(StorageService.name);
 
   constructor(config: ConfigService) {
     // Venues bucket is OPTIONAL at boot (P0 run #216): Render prod has no
@@ -76,6 +96,8 @@ export class StorageService {
     // VAPID keys (notifications.service): misconfiguration surfaces at USE
     // time as a typed, recoverable failure instead of killing the whole API.
     this.endpoint = (config.get<string>('S3_ENDPOINT') ?? 'http://127.0.0.1:8333').replace(/\/+$/, '');
+    const explicitEndpoint = config.get<string>('S3_ENDPOINT');
+    this.endpointExplicit = typeof explicitEndpoint === 'string' && explicitEndpoint.length > 0;
     this.bucket = config.get<string>('S3_BUCKET_VENUES') ?? '';
     this.accessKey = config.get<string>('S3_ACCESS_KEY') ?? '';
     this.secretKey = config.get<string>('S3_SECRET_KEY') ?? '';
@@ -83,9 +105,19 @@ export class StorageService {
     this.avatarBucket = config.get<string>('S3_BUCKET_AVATARS') ?? '';
   }
 
-  /** True when the venues bucket is configured (else venue-media routes 503). */
+  /**
+   * True when the venues bucket is configured (else venue-media routes 503).
+   * P2-385b (run #217): an EXPLICIT S3_ENDPOINT counts too — bucket+creds
+   * without an endpoint used to report configured and PUT against the
+   * constructor's localhost default instead of degrading typed.
+   */
   get venuesConfigured(): boolean {
-    return this.bucket.length > 0 && this.accessKey.length > 0 && this.secretKey.length > 0;
+    return (
+      this.endpointExplicit &&
+      this.bucket.length > 0 &&
+      this.accessKey.length > 0 &&
+      this.secretKey.length > 0
+    );
   }
 
   /** True when the avatars bucket is configured (else avatar routes 503). */
@@ -104,12 +136,12 @@ export class StorageService {
 
   /**
    * Store an uploaded venue image. Returns the canonical /media/venues/... path.
-   * Throws Error('venues bucket not configured') when storage env is absent
-   * (the caller maps it to 503 — same contract as the avatars half below),
+   * Throws StorageNotConfiguredError when storage env is absent (the caller
+   * maps it to 503 — same contract as the avatars half below),
    * Error('unsupported image type') / Error('file too large') / storage PUT errors.
    */
   async putVenueImage(venueId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
-    if (!this.venuesConfigured) throw new Error('venues bucket not configured');
+    if (!this.venuesConfigured) throw new StorageNotConfiguredError('venues');
     void declaredMime; // never trusted — magic bytes only (same rule as avatars)
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_UPLOAD_BYTES) throw new Error('file too large');
@@ -141,7 +173,22 @@ export class StorageService {
   async getVenueImage(
     key: string,
   ): Promise<{ body: Buffer; contentType: string; length: number } | null> {
-    if (!this.venuesConfigured) return null;
+    if (!this.venuesConfigured) {
+      // P2-385c (run #217): a misconfigured env must be OBSERVABLE — without
+      // this, every venue photo read is indistinguishable from deletion.
+      // First occurrence only (log + Sentry), then degrade to null (404).
+      if (!this.warnedVenueServe) {
+        this.warnedVenueServe = true;
+        this.logger.warn(
+          'Venue photo reads degrade to 404: storage env incomplete (S3_ENDPOINT/S3_BUCKET_VENUES/S3_ACCESS_KEY/S3_SECRET_KEY).',
+        );
+        Sentry.captureMessage('venue media serving degraded: storage env incomplete', {
+          level: 'warning',
+          tags: { scope: 'storage.degraded' },
+        });
+      }
+      return null;
+    }
     const s3key = key.replace(/^\/media\//, '');
     if (!s3key.startsWith('venues/') || s3key.includes('..')) return null;
     try {
@@ -161,7 +208,19 @@ export class StorageService {
 
   /** Best-effort delete when an upload's venue record vanished mid-request. */
   async deleteVenueImage(path: string): Promise<void> {
-    if (!this.venuesConfigured) return;
+    if (!this.venuesConfigured) {
+      if (!this.warnedVenueServe) {
+        this.warnedVenueServe = true;
+        this.logger.warn(
+          'Venue photo deletes no-op: storage env incomplete (S3_ENDPOINT/S3_BUCKET_VENUES/S3_ACCESS_KEY/S3_SECRET_KEY).',
+        );
+        Sentry.captureMessage('venue media deletion degraded: storage env incomplete', {
+          level: 'warning',
+          tags: { scope: 'storage.degraded' },
+        });
+      }
+      return;
+    }
     const s3key = path.replace(/^\/media\//, '');
     if (!s3key.startsWith('venues/') || s3key.includes('..')) return;
     try {
@@ -184,11 +243,11 @@ export class StorageService {
 
   /**
    * Store an uploaded avatar. Returns the canonical /media/avatars/... path.
-   * Throws Error('avatars bucket not configured') / Error('unsupported image
+   * Throws StorageNotConfiguredError / Error('unsupported image
    * type') / Error('file too large') / storage PUT errors — the caller maps them.
    */
   async putAvatar(userId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
-    if (!this.avatarBucket) throw new Error('avatars bucket not configured');
+    if (!this.avatarBucket) throw new StorageNotConfiguredError('avatars');
     void declaredMime; // never trusted — magic bytes only (same rule as venues)
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_AVATAR_BYTES) throw new Error('file too large');
