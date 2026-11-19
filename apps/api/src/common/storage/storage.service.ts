@@ -120,9 +120,19 @@ export class StorageService {
     );
   }
 
-  /** True when the avatars bucket is configured (else avatar routes 503). */
+  /**
+   * True when the avatars bucket is configured (else avatar routes 503).
+   * P2-385b symmetry (PR-Agent r1, run #217): same explicit-endpoint + creds
+   * rule as the venues half — the buckets share ONE endpoint/creds pair, so
+   * bucket-only was the same vacuous-config failure mode.
+   */
   get avatarConfigured(): boolean {
-    return this.avatarBucket.length > 0;
+    return (
+      this.endpointExplicit &&
+      this.avatarBucket.length > 0 &&
+      this.accessKey.length > 0 &&
+      this.secretKey.length > 0
+    );
   }
 
   /** True when the caller may serve from this module's bucket (path-prefix defense). */
@@ -247,7 +257,7 @@ export class StorageService {
    * type') / Error('file too large') / storage PUT errors — the caller maps them.
    */
   async putAvatar(userId: string, buf: Buffer, declaredMime: string | undefined): Promise<StoredObject> {
-    if (!this.avatarBucket) throw new StorageNotConfiguredError('avatars');
+    if (!this.avatarConfigured) throw new StorageNotConfiguredError('avatars');
     void declaredMime; // never trusted — magic bytes only (same rule as venues)
     if (!buf.length) throw new Error('empty body');
     if (buf.length > MAX_AVATAR_BYTES) throw new Error('file too large');
@@ -271,7 +281,19 @@ export class StorageService {
   async getAvatar(
     key: string,
   ): Promise<{ body: Buffer; contentType: string; length: number } | null> {
-    if (!this.avatarBucket) return null;
+    if (!this.avatarConfigured) {
+      if (!this.warnedAvatarServe) {
+        this.warnedAvatarServe = true;
+        this.logger.warn(
+          'Avatar reads degrade to 404: storage env incomplete (S3_ENDPOINT/S3_BUCKET_AVATARS/S3_ACCESS_KEY/S3_SECRET_KEY).',
+        );
+        Sentry.captureMessage('avatar serving degraded: storage env incomplete', {
+          level: 'warning',
+          tags: { scope: 'storage.degraded' },
+        });
+      }
+      return null;
+    }
     const s3key = key.replace(/^\/media\//, '');
     if (!s3key.startsWith('avatars/') || s3key.includes('..')) return null;
     try {
@@ -288,7 +310,7 @@ export class StorageService {
 
   /** Best-effort delete of a PREVIOUS avatar object (same-user prefix enforced upstream). */
   async deleteAvatar(path: string): Promise<void> {
-    if (!this.avatarBucket) return;
+    if (!this.avatarConfigured) return;
     const s3key = path.replace(/^\/media\//, '');
     if (!s3key.startsWith('avatars/') || s3key.includes('..')) return;
     try {

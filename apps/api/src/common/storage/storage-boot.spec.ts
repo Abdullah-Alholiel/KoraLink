@@ -91,7 +91,18 @@ describe('StorageService boot posture (run #216)', () => {
   });
 
   it('FULL_ENV including S3_ENDPOINT counts as configured (P2-385b positive pin)', () => {
-    expect(new StorageService(makeConfig(FULL_ENV)).venuesConfigured).toBe(true);
+    const svc = new StorageService(makeConfig(FULL_ENV));
+    expect(svc.venuesConfigured).toBe(true);
+    expect(svc.avatarConfigured).toBe(true);
+  });
+
+  it('avatar half mirrors the venues half: bucket without endpoint+creds degrades sentinel (PR-Agent r1 symmetry fix)', async () => {
+    const svc = new StorageService(makeConfig({ S3_BUCKET_AVATARS: 'koralink-avatars' }));
+    expect(svc.avatarConfigured).toBe(false);
+    await expect(svc.putAvatar('u1', Buffer.from('x'), undefined)).rejects.toBeInstanceOf(
+      StorageNotConfiguredError,
+    );
+    await expect(svc.getAvatar('/media/avatars/u1/abc.jpg')).resolves.toBeNull();
   });
 
   it('putVenueImage still rejects an empty body when storage IS configured', async () => {
