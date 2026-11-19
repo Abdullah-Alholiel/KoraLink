@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MediaService, MAX_VENUE_IMAGES } from './media.service';
+import { StorageNotConfiguredError } from '../../common/storage/storage.service';
 import type { StorageService } from '../../common/storage/storage.service';
 
 /**
@@ -50,15 +51,29 @@ beforeEach(() => {
 });
 
 describe('MediaService.uploadVenueImage', () => {
-  it('maps the unconfigured-venues-bucket error to 503 (run #216 P0 pin)', async () => {
+  it('maps the unconfigured-venues-bucket error to 503 (run #216 P0 pin; sentinel class per P2-385a)', async () => {
+    const { db } = makeDb([{ id: 'v1', owner_id: 'u1', images: [] }]);
+    (storage.putVenueImage as jest.Mock).mockRejectedValue(
+      new StorageNotConfiguredError('venues'),
+    );
+    const svc = new MediaService(db as never, storage);
+    await expect(svc.uploadVenueImage('u1', 'Partner', 'v1', FILE)).rejects.toMatchObject({
+      status: 503,
+      message: 'Venue photo storage is not configured.',
+    });
+  });
+
+  it('maps a plain-Error config message to the generic 500 branch (prose match retired, P2-385a)', async () => {
+    // Deliberate deploy-skew regression pin: the OLD prose path matched
+    // msg.includes('venues bucket not configured'); the instanceof sentinel
+    // must NOT match plain Errors with the same copy.
     const { db } = makeDb([{ id: 'v1', owner_id: 'u1', images: [] }]);
     (storage.putVenueImage as jest.Mock).mockRejectedValue(
       new Error('venues bucket not configured'),
     );
     const svc = new MediaService(db as never, storage);
     await expect(svc.uploadVenueImage('u1', 'Partner', 'v1', FILE)).rejects.toMatchObject({
-      status: 503,
-      message: 'Venue photo storage is not configured.',
+      status: 500,
     });
   });
 

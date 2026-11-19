@@ -5,7 +5,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as Sentry from '@sentry/node';
 import * as schema from '../../database/schema';
 import { users, venues } from '../../database/schema';
-import { StorageService, MAX_UPLOAD_BYTES, MAX_AVATAR_BYTES } from '../../common/storage/storage.service';
+import {
+  StorageService,
+  StorageNotConfiguredError,
+  MAX_UPLOAD_BYTES,
+  MAX_AVATAR_BYTES,
+} from '../../common/storage/storage.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -69,12 +74,13 @@ export class MediaService {
     try {
       stored = await this.storage.putVenueImage(venueId, file.buffer, file.mimetype);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('venues bucket not configured')) {
+      if (err instanceof StorageNotConfiguredError) {
         // Storage env absent (Render prod has no SeaweedFS — run #216): typed
         // 503 instead of a misleading 500. Sentry stays quiet on config gaps.
+        // P2-385a (run #217): matched by instanceof sentinel, not prose.
         throw new ServiceUnavailableException('Venue photo storage is not configured.');
       }
+      const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('unsupported image type')) {
         throw new BadRequestException('Only JPEG, PNG or WebP images are accepted.');
       }
@@ -152,10 +158,11 @@ export class MediaService {
     try {
       stored = await this.storage.putAvatar(userId, file.buffer, file.mimetype);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('avatars bucket not configured')) {
+      if (err instanceof StorageNotConfiguredError) {
+        // P2-385a (run #217): instanceof sentinel replaces the prose match.
         throw new ServiceUnavailableException('Avatar storage is not configured.');
       }
+      const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('unsupported image type')) {
         throw new BadRequestException('Only JPEG, PNG or WebP images are accepted.');
       }

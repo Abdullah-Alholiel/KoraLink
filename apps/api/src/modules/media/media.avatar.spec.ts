@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { MediaService } from './media.service';
-import { StorageService } from '../../common/storage/storage.service';
+import { StorageNotConfiguredError, StorageService } from '../../common/storage/storage.service';
 
 /**
  * P2-50 (run #181) — avatar upload specs.
@@ -67,10 +67,10 @@ describe('MediaService avatar upload (run #181)', () => {
     );
   });
 
-  it('storage "not configured" maps to 503 (not 500)', async () => {
+  it('storage "not configured" maps to 503 (not 500) — sentinel class per P2-385a', async () => {
     const { svc } = makeDbls({
       storagePut: async () => {
-        throw new Error('avatars bucket not configured');
+        throw new StorageNotConfiguredError('avatars');
       },
     });
     await expect(svc.uploadAvatar('u1', FILE)).rejects.toThrow(ServiceUnavailableException);
