@@ -81,9 +81,11 @@ export class StorageService {
   private readonly region: string;
   /** True when S3_ENDPOINT was EXPLICITLY set (the constructor default is a localhost convenience, not configuration). */
   private readonly endpointExplicit: boolean;
-  /** First-occurrence guards so a misconfigured env warns once, not per photo read (P2-385c). */
+  /** First-occurrence guards so a misconfigured env warns once, not per photo read (P2-385c). Separate flags per surface+operation (PR-Agent r2: a shared flag permanently silenced the second message). */
   private warnedVenueServe = false;
+  private warnedVenueDelete = false;
   private warnedAvatarServe = false;
+  private warnedAvatarDelete = false;
   private readonly logger = new Logger(StorageService.name);
 
   constructor(config: ConfigService) {
@@ -219,8 +221,8 @@ export class StorageService {
   /** Best-effort delete when an upload's venue record vanished mid-request. */
   async deleteVenueImage(path: string): Promise<void> {
     if (!this.venuesConfigured) {
-      if (!this.warnedVenueServe) {
-        this.warnedVenueServe = true;
+      if (!this.warnedVenueDelete) {
+        this.warnedVenueDelete = true;
         this.logger.warn(
           'Venue photo deletes no-op: storage env incomplete (S3_ENDPOINT/S3_BUCKET_VENUES/S3_ACCESS_KEY/S3_SECRET_KEY).',
         );
@@ -310,7 +312,19 @@ export class StorageService {
 
   /** Best-effort delete of a PREVIOUS avatar object (same-user prefix enforced upstream). */
   async deleteAvatar(path: string): Promise<void> {
-    if (!this.avatarConfigured) return;
+    if (!this.avatarConfigured) {
+      if (!this.warnedAvatarDelete) {
+        this.warnedAvatarDelete = true;
+        this.logger.warn(
+          'Avatar deletes no-op: storage env incomplete (S3_ENDPOINT/S3_BUCKET_AVATARS/S3_ACCESS_KEY/S3_SECRET_KEY).',
+        );
+        Sentry.captureMessage('avatar deletion degraded: storage env incomplete', {
+          level: 'warning',
+          tags: { scope: 'storage.degraded' },
+        });
+      }
+      return;
+    }
     const s3key = path.replace(/^\/media\//, '');
     if (!s3key.startsWith('avatars/') || s3key.includes('..')) return;
     try {
