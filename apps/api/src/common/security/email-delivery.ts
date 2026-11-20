@@ -20,8 +20,10 @@ import { isProdLike } from '../utils/env-flags';
 // a laptop tolerable behavior. Local dev keeps the log-only dev mode by design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Env names each transport REQUIRES to deliver — mirrors the adapters' own `isConfigured()`. */
-const REQUIRED_BY_PROVIDER: Record<string, string[]> = {
+/** Env names each transport REQUIRES to deliver — mirrors the adapters' own `isConfigured()`.
+ *  EXPORTED for the drift tripwire (email-delivery.drift.spec.ts) that keeps this map
+ *  mechanically tied to the adapters' implementations — PR #283 r3 (PR-Agent MINOR). */
+export const REQUIRED_BY_PROVIDER: Record<string, string[]> = {
   brevo: ['BREVO_API_KEY', 'BREVO_FROM'],
   resend: ['RESEND_API_KEY'],
 };
