@@ -19,6 +19,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { isCookieSecure } from '../../common/utils/env-flags';
 import { TurnstileService } from '../../common/captcha/turnstile.service';
+import { verifyCaptchaOrThrow } from '../../common/captcha/verify-captcha';
 import { EmailOtpService } from './email-otp.service';
 import { EmailSendOtpDto, EmailVerifyOtpDto } from './dto/email-otp.dto';
 
@@ -60,8 +61,12 @@ export class EmailAuthController {
     // ── F1 (launch lane, run #212): same fail-closed gate as the phone flow.
     // NOTE the documented asymmetry: unlike the phone flow, this route's
     // 202 anti-enumeration contract means the captcha rejection surfaces as a
-    // 400 CAPTCHA_REQUIRED (it cannot leak send status).
-    await this.turnstile.verify(dto.turnstileToken, ip);
+    // 400 CAPTCHA_REQUIRED (it cannot leak send status). P2-382 (run #219):
+    // the shared helper's surfaceCaptchaAs400 flag pins that 400 surface;
+    // parity with the phone route is pinned by turnstile-parity.spec.ts.
+    await verifyCaptchaOrThrow(this.turnstile, dto.turnstileToken, ip, {
+      surfaceCaptchaAs400: true,
+    });
     await this.emailOtpService.requestEmailOtp(dto.email.toLowerCase(), ip);
     return {
       message:
