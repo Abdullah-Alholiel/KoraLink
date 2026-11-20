@@ -3,8 +3,9 @@
 ## Gate 1 — Product
 - **Problem:** (a) /privacy + /terms make 5 claims false today — the lawyer reviews these drafts NOW (launch critical path) and false claims waste the legal pass / create liability. (b) A production env missing EMAIL_PROVIDER or its provider key boots fine and silently sends zero emails (OTP outage, no signal).
 - **User story:** As the reviewing lawyer, I read claims that are true as of today. As the owner, if prod email is misconfigured, the API refuses to boot and tells me exactly which env names are missing.
-- **IN:** 5 key edits × EN+AR; `assertEmailDelivery()` boot guard (prod only); spec pins; truth-pins tripwire test. **OUT:** any legal conclusion/new section (lawyer's job); staging behavior change (staging keeps log-only mailer dev-mode per design); non-prod guard.
-- **Success criteria:** (1) no key claims Saudi-phone-only login; (2) hosting claims say "currently outside / moves inside at launch"; (3) cookie claim says Secure in production; (4) prod boot throws naming the missing env(s); (5) staging boot unchanged; (6) i18n leaf parity holds; (7) build+tests green.
+- **IN:** 5 key edits × EN+AR; `assertEmailDelivery()` boot guard (prod-like posture); spec pins; truth-pins tripwire test. **OUT:** any legal conclusion/new section (lawyer's job); local-dev behavior change (dev keeps log-only mailer dev-mode per design).
+- **Success criteria:** (1) no key claims Saudi-phone-only login; (2) hosting claims say "currently outside / moves inside at launch"; (3) cookie claims say Secure in production; (4) prod-like (production|staging) boot throws naming the missing env(s); (5) local dev boots unchanged; (6) i18n leaf parity holds; (7) build+tests green.
+- **SCOPE REVISION (PR #283 r2 — PR-Agent finding, adopted):** the guard ships with the **isProdLike** posture (production OR staging — the env-flags.ts delivery fail-closed precedent; staging is a public funnel where silent OTP loss is an outage), NOT the prod-only reading first written here. Gate-3 signature text below was correspondingly revised; the spec pins staging-throw and staging-boot cases. Staging live-verified no-op (EMAIL_PROVIDER=brevo + keys set).
 
 ## Gate 2 — Architecture
 - Data flow: env (`EMAIL_PROVIDER`, `BREVO_API_KEY`, `BREVO_FROM`, `RESEND_API_KEY`) → `assertEmailDelivery(ConfigService)` in main.ts boot chain (after `assertEnvFlags`) → throw before `app.listen`. Same posture as P0-3/P1-72 guards.
@@ -38,7 +39,9 @@
 ### Guard signature
 ```ts
 export function assertEmailDelivery(config: ConfigService): void
-// NODE_ENV !== 'production' → return (staging/dev keep log-only dev mode by design)
+// NODE_ENV prod-like (production|staging, per isProdLike) → the guard below
+// enforces; local dev returns and keeps log-only mode by design. (PR #283 r2:
+// scope-revised from the prod-only first draft — see the Gate-1 note.)
 // provider = trim().toLowerCase() of EMAIL_PROVIDER || 'resend'  (parity with EMAIL_SENDER_PROVIDER factory)
 // provider ∉ {brevo, resend} → throw 'EMAIL_PROVIDER=<v> is not a known transport (brevo | resend)'
 // missing = required env names w/o value (brevo: BREVO_API_KEY, BREVO_FROM; resend: RESEND_API_KEY)

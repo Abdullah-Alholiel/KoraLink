@@ -49,10 +49,17 @@ describe('legal copy truth pins (run #218 D-20261119-02)', () => {
     expect(ar.termsAccountsBody1).toContain('رقماً للهاتف أو عنوان بريد إلكتروني');
   });
 
-  it('cookie claim scopes Secure to production (staging serves COOKIE_SECURE-true too, but the claim must stay precise)', () => {
+  it('cookie claims scope Secure to production (privacyCookiesBody1 AND privacySecurityBody1 — r2 pin covers the section-10 overclaim too)', () => {
     expect(enRaw).not.toContain('(HttpOnly, Secure),');
     expect(en.privacyCookiesBody1).toContain('Secure in production');
     expect(ar.privacyCookiesBody1).toContain('Secure في بيئة الإنتاج');
+    expect(en.privacySecurityBody1).toContain('Secure in production');
+    expect(ar.privacySecurityBody1).toContain('في بيئة الإنتاج');
+  });
+
+  it('AR termsAccountsBody1 carries the one-time qualifier (EN/AR legal-meaning parity — r2)', () => {
+    expect(ar.termsAccountsBody1).toContain('برمز لمرة واحدة');
+    expect(en.termsAccountsBody1).toContain('verified by one-time code');
   });
 
   it('truth-fix kept the draft-pending-lawyer framing and EN/AR leaf parity', () => {
