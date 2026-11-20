@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Trophy, Loader2, AlertCircle, Mail, Smartphone } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useSendOtp, useSendEmailOtp } from '@/hooks/useAuth';
 import { useTurnstileEnabled } from '@/hooks/useTurnstileEnabled';
 import { Turnstile } from '@/components/auth/Turnstile';
 import DevLoginBar from '@/components/auth/DevLoginBar';
 import LanguageToggle from '@/components/common/LanguageToggle';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import { useRestoreAccount } from '@/hooks/useUser';
 import { classifyError } from '@/lib/error-classify';
 import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, getAuthPhoneDraft, setAuthPhoneDraft, type AuthChannel } from '@/lib/auth-flow';
@@ -16,12 +18,24 @@ import { getAuthChannel, setAuthChannel, getAuthEmailDraft, setAuthEmailDraft, g
 
 export default function LoginPage() {
     const router = useRouter();
-    const pathname = usePathname();
-    const locale = (pathname ?? '').split('/')[1] || 'en';
+    // P2-386 (run #218): locale from next-intl (middleware default is 'ar';
+    // a pathname-split fallback to 'en' desynced redirects from the UI).
+    const locale = useLocale();
     const t = useTranslations('login');
     const tErrors = useTranslations('errors');
+    // P2-386: offline UX state — banner + OTP-send gated until reconnect.
+    const isOnline = useOnlineStatus();
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
+    // Tracks whether the current inline error is the offline gate notice, so
+    // reconnecting clears it without touching classified auth errors.
+    const [offlineBlocked, setOfflineBlocked] = useState(false);
+    useEffect(() => {
+        if (isOnline && offlineBlocked) {
+            setOfflineBlocked(false);
+            setError(null);
+        }
+    }, [isOnline, offlineBlocked]);
     // 2026-11-16 P0: when SMS is unavailable, the error carries a one-tap
     // "switch to email" action rendered right under the message.
     const [errorAction, setErrorAction] = useState<'switchEmail' | null>(null);
@@ -105,6 +119,15 @@ export default function LoginPage() {
         if (submitting) return;
         setError(null);
         setErrorAction(null);
+        setOfflineBlocked(false);
+        // P2-386: never fire send-otp offline — the request would fail (or
+        // queue) and the user would see a generic send failure. Show the
+        // offline notice in the same inline error slot instead.
+        if (!isOnline) {
+            setError(t('offlineNotice'));
+            setOfflineBlocked(true);
+            return;
+        }
         // F1: armed widget without a fresh token → complete the human check.
         // (The submit button is disabled in this state too; this guard covers
         // programmatic callers and the race between expiry and click.)
@@ -207,6 +230,15 @@ export default function LoginPage() {
                 {/* P0-6 (run #30): restore banner when the user soft-deleted
                     on profile and the restore token is still valid. Tap →
                     fetcher falls back to the PDPL restore-token Bearer. */}
+                {/* P2-386 (run #218): shared offline strip — the phone/email
+                    is not sent until the user is back online. Hidden while a
+                    send is in flight (in-progress flow owns the screen). */}
+                <OfflineBanner
+                    isOffline={!isOnline && !submitting}
+                    message={t('offlineNotice')}
+                    variant="plain"
+                    className="w-full mb-4"
+                />
                 {restoreAvailable && (
                     <div
                         role="alert"

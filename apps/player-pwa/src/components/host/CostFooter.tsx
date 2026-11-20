@@ -11,6 +11,9 @@ export interface CostFooterProps {
     canPublish: boolean;
     isPending: boolean;
     onPublish: () => void;
+    /** P2-381: set while offline — publish is disabled and this localized
+     *  notice becomes the button's title/aria-label. */
+    offlineNotice?: string;
 }
 
 export default function CostFooter({
@@ -20,11 +23,12 @@ export default function CostFooter({
     canPublish,
     isPending,
     onPublish,
+    offlineNotice,
 }: CostFooterProps) {
     const t = useTranslations();
     const intlLocale = useLocale() as 'ar' | 'en';
 
-    const publishDisabled = isPending || !canPublish;
+    const publishDisabled = isPending || !canPublish || !!offlineNotice;
 
     return (
         <div className="absolute bottom-0 inset-x-0 bg-white border-t border-gray-100 px-5 pt-3 pb-5 pb-safe animate-slide-in-bottom">
@@ -50,6 +54,9 @@ export default function CostFooter({
             <button
                 onClick={onPublish}
                 disabled={publishDisabled}
+                title={offlineNotice}
+                aria-label={offlineNotice}
+                data-testid="host-publish"
                 className="w-full py-4 rounded-2xl bg-brand-green text-white text-sm font-bold
                     flex items-center justify-center gap-2
                     shadow-[0_4px_20px_rgba(37,65,50,0.4)]
