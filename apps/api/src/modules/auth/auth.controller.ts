@@ -23,6 +23,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { isCookieSecure } from '../../common/utils/env-flags';
 import { TurnstileService } from '../../common/captcha/turnstile.service';
+import { verifyCaptchaOrThrow } from '../../common/captcha/verify-captcha';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -66,7 +67,10 @@ export class AuthController {
     // ── F1 (launch lane, run #212): human-proof gate BEFORE any counter or
     // OTP write. Fail-closed 400 CAPTCHA_REQUIRED when armed without a valid
     // token; zero behavior change while TURNSTILE_ENABLED is unset.
-    await this.turnstile.verify(dto.turnstileToken, ip);
+    // P2-382 (run #219): shared helper — parity with the email send route is
+    // pinned by turnstile-parity.spec.ts. SMS surfaces rejections via the
+    // shared coded-exception path (no surfaceCaptchaAs400 flag).
+    await verifyCaptchaOrThrow(this.turnstile, dto.turnstileToken, ip);
     await this.authService.sendOtp(dto.phone, ip);
     return { message: 'OTP sent.' };
   }
