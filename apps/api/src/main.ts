@@ -19,6 +19,7 @@ import {
 } from './common/utils/cors-origin';
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 import { assertEnvFlags, isSwaggerEnabled } from './common/utils/env-flags';
+import { assertEmailDelivery } from './common/security/email-delivery';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -42,6 +43,13 @@ async function bootstrap(): Promise<void> {
   // COOKIE_SECURE=false in production (P2-241 invariant), kills the boot
   // instead of silently serving insecure defaults.
   assertEnvFlags(configService);
+
+  // ── D-20261119-02 (run #218): refuse to boot in a prod-like runtime when
+  // transactional email cannot actually deliver — an unset provider or key
+  // means OTP emails silently send nothing (user-facing auth outage).
+  // Prod-like = production OR staging (delivery fail-closed posture,
+  // env-flags.ts); local dev keeps the log-only dev mode.
+  assertEmailDelivery(configService);
 
   const playerUrls = configService
     .get<string>('PLAYER_URL', 'http://localhost:3000')
