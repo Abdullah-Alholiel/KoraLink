@@ -252,6 +252,7 @@ export default function HostMatchForm() {
     };
 
     const handlePublishClick = () => {
+        if (!isOnline) return; // P2-381: publish needs the network
         if (!selectedPitch || !date || !time) return;
         setShowWarning(true);
     };
@@ -410,6 +411,13 @@ export default function HostMatchForm() {
                 SCROLLABLE BODY
             ═══════════════════════════════════ */}
             <div className="flex-1 overflow-y-auto scroll-container pb-44">
+                {/* P2-381 (run #218): form-level offline strip above the first
+                    field group — the draft persists locally; publish and
+                    availability checks wait for the network. */}
+                <OfflineBanner
+                    isOffline={!isOnline}
+                    message={t('host.offlineNotice')}
+                />
                 {/* ── VENUE ─────────────────────────── */}
                 <div className="px-5 pt-4">
                     <p className="text-xs font-bold text-brand-green uppercase tracking-widest mb-3">
@@ -574,8 +582,9 @@ export default function HostMatchForm() {
                 selectedPitch={!!selectedPitch}
                 pitchCostSar={pitchCostSar}
                 playerShare={playerShare}
-                canPublish={canPublish}
+                canPublish={canPublish && isOnline}
                 isPending={createMatch.isPending}
+                offlineNotice={isOnline ? undefined : t('host.offlineNotice')}
                 onPublish={handlePublishClick}
             />
 

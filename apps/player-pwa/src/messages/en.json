@@ -138,7 +138,8 @@
     "channelSelector": "Login method",
     "switchToEmail": "Switch to email login",
     "invalidEmail": "Enter a valid email address",
-    "changeLanguage": "Change language"
+    "changeLanguage": "Change language",
+    "offlineNotice": "You are offline. Reconnect to sign in — your phone number is not sent until you are back online."
   },
   "verify": {
     "title": "Enter the code",
@@ -501,6 +502,7 @@
     "slotsError": "Couldn't load available slots. Check your connection.",
     "slotsRetry": "Try Again",
     "slotsOffline": "You're offline — slots can't load right now. Reconnect to pick a time.",
+    "offlineNotice": "You are offline. Your match draft stays on this device — reconnect to publish or check availability.",
     "repeat": {
       "once": "Once",
       "weekly2": "Weekly ×2",
@@ -1125,7 +1127,7 @@
     "noVotesDescription": "No votes were taken, so there is no Player of the Match.",
     "allVoted": "All votes are in"
   },
-    "legal": {
+  "legal": {
     "draftBanner": "Draft — pending lawyer review. Not legal advice.",
     "lastUpdated": "Last updated",
     "lastUpdatedValue": "13 November 2026",
