@@ -1,11 +1,11 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 0 (run-#219 item merged same-run: **#284** P2-382 Turnstile gate parity — shared helper + tripwire, `047d202b`, CI 8/8 + PR-Agent CLEAN).
+- Open PRs: 0 (run-#220 item merged same-run: **#285** P2-371 Playwright layout-audit harness + staging baseline, squash `9c0f3662`, CI 8/8 ×4 heads + PR-Agent 4 rounds all triaged).
 - **⚠ URGENT: PROD API IS STALE — Render deploy of promote #276 CRASHED 11-18 (storage env boot throw). Prod API serves the SEP-25 build; Vercel PWA+admin deployed NEW. ALL fixes are MERGED to staging (#277–#284). Your one word "GO" (section 2) heals prod. Zero new migrations ride it (repo journal 62; live Neon 62 + journal-exempt PostGIS row — verified run #218). Release-verify FAILS on a stale build (PR #279), so a repeat of the silent rollback is stamped red on the promote commit automatically.**
-- Promote gap: staging is 13 commits ahead of main (runs #216–#219 ride the merge); last promote 2026-11-18 (PR #276). Pending migrations on next promote: NONE. Promote = owner GO per D-20261113-28.
+- Promote gap: staging is 15 commits ahead of main (runs #216–#220 ride the merge); last promote 2026-11-18 (PR #276). Pending migrations on next promote: NONE (PR #285 is scripts/docs-only; repo journal 62 = live Neon 62). Promote = owner GO per D-20261113-28.
 - Services: API :3001 healthy on 047d202b (Turnstile parity helper + guard live), PWA :3000 + admin :3002 active. ⚠ Tailscale funnels DOWN ("Logged out") since 11-19 ~02Z — :9450/:10000/:8443 unreachable until owner re-auth (`sudo tailscale up`); loopback verification substitutes.
-- Built recently: #219 P2-382 Turnstile parity (PR #284); #218 P2-390 legal truth-fix + email guard (PR #283) + P2-386/P2-381 login+host offline (PR #282); #217 P2-384 match-detail offline (PR #280) + P2-387 release-verify SHA guard (PR #279) + P2-385 storage hardening trio (PR #281); #216 P0-12 storage boot guard (PR #277) + P2-367 RTL wraps (PR #278).
+- Built recently: #220 P2-371 Playwright layout audit baseline (PR #285; findings boarded as P2-391/P2-392); #219 P2-382 Turnstile parity (PR #284); #218 P2-390 legal truth-fix + email guard (PR #283) + P2-386/P2-381 login+host offline (PR #282); #217 P2-384 match-detail offline (PR #280) + P2-387 release-verify SHA guard (PR #279) + P2-385 storage hardening trio (PR #281); #216 P0-12 storage boot guard (PR #277) + P2-367 RTL wraps (PR #278).
 - Owner decisions waiting: none NEW this run. Standing: P2-325 webhook dashboard URL (go-live gated), F1 arming keys (NEW-9), Moyasar live keys = post-launch milestone (D-20261113-03), recurring-series identity re-review (D-20261106-11 owner note).
 
 ## Active owner actions
