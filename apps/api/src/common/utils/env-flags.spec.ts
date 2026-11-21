@@ -81,6 +81,29 @@ describe('env-flags (P1-72)', () => {
       ).not.toThrow();
     });
 
+    // D-20261121-01 (run #221): dev-login is an OTP bypass that mints valid
+    // 7-day sessions — prod must fail LOUD at boot with it on. Deliberately
+    // NODE_ENV=production-scoped (NOT isProdLike()): staging runs
+    // DEV_LOGIN_ENABLED=true ON PURPOSE (dev-login bar + the P2-371 Playwright
+    // harness authenticate through dev-login; isProdLike() would boot-loop it).
+    it('throws when production boots with DEV_LOGIN_ENABLED=true (D-20261121-01)', () => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: 'production', DEV_LOGIN_ENABLED: 'true' })),
+      ).toThrow('DEV_LOGIN_ENABLED=true is not allowed when NODE_ENV=production');
+    });
+
+    it.each([
+      ['production', 'false'],
+      ['production', undefined],
+      ['staging', 'true'],
+      ['development', 'true'],
+      [undefined, 'true'],
+    ])('allows NODE_ENV=%s with DEV_LOGIN_ENABLED=%s (no throw)', (nodeEnv, flag) => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, DEV_LOGIN_ENABLED: flag })),
+      ).not.toThrow();
+    });
+
     it('compose: the assert is the guard — without it the getters fall through to legacy', () => {
       const cfg = makeConfig({ COOKIE_SECURE: 'True', NODE_ENV: 'staging' });
       expect(() => assertEnvFlags(cfg)).toThrow('COOKIE_SECURE=True is invalid');

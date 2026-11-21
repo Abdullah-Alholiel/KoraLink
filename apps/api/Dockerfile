@@ -18,6 +18,14 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# D-20261121-01 (run #221): build identity for /api/v1/health `commit` — the
+# release-verify EXPECTED_SHA guard (P2-387) reads it to fail a rolled-back or
+# stale deploy. Render injects RENDER_GIT_COMMIT itself; on Coolify/Docker the
+# image must carry the SHA: pass --build-arg GIT_SHA="$(git rev-parse HEAD)"
+# at build time (Coolify sets it from the built commit by default).
+ARG GIT_SHA
+ENV GIT_SHA=$GIT_SHA
+
 # Only install production dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
