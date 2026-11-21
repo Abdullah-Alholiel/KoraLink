@@ -1,8 +1,10 @@
 {
-  "last_run": "2026-11-21T15-17Z-run221 (in progress)",
-  "last_run_report": "kanban/RUNS/2026-11-21T01-18Z-run220.md",
+  "last_run": "2026-11-21T15-17Z-run221",
+  "last_run_report": "kanban/RUNS/2026-11-21T15-17Z-run221.md",
   "last_run_commits": [
-    "9c0f3662 feat(infra): P2-371 Playwright layout audit harness + staging baseline (run #220) (#285)"
+    "4496eaac",
+    "c00933f7",
+    "1f3584fe"
   ],
   "in_review_items": [],
   "consecutive_skip_count": 0,
