@@ -52,7 +52,7 @@ export function isProdLike(config: ConfigService): boolean {
 // P2-241 invariant (prod auth cookies must never ride an insecure connection).
 // Fail LOUD at boot instead — same posture as assertBootstrapSecrets (P0-3).
 export function assertEnvFlags(config: ConfigService): void {
-  for (const name of ['COOKIE_SECURE', 'SWAGGER_ENABLED'] as const) {
+  for (const name of ['COOKIE_SECURE', 'SWAGGER_ENABLED', 'DEV_LOGIN_ENABLED'] as const) {
     const v = config.get<string | undefined>(name);
     if (v === undefined || v === 'true' || v === 'false') continue;
     throw new Error(
@@ -78,6 +78,21 @@ export function assertEnvFlags(config: ConfigService): void {
   ) {
     throw new Error(
       'SWAGGER_ENABLED=true is not allowed when NODE_ENV=production — the OpenAPI document must not be public in production',
+    );
+  }
+  // D-20261121-01 (run #221): DEV_LOGIN_ENABLED joins the fail-loud family.
+  // prod gate: DEV_LOGIN_ENABLED=true + NODE_ENV=production throws at boot —
+  // an OTP bypass that mints valid 7-day sessions must never boot in prod
+  // (launch condition 1; the cutover checklist pins the prod flip). Deliberately
+  // NODE_ENV=production-scoped, NOT isProdLike(): staging runs DEV_LOGIN_ENABLED=true
+  // ON PURPOSE (dev-login bar + the P2-371 Playwright harness authenticate
+  // through dev-login); gating on isProdLike() would boot-loop staging.
+  if (
+    config.get<string>('NODE_ENV') === 'production' &&
+    config.get<string>('DEV_LOGIN_ENABLED') === 'true'
+  ) {
+    throw new Error(
+      'DEV_LOGIN_ENABLED=true is not allowed when NODE_ENV=production — dev-login must be off in production (set DEV_LOGIN_ENABLED=false)',
     );
   }
 }

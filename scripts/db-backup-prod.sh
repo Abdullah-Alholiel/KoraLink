@@ -5,6 +5,12 @@
 # URI comes from /home/ubuntu/.hermes/profiles/koralink/prod-db-uri.env (0600)
 # and is passed to the container via env — never in argv or logs.
 # Scheduled by systemd user timer: koralink-backup-prod.timer (03:20 UTC daily).
+#
+# D-20261121-06 (run #221): ATOMIC writes. The dump lands at $OUT.tmp and is
+# promoted to $OUT with mv ONLY after the gzip -t / size / table-count checks
+# pass; an EXIT trap removes the tmp on every failure path. Rationale
+# (2026-11-21): a Neon-quota failure left a 20-byte koralink-prod-20261121-*.sql.gz
+# in the backup dir — a corrupted newest-file that a cutover restore could pick.
 set -euo pipefail
 
 ENV_FILE="/home/ubuntu/.hermes/profiles/koralink/prod-db-uri.env"
@@ -13,6 +19,10 @@ BACKUP_DIR="/home/ubuntu/backups/koralink-prod"
 RETENTION_DAYS=30
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 OUT="$BACKUP_DIR/koralink-prod-$STAMP.sql.gz"
+TMP="$OUT.tmp"
+
+cleanup() { rm -f "$TMP"; }
+trap cleanup EXIT
 
 [ -r "$ENV_FILE" ] || { echo "BACKUP FAIL: cannot read $ENV_FILE" >&2; exit 1; }
 # shellcheck disable=SC1090
@@ -23,30 +33,35 @@ import sys
 for line in open('$ENV_FILE'):
     k, eq, v = line.strip().partition('=')
     if k == 'MIGRATE_DATABASE_URL' and eq:
-        print(v.strip().strip('\"').strip(\"'\")); break
+        print(v.strip().strip('\\\"').strip(\"'\")); break
 ")
 [ -n "${MIGRATE_DATABASE_URL:-}" ] || { echo "BACKUP FAIL: MIGRATE_DATABASE_URL empty" >&2; exit 1; }
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 
-# Dump inside the container (client pg17), compress on the host stream.
+# Dump inside the container (client pg17), compress on the host stream —
+# written to the TMP name; the final name appears only after ALL checks pass.
 docker exec -e PGURL="$MIGRATE_DATABASE_URL" "$CLIENT_CONTAINER" \
-  sh -c 'pg_dump --no-owner --no-privileges --encoding=UTF8 -d "$PGURL"' | gzip > "$OUT"
-chmod 600 "$OUT"
+  sh -c 'pg_dump --no-owner --no-privileges --encoding=UTF8 -d "$PGURL"' | gzip > "$TMP"
+chmod 600 "$TMP"
 
 # Integrity: gzip decodes cleanly, non-trivial size, contains schema DDL.
-gzip -t "$OUT"
-SIZE=$(stat -c%s "$OUT")
+gzip -t "$TMP"
+SIZE=$(stat -c%s "$TMP")
 if [ "$SIZE" -lt 10000 ]; then
-  echo "BACKUP FAIL: $OUT suspiciously small ($SIZE bytes)" >&2
+  echo "BACKUP FAIL: dump suspiciously small ($SIZE bytes) — tmp discarded, final name untouched" >&2
   exit 1
 fi
-TABLES=$(zgrep -c '^CREATE TABLE' "$OUT" || true)
+TABLES=$(zgrep -c '^CREATE TABLE' "$TMP" || true)
 if [ "${TABLES:-0}" -lt 20 ]; then
-  echo "BACKUP FAIL: only $TABLES CREATE TABLE statements — dump looks truncated" >&2
+  echo "BACKUP FAIL: only $TABLES CREATE TABLE statements — dump looks truncated; tmp discarded" >&2
   exit 1
 fi
+
+# Promote: the only place the final name is ever created.
+mv "$TMP" "$OUT"
+chmod 600 "$OUT"
 
 # Retention: delete local prod dumps older than N days.
 find "$BACKUP_DIR" -name 'koralink-prod-*.sql.gz' -mtime +$RETENTION_DAYS -delete

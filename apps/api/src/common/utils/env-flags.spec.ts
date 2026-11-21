@@ -30,6 +30,13 @@ describe('env-flags (P1-72)', () => {
       ['COOKIE_SECURE', 'yes'],
       ['COOKIE_SECURE', ''],
       ['SWAGGER_ENABLED', 'off'],
+      // PR-Agent r1 on PR #286 (run #221): DEV_LOGIN_ENABLED joins the strict
+      // membership family — 'True'/'1' must fail loud, never silently skip the
+      // prod guard (the endpoint's own predicate is strict 'true', so those
+      // spellings leave dev-login DISABLED — but the boot guard must say so).
+      ['DEV_LOGIN_ENABLED', 'True'],
+      ['DEV_LOGIN_ENABLED', '1'],
+      ['DEV_LOGIN_ENABLED', 'on'],
     ])('throws on %s=%s (typo protection)', (name, value) => {
       expect(() => assertEnvFlags(makeConfig({ [name]: value }))).toThrow(
         `${name}=${value} is invalid`,
@@ -78,6 +85,29 @@ describe('env-flags (P1-72)', () => {
     ])('allows NODE_ENV=%s with SWAGGER_ENABLED=%s (no throw)', (nodeEnv, flag) => {
       expect(() =>
         assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, SWAGGER_ENABLED: flag })),
+      ).not.toThrow();
+    });
+
+    // D-20261121-01 (run #221): dev-login is an OTP bypass that mints valid
+    // 7-day sessions — prod must fail LOUD at boot with it on. Deliberately
+    // NODE_ENV=production-scoped (NOT isProdLike()): staging runs
+    // DEV_LOGIN_ENABLED=true ON PURPOSE (dev-login bar + the P2-371 Playwright
+    // harness authenticate through dev-login; isProdLike() would boot-loop it).
+    it('throws when production boots with DEV_LOGIN_ENABLED=true (D-20261121-01)', () => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: 'production', DEV_LOGIN_ENABLED: 'true' })),
+      ).toThrow('DEV_LOGIN_ENABLED=true is not allowed when NODE_ENV=production');
+    });
+
+    it.each([
+      ['production', 'false'],
+      ['production', undefined],
+      ['staging', 'true'],
+      ['development', 'true'],
+      [undefined, 'true'],
+    ])('allows NODE_ENV=%s with DEV_LOGIN_ENABLED=%s (no throw)', (nodeEnv, flag) => {
+      expect(() =>
+        assertEnvFlags(makeConfig({ NODE_ENV: nodeEnv, DEV_LOGIN_ENABLED: flag })),
       ).not.toThrow();
     });
 

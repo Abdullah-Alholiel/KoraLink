@@ -17,6 +17,15 @@ permissions:
   contents: read
   statuses: write
 
+# D-20261121-01 (run #221): hosts become workflow INPUTS so the Coolify
+# cutover commit (D-20261106-01) re-points them without a code dive — the
+# worker brief pins release-verify.yml:33-35 as a required flip. Defaults are
+# the CURRENT prod hosts; nothing changes for existing releases.
+env:
+  API_BASE: https://koralink-api.onrender.com/api/v1
+  PWA_BASE: https://kora-link-player-pwa.vercel.app
+  ADMIN_BASE: https://kora-link-admin.vercel.app
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -30,9 +39,9 @@ jobs:
       - name: Cutover matrix (public probes)
         run: |
           bash scripts/release-verify.sh \
-            https://koralink-api.onrender.com/api/v1 \
-            https://kora-link-player-pwa.vercel.app \
-            https://kora-link-admin.vercel.app \
+            "$API_BASE" \
+            "$PWA_BASE" \
+            "$ADMIN_BASE" \
             "${{ github.sha }}"
 
       - name: Stamp result on the commit
