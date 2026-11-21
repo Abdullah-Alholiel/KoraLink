@@ -174,7 +174,22 @@ async function api(pathname, cookie) {
                   const cs = getComputedStyle(el);
                   if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return null;
                   if (r.bottom <= 0 || r.top >= vh) return null;
-                  return r;
+                  // horizontally off-screen (skip links, carousel items beyond the edge)
+                  if (r.right <= 0 || r.left >= vw) return null;
+                  // respect overflow clippers: intersect with clipping ancestors
+                  let n = el.parentElement, guard = 0;
+                  let L = r.left, R = r.right, T = r.top, B = r.bottom;
+                  while (n && n !== document.documentElement && guard++ < 12) {
+                    const pcs = getComputedStyle(n);
+                    if (pcs.overflowX !== 'visible' || pcs.overflowY !== 'visible') {
+                      const cr = n.getBoundingClientRect();
+                      L = Math.max(L, cr.left); R = Math.min(R, cr.right);
+                      T = Math.max(T, cr.top); B = Math.min(B, cr.bottom);
+                      if (R - L <= 0 || B - T <= 0) return null; // fully clipped
+                    }
+                    n = n.parentElement;
+                  }
+                  return { left: L, right: R, top: T, bottom: B, width: R - L, height: B - T };
                 };
                 for (const el of document.body.querySelectorAll('*')) {
                   const r = visible(el);

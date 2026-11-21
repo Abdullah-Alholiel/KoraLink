@@ -1,6 +1,6 @@
 # P2-371 baseline audit — real-browser layout scan (run #220)
 
-- Generated: 2026-11-21T02:17:05.395Z · PWA http://localhost:3000 · API http://127.0.0.1:3001 (loopback intercept, api/v1 only)
+- Generated: 2026-11-21T02:47:22.298Z · PWA http://localhost:3000 · API http://127.0.0.1:3001 (loopback intercept, api/v1 only)
 - Matrix: 12 pages × {ar,en} × {360,390,430} — 72 planned loads, **66 executed** (6 match-detail loads skipped: staging DB has ZERO Open matches — 19 Cancelled / 8 Completed)
 - Fixtures: CLUB_ID=83ae5528-5f3f-413f-820a-9d5b40815c51 MATCH_ID=n/a
 
@@ -12,7 +12,7 @@
 | OOB (element outside viewport, scroller-aware) | **PASS — 0** |
 | MISSING_MESSAGE (i18n) | **PASS — 0** |
 | OVERLAP (text-leaf pairs >8px, ancestor-aware) | FAIL — ≥330 instances (counter saturated at the 5/page cap on every load — true count is higher) → 1 structural finding (top-band overlay stacking) |
-| TAP (<44px targets) | FAIL — ≥408 instances (8/page cap) → 7 signatures (all OUTSIDE the PR #274/#275 census sheets) |
+| TAP (<44px targets) | FAIL — ≥416 instances (8/page cap) → signatures below (all OUTSIDE the PR #274/#275 census sheets) |
 | CONSOLE errors | 6 — single signature (messages page resource 404, URL attribution deferred) |
 
 ## Finding 1 — Top-band overlay stacking (P2)
@@ -40,15 +40,15 @@ Signature table (deduped):
 
 | Target | size | loads | pages |
 |---|---|---|---|
-| button 58x28 تفعيل | 58x28 | 25 | play,club-detail,my-games,wallet |
+| button 58x28 تفعيل | 58x28 | 26 | play,club-detail,my-games,wallet |
+| button 62x28 Enable | 62x28 | 26 | play,club-detail,my-games,wallet |
 | button 28x28 ليس الآن | 28x28 | 25 | play,club-detail,my-games,wallet |
-| button 62x28 Enable | 62x28 | 25 | play,club-detail,my-games,wallet |
 | button 28x28 Not now | 28x28 | 25 | play,club-detail,my-games,wallet |
+| button 36x36 Add to favorites | 36x36 | 7 | clubs |
 | button 44x28 العربية | 44x28 | 6 | login |
 | button 44x28 English | 44x28 | 6 | login |
 | button 40x28  | 40x28 | 6 | play |
 | button 36x36 أضف إلى المفضلة | 36x36 | 6 | clubs |
-| button 36x36 Add to favorites | 36x36 | 6 | clubs |
 | a 71x12 شروط الخدمة | 71x12 | 3 | login |
 | a 96x12 سياسة الخصوصية | 96x12 | 3 | login |
 | a 137x40 استضافة مباراة | 137x40 | 3 | play |
