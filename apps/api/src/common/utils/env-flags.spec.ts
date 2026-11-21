@@ -30,6 +30,13 @@ describe('env-flags (P1-72)', () => {
       ['COOKIE_SECURE', 'yes'],
       ['COOKIE_SECURE', ''],
       ['SWAGGER_ENABLED', 'off'],
+      // PR-Agent r1 on PR #286 (run #221): DEV_LOGIN_ENABLED joins the strict
+      // membership family — 'True'/'1' must fail loud, never silently skip the
+      // prod guard (the endpoint's own predicate is strict 'true', so those
+      // spellings leave dev-login DISABLED — but the boot guard must say so).
+      ['DEV_LOGIN_ENABLED', 'True'],
+      ['DEV_LOGIN_ENABLED', '1'],
+      ['DEV_LOGIN_ENABLED', 'on'],
     ])('throws on %s=%s (typo protection)', (name, value) => {
       expect(() => assertEnvFlags(makeConfig({ [name]: value }))).toThrow(
         `${name}=${value} is invalid`,

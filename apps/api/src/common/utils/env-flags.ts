@@ -52,7 +52,7 @@ export function isProdLike(config: ConfigService): boolean {
 // P2-241 invariant (prod auth cookies must never ride an insecure connection).
 // Fail LOUD at boot instead — same posture as assertBootstrapSecrets (P0-3).
 export function assertEnvFlags(config: ConfigService): void {
-  for (const name of ['COOKIE_SECURE', 'SWAGGER_ENABLED'] as const) {
+  for (const name of ['COOKIE_SECURE', 'SWAGGER_ENABLED', 'DEV_LOGIN_ENABLED'] as const) {
     const v = config.get<string | undefined>(name);
     if (v === undefined || v === 'true' || v === 'false') continue;
     throw new Error(
