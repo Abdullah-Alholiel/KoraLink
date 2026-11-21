@@ -131,6 +131,7 @@ async function api(pathname, cookie) {
             const resp = await fetch(`${API}${u.pathname}${u.search}`, {
               method: req.method(), headers,
               body: ['GET', 'HEAD'].includes(req.method()) ? undefined : req.postData(),
+              signal: AbortSignal.timeout(15_000),
             });
             const buf = Buffer.from(await resp.arrayBuffer());
             const h = {};

@@ -1,14 +1,14 @@
 # P2-371 baseline audit — real-browser layout scan (run #220)
 
-- Generated: 2026-11-21T01:59:41.264Z · PWA http://localhost:3000 · API http://127.0.0.1:3001 (loopback intercept, api/v1 only)
-- Matrix: 12 pages × {ar,en} × {360,390,430} = 72 page-loads · dev-login + zustand persist seeding (AuthGuard deterministic)
-- Fixtures: CLUB_ID=83ae5528-5f3f-413f-820a-9d5b40815c51 MATCH_ID=n/a (match-detail skipped: staging DB has ZERO Open matches — 19 Cancelled / 8 Completed)
+- Generated: 2026-11-21T02:17:05.395Z · PWA http://localhost:3000 · API http://127.0.0.1:3001 (loopback intercept, api/v1 only)
+- Matrix: 12 pages × {ar,en} × {360,390,430} — 72 planned loads, **66 executed** (6 match-detail loads skipped: staging DB has ZERO Open matches — 19 Cancelled / 8 Completed)
+- Fixtures: CLUB_ID=83ae5528-5f3f-413f-820a-9d5b40815c51 MATCH_ID=n/a
 
 ## Gate results (D-20261113-33)
 
 | Gate | Result |
 |---|---|
-| H-SCROLL (horizontal overflow) | **PASS — 0 of 72 loads** |
+| H-SCROLL (horizontal overflow) | **PASS — 0 of 66 executed loads** |
 | OOB (element outside viewport, scroller-aware) | **PASS — 0** |
 | MISSING_MESSAGE (i18n) | **PASS — 0** |
 | OVERLAP (text-leaf pairs >8px, ancestor-aware) | FAIL — 330 instances → 1 structural finding (top-band overlay stacking) |
