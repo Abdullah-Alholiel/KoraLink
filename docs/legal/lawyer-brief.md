@@ -40,7 +40,7 @@ before registration vs after.
 - Backups: nightly encrypted-at-rest dumps, **30-day retention**
   (`scripts/db-backup-prod.sh`).
 
-## 3. Processors & data locations (as of 2026-11-14)
+## 3. Processors & data locations (as of 2026-11-21)
 
 | Processor | Service | Data shared | Location TODAY |
 |---|---|---|---|
@@ -63,13 +63,19 @@ Kingdom" is **true post-cutover, false today for prod traffic**.
 
 Source file: `apps/player-pwa/src/messages/en.json` (Arabic mirror carries the same claims).
 
+> **Refresh 2026-11-21 (factory run #221):** claims 1 and 3 below were FIXED in copy by
+> PR #283 (2026-11-18, run #218) — the app text now states the true position and is pinned
+> by `apps/player-pwa/test/p218-legal-truth-pins.test.ts`. They stay listed so the lawyer
+> sees what changed and rules on the underlying PDPL question, which the copy fix does NOT
+> answer. Claims 2, 4, 5 are unchanged and still open.
+
 | # | Where | Claim (verbatim) | Verified reality | TODO-lawyer |
 |---|---|---|---|---|
-| 1 | en.json:1167 `privacyTransfersBody1` | "Our primary hosting and databases run inside the Kingdom." | **FALSE for prod today** — prod = Render US-West + Vercel + Neon US-West. Becomes TRUE at the Coolify/Riyadh cutover. Staging (what testers see) already runs in Riyadh. | Whether pre-cutover US processing requires a PDPL transfer mechanism (risk assessment / contractual clause / consent) and a record of transfer; and whether the notice may state the post-cutover position once the cutover is scheduled. |
-| 2 | en.json:1175 `privacyCookiesBody1` | "…strictly necessary cookies… We do not use advertising or cross-site tracking cookies." | **INCOMPLETE/SILENT on analytics**: PostHog analytics IS active in the app (PWA env has `NEXT_PUBLIC_POSTHOG_KEY`; wired in `apps/player-pwa/src/providers/ObservabilityProvider.tsx`). The notice never discloses analytics processing. | Consent basis for product analytics under PDPL; amend the notice text before launch. |
-| 3 | en.json:1173 `privacyChildrenBody1` | "…accounts require a Saudi phone number verified by one-time code." | **FALSE as stated** — email-OTP signup creates accounts WITHOUT any phone number (`apps/api/src/modules/auth/email-otp.service.ts:203-206` inserts a user with `email` only). A phone is added later via profile completion. | Whether an age gate must apply to BOTH signup channels and what verification is reasonable. |
-| 4 | en.json:1177 `privacyContactBody1` | "…complaints: hello@koralink.sa" | **UNVERIFIABLE TODAY** — the koralink.sa domain has no mail infrastructure reachable from this host (no A/MX resolved). Rights requests would bounce. | n/a (ops fix needed: provision the mailbox before launch; factory flagged to owner 2026-11-14). |
-| 5 | en.json:1200 `termsPaymentsBody2` | "…our licensed processor (Moyasar)…" | Moyasar publicly states SAMA licensing; the factory cannot verify KoraLink's own contract/merchant status. | Confirm the licensing statement is accurate to repeat in terms; confirm what happens contractually while only sandbox keys exist. |
+| 1 | en.json:1163 `privacySharingBody1` / :1186 `privacyTransfersBody1` | ~~"Our primary hosting and databases run inside the Kingdom."~~ **FIXED by PR #283** — copy now reads "currently run outside the Kingdom; at launch it moves to servers inside the Kingdom" (EN+AR pinned). | Underlying reality unchanged: prod = Render US-West + Vercel + Neon US-West until the Coolify/Riyadh cutover. | **STILL OPEN:** whether pre-cutover US processing requires a PDPL transfer mechanism (risk assessment / contractual clause / consent) and a record of transfer. |
+| 2 | legal ns (no dedicated key) | Analytics silent: the notice never discloses product analytics. | **UNCHANGED** — PostHog IS active (`NEXT_PUBLIC_POSTHOG_KEY` in PWA env, wired in `ObservabilityProvider.tsx`); no analytics disclosure exists in the legal namespace (grep 2026-11-21). | Consent basis for product analytics under PDPL; amend the notice text before launch. |
+| 3 | en.json `privacyChildrenBody1` / `termsAccountsBody1` | ~~"…Saudi phone number verified by one-time code."~~ **FIXED by PR #283** — copy now says a phone number **or email address**, verified by one-time code (EN+AR pinned). | Underlying reality unchanged: email-OTP signup creates accounts without a phone (`email-otp.service.ts`). | **STILL OPEN:** whether an age gate must apply to BOTH signup channels and what verification is reasonable. |
+| 4 | en.json:1138/:1176/:1196 | "…complaints: hello@koralink.sa" | **UNCHANGED/UNVERIFIABLE** — koralink.sa has no reachable mail infrastructure; rights requests would bounce. | n/a (ops fix: provision the mailbox before launch; factory flagged to owner 2026-11-14). |
+| 5 | en.json:1219 `termsPaymentsBody2` | "…our licensed processor (Moyasar)…" | **UNCHANGED** — Moyasar publicly states SAMA licensing; KoraLink's own contract/merchant status unverifiable by the factory. | Confirm the licensing statement is accurate to repeat in terms; confirm what happens contractually while only sandbox keys exist. |
 
 Claims that are TRUE and verified (no action): the 12-hour refund rule (en.json:1204 —
 matches shipped code + owner decision D-20261110-06); 30-day backup overwrite
