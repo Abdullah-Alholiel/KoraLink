@@ -47,7 +47,10 @@ let CLUB_ID = null;
 let MATCH_ID = null;
 
 async function api(pathname, cookie) {
-  const r = await fetch(`${API}${pathname}`, { headers: { cookie: `access_token=${cookie}`, origin: 'http://localhost:3000' } });
+  const r = await fetch(`${API}${pathname}`, {
+    headers: { cookie: `access_token=${cookie}`, origin: 'http://localhost:3000' },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!r.ok) return null;
   return r.json();
 }
@@ -58,9 +61,13 @@ async function api(pathname, cookie) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ phone: SEED_PHONE, surface: 'player' }),
+    signal: AbortSignal.timeout(15_000),
   });
   if (!lr.ok) throw new Error(`dev-login failed: ${lr.status}`);
-  const COOKIE = decodeURIComponent((lr.headers.get('set-cookie') || '').match(/access_token=([^;]+)/)[1]);
+  const setCookie = lr.headers.get('set-cookie') || '';
+  const m = setCookie.match(/access_token=([^;]+)/);
+  if (!m) throw new Error(`dev-login succeeded but no access_token cookie was set (set-cookie: ${setCookie.slice(0, 80) || 'ABSENT'})`);
+  const COOKIE = decodeURIComponent(m[1]);
 
   // ── fixtures (real endpoints; /matches/nearby does NOT exist — bare GET /matches) ──
   const venues = await api('/api/v1/venues', COOKIE);
