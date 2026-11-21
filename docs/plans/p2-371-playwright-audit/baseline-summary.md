@@ -11,8 +11,8 @@
 | H-SCROLL (horizontal overflow) | **PASS — 0 of 66 executed loads** |
 | OOB (element outside viewport, scroller-aware) | **PASS — 0** |
 | MISSING_MESSAGE (i18n) | **PASS — 0** |
-| OVERLAP (text-leaf pairs >8px, ancestor-aware) | FAIL — 330 instances → 1 structural finding (top-band overlay stacking) |
-| TAP (<44px targets) | FAIL — 408 instances → 7 signatures (all OUTSIDE the PR #274/#275 census sheets) |
+| OVERLAP (text-leaf pairs >8px, ancestor-aware) | FAIL — ≥330 instances (counter saturated at the 5/page cap on every load — true count is higher) → 1 structural finding (top-band overlay stacking) |
+| TAP (<44px targets) | FAIL — ≥408 instances (8/page cap) → 7 signatures (all OUTSIDE the PR #274/#275 census sheets) |
 | CONSOLE errors | 6 — single signature (messages page resource 404, URL attribution deferred) |
 
 ## Finding 1 — Top-band overlay stacking (P2)

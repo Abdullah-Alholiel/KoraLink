@@ -135,11 +135,18 @@ async function api(pathname, cookie) {
             });
             const buf = Buffer.from(await resp.arrayBuffer());
             const h = {};
-            resp.headers.forEach((v, k) => { if (!k.startsWith('access-control-')) h[k] = v; });
+            resp.headers.forEach((v, k) => {
+              // drop CORS headers (restamped) + content-encoding/length (body is
+              // already decompressed by undici — stale encoding headers corrupt
+              // the response once the API enables gzip/br)
+              if (k.startsWith('access-control-')) return;
+              if (k === 'content-encoding' || k === 'content-length') return;
+              h[k] = v;
+            });
             h['access-control-allow-origin'] = 'http://localhost:3000';
             h['access-control-allow-credentials'] = 'true';
             route.fulfill({ status: resp.status, headers: h, body: buf });
-          } catch { route.continue(); }
+          } catch { route.abort(); } // harness fault → never surface as a 404 console finding on the app
         });
 
         const entry = { locale, viewport: vp.tag, page: pg.id, url: pg.path(locale), findings: {} };
