@@ -33,6 +33,7 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/node';
 import type { RawBodyRequest } from '@nestjs/common';
@@ -40,6 +41,7 @@ import type { Request } from 'express';
 
 import { WalletTopupService } from './wallet.topup.service';
 import { WEBHOOK_INTENT_DESC_PREFIX } from './wallet.topup.service';
+import { timingSafeEqual } from 'node:crypto';
 
 interface MoyasarWebhookEvent {
   id?: string;
@@ -67,6 +69,7 @@ export class WalletWebhookController {
   ) {}
 
   @Post()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   async handleMoyasarWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ received: boolean }> {
     if (this.configService.get<string>('WALLET_WEBHOOK_ENABLED') !== 'true') {
       throw new ForbiddenException('Wallet webhook is disabled in this environment');
@@ -184,7 +187,6 @@ export class WalletWebhookController {
 
 /** timingSafeEqual wrapper that never throws on length mismatch. */
 function timingSafeEqualSafe(a: Buffer, b: Buffer): boolean {
-  const { timingSafeEqual } = require('node:crypto') as typeof import('node:crypto');
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }

@@ -366,6 +366,14 @@ export class WalletTopupService {
    * never decides WHAT landed.
    */
   async creditFromWebhook(intentId: string, paymentId: string): Promise<VerifyTopupResult> {
+    // Reviewer A run-#223 IMPORTANT-3: gate on the TOP-UP flag too, not just
+    // the webhook flag — WALLET_TOPUP_ENABLED=false + WALLET_WEBHOOK_ENABLED=true
+    // must never credit (fail-closed posture parity with verifyTopup).
+    if (!this.enabled) {
+      throw new ForbiddenException(
+        'Wallet top-up is disabled in this environment until a payment provider is integrated',
+      );
+    }
     const [intent] = await this.db
       .select()
       .from(wallet_topup_intents)

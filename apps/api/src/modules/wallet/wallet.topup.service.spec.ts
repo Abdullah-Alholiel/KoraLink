@@ -483,6 +483,14 @@ describe('creditFromWebhook — F2 (run #223): webhook credit entry', () => {
     await expect(svc.creditFromWebhook('intent-1', 'pay_1')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('403 when WALLET_TOPUP_ENABLED=false even with the webhook flag on (Reviewer A run-#223: fail-closed parity)', async () => {
+    const db = makeDb();
+    const svc = makeService(db, { ...ENV_ON, WALLET_TOPUP_ENABLED: undefined });
+    await expect(svc.creditFromWebhook('intent-1', 'pay_1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
   it('replays alreadyCredited for the same payment (webhook retry after lost 2xx)', async () => {
     mockFetch.mockResolvedValue(PAID_PAYMENT);
     const db = makeDb({
