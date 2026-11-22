@@ -14,12 +14,14 @@ import {
 import {
   TOPUP_CONFLICT_NOT_PAID_PREFIX,
   WalletTopupService,
+  WEBHOOK_INTENT_DESC_PREFIX,
 } from './wallet.topup.service';
 
 type DB = PostgresJsDatabase<typeof schema>;
 
-/** Moyasar hosted-form description prefix binding a payment to an intent. */
-const INTENT_DESC_PREFIX = 'wallet-topup:';
+// Claude tier-C MINOR-4 (run #223): the prefix is single-sourced in
+// wallet.topup.service (WEBHOOK_INTENT_DESC_PREFIX) — no local re-declaration.
+const INTENT_DESC_PREFIX = WEBHOOK_INTENT_DESC_PREFIX;
 
 /**
  * P2-314 (run #198): a pending intent older than this is "aged out" — real
