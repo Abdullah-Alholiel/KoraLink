@@ -120,9 +120,16 @@ export default function CompleteProfilePage() {
                         <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center">
                             <span className="text-3xl text-gray-300">👤</span>
                         </div>
-                        <button className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-brand-black flex items-center justify-center border-2 border-white"
+                        <button className="group absolute -bottom-1.5 -end-1.5 flex min-h-hit min-w-hit items-center justify-center"
+                            aria-label={t('uploadAvatar')}
                             onClick={() => router.push(`/${locale}/personal-info`)}>
-                            <Camera className="w-4 h-4 text-white" strokeWidth={2} />
+                            {/* PR-Agent r1 (run #222, mirrors PR #275 AvatarUpload pattern):
+                                the button is the invisible 44x44 target; the VISIBLE badge
+                                stays 32px as an inner span so the 96px avatar corner is
+                                not over-covered. */}
+                            <span aria-hidden="true" className="flex w-8 h-8 items-center justify-center rounded-full border-2 border-white bg-brand-black">
+                                <Camera className="w-4 h-4 text-white" strokeWidth={2} />
+                            </span>
                         </button>
                     </div>
                 </div>

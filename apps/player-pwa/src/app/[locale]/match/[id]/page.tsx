@@ -355,12 +355,13 @@ export default function MatchDetailPage({
                     >
                         <button
                             onClick={() => router.back()}
-                            className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            className="w-10 h-10 min-h-hit min-w-hit rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            aria-label={t('common.back')}
                         >
                             <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
                         </button>
-                        <button className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
-                            aria-label={isJoined ? t('messages.title') : t('matchDetail.shareAria')}
+                        <button className="w-10 h-10 min-h-hit min-w-hit rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                            aria-label={isJoined ? t('chatSheet.openAria') : t('matchDetail.shareAria')}
                             onClick={() => {
                                 if (isJoined) {
                                     setShowChatSheet(true);
