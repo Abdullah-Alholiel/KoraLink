@@ -120,7 +120,7 @@ export default function CompleteProfilePage() {
                         <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center">
                             <span className="text-3xl text-gray-300">👤</span>
                         </div>
-                        <button className="group absolute bottom-0 end-0 flex min-h-hit min-w-hit items-center justify-center"
+                        <button className="group absolute -bottom-1.5 -end-1.5 flex min-h-hit min-w-hit items-center justify-center"
                             aria-label={t('uploadAvatar')}
                             onClick={() => router.push(`/${locale}/personal-info`)}>
                             {/* PR-Agent r1 (run #222, mirrors PR #275 AvatarUpload pattern):
