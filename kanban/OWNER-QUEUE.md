@@ -1,13 +1,13 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 0 — PR #286 merged run #221; PR #287 (P2-393 a11y quartet) merged run #222.
-- **🔴 NEW URGENT (run #222): Neon quota RE-IGNITED HARD — Sentry KORALINK-API-1C: 76 events/24h, lastSeen 2026-11-22T00:00Z. The nightly prod backup FAILED AGAIN 2026-11-22 00:41Z (same quota error) after failing 2026-11-21 03:25Z. Last good dump: Nov 20 (now ~46h stale). FIX = same as October: console.neon.tech → solitary-thunder-20087776 → billing/usage → upgrade or free CU-hrs. Until fixed: prod writes fail AND you have NO fresh prod backup.**
-- **⚠ URGENT: PROD API IS STALE — Render deploy of promote #276 CRASHED 11-18 (storage env boot throw). Prod API serves the SEP-25 build; Vercel PWA+admin deployed NEW. ALL fixes are MERGED to staging (#277–#284). Your one word "GO" (section 2) heals prod. Zero new migrations ride it (repo journal 62; live Neon 62 + journal-exempt PostGIS row — verified run #218). Release-verify FAILS on a stale build (PR #279), so a repeat of the silent rollback is stamped red on the promote commit automatically.**
-- Promote gap: staging is 21 commits ahead of main (runs #216–#222 + PR #286); last promote 2026-11-18 (PR #276). Pending migrations on next promote: 0059_settlement_void + 0060_waitlist_removed_verb (repo journal 62; live Neon unreachable due to quota — verified via pg_dump error 2026-11-22 00:41Z). Promote = owner GO per D-20261119-01 (Life OS D-20261122-01: move prod to VPS now via Coolify cutover instead of Neon). NOTE: with Neon quota re-ignited hard, any Neon-first migrate is blocked; cutover path uses the Nov-20 backup + restore to VPS PG.
-- Services: API :3001 healthy on 047d202b (Turnstile parity helper + guard live), PWA :3000 + admin :3002 active. ⚠ Tailscale funnels DOWN ("Logged out") since 11-19 ~02Z — :9450/:10000/:8443 unreachable until owner re-auth (`sudo tailscale up`); loopback verification substitutes.
-- Built recently: #222 P2-393 a11y quartet (PR #287) + cron/skill safety patch (branch main→staging + 5-hourly→3x-daily, v1.5.1); #221 launch-lane docs batch (P2-394) + PR #286 infra guard; #220 P2-371 Playwright layout audit baseline (PR #285; findings boarded as P2-391/P2-392); #219 P2-382 Turnstile parity (PR #284); #218 P2-390 legal truth-fix + email guard (PR #283) + P2-386/P2-381 login+host offline (PR #282); #217 P2-384 match-detail offline (PR #280) + P2-387 release-verify SHA guard (PR #279) + P2-385 storage hardening trio (PR #281); #216 P0-12 storage boot guard (PR #277) + P2-367 RTL wraps (PR #278).
-- Owner decisions waiting: none NEW this run. Standing: P2-325 webhook dashboard URL (go-live gated), F1 arming keys (NEW-9), Moyasar live keys = post-launch milestone (D-20261113-03), recurring-series identity re-review (D-20261106-11 owner note).
+- Open PRs: 0 — PR #288 (F2 webhook, tier C) squash-merged `2c17093f` + LIVE on staging run #223.
+- **🔴 URGENT (owner: `promise`/`irreversible` kind): Neon quota STILL HARD-DOWN — Sentry KORALINK-API-1C 79 events/24h (lastSeen 2026-11-22T15:00Z, minutes before this run). Nightly prod backup FAILED 3rd consecutive night (03:21Z today; last GOOD dump Nov 20, now >2 days stale). Until fixed: prod writes fail + no fresh backup. FIX = console.neon.tech → billing/usage → upgrade (or accept D-20261122-01's cutover: restore the Nov-20 dump to VPS PG).**
+- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; D-20261122-01 ordered the VPS Coolify cutover + Nov-20-backup restore instead of a Neon promote (owner `irreversible` — needs your supervised go for infra execution).**
+- Promote gap: 25 commits ahead of main (runs #216–#223); last promote 2026-11-18. D-20261122-01 makes the cutover the heal path; a Neon-first promote stays blocked on quota.
+- Services: API :3001 healthy on 2c17093f (F2 webhook endpoint live, flag-off = exact 403), PWA :3000 + admin :3002 active. Tailscale funnels still DOWN (owner re-auth pending).
+- Built this run: F2 Moyasar webhook (PR #288, tier C: cross-model review + rollback line) + D-20261122-02 factory rules (skill v1.5.2 + kanban/GATE.md + kanban/DELEGATION.md).
+- Owner decisions waiting: none NEW. Standing below re-labeled per Rule 1 (D-20261122-02).
 
 ## Active owner actions
 
@@ -24,11 +24,14 @@
 - **Close line:** "P1-66: subscribe test passed" (factory then records the ledger close) — or report what failed.
 - **Deadline:** Before public launch.
 
-### NEW-1. P2-325 — Moyasar webhook registration (NEW run #196)
-- **What:** Wallet top-up credit currently depends on the client verify call + the 5-min reconcile backstop (webhook-less flow, wallet.reconcile.service.ts:34). A player who pays then closes the app before verify waits for the cron rescue. Industry norm = signed webhook capture.
-- **Your part:** Moyasar dashboard → register a webhook URL for invoice/payment events (the factory builds the signature-verify endpoint once the URL exists).
-- **Close line:** "P2-325: webhook URL registered — build the verify endpoint" OR "P2-325: reconcile backstop is enough for now".
-- **Deadline:** Before prod launch (money-adjacent).
+### NEW-1. P2-325 — Moyasar webhook registration (UPDATED run #223 — the endpoint is BUILT)
+- **What:** The F2 webhook endpoint is LIVE on staging flag-off (PR #288): Moyasar can push payment events the moment a top-up completes — closes the newest-100 reconcile gap. **Your part shrank to 4 steps, IN THIS ORDER** (the verification event is one-time; the endpoint must accept deliveries first):
+  1. `openssl rand -hex 32` → paste as `MOYASAR_WEBHOOK_SECRET` in the API env.
+  2. Flip `WALLET_WEBHOOK_ENABLED=true` → restart API.
+  3. Moyasar dashboard → Settings → Webhooks → register the URL with that same secret as the shared secret.
+  4. Read the 6-digit code from the API log / Sentry page → confirm the webhook in the dashboard within 30 min (dashboard can resend the code).
+- **Close line:** "P2-325: webhook registered + code confirmed" — factory then verifies on staging E2E.
+- **Deadline:** Before prod launch (money-adjacent; pairs with OWNER-QUEUE 4 sandbox test).
 
 ### NEW-2. P2-327 — admin console MFA (NEW run #196, follows RBAC)
 - **What:** The admin console (settlements void/pay, refunds, CSV exports) sits behind password-only auth; no 2FA anywhere. Per D-20261106-14 RBAC design comes first; MFA is the follows-item.
@@ -65,65 +68,48 @@
 - **Optional hardening:** Render dashboard → koralink-api → Settings → Pre-Deploy Command `node scripts/migrate-vps.mjs` (closes P2-51 drift permanently).
 - **Neon housekeeping (optional, 10 min):** check koralink-prod Usage/plan; delete `koralink-prod-pg18-empty` experiment. Nightly prod dumps LIVE (koralink-backup-prod.timer 03:20 UTC, 30-day retention) + watchdog freshness alarm covers prod.
 
-### 4. P0-2 sandbox → live Moyasar
-- **Owner decision (Life OS 2026-11-07, D-20261106-04):** Flip WALLET_TOPUP_ENABLED and test
-- **What:** Flip `WALLET_TOPUP_ENABLED=true` + real Moyasar sandbox keys on staging; run one SAR 5.00 top-up with test card 4201320111111010.
-- **Close line:** "P0-2 sandbox tested" OR "P0-2: flip WALLET_TOPUP_ENABLED and test".
-- **Deadline:** Before prod launch; optional for staging now.
+### 6. P1-45 admin push composer — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-07, D-20261106-06):** Admin plus venue-owner scoped.
+- **Nothing to ask.** The build slice carries this decision as given. CLOSED 2026-11-22.
 
-### 5. P1-41 email live
-- **Owner decision (Life OS 2026-11-07, D-20261106-05):** Defer to pre-launch — And i think its already set but we can check pre pandh
-- **What:** Provision Resend API key + `MAIL_FROM` in API env to enable transactional email transport.
-- **Close line:** "Email live: RESEND_API_KEY set".
+### 7. P2-297 — hidden review rating policy — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-07, D-20261106-07):** Hidden reviews still count.
+- **Nothing to ask.** The question duplicate is removed; the build-side slice (rating recompute) takes the decision as given. CLOSED 2026-11-22.
+
+### 8. P1-69 player wallet withdrawal — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-08, D-20261106-08):** Defer until post-launch — back in the wallet, not to their bank.
+- **Nothing to ask.** CLOSED 2026-11-22 (re-open only if the owner revisits the rail choice).
+
+### 9. P1-73 — dev-login on staging — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-07, D-20261106-09):** Keep dev-login on staging.
+- **Nothing to ask.** Factory re-assessed as ACCEPTED-RISK run #193; the DEV_LOGIN_ENABLED prod boot guard (PR #286) protects prod. CLOSED 2026-11-22.
+
+### 10. Recurring-match series identity — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-08, D-20261106-11):** Confirmed: independent matches; owner re-review only if a series feature is proposed.
+- **Nothing to ask.** CLOSED 2026-11-22.
+
+### 12. P1-76 — social sign-in — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-07, D-20261106-12):** Build Apple first post-launch.
+- **Nothing to ask.** CLOSED 2026-11-22 (post-launch milestone).
+
+### 13. P2-311 — receipt/invoice shape — DECIDED, CLOSED (run #223 Rule-1 sweep)
+- **Owner decision (Life OS 2026-11-07, D-20261106-13):** In-app receipt MVP + exportable as invoice.
+- **Nothing to ask.** Receipt MVP SHIPPED (PR #256); invoice export rides P2-145. CLOSED 2026-11-22.
+
+### 4. P0-2 sandbox → live Moyasar (kind: `promise` — credentials/live money)
+- **Owner decision (Life OS 2026-11-07, D-20261106-04):** Flip WALLET_TOPUP_ENABLED and test.
+- **What:** Flip `WALLET_TOPUP_ENABLED=true` + real Moyasar sandbox keys on staging; run one SAR 5.00 top-up with test card 4201320111111010. The F2 webhook (PR #288) is now live flag-off — a full E2E can include webhook-delivery credit once NEW-1 is done.
+- **Close line:** "P0-2 sandbox tested".
 - **Deadline:** Before prod launch.
 
-### 6. P1-45 admin push composer
-- **Owner decision (Life OS 2026-11-07, D-20261106-06):** Admin plus venue-owner scoped
-- **What:** Who may broadcast maintenance/venue-closure notices? Admin only? Partners to their venue rosters? What guardrails?
-- **Close line:** "P1-45: admin-only broadcast" OR "P1-45: admin + venue owner scoped".
-- **Deadline:** Not urgent.
-
-### 7. P2-297 — hidden review rating policy
-- **Owner decision (Life OS 2026-11-07, D-20261106-07):** Hidden reviews still count
-- **What:** When a venue review is hidden/restored/deleted, should `venues.rating_avg`/`rating_count` be recomputed? Does hiding remove it from the public average?
-- **Close line:** "P2-297: hidden reviews do NOT count" OR "P2-297: hidden reviews still count".
-- **Deadline:** Before building rating-recompute slice.
-
-### 8. P1-69 player wallet withdrawal
-- **Owner decision (Life OS 2026-11-08, D-20261106-08):** Defer until post-launch — Back in the wallet not to their bank.
-- **What:** Withdrawal rail (bank transfer? wallet-to-wallet? instant SAR?); KYC threshold; fees.
-- **Close line:** "P1-69: bank-transfer withdrawal with IBAN" OR "P1-69: defer until post-launch".
-- **Deadline:** Before building withdrawal path.
-
-### 9. P1-73 — dev-login on staging (factory re-assessed run #193)
-- **Owner decision (Life OS 2026-11-07, D-20261106-09):** Keep dev-login on staging
-- **What:** Factory VERIFIED dev-login 403s in prod and assessed staging-on usage as deliberate owner workflow → reclassified ACCEPTED-RISK on the board (run #193). Owner confirmation still welcome.
-- **Close line:** "P1-73: keep dev-login on staging" (confirms the accepted-risk) OR "P1-73: disable dev-login on staging".
-- **Deadline:** Before public launch.
-- **What:** Should `DEV_LOGIN_ENABLED` stay `true` on staging? Factory recommends `false` (only real OTP) unless explicit staging-only dev-login policy.
-- **Close line:** "P1-73: disable dev-login on staging" OR "P1-73: keep dev-login on staging".
-- **Deadline:** Before public launch.
+### 5. P1-41 email live (kind: `promise` — provider keys)
+- **Owner decision (Life OS 2026-11-07, D-20261106-05):** Defer to pre-launch — check before launch.
+- **Close line:** "Email live: keys verified".
+- **Deadline:** Before prod launch.
 
 ### 11. P1-72 staging posture — CLOSED by factory run #209 (verify-only)
 - **Owner decision (Life OS 2026-11-07, D-20261106-10):** Apply posture — flags were ALREADY SET in apps/api/.env (COOKIE_SECURE=true, SWAGGER_ENABLED=false; DEV_LOGIN_ENABLED untouched per owner) and the API has been serving them. Run #209 executed the REQUESTED VERIFICATION (D-20261113-08 proof): GET /api/docs → **404**, dev-login Set-Cookie → **HttpOnly; Secure; SameSite=Lax**, /health 200. No env change was needed; Strix MEDIUM is closed on staging evidence.
 - **Closed:** 2026-11-15 (run #209). Ledger row added to kanban/DECISIONS.md.
-
-### 10. Recurring-match series identity (run #121)
-- **What:** Confirm 8 weekly instances are independent matches (no series id); cancelled week does not propagate.
-- **Close line:** "Confirmed: recurring matches are independent".
-- **Deadline:** Before building any recurring-match editing/cancellation logic.
-
-### 12. P1-76 — social sign-in (Apple/Google) (NEW run #189)
-- **Owner decision (Life OS 2026-11-07, D-20261106-12):** Build Apple first post-launch
-- **What:** Do we add Apple/Google sign-in? iOS App Store REQUIRES Sign in with Apple once any third-party login exists; Saudi market expects low-friction signup vs OTP. Priority vs other auth work?
-- **Close line:** "P1-76: build Apple first post-launch" OR "P1-76: defer, OTP is fine for now" OR "P1-76: plan a Gate cycle".
-- **Deadline:** Before iOS App Store submission.
-
-### 13. P2-311 — receipt/invoice artifact shape (NEW run #189, folds into P2-145)
-- **Owner decision (Life OS 2026-11-07, D-20261106-13):** In-app receipt MVP — And can be exported as invoice
-- **What:** Players top up + hosts pay pitch costs with no printable artifact (CSV export only). What shape: in-app receipt page? PDF invoice w/ VAT? Defer ZATCA e-invoicing?
-- **Close line:** "P2-311: in-app receipt MVP" OR "P2-311: PDF invoice w/ VAT" OR "P2-311: defer".
-- **Deadline:** Not urgent; before formal B2B venue contracts.
 
 ## Owner decisions from Life OS
 
@@ -170,6 +156,8 @@
 - **Owner decision (Life OS 2026-11-22, D-20261118-04):** Yes, Claude session patches both with backup
 - **Owner decision (Life OS 2026-11-22, D-20261122-01):** Move production to the VPS now: do the planned Coolify cutover (D-20261117-06) and restore the 20 Nov backup; no Neon payment
 - **Owner decision (Life OS 2026-11-22, D-20261122-02):** Adopt all three
+- **Life OS WORKER request, not an owner decision (Life OS 2026-11-22, D-20261122-04):** Build D-20261115-04 (host cancels a paid match inside 12h forfeits pitch cost to the venue; matches.service.ts cancelMatch ~3285-3457 currently refunds 100% at any time) and D-20261113-10 (no-show on a paid match: karma penalty plus fee equal to the player share; markNoShow ~3870-3951 only bumps no_show_count). Add specs, add the EN+AR terms lines, then add both rules to docs/legal/lawyer-brief.md with the code facts. Proof: PR numbers, spec names, brief diff. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- **Life OS WORKER request, not an owner decision (Life OS 2026-11-22, D-20261122-05):** Per D-20261113-14/-11 (register webhook, factory builds verify endpoint): add a wallet webhook endpoint now, default OFF behind a flag: raw-body HMAC signature check with constant-time compare, idempotency by payment id, reuse the reconcile credit path (wallet.reconcile.service.ts), specs for bad signature, replay and good payment. Env names in .env.example only, no secrets. Owner then only pastes the URL and secret. Proof: PR number, spec names. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 
 ## Closed since last run
 - **D-20261113-09 restore drill:** CLOSED run #211 — premise stale (docs/runbooks/restore-drill.md exists since run #209 e575e58; drill PASSED). Runbook hardened same run. No owner action needed.
