@@ -9,7 +9,14 @@
  * AND flips the intent in ONE transaction with Stripe-style idempotent replay
  * (idempotency_key = 'topup:<paymentId>', UNIQUE).
  */
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Inject,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { and, eq, inArray, sql, desc } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -101,6 +108,15 @@ export const TOPUP_VERIFY_CODES = {
 } as const;
 const TOPUP_KEY_PREFIX = 'topup:';
 const INTENT_KEY_PREFIX = 'topup-intent:';
+
+/**
+ * F2 (run #223): the payment description binding `wallet-topup:<intentId>` —
+ * THE shared producer/consumer contract between intent creation (PWA hosted
+ * form writes it), the webhook (parses intentId out of it) and the reconcile
+ * sweep (narrows the Moyasar list by it). One exported constant, three
+ * consumers — a reword here breaks loudly at compile time, never silently.
+ */
+export const WEBHOOK_INTENT_DESC_PREFIX = 'wallet-topup:';
 
 /** Round-trips a SAR amount to integer halalas exactly (2dp-guarded upstream). */
 export function sarToHalalas(amountSar: number): number {
@@ -337,6 +353,119 @@ export class WalletTopupService {
         code: TOPUP_VERIFY_CODES.NOT_PAID,
       });
     }
+
+    return this.creditPaidPaymentToIntent(intent, payment);
+  }
+
+  /**
+   * F2 (run #223): the Moyasar webhook's credit entry. Resolves the intent by
+   * id (webhook has no JWT — the intent row carries its user), fetches the
+   * payment server-side, then reuses verifyTopup's EXACT binding + paid/SAR/
+   * amount assertions and the SAME guarded single-tx credit. Money truth stays
+   * 100% Moyasar-authoritative: the webhook secret only gates WHO CAN ASK, it
+   * never decides WHAT landed.
+   */
+  async creditFromWebhook(intentId: string, paymentId: string): Promise<VerifyTopupResult> {
+    const [intent] = await this.db
+      .select()
+      .from(wallet_topup_intents)
+      .where(eq(wallet_topup_intents.id, intentId))
+      .limit(1);
+    if (!intent) {
+      // Unknown intent on a signed event: log + 2xx upstream (nothing to act
+      // on; a non-2xx would only burn Moyasar retries on a dead reference).
+      throw new NotFoundException('Top-up intent not found for this payment');
+    }
+
+    const secretKey = resolveMoyasarSecretKey((k) => this.getConfig(k));
+    if (!secretKey) {
+      throw new ForbiddenException('Wallet top-up is not configured in this environment');
+    }
+
+    let payment: MoyasarPayment;
+    try {
+      payment = await fetchMoyasarPayment(secretKey, paymentId);
+    } catch (err) {
+      if (err instanceof MoyasarHttpError && err.status === 404) {
+        throw new NotFoundException('Payment not found at the payment provider');
+      }
+      throw err;
+    }
+
+    // The binding guard (payment created for THIS intent) and the replay/race
+    // handling live in creditPaidPaymentToIntent below — identical to verify.
+    const expectedDescription = `wallet-topup:${intent.id}`;
+    if ((payment.description ?? null) !== expectedDescription) {
+      throw new ConflictException({
+        message:
+          'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
+        code: TOPUP_VERIFY_CODES.INTENT_MISMATCH,
+      });
+    }
+
+    if (payment.status !== 'paid') {
+      // Webhook says paid but Moyasar's own record disagrees: warn upstream
+      // (auth passed, so this is anomalous) and take no money action.
+      throw new ConflictException({
+        message: `${TOPUP_CONFLICT_NOT_PAID_PREFIX}: the payment is not completed yet — no money was credited`,
+        code: TOPUP_VERIFY_CODES.NOT_PAID,
+      });
+    }
+
+    return this.creditPaidPaymentToIntent(intent, payment);
+  }
+
+  /**
+   * The single credit authority shared by /topup/verify and the F2 webhook:
+   * sequential-replay check → currency + amount guards → ONE tx (ledger +
+   * balance + guarded intent flip) → unique-violation race healing. Both
+   * callers have already asserted status=paid and the description binding.
+   */
+  private async creditPaidPaymentToIntent(
+    intent: TopupIntentRow,
+    payment: MoyasarPayment,
+  ): Promise<VerifyTopupResult> {
+    const creditKey = `${TOPUP_KEY_PREFIX}${payment.id}`;
+    const userId = intent.user_id;
+
+    // P2-282: an intent completes with exactly ONE payment. Once credited, only
+    // a replay of the SAME payment is served; a second, different paid payment
+    // bound to this intent is refused (never a second, untracked credit).
+    if (intent.status === 'credited') {
+      if (payment.id !== intent.payment_id) {
+        throw new ConflictException({
+          message:
+            'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
+          code: TOPUP_VERIFY_CODES.ALREADY_CREDITED,
+        });
+      }
+      const replay = await this.findCreditReplay(userId, creditKey);
+      if (replay) {
+        await this.flipIntentCredited(intent.id, payment.id);
+        return {
+          credited: false,
+          alreadyCredited: true,
+          balance: replay.wallet_balance,
+          paymentId: payment.id,
+          amountSar: moneyToNumber(replay.ledgerEntry.amount),
+        };
+      }
+    }
+
+    // Sequential replay: this payment already credited (retry after a lost
+    // response) — heal the intent flip and return the original outcome.
+    const prior = await this.findCreditReplay(userId, creditKey);
+    if (prior) {
+      await this.flipIntentCredited(intent.id, payment.id);
+      return {
+        credited: false,
+        alreadyCredited: true,
+        balance: prior.wallet_balance,
+        paymentId: payment.id,
+        amountSar: moneyToNumber(prior.ledgerEntry.amount),
+      };
+    }
+
     if (payment.currency !== 'SAR') {
       throw new ConflictException({
         message: 'currency_mismatch: payment currency is not SAR',

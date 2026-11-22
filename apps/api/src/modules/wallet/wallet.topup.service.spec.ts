@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { WalletTopupService, sarToHalalas } from './wallet.topup.service';
+import { WalletTopupService, sarToHalalas, WEBHOOK_INTENT_DESC_PREFIX } from './wallet.topup.service';
 import { MoyasarHttpError } from '../../common/moyasar/moyasar.client';
 
 /**
@@ -418,5 +418,105 @@ describe('verifyTopup — sweep-expired (failed) intent heal (t_b8468d98)', () =
     expect(res.credited).toBe(false);
     expect(res.alreadyCredited).toBe(true);
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('creditFromWebhook — F2 (run #223): webhook credit entry', () => {
+  it('credits a paid payment by description binding — user comes from the intent row (no JWT)', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb();
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.creditFromWebhook('intent-1', 'pay_test1234567890');
+    expect(res).toEqual({
+      credited: true,
+      alreadyCredited: false,
+      balance: '150.00',
+      paymentId: 'pay_test1234567890',
+      amountSar: 50,
+    });
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(db.committedLedgerInserts).toHaveLength(1);
+  });
+
+  it('404 NotFoundException for an unknown intent (controller surfaces 2xx, no Moyasar retry)', async () => {
+    const db = makeDb({ intentRows: [] });
+    const svc = makeService(db, ENV_ON);
+    await expect(svc.creditFromWebhook('intent-404', 'pay_1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('404 when Moyasar does not know the payment', async () => {
+    mockFetch.mockRejectedValue(new MoyasarHttpError(404, 'not found'));
+    const db = makeDb();
+    const svc = makeService(db, ENV_ON);
+    await expect(svc.creditFromWebhook('intent-1', 'pay_missing')).rejects.toBeInstanceOf(NotFoundException);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('409 payment_intent_mismatch when the payment is bound to a DIFFERENT intent', async () => {
+    mockFetch.mockResolvedValue({ ...PAID_PAYMENT, description: `${WEBHOOK_INTENT_DESC_PREFIX}intent-OTHER` });
+    const db = makeDb();
+    const svc = makeService(db, ENV_ON);
+    const err = await svc.creditFromWebhook('intent-1', 'pay_test1234567890').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).message).toBe(
+      'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(db.committedLedgerInserts).toHaveLength(0);
+  });
+
+  it('409 payment_not_paid when the webhook says paid but Moyasar disagrees (no money action)', async () => {
+    mockFetch.mockResolvedValue({ ...PAID_PAYMENT, status: 'pending' });
+    const db = makeDb();
+    const svc = makeService(db, ENV_ON);
+    const err = await svc.creditFromWebhook('intent-1', 'pay_test1234567890').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(String((err as ConflictException).message)).toContain('payment_not_paid');
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('403 when no Moyasar secret key is configured', async () => {
+    const db = makeDb();
+    const svc = makeService(db, { ...ENV_ON, MOYASAR_SECRET_KEY_TEST: undefined });
+    await expect(svc.creditFromWebhook('intent-1', 'pay_1')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('replays alreadyCredited for the same payment (webhook retry after lost 2xx)', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({
+      intentRows: [{ ...INTENT_ROW, status: 'credited', payment_id: 'pay_test1234567890' }],
+      txRows: [{ amount: '50.00', user_id: 'user-1', idempotency_key: 'topup:pay_test1234567890' }],
+    });
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.creditFromWebhook('intent-1', 'pay_test1234567890');
+    expect(res).toEqual({
+      credited: false,
+      alreadyCredited: true,
+      balance: '150.00',
+      paymentId: 'pay_test1234567890',
+      amountSar: 50,
+    });
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses a SECOND different paid payment on a credited intent (P2-282 via webhook)', async () => {
+    mockFetch.mockResolvedValue({ ...PAID_PAYMENT, id: 'pay_second0987654321' });
+    const db = makeDb({ intentRows: [{ ...INTENT_ROW, status: 'credited', payment_id: 'pay_test1234567890' }] });
+    const svc = makeService(db, ENV_ON);
+    const err = await svc.creditFromWebhook('intent-1', 'pay_second0987654321').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(String((err as ConflictException).message)).toContain('topup_already_credited');
+    expect(db.committedLedgerInserts).toHaveLength(0);
+  });
+
+  it('credits a failed (sweep-expired) intent — same heal as verify (t_b8468d98)', async () => {
+    mockFetch.mockResolvedValue(PAID_PAYMENT);
+    const db = makeDb({ intentRows: [{ ...INTENT_ROW, status: 'failed' }] });
+    const svc = makeService(db, ENV_ON);
+    const res = await svc.creditFromWebhook('intent-1', 'pay_test1234567890');
+    expect(res.credited).toBe(true);
+    expect(db.committedLedgerInserts).toHaveLength(1);
   });
 });

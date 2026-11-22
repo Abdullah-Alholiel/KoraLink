@@ -22,7 +22,11 @@ import { assertEnvFlags, isSwaggerEnabled } from './common/utils/env-flags';
 import { assertEmailDelivery } from './common/security/email-delivery';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // F2 (run #223): buffer the raw request body so the Moyasar webhook
+  // controller can parse the EXACT bytes Moyasar sent (secret-echo auth reads
+  // the body; the parsed-object fallback stays for environments/specs without
+  // rawBody). No behavior change for JSON-only API consumers.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
 
   // ── Structured JSON logger (OCI-ready) ──────────────────────────────────
   app.useLogger(app.get(Logger));
