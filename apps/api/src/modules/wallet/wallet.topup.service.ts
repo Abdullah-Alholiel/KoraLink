@@ -368,7 +368,7 @@ export class WalletTopupService {
     // The binding guard (payment created for THIS intent) is asserted HERE,
     // above; creditPaidPaymentToIntent below owns replay/race + SAR/amount +
     // the single-tx credit — identical for both verify and webhook callers.
-    const expectedDescription = `wallet-topup:${intent.id}`;
+    const expectedDescription = `${WEBHOOK_INTENT_DESC_PREFIX}${intent.id}`;
     if ((payment.description ?? null) !== expectedDescription) {
       throw new ConflictException({
         message:

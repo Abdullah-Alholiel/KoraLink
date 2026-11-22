@@ -106,7 +106,9 @@ export class WalletWebhookController {
       default:
         // Acknowledged, not acted on (see header). Never tickle Moyasar retries
         // for events the wallet deliberately ignores.
-        this.logger.log(`moyasar webhook ignored: type=${event.type} id=${event.id ?? '?'}`);
+        this.logger.log(
+          `moyasar webhook ignored: type=${sanitize(String(event.type))} id=${sanitize(String(event.id ?? '?'))}`,
+        );
         return { received: true };
     }
   }
@@ -195,11 +197,11 @@ export class WalletWebhookController {
       const result = await this.topupService.creditFromWebhook(intentId, paymentId);
       if (result.credited) {
         this.logger.log(
-          `topup webhook credited: intent=${intentId} payment=${result.paymentId} amountSar=${result.amountSar}`,
+          `topup webhook credited: intent=${sanitize(intentId)} payment=${sanitize(result.paymentId)} amountSar=${result.amountSar}`,
         );
       } else {
         this.logger.log(
-          `topup webhook replay: intent=${intentId} payment=${result.paymentId} alreadyCredited=true`,
+          `topup webhook replay: intent=${sanitize(intentId)} payment=${sanitize(result.paymentId)} alreadyCredited=true`,
         );
       }
     } catch (err) {
@@ -217,7 +219,7 @@ export class WalletWebhookController {
       // Moyasar's 5× retry redelivers.
       if (isNotFound || isDecidedConflict) {
         this.logger.warn(
-          `moyasar webhook paid-event refused: intent=${intentId} payment=${paymentId} err=${sanitize(err instanceof Error ? err.message : String(err))}`,
+          `moyasar webhook paid-event refused: intent=${sanitize(intentId)} payment=${sanitize(paymentId)} err=${sanitize(err instanceof Error ? err.message : String(err))}`,
         );
         Sentry.captureException(err, {
           tags: { scope: 'wallet.webhook', intentId, paymentId },
