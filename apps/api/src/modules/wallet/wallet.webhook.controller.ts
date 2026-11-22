@@ -46,7 +46,7 @@ import {
   TOPUP_CONFLICT_NOT_PAID_PREFIX,
   WEBHOOK_INTENT_DESC_PREFIX,
 } from './wallet.topup.service';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 interface MoyasarWebhookEvent {
   id?: string;
@@ -116,15 +116,12 @@ export class WalletWebhookController {
   /** Constant-time shared-secret compare; anything non-string fails closed. */
   private assertSecret(presented: unknown, expected: string): boolean {
     if (typeof presented !== 'string' || presented.length === 0) return false;
-    const a = Buffer.from(presented, 'utf8');
-    const b = Buffer.from(expected, 'utf8');
-    if (a.length !== b.length) {
-      // Length differ: burn a comparison anyway so response timing does not
-      // reveal the expected secret's length class.
-      timingSafeEqualSafe(a, b);
-      return false;
-    }
-    return timingSafeEqualSafe(a, b);
+    // Hash-then-compare (PR-Agent r4 run-#223): both SHA-256 digests are
+    // fixed-length 32B, so timingSafeEqual never throws AND the comparison
+    // timing carries no trace of the expected secret's length class.
+    const a = createHash('sha256').update(presented, 'utf8').digest();
+    const b = createHash('sha256').update(expected, 'utf8').digest();
+    return timingSafeEqual(a, b);
   }
 
   private parseBody(req: RawBodyRequest<Request>): MoyasarWebhookEvent {
@@ -216,7 +213,11 @@ export class WalletWebhookController {
       // the old semantics — for them not-paid means "3DS still in flight").
       // Transient infra failures (DB outage — Neon quota storms are recurring
       // here — Moyasar 5xx/timeouts, unexpected errors) also rethrow → 5xx →
-      // Moyasar's 5× retry redelivers.
+      // Moyasar's 5× retry redelivers. Skew rethrow nuance (PR-Agent r4
+      // run-#223): a rethrown ConflictException leaves as HTTP 409 — Moyasar
+      // redelivers on ANY non-2xx per the scraped docs; even if it only
+      // honored 5xx, the reconcile sweep backstops the credit, so no money
+      // is ever lost — retries only buy latency.
       if (isNotFound || isDecidedConflict) {
         this.logger.warn(
           `moyasar webhook paid-event refused: intent=${sanitize(intentId)} payment=${sanitize(paymentId)} err=${sanitize(err instanceof Error ? err.message : String(err))}`,
@@ -234,10 +235,4 @@ export class WalletWebhookController {
 /** Log-injection guard: strip newlines/control chars, cap length (Claude tier-C MINOR-7). */
 function sanitize(value: string): string {
   return value.replace(/[\r\n\t\x00-\x1f]/g, ' ').slice(0, 120);
-}
-
-/** timingSafeEqual wrapper that never throws on length mismatch. */
-function timingSafeEqualSafe(a: Buffer, b: Buffer): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
 }
