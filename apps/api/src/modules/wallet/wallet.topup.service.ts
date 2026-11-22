@@ -400,8 +400,9 @@ export class WalletTopupService {
       throw err;
     }
 
-    // The binding guard (payment created for THIS intent) and the replay/race
-    // handling live in creditPaidPaymentToIntent below — identical to verify.
+    // The binding guard (payment created for THIS intent) is asserted HERE,
+    // above; creditPaidPaymentToIntent below owns replay/race + SAR/amount +
+    // the single-tx credit — identical for both verify and webhook callers.
     const expectedDescription = `wallet-topup:${intent.id}`;
     if ((payment.description ?? null) !== expectedDescription) {
       throw new ConflictException({

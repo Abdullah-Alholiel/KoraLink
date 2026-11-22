@@ -132,11 +132,30 @@ describe('WalletWebhookController — event routing', () => {
     expect(loggerLog).toHaveBeenCalledWith(expect.stringContaining('topup webhook credited'));
   });
 
-  it('payment_paid business refusal → STILL 2xx (no Moyasar retry) + Sentry', async () => {
+  it('payment_paid business refusal (ConflictException) → STILL 2xx (no Moyasar retry) + Sentry', async () => {
     const { controller, service } = await makeController(FLAG_ON);
-    service.creditFromWebhook.mockRejectedValue(new Error('amount_mismatch: 50 != 100'));
+    const { ConflictException } = await import('@nestjs/common');
+    service.creditFromWebhook.mockRejectedValue(
+      new ConflictException({ message: 'amount_mismatch: 50 != 100', code: 'amount_mismatch' }),
+    );
     await expect(controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
     expect(mockedCaptureException).toHaveBeenCalled();
+  });
+
+  it('business refusals ACK; transient failures RETHROW (Moyasar redelivers) — PR-Agent r1 run-#223', async () => {
+    const { controller } = await makeController(FLAG_ON);
+    // Conflict/NotFound = decided outcomes → 2xx.
+    const { ConflictException, NotFoundException } = await import('@nestjs/common');
+    const businessA = await makeController(FLAG_ON);
+    (businessA.service.creditFromWebhook as jest.Mock).mockRejectedValue(new ConflictException('payment_intent_mismatch: no'));
+    await expect(businessA.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
+    const businessB = await makeController(FLAG_ON);
+    (businessB.service.creditFromWebhook as jest.Mock).mockRejectedValue(new NotFoundException('intent gone'));
+    await expect(businessB.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
+    // Transient infra failure → rethrow (5xx → Moyasar retry).
+    const transient = await makeController(FLAG_ON);
+    (transient.service.creditFromWebhook as jest.Mock).mockRejectedValue(new Error('PostgresError: quota exceeded'));
+    await expect(transient.controller.handleMoyasarWebhook(makeReq(paidEvent()))).rejects.toThrow('quota exceeded');
   });
 
   it('payment_paid without a usable description binding → 2xx, service untouched', async () => {

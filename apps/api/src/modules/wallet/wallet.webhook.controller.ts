@@ -25,10 +25,12 @@
  * to fix, retrying is correct from their side).
  */
 import {
+  ConflictException,
   Controller,
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
   Post,
   Req,
   UnauthorizedException,
@@ -175,12 +177,22 @@ export class WalletWebhookController {
         );
       }
     } catch (err) {
-      this.logger.warn(
-        `moyasar webhook paid-event refused: intent=${intentId} payment=${paymentId} err=${err instanceof Error ? err.message : String(err)}`,
-      );
-      Sentry.captureException(err, {
-        tags: { scope: 'wallet.webhook', intentId, paymentId },
-      });
+      // PR-Agent r1 IMPORTANT (run #223): only DECIDED business refusals are
+      // ACK'd (2xx). Transient infra failures (DB outage — Neon quota storms
+      // are recurring here — Moyasar 5xx/timeouts, unexpected errors) RETHROW
+      // so Nest returns 5xx and Moyasar's 5× retry redelivers; swallowing
+      // them would drop a real-time credit to the reconcile sweep's
+      // newest-100 list window — the exact gap this webhook exists to close.
+      if (err instanceof ConflictException || err instanceof NotFoundException) {
+        this.logger.warn(
+          `moyasar webhook paid-event refused: intent=${intentId} payment=${paymentId} err=${err instanceof Error ? err.message : String(err)}`,
+        );
+        Sentry.captureException(err, {
+          tags: { scope: 'wallet.webhook', intentId, paymentId },
+        });
+        return;
+      }
+      throw err;
     }
   }
 }
