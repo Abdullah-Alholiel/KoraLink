@@ -23,7 +23,7 @@ hit-area beyond this one line, any sheet outside AppealSheet.
 | File | Change |
 |---|---|
 | apps/player-pwa/src/components/matches/AppealSheet.tsx:50 | +min-h-hit min-w-hit |
-| apps/player-pwa/src/app/[locale]/(auth)/complete-profile/page.tsx:123 | +aria-label=tCommon… wait: t('uploadAvatar') + min-h-hit min-w-hit |
+| apps/player-pwa/src/app/[locale]/(auth)/complete-profile/page.tsx:123 | +aria-label=t('uploadAvatar') + invisible min-h-hit/min-w-hit target (inner span keeps visible 32px badge) |
 | apps/player-pwa/src/app/[locale]/match/[id]/page.tsx:356-363 | back: aria-label=t('common.back') + rtl flip check; chat: aria-label=t('chatSheet.openAria') + min-h-hit min-w-hit |
 | apps/player-pwa/src/messages/{en,ar}.json | chatSheet.openAria (surgical insert after openFullThread) |
 | apps/player-pwa/test/p2366-tap-targets.test.ts | drop 2 KNOWN_DEBT entries |
