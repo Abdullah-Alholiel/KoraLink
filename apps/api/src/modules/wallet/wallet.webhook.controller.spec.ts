@@ -21,6 +21,11 @@ import { WEBHOOK_INTENT_DESC_PREFIX } from './wallet.topup.service';
 const mockedCaptureMessage = Sentry.captureMessage as jest.Mock;
 const mockedCaptureException = Sentry.captureException as jest.Mock;
 
+beforeEach(() => {
+  mockedCaptureMessage.mockClear();
+  mockedCaptureException.mockClear();
+});
+
 function makeConfig(values: Record<string, string>) {
   return { get: (key: string) => values[key] } as never;
 }
@@ -142,20 +147,33 @@ describe('WalletWebhookController — event routing', () => {
     expect(mockedCaptureException).toHaveBeenCalled();
   });
 
-  it('business refusals ACK; transient failures RETHROW (Moyasar redelivers) — PR-Agent r1 run-#223', async () => {
-    const { controller } = await makeController(FLAG_ON);
+  it('business refusals ACK; payment_not_paid + transient failures RETHROW (Moyasar redelivers) — PR-Agent r1 + Claude tier-C run-#223', async () => {
     // Conflict/NotFound = decided outcomes → 2xx.
     const { ConflictException, NotFoundException } = await import('@nestjs/common');
-    const businessA = await makeController(FLAG_ON);
-    (businessA.service.creditFromWebhook as jest.Mock).mockRejectedValue(new ConflictException('payment_intent_mismatch: no'));
-    await expect(businessA.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
-    const businessB = await makeController(FLAG_ON);
-    (businessB.service.creditFromWebhook as jest.Mock).mockRejectedValue(new NotFoundException('intent gone'));
-    await expect(businessB.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
+    const mismatch = await makeController(FLAG_ON);
+    (mismatch.service.creditFromWebhook as jest.Mock).mockRejectedValue(new ConflictException('payment_intent_mismatch: no'));
+    await expect(mismatch.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
+    const missing = await makeController(FLAG_ON);
+    (missing.service.creditFromWebhook as jest.Mock).mockRejectedValue(new NotFoundException('intent gone'));
+    await expect(missing.controller.handleMoyasarWebhook(makeReq(paidEvent()))).resolves.toEqual({ received: true });
+    // payment_not_paid = read-after-write skew (Moyasar GET lags its event) → retryable → rethrow.
+    const notPaid = await makeController(FLAG_ON);
+    (notPaid.service.creditFromWebhook as jest.Mock).mockRejectedValue(
+      new ConflictException('payment_not_paid: the payment is not completed yet'),
+    );
+    await expect(notPaid.controller.handleMoyasarWebhook(makeReq(paidEvent()))).rejects.toThrow('payment_not_paid');
     // Transient infra failure → rethrow (5xx → Moyasar retry).
     const transient = await makeController(FLAG_ON);
     (transient.service.creditFromWebhook as jest.Mock).mockRejectedValue(new Error('PostgresError: quota exceeded'));
     await expect(transient.controller.handleMoyasarWebhook(makeReq(paidEvent()))).rejects.toThrow('quota exceeded');
+  });
+
+  it('non-string data.description → ack 2xx with sanitized warn (no TypeError 500) — Claude tier-C MINOR-3', async () => {
+    const { controller, service, loggerWarn } = await makeController(FLAG_ON);
+    const evt = paidEvent({ data: { id: 'pay_3', status: 'paid', description: 12345 } });
+    await expect(controller.handleMoyasarWebhook(makeReq(evt))).resolves.toEqual({ received: true });
+    expect(service.creditFromWebhook).not.toHaveBeenCalled();
+    expect(loggerWarn).toHaveBeenCalledWith(expect.stringContaining('without usable binding'));
   });
 
   it('payment_paid without a usable description binding → 2xx, service untouched', async () => {

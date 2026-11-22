@@ -112,9 +112,10 @@ const INTENT_KEY_PREFIX = 'topup-intent:';
 /**
  * F2 (run #223): the payment description binding `wallet-topup:<intentId>` —
  * THE shared producer/consumer contract between intent creation (PWA hosted
- * form writes it), the webhook (parses intentId out of it) and the reconcile
- * sweep (narrows the Moyasar list by it). One exported constant, three
- * consumers — a reword here breaks loudly at compile time, never silently.
+ * form writes it), the webhook (parses intentId out of it), verifyTopup
+ * (asserts the binding) and the reconcile sweep (narrows the Moyasar list by
+ * it). Single exported constant — a reword breaks loudly at compile time, not
+ * silently at runtime.
  */
 export const WEBHOOK_INTENT_DESC_PREFIX = 'wallet-topup:';
 
@@ -293,58 +294,18 @@ export class WalletTopupService {
       throw err;
     }
 
-    const creditKey = `${TOPUP_KEY_PREFIX}${payment.id}`;
-
-    // P2-282: an intent completes with exactly ONE payment. Once credited, only
-    // a replay of the SAME payment is served; a second, different paid payment
-    // bound to this intent is refused (never a second, untracked credit).
-    if (intent.status === 'credited') {
-      if (payment.id !== intent.payment_id) {
-        throw new ConflictException({
-          message:
-            'topup_already_credited: this top-up was already completed with a different payment — no money was credited',
-          code: TOPUP_VERIFY_CODES.ALREADY_CREDITED,
-        });
-      }
-      const replay = await this.findCreditReplay(userId, creditKey);
-      if (replay) {
-        await this.flipIntentCredited(intent.id, payment.id);
-        return {
-          credited: false,
-          alreadyCredited: true,
-          balance: replay.wallet_balance,
-          paymentId: payment.id,
-          amountSar: moneyToNumber(replay.ledgerEntry.amount),
-        };
-      }
-    }
-
     // PR-Agent r1 CRITICAL (run #169): payment↔intent BINDING. The hosted form
     // creates the payment with description `wallet-topup:<intentId>`; verify
     // refuses ANY payment not bound to THIS intent, before any other check —
     // a leaked/observed paid paymentId can never be claimed into another
     // user's same-amount intent (and replays can never cross intents).
-    const expectedDescription = `wallet-topup:${intent.id}`;
+    const expectedDescription = `${WEBHOOK_INTENT_DESC_PREFIX}${intent.id}`;
     if ((payment.description ?? null) !== expectedDescription) {
       throw new ConflictException({
         message:
           'payment_intent_mismatch: this payment was not created for this top-up intent — no money was credited',
         code: TOPUP_VERIFY_CODES.INTENT_MISMATCH,
       });
-    }
-
-    // Sequential replay: this payment already credited (webhook-less retry) —
-    // heal the intent flip and return the original outcome, never re-credit.
-    const prior = await this.findCreditReplay(userId, creditKey);
-    if (prior) {
-      await this.flipIntentCredited(intent.id, payment.id);
-      return {
-        credited: false,
-        alreadyCredited: true,
-        balance: prior.wallet_balance,
-        paymentId: payment.id,
-        amountSar: moneyToNumber(prior.ledgerEntry.amount),
-      };
     }
 
     if (payment.status !== 'paid') {
@@ -354,6 +315,10 @@ export class WalletTopupService {
       });
     }
 
+    // Claude tier-C MINOR-5 (run #223): the P2-282 credited-refusal + replay
+    // blocks LIVE ONLY in creditPaidPaymentToIntent now — verifyTopup used to
+    // run them here AND the shared method re-ran them (two findCreditReplay
+    // queries, two copies of the same logic waiting to drift).
     return this.creditPaidPaymentToIntent(intent, payment);
   }
 

@@ -35,14 +35,17 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/node';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { WalletTopupService } from './wallet.topup.service';
-import { WEBHOOK_INTENT_DESC_PREFIX } from './wallet.topup.service';
+import {
+  TOPUP_CONFLICT_NOT_PAID_PREFIX,
+  WEBHOOK_INTENT_DESC_PREFIX,
+} from './wallet.topup.service';
 import { timingSafeEqual } from 'node:crypto';
 
 interface MoyasarWebhookEvent {
@@ -71,7 +74,13 @@ export class WalletWebhookController {
   ) {}
 
   @Post()
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  // Claude tier-C review IMPORTANT-1 (run #223): the shared secret IS the
+  // throttle here — Moyasar delivers from a small shared egress-IP set, so a
+  // per-IP limiter would 429 legitimate bursts (paid + authorized + failed
+  // across users) and Moyasar's 5-retry cap would then DROP those credits.
+  // Auth failures cost one Buffer compare; a flood of garbage bodies is a
+  // Moyasar-side incident, not a brute-force surface worth rate-limiting.
+  @SkipThrottle()
   async handleMoyasarWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ received: boolean }> {
     if (this.configService.get<string>('WALLET_WEBHOOK_ENABLED') !== 'true') {
       throw new ForbiddenException('Wallet webhook is disabled in this environment');
@@ -136,7 +145,14 @@ export class WalletWebhookController {
     return parsed;
   }
 
-  /** The ONE-TIME verification event: surface the code so the owner can act. */
+  /**
+   * The ONE-TIME verification event: surface the code so the owner can act.
+   * Claude tier-C MINOR-8 (run #223): putting the code in Sentry `extra` is
+   * DELIBERATE — the code expires in 30 min, grants nothing by itself
+   * (dashboard-side confirmation with the owner's login is still required),
+   * and Sentry is the pager the owner actually reads. The log line is the
+   * fallback when Sentry is disabled/quota-starved.
+   */
   private handleVerification(event: MoyasarWebhookEvent): void {
     const code = event.data?.verification_code ?? '(missing)';
     const webhookId = event.data?.webhook_id ?? '(missing)';
@@ -150,17 +166,27 @@ export class WalletWebhookController {
   }
 
   /**
-   * paid-credit path. Business rejections (mismatch/amount/race) land here as
-   * errors from the service: log + Sentry + 2xx — Moyasar must not retry an
-   * event our money-truth logic has already decided on.
+   * paid-credit path. DECIDED business refusals (mismatch / amount / currency /
+   * already-credited / unknown intent) are ACK'd (log + Sentry + 2xx — Moyasar
+   * must not retry an event our money-truth logic has settled). Everything
+   * else — including the service's payment_not_paid conflict (Claude tier-C
+   * IMPORTANT-2: Moyasar's own GET can lag its event or briefly show
+   * `authorized` = read-after-write skew) and infra failures — RETHROWS so
+   * Nest returns 5xx and Moyasar redelivers.
    */
   private async handlePaymentPaid(event: MoyasarWebhookEvent): Promise<void> {
     const payment = event.data ?? {};
-    const paymentId = payment.id;
-    const description = payment.description ?? '';
-    if (typeof paymentId !== 'string' || !description.startsWith(WEBHOOK_INTENT_DESC_PREFIX)) {
+    const paymentId = typeof payment.id === 'string' ? payment.id : '';
+    const rawDescription = payment.description;
+    const description = typeof rawDescription === 'string' ? rawDescription : '';
+    if (
+      !paymentId ||
+      !description.startsWith(WEBHOOK_INTENT_DESC_PREFIX)
+    ) {
+      // Non-string/absent id or description: the payload can never bind to an
+      // intent — ack + warn (re-delivery of the same bytes changes nothing).
       this.logger.warn(
-        `moyasar webhook payment_paid without usable binding: payment=${String(paymentId)} desc=${String(description)}`,
+        `moyasar webhook payment_paid without usable binding: payment=${sanitize(String(paymentId))} desc=${sanitize(String(rawDescription))}`,
       );
       return;
     }
@@ -177,15 +203,21 @@ export class WalletWebhookController {
         );
       }
     } catch (err) {
-      // PR-Agent r1 IMPORTANT (run #223): only DECIDED business refusals are
-      // ACK'd (2xx). Transient infra failures (DB outage — Neon quota storms
-      // are recurring here — Moyasar 5xx/timeouts, unexpected errors) RETHROW
-      // so Nest returns 5xx and Moyasar's 5× retry redelivers; swallowing
-      // them would drop a real-time credit to the reconcile sweep's
-      // newest-100 list window — the exact gap this webhook exists to close.
-      if (err instanceof ConflictException || err instanceof NotFoundException) {
+      const isNotFound = err instanceof NotFoundException;
+      const isDecidedConflict =
+        err instanceof ConflictException &&
+        !String(err.message).startsWith(TOPUP_CONFLICT_NOT_PAID_PREFIX);
+      // PR-Agent r1 IMPORTANT (run #223): decided refusals are ACK'd (2xx).
+      // Claude tier-C IMPORTANT-2: payment_not_paid from the WEBHOOK path is
+      // read-after-write skew (Moyasar's GET lags its own event) → retryable,
+      // so it does NOT count as decided here (verifyTopup's own callers keep
+      // the old semantics — for them not-paid means "3DS still in flight").
+      // Transient infra failures (DB outage — Neon quota storms are recurring
+      // here — Moyasar 5xx/timeouts, unexpected errors) also rethrow → 5xx →
+      // Moyasar's 5× retry redelivers.
+      if (isNotFound || isDecidedConflict) {
         this.logger.warn(
-          `moyasar webhook paid-event refused: intent=${intentId} payment=${paymentId} err=${err instanceof Error ? err.message : String(err)}`,
+          `moyasar webhook paid-event refused: intent=${intentId} payment=${paymentId} err=${sanitize(err instanceof Error ? err.message : String(err))}`,
         );
         Sentry.captureException(err, {
           tags: { scope: 'wallet.webhook', intentId, paymentId },
@@ -195,6 +227,11 @@ export class WalletWebhookController {
       throw err;
     }
   }
+}
+
+/** Log-injection guard: strip newlines/control chars, cap length (Claude tier-C MINOR-7). */
+function sanitize(value: string): string {
+  return value.replace(/[\r\n\t\x00-\x1f]/g, ' ').slice(0, 120);
 }
 
 /** timingSafeEqual wrapper that never throws on length mismatch. */

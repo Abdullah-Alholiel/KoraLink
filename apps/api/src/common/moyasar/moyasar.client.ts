@@ -60,6 +60,11 @@ export async function fetchMoyasarPayment(
   const res = await fetch(
     `${MOYASAR_API_BASE}/payments/${encodeURIComponent(paymentId)}`,
     {
+      // Claude tier-C MINOR-11 (run #223): a hung Moyasar call must not pin a
+      // worker (the webhook path now depends on this client too). 15s is far
+      // above p99 for a payment GET; on abort, MoyasarHttpError-style callers
+      // see a plain fetch AbortError → retried by verify UX / webhook redelivery.
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization:
           'Basic ' + Buffer.from(`${secretKey}:`).toString('base64'),

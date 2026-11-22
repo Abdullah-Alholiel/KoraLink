@@ -41,33 +41,44 @@ fails closed.
 ## Gate 3 — Program design (exact contracts)
 ### Request → response
 - `POST /api/v1/wallet/webhook`, body = Moyasar webhook object (JSON):
-  `{ id, type: 'payment_paid'|'payment_failed'|'payment_refunded'|'payment_voided'|'payment_authorized'|'payment_captured'|'payment_verified'|'card_auth_*'|'webhook_verification', created_at, secret_token, account_name, live, data }`
-- Success: `200 { "received": true }` for every authenticated event (Moyasar retries 5× on
-  non-2xx — never tickle retries for business outcomes we don't act on).
+  `{ id, type: 'payment_paid'|'payment_failed'|'payment_refunded'|'payment_voided'|'payment_authorized'|'payment_captured'|'payment_verified'|'card_auth_*'|'webhook_verification', created_at, secret_token, live, data }`
+- Success: `200 { "received": true }` for every authenticated event whose outcome is
+  DECIDED (Moyasar retries 5× on non-2xx — never tickle retries for settled outcomes).
 - Flag off (or secret unset): `403 { "statusCode":403, "message":"Wallet webhook is disabled in this environment" }`.
-- Auth fail: `401 { "statusCode":401, "message":"Invalid webhook secret" }`.
-- Malformed body (no type/data): `200 { received: true }` with warn log (never retry on our
-  parsing gaps — a retry of a malformed event is another malformed event) — EXCEPT missing
-  secret_token which is the auth check.
+- Auth fail (missing/non-string/mismatched `secret_token`, incl. unparseable bodies where
+  the secret cannot be extracted): `401 { "statusCode":401, "message":"Invalid webhook secret" }`
+  — fail closed (r2 revision: the original "malformed → 200" was wrong; an unparseable
+  sender cannot be authenticated).
+- Route throttling: `@SkipThrottle()` — the shared secret IS the gate; Moyasar's shared
+  egress IPs would false-positive a per-IP limiter and its 5-retry cap would drop credits.
+### Retry contract (final, post Claude tier-C review)
+- ACK 2xx: decided refusals only — `payment_intent_mismatch`, amount/currency mismatch,
+  `topup_already_credited`, unknown intent (NotFound), malformed-but-authenticated bodies,
+  and ALL non-actionable event types.
+- RETHROW → 5xx → Moyasar redelivers: `payment_not_paid` from the WEBHOOK path
+  (read-after-write skew — Moyasar's GET can lag its own event), DB failures, Moyasar
+  5xx/timeouts, unexpected errors.
+- `payment_failed` / `payment_refunded` / `payment_voided` / `card_auth_*`: acknowledged
+  2xx, deliberately NOT acted on (no debit-back path today — future board row).
 ### TS signatures
 ```ts
 // wallet.webhook.controller.ts
-@Controller('wallet/webhook')   // under global prefix api/v1
+@Controller('wallet/webhook')   // under global prefix api/v1; @SkipThrottle()
 handleMoyasarWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ received: boolean }>
 // service (extracted, shared by verify + webhook):
 creditFromWebhook(intentId: string, paymentId: string): Promise<VerifyTopupResult>
 // internals:
-private assertSecret(rawSecret: unknown): boolean   // timingSafeEqual, fail-closed
-private static resolveMoyasarEventType(type: string): 'verify'|'paid'|'failed'|'ignore'
+private assertSecret(rawSecret: unknown, expected: string): boolean   // timingSafeEqual, fail-closed
 ```
 ### creditFromWebhook contract (reuse, not fork)
-Identical assertion order to verifyTopup after intent resolution: fetch payment (sk) →
-`payment_intent_mismatch` guard (desc binding) → sequential replay check → paid/SAR/amount
-guards → ONE tx (ledger insert `topup:<paymentId>` + balance increment + guarded intent flip).
-Divergence: intent resolved by `wallet-topup:<intentId>` description binding — any
-payment-bound user; caller supplies intentId, user comes from the intent row (webhook has no
-JWT). If the intent is already `credited` with a DIFFERENT payment → ConflictException
-(surfaced as warn log; 2xx still returned — Moyasar needn't retry).
+Assertion order: intent lookup → topup-flag gate (fail-closed parity with verifyTopup) →
+fetch payment (sk) → binding (`payment_intent_mismatch`) → status paid
+(`payment_not_paid`; retryable on the webhook path per the retry contract above) → then
+creditPaidPaymentToIntent (shared by BOTH callers, single copy of P2-282 credited-refusal +
+sequential replay + SAR + amount + guarded single-tx). Intent resolved by the
+`wallet-topup:<intentId>` description binding — user comes from the intent row (webhook has
+no JWT). If the intent is already `credited` with a DIFFERENT payment → ConflictException
+(surfaced as warn log + Sentry; 2xx still returned — Moyasar needn't retry).
 ### Env contract (.env.example only, no secrets)
 ```
 # MOYASAR_WEBHOOK_SECRET — the shared_secret you registered for the webhook in the Moyasar
