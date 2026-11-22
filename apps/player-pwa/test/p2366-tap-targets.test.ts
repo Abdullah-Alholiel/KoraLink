@@ -38,12 +38,10 @@ const HIT_W_RE = /(?:^|[\s`'"{])min-w-hit(?=[\s`'"}]|$)/;
  * file (listed or not) fails immediately. Do not grow these numbers.
  */
 const KNOWN_DEBT: Record<string, number> = {
-  'src/components/matches/AppealSheet.tsx': 1,
   'src/components/matches/MatchChat.tsx': 2,
   'src/components/matches/RescheduleSheet.tsx': 1,
   'src/components/matches/TeamLineupSheet.tsx': 1,
   'src/components/wallet/TopupSheet.tsx': 1,
-  'src/app/[locale]/(auth)/complete-profile/page.tsx': 1,
   'src/app/[locale]/(main)/clubs/page.tsx': 1,
   'src/app/[locale]/(main)/my-games/page.tsx': 1,
   'src/app/[locale]/(main)/reports/page.tsx': 1,
