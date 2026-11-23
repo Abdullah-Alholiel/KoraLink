@@ -485,6 +485,15 @@ export const matches = pgTable(
     host_payout_state: hostPayoutStateEnum('host_payout_state')
       .notNull()
       .default('not_applicable'),
+    // Run #225 (P2-398 / D-20261115-04): stamped when a late host cancel
+    // (<12h before kick-off, match never started) forfeits the pitch cost to
+    // the venue. Settlement counts this column for Cancelled matches (see
+    // settlement-revenue.ts), so the venue is paid through the normal
+    // settlement rail. NULL = no forfeit (also the pre-migration state).
+    pitch_forfeited_sar: numeric('pitch_forfeited_sar', {
+      precision: 10,
+      scale: 2,
+    }),
     host_accepted_terms_at: timestamp('host_accepted_terms_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -528,6 +537,13 @@ export const match_players = pgTable(
       scale: 2,
     }),
     no_show: boolean('no_show').notNull().default(false),
+    // Run #225 (P2-398 / D-20261113-10): the karma amount ACTUALLY applied by
+    // this episode's no-show mark (the −5 penalty clamped by the karma floor).
+    // The un-mark reverses THIS amount, not a constant — mark/un-mark stays
+    // symmetric for players sitting at the karma floor. NULL = no mark yet,
+    // the mark was cleared, or the row was marked BEFORE this column existed
+    // (legacy marks never deducted karma, so the un-mark restores 0).
+    no_show_karma_applied: integer('no_show_karma_applied'),
     // P2-58 (run #50): per-user read watermark for match-chat unread counts.
     // Roster-row-scoped (per match EPISODE): a leave→rejoin gets a fresh row
     // and thus a fresh watermark, mirroring the fee_paid_sar episode

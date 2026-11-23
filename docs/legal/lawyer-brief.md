@@ -82,6 +82,82 @@ matches shipped code + owner decision D-20261110-06); 30-day backup overwrite
 (en.json:1155); "no full card numbers stored" (en.json:1200 — wallet stores only Moyasar
 payment references).
 
+### 4.1 Host late-cancel forfeit & player no-show fee — shipped 2026-11-23 (factory run #225)
+
+Two owner-decided money rules (launch condition 6) are now enforced in code. Disclosure
+lives in the Terms, section 6 "Refunds and cancellation" (`legal.termsRefundBody5`) and
+section 7 "Acceptable use" (`legal.termsConductBody5`), EN + AR. Both keys are listed in
+`apps/player-pwa/src/messages/{en,ar}.json` AND rendered on the Terms page
+(`apps/player-pwa/src/app/[locale]/terms/page.tsx` paragraph lists, extended in the same
+commit).
+
+**Rule A — host late-cancel forfeit (D-20261115-04).** Code: `MatchesService.cancelMatch`
++ helper `isLateHostCancel` (`apps/api/src/modules/matches/matches.service.ts`).
+- Applies to KoraLink-booked pitches only (`booking_mode = 'koralink'`) where the host
+  was debited a pitch cost (`pitch_cost_sar > 0`) at match creation.
+- Cutoff: server wall clock (`Date.now()`) compared to the match's stored
+  `scheduled_at` (timestamptz). The cancel is "late" when it is NOT at least
+  12 hours before kick-off — i.e. anything inside the final 12h, AND anything
+  at or after the scheduled start (an unstarted match stays cancellable, and
+  cancelling it after kick-off cannot dodge the forfeit).
+- Exactly 12h or more before kick-off → full refund.
+- Started matches are exempt: cancelling an InProgress match (the in-app
+  emergency cancel) keeps the full 100% pitch refund regardless of the clock.
+- Effect of a late cancel: the booked slot is still released and the host
+  receives **no wallet credit** (no ledger row for the host). The forfeited
+  amount is STAMPED on the match row (`matches.pitch_forfeited_sar`) and the
+  venue-settlement generator counts stamped rows exactly like completed
+  bookings — the venue is paid through the normal settlement rail, with a
+  per-match auditable record visible to admin and partner consoles.
+- Joining players are always refunded 100% of the fee they paid (`refund-join-<rosterId>`
+  REFUND credits), regardless of timing. The forfeit touches only the host's pitch cost.
+- Non-late cancels refund the host exactly the stored `pitch_cost_sar` under the
+  idempotency key `refund-<matchId>` (unchanged from before).
+
+**Rule B — player no-show fee (D-20261113-10).** Code: `MatchesService.markNoShow`.
+- Only the match host can mark, only on an InProgress/Completed match, after the
+  configured grace window (pre-existing gates).
+- Charged only when the player **actually paid to join** (their roster row's
+  `fee_paid_sar` snapshot > 0). Players who joined free are never charged.
+- Amount: the match's `price_per_player` — the per-player share the player paid at join.
+  It is debited from the player's in-app wallet as a `MATCH_FEE` DEBIT ledger row.
+- If the wallet cannot cover the fee, the whole mark is rejected (no flag, no fee, no
+  karma change — all in one database transaction).
+- Karma: the penalty is −5 floored at the player's current karma (a player at
+  0 loses nothing); the amount actually applied is stored per roster episode
+  (`match_players.no_show_karma_applied`) and the un-mark restores exactly
+  that amount — mark/clear is symmetric even at the floor (capped at 100).
+- Idempotency: fees are per charge INSTANCE within the roster episode —
+  `noshow-fee:<rosterRowId>:<n>` for the nth charge and
+  `noshow-fee:<rosterRowId>:r<n>` for its reversal (both UNIQUE in the
+  ledger). A mark charges the seat once; clearing the mark reverses the
+  standing charge; marking again charges a new instance. Sequential retries
+  of the same flip replay (no double charge); concurrent flips collide on the
+  UNIQUE key and surface as 409.
+- Reversal: when the host clears a mark and a standing (not-yet-reversed)
+  fee instance exists, the exact charged amount is credited back as a REFUND
+  under that instance's reversal key `noshow-fee:<rosterRowId>:r<n>` (once
+  only). Clearing the mark also closes the auto-opened no-show dispute
+  (pre-existing behavior).
+- Karma on re-mark: the floor clamp applies at each mark against the player's
+  CURRENT karma, and each mark stamps its own applied amount on the roster
+  row — reversal always restores the latest mark's exact amount.
+- Note for counsel (fee cycle): a mark → clear → mark cycle charges,
+  refunds, and charges again (each flip is money-real; the ledger shows every
+  episode). The unaffordable-fee case blocks the whole mark (no attendance
+  record without payment) — engineering chose that over recording an
+  uncollectable fee; flag if the terms need a debt/pending-charge model.
+- Note for counsel (forfeit scope): the forfeit rule covers HOST-initiated
+  cancels only (`POST /matches/:id/cancel`). Platform auto-cancels
+  (underfilled matches past their start, expired booking holds, stranded
+  rows) keep the existing policy — full refund to the host — and cannot be
+  triggered by the host directly. Residual: a host could passively let a
+  booking run underfilled to capture the auto-cancel refund; flag if the
+  venue-side terms need that platform-cancel path to carry its own forfeit
+  rule (a separate policy decision, not part of D-20261115-04 as decided).
+- Where the fee goes: today it is debited from the player only; it is not credited to
+  the host or venue. Question for counsel: should the terms say who receives it?
+
 ## 5. Open questions for the lawyer (owner-approved agenda, D-20261114-01)
 
 1. **Stored-value wallet & SAMA:** does holding prepaid player balances (wallet ledger,

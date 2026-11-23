@@ -35,7 +35,9 @@ export type PushKey =
   | 'payout_paid'
   // ── Player money flows (P2-193, run #155): wallet credits get a voice ──
   | 'refund_credited'
-  | 'payout_released';
+  | 'payout_released'
+  // Run #225 (D-20261115-04): host late-cancel (<12h) forfeits the pitch cost.
+  | 'pitch_forfeit';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -330,6 +332,21 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
       title: '💸 تم صرف المستحقات',
       body: (v) =>
         `تم إيداع مستحقاتك بقيمة ${payoutAmount(v.amount, 'ar-SA')} عن "${v.title ?? 'مباراتك'}" في محفظتك.`,
+    },
+  },
+  // Run #225 (D-20261115-04): a host who cancels a paid koralink booking
+  // within 12h of kick-off forfeits the pitch cost to the venue — no wallet
+  // credit. The host must still hear WHY no refund arrived.
+  pitch_forfeit: {
+    en: {
+      title: 'Pitch cost not refunded',
+      body: (v) =>
+        `"${v.title ?? 'your match'}" was cancelled less than 12 hours before kick-off, so the pitch cost of ${payoutAmount(v.amount, 'en-GB')} goes to the venue. Players were refunded in full.`,
+    },
+    ar: {
+      title: 'لم يُسترد سعر الملعب',
+      body: (v) =>
+        `أُلغيت "${v.title ?? 'مباراتك'}" قبل أقل من 12 ساعة من موعدها، لذلك يذهب سعر الملعب ${payoutAmount(v.amount, 'ar-SA')} إلى الملعب. تم إرجاع المبالغ كاملة للاعبين.`,
     },
   },
 };
