@@ -4064,6 +4064,17 @@ export class MatchesService {
           )
           .where(eq(schema.users.id, targetUserId));
 
+        // PR-Agent r4 (run #225): an un-marked roster row must carry NULL —
+        // the schema contract is "NULL = no standing mark" (also what legacy
+        // pre-column rows look like), so clear the stamp AFTER the restore
+        // read above consumed it.
+        if (!noShow) {
+          await tx
+            .update(schema.match_players)
+            .set({ no_show_karma_applied: null })
+            .where(eq(schema.match_players.id, player.id));
+        }
+
         // Run #225 (D-20261113-10): no-show fee on a PAID seat. Same tx as
         // the flag write — an unaffordable fee (chargeMatchFeeTx 400) rolls
         // the whole mark back, so nothing half-applies.
