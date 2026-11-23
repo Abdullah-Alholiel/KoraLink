@@ -4066,10 +4066,37 @@ export class MatchesService {
 
         // Run #225 (D-20261113-10): no-show fee on a PAID seat. Same tx as
         // the flag write — an unaffordable fee (chargeMatchFeeTx 400) rolls
-        // the whole mark back, so nothing half-applies. Keys are per roster
-        // episode (match_players.id), never per toggle: replay pre-checks in
-        // chargeMatchFeeTx / creditWalletTx make repeated toggles idempotent.
-        const feeKey = `noshow-fee-${player.id}`;
+        // the whole mark back, so nothing half-applies.
+        // PR-Agent r2 (run #225): the fee key is per CHARGE INSTANCE, not per
+        // episode — a legal un-mark reverses the fee, so a re-mark must be
+        // able to charge again (a single episode key would make the re-mark a
+        // free replay while karma still applies). All keys of this roster
+        // episode share the prefix `noshow-fee:<mpId>:` with suffixes
+        // `<n>` (fee instance n) and `r<n>` (its reversal), so one LIKE
+        // fetches the family and instance pairing is parseable. Sequential
+        // retries replay on the same instance key; concurrent marks collide
+        // on the UNIQUE key → 409 → the client retry replays. (mpId is a
+        // UUID — no LIKE wildcards in it.)
+        const feePrefix = `noshow-fee:${player.id}:`;
+        const feeRows = await tx
+          .select({ key: transactions.idempotency_key, amount: transactions.amount })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.user_id, targetUserId),
+              sql`${transactions.idempotency_key} LIKE ${`${feePrefix}%`}`,
+            ),
+          );
+        const feeInstances = new Set<number>();
+        const reversedInstances = new Set<number>();
+        for (const r of feeRows) {
+          const suffix = r.key.slice(feePrefix.length);
+          if (/^r\d+$/.test(suffix)) {
+            reversedInstances.add(Number.parseInt(suffix.slice(1), 10));
+          } else if (/^\d+$/.test(suffix)) {
+            feeInstances.add(Number.parseInt(suffix, 10));
+          }
+        }
         if (noShow) {
           // PR-Agent r1 (run #225): charge the player's OWN paid share
           // snapshot (fee_paid_sar) — never the match's current
@@ -4078,50 +4105,41 @@ export class MatchesService {
           // when fee_paid_sar > 0, so the snapshot is always the basis.
           const fee = moneyToNumber(player.fee_paid_sar);
           if (fee > 0) {
-            const charged = await chargeMatchFeeTx(tx, targetUserId, matchId, fee, feeKey);
+            const instance = feeInstances.size + 1;
+            const charged = await chargeMatchFeeTx(
+              tx,
+              targetUserId,
+              matchId,
+              fee,
+              `${feePrefix}${instance}`,
+            );
             if (charged !== 'REPLAYED') {
               noShowFeeEvent = { mpId: player.id, amountSar: fee, kind: 'charged' };
             }
           }
         } else {
-          const [priorFee] = await tx
-            .select({ amount: transactions.amount })
-            .from(transactions)
-            .where(
-              and(
-                eq(transactions.idempotency_key, feeKey),
-                eq(transactions.user_id, targetUserId),
-              ),
-            )
-            .limit(1);
-          const reversal = priorFee ? moneyToNumber(priorFee.amount) : 0;
-          // PR-Agent r3 (run #225): only claim "reversed" when the credit will
-          // actually write — if the reversal key already stands (a prior
-          // un-mark on this episode), creditWalletTx would replay-guard it and
-          // the log line would describe money that never moved.
-          const [priorReversal] = await tx
-            .select({ id: transactions.id })
-            .from(transactions)
-            .where(
-              and(
-                eq(
-                  transactions.idempotency_key,
-                  `noshow-fee-reversal-${player.id}`,
-                ),
-                eq(transactions.user_id, targetUserId),
-              ),
-            )
-            .limit(1);
-          if (reversal > 0 && !priorReversal) {
-            await creditWalletTx(
-              tx,
-              targetUserId,
-              reversal,
-              `noshow-fee-reversal-${player.id}`,
-              'REFUND',
-              matchId,
+          // Reverse the LATEST standing fee instance (one without its
+          // reversal row). An already-reversed instance is skipped, so a
+          // second un-mark never claims money that did not move (PR-Agent r3).
+          const standing = [...feeInstances]
+            .filter((n) => !reversedInstances.has(n))
+            .sort((a, b) => b - a)[0];
+          if (standing !== undefined) {
+            const feeRow = feeRows.find(
+              (r) => r.key === `${feePrefix}${standing}`,
             );
-            noShowFeeEvent = { mpId: player.id, amountSar: reversal, kind: 'reversed' };
+            const reversal = feeRow ? moneyToNumber(feeRow.amount) : 0;
+            if (reversal > 0) {
+              await creditWalletTx(
+                tx,
+                targetUserId,
+                reversal,
+                `${feePrefix}r${standing}`,
+                'REFUND',
+                matchId,
+              );
+              noShowFeeEvent = { mpId: player.id, amountSar: reversal, kind: 'reversed' };
+            }
           }
         }
 

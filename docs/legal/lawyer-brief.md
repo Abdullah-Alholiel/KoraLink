@@ -127,16 +127,26 @@ commit).
   0 loses nothing); the amount actually applied is stored per roster episode
   (`match_players.no_show_karma_applied`) and the un-mark restores exactly
   that amount — mark/clear is symmetric even at the floor (capped at 100).
-- Idempotency: one fee per roster episode — key `noshow-fee-<rosterRowId>`, never tied
-  to the toggle state. Repeated marks, or mark → clear → mark again, can never charge
-  twice (the ledger key is checked before writing and is UNIQUE in the database).
-- Reversal: when the host clears a mark and a fee exists, the exact charged amount is
-  credited back as a REFUND under `noshow-fee-reversal-<rosterRowId>` (also once only).
-  Clearing the mark also closes the auto-opened no-show dispute (pre-existing behavior).
-- Known limitation for counsel: because both keys are once-per-episode, a player who is
-  marked, cleared, and then marked again ends up **not charged** (fee and refund both
-  stand). Engineering chose this over any risk of double-charging; flag if the terms
-  need a different outcome.
+- Idempotency: fees are per charge INSTANCE within the roster episode —
+  `noshow-fee:<rosterRowId>:<n>` for the nth charge and
+  `noshow-fee:<rosterRowId>:r<n>` for its reversal (both UNIQUE in the
+  ledger). A mark charges the seat once; clearing the mark reverses the
+  standing charge; marking again charges a new instance. Sequential retries
+  of the same flip replay (no double charge); concurrent flips collide on the
+  UNIQUE key and surface as 409.
+- Reversal: when the host clears a mark and a standing (not-yet-reversed)
+  fee instance exists, the exact charged amount is credited back as a REFUND
+  under that instance's reversal key `noshow-fee:<rosterRowId>:r<n>` (once
+  only). Clearing the mark also closes the auto-opened no-show dispute
+  (pre-existing behavior).
+- Karma on re-mark: the floor clamp applies at each mark against the player's
+  CURRENT karma, and each mark stamps its own applied amount on the roster
+  row — reversal always restores the latest mark's exact amount.
+- Note for counsel: a mark → clear → mark cycle charges, refunds, and charges
+  again (each flip is money-real; the ledger shows every episode). The
+  unaffordable-fee case still blocks the whole mark (no attendance record
+  without payment) — engineering chose that over recording an uncollectable
+  fee; flag if the terms need a debt/pending-charge model instead.
 - Where the fee goes: today it is debited from the player only; it is not credited to
   the host or venue. Question for counsel: should the terms say who receives it?
 

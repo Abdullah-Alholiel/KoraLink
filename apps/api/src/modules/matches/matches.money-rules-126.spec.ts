@@ -97,10 +97,27 @@ function makeTx(w: World) {
           const c = chain(() => []);
           c.then = (res: (v: unknown) => void) => {
             const p = params((c as { _where: () => unknown })._where());
+            // emulate eq(key)/eq(user) AND LIKE '<prefix>%' clauses: if a
+            // param looks like a key prefix, treat the query as the fee-family
+            // fetch (markNoShow reads it for instance pairing). The LIKE
+            // pattern carries a trailing '%' — strip it for startsWith.
+            const likePattern = p.find(
+              (v) => typeof v === 'string' && v.startsWith('noshow-fee:'),
+            );
+            const prefix =
+              typeof likePattern === 'string' ? likePattern.replace(/%$/, '') : undefined;
             res(
-              w.ledger
-                .filter((l) => p.includes(l.idempotency_key) && p.includes(l.user_id))
-                .map((l) => ({ id: `tx-${l.idempotency_key}`, amount: l.amount })),
+              prefix !== undefined
+                ? w.ledger
+                    .filter(
+                      (l) =>
+                        l.user_id === p[0] &&
+                        l.idempotency_key.startsWith(prefix),
+                    )
+                    .map((l) => ({ key: l.idempotency_key, amount: l.amount }))
+                : w.ledger
+                    .filter((l) => p.includes(l.idempotency_key) && p.includes(l.user_id))
+                    .map((l) => ({ id: `tx-${l.idempotency_key}`, amount: l.amount })),
             );
           };
           return c;
@@ -351,7 +368,7 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
         amount: '35.00',
         reference_type: 'MATCH_FEE',
         reference_id: MATCH_ID,
-        idempotency_key: `noshow-fee-${MP_ID}`,
+        idempotency_key: `noshow-fee:${MP_ID}:1`,
       }),
     ]);
     const k = karmaSet(w, 0);
@@ -367,7 +384,7 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
     (w.player as { no_show_karma_applied?: number }).no_show_karma_applied = 5; // the mark's stamp committed
     await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
 
-    const reversal = w.ledger.find((l) => l.idempotency_key === `noshow-fee-reversal-${MP_ID}`);
+    const reversal = w.ledger.find((l) => l.idempotency_key === `noshow-fee:${MP_ID}:r1`);
     expect(reversal).toMatchObject({
       user_id: TARGET,
       type: 'CREDIT',
@@ -393,7 +410,7 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
         type: 'DEBIT',
         amount: '30.00',
         reference_type: 'MATCH_FEE',
-        idempotency_key: `noshow-fee-${MP_ID}`,
+        idempotency_key: `noshow-fee:${MP_ID}:1`,
       }),
     ]);
   });
@@ -445,7 +462,7 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
     expect(karmaSet(w, 1).params).toEqual([0]);
   });
 
-  it('(g) toggle on → off → on → exactly ONE fee debit (per-episode replay guard)', async () => {
+  it('(g) toggle on → off → on → TWO fee debits, ONE reversal (re-mark charges a fresh instance)', async () => {
     const w = noShowWorld('35.00');
     const { svc } = makeService(w);
     await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
@@ -454,9 +471,50 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
     w.player!.no_show = false;
     await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
 
-    const fees = w.ledger.filter((l) => l.idempotency_key === `noshow-fee-${MP_ID}`);
-    expect(fees).toHaveLength(1);
-    expect(w.ledger.filter((l) => l.type === 'DEBIT')).toHaveLength(1);
+    // instance 1 charged + reversed; instance 2 charged (standing)
+    const debits = w.ledger.filter((l) => l.type === 'DEBIT');
+    expect(debits.map((l) => l.idempotency_key).sort()).toEqual([
+      `noshow-fee:${MP_ID}:1`,
+      `noshow-fee:${MP_ID}:2`,
+    ]);
+    expect(
+      w.ledger.filter((l) => l.idempotency_key === `noshow-fee:${MP_ID}:r1`),
+    ).toHaveLength(1);
+    // sequential retry of the re-mark (flag already committed true) replays:
+    // no flip → no new charge
+    w.player!.no_show = true;
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+    expect(w.ledger.filter((l) => l.type === 'DEBIT')).toHaveLength(2);
+  });
+
+  it('(g2) full cycle on → off → on → off → exactly 2 fees + 2 reversals', async () => {
+    const w = noShowWorld('35.00');
+    const { svc } = makeService(w);
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+    w.player!.no_show = true;
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
+    w.player!.no_show = false;
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+    w.player!.no_show = true;
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
+
+    const debits = w.ledger.filter((l) => l.type === 'DEBIT');
+    const credits = w.ledger.filter(
+      (l) => l.type === 'CREDIT' && l.idempotency_key.startsWith(`noshow-fee:${MP_ID}:r`),
+    );
+    expect(debits.map((l) => l.idempotency_key).sort()).toEqual([
+      `noshow-fee:${MP_ID}:1`,
+      `noshow-fee:${MP_ID}:2`,
+    ]);
+    expect(credits.map((l) => l.idempotency_key).sort()).toEqual([
+      `noshow-fee:${MP_ID}:r1`,
+      `noshow-fee:${MP_ID}:r2`,
+    ]);
+    // net money movement across the whole cycle = zero
+    const net =
+      debits.reduce((s, l) => s + parseFloat(l.amount), 0) -
+      credits.reduce((s, l) => s + parseFloat(l.amount), 0);
+    expect(net).toBe(0);
   });
 
   it('repeated mark (already flagged) → no second debit', async () => {
