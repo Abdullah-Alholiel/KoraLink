@@ -91,14 +91,14 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             </div>
             <button
               onClick={request}
-              className="shrink-0 bg-white text-brand-green text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+              className="shrink-0 bg-white text-brand-green text-xs font-bold px-3 py-1.5 min-h-hit rounded-full active:scale-95 transition-transform"
             >
               {t('location.enable')}
             </button>
             <button
               onClick={() => setDismissed(true)}
               aria-label={t('location.later')}
-              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/20 active:scale-95 transition-transform"
+              className="shrink-0 w-7 h-7 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-white/20 active:scale-95 transition-transform"
             >
               <X className="w-4 h-4" strokeWidth={2} />
             </button>

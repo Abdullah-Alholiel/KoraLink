@@ -182,7 +182,7 @@ export default function ClubPage() {
         <button
           onClick={() => router.back()}
           aria-label={t('common.back')}
-          className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+          className="w-9 h-9 min-h-hit min-w-hit rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
         >
           <ArrowLeft className="w-5 h-5 text-white rtl:-scale-x-100" strokeWidth={2} />
         </button>
@@ -273,7 +273,7 @@ export default function ClubPage() {
                           { onError: () => showToast(t('errors.favoriteFailed'), 'error') },
                       )
                   }
-                  className="absolute top-4 end-5 z-10 w-10 h-10 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+                  className="absolute top-4 end-5 z-10 w-10 h-10 min-h-hit min-w-hit rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
               >
                   <Heart
                       className={`w-5 h-5 transition-colors ${
@@ -584,7 +584,8 @@ export default function ClubPage() {
             )}
             <button
               onClick={() => setShowCalendar(false)}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+              aria-label={t('common.close')}
+              className="w-8 h-8 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100"
             >
               <X className="w-5 h-5 text-gray-500" strokeWidth={2} />
             </button>

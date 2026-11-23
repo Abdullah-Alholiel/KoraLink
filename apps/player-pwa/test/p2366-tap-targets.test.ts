@@ -32,25 +32,14 @@ const HIT_H_RE = /(?:^|[\s`'"{])min-h-hit(?=[\s`'"}]|$)/;
 const HIT_W_RE = /(?:^|[\s`'"{])min-w-hit(?=[\s`'"}]|$)/;
 
 /**
- * Pre-existing compact buttons OUTSIDE the P2-366 scope (page headers, chat
- * composer, etc.). Ratchet: the count per file must match EXACTLY — fixing one
- * fails the test until the entry is lowered/removed, and a NEW offender in any
- * file (listed or not) fails immediately. Do not grow these numbers.
+ * Pre-existing compact buttons OUTSIDE the P2-366 scope. Ratchet: the count per
+ * file must match EXACTLY — fixing one fails the test until the entry is
+ * lowered/removed, and a NEW offender in any file (listed or not) fails
+ * immediately. Run #224 (P2-392) FIXED the last 12 tracked debt buttons — the
+ * registry is now EMPTY, so this census asserts zero compact-no-hit buttons
+ * anywhere in src/components or src/app. Do not re-add entries: fix the button.
  */
-const KNOWN_DEBT: Record<string, number> = {
-  'src/components/matches/MatchChat.tsx': 2,
-  'src/components/matches/RescheduleSheet.tsx': 1,
-  'src/components/matches/TeamLineupSheet.tsx': 1,
-  'src/components/wallet/TopupSheet.tsx': 1,
-  'src/app/[locale]/(main)/clubs/page.tsx': 1,
-  'src/app/[locale]/(main)/my-games/page.tsx': 1,
-  'src/app/[locale]/(main)/reports/page.tsx': 1,
-  'src/app/[locale]/(main)/wallet/page.tsx': 1,
-  'src/app/[locale]/clubs/[id]/page.tsx': 2,
-  'src/app/[locale]/messages/[id]/page.tsx': 2,
-  'src/app/[locale]/privacy/page.tsx': 1,
-  'src/app/[locale]/terms/page.tsx': 1,
-};
+const KNOWN_DEBT: Record<string, number> = {};
 
 function walk(dir: string): string[] {
   const out: string[] = [];

@@ -136,7 +136,7 @@ export default function PlayPage() {
                                     if (e.key === 'Escape') dismiss();
                                 }}
                                 placeholder={t('play.searchPlaceholder')}
-                                className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                                className="flex-1 min-h-hit text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
                                 aria-label={t('play.searchPlaceholder')}
                             />
                             {searchQuery && (

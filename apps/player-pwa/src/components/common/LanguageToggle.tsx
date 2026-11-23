@@ -33,15 +33,16 @@ import { syncUserLocale } from '@/lib/sync-user-locale';
 export type ToggleLocale = 'ar' | 'en';
 
 interface LanguageToggleProps {
-    /** Visual size of the pill. `sm` = login header, `md` = profile row. */
-    size?: 'sm' | 'md';
     /** Localized group aria-label (endonyms on the segments are universal).
      *  REQUIRED (P2-75, run #59): a default 'Language' shipped untranslated
      *  English copy into Arabic UI when a call site omitted the prop. */
     ariaLabel: string;
 }
 
-export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggleProps) {
+// P2-392 (run #224): the old `size` prop ('sm' | 'md') is RETIRED — segments
+// now carry the 44px hit-target tokens directly and the container hugs them
+// (padding-only), so there is no visual-size variant left to select.
+export default function LanguageToggle({ ariaLabel }: LanguageToggleProps) {
     // P2-75 (run #59): ariaLabel is REQUIRED — the old `= 'Language'` default
     // shipped untranslated English copy into Arabic UI whenever a call site
     // omitted the prop. TS makes omission a compile error; this guard keeps
@@ -69,15 +70,16 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
         navigatePreservingLocale(`/${segments.slice(1).join('/')}${window.location.search}`);
     };
 
-    const heights = size === 'md' ? 'h-10' : 'h-9';
-    const segH = size === 'md' ? 'h-8' : 'h-7';
-
+    // P2-392 (run #224): segments carry min-h-hit/min-w-hit (44px targets).
+    // The container pads around them (p-0.5) — no fixed height: a fixed
+    // h-9/h-11 wrapper would clip the 44px segments (PR-Agent r2 catch:
+    // min-h-hit always wins over h-8/h-9, making segH dead code).
     return (
         <div
             role="group"
             aria-label={ariaLabel}
             data-testid="language-toggle"
-            className={`inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 ${heights}`}
+            className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5"
         >
             {(['ar', 'en'] as const).map((loc) => {
                 const active = loc === current;
@@ -88,7 +90,7 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
                         aria-pressed={active}
                         aria-label={loc === 'ar' ? 'العربية' : 'English'}
                         onClick={() => switchTo(loc)}
-                        className={`${segH} min-w-[44px] px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
+                        className={`min-h-hit min-w-hit px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
                             active
                                 ? 'bg-brand-green text-white shadow-[0_1px_4px_rgba(37,65,50,0.3)]'
                                 : 'text-gray-500'

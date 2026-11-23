@@ -225,11 +225,21 @@ export default function HostOnboarding({
                                 title: t(STEP_DEFS[i].title1Key),
                             })}
                             onClick={() => setStep(i)}
-                            className={`h-2 rounded-full transition-all ${
-                                i === step ? 'w-6 bg-brand-green' : 'w-2 bg-gray-300 active:scale-95'
-                            }`}
+                            className="relative flex min-h-hit min-w-hit items-center justify-center active:scale-95 transition-transform"
                             data-testid={`onboarding-dot-${i}`}
-                        />
+                        >
+                            {/* PR-Agent r4 (run #224): the visual dot is a child
+                                span — the 44px hit target must NOT inflate the
+                                dot (PR #275 target-vs-visual split; the census
+                                regex only inspects literal <button tags, so a
+                                child-span visual also keeps the census true). */}
+                            <span
+                                aria-hidden
+                                className={`h-2 rounded-full transition-all ${
+                                    i === step ? 'w-6 bg-brand-green' : 'w-2 bg-gray-300'
+                                }`}
+                            />
+                        </button>
                     ))}
                 </div>
 

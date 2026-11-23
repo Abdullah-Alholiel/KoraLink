@@ -117,14 +117,14 @@ export default function RescheduleSheet({
             </div>
 
             <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
-                <div className="w-8" />
+                <div className="w-11" />
                 <h2 className="text-lg font-bold text-brand-black">
                     {t('reschedule.title')}
                 </h2>
                 <button
                     onClick={handleClose}
                     aria-label={t('common.close')}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    className="w-8 h-8 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100"
                 >
                     <X />
                 </button>

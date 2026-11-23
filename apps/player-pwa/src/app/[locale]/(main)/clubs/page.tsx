@@ -209,7 +209,7 @@ function ClubsContent() {
                             if (e.key === 'Escape') dismiss();
                         }}
                         placeholder={t('clubs.searchPlaceholder')}
-                        className="flex-1 text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
+                        className="flex-1 min-h-hit text-sm text-brand-black placeholder:text-gray-400 outline-none bg-transparent"
                         aria-label={t('clubs.searchPlaceholder')}
                     />
                     {searchQuery && (
@@ -415,7 +415,7 @@ function ClubsContent() {
                                         },
                                     );
                                 }}
-                                className="absolute top-3 end-3 z-10 w-9 h-9 rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+                                className="absolute top-3 end-3 z-10 w-9 h-9 min-h-hit min-w-hit rounded-full bg-white/90 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
                             >
                                 <Heart
                                     className={`w-[18px] h-[18px] transition-colors ${

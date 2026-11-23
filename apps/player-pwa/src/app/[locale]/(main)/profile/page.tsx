@@ -407,7 +407,7 @@ export default function ProfilePage() {
                     <span className="flex-1 text-start text-sm font-medium text-brand-black">
                         {t('profile.language')}
                     </span>
-                    <LanguageToggle size="md" ariaLabel={t('profile.language')} />
+                    <LanguageToggle ariaLabel={t('profile.language')} />
                 </div>
                 {/* PR-Agent r1 (run #104): the anchor div must exist at SSR
                     time — deep links from the Settings hub land here BEFORE

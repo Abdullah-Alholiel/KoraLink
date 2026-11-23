@@ -59,14 +59,14 @@ export default function InstallPrompt() {
                         <Download className="w-5 h-5 text-white" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-4">
                             <h3 className="text-sm font-bold text-brand-black leading-tight">
                                 {t('title')}
                             </h3>
                             <button
                                 onClick={handleDismiss}
                                 aria-label={t('notNow')}
-                                className="text-gray-400 -mt-0.5 flex-shrink-0 active:scale-95 transition-transform"
+                                className="min-h-hit min-w-hit -m-3 flex items-center justify-center text-gray-400 flex-shrink-0 active:scale-95 transition-transform"
                             >
                                 <X className="w-4 h-4" strokeWidth={2} />
                             </button>
