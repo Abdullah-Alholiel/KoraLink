@@ -69,15 +69,16 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
         navigatePreservingLocale(`/${segments.slice(1).join('/')}${window.location.search}`);
     };
 
-    const heights = size === 'md' ? 'h-11' : 'h-9';
-    const segH = size === 'md' ? 'h-9' : 'h-8';
-
+    // P2-392 (run #224): segments carry min-h-hit/min-w-hit (44px targets).
+    // The container pads around them (p-0.5) — no fixed height: a fixed
+    // h-9/h-11 wrapper would clip the 44px segments (PR-Agent r2 catch:
+    // min-h-hit always wins over h-8/h-9, making segH dead code).
     return (
         <div
             role="group"
             aria-label={ariaLabel}
             data-testid="language-toggle"
-            className={`inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 ${heights}`}
+            className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5"
         >
             {(['ar', 'en'] as const).map((loc) => {
                 const active = loc === current;
@@ -88,7 +89,7 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
                         aria-pressed={active}
                         aria-label={loc === 'ar' ? 'العربية' : 'English'}
                         onClick={() => switchTo(loc)}
-                        className={`${segH} min-h-hit min-w-[44px] px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
+                        className={`min-h-hit min-w-hit px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
                             active
                                 ? 'bg-brand-green text-white shadow-[0_1px_4px_rgba(37,65,50,0.3)]'
                                 : 'text-gray-500'
