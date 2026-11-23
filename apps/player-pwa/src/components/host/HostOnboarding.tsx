@@ -225,7 +225,7 @@ export default function HostOnboarding({
                                 title: t(STEP_DEFS[i].title1Key),
                             })}
                             onClick={() => setStep(i)}
-                            className="relative flex min-h-hit min-w-hit items-center justify-center"
+                            className="relative flex min-h-hit min-w-hit items-center justify-center active:scale-95 transition-transform"
                             data-testid={`onboarding-dot-${i}`}
                         >
                             {/* PR-Agent r4 (run #224): the visual dot is a child
