@@ -232,7 +232,7 @@ export default function MatchChat({
             {!isSheet && (
                 <button
                     onClick={onRequestClose}
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 flex-shrink-0 active:scale-95 transition-transform"
+                    className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50 flex-shrink-0 active:scale-95 transition-transform"
                     aria-label={t('common.back')}
                 >
                     <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
@@ -272,7 +272,7 @@ export default function MatchChat({
             {isSheet && (
                 <button
                     onClick={onRequestClose}
-                    className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
+                    className="w-8 h-8 min-h-hit min-w-hit rounded-full bg-gray-100 flex items-center justify-center ml-3 flex-shrink-0 active:scale-95 transition-transform"
                     aria-label={t('common.close')}
                 >
                     <X className="w-4 h-4 text-gray-500" strokeWidth={2} />

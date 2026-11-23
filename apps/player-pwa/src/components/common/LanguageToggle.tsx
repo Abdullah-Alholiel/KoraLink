@@ -69,8 +69,8 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
         navigatePreservingLocale(`/${segments.slice(1).join('/')}${window.location.search}`);
     };
 
-    const heights = size === 'md' ? 'h-10' : 'h-9';
-    const segH = size === 'md' ? 'h-8' : 'h-7';
+    const heights = size === 'md' ? 'h-11' : 'h-9';
+    const segH = size === 'md' ? 'h-9' : 'h-8';
 
     return (
         <div

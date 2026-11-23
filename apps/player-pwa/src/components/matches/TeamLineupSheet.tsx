@@ -32,7 +32,7 @@ export default function TeamLineupSheet({ isOpen, onClose, format, roster = [], 
                 <h2 className="text-lg font-bold text-brand-black">{t('team')}</h2>
                 <button
                     onClick={onClose}
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100"
                 >
                     <X className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
                 </button>

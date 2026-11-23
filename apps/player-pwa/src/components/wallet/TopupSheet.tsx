@@ -406,7 +406,7 @@ export default function TopupSheet({
         <button
           onClick={onClose}
           aria-label={t('common.close')}
-          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50"
+          className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50"
         >
           <span aria-hidden className="text-xl text-brand-black leading-none">×</span>
         </button>

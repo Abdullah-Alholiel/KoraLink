@@ -153,7 +153,7 @@ export default function ConversationPage({
         <div className="flex items-center gap-3 px-4 pt-[var(--top-safe-inset)] pb-3 bg-white border-b border-gray-100">
           <button
             onClick={() => router.back()}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
+            className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
             aria-label={t('common.back')}
           >
             <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
@@ -382,7 +382,7 @@ export default function ConversationPage({
           <button
             onClick={handleSend}
             disabled={!draft.trim()}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-brand-green text-white disabled:bg-gray-200 disabled:text-gray-400 active:scale-95 transition-transform"
+            className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full bg-brand-green text-white disabled:bg-gray-200 disabled:text-gray-400 active:scale-95 transition-transform"
             aria-label={t('messages.send')}
           >
             <Send className="w-4 h-4" strokeWidth={2} />

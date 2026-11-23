@@ -124,7 +124,7 @@ export default function RescheduleSheet({
                 <button
                     onClick={handleClose}
                     aria-label={t('common.close')}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    className="w-8 h-8 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100"
                 >
                     <X />
                 </button>

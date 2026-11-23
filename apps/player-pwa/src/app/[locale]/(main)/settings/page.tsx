@@ -57,7 +57,7 @@ export default function SettingsPage() {
             <div className="sticky top-0 z-40 flex items-center bg-white px-4 pt-[var(--top-safe-inset)] pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100">
                 <button
                     onClick={() => router.back()}
-                    className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-50"
+                    className="flex h-10 w-10 min-h-hit min-w-hit items-center justify-center rounded-full hover:bg-gray-50"
                     aria-label={t('common.back')}
                 >
                     <ArrowLeft className="h-5 w-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />

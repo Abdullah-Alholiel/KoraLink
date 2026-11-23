@@ -341,7 +341,7 @@ export default function LoginPage() {
                             setAuthPhoneDraft(v); // survives reloads + back-nav
                         }}
                         placeholder={t('phonePlaceholder')}
-                        className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                        className="flex-1 min-h-hit text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                         maxLength={9}
                         autoFocus
                     />
@@ -359,7 +359,7 @@ export default function LoginPage() {
                             setAuthEmailDraft(e.target.value); // survives reloads + back-nav
                         }}
                         placeholder={t('emailPlaceholder')}
-                        className="flex-1 text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
+                        className="flex-1 min-h-hit text-sm text-brand-black placeholder:text-gray-300 outline-none bg-transparent"
                         autoComplete="email"
                         autoFocus
                     />

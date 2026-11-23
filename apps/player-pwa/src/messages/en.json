@@ -1130,6 +1130,7 @@
   },
   "legal": {
     "draftBanner": "Draft — pending lawyer review. Not legal advice.",
+    "backAria": "Go back",
     "lastUpdated": "Last updated",
     "lastUpdatedValue": "13 November 2026",
     "privacyTitle": "Privacy Policy",

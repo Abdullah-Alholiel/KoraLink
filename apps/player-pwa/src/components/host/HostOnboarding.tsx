@@ -225,8 +225,8 @@ export default function HostOnboarding({
                                 title: t(STEP_DEFS[i].title1Key),
                             })}
                             onClick={() => setStep(i)}
-                            className={`h-2 rounded-full transition-all ${
-                                i === step ? 'w-6 bg-brand-green' : 'w-2 bg-gray-300 active:scale-95'
+                            className={`h-3 rounded-full transition-all ${
+                                i === step ? 'w-7 bg-brand-green' : 'w-3 bg-gray-300 active:scale-95'
                             }`}
                             data-testid={`onboarding-dot-${i}`}
                         />
