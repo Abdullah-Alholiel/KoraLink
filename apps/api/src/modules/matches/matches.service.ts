@@ -4041,7 +4041,11 @@ export class MatchesService {
             .from(schema.match_players)
             .where(eq(schema.match_players.id, player.id))
             .limit(1);
-          karmaApplied = appliedRow?.applied ?? NO_SHOW_KARMA_PENALTY;
+          // PR-Agent r2 (run #225): NULL = the row was marked BEFORE this
+          // feature existed — no karma was ever deducted (pre-PR marks touched
+          // no_show_count only), so a legacy un-mark restores 0, not the
+          // constant. Phantom +5 grants stay impossible.
+          karmaApplied = appliedRow?.applied ?? 0;
         }
         await tx
           .update(schema.users)
@@ -4067,8 +4071,13 @@ export class MatchesService {
         // chargeMatchFeeTx / creditWalletTx make repeated toggles idempotent.
         const feeKey = `noshow-fee-${player.id}`;
         if (noShow) {
-          const fee = moneyToNumber(match.price_per_player);
-          if (moneyToNumber(player.fee_paid_sar) > 0 && fee > 0) {
+          // PR-Agent r1 (run #225): charge the player's OWN paid share
+          // snapshot (fee_paid_sar) — never the match's current
+          // price_per_player, which can drift after a reschedule and
+          // overcharge vs what the seat actually cost. This branch only runs
+          // when fee_paid_sar > 0, so the snapshot is always the basis.
+          const fee = moneyToNumber(player.fee_paid_sar);
+          if (fee > 0) {
             const charged = await chargeMatchFeeTx(tx, targetUserId, matchId, fee, feeKey);
             if (charged !== 'REPLAYED') {
               noShowFeeEvent = { mpId: player.id, amountSar: fee, kind: 'charged' };
@@ -4086,7 +4095,24 @@ export class MatchesService {
             )
             .limit(1);
           const reversal = priorFee ? moneyToNumber(priorFee.amount) : 0;
-          if (reversal > 0) {
+          // PR-Agent r3 (run #225): only claim "reversed" when the credit will
+          // actually write — if the reversal key already stands (a prior
+          // un-mark on this episode), creditWalletTx would replay-guard it and
+          // the log line would describe money that never moved.
+          const [priorReversal] = await tx
+            .select({ id: transactions.id })
+            .from(transactions)
+            .where(
+              and(
+                eq(
+                  transactions.idempotency_key,
+                  `noshow-fee-reversal-${player.id}`,
+                ),
+                eq(transactions.user_id, targetUserId),
+              ),
+            )
+            .limit(1);
+          if (reversal > 0 && !priorReversal) {
             await creditWalletTx(
               tx,
               targetUserId,

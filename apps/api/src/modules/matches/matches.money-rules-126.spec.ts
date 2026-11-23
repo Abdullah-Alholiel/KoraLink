@@ -364,6 +364,7 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
     const { svc } = makeService(w);
     await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
     w.player!.no_show = true; // the flag write committed
+    (w.player as { no_show_karma_applied?: number }).no_show_karma_applied = 5; // the mark's stamp committed
     await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
 
     const reversal = w.ledger.find((l) => l.idempotency_key === `noshow-fee-reversal-${MP_ID}`);
@@ -375,8 +376,26 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
       reference_id: MATCH_ID,
     });
     const k = karmaSet(w, 1);
-    expect(k.sql).toMatch(/LEAST\(.*karma_score.* \+ \$1, 100\)/);
+    expect(k.sql).toMatch(/LEAST\(\s*.*karma_score.* \+ \$1, 100\)/);
     expect(k.params).toEqual([5]);
+  });
+
+  it('(d2) fee basis = the player’s OWN paid snapshot, not the current match price (PR-Agent r1)', async () => {
+    // seat paid 30.00 at join; match price later drifted to 35.00 → the
+    // no-show fee must be 30.00 (what the player actually paid)
+    const w = noShowWorld('30.00');
+    (w.matchRow as { price_per_player: string }).price_per_player = '35.00';
+    const { svc } = makeService(w);
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+
+    expect(w.ledger).toEqual([
+      expect.objectContaining({
+        type: 'DEBIT',
+        amount: '30.00',
+        reference_type: 'MATCH_FEE',
+        idempotency_key: `noshow-fee-${MP_ID}`,
+      }),
+    ]);
   });
 
   it('(f) no-show on an unpaid player (fee_paid_sar null) → no debit (karma still applies)', async () => {
