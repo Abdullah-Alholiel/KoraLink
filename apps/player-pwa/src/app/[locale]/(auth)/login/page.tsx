@@ -212,7 +212,7 @@ export default function LoginPage() {
                 {/* Language toggle (2026-09-17): segmented ع/EN pill replaces the
                     bare globe icon — the choice is visible and pressed-state,
                     not a hidden icon that flips the language on one tap. */}
-                <LanguageToggle size="sm" ariaLabel={t('changeLanguage')} />
+                <LanguageToggle ariaLabel={t('changeLanguage')} />
                 <div className="flex items-center gap-2 flex-1 justify-center pe-10">
                     <div className="w-7 h-7 rounded-full bg-brand-green/10 flex items-center justify-center">
                         <Trophy className="w-3.5 h-3.5 text-brand-green" strokeWidth={2.5} />

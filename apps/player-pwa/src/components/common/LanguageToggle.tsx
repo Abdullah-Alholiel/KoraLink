@@ -33,15 +33,16 @@ import { syncUserLocale } from '@/lib/sync-user-locale';
 export type ToggleLocale = 'ar' | 'en';
 
 interface LanguageToggleProps {
-    /** Visual size of the pill. `sm` = login header, `md` = profile row. */
-    size?: 'sm' | 'md';
     /** Localized group aria-label (endonyms on the segments are universal).
      *  REQUIRED (P2-75, run #59): a default 'Language' shipped untranslated
      *  English copy into Arabic UI when a call site omitted the prop. */
     ariaLabel: string;
 }
 
-export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggleProps) {
+// P2-392 (run #224): the old `size` prop ('sm' | 'md') is RETIRED — segments
+// now carry the 44px hit-target tokens directly and the container hugs them
+// (padding-only), so there is no visual-size variant left to select.
+export default function LanguageToggle({ ariaLabel }: LanguageToggleProps) {
     // P2-75 (run #59): ariaLabel is REQUIRED — the old `= 'Language'` default
     // shipped untranslated English copy into Arabic UI whenever a call site
     // omitted the prop. TS makes omission a compile error; this guard keeps

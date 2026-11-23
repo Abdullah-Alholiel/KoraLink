@@ -134,7 +134,7 @@ export default function SettingsPage() {
                     <span className="flex-1 text-start text-sm font-medium text-brand-black">
                         {t('settings.language')}
                     </span>
-                    <LanguageToggle size="md" ariaLabel={t('settings.language')} />
+                    <LanguageToggle ariaLabel={t('settings.language')} />
                 </div>
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 {/* Sign-out LINK: the confirm sheet lives on the profile page
