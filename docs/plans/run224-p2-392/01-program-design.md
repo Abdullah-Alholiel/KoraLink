@@ -31,10 +31,15 @@ segment/dot geometry grows 4-8px; no sibling depends on the old heights).
 ## Gate 3 — Program design (contracts)
 
 - **Components (all render-only)**: add `min-h-hit min-w-hit` to w-8/w-9/w-10 compact buttons
-  (visual size unchanged, target grows to 44); InstallPrompt X + geolocation dismiss get hit
-  tokens; geolocation Enable + onboarding dots + LanguageToggle get height bumps
-  (dots 2→3, md-segment 32→36, md-container 40→44); phone/email/search inputs get `min-h-hit`
-  (parent containers already ≥48px; input becomes the full-height target).
+  (InstallPrompt X + geolocation dismiss get hit tokens; geolocation Enable gets a height bump;
+  onboarding dots get a 44px hit target via a child-span visual — the dot graphic stays 8px,
+  PR #275 target-vs-visual split); LanguageToggle segments carry the hit tokens directly and
+  the container hugs them (padding-only; the `size` prop is retired).
+  **Visual-size contract (amended after PR-Agent r4/r5, run #224): solid icon BUTTONS
+  (`bg-*` circles/pills) intentionally grow to the 44px floor — this is the repo's standing
+  pattern since PR #274 (PaymentSheet), followed by #275 (sheets), #287 (AppealSheet); the
+  PR-#275 walk-back applied to the avatar BADGE (a non-button visual), not to buttons.
+  Text/outline controls keep their visual size (the target grows around them).**
 - **i18n**: `legal.backAria` = "Go back" / "رجوع" — pages already bind `useTranslations('legal')`,
   so call sites use `t('backAria')` (NOT `t('legal.backAria')` — the i18n-literal-keys
   tripwire enforces this).
