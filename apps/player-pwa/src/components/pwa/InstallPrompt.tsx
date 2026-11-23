@@ -66,7 +66,7 @@ export default function InstallPrompt() {
                             <button
                                 onClick={handleDismiss}
                                 aria-label={t('notNow')}
-                                className="min-h-hit min-w-hit text-gray-400 -mt-0.5 flex-shrink-0 active:scale-95 transition-transform"
+                                className="min-h-hit min-w-hit -m-3 flex items-center justify-center text-gray-400 flex-shrink-0 active:scale-95 transition-transform"
                             >
                                 <X className="w-4 h-4" strokeWidth={2} />
                             </button>
