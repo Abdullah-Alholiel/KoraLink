@@ -88,7 +88,7 @@ export default function LanguageToggle({ size = 'sm', ariaLabel }: LanguageToggl
                         aria-pressed={active}
                         aria-label={loc === 'ar' ? 'العربية' : 'English'}
                         onClick={() => switchTo(loc)}
-                        className={`${segH} min-w-[44px] px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
+                        className={`${segH} min-h-hit min-w-[44px] px-2.5 rounded-full text-[13px] font-bold flex items-center justify-center transition-all active:scale-[0.97] ${
                             active
                                 ? 'bg-brand-green text-white shadow-[0_1px_4px_rgba(37,65,50,0.3)]'
                                 : 'text-gray-500'
