@@ -14,12 +14,19 @@ Mode: autonomous — all gates self-approved by the factory lane.
 - Slice 1: Rule A in `cancelMatch` + `isLateHostCancel` + `pitch_forfeit` push key.
 - Slice 2: Rule B in `markNoShow` (fee, reversal, karma) + `noshow_fee` log line.
 - Slice 3: spec `matches.money-rules-126.spec.ts`; terms keys EN+AR; lawyer brief §4.1.
+- Slice 4 (tier-C review fixes): forfeit stamp `matches.pitch_forfeited_sar` +
+  settlement-revenue counts stamped Cancelled matches (venue actually paid —
+  disclosure now true); karma exact-reversal via `match_players.no_show_karma_applied`;
+  `isLateHostCancel` covers past-start (dodge closed) with the InProgress exemption
+  explicit; migration 0061 (journal + prevId-linked snapshot, tripwires 8/8).
+  Terms page paragraph lists extended (closes the follow-up below).
 
 ## Verification
-- `npx jest src/modules/matches/matches.money-rules-126.spec.ts` → 11/11 green.
-- `npx jest src/modules/matches src/modules/notifications` → 44 suites / 359 tests green.
-- `npx tsc --noEmit -p apps/api/tsconfig.json` → 0 errors.
-- PWA vitest (legal-sections, legal-truth-pins, i18n parity) → green.
+- `npx jest src/modules/matches/matches.money-rules-126.spec.ts` → 15/15 green.
+- api jest FULL (post-fix) + tsc + turbo 3/3 — re-run by the parent after commit.
 
-## Open follow-up
-- Wire `termsRefundBody5` / `termsConductBody5` into `apps/player-pwa/src/app/[locale]/terms/page.tsx`.
+## Open follow-ups (documented, non-blocking)
+- No-show fee books as MATCH_FEE reference_type — shows in admin GMV as match revenue;
+  a dedicated NO_SHOW_FEE type is a deliberate follow-up (enum churn) flagged to counsel.
+- The forfeit/settlement semantics for SELF-mode bookings (no pitch debit) don't apply —
+  stamp only written on koralink bookings with pitch_cost_sar > 0.

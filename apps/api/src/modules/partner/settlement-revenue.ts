@@ -55,7 +55,14 @@ export function buildSettlementRevenueQuery(opts: SettlementRevenueQueryOpts): S
     INNER JOIN pitches p ON p.venue_id = v.id
     INNER JOIN matches m ON m.pitch_id = p.id
     WHERE ${venueFilter}
-      AND m.status = 'Completed'
+      AND (
+        (m.status = 'Completed')
+        -- Run #225 (P2-398 / D-20261115-04): a late host cancel forfeits the
+        -- pitch cost TO THE VENUE — those Cancelled matches are revenue for
+        -- the venue and must settle like completed ones (the forfeit stamp is
+        -- written only on koralink bookings, checked below).
+        OR (m.status = 'Cancelled' AND m.pitch_forfeited_sar IS NOT NULL)
+      )
       AND m.booking_mode = 'koralink'
       AND m.scheduled_at >= (${startDay}::date::timestamp AT TIME ZONE 'Asia/Riyadh')
       AND m.scheduled_at < (${endExclusive}::date::timestamp AT TIME ZONE 'Asia/Riyadh')

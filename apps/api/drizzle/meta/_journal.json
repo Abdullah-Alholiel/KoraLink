@@ -435,6 +435,13 @@
       "when": 1793115756733,
       "tag": "0060_waitlist_removed_verb",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793115756734,
+      "tag": "0061_pitch_forfeit_no_show_karma",
+      "breakpoints": true
     }
   ]
 }

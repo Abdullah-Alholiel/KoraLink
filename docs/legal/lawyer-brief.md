@@ -96,13 +96,19 @@ commit).
 - Applies to KoraLink-booked pitches only (`booking_mode = 'koralink'`) where the host
   was debited a pitch cost (`pitch_cost_sar > 0`) at match creation.
 - Cutoff: server wall clock (`Date.now()`) compared to the match's stored
-  `scheduled_at` (timestamptz). The cancel is "late" when kick-off has NOT yet passed
-  and is **less than 12 hours** away. Exactly 12h or more before kick-off → full refund.
-- Started matches are exempt: a cancel at or after `scheduled_at` (the in-app emergency
-  cancel of an in-progress match) keeps the full 100% pitch refund.
-- Effect of a late cancel: the booked slot is still released, but the host receives **no
-  wallet credit** for the pitch cost (no ledger row is written; the amount stays with the
-  venue side of the booking). The host gets a `pitch_forfeit` push explaining why.
+  `scheduled_at` (timestamptz). The cancel is "late" when it is NOT at least
+  12 hours before kick-off — i.e. anything inside the final 12h, AND anything
+  at or after the scheduled start (an unstarted match stays cancellable, and
+  cancelling it after kick-off cannot dodge the forfeit).
+- Exactly 12h or more before kick-off → full refund.
+- Started matches are exempt: cancelling an InProgress match (the in-app
+  emergency cancel) keeps the full 100% pitch refund regardless of the clock.
+- Effect of a late cancel: the booked slot is still released and the host
+  receives **no wallet credit** (no ledger row for the host). The forfeited
+  amount is STAMPED on the match row (`matches.pitch_forfeited_sar`) and the
+  venue-settlement generator counts stamped rows exactly like completed
+  bookings — the venue is paid through the normal settlement rail, with a
+  per-match auditable record visible to admin and partner consoles.
 - Joining players are always refunded 100% of the fee they paid (`refund-join-<rosterId>`
   REFUND credits), regardless of timing. The forfeit touches only the host's pitch cost.
 - Non-late cancels refund the host exactly the stored `pitch_cost_sar` under the
@@ -117,7 +123,10 @@ commit).
   It is debited from the player's in-app wallet as a `MATCH_FEE` DEBIT ledger row.
 - If the wallet cannot cover the fee, the whole mark is rejected (no flag, no fee, no
   karma change — all in one database transaction).
-- Karma: −5 on the mark (floored at 0), +5 when the mark is cleared (capped at 100).
+- Karma: the penalty is −5 floored at the player's current karma (a player at
+  0 loses nothing); the amount actually applied is stored per roster episode
+  (`match_players.no_show_karma_applied`) and the un-mark restores exactly
+  that amount — mark/clear is symmetric even at the floor (capped at 100).
 - Idempotency: one fee per roster episode — key `noshow-fee-<rosterRowId>`, never tied
   to the toggle state. Repeated marks, or mark → clear → mark again, can never charge
   twice (the ledger key is checked before writing and is UNIQUE in the database).

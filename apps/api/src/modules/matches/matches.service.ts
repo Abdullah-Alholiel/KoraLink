@@ -220,10 +220,15 @@ export const LATE_CANCEL_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Run #225 (D-20261115-04): is a host cancel "late" — i.e. the pitch cost is
- * forfeit to the venue? True only when the match has NOT started yet
- * (now < scheduled_at; a mid-game emergency cancel keeps the full refund) and
- * kick-off is less than 12h away on the wall clock. A missing/unparseable
- * scheduled_at is never late (fail toward the refund).
+ * forfeit to the venue? True when the cancel is NOT at least 12h before
+ * kick-off: anything inside the final 12h, AND anything at/after the
+ * scheduled start (a match that never got started stays cancellable, and
+ * cancelling it after kick-off must not refund the venue's slot). Tier-C
+ * review fix: the old `now < start` form let a host dodge the forfeit by
+ * waiting until one minute after kick-off. The emergency exemption is
+ * separate — the CALLER refunds InProgress matches regardless of this flag
+ * (a mid-game emergency cancel is not a late cancel).
+ * A missing/unparseable scheduled_at is never late (fail toward the refund).
  */
 export function isLateHostCancel(
   scheduledAt: Date | string | null | undefined,
@@ -232,7 +237,7 @@ export function isLateHostCancel(
   if (!scheduledAt) return false;
   const startMs = (scheduledAt instanceof Date ? scheduledAt : new Date(scheduledAt)).getTime();
   if (Number.isNaN(startMs)) return false;
-  return nowMs < startMs && startMs - nowMs < LATE_CANCEL_WINDOW_MS;
+  return startMs - nowMs < LATE_CANCEL_WINDOW_MS;
 }
 
 export interface NearbyMatchRow {
@@ -3472,12 +3477,24 @@ export class MatchesService {
           // manual refund exactly like the auto-cancel twin (P2-244) and
           // every other credit path.
           const refundSar = moneyToNumber(match.pitch_cost_sar);
-          if (refundSar > 0 && isLateHostCancel(match.scheduled_at, Date.now())) {
-            // Run #225 (D-20261115-04): host cancelled inside 12h of a
-            // not-yet-started paid booking — the pitch cost is forfeit to the
-            // venue (no wallet credit). The slot is still released above and
-            // joiners were already refunded 100% by the sweep.
+          // Emergency exemption (tier-C review): an InProgress match keeps the
+          // full refund; an Open/Full match at/after kick-off does NOT —
+          // isLateHostCancel is true past the start, so waiting out the 12h
+          // window cannot dodge the forfeit.
+          const emergencyInProgress = match.status === 'InProgress';
+          if (
+            refundSar > 0 &&
+            !emergencyInProgress &&
+            isLateHostCancel(match.scheduled_at, Date.now())
+          ) {
+            // D-20261115-04: forfeit to the venue — stamp the match row
+            // (settlement-revenue.ts counts it like a completed booking) and
+            // credit the host nothing. Slot stays released; joiners whole.
             forfeitedSar = refundSar;
+            await tx
+              .update(matches)
+              .set({ pitch_forfeited_sar: match.pitch_cost_sar })
+              .where(eq(matches.id, matchId));
           } else if (refundSar > 0) {
             await creditWalletTx(
               tx,
@@ -3999,6 +4016,33 @@ export class MatchesService {
       // reputation). Only adjust when the flag actually flips so repeated
       // host actions stay idempotent.
       if (player.no_show !== noShow) {
+        // Run #225 (D-20261113-10, tier-C review fix): the karma penalty is
+        // clamped by the floor at mark time, so the un-mark must reverse the
+        // amount ACTUALLY applied — stored per roster episode in
+        // no_show_karma_applied (NULL = legacy row marked pre-column, fall
+        // back to the constant). Without this, players at the 0 floor lose
+        // nothing on mark but GAIN +5 on un-mark.
+        let karmaApplied = NO_SHOW_KARMA_PENALTY;
+        if (noShow) {
+          const [karmaRow] = await tx
+            .select({ karma_score: schema.users.karma_score })
+            .from(schema.users)
+            .where(eq(schema.users.id, targetUserId))
+            .limit(1);
+          const current = karmaRow ? karmaRow.karma_score : 0;
+          karmaApplied = Math.min(NO_SHOW_KARMA_PENALTY, current);
+          await tx
+            .update(schema.match_players)
+            .set({ no_show_karma_applied: karmaApplied })
+            .where(eq(schema.match_players.id, player.id));
+        } else {
+          const [appliedRow] = await tx
+            .select({ applied: schema.match_players.no_show_karma_applied })
+            .from(schema.match_players)
+            .where(eq(schema.match_players.id, player.id))
+            .limit(1);
+          karmaApplied = appliedRow?.applied ?? NO_SHOW_KARMA_PENALTY;
+        }
         await tx
           .update(schema.users)
           .set(
@@ -4006,12 +4050,12 @@ export class MatchesService {
               no_show_count: noShow
                 ? sql`${schema.users.no_show_count} + 1`
                 : sql`GREATEST(${schema.users.no_show_count} - 1, 0)`,
-              // Run #225 (D-20261113-10): karma penalty rides the same flip.
-              // Schema: integer NOT NULL default 0, no DB bound — clamp to
-              // [0, 100] like the count's GREATEST floor.
+              // Karma: subtract exactly what the mark took (floored), restore
+              // exactly that on un-mark (capped at 100). Symmetric by
+              // construction now.
               karma_score: noShow
-                ? sql`GREATEST(${schema.users.karma_score} - ${NO_SHOW_KARMA_PENALTY}, 0)`
-                : sql`LEAST(${schema.users.karma_score} + ${NO_SHOW_KARMA_PENALTY}, 100)`,
+                ? sql`GREATEST(${schema.users.karma_score} - ${karmaApplied}, 0)`
+                : sql`LEAST(${schema.users.karma_score} + ${karmaApplied}, 100)`,
             }),
           )
           .where(eq(schema.users.id, targetUserId));

@@ -45,9 +45,15 @@ type Ledger = {
 interface World {
   ledger: Ledger[];
   matchRow: Record<string, unknown>;
+  /** users row for the karma read in markNoShow; undefined = empty select. */
+  userRow?: { karma_score: number };
+  /** matches UPDATE payloads carrying pitch_forfeited_sar (the forfeit stamp). */
+  forfeitStamps: Array<Record<string, unknown>>;
+  /** match_players UPDATE payloads (flag writes + karma-applied stamps). */
+  playerSets: Array<Record<string, unknown>>;
   payers: Array<{ id: string; user_id: string; fee_paid_sar: string | null }>;
   slot: { id: string; is_booked: boolean } | null;
-  player: { id: string; no_show: boolean; fee_paid_sar: string | null } | null;
+  player: ({ id: string; no_show: boolean; fee_paid_sar: string | null; no_show_karma_applied?: number | null } & Record<string, unknown>) | null;
   slotReleased: boolean;
   userSets: Array<Record<string, unknown>>;
   /** wallet_balance returned by the guarded users UPDATE (negative ⇒ 400). */
@@ -71,15 +77,21 @@ function makeTx(w: World) {
   }
   return {
     execute: async () => [w.matchRow],
-    select: () => ({
+    select: (cols?: Record<string, unknown>) => ({
       from: (table: unknown) => {
+        // column-aware mapping: a select shaped {applied: ...} reads the
+        // roster row's no_show_karma_applied (matches markNoShow's applied read)
+        const mapPlayer = (
+          r: { id: string; no_show: boolean; fee_paid_sar: string | null; no_show_karma_applied?: number | null },
+        ) => (cols && 'applied' in cols ? { applied: r.no_show_karma_applied } : r);
         if (table === matches) return chain(() => [w.matchRow]);
+        if (table === users) return chain(() => (w.userRow ? [w.userRow] : []));
         if (table === match_waitlist) return chain(() => []);
         if (table === disputes) return chain(() => []);
         if (table === pitch_slots) return chain(() => (w.slot ? [w.slot] : []));
         if (table === match_players) {
           // markNoShow selects one roster row; cancelMatch selects payers.
-          return chain(() => (w.player ? [w.player] : w.payers));
+          return chain(() => (w.player ? [mapPlayer(w.player)] : w.payers));
         }
         if (table === transactions) {
           const c = chain(() => []);
@@ -117,6 +129,8 @@ function makeTx(w: World) {
       set: (s: Record<string, unknown>) => ({
         where: () => {
           if (table === users) w.userSets.push(s);
+          if (table === matches && s.pitch_forfeited_sar !== undefined) w.forfeitStamps.push(s);
+          if (table === match_players) w.playerSets.push(s);
           if (table === pitch_slots && s.is_booked === false) w.slotReleased = true;
           return {
             then: (res: (v: unknown) => void) => res([]),
@@ -190,6 +204,8 @@ function cancelWorld(startsInMs: number, status = 'Open'): World {
     player: null,
     slotReleased: false,
     userSets: [],
+    forfeitStamps: [],
+    playerSets: [],
     balanceAfter: '100.00',
   };
 }
@@ -249,11 +265,40 @@ describe('Rule A (D-20261115-04) — cancelMatch late-cancel forfeit', () => {
     expect(host[0]).toMatchObject({ amount: '300.00', idempotency_key: `refund-${MATCH_ID}` });
   });
 
+  it('(c2) Open match at/after kick-off → FORFEIT (the wait-it-out dodge is closed)', async () => {
+    // Open match that never started, cancelled 30 min AFTER its scheduled
+    // start: isLateHostCancel is true past kick-off → forfeit, stamp written.
+    const w = cancelWorld(-30 * 60 * 1000, 'Open');
+    const { svc } = makeService(w);
+    await svc.cancelMatch(HOST, MATCH_ID);
+
+    expect(w.ledger.filter((l) => l.user_id === HOST)).toHaveLength(0);
+    expect(w.slotReleased).toBe(true);
+    expect(w.forfeitStamps).toEqual([
+      expect.objectContaining({ pitch_forfeited_sar: '300.00' }),
+    ]);
+  });
+
+  it('(c3) forfeit stamps the match row → settlement counts it; refund path writes NO stamp', async () => {
+    const late = cancelWorld(2 * HOUR);
+    const { svc: lateSvc } = makeService(late);
+    await lateSvc.cancelMatch(HOST, MATCH_ID);
+    expect(late.forfeitStamps).toEqual([
+      expect.objectContaining({ pitch_forfeited_sar: '300.00' }),
+    ]);
+
+    const early = cancelWorld(13 * HOUR);
+    const { svc: earlySvc } = makeService(early);
+    await earlySvc.cancelMatch(HOST, MATCH_ID);
+    expect(early.forfeitStamps).toHaveLength(0);
+  });
+
   it('isLateHostCancel: boundary + fail-toward-refund semantics', () => {
     const now = Date.UTC(2026, 10, 23, 12);
     expect(isLateHostCancel(new Date(now + 12 * HOUR), now)).toBe(false); // exactly 12h → refund
     expect(isLateHostCancel(new Date(now + 12 * HOUR - 1), now)).toBe(true);
-    expect(isLateHostCancel(new Date(now), now)).toBe(false); // started
+    expect(isLateHostCancel(new Date(now), now)).toBe(true); // at start → late (not ≥12h before)
+    expect(isLateHostCancel(new Date(now - 30 * 60_000), now)).toBe(true); // past start → late
     expect(isLateHostCancel(new Date(now + HOUR).toISOString(), now)).toBe(true);
     expect(isLateHostCancel(null, now)).toBe(false);
     expect(isLateHostCancel('garbage', now)).toBe(false);
@@ -265,7 +310,7 @@ describe('Rule A (D-20261115-04) — cancelMatch late-cancel forfeit', () => {
 const TARGET = 'player-1';
 const MP_ID = 'mp-9';
 
-function noShowWorld(fee: string | null, flagged = false): World {
+function noShowWorld(fee: string | null, flagged = false, karma = 10): World {
   return {
     ledger: [],
     matchRow: {
@@ -275,11 +320,14 @@ function noShowWorld(fee: string | null, flagged = false): World {
       scheduled_at: new Date('2020-01-01T18:00:00Z'),
       price_per_player: '35.00',
     },
+    userRow: { karma_score: karma },
     payers: [],
     slot: null,
     player: { id: MP_ID, no_show: flagged, fee_paid_sar: fee },
     slotReleased: false,
     userSets: [],
+    forfeitStamps: [],
+    playerSets: [],
     balanceAfter: '65.00',
   };
 }
@@ -345,6 +393,37 @@ describe('Rule B (D-20261113-10) — markNoShow fee + karma', () => {
     const { svc } = makeService(w);
     await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
     expect(w.ledger).toHaveLength(0);
+  });
+
+  it('(k1) mark a player with karma 3 → only 3 applied (floor-clamped, stamped per episode)', async () => {
+    const w = noShowWorld(null, false, 3);
+    const { svc } = makeService(w);
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+
+    // the episode stamps EXACTLY what was taken
+    expect(w.playerSets).toEqual(
+      expect.arrayContaining([expect.objectContaining({ no_show_karma_applied: 3 })]),
+    );
+    const k = karmaSet(w, 0);
+    expect(k.sql).toMatch(/GREATEST/);
+    expect(k.params).toEqual([3]);
+  });
+
+  it('(k2) un-mark reverses the STORED applied amount — karma 0 mark→unmark nets exactly zero', async () => {
+    // mark at the 0 floor: nothing applied, stamped 0
+    const w = noShowWorld(null, false, 0);
+    const { svc } = makeService(w);
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, true);
+    expect(w.playerSets).toEqual(
+      expect.arrayContaining([expect.objectContaining({ no_show_karma_applied: 0 })]),
+    );
+    expect(karmaSet(w, 0).params).toEqual([0]);
+
+    // un-mark: restores 0, not the constant 5 — no phantom gain
+    w.player!.no_show = true;
+    (w.player as { no_show_karma_applied?: number }).no_show_karma_applied = 0;
+    await svc.markNoShow(HOST, MATCH_ID, TARGET, false);
+    expect(karmaSet(w, 1).params).toEqual([0]);
   });
 
   it('(g) toggle on → off → on → exactly ONE fee debit (per-episode replay guard)', async () => {
