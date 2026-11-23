@@ -212,6 +212,29 @@ const PLATFORM_MARGIN_SAR = 5;
 /** Round a SAR amount up to 2 decimal places (money-safe, never rounds down). */
 const round2 = (n: number): number => Math.ceil(n * 100) / 100;
 
+/** D-20261113-10 karma penalty per no-show mark (reversed on un-mark). */
+export const NO_SHOW_KARMA_PENALTY = 5;
+
+/** D-20261115-04 late-cancel window: 12h before scheduled kick-off. */
+export const LATE_CANCEL_WINDOW_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Run #225 (D-20261115-04): is a host cancel "late" — i.e. the pitch cost is
+ * forfeit to the venue? True only when the match has NOT started yet
+ * (now < scheduled_at; a mid-game emergency cancel keeps the full refund) and
+ * kick-off is less than 12h away on the wall clock. A missing/unparseable
+ * scheduled_at is never late (fail toward the refund).
+ */
+export function isLateHostCancel(
+  scheduledAt: Date | string | null | undefined,
+  nowMs: number,
+): boolean {
+  if (!scheduledAt) return false;
+  const startMs = (scheduledAt instanceof Date ? scheduledAt : new Date(scheduledAt)).getTime();
+  if (Number.isNaN(startMs)) return false;
+  return nowMs < startMs && startMs - nowMs < LATE_CANCEL_WINDOW_MS;
+}
+
 export interface NearbyMatchRow {
   id: string;
   title: string;
@@ -3284,6 +3307,9 @@ export class MatchesService {
    */
   async cancelMatch(userId: string, matchId: string) {
     let refundedSar = 0;
+    // Run #225 (D-20261115-04): pitch cost forfeited to the venue on a late
+    // (<12h before kick-off, not yet started) host cancel — never credited.
+    let forfeitedSar = 0;
     // P1-17: ex-queued players collected in-tx for the post-commit push.
     let queueUserIds: string[] = [];
     // P2-193 (run #155): refunded payers collected in-tx for the post-commit
@@ -3298,7 +3324,7 @@ export class MatchesService {
       const [match] = await tx.execute(sql`
         SELECT id, host_id, status, booking_mode, booking_slot_id,
                pitch_cost_sar, price_per_player, max_players,
-               is_player_hosted, host_payout_state
+               is_player_hosted, host_payout_state, scheduled_at
         FROM matches
         WHERE id = ${matchId}::text
         FOR UPDATE
@@ -3307,6 +3333,7 @@ export class MatchesService {
         booking_mode: string; booking_slot_id: string | null;
         pitch_cost_sar: string | null; price_per_player: string; max_players: number;
         is_player_hosted: boolean; host_payout_state: string;
+        scheduled_at: Date | string | null;
       }>;
 
       if (!match) {
@@ -3445,7 +3472,13 @@ export class MatchesService {
           // manual refund exactly like the auto-cancel twin (P2-244) and
           // every other credit path.
           const refundSar = moneyToNumber(match.pitch_cost_sar);
-          if (refundSar > 0) {
+          if (refundSar > 0 && isLateHostCancel(match.scheduled_at, Date.now())) {
+            // Run #225 (D-20261115-04): host cancelled inside 12h of a
+            // not-yet-started paid booking — the pitch cost is forfeit to the
+            // venue (no wallet credit). The slot is still released above and
+            // joiners were already refunded 100% by the sweep.
+            forfeitedSar = refundSar;
+          } else if (refundSar > 0) {
             await creditWalletTx(
               tx,
               userId,
@@ -3467,7 +3500,10 @@ export class MatchesService {
     } catch (err) {
       this.logger.error(`WS broadcast error on cancelMatch: ${(err as Error).message}`);
     }
-    this.logger.log(`match_cancelled matchId=${matchId} refundSar=${refundedSar}`, MatchesService.name);
+    this.logger.log(
+      `match_cancelled matchId=${matchId} refundSar=${refundedSar} forfeitedSar=${forfeitedSar}`,
+      MatchesService.name,
+    );
 
     // P1-17: tell ex-queued players the match was cancelled (localized).
     if (queueUserIds.length > 0) {
@@ -3505,6 +3541,19 @@ export class MatchesService {
         });
       } catch (err) {
         this.logger.error(`refund_credited (pitch) push failed for ${matchId}: ${(err as Error).message}`);
+      }
+    }
+    // Run #225 (D-20261115-04): late-cancel forfeit — tell the host why no
+    // refund arrived (replaces refund_credited; never both).
+    if (forfeitedSar > 0) {
+      try {
+        await this.notificationsService.sendPushToUsers([userId], {
+          key: 'pitch_forfeit',
+          vars: { title: updatedMatch.title, amount: forfeitedSar.toFixed(2) },
+          data: { type: 'pitch-forfeit', matchId },
+        });
+      } catch (err) {
+        this.logger.error(`pitch_forfeit push failed for ${matchId}: ${(err as Error).message}`);
       }
     }
 
@@ -3875,6 +3924,9 @@ export class MatchesService {
       throw new BadRequestException('You cannot mark yourself as a no-show.');
     }
     let wasFlagged = false; // player's no_show state BEFORE this call
+    // Run #225 (D-20261113-10): money event for the post-commit log line.
+    type NoShowFeeEvent = { mpId: string; amountSar: number; kind: 'charged' | 'reversed' };
+    let noShowFeeEvent = null as NoShowFeeEvent | null;
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -3882,6 +3934,7 @@ export class MatchesService {
           host_id: matches.host_id,
           status: matches.status,
           scheduled_at: matches.scheduled_at,
+          price_per_player: matches.price_per_player,
         })
         .from(matches)
         .where(eq(matches.id, matchId))
@@ -3917,7 +3970,11 @@ export class MatchesService {
       }
 
       const [player] = await tx
-        .select({ id: schema.match_players.id, no_show: schema.match_players.no_show })
+        .select({
+          id: schema.match_players.id,
+          no_show: schema.match_players.no_show,
+          fee_paid_sar: schema.match_players.fee_paid_sar,
+        })
         .from(schema.match_players)
         .where(
           and(
@@ -3949,9 +4006,54 @@ export class MatchesService {
               no_show_count: noShow
                 ? sql`${schema.users.no_show_count} + 1`
                 : sql`GREATEST(${schema.users.no_show_count} - 1, 0)`,
+              // Run #225 (D-20261113-10): karma penalty rides the same flip.
+              // Schema: integer NOT NULL default 0, no DB bound — clamp to
+              // [0, 100] like the count's GREATEST floor.
+              karma_score: noShow
+                ? sql`GREATEST(${schema.users.karma_score} - ${NO_SHOW_KARMA_PENALTY}, 0)`
+                : sql`LEAST(${schema.users.karma_score} + ${NO_SHOW_KARMA_PENALTY}, 100)`,
             }),
           )
           .where(eq(schema.users.id, targetUserId));
+
+        // Run #225 (D-20261113-10): no-show fee on a PAID seat. Same tx as
+        // the flag write — an unaffordable fee (chargeMatchFeeTx 400) rolls
+        // the whole mark back, so nothing half-applies. Keys are per roster
+        // episode (match_players.id), never per toggle: replay pre-checks in
+        // chargeMatchFeeTx / creditWalletTx make repeated toggles idempotent.
+        const feeKey = `noshow-fee-${player.id}`;
+        if (noShow) {
+          const fee = moneyToNumber(match.price_per_player);
+          if (moneyToNumber(player.fee_paid_sar) > 0 && fee > 0) {
+            const charged = await chargeMatchFeeTx(tx, targetUserId, matchId, fee, feeKey);
+            if (charged !== 'REPLAYED') {
+              noShowFeeEvent = { mpId: player.id, amountSar: fee, kind: 'charged' };
+            }
+          }
+        } else {
+          const [priorFee] = await tx
+            .select({ amount: transactions.amount })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.idempotency_key, feeKey),
+                eq(transactions.user_id, targetUserId),
+              ),
+            )
+            .limit(1);
+          const reversal = priorFee ? moneyToNumber(priorFee.amount) : 0;
+          if (reversal > 0) {
+            await creditWalletTx(
+              tx,
+              targetUserId,
+              reversal,
+              `noshow-fee-reversal-${player.id}`,
+              'REFUND',
+              matchId,
+            );
+            noShowFeeEvent = { mpId: player.id, amountSar: reversal, kind: 'reversed' };
+          }
+        }
 
         if (noShow) {
           // The mark itself auto-opens a dispute so it lands in the admin
@@ -4012,6 +4114,14 @@ export class MatchesService {
         }
       }
     });
+
+    const feeEvent: NoShowFeeEvent | null = noShowFeeEvent;
+    if (feeEvent) {
+      this.logger.log(
+        `noshow_fee ${feeEvent.kind} matchId=${matchId} mpId=${feeEvent.mpId} userId=${targetUserId} amountSar=${feeEvent.amountSar.toFixed(2)}`,
+        MatchesService.name,
+      );
+    }
 
     const updatedMatch = await this.findOne(matchId);
     try {

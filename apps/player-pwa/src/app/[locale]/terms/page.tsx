@@ -52,6 +52,7 @@ const TERMS_SECTIONS: LegalSection[] = [
       'termsRefundBody2',
       'termsRefundBody3',
       'termsRefundBody4',
+      'termsRefundBody5',
     ],
   },
   {
@@ -61,6 +62,7 @@ const TERMS_SECTIONS: LegalSection[] = [
       'termsConductBody2',
       'termsConductBody3',
       'termsConductBody4',
+      'termsConductBody5',
     ],
   },
   {
