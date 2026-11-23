@@ -59,7 +59,7 @@ export default function InstallPrompt() {
                         <Download className="w-5 h-5 text-white" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-4">
                             <h3 className="text-sm font-bold text-brand-black leading-tight">
                                 {t('title')}
                             </h3>
