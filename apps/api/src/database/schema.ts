@@ -541,8 +541,8 @@ export const match_players = pgTable(
     // this episode's no-show mark (the −5 penalty clamped by the karma floor).
     // The un-mark reverses THIS amount, not a constant — mark/un-mark stays
     // symmetric for players sitting at the karma floor. NULL = no mark yet,
-    // or the mark was cleared (legacy rows marked pre-column fall back to the
-    // constant on un-mark).
+    // the mark was cleared, or the row was marked BEFORE this column existed
+    // (legacy marks never deducted karma, so the un-mark restores 0).
     no_show_karma_applied: integer('no_show_karma_applied'),
     // P2-58 (run #50): per-user read watermark for match-chat unread counts.
     // Roster-row-scoped (per match EPISODE): a leave→rejoin gets a fresh row

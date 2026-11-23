@@ -142,11 +142,19 @@ commit).
 - Karma on re-mark: the floor clamp applies at each mark against the player's
   CURRENT karma, and each mark stamps its own applied amount on the roster
   row — reversal always restores the latest mark's exact amount.
-- Note for counsel: a mark → clear → mark cycle charges, refunds, and charges
-  again (each flip is money-real; the ledger shows every episode). The
-  unaffordable-fee case still blocks the whole mark (no attendance record
-  without payment) — engineering chose that over recording an uncollectable
-  fee; flag if the terms need a debt/pending-charge model instead.
+- Note for counsel (fee cycle): a mark → clear → mark cycle charges,
+  refunds, and charges again (each flip is money-real; the ledger shows every
+  episode). The unaffordable-fee case blocks the whole mark (no attendance
+  record without payment) — engineering chose that over recording an
+  uncollectable fee; flag if the terms need a debt/pending-charge model.
+- Note for counsel (forfeit scope): the forfeit rule covers HOST-initiated
+  cancels only (`POST /matches/:id/cancel`). Platform auto-cancels
+  (underfilled matches past their start, expired booking holds, stranded
+  rows) keep the existing policy — full refund to the host — and cannot be
+  triggered by the host directly. Residual: a host could passively let a
+  booking run underfilled to capture the auto-cancel refund; flag if the
+  venue-side terms need that platform-cancel path to carry its own forfeit
+  rule (a separate policy decision, not part of D-20261115-04 as decided).
 - Where the fee goes: today it is debited from the player only; it is not credited to
   the host or venue. Question for counsel: should the terms say who receives it?
 
