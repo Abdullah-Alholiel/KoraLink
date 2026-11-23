@@ -1,8 +1,8 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 0 — PR #288 (F2 webhook, tier C) squash-merged `2c17093f` + LIVE on staging run #223.
-- **🔴 URGENT (owner: `promise`/`irreversible` kind): Neon quota STILL HARD-DOWN — Sentry KORALINK-API-1C 79 events/24h (lastSeen 2026-11-22T15:00Z, minutes before this run). Nightly prod backup FAILED 3rd consecutive night (03:21Z today; last GOOD dump Nov 20, now >2 days stale). Until fixed: prod writes fail + no fresh backup. FIX = console.neon.tech → billing/usage → upgrade (or accept D-20261122-01's cutover: restore the Nov-20 dump to VPS PG).**
+- Open PRs: 1 — PR #289 (P2-392 tap-target batch, run #224 lane) awaiting CI/triage/merge. PR #288 (F2 webhook, tier C) squash-merged `2c17093f` + LIVE on staging run #223.
+- **🔴 URGENT (owner: `irreversible` kind): Neon quota RE-IGNITED AGAIN — Sentry KORALINK-API-1C 81 events/24h (re-pulled run #224, lastSeen 2026-11-22T20:00Z); API-1F prod push-sweep dead 15 events/24h (same quota class). Nightly prod backup FAILED again 03:21Z Nov 22 — last GOOD dump Nov 20, now 3 days stale. Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you (the earlier "Sat 11-21" slot passed). Until then prod writes fail near-continuously and backups stay stale.**
 - **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; D-20261122-01 ordered the VPS Coolify cutover + Nov-20-backup restore instead of a Neon promote (owner `irreversible` — needs your supervised go for infra execution).**
 - Promote gap: 25 commits ahead of main (runs #216–#223); last promote 2026-11-18. D-20261122-01 makes the cutover the heal path; a Neon-first promote stays blocked on quota.
 - Services: API :3001 healthy on 2c17093f (F2 webhook endpoint live, flag-off = exact 403), PWA :3000 + admin :3002 active. Tailscale funnels still DOWN (owner re-auth pending).
