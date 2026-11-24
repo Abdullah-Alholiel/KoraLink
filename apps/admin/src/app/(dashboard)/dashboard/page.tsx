@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import LoadingState from '@/components/LoadingState';
 import type { AdminMetrics } from '@/lib/types';
 import { formatMoney, formatPercent, formatMetricInt } from '@/lib/utils';
 import MetricCard from '@/components/MetricCard';
@@ -44,7 +45,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader title={t('dashboardTitle')} />
-        <div className="p-8 text-sm text-gray-500">{t('loadingMetrics')}</div>
+        <LoadingState message={t('loadingMetrics')} />
       </div>
     );
   }
