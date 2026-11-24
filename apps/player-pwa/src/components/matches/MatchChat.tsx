@@ -263,7 +263,7 @@ export default function MatchChat({
                     type="button"
                     onClick={onExpand}
                     data-testid="chat-expand"
-                    className="flex items-center gap-1 text-xs font-bold text-brand-green bg-brand-green/10 rounded-full px-3 py-1.5 flex-shrink-0 active:scale-95 transition-transform ml-2"
+                    className="flex items-center gap-1 text-xs font-bold text-brand-green bg-brand-green/10 rounded-full px-3 py-1.5 flex-shrink-0 active:scale-95 transition-transform ms-2"
                 >
                     <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
                     <span className="whitespace-nowrap">{t('chatSheet.openFullThread')}</span>
@@ -453,10 +453,16 @@ export default function MatchChat({
                         // P1-31 parity: report an abusive received lobby message.
                         <button
                           onClick={() => setReportTargetId(msg.id)}
-                          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all"
+                          className="group -m-2 flex min-h-hit min-w-hit items-center justify-center"
                           aria-label={t('report.chatMessage')}
                         >
-                          <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                          {/* P2-397: 44px hit target, 28px visual (-m-2 keeps the layout footprint). */}
+                          <span
+                            aria-hidden="true"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-300 transition-all group-hover:bg-gray-100 group-hover:text-gray-500 group-active:scale-95"
+                          >
+                            <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                          </span>
                         </button>
                       )}
                     </span>
@@ -554,7 +560,7 @@ export default function MatchChat({
           <button
             onClick={handleSend}
             disabled={!input.trim() || chatClosedLocked}
-            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
+            className={`w-10 h-10 min-h-hit min-w-hit rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
               input.trim()
                 ? 'bg-brand-green text-white shadow-[0_4px_12px_rgba(37,65,50,0.3)]'
                 : 'bg-gray-200 text-gray-400'

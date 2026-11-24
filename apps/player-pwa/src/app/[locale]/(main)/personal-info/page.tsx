@@ -95,7 +95,7 @@ export default function PersonalInfoPage() {
       <div className="sticky top-0 z-40 flex items-center bg-white px-4 pt-[var(--top-safe-inset)] pb-2 shadow-[0_4px_14px_rgba(0,0,0,0.07)] border-b border-gray-100">
         <button
           onClick={() => (editing ? setEditing(false) : router.back())}
-          className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-50"
+          className="flex h-10 w-10 min-h-hit min-w-hit items-center justify-center rounded-full hover:bg-gray-50"
           aria-label={t('common.back')}
         >
           <ArrowLeft className="h-5 w-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />
@@ -177,12 +177,19 @@ export default function PersonalInfoPage() {
                     )}
                   </div>
                   {!editing && (
+                    // P2-397: 44px transparent hit target, 28px visible badge
+                    // (AvatarUpload split pattern); -m-2 keeps the badge anchored.
                     <button
                       onClick={startEdit}
-                      className="absolute bottom-0 end-0 flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md active:scale-95 transition-transform"
+                      className="group absolute bottom-0 end-0 -m-2 flex min-h-hit min-w-hit items-center justify-center"
                       aria-label={t('common.edit')}
                     >
-                      <Pencil className="h-3 w-3" strokeWidth={2.5} />
+                      <span
+                        aria-hidden="true"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-brand-green shadow-md transition-transform group-active:scale-95"
+                      >
+                        <Pencil className="h-3 w-3" strokeWidth={2.5} />
+                      </span>
                     </button>
                   )}
                 </div>
