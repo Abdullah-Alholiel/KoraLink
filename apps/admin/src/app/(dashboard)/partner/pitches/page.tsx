@@ -6,7 +6,8 @@ import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import { pitchActionFailure, type PitchActionFailure } from '@/lib/blackout';
 import type { PartnerPitch, PartnerSlot, PartnerVenueRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -25,6 +26,14 @@ interface SlotsResponse {
 export default function MyPitchesPage() {
   const t = useTranslations('partner.pitches');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canCreatePitch = can(role, 'pitch.create');
+  const canEditPitch = can(role, 'pitch.edit');
   const { data, loading, error, reload } = useLiveAdminData<PartnerPitch[]>('/partner/pitches', ['venues']);
   const venues = useLiveAdminData<PartnerVenueRow[]>('/partner/venues', ['venues']);
 
@@ -147,12 +156,14 @@ export default function MyPitchesPage() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
+          canCreatePitch && (
           <button
             onClick={() => setCreating(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" /> {t('addNewPitch')}
           </button>
+          )
         }
       />
 
@@ -272,6 +283,8 @@ export default function MyPitchesPage() {
                       <Zap className="h-4 w-4" /> {t('manageSchedule')}
                     </button>
                     <div className="flex gap-2">
+                      {canEditPitch && (
+                      <>
                       <button
                         onClick={() => toggleActive(p)}
                         disabled={busy}
@@ -287,6 +300,8 @@ export default function MyPitchesPage() {
                           <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
                         </span>
                       </button>
+                      </>
+                      )}
                       <button
                         onClick={() => setDeleting(p)}
                         disabled={busy}

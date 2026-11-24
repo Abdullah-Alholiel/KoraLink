@@ -58,6 +58,14 @@ export const SECTION_BY_ROLE: Record<Role, ConsoleSection[]> = {
   Player: [],
 };
 
+/**
+ * HQ (non-partner) sections, derived from SECTION_BY_ROLE so the section list
+ * has a single source (P2-400e). Partner paths are mapped separately below.
+ */
+const KNOWN_SECTIONS: ConsoleSection[] = [
+  ...new Set(Object.values(SECTION_BY_ROLE).flat().filter((s) => !s.startsWith('partner.'))),
+];
+
 /** Map a pathname to its console section (null = outside the console). */
 export function sectionForPath(pathname: string): ConsoleSection | null {
   if (pathname.startsWith('/partner')) {
@@ -68,21 +76,7 @@ export function sectionForPath(pathname: string): ConsoleSection | null {
   }
   const seg = pathname.replace(/^\//, '').split('/')[0];
   if (!seg) return null;
-  const known: ConsoleSection[] = [
-    'dashboard',
-    'users',
-    'matches',
-    'venues',
-    'pitches',
-    'disputes',
-    'reports',
-    'reviews',
-    'transactions',
-    'settlements',
-    'settings',
-    'audit',
-  ];
-  return known.includes(seg as ConsoleSection) ? (seg as ConsoleSection) : null;
+  return KNOWN_SECTIONS.includes(seg as ConsoleSection) ? (seg as ConsoleSection) : null;
 }
 
 /** Where a role lands after login. */

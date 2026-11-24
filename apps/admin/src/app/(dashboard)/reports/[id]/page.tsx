@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminReportDetail } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -19,6 +20,15 @@ const CLOSED = new Set(['resolved', 'dismissed']);
 export default function ReportDetailPage() {
   const t = useTranslations('adminReports');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canResolve = can(role, 'report.resolve');
+  const canReopen = can(role, 'report.reopen');
+  const canBan = can(role, 'user.ban');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -220,6 +230,7 @@ export default function ReportDetailPage() {
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">{t('closedAs', { status: statusLabel })}</p>
                 <div className="flex gap-2">
+                  {canReopen && (
                   <button
                     onClick={() => setConfirmReopen(true)}
                     disabled={saving}
@@ -227,6 +238,7 @@ export default function ReportDetailPage() {
                   >
                     <RotateCcw className="h-4 w-4" /> {t('reopen')}
                   </button>
+                  )}
                   <button
                     onClick={startEdit}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -236,7 +248,7 @@ export default function ReportDetailPage() {
                 </div>
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
               </div>
-            ) : (
+            ) : canResolve ? (
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <button
@@ -272,7 +284,7 @@ export default function ReportDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={3}
                 />
-                {isUserSubject && outcome === 'resolved' && (
+                {isUserSubject && outcome === 'resolved' && canBan && (
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="checkbox"
@@ -293,7 +305,7 @@ export default function ReportDetailPage() {
                   {t('submit')}
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

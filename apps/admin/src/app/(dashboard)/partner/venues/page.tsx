@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, MapPin, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
 import type { PartnerVenueRow } from '@/lib/types';
+import type { Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import VenueFormDrawer from '@/components/VenueFormDrawer';
@@ -14,6 +16,13 @@ import VenueFormDrawer from '@/components/VenueFormDrawer';
 export default function PartnerVenuesPage() {
   const t = useTranslations('partner.venues');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canCreateVenue = can(role, 'venue.create');
   const { data, loading, error, reload } = useLiveAdminData<PartnerVenueRow[]>('/partner/venues', ['venues']);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PartnerVenueRow | null>(null);
@@ -24,12 +33,14 @@ export default function PartnerVenuesPage() {
         title={t('titleMine')}
         subtitle={t('subtitleMine')}
         actions={
+          canCreateVenue && (
           <button
             onClick={() => setCreating(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" /> {t('addVenue')}
           </button>
+          )
         }
       />
 

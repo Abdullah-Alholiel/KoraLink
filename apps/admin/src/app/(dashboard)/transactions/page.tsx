@@ -2,13 +2,14 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminTransaction, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -31,6 +32,13 @@ export default function TransactionsPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so the refund button never flashes.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canRefund = can(role, 'transaction.refund');
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
   const [sort, setSort] = useState('');
@@ -288,7 +296,7 @@ export default function TransactionsPage() {
             : []
         }
         actions={
-          selected && selected.type === 'DEBIT' && selected.status === 'Completed' ? (
+          selected && selected.type === 'DEBIT' && selected.status === 'Completed' && canRefund ? (
             busyId === selected.id ? (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
@@ -8,7 +8,8 @@ import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import LoadingState from '@/components/LoadingState';
 import EmptyState from '@/components/EmptyState';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminVenueDetail } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -25,6 +26,13 @@ export default function VenueDetailPage() {
   const t = useTranslations('venueDetail');
   const tHQ = useTranslations('hq');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canApprove = can(role, 'venue.approve');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -156,7 +164,7 @@ export default function VenueDetailPage() {
                     </dd>
                   </div>
                 </dl>
-                {!data.is_approved && (
+                {!data.is_approved && canApprove && (
                   <div className="mt-4">
                     <div className="flex gap-2">
                       <button

@@ -6,7 +6,8 @@ import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminPitchList, AdminPitchRow, AdminVenueListRow, PartnerSlot } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { weekEnd, weekStart } from '@/lib/week';
@@ -32,6 +33,13 @@ export default function AdminPitchesPage() {
   const t = useTranslations('adminPitches');
   const ts = useTranslations('status');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canEditPitch = can(role, 'pitch.edit');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -245,6 +253,8 @@ export default function AdminPitchesPage() {
                 >
                   <CalendarClock className="h-3.5 w-3.5" /> {t('scheduleBtn')}
                 </button>
+                {canEditPitch && (
+                <>
                 <button
                   onClick={() => toggleActive(selected)}
                   aria-label={selected.is_active ? ts('inactive') : ts('active')}
@@ -258,6 +268,8 @@ export default function AdminPitchesPage() {
                 >
                   {tc('edit')}
                 </button>
+                </>
+                )}
               </div>
             )
           ) : undefined

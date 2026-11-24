@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminUser } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -38,6 +39,15 @@ function userStatus(u: AdminUser): string {
 export default function UserDetailPage() {
   const t = useTranslations('userDetail');
   const tHQ = useTranslations('hq');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canBan = can(role, 'user.ban');
+  const canSuspend = can(role, 'user.suspend');
+  const canSetRole = can(role, 'user.setRole');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -95,7 +105,7 @@ export default function UserDetailPage() {
     ],
     [
       'role',
-      (
+      canSetRole ? (
         <div className="relative inline-flex">
           <select
             value={data.role}
@@ -112,6 +122,8 @@ export default function UserDetailPage() {
           </select>
           <ChevronDown className="pointer-events-none absolute end-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
+      ) : (
+        tHQ(`role${data.role}`)
       ),
     ],
     ['wallet', formatMoney(data.wallet_balance)],
@@ -169,7 +181,7 @@ export default function UserDetailPage() {
             <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
           ) : (
             <>
-              {st === 'banned' ? (
+              {canBan && (st === 'banned' ? (
                 <button
                   onClick={() => act({ banned: false })}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
@@ -183,8 +195,8 @@ export default function UserDetailPage() {
                 >
                   <Ban className="h-4 w-4" /> {t('ban')}
                 </button>
-              )}
-              {st === 'suspended' ? (
+              ))}
+              {canSuspend && (st === 'suspended' ? (
                 <>
                   <button
                     onClick={() => setSuspendMenu(true)}
@@ -206,7 +218,7 @@ export default function UserDetailPage() {
                 >
                   <TimerOff className="h-4 w-4" /> {t('suspendBtn')}
                 </button>
-              )}
+              ))}
             </>
           )}
         </div>

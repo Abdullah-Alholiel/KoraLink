@@ -8,7 +8,8 @@ import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { Settlement, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -29,6 +30,14 @@ export default function SettlementsPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canPay = can(role, 'settlement.pay');
+  const canGenerate = can(role, 'settlement.generate');
   const [status, setStatus] = useState('');
   const [sort, setSort] = useState('');
   const [page, setPage] = useState(1);
@@ -274,6 +283,7 @@ export default function SettlementsPage() {
         <SortSelect value={sort} options={sortOptions} onChange={onSortChange} />
         {/* P2-284 (run #179): optional generate scope — pick one venue to
             settle just that batch member; '' = all venues (default). */}
+        {canGenerate && (
         <select
           aria-label={t('generateScopeLabel')}
           value={generateVenue}
@@ -287,6 +297,7 @@ export default function SettlementsPage() {
             </option>
           ))}
         </select>
+        )}
         <button
           type="button"
           onClick={onExport}
@@ -297,6 +308,7 @@ export default function SettlementsPage() {
           <Download className="h-4 w-4" />
           {t('exportSettlements')}
         </button>
+        {canGenerate && (
         <button
           onClick={generate}
           disabled={generating}
@@ -305,6 +317,7 @@ export default function SettlementsPage() {
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {t('generatePayouts')}
         </button>
+        )}
       </div>
 
       {/* shared always-mounted live-region pair (success polite /
@@ -379,7 +392,7 @@ export default function SettlementsPage() {
             : []
         }
         actions={
-          selected && selected.status === 'pending' ? (
+          selected && selected.status === 'pending' && canPay ? (
             <>
               {/* P2-267: pay failure alert INSIDE the drawer (the button's
                   surface) — mounts on failure so role=alert announces it;
