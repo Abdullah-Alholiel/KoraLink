@@ -30,7 +30,6 @@ const READ_ONLY: string[] = [];
  * until one exists. They are reachable only by the role that owns the API.
  */
 const NO_TOKEN_YET: string[] = [
-  'reviews/page.tsx', // hide/restore/delete review — no review.* token
   'partner/earnings/page.tsx', // payout request — no payout.* token
 ];
 
@@ -89,6 +88,7 @@ describe('rbac census', () => {
         'partner/venues/page.tsx',
         'pitches/page.tsx',
         'reports/[id]/page.tsx',
+        'reviews/page.tsx',
         'settings/page.tsx',
         'settlements/page.tsx',
         'transactions/page.tsx',

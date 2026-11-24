@@ -109,7 +109,8 @@ export type ConsoleAction =
   | 'pitch.edit'
   | 'pitch.transfer'
   | 'venue.create'
-  | 'verification.submit';
+  | 'verification.submit'
+  | 'review.moderate';
 
 const ACTIONS_BY_ROLE: Record<Role, ConsoleAction[]> = {
   Admin: [
@@ -132,6 +133,7 @@ const ACTIONS_BY_ROLE: Record<Role, ConsoleAction[]> = {
     'pitch.edit',
     'pitch.transfer',
     'venue.create',
+    'review.moderate',
   ],
   VenueOwner: [
     'pitch.create',

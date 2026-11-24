@@ -11,7 +11,8 @@ import LoadError from '@/components/LoadError';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import RecordDrawer from '@/components/RecordDrawer';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { ListResponse, VenueReview, VenueReviewMutation } from '@/lib/types';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { cn, formatDate } from '@/lib/utils';
@@ -42,6 +43,13 @@ function Stars({ rating, label }: { rating: number; label: string }) {
 
 export default function ReviewsPage() {
   const t = useTranslations('reviews');
+  // RBAC (P2-400, run #228): resolve the role once on mount (getRole() reads
+  // browser storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canModerate = can(role, 'review.moderate');
   const [venueId, setVenueId] = useState('');
   const [hidden, setHidden] = useState('');
   // P2-336 (run #199): rating filter + sort controls ('' = all).
@@ -341,7 +349,7 @@ export default function ReviewsPage() {
               )}
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-              ) : (
+              ) : canModerate ? (
                 <>
                   <button
                     onClick={() => run(selected, selected.hidden_at ? 'restore' : 'hide')}
@@ -357,14 +365,14 @@ export default function ReviewsPage() {
                     <Trash2 className="h-3.5 w-3.5" /> {t('delete')}
                   </button>
                 </>
-              )}
+              ) : undefined}
             </>
           ) : undefined
         }
       />
 
       <ConfirmDialog
-        open={confirmDelete}
+        open={confirmDelete && canModerate}
         danger
         title={t('deleteConfirmTitle')}
         message={t('deleteConfirmMessage')}
