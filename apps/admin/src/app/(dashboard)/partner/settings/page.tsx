@@ -1,18 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { PartnerVerificationRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 
 export default function PartnerSettingsPage() {
   const t = useTranslations('partner.settings');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canSubmit = can(role, 'verification.submit');
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerVerificationRow[]>('/partner/verification', ['venues']);
   const [selected, setSelected] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -152,6 +160,7 @@ export default function PartnerSettingsPage() {
                   />
                 </div>
               </div>
+              {canSubmit && (
               <button
                 onClick={submit}
                 disabled={saving || !form.legal_entity_name}
@@ -160,6 +169,7 @@ export default function PartnerSettingsPage() {
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {t('submitVerification')}
               </button>
+              )}
             </div>
           </div>
         )}

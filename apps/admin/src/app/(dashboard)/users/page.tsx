@@ -2,14 +2,15 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Ban, CheckCircle2, Download, Loader2, RotateCcw, Search, TimerOff } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminUser, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -66,6 +67,15 @@ export default function UsersPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  // (`role` below is the list's role filter — hence viewerRole.)
+  const [viewerRole, setViewerRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setViewerRole(getRole());
+  }, []);
+  const canBan = can(viewerRole, 'user.ban');
+  const canSuspend = can(viewerRole, 'user.suspend');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
@@ -414,6 +424,7 @@ export default function UsersPage() {
                 <span className="ms-2 font-normal text-red-600">{t('bulkCapNote', { cap: BULK_CAP })}</span>
               )}
             </span>
+            {canBan && (
             <button
               type="button"
               disabled={bulkRunning || overCap}
@@ -422,6 +433,8 @@ export default function UsersPage() {
             >
               <Ban className="h-3.5 w-3.5" /> {t('bulkBan')}
             </button>
+            )}
+            {canSuspend && (
             <button
               type="button"
               disabled={bulkRunning || overCap}
@@ -430,6 +443,7 @@ export default function UsersPage() {
             >
               <TimerOff className="h-3.5 w-3.5" /> {t('bulkSuspend')}
             </button>
+            )}
             {bulkRunning && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
             <button
               type="button"
@@ -561,7 +575,7 @@ export default function UsersPage() {
               })()
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                {userStatus(selected) === 'banned' ? (
+                {canBan && (userStatus(selected) === 'banned' ? (
                   <button
                     onClick={() => act(selected.id, { banned: false })}
                     className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
@@ -575,8 +589,8 @@ export default function UsersPage() {
                   >
                     <Ban className="h-3.5 w-3.5" /> {t('banAction')}
                   </button>
-                )}
-                {userStatus(selected) === 'suspended' ? (
+                ))}
+                {canSuspend && (userStatus(selected) === 'suspended' ? (
                   <button
                     onClick={() => act(selected.id, { suspendedUntil: null })}
                     className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
@@ -594,7 +608,7 @@ export default function UsersPage() {
                   >
                     <TimerOff className="h-3.5 w-3.5" /> {t('suspendAction')}
                   </button>
-                )}
+                ))}
               </div>
             )
           )

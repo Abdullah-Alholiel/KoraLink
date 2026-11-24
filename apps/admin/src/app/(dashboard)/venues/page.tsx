@@ -2,14 +2,15 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Pencil, Search, UserCog, XCircle } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminVenue, ListResponse, PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
@@ -25,6 +26,14 @@ export default function VenuesPage() {
   const t = useTranslations('hq');
   const ts = useTranslations('status');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canApprove = can(role, 'venue.approve');
+  const canTransfer = can(role, 'venue.transfer');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -200,7 +209,7 @@ export default function VenuesPage() {
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                {!selected.is_approved && (
+                {!selected.is_approved && canApprove && (
                   <>
                     <button
                       onClick={() => decide(selected.id, 'approve')}
@@ -216,18 +225,22 @@ export default function VenuesPage() {
                     </button>
                   </>
                 )}
+                {canTransfer && (
                 <button
                   onClick={() => setTransferring(selected)}
                   className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
                 >
                   <UserCog className="h-3.5 w-3.5" /> {t('transferAction')}
                 </button>
+                )}
+                {canTransfer && (
                 <button
                   onClick={() => startEdit(selected)}
                   className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
                 </button>
+                )}
               </div>
             )
           ) : undefined

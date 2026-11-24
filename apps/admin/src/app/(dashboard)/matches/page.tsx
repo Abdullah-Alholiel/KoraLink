@@ -2,13 +2,14 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ban, Download, Loader2, Pencil } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { can, getRole } from '@/lib/rbac';
 import type { AdminMatch, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -31,6 +32,14 @@ export default function MatchesPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
+  // storage). null = not permitted, so write buttons never flash.
+  const [role, setRole] = useState<Role | null>(null);
+  useEffect(() => {
+    setRole(getRole());
+  }, []);
+  const canEditMatch = can(role, 'match.edit');
+  const canCancelMatch = can(role, 'match.cancel');
   const [status, setStatus] = useState('');
   const [sort, setSort] = useState('');
   const [page, setPage] = useState(1);
@@ -239,23 +248,27 @@ export default function MatchesPage() {
             : []
         }
         actions={
-          selected && !TERMINAL.has(selected.status) ? (
+          selected && !TERMINAL.has(selected.status) && (canEditMatch || canCancelMatch) ? (
             busyId === selected.id ? (
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             ) : (
               <div className="flex flex-wrap items-center gap-2">
+                {canEditMatch && (
                 <button
                   onClick={() => setEditing(selected)}
                   className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700"
                 >
                   <Pencil className="h-3.5 w-3.5" /> {t('editAction')}
                 </button>
+                )}
+                {canCancelMatch && (
                 <button
                   onClick={() => cancel(selected.id)}
                   className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                 >
                   <Ban className="h-3.5 w-3.5" /> {t('cancelAction')}
                 </button>
+                )}
               </div>
             )
           ) : undefined
