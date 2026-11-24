@@ -28,6 +28,7 @@ const TOKEN_MAP: Record<ConsoleAction, true> = {
   'pitch.transfer': true,
   'venue.create': true,
   'verification.submit': true,
+  'review.moderate': true,
 };
 const ALL_ACTIONS = Object.keys(TOKEN_MAP) as ConsoleAction[];
 const ROLES: Role[] = ['Admin', 'VenueOwner', 'Player'];
@@ -49,6 +50,7 @@ describe('rbac parity', () => {
     expect(can('VenueOwner', 'settlement.generate')).toBe(false);
     expect(can('VenueOwner', 'transaction.refund')).toBe(false);
     expect(can('VenueOwner', 'user.ban')).toBe(false);
+    expect(can('VenueOwner', 'review.moderate')).toBe(false);
   });
 
   it('Player has no actions and no sections', () => {
