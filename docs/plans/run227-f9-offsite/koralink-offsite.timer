@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly KoraLink offsite backup push (after the local dump + canary)
+
+[Timer]
+# 04:00 UTC — 40min after koralink-backup-prod.timer (03:20) so the newest
+# dump is always older than the script's 5-minute freshness gate.
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

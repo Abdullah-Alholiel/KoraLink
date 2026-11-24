@@ -1,0 +1,11 @@
+[Unit]
+Description=KoraLink PROD offsite encrypted backup push (F9)
+# Disabled by default: enable ONLY after the owner creates the private
+# backup repo and GH_BACKUP_REPO is set (kanban/OWNER-QUEUE.md NEW-10).
+# Until then a manual run fails loud at the repo gate by design.
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/projects/koralink/scripts/db-offsite-push.sh
+# A hung run must not hold the flock forever (Claude tier-C review, run #227).
+TimeoutStartSec=1800
