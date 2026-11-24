@@ -102,6 +102,7 @@ describe('MatchWaitlistService.notifyPromotion — P2-95 push fan-out (run #70)'
     );
     expect(gateway.broadcastRosterUpdate).toHaveBeenCalledWith('match-1', {
       promoted: 'user-1',
+      chargedSar: null,
     });
     expect(notifications.sendPushToUsers).toHaveBeenCalled();
   });
@@ -126,5 +127,29 @@ describe('MatchWaitlistService.notifyPromotion — P2-95 push fan-out (run #70)'
 
     await expect(svc.notifyPromotion(promotion, 'match-1')).resolves.toBeUndefined();
     expect(notifications.sendPushToUsers).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MatchWaitlistService.notifyPromotion — roster-update carries chargedSar (P2-357)', () => {
+  it('a CHARGED promotion broadcasts the charged amount so the open match page can confirm it', async () => {
+    const { svc, gateway } = makeService();
+
+    await svc.notifyPromotion({ ...promotion, chargedSar: 37.5 }, 'match-1');
+
+    expect(gateway.broadcastRosterUpdate).toHaveBeenCalledWith('match-1', {
+      promoted: 'user-1',
+      chargedSar: 37.5,
+    });
+  });
+
+  it('a FREE promotion broadcasts chargedSar: null', async () => {
+    const { svc, gateway } = makeService();
+
+    await svc.notifyPromotion({ ...promotion, chargedSar: null }, 'match-1');
+
+    expect(gateway.broadcastRosterUpdate).toHaveBeenCalledWith('match-1', {
+      promoted: 'user-1',
+      chargedSar: null,
+    });
   });
 });

@@ -254,7 +254,9 @@
     "queuedOf": "Queued · #{position} of {count} waiting",
     "leave": "Leave",
     "leaving": "Leaving…",
-    "leaveFailed": "Couldn't leave the waitlist"
+    "leaveFailed": "Couldn't leave the waitlist",
+    "promoted": "A spot opened up — you were moved off the waitlist into the game.",
+    "promotedCharged": "A spot opened up — you were moved off the waitlist into the game. {amount} SAR was charged to your wallet."
   },
   "matchDetail": {
     "offlineNotice": "You're offline — check your connection, then try again.",

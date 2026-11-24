@@ -428,7 +428,10 @@ export class MatchWaitlistService {
         recipients: [promotion.userId],
         excludeActor: false, // the promoted player IS the recipient
       });
-      this.appGateway.broadcastRosterUpdate(matchId, { promoted: promotion.userId });
+      this.appGateway.broadcastRosterUpdate(matchId, {
+        promoted: promotion.userId,
+        chargedSar: promotion.chargedSar ?? null,
+      });
     } catch (err) {
       this.logger.error(
         `waitlist promotion activity fan-out failed (match ${matchId}): ${(err as Error).message}`,

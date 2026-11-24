@@ -1,5 +1,5 @@
 import { AppGateway } from './app.gateway';
-import { users, match_players, matches } from '../../database/schema';
+import { users, match_players, matches, match_waitlist } from '../../database/schema';
 
 /** Room ids must be UUID-shaped (run #78 gateway id-shape check). */
 const MATCH_ID = '11111111-1111-4111-8111-111111111111';
@@ -1273,4 +1273,92 @@ describe('send-message tx serialization (P2-220-twin, run #147)', () => {
     expect(insertCalled).toBe(false);
   });
 });
+});
+
+describe('join-lobby admits waitlisted viewers (P2-357)', () => {
+  const ACTIVE = { id: 'u1', role: 'Player', banned_at: null, suspended_until: null };
+
+  /** Table-routed select stub: users → active row, match_players → roster,
+   * match_waitlist → queue rows. Records which tables were read. */
+  function makeDb(roster: Array<{ id: string }>, waitlist: Array<{ id: string }>) {
+    const reads: unknown[] = [];
+    const db = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => {
+              reads.push(table);
+              if (table === users) return [ACTIVE];
+              if (table === match_players) return roster;
+              if (table === match_waitlist) return waitlist;
+              return [];
+            },
+          }),
+        }),
+      }),
+    };
+    return { db, reads };
+  }
+
+  function makeGw(db: unknown) {
+    return new AppGateway(
+      db as never,
+      { verify: () => ({ sub: 'u1', role: 'Player' }) } as never,
+      {
+        get: (_k: string, def?: string) => def,
+        getOrThrow: (k: string) => {
+          if (k === 'JWT_SECRET') return 'test-secret';
+          throw new Error(`config key not stubbed: ${k}`);
+        },
+      } as never,
+      {} as never,
+      { userRoom: (id: string) => `user:${id}`, registerServer: () => undefined } as never,
+      {} as never,
+      {} as never,
+      { consume: () => ({ allowed: true, retryAfterSec: 0 }), release: () => undefined } as never,
+    );
+  }
+
+  function makeClient() {
+    const emit = jest.fn();
+    return {
+      userId: 'u1',
+      join: jest.fn(async () => undefined),
+      to: jest.fn(() => ({ emit })),
+      emit,
+    };
+  }
+
+  it('roster miss + waitlist hit → joins match:<id> (receives roster-update on promotion)', async () => {
+    const { db, reads } = makeDb([], [{ id: 'wl-1' }]);
+    const client = makeClient();
+
+    await expect(
+      makeGw(db).handleJoinLobby({ matchId: MATCH_ID }, client as never),
+    ).resolves.toBeUndefined();
+
+    expect(client.join).toHaveBeenCalledWith(`match:${MATCH_ID}`);
+    expect(client.emit).toHaveBeenCalledWith('user-joined', { userId: 'u1' });
+    expect(reads).toContain(match_waitlist);
+  });
+
+  it('roster miss + waitlist miss → WsException, never joins', async () => {
+    const { db } = makeDb([], []);
+    const client = makeClient();
+
+    await expect(
+      makeGw(db).handleJoinLobby({ matchId: MATCH_ID }, client as never),
+    ).rejects.toThrow('You are not a member of this match.');
+    expect(client.join).not.toHaveBeenCalled();
+  });
+
+  it('roster hit still joins without consulting the waitlist', async () => {
+    const { db, reads } = makeDb([{ id: 'mp-1' }], []);
+    const client = makeClient();
+
+    await makeGw(db).handleJoinLobby({ matchId: MATCH_ID }, client as never);
+
+    expect(client.join).toHaveBeenCalledWith(`match:${MATCH_ID}`);
+    expect(reads).not.toContain(match_waitlist);
+  });
 });
