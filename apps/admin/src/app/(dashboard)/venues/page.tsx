@@ -233,12 +233,14 @@ export default function VenuesPage() {
                   <UserCog className="h-3.5 w-3.5" /> {t('transferAction')}
                 </button>
                 )}
+                {canTransfer && (
                 <button
                   onClick={() => startEdit(selected)}
                   className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <Pencil className="h-3.5 w-3.5" /> {tc('edit')}
                 </button>
+                )}
               </div>
             )
           ) : undefined
