@@ -9,9 +9,11 @@ import type { Match } from '@/types';
 /**
  * P2-357 (run #228): a queued player watching a FULL match must get a visible,
  * in-app transition when the host frees a spot and the API auto-promotes them
- * (wallet charged). The API broadcasts roster-update { promoted, chargedSar }
- * to match:<id> (waitlisted viewers are now admitted to that room); the page
- * toasts the move + charged amount for promoted === me while still queued.
+ * (wallet charged). The API admits waitlisted viewers to the match room
+ * (roster-update { promoted } drives the refetch) and emits the PRIVATE
+ * 'waitlist-promoted' { matchId, chargedSar } to the promoted user's personal
+ * room (PR-Agent r1: the charge amount never rides the room broadcast). The
+ * page toasts the move + charged amount on that event, matchId-guarded.
  */
 
 // ── Realtime stub: on() registers handlers the test can fire ──
@@ -159,9 +161,9 @@ beforeEach(() => {
 });
 
 describe('P2-357 — waitlist auto-promotion toast on the match page', () => {
-  it('EN: promoted === me while queued → charged toast with the amount', () => {
+  it('EN: waitlist-promoted for my match while queued → charged toast with the amount', () => {
     renderPage('en');
-    act(() => rt.emit('roster-update', { promoted: 'user-1', chargedSar: 37.5 }));
+    act(() => rt.emit('waitlist-promoted', { matchId: MATCH_ID, chargedSar: 37.5 }));
 
     const msg = toastMessage();
     expect(msg).toBe(
@@ -172,7 +174,7 @@ describe('P2-357 — waitlist auto-promotion toast on the match page', () => {
 
   it('AR: charged toast renders Arabic-Indic amount digits', () => {
     renderPage('ar');
-    act(() => rt.emit('roster-update', { promoted: 'user-1', chargedSar: 37.5 }));
+    act(() => rt.emit('waitlist-promoted', { matchId: MATCH_ID, chargedSar: 37.5 }));
 
     const msg = toastMessage() ?? '';
     expect(msg).toContain('٣٧٫٥٠');
@@ -183,21 +185,21 @@ describe('P2-357 — waitlist auto-promotion toast on the match page', () => {
 
   it('free promotion (chargedSar null) → plain promoted toast', () => {
     renderPage('en');
-    act(() => rt.emit('roster-update', { promoted: 'user-1', chargedSar: null }));
+    act(() => rt.emit('waitlist-promoted', { matchId: MATCH_ID, chargedSar: null }));
 
     expect(toastMessage()).toBe(enMessages.waitlist.promoted);
   });
 
-  it('someone else promoted → NO toast', () => {
+  it('promotion in ANOTHER match → NO toast (matchId guard)', () => {
     renderPage('en');
-    act(() => rt.emit('roster-update', { promoted: 'user-2', chargedSar: 37.5 }));
+    act(() => rt.emit('waitlist-promoted', { matchId: 'other-match', chargedSar: 37.5 }));
 
     expect(useAppStore.getState().toast).toBeNull();
   });
 
-  it('plain roster-update (no promoted field) → NO toast', () => {
+  it('plain roster-update (room broadcast, no personal event) → NO toast', () => {
     renderPage('en');
-    act(() => rt.emit('roster-update', { joined: 'user-9' }));
+    act(() => rt.emit('roster-update', { promoted: 'user-1' }));
 
     expect(useAppStore.getState().toast).toBeNull();
   });
@@ -205,7 +207,7 @@ describe('P2-357 — waitlist auto-promotion toast on the match page', () => {
   it('not queued (already on the roster) → NO toast', () => {
     state.match = { ...queuedMatch(), yourWaitlistPosition: null, isJoined: true };
     renderPage('en');
-    act(() => rt.emit('roster-update', { promoted: 'user-1', chargedSar: 37.5 }));
+    act(() => rt.emit('waitlist-promoted', { matchId: MATCH_ID, chargedSar: 37.5 }));
 
     expect(useAppStore.getState().toast).toBeNull();
   });
@@ -213,7 +215,7 @@ describe('P2-357 — waitlist auto-promotion toast on the match page', () => {
   it('unsubscribes on unmount', () => {
     const { unmount } = renderPage('en');
     unmount();
-    expect(rt.handlers.get('roster-update')?.size ?? 0).toBe(0);
+    expect(rt.handlers.get('waitlist-promoted')?.size ?? 0).toBe(0);
   });
 });
 

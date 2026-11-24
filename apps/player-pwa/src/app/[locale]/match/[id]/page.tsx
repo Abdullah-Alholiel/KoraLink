@@ -136,12 +136,15 @@ export default function MatchDetailPage({
 
     // ── P2-357: waitlist auto-promotion transition ──
     // When the host frees a spot, the API promotes the queue head (charging
-    // their wallet) and broadcasts roster-update { promoted, chargedSar } to
-    // the match room — waitlisted viewers are admitted to it for exactly this.
-    // useMatch's existing roster-update refetch flips the UI off the queued
-    // bar; this toast is the visible, in-app confirmation of the move + charge.
-    // Refs keep the subscription stable (keyed on currentUserId only) while
-    // the handler reads the latest queued state / locale.
+    // their wallet): a roster-update { promoted } room broadcast drives
+    // useMatch's refetch (waitlisted viewers are admitted to the match room
+    // for exactly this), and a PERSONAL-room 'waitlist-promoted'
+    // { matchId, chargedSar } event carries the private charge detail to the
+    // promoted user only (PR-Agent r1: the amount must not ride the room
+    // broadcast). The matchId guard means a socket lingering in another
+    // match's room can never toast the wrong match. Refs keep the
+    // subscription stable (keyed on currentUserId only) while the handler
+    // reads the latest queued state / locale.
     const isQueuedRef = useRef(isQueued);
     isQueuedRef.current = isQueued;
     const promotionToastRef = useRef<(chargedSar: number | null) => void>(() => undefined);
@@ -155,13 +158,13 @@ export default function MatchDetailPage({
     useEffect(() => {
         if (!currentUserId) return;
         const rt = getRealtime();
-        return rt.on('roster-update', (payload: unknown) => {
-            const p = payload as { promoted?: unknown; chargedSar?: unknown } | null | undefined;
-            if (!p || p.promoted !== currentUserId) return;
+        return rt.on('waitlist-promoted', (payload: unknown) => {
+            const p = payload as { matchId?: unknown; chargedSar?: unknown } | null | undefined;
+            if (!p || p.matchId !== id) return;
             if (!isQueuedRef.current) return;
             promotionToastRef.current(typeof p.chargedSar === 'number' ? p.chargedSar : null);
         });
-    }, [currentUserId]);
+    }, [currentUserId, id]);
 
     const [showPayment, setShowPayment] = useState(false);
     const [showRules, setShowRules] = useState(false);
