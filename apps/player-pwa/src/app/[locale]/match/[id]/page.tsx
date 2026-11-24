@@ -34,7 +34,8 @@ import { useWalletBalance } from '@/hooks/useWallet';
 import { useAppStore, selectUser } from '@/store/useAppStore';
 import { env } from '@/env.mjs';
 import { shareOrCopy } from '@/lib/share';
-import { formatClockTime, formatCount, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
+import { formatAmount, formatClockTime, formatCount, formatMoney, formatShortDate, type AppLocale } from '@/lib/format';
+import { getRealtime } from '@/lib/realtime';
 import {
     matchHasStarted,
     matchHasEnded,
@@ -132,6 +133,38 @@ export default function MatchDetailPage({
     // Non-members see the queue CTA on a full match; queued players see their spot.
     const showWaitlistCTA = isFullMatch && !isJoined && !isUserHost && !isQueued;
     const showQueuedState = isFullMatch && !isJoined && isQueued;
+
+    // ── P2-357: waitlist auto-promotion transition ──
+    // When the host frees a spot, the API promotes the queue head (charging
+    // their wallet): a roster-update { promoted } room broadcast drives
+    // useMatch's refetch (waitlisted viewers are admitted to the match room
+    // for exactly this), and a PERSONAL-room 'waitlist-promoted'
+    // { matchId, chargedSar } event carries the private charge detail to the
+    // promoted user only (PR-Agent r1: the amount must not ride the room
+    // broadcast). The matchId guard means a socket lingering in another
+    // match's room can never toast the wrong match. Refs keep the
+    // subscription stable (keyed on currentUserId only) while the handler
+    // reads the latest queued state / locale.
+    const isQueuedRef = useRef(isQueued);
+    isQueuedRef.current = isQueued;
+    const promotionToastRef = useRef<(chargedSar: number | null) => void>(() => undefined);
+    promotionToastRef.current = (chargedSar) => {
+        if (chargedSar != null && Number.isFinite(chargedSar)) {
+            showToast(t('waitlist.promotedCharged', { amount: formatAmount(chargedSar, numeralLocale) }), 'success');
+        } else {
+            showToast(t('waitlist.promoted'), 'success');
+        }
+    };
+    useEffect(() => {
+        if (!currentUserId) return;
+        const rt = getRealtime();
+        return rt.on('waitlist-promoted', (payload: unknown) => {
+            const p = payload as { matchId?: unknown; chargedSar?: unknown } | null | undefined;
+            if (!p || p.matchId !== id) return;
+            if (!isQueuedRef.current) return;
+            promotionToastRef.current(typeof p.chargedSar === 'number' ? p.chargedSar : null);
+        });
+    }, [currentUserId, id]);
 
     const [showPayment, setShowPayment] = useState(false);
     const [showRules, setShowRules] = useState(false);

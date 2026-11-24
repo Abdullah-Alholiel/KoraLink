@@ -17,7 +17,7 @@ import { Inject } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
-import { match_players, match_messages, users } from '../../database/schema';
+import { match_players, match_messages, match_waitlist, users } from '../../database/schema';
 import { isChatClosed, CHAT_CLOSED_ERROR_CODE } from '../matches/chat-status.predicate';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -435,7 +435,25 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       )
       .limit(1);
 
-    if (!membership) throw new WsException('You are not a member of this match.');
+    if (!membership) {
+      // P2-357: waitlisted viewers are admitted too. The room is "currently
+      // viewing" semantics, and a queued player must receive the
+      // 'roster-update' { promoted } broadcast to learn they were auto-promoted
+      // off the waitlist (otherwise their page stays on the stale queued bar).
+      // Chat SEND stays roster-gated in handleMessage. match_waitlist has no
+      // status column — row presence = actively queued.
+      const [queued] = await this.db
+        .select({ id: match_waitlist.id })
+        .from(match_waitlist)
+        .where(
+          and(
+            eq(match_waitlist.match_id, data.matchId),
+            eq(match_waitlist.user_id, client.userId),
+          ),
+        )
+        .limit(1);
+      if (!queued) throw new WsException('You are not a member of this match.');
+    }
 
     await client.join(`match:${data.matchId}`);
     client.to(`match:${data.matchId}`).emit('user-joined', { userId: client.userId });

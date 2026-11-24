@@ -5,6 +5,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { ActivitiesService } from '../activities/activities.service';
 import { AppGateway } from '../gateway/app.gateway';
+import { RealtimeService } from '../gateway/realtime.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { chargeMatchFeeTx } from './match-fees';
 import { moneyToNumber } from '../../common/utils/money';
@@ -64,6 +65,7 @@ export class MatchWaitlistService {
     private readonly activities: ActivitiesService,
     private readonly appGateway: AppGateway,
     private readonly notifications: NotificationsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────────────────────
@@ -428,7 +430,20 @@ export class MatchWaitlistService {
         recipients: [promotion.userId],
         excludeActor: false, // the promoted player IS the recipient
       });
-      this.appGateway.broadcastRosterUpdate(matchId, { promoted: promotion.userId });
+      this.appGateway.broadcastRosterUpdate(matchId, {
+        promoted: promotion.userId,
+      });
+      // PR-Agent r1 (PR #296): the charge amount is the promoted player's
+      // PRIVATE financial detail — it must not ride the room broadcast (this
+      // run also admits waitlisted viewers to match:<id>). The personal-room
+      // event below carries { matchId, chargedSar } to the promoted user's
+      // user:<id> room only: private by construction and matchId-guarded on
+      // the client, so a socket lingering in another match's room can never
+      // toast the wrong match.
+      this.realtime.emitToUser(promotion.userId, 'waitlist-promoted', {
+        matchId,
+        chargedSar: promotion.chargedSar ?? null,
+      });
     } catch (err) {
       this.logger.error(
         `waitlist promotion activity fan-out failed (match ${matchId}): ${(err as Error).message}`,

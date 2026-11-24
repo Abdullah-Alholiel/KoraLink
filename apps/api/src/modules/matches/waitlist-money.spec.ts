@@ -127,6 +127,7 @@ function makeHarness(opts: HarnessOpts) {
     { record: async () => undefined } as never,
     { broadcastRosterUpdate: () => {} } as never,
     { sendPushToUsers: async () => 1 } as never,
+    { emitToUser: () => {} } as never, // P2-357: RealtimeService personal-room emitter
   );
 
   return { svc, tx, deletedWaitlistIds, insertedPlayers, playerUpdates };
@@ -303,6 +304,7 @@ describe('Waitlist promotion money loop (run #200, P2-333)', () => {
       activities as never,
       { broadcastRosterUpdate: () => {} } as never,
       notifications as never,
+      { emitToUser: () => {} } as never, // P2-357: RealtimeService personal-room emitter
     );
 
     await svc.notifyWaitlistRemoval('user-poor', 'match-1', 'Tuesday Padel');
