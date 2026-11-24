@@ -23,8 +23,13 @@ export default function NotificationBell() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('title')}
-        className="relative w-10 h-10 min-h-hit min-w-hit flex items-center justify-center rounded-full bg-gray-50 active:scale-95 transition-transform"
+        className="group relative flex min-h-hit min-w-hit items-center justify-center"
       >
+        {/* P2-397: 44px hit target, 40px visible circle (split-span per the #275 precedent). */}
+        <span
+          aria-hidden="true"
+          className="relative flex w-10 h-10 items-center justify-center rounded-full bg-gray-50 transition-transform group-active:scale-95"
+        >
         <Bell className="w-5 h-5 text-brand-black" strokeWidth={1.8} />
         {badge > 0 && (
           <span
@@ -34,6 +39,7 @@ export default function NotificationBell() {
             {badge > 99 ? '99+' : badge}
           </span>
         )}
+        </span>
       </button>
 
       <NotificationSheet open={open} onClose={() => setOpen(false)} />
