@@ -1,12 +1,12 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 — PR #289 (P2-392 tap-target batch, run #224 lane) awaiting CI/triage/merge. PR #288 (F2 webhook, tier C) squash-merged `2c17093f` + LIVE on staging run #223.
-- **🔴 URGENT (owner: `irreversible` kind): Neon quota RE-IGNITED AGAIN — Sentry KORALINK-API-1C 81 events/24h (re-pulled run #224, lastSeen 2026-11-22T20:00Z); API-1F prod push-sweep dead 15 events/24h (same quota class). Nightly prod backup FAILED again 03:21Z Nov 22 — last GOOD dump Nov 20, now 3 days stale. Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you (the earlier "Sat 11-21" slot passed). Until then prod writes fail near-continuously and backups stay stale.**
-- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; D-20261122-01 ordered the VPS Coolify cutover + Nov-20-backup restore instead of a Neon promote (owner `irreversible` — needs your supervised go for infra execution).**
-- Promote gap: 25 commits ahead of main (runs #216–#223); last promote 2026-11-18. D-20261122-01 makes the cutover the heal path; a Neon-first promote stays blocked on quota.
-- Services: API :3001 healthy on 2c17093f (F2 webhook endpoint live, flag-off = exact 403), PWA :3000 + admin :3002 active. Tailscale funnels still DOWN (owner re-auth pending).
-- Built this run: F2 Moyasar webhook (PR #288, tier C: cross-model review + rollback line) + D-20261122-02 factory rules (skill v1.5.2 + kanban/GATE.md + kanban/DELEGATION.md).
+- Open PRs: 1 — PR #291 (run #226 admin state-consistency part 1: dead Blocked.tsx removal + dashboard LoadingState; PR-Agent CLEAN, awaiting gate/Vercel then auto-merge-eligible). PR #290 (P2-398 money rules) MERGED + LIVE `719b5f84` run #225.
+- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #226 re-probe (2026-11-24 01:2xZ): every prod connection answers "exceeded the quota" (1C 86 events/24h; 1F 16; nightly backup FAILED 03:2xZ Nov 23 — last GOOD dump Nov 20, now 4 days stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
+- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is now BLOCKED TOO (run #226: migrate-first precondition needs the prod DB alive, and Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`).**
+- Promote gap: 31 commits ahead of main; last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard is merged and rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
+- Services: API :3001 healthy (money rules live: 12h late-cancel forfeit + no-show fee), PWA :3000 + admin :3002 active. Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
+- Built this run (#226): PR #291 (admin part 1) + P2-397 riders via Claude lane 01a20b33 (in flight at snapshot time) + promote-blocked finding recorded.
 - Owner decisions waiting: none NEW. Standing below re-labeled per Rule 1 (D-20261122-02).
 
 ## Active owner actions
