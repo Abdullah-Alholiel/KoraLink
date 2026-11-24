@@ -302,6 +302,7 @@ export default function MyPitchesPage() {
                       </button>
                       </>
                       )}
+                      {canEditPitch && (
                       <button
                         onClick={() => setDeleting(p)}
                         disabled={busy}
@@ -310,6 +311,7 @@ export default function MyPitchesPage() {
                       >
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>
