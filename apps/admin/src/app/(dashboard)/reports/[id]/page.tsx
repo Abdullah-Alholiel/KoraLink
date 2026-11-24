@@ -239,12 +239,14 @@ export default function ReportDetailPage() {
                     <RotateCcw className="h-4 w-4" /> {t('reopen')}
                   </button>
                   )}
+                  {canResolve && (
                   <button
                     onClick={startEdit}
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     <Pencil className="h-4 w-4" /> {t('editOutcome')}
                   </button>
+                  )}
                 </div>
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
               </div>
