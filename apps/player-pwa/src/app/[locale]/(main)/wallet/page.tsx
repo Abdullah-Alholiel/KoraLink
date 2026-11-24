@@ -219,7 +219,7 @@ export default function WalletPage() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => router.back()}
-                        className="w-10 h-10 flex items-center justify-center"
+                        className="w-10 h-10 min-h-hit min-w-hit flex items-center justify-center"
                         aria-label={t('common.back')}
                     >
                         <ArrowLeft className="w-5 h-5 text-brand-black rtl:-scale-x-100" strokeWidth={2} />

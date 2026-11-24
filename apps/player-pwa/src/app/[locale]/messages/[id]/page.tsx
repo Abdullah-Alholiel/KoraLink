@@ -265,21 +265,27 @@ export default function ConversationPage({
                     {!mine && (
                       <button
                         onClick={() => openProfile(m.sender)}
-                        className="w-7 h-7 rounded-full bg-brand-green/20 flex items-center justify-center flex-shrink-0 mb-0.5 overflow-hidden active:scale-95 transition-transform"
+                        className="group -mx-2 -mt-2 -mb-1.5 flex min-h-hit min-w-hit flex-shrink-0 items-center justify-center"
                         aria-label={t('matchDetail.playerProfile')}
                       >
-                        {m.sender.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={m.sender.avatarUrl}
-                            alt={m.sender.fullName ?? 'Player'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-[10px] font-bold text-brand-green">
-                            {(m.sender.fullName ?? m.sender.handle ?? 'P').charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        {/* P2-397: 44px hit target, 28px visible avatar; negative margins keep the row layout. */}
+                        <span
+                          aria-hidden="true"
+                          className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-brand-green/20 transition-transform group-active:scale-95"
+                        >
+                          {m.sender.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={m.sender.avatarUrl}
+                              alt={m.sender.fullName ?? 'Player'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-bold text-brand-green">
+                              {(m.sender.fullName ?? m.sender.handle ?? 'P').charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
                       </button>
                     )}
 
@@ -328,10 +334,16 @@ export default function ConversationPage({
                         // P1-31: report an abusive received message.
                         <button
                           onClick={() => setReportTargetId(m.id)}
-                          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:scale-95 transition-all"
+                          className="group -m-2 flex min-h-hit min-w-hit items-center justify-center"
                           aria-label={t('report.reportMessage')}
                         >
-                          <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                          {/* P2-397: 44px hit target, 28px visual (-m-2 keeps the layout footprint). */}
+                          <span
+                            aria-hidden="true"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-300 transition-all group-hover:bg-gray-100 group-hover:text-gray-500 group-active:scale-95"
+                          >
+                            <MoreVertical className="w-4 h-4" strokeWidth={2} />
+                          </span>
                         </button>
                       )}
                     </span>

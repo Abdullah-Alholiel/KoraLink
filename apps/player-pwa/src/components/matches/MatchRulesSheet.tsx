@@ -45,7 +45,7 @@ export default function MatchRulesSheet({ isOpen, onClose }: MatchRulesSheetProp
         </h2>
         <button
           onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-transform"
+          className="w-7 h-7 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-transform"
           aria-label={tCommon('close')}
         >
           <X className="w-4 h-4 text-gray-500" strokeWidth={2} />

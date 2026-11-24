@@ -130,7 +130,7 @@ export default function MessagesPage() {
             setShowSearch(!showSearch);
             if (showSearch) setSearchQuery('');
           }} 
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
+          className="w-10 h-10 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50 active:scale-95 transition-transform"
           aria-label={t('common.search')}
         >
           <Search

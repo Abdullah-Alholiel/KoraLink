@@ -23,7 +23,7 @@ export default function NotificationBell() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('title')}
-        className="relative w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 active:scale-95 transition-transform"
+        className="relative w-10 h-10 min-h-hit min-w-hit flex items-center justify-center rounded-full bg-gray-50 active:scale-95 transition-transform"
       >
         <Bell className="w-5 h-5 text-brand-black" strokeWidth={1.8} />
         {badge > 0 && (

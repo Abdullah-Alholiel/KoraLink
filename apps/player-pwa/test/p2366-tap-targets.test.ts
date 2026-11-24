@@ -26,8 +26,8 @@ const SCAN_DIRS = ['src/components', 'src/app'];
 // PR-Agent r3: breakpoint-prefixed variants (sm:w-8 sm:h-8) ship the same
 // sub-44px target on small screens — the optional `[\w-]+:` prefix eats
 // `sm:`/`md:`/etc. (min-w-8 style utilities have no colon and stay out).
-const COMPACT_W_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:w-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
-const COMPACT_H_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:h-(?:8|9)|size-(?:8|9))(?=[\s`'"}]|$)/;
+const COMPACT_W_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:w-(?:7|8|9|10)|size-(?:7|8|9|10))(?=[\s`'"}]|$)/;
+const COMPACT_H_RE = /(?:^|[\s`'"{])(?:[\w-]+:)?(?:h-(?:7|8|9|10)|size-(?:7|8|9|10))(?=[\s`'"}]|$)/;
 const HIT_H_RE = /(?:^|[\s`'"{])min-h-hit(?=[\s`'"}]|$)/;
 const HIT_W_RE = /(?:^|[\s`'"{])min-w-hit(?=[\s`'"}]|$)/;
 
