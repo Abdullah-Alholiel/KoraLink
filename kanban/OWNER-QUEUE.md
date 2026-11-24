@@ -1,15 +1,20 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 — PR #291 (run #226 admin state-consistency part 1: dead Blocked.tsx removal + dashboard LoadingState; PR-Agent CLEAN, awaiting gate/Vercel then auto-merge-eligible). PR #290 (P2-398 money rules) MERGED + LIVE `719b5f84` run #225.
-- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #226 re-probe (2026-11-24 01:2xZ): every prod connection answers "exceeded the quota" (1C 86 events/24h; 1F 16; nightly backup FAILED 03:2xZ Nov 23 — last GOOD dump Nov 20, now 4 days stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
-- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is now BLOCKED TOO (run #226: migrate-first precondition needs the prod DB alive, and Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`).**
-- Promote gap: 31 commits ahead of main; last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard is merged and rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
-- Services: API :3001 healthy (money rules live: 12h late-cancel forfeit + no-show fee), PWA :3000 + admin :3002 active. Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
-- Built this run (#226): PR #291 (admin part 1) + P2-397 riders via Claude lane 01a20b33 (in flight at snapshot time) + promote-blocked finding recorded.
-- Owner decisions waiting: none NEW. Standing below re-labeled per Rule 1 (D-20261122-02).
+- Open PRs: 0 — PR #293 (F9 offsite backup) SQUASH-MERGED `5f42e315` run #227; PR #294 (P2-400 part 2 RBAC gates) SQUASH-MERGED `a35805af` run #227. PR #290/#291/#292 all MERGED+LIVE.
+- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #227 re-pull (2026-11-24 12:1xZ): 1C 88 events/24h, 1F 17; nightly backup STILL FAILED (newest good dump Nov 20 03:23Z, 105h stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
+- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is BLOCKED (migrate-first precondition needs the prod DB alive; Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`).**
+- Promote gap: 37 commits ahead of main; last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
+- Services: API :3001 healthy (money rules live), PWA :3000 + admin :3002 active (admin now carries RBAC-gated write buttons — PR #294). Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
+- **NEW (#227): F9 offsite backup BUILT — push awaits YOUR repo (NEW-10 below; one command after that). The age PRIVATE key at ~/.config/koralink/koralink-offsite.key must be escrowed OFF this VPS.**
+- Owner decisions waiting: NEW-10 (F9 repo + key escrow). Standing below re-labeled per Rule 1 (D-20261122-02).
 
 ## Active owner actions
+
+### NEW-10. F9 — Create the private offsite backup repo + escrow the age key (NEW run #227)
+- **What:** The offsite backup pipeline is BUILT and verified (run #227: age-encrypt → decrypt round-trip → canary restore 32 tables OK; push fails loud until the repo exists). Two owner steps remain: (1) create a PRIVATE GitHub repo for backups (suggested name `koralink-backups`, empty, private) — the factory PAT already has Contents:write so NO deploy key is needed; (2) escrow the age PRIVATE key `~/.config/koralink/koralink-offsite.key` somewhere OFF this VPS (password manager / printed) — losing it loses every backup.
+- **Close line:** "F9 repo created <owner/repo>" → factory sets `GH_BACKUP_REPO` in offsite.env and re-runs the push to confirm end-to-end (remote-blob decrypt verification included).
+- **Deadline:** Before launch (launch condition 5 needs a tested offsite restore; local restore-test already PASSES).
 
 ### NEW-9. F1 — Arm Cloudflare Turnstile on staging (NEW run #212)
 - **What:** F1 OTP bot protection is built and LIVE, but flag-off by default (`TURNSTILE_ENABLED=false`). The PWA only renders the widget when `/api/v1/health` advertises a site key. Cloudflare dummy keys exist for CI/staging short-circuit; real keys are needed for actual protection.
@@ -42,11 +47,6 @@
 - **What:** No discount codes exist (grep 0 hits); competitors run first-game discounts heavily in KSA. Needs product shape: % vs flat, per-venue vs platform, stacking rules.
 - **Close line:** "P2-328: build <shape>" OR "P2-328: defer post-launch".
 - **Deadline:** None (acquisition lever, not a gap).
-
-### NEW-4. P2-329 — player no-show fee policy (NEW run #196, CEO-lane)
-- **What:** A player who no-shows a PAID match owes nothing (fee is refunded on cancel; karma penalties only). Host math goes negative with zero recourse. Needs your call: fee vs karma vs both.
-- **Close line:** "P2-329: <fee/karma/both>" OR "P2-329: defer".
-- **Deadline:** Before paid matches go live at scale.
 
 ### NEW-6. P2-334 — blackout product shape: soft-record vs snapshot-restore (NEW run #198)
 - **What:** Pitch blackouts DELETE every free slot in the range with no list/undo — a partner who fat-fingers a date range cannot recover availability without manually re-adding slots (admin surface omits it too). Before the factory builds a blackout list/restore surface, the product shape needs your call.
@@ -160,6 +160,8 @@
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-22, D-20261122-05):** Per D-20261113-14/-11 (register webhook, factory builds verify endpoint): add a wallet webhook endpoint now, default OFF behind a flag: raw-body HMAC signature check with constant-time compare, idempotency by payment id, reuse the reconcile credit path (wallet.reconcile.service.ts), specs for bad signature, replay and good payment. Env names in .env.example only, no secrets. Owner then only pastes the URL and secret. Proof: PR number, spec names. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-23, D-20261123-06):** Owner said Yes (Nov 17 to 28): add a 12:15 UTC factory slot. cron/jobs.json KoraLink Factory Loop still has expr '15 1,15 * * *' (2 runs/day, runs #218-#224 confirm). Back up jobs.json, add the 12:15 slot until Nov 28, report the diff and the first run that used it. Also correct the plan's '3 runs/day' sizing. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 - **Life OS WORKER request, not an owner decision (Life OS 2026-11-23, D-20261123-07):** koralink-factory-loop/SKILL.md still has zero hits for production-plan or 'WORKER request'. Back up, then patch: read readiness/koralink-production-plan.md Step 3 lane (a) before picking rows; treat 'Life OS WORKER request' rows in DECISIONS.md as work; fix '5-hourly'/'branch main' drift. Report diff and commit. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- **Life OS WORKER request, not an owner decision (Life OS 2026-11-24, D-20261124-01):** Build the offsite backup step now, no cutover needed: encrypt the newest dump (age), push to a private GitHub repo target per D-20261113-15, script plus a restore check against the 2026-11-20 dump. Do not create the repo or deploy key (owner step); write the exact owner steps in OWNER-QUEUE. Report PR number and restore-check output. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
+- **Life OS WORKER request, not an owner decision (Life OS 2026-11-24, D-20261124-02):** Back up first, then patch: (1) run report line 1 must name the plan F-item picked (F7-rest, F8, F9, F10) or say in one line why none is buildable; polish rows only after that. (2) cron prompt: slots 01:15/12:15/15:15 UTC, 12:15 run releases lock by 14:45, third slot ends 11-28. (3) reviewer prompts: container name koralink-postgres is the staging DB, and every 'missing' claim needs a named-flow grep before boarding. Also drop P2-329 from OWNER-QUEUE (resolved by PR #290). Report diff summary and commit. — Requested by the Life OS worker (Claude), not by the owner. Reversible work only; owner-only rules still apply.
 
 ## Closed since last run
 - **D-20261113-09 restore drill:** CLOSED run #211 — premise stale (docs/runbooks/restore-drill.md exists since run #209 e575e58; drill PASSED). Runbook hardened same run. No owner action needed.
