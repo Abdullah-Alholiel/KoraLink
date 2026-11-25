@@ -212,6 +212,12 @@ export function apiErrorToMessage(
   fallbackKey?: string,
 ): string {
   const bucket = classifyApiError(e);
+  // Diagnostics aid (PR-Agent r1 MINOR, PR #299): an unclassified error kept its
+  // message only in memory before; log it once so client bugs inside migrated
+  // try blocks stay diagnosable without ever surfacing raw text to the user.
+  if (bucket === 'generic' && process.env.NODE_ENV !== 'production') {
+    console.warn('[admin] unclassified error (shown as generic copy):', e);
+  }
   if (bucket === 'generic' && fallbackKey) return t(fallbackKey);
   return t(`errors.${bucket}`);
 }

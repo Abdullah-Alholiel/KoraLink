@@ -54,7 +54,7 @@ export default function VenueTransferDrawer({ venue, onClose, onSaved }: VenueTr
         // Never offer the current owner as a target.
         setResults((res.users ?? []).filter((u) => u.id !== v.id));
       } catch (e) {
-        setError(apiErrorToMessage(e, tr));
+        setError(apiErrorToMessage(e, tr, 'common.failedToLoad'));
         setResults([]);
       } finally {
         setSearching(false);

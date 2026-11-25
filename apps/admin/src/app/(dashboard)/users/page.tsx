@@ -189,8 +189,9 @@ export default function UsersPage() {
       reload();
       setSelected(null);
     } catch (e) {
-      // API copy is plain (400/409): mirror the act() convention of showing
-      // the API reason instead of a generic failure.
+      // Localized bucket copy now (P2-401): the API's plain 400/409 reason no
+      // longer reaches the screen; specific restore-failed key kept for the
+      // generic bucket via fallbackKey.
       setActionError(apiErrorToMessage(e, tr, 'hq.restoreFailed'));
     } finally {
       setBusyId(null);
