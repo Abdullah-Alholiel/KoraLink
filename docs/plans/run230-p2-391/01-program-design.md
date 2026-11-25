@@ -78,19 +78,35 @@ paint order matches DOM order; toasts float above the pill and never cover its b
 Component changes:
 | File | Change |
 |---|---|
-| `src/styles/globals.css` | +`--top-banner-h: 0px`, `--top-band-top: calc(...)`; z-ladder comment block |
+| `src/styles/globals.css` | +`--top-banner-h: 0px`, `--top-band-top: max(...)`; z-ladder comment block |
 | `src/providers/LocationProvider.tsx` | z-[80]→z-[46]; ResizeObserver measures card → sets `--top-banner-h` (mount/unmount cleanup) |
 | `src/components/layout/Toast.tsx` | top = `var(--top-band-top)` (replaces raw 1.5rem+env calc; also fixes MINOR-4 drift) |
-| `src/components/layout/MobileFrame.tsx` | inner box `paddingTop: calc(var(--top-safe-inset) + var(--top-banner-h))`; (main)/layout header drops its own pt |
-| `(auth)/complete-profile`, `messages/[id]`, `clubs/[id]` pages | header `pt-[var(--top-safe-inset)]` → `pt-[var(--top-band-top)]` (no double-count of the band) |
-| `ViewportHeightSync.tsx` | standalone canvas pin → `calc(canvas - band)` (no bottom gap while pill mounted) |
+| `src/styles/globals.css` (shell) | `.app-shell { padding-top: var(--top-banner-h) }` — the single reservation point |
+| `src/components/layout/MobileFrame.tsx` | height `calc(var(--app-height) - var(--top-banner-h))` — frame ends at canvas bottom, nav never clips |
 | `test/p2391-top-band.test.tsx` (new) | tripwires: z-order, var contract, MobileFrame reservation, Toast slot |
 
-Risks & mitigations: double-count (headers + shell padding both shifting) → only MobileFrame-based
-screens get the shell padding; standalone authed shells are MobileFrame-free and use the band var.
-Measurement loop (pill resize re-triggers layout) → ResizeObserver only writes when value changes.
-SSR safety → pill is client-only after auth check; vars default to 0px server-side (no hydration
-mismatch: no SSR-rendered markup depends on the var beyond CSS cascade).
+**IMPLEMENTATION PIVOT (recorded post-PR-Agent #298 r1, parent-verified):** the original plan's
+per-page header swaps (`pt-[var(--top-safe-inset)]` → `pt-[var(--top-band-top)]` on
+complete-profile / messages/[id] / clubs/[id]) and a ViewportHeightSync band-calc were DROPPED —
+replaced by the single `.app-shell` padding reservation + MobileFrame height calc. Why this is
+strictly better:
+1. `.app-shell` padding shifts EVERY in-flow header (complete-profile, messages/[id], clubs/[id]
+   headers are plain flex children of in-flow page roots — verified in the tree) with ZERO per-page
+   edits; a per-page swap would have DOUBLE-shifted those headers (shell padding + own band var).
+2. MobileFrame (and everything absolutely positioned INSIDE it, e.g. match/[id]'s absolute header)
+   rides the frame's own shift — the frame starts exactly at the pill's bottom edge.
+3. Height math stays closed without touching ViewportHeightSync: `.app-shell` padding (banner) +
+   MobileFrame `--app-height − banner` = exactly `--app-height`; standalone-mode pinning and the
+   v3 visible-canvas contract are untouched (its test suite pins exact values — unchanged).
+4. Fixed-top overlays are covered explicitly: Toast via `--top-band-top`; the only other fixed-top
+   owner is the pill itself.
+
+Risks & mitigations: double-count — resolved BY the pivot: the shell padding is the ONLY
+reservation; no page or header adds its own band offset, so double-shifting is structurally
+impossible. Measurement loop → ResizeObserver writes only on value change. SSR/hydration →
+vars default to 0px; the pill renders client-side only (no SSR markup depends on JS-written
+values). Untouched contract: ViewportHeightSync v3 (its spec pins exact values and stays
+green), bottom-band offsets, sheet z-indices.
 
 ## Gate 3 — Program Design (contract)
 
