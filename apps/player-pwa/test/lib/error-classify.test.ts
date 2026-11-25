@@ -6,6 +6,8 @@ import {
   type ErrorKind,
 } from '@/lib/error-classify';
 import { FetchError } from '@/lib/fetcher';
+import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 
 describe('classifyError', () => {
   it('classifies FetchError by HTTP status', () => {
@@ -135,6 +137,56 @@ describe('classifyError — SMS_UNAVAILABLE (2026-11-16 P0)', () => {
   it('a bare 503 WITHOUT the code still classifies as generic "server"', () => {
     const err = new FetchError('Service Unavailable', 503, '/auth/send-otp');
     expect(classifyError(err)).toBe('server');
+  });
+});
+
+/**
+ * P2-344 (run #229) — insufficient wallet balance carries a stable API code.
+ * The matches.service charge sites send 400 `{ message,
+ * code: 'WALLET_INSUFFICIENT' }` (PR #262 convention). Without the mapping
+ * the 400 falls into the generic `validation` bucket, which says neither
+ * what happened (money) nor the fix (top up). A stable code beats the status.
+ */
+describe('classifyError — WALLET_INSUFFICIENT (P2-344)', () => {
+  it('maps FetchError code WALLET_INSUFFICIENT → "insufficientFunds" (beats 400 status)', () => {
+    const err = new FetchError(
+      'Insufficient wallet balance. Required: SAR 37.00, Available: SAR 12.50',
+      400,
+      '/matches',
+      'WALLET_INSUFFICIENT',
+    );
+    expect(classifyError(err)).toBe('insufficientFunds');
+    expect(errorKey('insufficientFunds')).toBe('errors.insufficientFunds');
+  });
+
+  it('a bare 400 WITHOUT the code still classifies as generic "validation"', () => {
+    const err = new FetchError('Some validation problem', 400, '/matches');
+    expect(classifyError(err)).toBe('validation');
+  });
+});
+
+/**
+ * P2-344 contract pin (Claude tier-B run-#229 "missing for optimal"): every
+ * ERROR_KEYS value must resolve to a REAL leaf key in BOTH message catalogs —
+ * a kind added without its en/ar copy (or a catalog key renamed without the
+ * classifier) fails here instead of rendering a MISSING_MESSAGE at runtime.
+ */
+describe('ERROR_KEYS ↔ message catalogs', () => {
+  function hasLeaf(obj: unknown, path: string): boolean {
+    let cur: unknown = obj;
+    for (const part of path.split('.')) {
+      if (typeof cur !== 'object' || cur === null) return false;
+      cur = (cur as Record<string, unknown>)[part];
+    }
+    return typeof cur === 'string';
+  }
+
+  it('every ERROR_KEYS value resolves to a string in BOTH en.json and ar.json', () => {
+    for (const kind of Object.keys(ERROR_KEYS) as ErrorKind[]) {
+      const key = errorKey(kind);
+      expect(hasLeaf(enMessages, key)).toBe(true);
+      expect(hasLeaf(arMessages, key)).toBe(true);
+    }
   });
 });
 

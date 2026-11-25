@@ -46,7 +46,14 @@ export type ErrorKind =
    */
   | 'captchaRequired'
   | 'captchaFailed'
-  | 'captchaUnavailable';
+  | 'captchaUnavailable'
+  /**
+   * P2-344 (run #229): the wallet cannot cover this action — the API sends
+   * 400 `{ message, code: 'WALLET_INSUFFICIENT' }` (matches.service throw
+   * sites, PR #262 convention). Copy: what happened + the fix (top up),
+   * instead of the generic validation bucket that says neither.
+   */
+  | 'insufficientFunds';
 
 /** i18n key per kind (`errors` namespace). */
 export const ERROR_KEYS: Record<ErrorKind, string> = {
@@ -69,6 +76,7 @@ export const ERROR_KEYS: Record<ErrorKind, string> = {
   captchaRequired: 'errors.captchaRequired',
   captchaFailed: 'errors.captchaFailed',
   captchaUnavailable: 'errors.captchaUnavailable',
+  insufficientFunds: 'errors.insufficientFunds',
 };
 
 /** API error-body codes → moderation ErrorKinds (P1-47). */
@@ -89,6 +97,10 @@ const CODE_KINDS: Record<string, ErrorKind> = {
   CAPTCHA_REQUIRED: 'captchaRequired',
   CAPTCHA_INVALID: 'captchaFailed',
   CAPTCHA_UNAVAILABLE: 'captchaUnavailable',
+  // P2-344 (run #229): wallet can't cover the action (400 body code from the
+  // matches.service charge sites). A stable code beats the 400 status →
+  // dedicated "top up" copy instead of the generic validation bucket.
+  WALLET_INSUFFICIENT: 'insufficientFunds',
 };
 
 /** i18n key for a classified error. */

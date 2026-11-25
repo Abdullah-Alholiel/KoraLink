@@ -33,6 +33,10 @@ describe('healStrandedCompletedMatches — stranded-row self-heal (Al-Nakheel in
     min_players: 20,
     is_player_hosted: true,
     total_players: 1,
+    // Run #229 (PR #297 tier-B round): the heal SELECT now also reads the
+    // payout state so the held→cancelled flip can scope its lost-race alert.
+    // A stranded Al-Nakheel-class row carries a HELD hold (schema NOT NULL).
+    host_payout_state: 'held',
   };
 
   interface CapturedCall {
