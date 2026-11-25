@@ -6,6 +6,8 @@ import {
   type ErrorKind,
 } from '@/lib/error-classify';
 import { FetchError } from '@/lib/fetcher';
+import enMessages from '@/messages/en.json';
+import arMessages from '@/messages/ar.json';
 
 describe('classifyError', () => {
   it('classifies FetchError by HTTP status', () => {
@@ -160,6 +162,31 @@ describe('classifyError — WALLET_INSUFFICIENT (P2-344)', () => {
   it('a bare 400 WITHOUT the code still classifies as generic "validation"', () => {
     const err = new FetchError('Some validation problem', 400, '/matches');
     expect(classifyError(err)).toBe('validation');
+  });
+});
+
+/**
+ * P2-344 contract pin (Claude tier-B run-#229 "missing for optimal"): every
+ * ERROR_KEYS value must resolve to a REAL leaf key in BOTH message catalogs —
+ * a kind added without its en/ar copy (or a catalog key renamed without the
+ * classifier) fails here instead of rendering a MISSING_MESSAGE at runtime.
+ */
+describe('ERROR_KEYS ↔ message catalogs', () => {
+  function hasLeaf(obj: unknown, path: string): boolean {
+    let cur: unknown = obj;
+    for (const part of path.split('.')) {
+      if (typeof cur !== 'object' || cur === null) return false;
+      cur = (cur as Record<string, unknown>)[part];
+    }
+    return typeof cur === 'string';
+  }
+
+  it('every ERROR_KEYS value resolves to a string in BOTH en.json and ar.json', () => {
+    for (const kind of Object.keys(ERROR_KEYS) as ErrorKind[]) {
+      const key = errorKey(kind);
+      expect(hasLeaf(enMessages, key)).toBe(true);
+      expect(hasLeaf(arMessages, key)).toBe(true);
+    }
   });
 });
 
