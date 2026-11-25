@@ -100,8 +100,13 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     if (typeof ResizeObserver === 'undefined') return; // jsdom/test safety
     const ro = new ResizeObserver(() => write());
     ro.observe(card);
+    // Rotation changes env(safe-area-inset-top) WITHOUT resizing the card
+    // (PR-Agent #298 r2): the card's offsetTop shifts but its box does not,
+    // so RO alone stays stale. Viewport resizes re-read the fresh inset.
+    window.addEventListener('resize', write);
     return () => {
       ro.disconnect();
+      window.removeEventListener('resize', write);
       root.style.setProperty('--top-banner-h', '0px');
     };
   }, [showPrompt, showDenied]);

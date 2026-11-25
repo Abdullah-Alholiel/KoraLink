@@ -112,14 +112,16 @@ describe('P2-391 top-band slot contract', () => {
     expect(css).toMatch(/\.app-shell\s*{[^}]*padding-top:\s*var\(--top-banner-h/);
   });
 
-  it('P391-6: z-ladder documented in globals.css — pill z-[46], toast band z-[47]', () => {
+  it('P391-6: z-ladder documented in globals.css — pill z-[46]; Toast stacks positionally (no phantom rung)', () => {
     const css = fs.readFileSync(
       path.join(PWA_ROOT, 'styles', 'globals.css'),
       'utf8',
     );
     expect(css).toContain('P2-391 Overlay z-ladder');
     expect(css).toContain('z-[46]');
-    expect(css).toContain('z-[47]');
+    // PR-Agent #298 r2: no phantom z-[47] rung — Toast stacking is positional
+    // (the band var), not z-based; the ladder must not list a rung nothing uses.
+    expect(css).not.toContain('z-[47]');
   });
 
   it('P391-7: MobileFrame subtracts the reserved row so the nav never clips', () => {

@@ -113,27 +113,28 @@ green), bottom-band offsets, sheet z-indices.
 Exact shapes (all client-side; no API contract):
 
 ```ts
-// globals.css additions (:root)
---top-banner-h: 0px;                                            /* pill-measured, JS-written */
---top-band-top: calc(var(--top-safe-inset) + var(--top-banner-h)); /* where floating top UI sits */
+// globals.css additions (:root) — SHIPPED SHAPE (post-pivot; the original
+// calc form + VHS change were dropped, see the pivot record in Gate 2):
+--top-banner-h: 0px;   /* pill's FULL viewport extent (inset + height), JS-written */
+--top-band-top: max(var(--top-banner-h), var(--top-safe-inset)); /* floating top UI anchor */
 
 // LocationProvider (pill container, was z-[80]):
 <div className="fixed inset-x-0 top-0 z-[46] max-w-md mx-auto pointer-events-none" ref={containerRef}>
-  // card measured: new ResizeObserver(entries => {
-  //   const h = Math.round(entries[0].borderBoxSize?.[0]?.blockSize ?? card.getBoundingClientRect().height);
-  //   const next = h > 0 ? `${h}px` : '0px';
-  //   if (documentElement.style.getPropertyValue('--top-banner-h') !== next) setProperty('--top-banner-h', next);
-  // }).observe(card); disconnect + reset on unmount/status-change
+  // card measured: write() = setProperty('--top-banner-h',
+  //   `${card.offsetTop + card.offsetHeight}px`) — offsetTop carries the
+  //   RESOLVED safe-inset; write on mount + ResizeObserver + window resize
+  //   (rotation changes the inset without resizing the card); cleanup
+  //   disconnects both listeners and resets the var to 0px.
 ```
 
-TS signatures (changed files only):
+TS signatures (changed files only) — SHIPPED SHAPE (post-pivot):
 ```ts
 // Toast.tsx (className only — no props/signature change)
 className="fixed top-[var(--top-band-top)] inset-x-0 z-[100] ..."
-// MobileFrame.tsx (inner box style attr — no props change)
-style={{ paddingTop: 'calc(var(--top-safe-inset) + var(--top-banner-h))' }}
-// ViewportHeightSync.tsx (apply() pinned value — no signature change)
-document.documentElement.style.setProperty('--app-height', `calc(${canvas}px - var(--top-banner-h, 0px))`);
+// MobileFrame.tsx (className only — no props change; BOTH height boxes)
+className="w-full h-[calc(var(--app-height)-var(--top-banner-h,0px))] max-h-[calc(...)] ..."
+// ViewportHeightSync.tsx: UNTOUCHED (pivot — .app-shell padding + frame calc
+// close the height math without it; v3 visible-canvas contract intact).
 ```
 
 i18n contract: **zero new keys** (layout-only change; all copy already exists in `location.*` and

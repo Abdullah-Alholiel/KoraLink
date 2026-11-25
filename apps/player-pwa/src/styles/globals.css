@@ -237,8 +237,7 @@ body {
              reserved row; measures itself into --top-banner-h so page
              content + headers shift down while it is mounted (zero gap on
              unmount). Paint order matches DOM order.
-     z-[47]  toast band slot (Toast) — floats ABOVE the pill but NEVER
-             covers its buttons: it renders below the pill box
-             (top-[var(--top-band-top)]) so the two stack instead of overlap.
    Full-screen takeovers (WelcomeCheckpoint, InstallLanding) keep z-[90];
-   Toast keeps z-[100] (transient, auto-dismisses, always readable). */
+   Toast keeps z-[100] (transient, auto-dismisses, always readable) and sits
+   BELOW the pill geometrically via top-[var(--top-band-top)] — stacking is
+   positional (the slot contract), not z-based, so no toast rung exists here. */
