@@ -1,13 +1,14 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 0 — PR #293 (F9 offsite backup) SQUASH-MERGED `5f42e315` run #227; PR #294 (P2-400 part 2 RBAC gates) SQUASH-MERGED `a35805af` run #227. PR #290/#291/#292 all MERGED+LIVE.
-- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #227 re-pull (2026-11-24 12:1xZ): 1C 88 events/24h, 1F 17; nightly backup STILL FAILED (newest good dump Nov 20 03:23Z, 105h stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
+- Open PRs: 0 — PR #297 (P2-344 insufficient-funds + payout-flip observability, run #229) SQUASH-MERGED `15ac2a3d` + LIVE. PR #293 (F9 offsite backup) SQUASH-MERGED `5f42e315` run #227; PR #294 (P2-400 part 2 RBAC gates) SQUASH-MERGED `a35805af` run #227. PR #290/#291/#292 all MERGED+LIVE.
+- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #229 re-pull (2026-11-25 01:2xZ): 1C 91 events/24h (rising), 1F 17; nightly backup STILL FAILED (newest good dump Nov 20 03:23Z, ~118h stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
 - **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is BLOCKED (migrate-first precondition needs the prod DB alive; Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`).**
-- Promote gap: 37 commits ahead of main; last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
-- Services: API :3001 healthy (money rules live), PWA :3000 + admin :3002 active (admin now carries RBAC-gated write buttons — PR #294). Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
+- Promote gap: 43 commits ahead of main (incl. #295/#296/#297); last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
+- Services: API :3001 healthy, PWA :3000 + admin :3002 active (run #229 restarted all three on `15ac2a3d`; dist carries P2-344 + payout-flip observability). Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
 - **NEW (#227): F9 offsite backup BUILT — push awaits YOUR repo (NEW-10 below; one command after that). The age PRIVATE key at ~/.config/koralink/koralink-offsite.key must be escrowed OFF this VPS.**
 - Owner decisions waiting: NEW-10 (F9 repo + key escrow). Standing below re-labeled per Rule 1 (D-20261122-02).
+
 
 ## Active owner actions
 
