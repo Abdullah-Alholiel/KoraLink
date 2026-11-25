@@ -91,6 +91,40 @@ else
   FAIL=1
 fi
 
+# 4c. OFFSITE freshness (F9, Life-OS worker D-20261125-02): run the repo's
+# offsite-freshness.sh; OFFSITE RED fails the unit. Disabled until the owner
+# sets GH_BACKUP_REPO in /home/ubuntu/.config/koralink/offsite.env
+# (OWNER-QUEUE NEW-10) — until then the push script has no target and an
+# alarm here would be permanent noise, so we log the disabled state instead.
+OFFSITE_ENV="/home/ubuntu/.config/koralink/offsite.env"
+OFFSITE_FRESH="/home/ubuntu/projects/koralink/scripts/offsite-freshness.sh"
+# A real repo slug looks like owner/repo; run #227 wrote the placeholder
+# "OWNER-STEP-PENDING/..." to hold the file shape until the owner acts —
+# the placeholder counts as NOT set (a bogus slug would arm a permanent RED).
+GH_REPO_VAL="$(grep '^GH_BACKUP_REPO=' "$OFFSITE_ENV" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')"
+GH_REPO_VAL="$(printf '%s' "$GH_REPO_VAL" | tr -d '"')"
+GH_REPO_VAL="$(printf '%s' "$GH_REPO_VAL" | tr -d "'")"
+if [ -n "$GH_REPO_VAL" ] \
+   && [ "${GH_REPO_VAL#OWNER-STEP-PENDING}" = "$GH_REPO_VAL" ] \
+   && printf '%s' "$GH_REPO_VAL" | grep -qE '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; then
+  if [ -x "$OFFSITE_FRESH" ]; then
+    OFFSITE_OUT="$(bash "$OFFSITE_FRESH" 2>/dev/null || true)"
+    if printf '%s' "$OFFSITE_OUT" | grep -q "OFFSITE RED"; then
+      say "FAIL $OFFSITE_OUT"
+      FAIL=1
+    elif [ -n "$OFFSITE_OUT" ]; then
+      say "WARN $OFFSITE_OUT"
+    else
+      say "OK offsite fresh"
+    fi
+  else
+    say "FAIL offsite-freshness.sh missing: $OFFSITE_FRESH"
+    FAIL=1
+  fi
+else
+  say "OK offsite check disabled (GH_BACKUP_REPO not set — owner step NEW-10)"
+fi
+
 if [ "$FAIL" -eq 1 ]; then
   say "=== WATCHDOG: FAILURES DETECTED ==="
   exit 1

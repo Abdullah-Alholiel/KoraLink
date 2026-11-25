@@ -1,13 +1,13 @@
 # KoraLink Owner Decision Queue
 
 ## Snapshot
-- Open PRs: 1 — **PR #298 (P2-391 top-band slot contract, run #230) awaiting checks on head `049b8dce`** (gate/review/Vercel re-running after the r1 doc-fix push; semgrep+GitGuardian+fresh-apply green on the first head; no kora-link status — ghost project stayed disconnected). Merge = next run after PR-Agent r2 triage.
-- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #230 re-pull (2026-11-25 12:1xZ): 1C 93 events/24h (rising from 91), 1F 18; nightly backup STILL FAILED (newest good dump Nov 20 03:23Z, ~129h stale). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
-- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is BLOCKED (migrate-first precondition needs the prod DB alive; Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`).**
-- Promote gap: 44 commits ahead of main (incl. #295/#296/#297); last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12; #277 storage guard rides the next promote). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
-- Services: API :3001 healthy, PWA :3000 + admin :3002 active (run #230: PWA lane build restarted the unit — main-tree rebuild + restart lands at PR #298 merge; dist on `15ac2a3d` still serves). Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
-- **NEW (#230): two Life-OS worker requests D-20261125-01/-02 landed in the queue (skill/cron-prompt rule wiring + PG17 image tag in prod-on-vps docs) — factory-side, next runs.**
-- Owner decisions waiting: NEW-10 (F9 repo + key escrow). Standing below re-labeled per Rule 1 (D-20261122-02).
+- Open PRs: 0 — run #231 merged both items: PR #299 `3d3e2fe2` (P2-401 admin error localization) + PR #300 `dacd687d` (P2-402 FloatingCta dedup), both squash-merged + LIVE on staging (PWA+admin rebuilt/restarted; served chunks carry the changes).
+- **🔴 URGENT (owner: `irreversible` kind): Neon quota STILL DEAD — run #231 (2026-11-25 15:1xZ): 1C 94 events/24h (rising), prod journal recount via Render URI FAILED (quota refuses connections); nightly backup STILL FAILED (newest good dump Nov 20 03:23Z, ~132h stale — watchdog §4b red). Per YOUR decision D-20261122-01 the heal path is the COOLIFY CUTOVER + Nov-20-backup restore (NOT a Neon payment) — it needs a fresh supervised window from you. Until then prod writes fail near-continuously and backups stay stale.**
+- **⚠ URGENT: PROD API IS STALE — Render serves the SEP-25 build; the promote package lane is BLOCKED (migrate-first precondition needs the prod DB alive; Neon refuses connections). The ONLY heal is the Coolify cutover (D-20261122-01, owner `irreversible`). Cutover docs are now FRESH for your session: prod-on-vps.md image = PG17 (`imresamu/postgis:17-3.5`, registry-verified), restore = `psql -v ON_ERROR_STOP=1` + 32-table check, journal 60→migrate 0059–0061→62 before traffic (A4). New skill `koralink-cutover-runbook` lets a Claude session drive A2–A5 prep.**
+- Promote gap: 47 commits ahead of main (incl. #299/#300); last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
+- Services: API :3001 healthy, PWA :3000 + admin :3002 active on `dacd687d`. Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
+- **DONE (#231): D-20261125-01 (launch-first rule in cron prompt + SKILL.md v1.5.4 + STATE consistency) and D-20261125-02 (PG17 image, strict restore, 60→62 journal gates, watchdog §8b wired) — executed + ledger-logged; removed from the waiting list.**
+- Owner decisions waiting: NEW-10 (F9 repo + age-key escrow — watchdog §8b auto-arms the moment GH_BACKUP_REPO is real). Standing below re-labeled per Rule 1 (D-20261122-02).
 
 
 ## Active owner actions

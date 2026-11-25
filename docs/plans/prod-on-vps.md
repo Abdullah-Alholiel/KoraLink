@@ -88,7 +88,11 @@ and confirm the container boots before wiring Coolify.
 
 ## 3. Prod Postgres+PostGIS container (the money table)
 
-- **Image:** `imresamu/postgis:16-3.5` (same as staging — PostGIS needed for venue geo).
+- **Image:** `imresamu/postgis:17-3.5` — PG17 + PostGIS 3.5 (registry-verified
+  2026-11-25; sibling tags `17-3.5-alpine`, `17-3.6` exist). PostGIS is required for
+  venue geo, and PG is pinned to **17** because prod Neon runs PG17 — its dumps carry
+  PG17-only dump output (`SET transaction_timeout`), which a PG16 image would choke on
+  at restore (Life-OS worker D-20261125-02).
 - **Name:** `koralink-prod-pg`, docker compose project `koralink-prod` (separate from
   staging's `koralink` project so a compose down never crosses).
 - **Resources:** `--memory=1g --memory-swap=2g` (target: prod quartet + DB ≈ 1 GB total
@@ -107,12 +111,25 @@ and confirm the container boots before wiring Coolify.
 
 1. Owner runs dump from prod Neon (helper exists: `scripts/db-backup-prod.sh` pattern —
    PG17 client against the Render-resolved `DATABASE_URL`). Verify: `gzip -t` +
-   CREATE-TABLE floor count = 29 tables (current prod truth).
-2. Owner restores into `koralink-prod-pg`:
-   `docker exec -i koralink-prod-pg psql -U <owner> -d koralink < dump.sql.gz` (gunzip pipe).
+   CREATE-TABLE floor count = 32 tables (run-#227 F9 canary restore counted 32 in the
+   2026-11-20 dump; the older 29-table figure predates migrations 0057+).
+2. Owner restores into `koralink-prod-pg` (strict mode: any restore error aborts
+   loudly instead of leaving a partial DB — Life-OS worker D-20261125-02):
+   `gunzip -c dump.sql.gz | docker exec -i koralink-prod-pg psql -v ON_ERROR_STOP=1 -U <owner> -d koralink`
+   then verify the table count matches the dump floor (expect 32 tables in
+   `public` — see step 1's floor check; adjust to the dump's own count if it
+   differs):
+   `docker exec koralink-prod-pg psql -U <owner> -d koralink -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"`
 3. Journal reconciliation: `scripts/neon_journal_reconcile.py` against the new DB —
-   `drizzle.__drizzle_migrations` must show 60/60 rows matching the repo journal (60
-   entries at run #190). Verify: helper prints 60/60 + table/object spot-checks.
+   `drizzle.__drizzle_migrations` must show 60 rows matching the repo journal through
+   entry idx 59 tag `0058_venue_reviews_hidden_at` (the last state verified live on
+   prod 2026-11-03: 60/60, object-checked). The repo head has since moved to idx 62
+   tag `0061_pitch_forfeit_no_show_karma`, so after the restore passes the count
+   check, apply migrations 0059→0061 to reach 62/62 (`MIGRATE_DATABASE_URL=<uri> node
+   scripts/migrate-vps.mjs`) BEFORE serving traffic — the repo journal carries 63
+   entries (idx 0–62). Recount at restore time; if prod moved past 62 since
+   2026-11-03, reconcile against the actual live count, never the doc number.
+   Verify: helper prints the expected N/N + table/object spot-checks.
 4. Point the api-app `DATABASE_URL` at the new container, restart, hit
    `/api/v1/health` + one authed endpoint from the PWA. **Rollback:** flip
    `DATABASE_URL` back to the Neon/Render URI and restart the Render service (still
@@ -148,7 +165,7 @@ and confirm the container boots before wiring Coolify.
 |---|---|---|---|
 | C1 | Coolify: create 3 apps + prod-pg from this plan (owner) | containers `Up (healthy)` in Coolify UI | delete apps/DB (nothing public yet) |
 | C2 | Wire webhook + tag `release/v<initial>` | Coolify builds green, images listed | rebuild previous tag |
-| C3 | Neon → prod-pg restore (§4) | journal 60/60 + 29 tables | Neon stays authoritative; point api back |
+| C3 | Neon → prod-pg restore (§4) | restore = 32 tables, journal 60 → migrate 0059–0061 → 62 (recount at restore) | Neon stays authoritative; point api back |
 | C4 | Flip api `DATABASE_URL` → prod-pg; restart | health 200 + authed smoke via PWA | flip back to Neon URI |
 | C5 | Repoint/remove stale demo route; confirm sslip URLs | `release-verify.sh` all-ok on sslip URLs | remove labels, Funnel links unchanged |
 | C6 | Announce/demo on sslip URLs (Momentum-style launch order unchanged) | owner manual pass | Render/Vercel still live — swap DNS/links back |

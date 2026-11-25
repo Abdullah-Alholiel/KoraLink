@@ -36,7 +36,7 @@ Per DECISIONS.md (2026-11-20 row): hosting truth-pins flip ONLY in the cutover c
 | 3.3 | `COOKIE_SECURE` | `true` | P2-241 invariant; boot THROWS otherwise (env-flags guard). |
 | 3.4 | `SWAGGER_ENABLED` | `false` (or unset) | /api/docs must not serve in prod; `true`+prod THROWS at boot (run #205 guard). |
 | 3.5 | `DEV_LOGIN_ENABLED` | `false` | prod+`true` THROWS at boot as of run #221 (PR #286). Launch condition 1: no OTP bypass. |
-| 3.6 | `DATABASE_URL` | koralink-prod-pg URI (A4 restore first) | migrate-first runbook; verify journal count == repo journal entries before traffic. |
+| 3.6 | `DATABASE_URL` | koralink-prod-pg URI (A4 restore first) | migrate-first runbook; **A4 gate: restore expects journal 60 (through 0058) → apply 0059–0061 → journal 62 before traffic** (32-table restore floor; recount at restore time). |
 | 3.7 | `TURNSTILE_ENABLED` + `TURNSTILE_SECRET_KEY` (+ site key to PWA) | arm for public URLs | F1 flag-off ships today; public OTP WITHOUT arming = bot exposure (A6 precondition). Owner dashboard keys (OWNER-QUEUE). |
 | 3.8 | `MOYASAR_*` + webhook URL registration | sandbox (launch posture) / live post-CR | P2-325 webhook half still unbuilt (F2) — reconcile-only until then. |
 
