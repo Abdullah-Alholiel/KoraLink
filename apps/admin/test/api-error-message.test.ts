@@ -39,6 +39,17 @@ describe('apiErrorToMessage', () => {
   it('maps a network TypeError to errors.network', () => {
     expect(apiErrorToMessage(new TypeError('Failed to fetch'), t)).toBe('errors.network');
     expect(classifyApiError(new TypeError('Failed to fetch'))).toBe('network');
+    expect(classifyApiError(new TypeError('Load failed'))).toBe('network');
+    expect(
+      classifyApiError(new TypeError('NetworkError when attempting to fetch resource.')),
+    ).toBe('network');
+  });
+
+  it('a client-bug TypeError is NOT network — generic bucket + diagnostics', () => {
+    expect(classifyApiError(new TypeError("Cannot read properties of undefined"))).toBe('generic');
+    expect(apiErrorToMessage(new TypeError("Cannot read properties of undefined"), t)).toBe(
+      'errors.generic',
+    );
   });
 
   it('maps non-Error input and status-less errors to errors.generic', () => {
@@ -98,7 +109,7 @@ describe('errors i18n namespace', () => {
     const fallbacks = [
       'adminReports.failed', 'hq.restoreFailed', 'venueForm.failed', 'venueTransfer.failed',
       'slotManager.generationFailed', 'slotManager.couldNotAdd', 'slotManager.deleteFailed',
-      'matchEdit.failed', 'pitchForm.failed', 'errors.failed',
+      'matchEdit.failed', 'pitchForm.failed', 'errors.failed', 'common.failedToLoad',
     ];
     for (const key of fallbacks) {
       const [ns, k] = key.split('.');

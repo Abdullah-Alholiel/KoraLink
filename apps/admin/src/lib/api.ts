@@ -193,8 +193,18 @@ export function classifyApiError(e: unknown): ApiErrorBucket {
     if (status >= 500 && status <= 599) return 'server';
     return 'generic';
   }
-  // fetch() rejects with a TypeError when the network is unreachable / CORS fails.
-  if (e instanceof TypeError) return 'network';
+  // fetch() rejects with a TypeError when the network is unreachable / CORS
+  // fails — those rejections carry stable BROWSER-ENGINE messages ("Failed to
+  // fetch" Chromium, "Load failed" Safari, "NetworkError when attempting to
+  // fetch resource" Firefox), so matching them is not the brittle backend-copy
+  // class. A TypeError thrown by a CLIENT bug (property of undefined, etc.)
+  // falls through to 'generic', which gets the dev-only diagnostics warn.
+  if (
+    e instanceof TypeError &&
+    /failed to fetch|load failed|networkerror/i.test(e.message ?? '')
+  ) {
+    return 'network';
+  }
   return 'generic';
 }
 
