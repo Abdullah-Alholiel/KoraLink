@@ -9,7 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminUser, ListResponse } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -67,6 +67,7 @@ export default function UsersPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  const tr = useTranslations();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   // (`role` below is the list's role filter — hence viewerRole.)
@@ -163,7 +164,7 @@ export default function UsersPage() {
       clearSelectionIds();
       reload();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : ts('failed'));
+      setActionError(apiErrorToMessage(e, tr, 'errors.failed'));
     } finally {
       setBulkRunning(false);
     }
@@ -188,9 +189,10 @@ export default function UsersPage() {
       reload();
       setSelected(null);
     } catch (e) {
-      // API copy is plain (400/409): mirror the act() convention of showing
-      // the API reason instead of a generic failure.
-      setActionError(e instanceof Error ? e.message : t('restoreFailed'));
+      // Localized bucket copy now (P2-401): the API's plain 400/409 reason no
+      // longer reaches the screen; specific restore-failed key kept for the
+      // generic bucket via fallbackKey.
+      setActionError(apiErrorToMessage(e, tr, 'hq.restoreFailed'));
     } finally {
       setBusyId(null);
     }
@@ -239,7 +241,7 @@ export default function UsersPage() {
       // What + why + next: surface the API reason (e.g. last-admin guard)
       // instead of silently swallowing the rejection — the banner stays until
       // the next attempt.
-      setActionError(e instanceof Error ? e.message : ts('failed'));
+      setActionError(apiErrorToMessage(e, tr, 'errors.failed'));
     } finally {
       setBusyId(null);
     }

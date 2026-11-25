@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminReportDetail } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
@@ -20,6 +20,7 @@ const CLOSED = new Set(['resolved', 'dismissed']);
 export default function ReportDetailPage() {
   const t = useTranslations('adminReports');
   const tc = useTranslations('common');
+  const tr = useTranslations();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -61,7 +62,7 @@ export default function ReportDetailPage() {
       setResolution('');
       setBanSubject(false);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
     } finally {
       setSaving(false);
     }
@@ -74,7 +75,7 @@ export default function ReportDetailPage() {
       await api.post(`/admin/reports/${id}/reopen`);
       reload();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
     } finally {
       setSaving(false);
       setConfirmReopen(false);
@@ -95,7 +96,7 @@ export default function ReportDetailPage() {
         setSaveError(tc('editStale'));
         reload();
       } else {
-        setSaveError(e instanceof Error ? e.message : t('failed'));
+        setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
       }
     } finally {
       setSaving(false);

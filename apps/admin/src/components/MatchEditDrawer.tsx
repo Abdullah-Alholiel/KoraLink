@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
-import { api } from '@/lib/api';
+import { api, apiErrorToMessage } from '@/lib/api';
 import type { AdminMatch } from '@/lib/types';
 
 interface MatchEditDrawerProps {
@@ -23,6 +23,7 @@ interface MatchEditDrawerProps {
 export default function MatchEditDrawer({ match, onClose, onSaved }: MatchEditDrawerProps) {
   const t = useTranslations('matchEdit');
   const tc = useTranslations('common');
+  const tr = useTranslations();
   // Local const so closures narrow properly (the early render-return is below).
   const m = match;
 
@@ -76,7 +77,7 @@ export default function MatchEditDrawer({ match, onClose, onSaved }: MatchEditDr
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('failed'));
+      setError(apiErrorToMessage(e, tr, 'matchEdit.failed'));
     } finally {
       setSaving(false);
     }

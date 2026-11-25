@@ -5,10 +5,11 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, Loader2, ShieldAlert } from 'lucide-react';
-import { api, defaultRoute, setToken } from '@/lib/api';
+import { api, apiErrorToMessage, defaultRoute, setToken } from '@/lib/api';
 
 export default function LoginPage() {
   const t = useTranslations('hq');
+  const tr = useTranslations();
   const router = useRouter();
   const [phone, setPhone] = useState('+966500000000');
   const [code, setCode] = useState('');
@@ -34,7 +35,7 @@ export default function LoginPage() {
       setToken(res.token);
       router.replace(defaultRoute());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed');
+      setError(apiErrorToMessage(e, tr));
     } finally {
       setLoading(false);
     }
@@ -47,7 +48,7 @@ export default function LoginPage() {
       await api.post('/auth/send-otp', { phone });
       setOtpSent(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send OTP');
+      setError(apiErrorToMessage(e, tr));
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function LoginPage() {
         setError('OTP verified but no token returned (production uses cookies).');
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Verification failed');
+      setError(apiErrorToMessage(e, tr));
     } finally {
       setLoading(false);
     }
