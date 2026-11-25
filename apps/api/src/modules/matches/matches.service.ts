@@ -21,6 +21,7 @@ import {
   moneyToNumber,
 } from '../../common/utils/money';
 import { reportFanOutError } from '../../common/utils/fanout';
+import * as Sentry from '@sentry/node';
 
 /** round to 2 d.p. (halves away from zero) for money amounts. */
 function roundMoney2(n: number): number {
@@ -811,6 +812,7 @@ export class MatchesService {
     const expiring = await this.db.execute(sql`
       SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
              m.pitch_cost_sar, m.min_players, m.is_player_hosted,
+             m.host_payout_state,
              (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
                AS total_players
       FROM matches m
@@ -828,6 +830,7 @@ export class MatchesService {
       id: string; title: string; host_id: string; booking_mode: string;
       booking_slot_id: string | null; pitch_cost_sar: string | null;
       min_players: number; is_player_hosted: boolean | null; total_players: number;
+      host_payout_state: string | null;
     }>)) {
       try {
         if (await this.autoCancelExpiringRow(row)) {
@@ -871,6 +874,7 @@ export class MatchesService {
       id: string; title: string; host_id: string; booking_mode: string;
       booking_slot_id: string | null; pitch_cost_sar: string | null;
       min_players: number; is_player_hosted: boolean | null; total_players: number;
+      host_payout_state: string | null;
     },
     fromStatuses: string[] = ['Open', 'Full'],
   ): Promise<boolean> {
@@ -952,9 +956,11 @@ export class MatchesService {
 
       // Slice 3: a cancelled player-hosted match must never pay out —
       // guarded flip held → cancelled (idempotent; no-op when not held,
-      // skipped entirely for venue-owned legacy rows). Same lost-race
-      // breadcrumb as the manual cancelMatch flip (run #229).
-      if (row.is_player_hosted) {
+      // skipped entirely for venue-owned legacy rows). Same breadcrumb as
+      // the manual cancelMatch flip (run #229) — but scoped to rows that
+      // were actually HELD on read (the row lacks the early held-check the
+      // manual path has, so a non-held row legitimately affects 0 here).
+      if (row.is_player_hosted && row.host_payout_state === 'held') {
         const flip = await tx
           .update(matches)
           .set(withTimestamp({ host_payout_state: 'cancelled' }))
@@ -969,8 +975,18 @@ export class MatchesService {
           (flip as unknown as { count?: number }).count ??
           1;
         if (affected === 0) {
-          this.logger.warn(
+          // Money anomaly, not routine noise: the hold we came to cancel was
+          // already gone (concurrent release), i.e. the host may have been
+          // paid while this match still cancels. Alert-grade (Claude tier-B
+          // run-#229): error-level Pino + Sentry so it surfaces.
+          this.logger.error(
             `host_payout_hold_lost_race match=${row.id} — hold already flipped by a concurrent release; auto-cancel proceeds, payout stayed with the winner.`,
+          );
+          Sentry.captureException(
+            new Error(
+              `host_payout_hold_lost_race: concurrent release won the payout hold on match ${row.id} during auto-cancel`,
+            ),
+            { tags: { scope: 'api-money', event: 'host_payout_hold_lost_race' } },
           );
         }
       }
@@ -1109,6 +1125,7 @@ export class MatchesService {
     const overdue = await this.db.execute(sql`
       SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
              m.pitch_cost_sar, m.min_players, m.is_player_hosted,
+             m.host_payout_state,
              (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
                AS total_players
       FROM matches m
@@ -1127,6 +1144,7 @@ export class MatchesService {
       id: string; title: string; host_id: string; booking_mode: string;
       booking_slot_id: string | null; pitch_cost_sar: string | null;
       min_players: number; is_player_hosted: boolean | null; total_players: number;
+      host_payout_state: string | null;
     }>)) {
       try {
         if (await this.autoCancelExpiringRow(row)) {
@@ -1189,6 +1207,7 @@ export class MatchesService {
     const stranded = await this.db.execute(sql`
       SELECT m.id, m.title, m.host_id, m.booking_mode, m.booking_slot_id,
              m.pitch_cost_sar, m.min_players, m.is_player_hosted,
+             m.host_payout_state,
              (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = m.id)
                AS total_players
       FROM matches m
@@ -1208,6 +1227,7 @@ export class MatchesService {
       id: string; title: string; host_id: string; booking_mode: string;
       booking_slot_id: string | null; pitch_cost_sar: string | null;
       min_players: number; is_player_hosted: boolean | null; total_players: number;
+      host_payout_state: string | null;
     }>)) {
       try {
         // Stranded rows are TERMINAL (Completed) — the heal must cancel FROM
@@ -3420,18 +3440,26 @@ export class MatchesService {
               eq(matches.host_payout_state, 'held'),
             ),
           );
-        // Run #229 (Reviewer A residual): the flip is safe-by-WHERE — a
-        // concurrent release wins the hold and this update affects 0 rows —
-        // but that race was previously UNOBSERVED. Read the affected count
-        // the same driver-shape-tolerant way as the settle guard (:141) and
-        // leave a breadcrumb when the hold we came to cancel was already gone.
+        // Run #229 (Reviewer A residual + Claude tier-B round): the flip is
+        // safe-by-WHERE — and this tx already holds the match row's FOR UPDATE
+        // lock, so a concurrent release would normally have blocked behind us;
+        // the 0-affected read is defence-in-depth for exotic interleavings,
+        // not the expected path. If it ever fires, money already moved on the
+        // winner's side (host paid while this cancel proceeds) — alert-grade:
+        // error-level Pino + Sentry, not a routine warn.
         const affected =
           (flip as unknown as { rowCount?: number; count?: number }).rowCount ??
           (flip as unknown as { count?: number }).count ??
           1; // optimistic default: tests + drivers that don't report it
         if (affected === 0) {
-          this.logger.warn(
+          this.logger.error(
             `host_payout_hold_lost_race match=${matchId} — hold already flipped by a concurrent release; cancel proceeds, payout stayed with the winner.`,
+          );
+          Sentry.captureException(
+            new Error(
+              `host_payout_hold_lost_race: concurrent release won the payout hold on match ${matchId} during cancelMatch`,
+            ),
+            { tags: { scope: 'api-money', event: 'host_payout_hold_lost_race' } },
           );
         }
       }

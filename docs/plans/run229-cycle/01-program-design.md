@@ -27,7 +27,7 @@ Worktree: ~/worktrees/koralink/run229-p2-344 (real npm ci — runbook §3.9).
   paths `/app/apps/api/...` = PROD Render stale build's daily push-subscriptions cleanup —
   zero staging impact, heals at the owner's Coolify cutover. Web project: 3 singleton
   payment-flow errors (1/24h each). Nothing new code-level.
--ADMIN STATE CHECK: apps/admin + partner modules CLEAN (no in-flight owner work).
+- ADMIN STATE CHECK: apps/admin + partner modules CLEAN (no in-flight owner work).
 
 ## Gate 1 — Product spec (P2-344)
 
