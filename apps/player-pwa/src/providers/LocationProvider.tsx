@@ -97,15 +97,18 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       }
     };
     write();
-    if (typeof ResizeObserver === 'undefined') return; // jsdom/test safety
-    const ro = new ResizeObserver(() => write());
-    ro.observe(card);
-    // Rotation changes env(safe-area-inset-top) WITHOUT resizing the card
-    // (PR-Agent #298 r2): the card's offsetTop shifts but its box does not,
-    // so RO alone stays stale. Viewport resizes re-read the fresh inset.
+    // RO is optional (older iOS Safari / Android WebView lack it); the resize
+    // listener + CLEANUP are NOT — PR-Agent #298 r5: an early-return here
+    // skipped cleanup registration, leaving --top-banner-h stale (permanent
+    // blank strip) after unmount on those browsers.
+    const ro =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => write());
+    if (ro) ro.observe(card);
     window.addEventListener('resize', write);
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       window.removeEventListener('resize', write);
       root.style.setProperty('--top-banner-h', '0px');
     };
