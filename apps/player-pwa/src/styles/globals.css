@@ -48,6 +48,11 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-overflow-scrolling: touch;
+  /* P2-391: reserve the top-banner row — the geolocation pill writes its
+     viewport extent into --top-banner-h (0px default = no reservation, zero
+     gap when it unmounts). MobileFrame's height subtracts the same var so
+     the frame still ends at the canvas bottom (nav never clips). */
+  padding-top: var(--top-banner-h, 0px);
 }
 
 /* Allow text selection inside form inputs */

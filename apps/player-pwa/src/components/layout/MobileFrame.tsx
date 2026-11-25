@@ -25,11 +25,11 @@ interface MobileFrameProps {
  */
 export default function MobileFrame({ children, className = '' }: MobileFrameProps) {
   return (
-    <div className="w-full h-[var(--app-height)] max-h-[var(--app-height)] bg-brand-bg flex justify-center overflow-hidden">
+    <div className="w-full h-[calc(var(--app-height)-var(--top-banner-h,0px))] max-h-[calc(var(--app-height)-var(--top-banner-h,0px))] bg-brand-bg flex justify-center overflow-hidden">
       <div
         className={`
           w-full max-w-6xl
-          h-[var(--app-height)] max-h-[var(--app-height)]
+          h-[calc(var(--app-height)-var(--top-banner-h,0px))] max-h-[calc(var(--app-height)-var(--top-banner-h,0px))]
           bg-white shadow-sm
           relative overflow-hidden
           flex flex-col flex-1
