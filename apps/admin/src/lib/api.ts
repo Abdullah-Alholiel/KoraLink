@@ -163,3 +163,55 @@ export function getRole(): Role | null {
 export function defaultRoute(): string {
   return getRole() === 'VenueOwner' ? '/partner' : '/dashboard';
 }
+
+export type ApiErrorBucket =
+  | 'conflict'
+  | 'auth'
+  | 'notFound'
+  | 'rate'
+  | 'server'
+  | 'network'
+  | 'generic';
+
+function statusOf(e: unknown): number | null {
+  if (e instanceof ApiError) return e.status;
+  if (typeof e === 'object' && e !== null && 'status' in e) {
+    const s = (e as { status: unknown }).status;
+    if (typeof s === 'number' && Number.isFinite(s)) return s;
+  }
+  return null;
+}
+
+/** Classify a thrown value into a localized-copy bucket (never inspects message text for output). */
+export function classifyApiError(e: unknown): ApiErrorBucket {
+  const status = statusOf(e);
+  if (status !== null) {
+    if (status === 400 || status === 409 || status === 422) return 'conflict';
+    if (status === 401 || status === 403) return 'auth';
+    if (status === 404) return 'notFound';
+    if (status === 429) return 'rate';
+    if (status >= 500 && status <= 599) return 'server';
+    return 'generic';
+  }
+  // fetch() rejects with a TypeError when the network is unreachable / CORS fails.
+  if (e instanceof TypeError) return 'network';
+  return 'generic';
+}
+
+/**
+ * Map any thrown value to localized, user-facing copy (error-message standard:
+ * what happened + why + what to do next, EN+AR). NEVER returns raw backend
+ * text. `t` must be the ROOT translator (`useTranslations()`), since keys are
+ * resolved as `errors.<bucket>`. `fallbackKey` (a full root-relative key, e.g.
+ * 'slotManager.generationFailed') replaces `errors.generic` so a surface keeps
+ * its more specific copy when the failure can't be classified.
+ */
+export function apiErrorToMessage(
+  e: unknown,
+  t: (key: string) => string,
+  fallbackKey?: string,
+): string {
+  const bucket = classifyApiError(e);
+  if (bucket === 'generic' && fallbackKey) return t(fallbackKey);
+  return t(`errors.${bucket}`);
+}

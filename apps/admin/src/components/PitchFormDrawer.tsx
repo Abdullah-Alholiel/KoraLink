@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
+import { apiErrorToMessage } from '@/lib/api';
 
 export interface PitchFormResult {
   venue_id: string;
@@ -59,6 +60,7 @@ export default function PitchFormDrawer({
 }: PitchFormDrawerProps) {
   const t = useTranslations('pitchForm');
   const tc = useTranslations('common');
+  const tr = useTranslations();
 
   const [values, setValues] = useState<PitchFormValues>(() => defaults(pitch));
   const [errors, setErrors] = useState<{ name?: string; venue_id?: string }>({});
@@ -97,7 +99,7 @@ export default function PitchFormDrawer({
       await onSubmit(payload);
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(apiErrorToMessage(e, tr, 'pitchForm.failed'));
     } finally {
       setSaving(false);
     }

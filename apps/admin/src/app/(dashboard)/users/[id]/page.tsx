@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminUser } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/utils';
@@ -39,6 +39,7 @@ function userStatus(u: AdminUser): string {
 export default function UserDetailPage() {
   const t = useTranslations('userDetail');
   const tHQ = useTranslations('hq');
+  const tr = useTranslations();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -67,9 +68,9 @@ export default function UserDetailPage() {
       await api.patch(`/admin/users/${id}`, body);
       reload();
     } catch (e) {
-      // Localized headline + raw backend text demoted to a muted LTR detail
-      // line (LoadError pattern); never silent (error-message standard).
-      setActionError(e instanceof Error ? e.message : '');
+      // Localized headline + localized what/why/next detail line; never
+      // silent and never raw backend text (error-message standard, P2-401).
+      setActionError(apiErrorToMessage(e, tr));
     } finally {
       setBusy(false);
     }
@@ -169,7 +170,7 @@ export default function UserDetailPage() {
           <div role="alert" className="mt-4">
             <p className="text-sm font-medium text-brand-red">{t('actionFailed')}</p>
             {actionError && (
-              <p dir="ltr" className="mt-0.5 text-xs text-gray-400 break-words">
+              <p className="mt-0.5 text-xs text-gray-400 break-words">
                 {actionError}
               </p>
             )}

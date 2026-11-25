@@ -7,7 +7,7 @@ import { Loader2, Save } from 'lucide-react';
 import LiveBadge from '@/components/LiveBadge';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import PageHeader from '@/components/PageHeader';
 
@@ -25,6 +25,7 @@ const KNOWN_SETTINGS: { key: string; labelKey: string; type: 'number' | 'text' }
 export default function SettingsPage() {
   const t = useTranslations('hq');
   const ts = useTranslations('status');
+  const tr = useTranslations();
   const { data, loading, error, reload, live, stale } = useLiveAdminData<SettingsResponse>('/admin/settings', ['settings']);
   const [values, setValues] = useState<Record<string, string>>({});
   // P2-322: save state is PER-SETTING — saving one key must not flash
@@ -58,7 +59,7 @@ export default function SettingsPage() {
       // role change); the banner stays on its card until the next attempt or success.
       setSaveErrors((errs) => ({
         ...errs,
-        [key]: e instanceof Error ? e.message : ts('failed'),
+        [key]: apiErrorToMessage(e, tr, 'errors.failed'),
       }));
     } finally {
       setSavingKey(null);

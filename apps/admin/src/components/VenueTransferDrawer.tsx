@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { api } from '@/lib/api';
+import { api, apiErrorToMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface OwnerCandidate {
@@ -30,6 +30,7 @@ interface VenueTransferDrawerProps {
 export default function VenueTransferDrawer({ venue, onClose, onSaved }: VenueTransferDrawerProps) {
   const t = useTranslations('venueTransfer');
   const tc = useTranslations('common');
+  const tr = useTranslations();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<OwnerCandidate[]>([]);
@@ -53,7 +54,7 @@ export default function VenueTransferDrawer({ venue, onClose, onSaved }: VenueTr
         // Never offer the current owner as a target.
         setResults((res.users ?? []).filter((u) => u.id !== v.id));
       } catch (e) {
-        setError(e instanceof Error ? e.message : tc('failedToLoad'));
+        setError(apiErrorToMessage(e, tr));
         setResults([]);
       } finally {
         setSearching(false);
@@ -77,7 +78,7 @@ export default function VenueTransferDrawer({ venue, onClose, onSaved }: VenueTr
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('failed'));
+      setError(apiErrorToMessage(e, tr, 'venueTransfer.failed'));
       setSaving(false);
       setConfirming(false);
     }

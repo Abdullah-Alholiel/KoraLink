@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Drawer from '@/components/Drawer';
 import FormField from '@/components/FormField';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, apiErrorToMessage } from '@/lib/api';
 import type { PartnerVenueRow } from '@/lib/types';
 
 /** Mirrors the API cap (media.service.ts MAX_VENUE_IMAGES). */
@@ -60,6 +60,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
   const t = useTranslations('venueForm');
   const tp = useTranslations('partner.venues');
   const tc = useTranslations('common');
+  const tr = useTranslations();
 
   const [values, setValues] = useState<VenueFormValues>(EMPTY);
   const [errors, setErrors] = useState<{ name?: string; city?: string; address?: string; hours?: string }>({});
@@ -203,7 +204,7 @@ export default function VenueFormDrawer({ open, venue, onClose, onSaved, endpoin
       onSaved();
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('failed'));
+      setSaveError(apiErrorToMessage(e, tr, 'venueForm.failed'));
     } finally {
       setSaving(false);
     }

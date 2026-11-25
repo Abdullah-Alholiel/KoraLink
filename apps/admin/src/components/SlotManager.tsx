@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { api } from '@/lib/api';
+import { api, apiErrorToMessage } from '@/lib/api';
 import type { PartnerSlot } from '@/lib/types';
 // P2-124 (run #86): shared TZ-correct week helpers (PR-Agent finding on #51 —
 // toISOString() shifted a Riyadh Sunday-midnight to Saturday UTC, seeding the
@@ -30,6 +30,7 @@ interface SlotManagerProps {
 export default function SlotManager({ pitchId, pitchName, slots, loading, onChanged, endpointBase = '/partner' }: SlotManagerProps) {
   const t = useTranslations('slotManager');
   const tc = useTranslations('common');
+  const tr = useTranslations();
   // P2-124 (run #86): the initializer used to run new Date() during SSR, where
   // the container clock (UTC) can disagree with the client's Asia/Riyadh
   // weekday — an SSR/client divergence in the slot-week grid (hydration
@@ -95,7 +96,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
       setMessage(t('created', { created: res.created, skipped: res.skipped }));
       onChanged();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : t('generationFailed'));
+      setMessage(apiErrorToMessage(e, tr, 'slotManager.generationFailed'));
     } finally {
       setBusyAction(false);
     }
@@ -109,7 +110,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
       setShowAddSlot(false);
       onChanged();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : t('couldNotAdd'));
+      setMessage(apiErrorToMessage(e, tr, 'slotManager.couldNotAdd'));
     } finally {
       setBusyAction(false);
     }
@@ -122,7 +123,7 @@ export default function SlotManager({ pitchId, pitchName, slots, loading, onChan
       await api.delete(`${endpointBase}/slots/${slotId}`);
       onChanged();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : t('deleteFailed'));
+      setMessage(apiErrorToMessage(e, tr, 'slotManager.deleteFailed'));
     } finally {
       setBusyId(null);
     }
