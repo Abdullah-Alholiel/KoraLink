@@ -27,11 +27,14 @@ class ROStub {
 vi.stubGlobal('ResizeObserver', ROStub);
 
 // jsdom has no navigator.geolocation → useGeolocation flips status to
-// 'unsupported' in its mount effect and the pill never renders. Stub it so
-// status stays 'idle' (the showPrompt precondition).
-vi.stubGlobal('navigator', {
-  ...globalThis.navigator,
-  geolocation: { getCurrentPosition: vi.fn() },
+// 'unsupported' in its mount effect and the pill never renders. Add the
+// property IN PLACE (PR-Agent #298 r4: spreading globalThis.navigator into a
+// plain object would REPLACE the global and lose jsdom's prototype-defined
+// getters — userAgent/language/platform would read undefined for every test
+// in this file). defineProperty keeps the whole prototype intact.
+Object.defineProperty(globalThis.navigator, 'geolocation', {
+  value: { getCurrentPosition: vi.fn() },
+  configurable: true,
 });
 
 const PWA_ROOT = path.resolve(__dirname, '..', 'src');
