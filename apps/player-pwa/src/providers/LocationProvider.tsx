@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -72,12 +73,56 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const showPrompt = isAuthed && status === 'idle' && !dismissed;
   const showDenied = isAuthed && status === 'denied' && !coords && !dismissed;
 
+  // P2-391 top-band slot contract (globals.css z-ladder): the pill owns the
+  // reserved top row. Measure the card into --top-banner-h so the Toast band
+  // and MobileFrame shift down while the pill is mounted — the toast can no
+  // longer paint over (and swallow taps on) the Enable / Not-now buttons
+  // (P2-371 baseline: 330 top-band overlap instances). Resets to 0px on
+  // unmount ⇒ zero gap left behind.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!(showPrompt || showDenied)) return;
+    const card = cardRef.current;
+    const root = document.documentElement;
+    if (!card) return;
+    const write = () => {
+      // FULL viewport extent (offsetTop = the card's resolved safe-inset
+      // margin inside the fixed wrapper, offsetHeight = card box): one number
+      // describing exactly where the pill's bottom edge sits. The shell
+      // (.app-shell padding) and the frame (--app-height) consume it.
+      const extent = card.offsetTop + card.offsetHeight;
+      const next = extent > 0 ? `${Math.round(extent)}px` : '0px';
+      if (root.style.getPropertyValue('--top-banner-h') !== next) {
+        root.style.setProperty('--top-banner-h', next);
+      }
+    };
+    write();
+    // RO is optional (older iOS Safari / Android WebView lack it); the resize
+    // listener + CLEANUP are NOT — PR-Agent #298 r5: an early-return here
+    // skipped cleanup registration, leaving --top-banner-h stale (permanent
+    // blank strip) after unmount on those browsers.
+    const ro =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => write());
+    if (ro) ro.observe(card);
+    window.addEventListener('resize', write);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', write);
+      root.style.setProperty('--top-banner-h', '0px');
+    };
+  }, [showPrompt, showDenied]);
+
   return (
     <LocationContext.Provider value={value}>
       {children}
       {(showPrompt || showDenied) && (
-        <div className="fixed inset-x-0 top-0 z-[80] max-w-md mx-auto pointer-events-none">
-          <div className="mx-4 mt-[var(--top-safe-inset)] bg-brand-green text-white rounded-2xl shadow-[0_8px_30px_rgba(37,65,50,0.35)] px-4 py-3 flex items-center gap-3 pointer-events-auto">
+        <div className="fixed inset-x-0 top-0 z-[46] max-w-md mx-auto pointer-events-none">
+          <div
+            ref={cardRef}
+            className="mx-4 mt-[var(--top-safe-inset)] bg-brand-green text-white rounded-2xl shadow-[0_8px_30px_rgba(37,65,50,0.35)] px-4 py-3 flex items-center gap-3 pointer-events-auto"
+          >
             <MapPin className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold">
