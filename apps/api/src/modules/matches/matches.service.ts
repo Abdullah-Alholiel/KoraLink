@@ -956,11 +956,14 @@ export class MatchesService {
 
       // Slice 3: a cancelled player-hosted match must never pay out —
       // guarded flip held → cancelled (idempotent; no-op when not held,
-      // skipped entirely for venue-owned legacy rows). Same breadcrumb as
-      // the manual cancelMatch flip (run #229) — but scoped to rows that
-      // were actually HELD on read (the row lacks the early held-check the
-      // manual path has, so a non-held row legitimately affects 0 here).
-      if (row.is_player_hosted && row.host_payout_state === 'held') {
+      // skipped entirely for venue-owned legacy rows). The guarded UPDATE is
+      // issued for EVERY player-hosted row (PR-Agent r2 run-#229: our SELECT
+      // snapshot can be STALE — a hold created between the sweep SELECT and
+      // this tx must still be caught by the WHERE clause, so the pre-check
+      // may NOT gate the statement). The lost-race alert, however, fires
+      // only when the snapshot said 'held' AND 0 rows affected — a true
+      // concurrent-release race, not a benign never-held no-op.
+      if (row.is_player_hosted) {
         const flip = await tx
           .update(matches)
           .set(withTimestamp({ host_payout_state: 'cancelled' }))
@@ -974,7 +977,7 @@ export class MatchesService {
           (flip as unknown as { rowCount?: number; count?: number }).rowCount ??
           (flip as unknown as { count?: number }).count ??
           1;
-        if (affected === 0) {
+        if (affected === 0 && row.host_payout_state === 'held') {
           // Money anomaly, not routine noise: the hold we came to cancel was
           // already gone (concurrent release), i.e. the host may have been
           // paid while this match still cancels. Alert-grade (Claude tier-B

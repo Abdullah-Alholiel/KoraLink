@@ -148,9 +148,11 @@ describe('payout-hold flip observability (run #229, PR #297 tier-B round)', () =
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it('never touches the flip for a row that was never held', async () => {
+  it('issues the WHERE-guarded flip for a not-held row but stays SILENT (PR-Agent r2: snapshot staleness must not skip the flip, nor false-alarm)', async () => {
     const row = { ...HELD_ROW, host_payout_state: 'not_applicable' };
-    const { svc, tx, db } = makeService();
+    const { svc, tx, db, loggerError, captureException } = makeService({
+      flipShape: { rowCount: 0 },
+    });
     db.execute.mockImplementation(async (query: unknown) => {
       const text = new PgDialect().sqlToQuery(query as never).sql;
       return text.includes("INTERVAL '60 minutes'") && text.includes('SELECT')
@@ -158,9 +160,17 @@ describe('payout-hold flip observability (run #229, PR #297 tier-B round)', () =
         : [];
     });
     await svc.checkMinPlayers();
+    // The guarded UPDATE is STILL issued (a hold created between the sweep
+    // SELECT and this tx must be caught by the WHERE clause).
     const matchesUpdates = (tx.update as jest.Mock).mock.calls.filter(
       (c) => c[0] === matches,
     );
-    expect(matchesUpdates).toHaveLength(0);
+    expect(matchesUpdates).toHaveLength(1);
+    // ...but a 0-affected result against a never-held snapshot is a benign
+    // no-op, not a lost race — no alert.
+    expect(loggerError).not.toHaveBeenCalledWith(
+      expect.stringContaining('host_payout_hold_lost_race'),
+    );
+    expect(captureException).not.toHaveBeenCalled();
   });
 });
