@@ -7,6 +7,16 @@
   --bottom-nav-height: calc(4.5rem + env(safe-area-inset-bottom));
   --floating-cta-bottom: calc(var(--bottom-nav-height) + 0.75rem);
   --top-safe-inset: max(1rem, env(safe-area-inset-top));
+  /* P2-391 top-band slot contract: the geolocation pill (LocationProvider)
+     writes its FULL viewport extent (safe inset + card height) into
+     --top-banner-h (JS; resets to 0 on unmount). The shell reserves that row
+     (.app-shell padding) and the app frame subtracts it (--app-height), so
+     page content and headers sit BELOW the pill while it is mounted — with
+     ZERO gap when it unmounts. 0px default = no reservation. */
+  --top-banner-h: 0px;
+  /* Where floating top UI (Toast) sits: below the pill when one is mounted
+     (extent wins), else at the standard safe-inset position. */
+  --top-band-top: max(var(--top-banner-h), var(--top-safe-inset));
   --color-brand-green: #254132;
   --color-brand-green-light: #2d5c3e;
   --color-brand-red: #d4494c;
@@ -213,3 +223,17 @@ body {
 .animate-spring-in {
   animation: spring-in 0.45s var(--ease-spring) forwards;
 }
+
+/* ── P2-391 Overlay z-ladder (the ONE place z contracts live) ────────────
+   Extending this list beats inventing a new z value. Bottom sheets stay on
+   the z-[60]/z-[70] standard (backdrop/sheet); modals above them z-[80]/[90].
+   Top band (floating, fixed-top overlays — mutually exclusive stacking):
+     z-[46]  geolocation permission pill (LocationProvider) — the band's
+             reserved row; measures itself into --top-banner-h so page
+             content + headers shift down while it is mounted (zero gap on
+             unmount). Paint order matches DOM order.
+     z-[47]  toast band slot (Toast) — floats ABOVE the pill but NEVER
+             covers its buttons: it renders below the pill box
+             (top-[var(--top-band-top)]) so the two stack instead of overlap.
+   Full-screen takeovers (WelcomeCheckpoint, InstallLanding) keep z-[90];
+   Toast keeps z-[100] (transient, auto-dismisses, always readable). */
