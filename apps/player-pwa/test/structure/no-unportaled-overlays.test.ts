@@ -36,6 +36,8 @@ const ALLOWLIST: Record<string, string> = {
     'top permission banner at layout level — no scroll-container ancestor; renders above content but below sheets by design',
   'app/[locale]/match/[id]/page.tsx':
     'floating CTAs (WhatsApp invite / Join) at z-40 — intentionally BELOW sheets (z-[60]+) and nav; never needs to overlay a sheet',
+  'components/matches/FloatingCta.tsx':
+    'the shared wrapper for the match page floating CTAs (P2-402) — same z-40 below-sheets contract the match page allowlist entry documents; the band markup lives here ONCE now',
   'app/[locale]/clubs/[id]/page.tsx':
     'floating Host CTA at z-40 — intentionally BELOW sheets (z-[60]+) and nav',
 };

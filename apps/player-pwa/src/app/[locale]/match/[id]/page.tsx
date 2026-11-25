@@ -52,6 +52,7 @@ import PaymentSheet from '@/components/payment/PaymentSheet';
 import TeamLineup from '@/components/matches/TeamLineup';
 import PushNudgeCard from '@/components/push/PushNudgeCard';
 import MatchRulesSheet from '@/components/matches/MatchRulesSheet';
+import { FloatingCta } from '@/components/matches/FloatingCta';
 import CancelMatchSheet from '@/components/matches/CancelMatchSheet';
 import RescheduleSheet from '@/components/matches/RescheduleSheet';
 import EmergencyCancelSheet from '@/components/matches/EmergencyCancelSheet';
@@ -827,7 +828,7 @@ export default function MatchDetailPage({
 
                             {/* WhatsApp Invite CTA (Sticky at bottom) — hidden once the game ends */}
                             {!isMatchEnded && (
-                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                            <FloatingCta>
                                 <a
                                     href={`https://wa.me/?text=${encodeURIComponent(
                                         t('matchDetail.whatsAppShareText', { ...shareParams(match), url: shareUrl })
@@ -850,7 +851,7 @@ export default function MatchDetailPage({
                                         </span>
                                     </div>
                                 </a>
-                            </div>
+                            </FloatingCta>
                             )}
                         </div>
                     ) : (
@@ -998,7 +999,7 @@ export default function MatchDetailPage({
                             )}
 
                             {showJoin && (
-                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                            <FloatingCta>
                                 <div className="max-w-xl mx-auto">
                                     <button
                                         onClick={handleJoinClick}
@@ -1019,12 +1020,12 @@ export default function MatchDetailPage({
                                         </span>
                                     </button>
                                 </div>
-                            </div>
+                            </FloatingCta>
                             )}
 
                             {/* P1-17: full-match waitlist CTA / queued state */}
                             {showWaitlistCTA && (
-                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                            <FloatingCta>
                                 <div className="max-w-xl mx-auto">
                                     <button
                                         onClick={() => joinWaitlist.mutate(id, {
@@ -1058,11 +1059,11 @@ export default function MatchDetailPage({
                                         </span>
                                     </button>
                                 </div>
-                            </div>
+                            </FloatingCta>
                             )}
 
                             {showQueuedState && (
-                            <div className="fixed bottom-[var(--floating-cta-bottom)] inset-x-0 max-w-md md:max-w-lg mx-auto px-5 z-40">
+                            <FloatingCta>
                                 <div className="max-w-xl mx-auto">
                                     <div
                                         data-testid="waitlist-queued-state"
@@ -1096,7 +1097,7 @@ export default function MatchDetailPage({
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </FloatingCta>
                             )}
                         </div>
                     )}
