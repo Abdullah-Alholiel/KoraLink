@@ -66,14 +66,17 @@ standard is untouched), legal/realtime banners (not fixed overlays), backend/API
 
 ## Gate 2 — Architecture
 
-Data flow (pure client-side layout): geolocation state → LocationProvider renders pill → pill's
-ResizeObserver writes measured height to `documentElement.style` `--top-banner-h` → two consumers:
-(a) `--top-band-top: calc(var(--top-safe-inset) + var(--top-banner-h))` (globals.css) shifts Toast +
-standalone-shell headers down by exactly the pill's height; (b) MobileFrame inner box reserves the
-row via `padding-top: calc(var(--top-safe-inset) + var(--top-banner-h))` while headers opt out of
-double-counting. Page content never leaves a gap (padding collapses with the var). Z-order: pill
-moves z-[80] → z-[46] (documented "band slot" rung; toast band z-[47], sheet backdrop z-[60]) so
-paint order matches DOM order; toasts float above the pill and never cover its buttons.
+Data flow (pure client-side layout; SHIPPED SHAPE — the original per-page swaps were pivoted to the
+shell reservation, see the pivot record below): geolocation state → LocationProvider renders pill →
+pill's measurement (ResizeObserver + window resize) writes its FULL viewport extent
+(`offsetTop + offsetHeight`) to `documentElement.style` `--top-banner-h` → two consumers:
+(a) `.app-shell { padding-top: var(--top-banner-h) }` (globals.css) shifts ALL in-flow page content
+and headers down by exactly the pill's extent; (b) `--top-band-top: max(var(--top-banner-h),
+var(--top-safe-inset))` anchors floating top UI (Toast) below the pill. MobileFrame height
+`calc(var(--app-height) - var(--top-banner-h))` keeps the frame ending at the canvas bottom. Page
+content never leaves a gap (padding collapses with the var; var resets to 0 on unmount). Z-order:
+pill moves z-[80] → z-[46] (the band's reserved rung; sheet backdrop z-[60]); Toast keeps z-[100]
+and stacks POSITIONALLY below the pill via the band var — no z-based toast rung exists.
 
 Component changes:
 | File | Change |
