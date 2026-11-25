@@ -138,6 +138,31 @@ describe('classifyError — SMS_UNAVAILABLE (2026-11-16 P0)', () => {
   });
 });
 
+/**
+ * P2-344 (run #229) — insufficient wallet balance carries a stable API code.
+ * The matches.service charge sites send 400 `{ message,
+ * code: 'WALLET_INSUFFICIENT' }` (PR #262 convention). Without the mapping
+ * the 400 falls into the generic `validation` bucket, which says neither
+ * what happened (money) nor the fix (top up). A stable code beats the status.
+ */
+describe('classifyError — WALLET_INSUFFICIENT (P2-344)', () => {
+  it('maps FetchError code WALLET_INSUFFICIENT → "insufficientFunds" (beats 400 status)', () => {
+    const err = new FetchError(
+      'Insufficient wallet balance. Required: SAR 37.00, Available: SAR 12.50',
+      400,
+      '/matches',
+      'WALLET_INSUFFICIENT',
+    );
+    expect(classifyError(err)).toBe('insufficientFunds');
+    expect(errorKey('insufficientFunds')).toBe('errors.insufficientFunds');
+  });
+
+  it('a bare 400 WITHOUT the code still classifies as generic "validation"', () => {
+    const err = new FetchError('Some validation problem', 400, '/matches');
+    expect(classifyError(err)).toBe('validation');
+  });
+});
+
 describe('errorKey / ERROR_KEYS', () => {
   it('maps every kind to an errors.* key', () => {
     for (const kind of Object.keys(ERROR_KEYS) as ErrorKind[]) {

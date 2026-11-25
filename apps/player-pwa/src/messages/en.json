@@ -5,6 +5,7 @@
   },
   "errors": {
     "network": "Connection problem — check your internet and try again.",
+    "insufficientFunds": "Your balance is not enough for this. Top up your wallet and try again.",
     "unauthorized": "Your session expired. Sign in again to continue.",
     "forbidden": "You don't have access to do this.",
     "notFound": "This item is no longer available.",

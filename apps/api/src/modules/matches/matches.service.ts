@@ -878,7 +878,8 @@ export class MatchesService {
     let releasedSlot = false;
     let refundedSar = 0;
     // P2-193 (run #155): refunded payers for the post-commit refund pushes.
-    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
+    // P2-262 (run #229): const — collected via push, never reassigned (lint).
+    const refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // Statuses are code-controlled enum literals (never user input), so
       // inlining them as SQL literals is safe. The heal path cancels FROM
@@ -951,9 +952,10 @@ export class MatchesService {
 
       // Slice 3: a cancelled player-hosted match must never pay out —
       // guarded flip held → cancelled (idempotent; no-op when not held,
-      // skipped entirely for venue-owned legacy rows).
+      // skipped entirely for venue-owned legacy rows). Same lost-race
+      // breadcrumb as the manual cancelMatch flip (run #229).
       if (row.is_player_hosted) {
-        await tx
+        const flip = await tx
           .update(matches)
           .set(withTimestamp({ host_payout_state: 'cancelled' }))
           .where(
@@ -962,6 +964,15 @@ export class MatchesService {
               eq(matches.host_payout_state, 'held'),
             ),
           );
+        const affected =
+          (flip as unknown as { rowCount?: number; count?: number }).rowCount ??
+          (flip as unknown as { count?: number }).count ??
+          1;
+        if (affected === 0) {
+          this.logger.warn(
+            `host_payout_hold_lost_race match=${row.id} — hold already flipped by a concurrent release; auto-cancel proceeds, payout stayed with the winner.`,
+          );
+        }
       }
 
       // Release a koralink slot + refund the host exactly what he was
@@ -3319,7 +3330,8 @@ export class MatchesService {
     let queueUserIds: string[] = [];
     // P2-193 (run #155): refunded payers collected in-tx for the post-commit
     // refund pushes (money events get a voice — see push-text.ts refund_credited).
-    let refundRecipients: Array<{ userId: string; amountSar: string }> = [];
+    // P2-262 (run #229): const — collected via push, never reassigned (lint).
+    const refundRecipients: Array<{ userId: string; amountSar: string }> = [];
     await this.db.transaction(async (tx) => {
       // FOR UPDATE row lock — serializes against rescheduleMatch, which moves
       // booking_slot_id between this read and the release below. Without the
@@ -3399,7 +3411,7 @@ export class MatchesService {
       // Slice 3 (player-host-responsibility): a cancelled match must never pay
       // out. Guarded flip held → cancelled (idempotent; no-op when not held).
       if (match.is_player_hosted && match.host_payout_state === 'held') {
-        await tx
+        const flip = await tx
           .update(matches)
           .set(withTimestamp({ host_payout_state: 'cancelled' }))
           .where(
@@ -3408,6 +3420,20 @@ export class MatchesService {
               eq(matches.host_payout_state, 'held'),
             ),
           );
+        // Run #229 (Reviewer A residual): the flip is safe-by-WHERE — a
+        // concurrent release wins the hold and this update affects 0 rows —
+        // but that race was previously UNOBSERVED. Read the affected count
+        // the same driver-shape-tolerant way as the settle guard (:141) and
+        // leave a breadcrumb when the hold we came to cancel was already gone.
+        const affected =
+          (flip as unknown as { rowCount?: number; count?: number }).rowCount ??
+          (flip as unknown as { count?: number }).count ??
+          1; // optimistic default: tests + drivers that don't report it
+        if (affected === 0) {
+          this.logger.warn(
+            `host_payout_hold_lost_race match=${matchId} — hold already flipped by a concurrent release; cancel proceeds, payout stayed with the winner.`,
+          );
+        }
       }
 
       // Slice 4 (player-host-responsibility): refund EVERY current-roster
