@@ -622,7 +622,7 @@ export default function ProfilePage() {
                 <MenuItem
                     icon={<Headphones className="h-5 w-5" strokeWidth={1.5} />}
                     label={t('profile.contactSupport')}
-                    href="mailto:hello@koralink.sa"
+                    href={`/${locale}/contact`}
                 />
                 <div className="h-px bg-gray-100 ms-[60px]" />
                 <MenuItem
