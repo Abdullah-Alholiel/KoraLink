@@ -21,26 +21,26 @@
   destructive writes while offline (banner shows but nothing stops the click).
 - User story: as an admin/venue-owner, when my connection drops I see a localized offline notice
   and write submits are gated until reconnect (what/why/next per the error-message standard).
-- Success criteria: login page shows OfflineBanner + localized offline notice in the error slot
-  when offline; all 3 login submits gated offline (auto-clears on reconnect); the 2 hardcoded-EN
-  strings render localized copy EN+AR; census tests pin the standard; build+tests green.
+- Success criteria: login page shows the localized offline notice in the error slot when
+  offline; all 3 login submits gated offline (auto-clears on reconnect); the 2 hardcoded-EN
+  strings render localized copy EN+AR; tripwire test pins the standard; build+tests green.
 
 ## Gate 2 — Architecture
-- **Reuse, don't rebuild:** `apps/admin/src/components/OfflineBanner.tsx` (amber strip,
-  role=status, `useOnline`) — mount as a compact variant above the card on the login page.
-- **Login page:** `const online = useOnline()`; the three submit handlers early-return with the
-  localized offline notice (auto-clears on reconnect since the notice is computed, not latched —
-  mirror PWA PR #282 pattern); buttons `disabled={!online || loading}`.
+- **IMPLEMENTATION PIVOT (recorded, PR-Agent r1):** the login page does NOT mount the
+  OfflineBanner component — it self-contains the offline notice: `const online = useOnline()`;
+  the notice is COMPUTED (`online ? error : t('hq.offlineNotice')`, not latched) so it
+  auto-clears on reconnect, rendered in a `role="alert"` slot; the three submit handlers
+  early-return offline and buttons carry `disabled={!online || loading}`. Strictly better than
+  a banner mount: no double-banner risk inside the centered card, no layout variant needed.
 - **i18n:** new `hq`-ns keys (login page uses `useTranslations('hq')`): `offlineNotice`,
   `playerRedirect` (replaces the player banner string), `otpNoToken` (replaces :66 string) —
   EN+AR parity (what/why/next copy per error-message standard).
-- **Offline-gating on dashboard write surfaces:** in scope ONLY where the click is destructive:
-  settlements pay/void, transactions refund, matches edit/cancel, users ban/suspend/setRole,
-  venues approve/transfer, reports resolve/reopen — via the same `useOnline()` early-return +
-  disabled state. If a surface proves non-uniform, board the remainder as a rider rather than
-  half-gating.
-- Files: `apps/admin/src/app/login/page.tsx`, `apps/admin/src/messages/{en,ar}.json` (hq ns),
-  write-surface components (drawer/modal submit handlers), `apps/admin/test/` (new tripwire).
+- **OUT OF SCOPE (pre-declared):** dashboard write-surface offline-gating is split to rider row
+  P2-412 (surfaces proved non-uniform — pages + drawers + ConfirmDialog; census-first sweep per
+  the P2-400 pattern). NOT in this PR.
+- Files (delivered): `apps/admin/src/app/login/page.tsx`,
+  `apps/admin/src/messages/{en,ar}.json` (hq ns), `apps/admin/test/login-offline.test.tsx`
+  (new tripwire, 6 pins).
 
 ## Gate 3 — Program design (contract)
 - `useOnline(): boolean` (existing, SSR-safe initial true — no hydration risk).
