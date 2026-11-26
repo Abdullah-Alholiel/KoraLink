@@ -74,8 +74,11 @@ const KNOWN_PARTNER_SECTIONS: ConsoleSection[] = [
 /**
  * Sentinel returned for paths that map to NO known console section (e.g.
  * /partner/bogus). Deliberately NEVER listed in SECTION_BY_ROLE, so
- * canAccessPath denies it for every role — a bogus partner path must NOT
- * fall into the `null = outside console (login etc.)` ALLOW lane.
+ * canAccessPath denies it for every role — a bogus PARTNER path must NOT
+ * fall into the `null = outside console (login etc.)` ALLOW lane. (Unknown
+ * HQ segments still return null and ride the allow lane by design — they
+ * have no console page and Next renders 404; only partner paths contain
+ * real (dashboard) pages, so only those need the hard deny.)
  * (P2-414: the partner branch used to return the raw `partner.${sub}` cast
  * for arbitrary input; the type lied and denial was only an accident of the
  * invalid key missing every role list.)

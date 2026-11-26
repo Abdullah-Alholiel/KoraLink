@@ -13,7 +13,8 @@ to ALLOWED (null = "outside console" = allow lane) — a regression disguised as
   SECTION_BY_ROLE → denied for every role, including null-role via `!role` guard).
 - `KNOWN_PARTNER_SECTIONS` derived from SECTION_BY_ROLE (single-source preserved, P2-400e).
 - partner branch: known sub → section; unknown sub → UNKNOWN_SECTION (never the invented cast).
-- `canAccessPath` untouched — sentinel flows through `includes()` → false. Type stops lying.
+- `canAccessPath` narrows explicitly (r2, PR-Agent MINOR + Claude review): `null` = allow
+  (outside console), `UNKNOWN_SECTION` = deny, else the role list. Type stops lying.
 - Tripwire: rbac-parity.test.ts pins /partner/bogus + /partner/../admin → UNKNOWN_SECTION,
   deny-for-all-roles (incl. null), real partner path still allows VenueOwner.
 

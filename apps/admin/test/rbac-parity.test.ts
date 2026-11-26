@@ -112,7 +112,14 @@ describe('rbac parity', () => {
       expect(canAccessPath(role, '/partner/bogus'), role).toBe(false);
     }
     expect(canAccessPath(null, '/partner/bogus')).toBe(false);
-    // ...while a REAL partner section still allows its owner.
+    // ...while a REAL partner section still allows its owner and ONLY them
+    // (Claude tier-2 review: pin the wrong-role denial too).
     expect(canAccessPath('VenueOwner', '/partner/pitches')).toBe(true);
+    expect(canAccessPath('Admin', '/partner/pitches')).toBe(false);
+    // Sentinel collision guard: '__unknown__' must never appear in any role
+    // list, or the deny lane silently starts allowing.
+    for (const sections of Object.values(SECTION_BY_ROLE)) {
+      expect(sections).not.toContain(UNKNOWN_SECTION);
+    }
   });
 });
