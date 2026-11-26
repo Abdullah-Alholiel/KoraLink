@@ -24,6 +24,7 @@ import {
     useResendEmailVerification,
     useUpdateEmailPreferences,
 } from '@/hooks/useUser';
+import { FetchError } from '@/lib/fetcher';
 import FlatSectionLabel from './FlatSectionLabel';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,8 +65,16 @@ export default function EmailSection() {
             setDraft('');
             setResent(false);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : '';
-            setError(/409|in use|taken/i.test(msg) ? t('taken') : t('error'));
+            // P2-383: status-first (copy-proof). The prose regex survives only
+            // as a deploy-skew fallback when the error carries no HTTP status.
+            let taken: boolean;
+            if (err instanceof FetchError) {
+                taken = err.status === 409 || err.code === 'EMAIL_TAKEN';
+            } else {
+                const msg = err instanceof Error ? err.message : '';
+                taken = /409|in use|taken/i.test(msg);
+            }
+            setError(taken ? t('taken') : t('error'));
         }
     };
 

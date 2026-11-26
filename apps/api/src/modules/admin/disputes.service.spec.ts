@@ -164,9 +164,14 @@ describe('AdminDisputesService — run #24', () => {
 
   it('reopen: guarded status UPDATE — 0 matching rows (race with concurrent resolve) → 400, no reopen', async () => {
     const { svc } = makeService({ updateRows: [] }); // status pred matched 0 rows
-    await expect(svc.reopen(DISPUTE_ID, 'admin1')).rejects.toThrow(
-      'Only decided disputes can be reopened.',
-    );
+    const err = await svc.reopen(DISPUTE_ID, 'admin1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as Error).message).toBe('Only decided disputes can be reopened.');
+    // P2-383: stable machine code rides alongside the unchanged prose.
+    expect((err as BadRequestException).getResponse()).toEqual({
+      message: 'Only decided disputes can be reopened.',
+      code: 'DISPUTE_NOT_DECIDED',
+    });
   });
 
   // ── admin replies (P2-2) ─────────────────────────────────────────────

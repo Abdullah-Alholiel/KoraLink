@@ -182,7 +182,10 @@ export class AdminDisputesService {
     const before = await this.findOne(id);
 
     if (before.status === 'resolved' || before.status === 'rejected') {
-      throw new BadRequestException('This dispute has already been decided.');
+      throw new BadRequestException({
+        message: 'This dispute has already been decided.',
+        code: 'DISPUTE_ALREADY_DECIDED',
+      });
     }
 
     // P2-273 (run #174, Reviewer A MINOR 1): a refund is a money INTENT — the
@@ -240,7 +243,10 @@ export class AdminDisputesService {
         // Lost the race (another admin decided it first) or the dispute was
         // closed between findOne and here — throw so NOTHING (side effect,
         // audit, activity) is applied for a stale decision.
-        throw new BadRequestException('This dispute has already been decided.');
+        throw new BadRequestException({
+          message: 'This dispute has already been decided.',
+          code: 'DISPUTE_ALREADY_DECIDED',
+        });
       }
 
       if (dto.outcome === 'resolved' && before.type === 'no_show' && before.match_id) {
@@ -390,7 +396,10 @@ export class AdminDisputesService {
     const before = await this.findOne(id);
 
     if (before.status !== 'resolved' && before.status !== 'rejected') {
-      throw new BadRequestException('Only decided disputes can be reopened.');
+      throw new BadRequestException({
+        message: 'Only decided disputes can be reopened.',
+        code: 'DISPUTE_NOT_DECIDED',
+      });
     }
 
     const entry = { action: 'reopened', by: adminId, at: new Date().toISOString() };
@@ -434,7 +443,10 @@ export class AdminDisputesService {
         .returning({ id: disputes.id });
 
       if (reopened.length === 0) {
-        throw new BadRequestException('Only decided disputes can be reopened.');
+        throw new BadRequestException({
+          message: 'Only decided disputes can be reopened.',
+          code: 'DISPUTE_NOT_DECIDED',
+        });
       }
     });
 
