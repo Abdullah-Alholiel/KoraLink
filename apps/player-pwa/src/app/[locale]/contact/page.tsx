@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, Mail } from 'lucide-react';
 
 // Run #233 (P2-405): Contact + PDPL-requests page. Same shell as the
@@ -28,14 +28,23 @@ const CONTACT_SECTIONS: ContactSection[] = [
 
 export default function ContactPage() {
     const router = useRouter();
+    const locale = useLocale();
     const t = useTranslations('contact');
     const tCommon = useTranslations('common');
+
+    // Deep-link back navigation (PR-Agent #302 MINOR): router.back() dead-ends
+    // when the page was opened directly (shared link / QR — empty history).
+    // Fall back to the feed so the button always leads somewhere in-app.
+    const goBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+        else router.push(`/${locale}`);
+    };
 
     return (
         <div className="min-h-dvh bg-brand-bg">
             <div className="flex items-center px-4 pt-[var(--top-safe-inset)] pb-3 flex-shrink-0 bg-white">
                 <button
-                    onClick={() => router.back()}
+                    onClick={goBack}
                     aria-label={tCommon('back')}
                     className="w-9 h-9 min-h-hit min-w-hit flex items-center justify-center rounded-full hover:bg-gray-50"
                 >
