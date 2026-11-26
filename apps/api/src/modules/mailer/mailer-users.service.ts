@@ -85,7 +85,10 @@ export class MailerUsersService {
       .where(and(eq(sql`LOWER(${users.email})`, email), ne(users.id, userId)))
       .limit(1);
     if (conflict) {
-      throw new ConflictException('EMAIL_TAKEN');
+      // P2-383: object form → Nest serializes {message, code} flat, so the
+      // PWA can classify on a stable top-level `code` (409 alone also works;
+      // this makes the code arm real instead of dead-defensive).
+      throw new ConflictException({ message: 'EMAIL_TAKEN', code: 'EMAIL_TAKEN' });
     }
 
     let updated: Array<{ id: string }>;
@@ -103,7 +106,7 @@ export class MailerUsersService {
       // Lost the TOCTOU race: concurrent setEmail hit migration 0033's
       // LOWER(email) unique index. Same client answer as the pre-check 409.
       if ((err as { code?: string }).code === '23505') {
-        throw new ConflictException('EMAIL_TAKEN');
+        throw new ConflictException({ message: 'EMAIL_TAKEN', code: 'EMAIL_TAKEN' });
       }
       throw err;
     }

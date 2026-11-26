@@ -59,9 +59,15 @@ describe('MailerUsersService.setEmail error contract (run #36)', () => {
     );
   });
 
-  it('address in use (pre-check) → ConflictException (409)', async () => {
+  it('address in use (pre-check) → ConflictException (409) with stable {message, code}', async () => {
     const svc = makeService({ conflictRows: [{ id: 'someone-else' }] });
-    await expect(svc.setEmail('u1', 'a@x.com')).rejects.toBeInstanceOf(ConflictException);
+    const err = await svc.setEmail('u1', 'a@x.com').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    // P2-383: object form → flat {message, code} wire body (PWA classifies on code OR 409).
+    expect((err as ConflictException).getResponse()).toEqual({
+      message: 'EMAIL_TAKEN',
+      code: 'EMAIL_TAKEN',
+    });
   });
 
   it('happy path → { email, emailVerified: false, verificationSent }', async () => {
@@ -73,9 +79,14 @@ describe('MailerUsersService.setEmail error contract (run #36)', () => {
     });
   });
 
-  it('lost TOCTOU race (pg 23505 unique violation) → ConflictException, not 500', async () => {
+  it('lost TOCTOU race (pg 23505 unique violation) → ConflictException with stable code, not 500', async () => {
     const svc = makeService({ updateErr: { code: '23505' } });
-    await expect(svc.setEmail('u1', 'a@x.com')).rejects.toBeInstanceOf(ConflictException);
+    const err = await svc.setEmail('u1', 'a@x.com').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toEqual({
+      message: 'EMAIL_TAKEN',
+      code: 'EMAIL_TAKEN',
+    });
   });
 
   it('UPDATE .returning() empty (no such user) → NotFoundException (404)', async () => {
