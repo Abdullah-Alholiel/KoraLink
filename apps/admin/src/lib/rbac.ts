@@ -66,13 +66,38 @@ const KNOWN_SECTIONS: ConsoleSection[] = [
   ...new Set(Object.values(SECTION_BY_ROLE).flat().filter((s) => !s.startsWith('partner.'))),
 ];
 
+/** Partner sections, derived from SECTION_BY_ROLE (P2-414: single source). */
+const KNOWN_PARTNER_SECTIONS: ConsoleSection[] = [
+  ...new Set(Object.values(SECTION_BY_ROLE).flat().filter((s) => s.startsWith('partner.'))),
+];
+
+/**
+ * Sentinel returned for paths that map to NO known console section (e.g.
+ * /partner/bogus). Deliberately NEVER listed in SECTION_BY_ROLE, so
+ * canAccessPath denies it for every role — a bogus PARTNER path must NOT
+ * fall into the `null = outside console (login etc.)` ALLOW lane. (Unknown
+ * HQ segments still return null and ride the allow lane by design — they
+ * have no console page and Next renders 404; only partner paths contain
+ * real (dashboard) pages, so only those need the hard deny.)
+ * (P2-414: the partner branch used to return the raw `partner.${sub}` cast
+ * for arbitrary input; the type lied and denial was only an accident of the
+ * invalid key missing every role list.)
+ *
+ * Typed as its string LITERAL (PR-Agent r1 MINOR): `ConsoleSection | null`
+ * does NOT absorb it, so the compiler can distinguish the sentinel from
+ * genuine sections — canAccessPath must narrow it explicitly below.
+ */
+export const UNKNOWN_SECTION = '__unknown__' as const;
+
 /** Map a pathname to its console section (null = outside the console). */
-export function sectionForPath(pathname: string): ConsoleSection | null {
+export function sectionForPath(
+  pathname: string,
+): ConsoleSection | typeof UNKNOWN_SECTION | null {
   if (pathname.startsWith('/partner')) {
     const sub = pathname.replace(/^\/partner\/?/, '').split('/')[0];
     if (!sub) return 'partner.dashboard';
     const key = `partner.${sub}` as ConsoleSection;
-    return key;
+    return KNOWN_PARTNER_SECTIONS.includes(key) ? key : UNKNOWN_SECTION;
   }
   const seg = pathname.replace(/^\//, '').split('/')[0];
   if (!seg) return null;
@@ -153,7 +178,10 @@ export function can(role: Role | null, action: ConsoleAction): boolean {
 export function canAccessPath(role: Role | null, pathname: string): boolean {
   if (!role) return false;
   const section = sectionForPath(pathname);
-  if (!section) return true; // login etc.
+  if (section === null) return true; // login etc.
+  // P2-414 sentinel: never listed for any role -> explicit deny (a bogus
+  // partner path must not ride the null allow lane).
+  if (section === UNKNOWN_SECTION) return false;
   return SECTION_BY_ROLE[role].includes(section);
 }
 
