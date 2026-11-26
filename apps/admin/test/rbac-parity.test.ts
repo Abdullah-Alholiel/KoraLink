@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Role } from '@/lib/api';
-import { can, sectionForPath, SECTION_BY_ROLE, type ConsoleAction } from '@/lib/rbac';
+import {
+  can,
+  canAccessPath,
+  sectionForPath,
+  SECTION_BY_ROLE,
+  UNKNOWN_SECTION,
+  type ConsoleAction,
+} from '@/lib/rbac';
 
 /**
  * Every ConsoleAction token. Typed as a Record so `tsc --noEmit` fails if a
@@ -93,5 +100,19 @@ describe('rbac parity', () => {
     expect(sectionForPath('/nonsense')).toBeNull();
     expect(sectionForPath('/')).toBeNull();
     expect(sectionForPath('/login')).toBeNull();
+  });
+
+  it('bogus partner subpaths map to UNKNOWN_SECTION — never an invented partner.* key (P2-414)', () => {
+    // The type used to lie: `partner.${sub}` was cast for arbitrary input and
+    // denial only worked by accident (invalid key misses every role list).
+    expect(sectionForPath('/partner/bogus')).toBe(UNKNOWN_SECTION);
+    expect(sectionForPath('/partner/../admin')).toBe(UNKNOWN_SECTION);
+    // UNKNOWN_SECTION is listed for NO role -> canAccessPath denies everyone.
+    for (const role of Object.keys(SECTION_BY_ROLE) as Role[]) {
+      expect(canAccessPath(role, '/partner/bogus'), role).toBe(false);
+    }
+    expect(canAccessPath(null, '/partner/bogus')).toBe(false);
+    // ...while a REAL partner section still allows its owner.
+    expect(canAccessPath('VenueOwner', '/partner/pitches')).toBe(true);
   });
 });

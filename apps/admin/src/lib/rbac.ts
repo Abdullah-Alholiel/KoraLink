@@ -66,13 +66,29 @@ const KNOWN_SECTIONS: ConsoleSection[] = [
   ...new Set(Object.values(SECTION_BY_ROLE).flat().filter((s) => !s.startsWith('partner.'))),
 ];
 
+/** Partner sections, derived from SECTION_BY_ROLE (P2-414: single source). */
+const KNOWN_PARTNER_SECTIONS: ConsoleSection[] = [
+  ...new Set(Object.values(SECTION_BY_ROLE).flat().filter((s) => s.startsWith('partner.'))),
+];
+
+/**
+ * Sentinel returned for paths that map to NO known console section (e.g.
+ * /partner/bogus). Deliberately NEVER listed in SECTION_BY_ROLE, so
+ * canAccessPath denies it for every role — a bogus partner path must NOT
+ * fall into the `null = outside console (login etc.)` ALLOW lane.
+ * (P2-414: the partner branch used to return the raw `partner.${sub}` cast
+ * for arbitrary input; the type lied and denial was only an accident of the
+ * invalid key missing every role list.)
+ */
+export const UNKNOWN_SECTION = '__unknown__' as ConsoleSection;
+
 /** Map a pathname to its console section (null = outside the console). */
 export function sectionForPath(pathname: string): ConsoleSection | null {
   if (pathname.startsWith('/partner')) {
     const sub = pathname.replace(/^\/partner\/?/, '').split('/')[0];
     if (!sub) return 'partner.dashboard';
     const key = `partner.${sub}` as ConsoleSection;
-    return key;
+    return KNOWN_PARTNER_SECTIONS.includes(key) ? key : UNKNOWN_SECTION;
   }
   const seg = pathname.replace(/^\//, '').split('/')[0];
   if (!seg) return null;
