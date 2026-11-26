@@ -8,7 +8,7 @@ IN: (1) admin disputes.service.ts 4 throw sites gain `{message, code}` (DISPUTE_
 OUT: new i18n keys (none needed — existing buckets reused), mailer service (already stable), other throw sites.
 
 ## Contracts (Gate 3)
-- API: `BadRequestException({ message: '<exact original prose>', code: 'DISPUTE_ALREADY_DECIDED'|'DISPUTE_NOT_DECIDED' })` → Nest serializes `{message: {message, code}, statusCode: 400, ...}`; admin apiFetch parses `body.message` object → ApiError carries `.code`.
+- API: `BadRequestException({ message: '<exact original prose>', code: 'DISPUTE_ALREADY_DECIDED'|'DISPUTE_NOT_DECIDED' })` → Nest passes the object through AS-IS (flat wire body `{message, code}` — verified by this PR's own spec pins asserting `getResponse()` equals the flat object); admin apiFetch parses `body.message` (string) + top-level `body.code` → ApiError carries `.code`.
 - Admin: `class ApiError extends Error { constructor(message, status, code?) }`; classifier: `code` first → 'conflict', regex fallback when code absent.
 - PWA: `if (err instanceof FetchError && (err.status === 409 || err.code === 'EMAIL_TAKEN')) → t('taken')`; plain-Error fallback keeps legacy regex (deploy skew).
 - i18n: zero new keys; EN+AR parity untouched (1332=1332 PWA, 872=872 admin).
