@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
 // Run #205 (launch lane F4): PDPL-structured privacy notice, rendered from the
@@ -122,6 +123,8 @@ const PRIVACY_SECTIONS: LegalSection[] = [
 export default function PrivacyPage() {
     const router = useRouter();
     const t = useTranslations('legal');
+    const tContact = useTranslations('contact');
+    const locale = useLocale();
 
     return (
         <div className="min-h-dvh bg-brand-bg">
@@ -157,6 +160,11 @@ export default function PrivacyPage() {
                         ))}
                     </section>
                 ))}
+                <p className="text-sm leading-relaxed mt-6">
+                    <Link href={`/${locale}/contact`} className="text-brand-green font-medium underline">
+                        {tContact('contactLink')}
+                    </Link>
+                </p>
             </div>
         </div>
     );
