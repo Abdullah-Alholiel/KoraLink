@@ -45,13 +45,15 @@
 ## Gate 3 — Program design (contract)
 - `useOnline(): boolean` (existing, SSR-safe initial true — no hydration risk).
 - OfflineBanner already consumed from `common.offlineBanner` — no change.
-- New `hq` keys (exact): `offlineNotice` = "You're offline — reconnect to sign in. Your entries
-  are kept." / AR "أنت غير متصل بالإنترنت — أعد الاتصال لتسجيل الدخول. مدخلاتك محفوظة."
+- New `hq` keys — SHIPPED COPY (synced to en/ar.json per fresh-reviewer MINOR-3, e756c91b+;
+  these are the verified pins, not hypotheses):
+  `offlineNotice` = "You are offline. Reconnect to sign in — nothing was sent." /
+  AR "أنت غير متصل بالإنترنت. أعد الاتصال لتسجيل الدخول — لم يتم إرسال أي شيء."
 - `playerRedirect` = "This console is for admins and venue owners only. Players use the KoraLink
   app." / AR "هذه اللوحة للأدمن ومالكي الملاعب فقط. اللاعبون يستخدمون تطبيق كورا لينك."
-- `otpNoToken` = "OTP verified but no session token was returned. This surface requires cookie
-  sessions in production. Please retry." / AR "تم التحقق من الرمز لكن لم يُرجَع رمز جلسة. هذه
-  الواجهة تتطلب جلسات كوكيز في الإنتاج. حاول مجددًا."
+- `otpNoToken` = "Sign-in was verified, but no session token was returned. This console requires
+  cookie sessions in production. Please try again." / AR "تم التحقق من تسجيل الدخول، لكن لم
+  يُرجَع رمز جلسة. تتطلب هذه اللوحة جلسات كوكيز في الإنتاج. حاول مرة أخرى."
 - Write-surface offline notice reuses `hq.offlineNotice` (single key, no per-surface forks).
 - Tests: `apps/admin/test/login-offline.test.tsx` — pins: (a) offline early-return shows
   hq.offlineNotice in the error slot; (2) all 3 buttons disabled offline; (c) both former
