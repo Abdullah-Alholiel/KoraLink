@@ -1,20 +1,15 @@
 {
-  "last_run": "2026-11-26T12-16Z-run233",
-  "last_run_report": "kanban/RUNS/2026-11-26T01-17Z-run232.md",
+  "last_run": "2026-11-26T15-16Z-run234",
+  "last_run_report": "kanban/RUNS/2026-11-26T15-16Z-run234.md",
   "last_run_commits": [
-    "22b4f469 (PR #302 squash)",
-    "0ef8480f",
-    "3373aaec",
-    "28cc6c48",
-    "18dc3893 (graphify)",
-    "98b376e7 (sibling ledger)",
-    "72d1becf (board rows)"
+    "e5522540 (PR #303 P2-408)",
+    "a78be9c0 (PR #304 P2-414)"
   ],
   "in_review_items": [
-    "PR #302 22b4f469 MERGED+DEPLOYED (P2-404..407) — next-run duty: served-copy spot-check (/ar/terms sandbox sentence, /contact 200 + parity, profile link) or served-chunk greps once funnels allow."
+    "PR #303 e5522540 + PR #304 a78be9c0 LIVE-verified on VPS (admin rebuilt+restarted, :3002 200, chunks carry offlineNotice + sentinel); next-run duty: funnel spot-check of the admin login offline notice + /partner/bogus deny once Tailscale funnels allow."
   ],
   "consecutive_skip_count": 0,
-  "notes": "RUN #233 (11-26 12:15Z): P2-283 PR #301 claims LIVE-verified (resolve/reopen guards flat {message,code}; 409 EMAIL_TAKEN flat code - probes restored). Reviewers A+B: A clean (0 C/I), B parity 1332/872 + 3 admin IMPORTants -> P2-408..410. Hex clean @baseline. D-20261126-01 launch-copy batch -> board P2-404..407, BUILT via zeroshot lane 01a217d9 (Claude, 21.1k out) -> PR #302. STATE notes restructured (summary+recent+archive). || RUN #232 (11-26 01:17Z): P2-383 PR #301 merged 5e6ea9ce + LIVE; P2-403 Serwist research card; P2-283 deeper stable-code sweep still open as follow-up lane.",
+  "notes": "RUN #233 (11-26 12:15Z): P2-283 PR #301 claims LIVE-verified (resolve/reopen guards flat {message,code}; 409 EMAIL_TAKEN flat code - probes restored). Reviewers A+B: A clean (0 C/I), B parity 1332/872 + 3 admin IMPORTants -> P2-408..410. Hex clean @baseline. D-20261126-01 launch-copy batch -> board P2-404..407, BUILT via zeroshot lane 01a217d9 (Claude, 21.1k out) -> PR #302. STATE notes restructured (summary+recent+archive). || RUN #232 (11-26 01:17Z): P2-383 PR #301 merged 5e6ea9ce + LIVE; P2-403 Serwist research card; P2-283 deeper stable-code sweep still open as follow-up lane. || RUN #234 (11-26 15:16Z): 2 items BUILT+MERGED+DEPLOYED — P2-408 admin login offline (PR #303 e5522540, zeroshot lane 01a21873, PR-Agent r1 doc-drift fixed, r2 crashed pre-LLM → fresh-GLM MERGE verdict; notice COMPUTED not latched) + P2-414 sectionForPath sentinel (PR #304 a78be9c0, PR-Agent r1 cast-minor fixed → literal type, Claude tier-2 MERGE, 3 triage fixes bf86d32c). P2-415 CLOSED premise-stale (all 11 (main) PWA surfaces already offline-wired). P2-408 premise corrected (banner exists since 9335eded) → real scope was login page; write-surface gating split to NEW P2-412. Reviewer B #234 CRITICAL: wallet money-in-only → NEW P2-411 (owner-gated, OWNER-QUEUE). Board +P2-411..415. Hex clean.",
   "open_blockers": [
     "P1-52 RESOLVED (run #183): Neon 1C quota storm ended — 0 events/48h (Sentry lifetime 70, last bucket 2026-10-31T20:00Z). Promote PR #178 no longer hard-blocked by quota; merge remains owner-only.",
     "P2-208 RESOLVED (2026-10-25): owner disconnected the ghost kora-link project in Vercel; checks stop firing on new PRs.",

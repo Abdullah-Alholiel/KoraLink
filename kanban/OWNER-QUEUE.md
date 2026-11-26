@@ -7,10 +7,16 @@
 - Promote gap: 51 commits ahead of main (incl. #299/#300/#301); last promote 2026-11-18 (#276 — its Render deploy crashed, P0-12). A Neon-first promote is BLOCKED until the cutover restores a live prod DB.
 - Services: API :3001 healthy, PWA :3000 + admin :3002 active on `5e6ea9ce`. Tailscale funnels :9450/:8443 still DOWN (owner re-auth pending).
 - **DONE (#231): D-20261125-01 (launch-first rule in cron prompt + SKILL.md v1.5.4 + STATE consistency) and D-20261125-02 (PG17 image, strict restore, 60→62 journal gates, watchdog §8b wired) — executed + ledger-logged; removed from the waiting list.**
-- Owner decisions waiting: NEW-10 (F9 repo + age-key escrow — watchdog §8b auto-arms the moment GH_BACKUP_REPO is real). Standing below re-labeled per Rule 1 (D-20261122-02).
+- Owner decisions waiting: NEW-10 (F9 repo + age-key escrow) + NEW-11 (P2-411 wallet withdrawal shape — NEW run #234, launch-blocking before real payments). Standing below re-labeled per Rule 1 (D-20261122-02).
 
 
 ## Active owner actions
+
+### NEW-11. P2-411 — Wallet withdrawal product-shape (NEW run #234)
+- **What:** Reviewer B run #234 found the wallet is money-in ONLY — `wallet.controller.ts:46-157` exposes balance/history/receipts/topup-intent/topup-verify/payout-receipt; there is NO withdrawal/cash-out path. Post-go-live, players can top up real money but cannot get balances out. Sandbox-beta launch (D-20261114-03) shields beta users, but this is launch-blocking before real payments. Kind: **promise (money)** — owner call, not factory-defaultable.
+- **Your part:** pick the payout shape: (a) manual-transfer requests (admin-processed, simplest, ships fastest); (b) bank rails via the PSP (needs a Moyasar payout-support check first); (c) defer past launch with explicit terms copy ("balances are in-app credit until withdrawals open").
+- **Close line:** "P2-411: option <a/b/c>" (+"min <N> SAR" if a).
+- **Deadline:** before go-live (D-20261114-03 permits post-launch, but terms copy must land first if deferred).
 
 ### NEW-10. F9 — Create the private offsite backup repo + escrow the age key (NEW run #227)
 - **What:** The offsite backup pipeline is BUILT and verified (run #227: age-encrypt → decrypt round-trip → canary restore 32 tables OK; push fails loud until the repo exists). Two owner steps remain: (1) create a PRIVATE GitHub repo for backups (suggested name `koralink-backups`, empty, private) — the factory PAT already has Contents:write so NO deploy key is needed; (2) escrow the age PRIVATE key `~/.config/koralink/koralink-offsite.key` somewhere OFF this VPS (password manager / printed) — losing it loses every backup.
@@ -176,3 +182,4 @@
 - **P2-350 (eviction concat asymmetry):** folded into PR #241, built run #202.
 - **P1-66 (VAPID keys):** DECIDED 2026-11-07 (D-20261106-15 "Generate and set VAPID keys") AND ACTIVATED run #203 — keypair generated server-side (secrets only in apps/api/.env + pwa .env.local, never in chat/logs), API restarted and serving with push ENABLED (zero "not configured" warnings, health 200). PWA rebuild + browser subscribe test remain (NEXT_PUBLIC_* bakes at build).
 - **P1-52 (Neon quota):** RESOLVED 2026-11-03 — direct prod Neon connect OK, no quota error.
+
