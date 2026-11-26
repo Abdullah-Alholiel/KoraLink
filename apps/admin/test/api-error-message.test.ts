@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { ApiError, apiErrorToMessage, classifyApiError } from '@/lib/api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api, ApiError, apiErrorToMessage, classifyApiError } from '@/lib/api';
+import { disputeActionFailure } from '@/lib/dispute-errors';
 import en from '@/messages/en.json';
 import arJson from '@/messages/ar.json';
 
@@ -117,5 +118,79 @@ describe('errors i18n namespace', () => {
         expect(typeof m[ns]?.[k]).toBe('string');
       }
     }
+  });
+});
+
+// P2-383: stable machine codes ride alongside the (unchanged) prose.
+describe('ApiError code (P2-383)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const stubFetch = (status: number, body: unknown) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(body), { status })),
+    );
+
+  it('carries the code from a non-ok response body, message unchanged', async () => {
+    stubFetch(400, {
+      message: 'This dispute has already been decided.',
+      code: 'DISPUTE_ALREADY_DECIDED',
+      statusCode: 400,
+    });
+    const err = await api.post('/admin/disputes/d1/resolve', {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(400);
+    expect((err as ApiError).code).toBe('DISPUTE_ALREADY_DECIDED');
+    expect((err as ApiError).message).toBe('This dispute has already been decided.');
+  });
+
+  it('code is undefined when the body has none', async () => {
+    stubFetch(500, { message: 'Internal Server Error', statusCode: 500 });
+    const err = await api.get('/x').catch((e: unknown) => e);
+    expect((err as ApiError).code).toBeUndefined();
+    expect(apiErrorToMessage(err, t)).toBe('errors.server');
+  });
+
+  it('a coded ApiError keeps the same apiErrorToMessage bucket', () => {
+    expect(apiErrorToMessage(new ApiError('x', 400, 'DISPUTE_NOT_DECIDED'), t)).toBe(
+      'errors.conflict',
+    );
+  });
+});
+
+describe('disputeActionFailure (P2-383 code-first)', () => {
+  it.each(['DISPUTE_ALREADY_DECIDED', 'DISPUTE_NOT_DECIDED'])(
+    '400 with code %s -> conflict, regardless of message',
+    (code) => {
+      expect(disputeActionFailure(new ApiError('reworded prose', 400, code))).toBe('conflict');
+    },
+  );
+
+  it('400 with an unrelated code -> invalid even if old prose is present', () => {
+    expect(
+      disputeActionFailure(
+        new ApiError('This dispute has already been decided.', 400, 'VALIDATION_FAILED'),
+      ),
+    ).toBe('invalid');
+  });
+
+  it('regex fallback still maps old prose when code is absent (deploy skew)', () => {
+    expect(
+      disputeActionFailure(new ApiError('This dispute has already been decided.', 400)),
+    ).toBe('conflict');
+    expect(
+      disputeActionFailure(new ApiError('Only decided disputes can be reopened.', 400)),
+    ).toBe('conflict');
+    expect(disputeActionFailure(new ApiError('note must be shorter', 400))).toBe('invalid');
+  });
+
+  it('non-400 buckets are unchanged', () => {
+    expect(disputeActionFailure(new ApiError('x', 401))).toBe('auth');
+    expect(disputeActionFailure(new ApiError('x', 404))).toBe('access');
+    expect(disputeActionFailure(new ApiError('x', 409))).toBe('conflict');
+    expect(disputeActionFailure(new ApiError('x', 503))).toBe('server');
+    expect(disputeActionFailure(new Error('x'))).toBe('network');
   });
 });

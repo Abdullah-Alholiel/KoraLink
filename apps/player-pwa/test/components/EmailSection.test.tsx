@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import enMessages from '@/messages/en.json';
 import EmailSection from '@/components/profile/EmailSection';
+import { FetchError } from '@/lib/fetcher';
 import {
     useUserProfile,
     useSetEmail,
@@ -117,6 +118,43 @@ describe('EmailSection (P1-41, owner session 2026-09-06)', () => {
         const user = userEvent.setup();
         mockProfile(null, false);
         mutateAsync.mockRejectedValueOnce(new Error('409 already in use'));
+        renderSection();
+        await user.type(screen.getByLabelText('Email address'), 'taken@example.com');
+        await user.click(screen.getByRole('button', { name: 'Add email' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/already in use on another account/i);
+    });
+
+    // P2-383: status-first classification — copy-proof against backend prose.
+    it('maps a FetchError 409 to the taken-copy regardless of message text', async () => {
+        const user = userEvent.setup();
+        mockProfile(null, false);
+        mutateAsync.mockRejectedValueOnce(
+            new FetchError('EMAIL_TAKEN', 409, 'http://api/email/me'),
+        );
+        renderSection();
+        await user.type(screen.getByLabelText('Email address'), 'taken@example.com');
+        await user.click(screen.getByRole('button', { name: 'Add email' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/already in use on another account/i);
+    });
+
+    it('maps a FetchError 500 to the generic error copy even if its message says "taken"', async () => {
+        const user = userEvent.setup();
+        mockProfile(null, false);
+        mutateAsync.mockRejectedValueOnce(
+            new FetchError('slot taken by worker', 500, 'http://api/email/me'),
+        );
+        renderSection();
+        await user.type(screen.getByLabelText('Email address'), 'a@example.com');
+        await user.click(screen.getByRole('button', { name: 'Add email' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(/Couldn't save your email/i);
+        expect(alert).not.toHaveTextContent(/already in use/i);
+    });
+
+    it('falls back to the prose match for a status-less Error (deploy skew)', async () => {
+        const user = userEvent.setup();
+        mockProfile(null, false);
+        mutateAsync.mockRejectedValueOnce(new Error('That email is already taken'));
         renderSection();
         await user.type(screen.getByLabelText('Email address'), 'taken@example.com');
         await user.click(screen.getByRole('button', { name: 'Add email' }));

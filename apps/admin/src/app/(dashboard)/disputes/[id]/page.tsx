@@ -7,7 +7,8 @@ import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
 import LoadError from '@/components/LoadError';
-import { api, ApiError, type Role } from '@/lib/api';
+import { api, type Role } from '@/lib/api';
+import { disputeActionFailure } from '@/lib/dispute-errors';
 import { can, getRole } from '@/lib/rbac';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
@@ -38,28 +39,8 @@ function parseEvidence(evidence: unknown): { action?: string; reason?: string; a
 
 const CLOSED = new Set(['resolved', 'rejected']);
 
-// P2-283: ApiError→bucket mapping for the dispute actions (settlements
-// moneyActionFailure pattern); raw backend text is never rendered. Unlike
-// settlements, 400 needs a message check (PR-Agent r1 #199): the service
-// answers a state race ("already been decided", "Only decided disputes can
-// be reopened") with 400 → 'conflict', while every OTHER 400 is payload
-// validation (e.g. an over-long note) → 'invalid', so the admin gets
-// "check your entries" instead of a refresh loop.
-type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'invalid' | 'server' | 'network';
-function disputeActionFailure(err: unknown): DisputeActionFailure {
-  if (!(err instanceof ApiError)) return 'network';
-  const status = err.status;
-  if (status === 401) return 'auth';
-  if (status === 403 || status === 404) return 'access';
-  if (status === 409) return 'conflict';
-  if (status === 400) {
-    return /already been decided|Only decided disputes can be reopened/.test(err.message)
-      ? 'conflict'
-      : 'invalid';
-  }
-  if (status === 429 || status >= 500) return 'server';
-  return 'network';
-}
+// Dispute action ApiError→bucket mapping (code-first, P2-383) lives in
+// lib/dispute-errors.ts so it is unit-testable (page files can't export it).
 
 export default function DisputeDetailPage() {
   const t = useTranslations('adminDisputes');

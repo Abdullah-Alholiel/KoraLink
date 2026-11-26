@@ -25,7 +25,12 @@ export function isAuthenticated(): boolean {
  * failures to localized copy instead of rendering raw backend text.
  */
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** Stable machine code from the API body (`{ message, code }`), if sent (P2-383). */
+    readonly code?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -100,8 +105,12 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new ApiError(body.message ?? `Request failed (${res.status})`, res.status);
+    const body = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
+    throw new ApiError(
+      body.message ?? `Request failed (${res.status})`,
+      res.status,
+      typeof body.code === 'string' ? body.code : undefined,
+    );
   }
 
   // 204 / empty body → resolve undefined instead of throwing SyntaxError
