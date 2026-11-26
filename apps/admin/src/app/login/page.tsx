@@ -6,11 +6,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, Loader2, ShieldAlert } from 'lucide-react';
 import { api, apiErrorToMessage, defaultRoute, setToken } from '@/lib/api';
+import { useOnline } from '@/lib/use-online';
 
 export default function LoginPage() {
   const t = useTranslations('hq');
   const tr = useTranslations();
   const router = useRouter();
+  const online = useOnline();
   const [phone, setPhone] = useState('+966500000000');
   const [code, setCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -21,13 +23,16 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('error') === 'player') {
-      setError(
-        'This console is for admins and venue owners only. Players use the KoraLink app.',
-      );
+      setError(t('playerRedirect'));
     }
-  }, []);
+  }, [t]);
+
+  // Offline notice is COMPUTED, not latched into `error`: it shows while the
+  // browser is offline and clears on its own when connectivity returns.
+  const shownError = online ? error : t('offlineNotice');
 
   async function handleDevLogin() {
+    if (!online) return; // nothing is sent offline; the notice is computed below
     setLoading(true);
     setError(null);
     try {
@@ -42,6 +47,7 @@ export default function LoginPage() {
   }
 
   async function handleSendOtp() {
+    if (!online) return; // nothing is sent offline; the notice is computed below
     setLoading(true);
     setError(null);
     try {
@@ -55,6 +61,7 @@ export default function LoginPage() {
   }
 
   async function handleVerifyOtp() {
+    if (!online) return; // nothing is sent offline; the notice is computed below
     setLoading(true);
     setError(null);
     try {
@@ -63,7 +70,7 @@ export default function LoginPage() {
         setToken(res.token);
         router.replace(defaultRoute());
       } else {
-        setError('OTP verified but no token returned (production uses cookies).');
+        setError(t('otpNoToken'));
       }
     } catch (e) {
       setError(apiErrorToMessage(e, tr));
@@ -97,7 +104,7 @@ export default function LoginPage() {
           <div className="space-y-2">
             <button
               onClick={handleDevLogin}
-              disabled={loading}
+              disabled={!online || loading}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -105,7 +112,7 @@ export default function LoginPage() {
             </button>
             <button
               onClick={handleSendOtp}
-              disabled={loading}
+              disabled={!online || loading}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Send OTP
@@ -122,7 +129,7 @@ export default function LoginPage() {
             />
             <button
               onClick={handleVerifyOtp}
-              disabled={loading}
+              disabled={!online || loading}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -131,8 +138,8 @@ export default function LoginPage() {
           </div>
         )}
 
-        {error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        {shownError && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{shownError}</p>
         )}
 
         <div className="mt-6 rounded-lg bg-gray-50 px-3 py-2.5 text-xs leading-relaxed text-gray-500">
