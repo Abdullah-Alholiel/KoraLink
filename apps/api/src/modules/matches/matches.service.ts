@@ -514,10 +514,14 @@ export class MatchesService {
     const healedStranded = await this.healStrandedCompletedMatches();
 
     // P2-254 (run #237): invite each newly-completed paid venue match's roster
-    // to rate the venue. Failure-isolated per match — the helper never throws.
-    for (const row of newlyCompleted) {
-      await this.fireVenueReviewPrompt(row.id, row.pitch_id, row.is_player_hosted === true);
-    }
+    // to rate the venue. Failure-isolated per match — the helper never throws,
+    // so the fan-out is safely concurrent (PR-Agent r1 MINOR: serial awaits
+    // would delay the scheduler tick N round-trips after a bulk completion).
+    await Promise.all(
+      newlyCompleted.map((row) =>
+        this.fireVenueReviewPrompt(row.id, row.pitch_id, row.is_player_hosted === true),
+      ),
+    );
 
     // Underfill net + bulk complete are both done — report all counters
     // (the scheduler logs; tests assert ordering net-before-complete).
