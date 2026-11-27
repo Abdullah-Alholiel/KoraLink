@@ -270,6 +270,10 @@ self.addEventListener('push', (event) => {
     data.matchId
   )
     url = `/${locale}/match/${data.matchId}`;
+  // P2-254 (run #237): post-match venue review prompt lands on the venue page
+  // (the PWA venue route is /clubs/:id — it hosts the can_review CTA).
+  else if (data.type === 'venue-review-prompt' && data.venueId)
+    url = `/${locale}/clubs/${data.venueId}`;
 
   // P2-233 (run #151): the tag must identify ONE notification, not one TYPE.
   // A type-only tag renotify-replaced distinct same-type events (two different

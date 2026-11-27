@@ -10,7 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { eq, sql, and, inArray, isNull, gt, lt, or } from 'drizzle-orm';
+import { eq, sql, and, inArray, isNull, isNotNull, gt, lt, or } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { disputes, matches, match_messages, match_players, match_votes, match_waitlist, pitch_slots, pitches, transactions, users } from '../../database/schema';
@@ -418,9 +418,19 @@ export class MatchesService {
           AND (SELECT COUNT(*)::int FROM match_players mp WHERE mp.match_id = ${matches.id})
                 < min_players
         )
+      RETURNING id, pitch_id, is_player_hosted
     `);
     const res = result as unknown as { count?: number; length?: number };
     const flipped = res.count ?? res.length ?? 0;
+    // P2-254 (run #237): the RETURNING rows are exactly the newly-completed
+    // matches — the review-prompt fan-out runs on these only (never on rows
+    // completed by an earlier tick). Defensive: partial mocks may return a
+    // bare { count } with no rows.
+    const newlyCompleted = (Array.isArray(result) ? (result as unknown[]) : []) as Array<{
+      id: string;
+      pitch_id: string | null;
+      is_player_hosted: boolean | null;
+    }>;
     // Slice 3 (player-host-responsibility): flip only changes status — release
     // each flipped player-hosted match's held payout (exactly-once per match;
     // state guard + per-match ledger key make re-runs no-ops). Failures are
@@ -502,6 +512,12 @@ export class MatchesService {
     // every tick. Zero-cost no-op when there are no stranded rows; the
     // bulk-complete equality signature keeps genuinely-played rows safe.
     const healedStranded = await this.healStrandedCompletedMatches();
+
+    // P2-254 (run #237): invite each newly-completed paid venue match's roster
+    // to rate the venue. Failure-isolated per match — the helper never throws.
+    for (const row of newlyCompleted) {
+      await this.fireVenueReviewPrompt(row.id, row.pitch_id, row.is_player_hosted === true);
+    }
 
     // Underfill net + bulk complete are both done — report all counters
     // (the scheduler logs; tests assert ordering net-before-complete).
@@ -3203,6 +3219,9 @@ export class MatchesService {
     let hostPayout = null as { paid: boolean; amountSar: string } | null;
     // P2-193 (run #155): host id hoisted for the post-commit payout push.
     let payoutHostId = '';
+    // P2-254 (run #237): venue-review prompt guards, captured in-tx.
+    let reviewPitchId = null as string | null;
+    let reviewPlayerHosted = false;
     await this.db.transaction(async (tx) => {
       const [match] = await tx
         .select({
@@ -3211,6 +3230,7 @@ export class MatchesService {
           status: matches.status,
           scheduled_at: matches.scheduled_at,
           duration_mins: matches.duration_mins,
+          pitch_id: matches.pitch_id,
           is_player_hosted: matches.is_player_hosted,
           host_payout_state: matches.host_payout_state,
           price_per_player: matches.price_per_player,
@@ -3262,6 +3282,8 @@ export class MatchesService {
           'Match is no longer completable (expected InProgress).',
         );
       }
+      reviewPitchId = match.pitch_id ?? null;
+      reviewPlayerHosted = match.is_player_hosted === true;
 
       // P1-17: a completed match can never seat its queue — clear it and
       // remember who was waiting for the post-commit notification.
@@ -3332,12 +3354,50 @@ export class MatchesService {
       }
     }
 
+    // P2-254 (run #237): post-commit venue review invite — best-effort.
+    await this.fireVenueReviewPrompt(matchId, reviewPitchId, reviewPlayerHosted);
+
     try {
       this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
     } catch (err) {
       this.logger.error(`WS broadcast error on completeMatch: ${(err as Error).message}`);
     }
     return updatedMatch;
+  }
+
+  /**
+   * P2-254 (run #237): post-completion venue review prompt. Guards: skip
+   * player-hosted matches and matches without a pitch; fire only when ≥1
+   * roster row actually paid (fee_paid_sar IS NOT NULL). NEVER throws — a
+   * failure is logged + reported to Sentry and the completion stands.
+   */
+  private async fireVenueReviewPrompt(
+    matchId: string,
+    pitchId: string | null,
+    isPlayerHosted: boolean,
+  ): Promise<void> {
+    if (isPlayerHosted || !pitchId) return;
+    try {
+      const [venue] = await this.db
+        .select({ id: schema.venues.id, name: schema.venues.name })
+        .from(pitches)
+        .innerJoin(schema.venues, eq(schema.venues.id, pitches.venue_id))
+        .where(eq(pitches.id, pitchId))
+        .limit(1);
+      if (!venue) return;
+
+      const [paid] = await this.db
+        .select({ id: match_players.id })
+        .from(match_players)
+        .where(and(eq(match_players.match_id, matchId), isNotNull(match_players.fee_paid_sar)))
+        .limit(1);
+      if (!paid) return;
+
+      await this.notificationsService.sendReviewPromptNotification(matchId, venue.id, venue.name);
+    } catch (err) {
+      this.logger.error(`venue_review_prompt failed for ${matchId}: ${(err as Error).message}`);
+      Sentry.captureException(err, { extra: { matchId, pitchId, op: 'venue_review_prompt' } });
+    }
   }
 
   /**
