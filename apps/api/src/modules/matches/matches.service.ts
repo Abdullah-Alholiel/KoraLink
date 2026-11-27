@@ -3358,8 +3358,12 @@ export class MatchesService {
       }
     }
 
-    // P2-254 (run #237): post-commit venue review invite — best-effort.
-    await this.fireVenueReviewPrompt(matchId, reviewPitchId, reviewPlayerHosted);
+    // P2-254 (run #237): post-commit venue review invite — fire-and-forget,
+    // NOT awaited (PR-Agent r2 MINOR: web-push sets no default send timeout;
+    // a stalled subscription endpoint must never delay the host's completion
+    // response — the commit is already durable here). The helper never
+    // rejects: every await inside it is wrapped in its own try/catch.
+    void this.fireVenueReviewPrompt(matchId, reviewPitchId, reviewPlayerHosted);
 
     try {
       this.appGateway.broadcastStatusUpdate(matchId, updatedMatch);
