@@ -132,11 +132,19 @@ describe('worker push route map (run #70) — cross-layer type contract', () => 
       'match_starting_24h', // P2-100, run #74: day-ahead reminder leg
       'players_needed', // run #70: renamed off 'match-chat' (tag collision)
       'players_needed_renudge', // run #70: renamed off 'match-chat' (tag collision)
+      'venue-review-prompt', // P2-254, run #237: post-match venue review invite
     ]) {
       expect(
         WORKER_SRC.includes(`data.type === '${type}'`),
       ).toBe(true);
     }
+  });
+
+  it('deep-links venue-review-prompt to the venue page (P2-254)', () => {
+    expect(WORKER_SRC).toContain(
+      "data.type === 'venue-review-prompt' && data.venueId",
+    );
+    expect(WORKER_SRC).toContain('url = `/${locale}/clubs/${data.venueId}`');
   });
 
   it('keeps real chat as the only "match-chat" sender (no more tag borrowing)', () => {

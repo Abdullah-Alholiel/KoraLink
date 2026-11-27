@@ -37,7 +37,10 @@ export type PushKey =
   | 'refund_credited'
   | 'payout_released'
   // Run #225 (D-20261115-04): host late-cancel (<12h) forfeits the pitch cost.
-  | 'pitch_forfeit';
+  | 'pitch_forfeit'
+  // P2-254 (run #237): post-match invite to rate the venue (booking-verified
+  // reviews, P1-55). Title interpolates the venue name.
+  | 'venue_review_prompt';
 
 /**
  * Template vars. All stringly/loosely typed on purpose: push text interpolates
@@ -58,7 +61,7 @@ export type PushVars = {
   kickoffDateISO?: string;
   /** New queue position (waitlist_promoted only). */
   position?: number;
-  /** Venue display name (payout_paid only) — embedded as-is. */
+  /** Venue display name (payout_paid + venue_review_prompt) — embedded as-is. */
   venueName?: string;
   /** Exact 2dp SAR amount string, e.g. "3150.00". Rendered through
    *  Intl.NumberFormat per locale (ar → Arabic-Indic digits + ر.س). Used by
@@ -66,7 +69,9 @@ export type PushVars = {
   amount?: string;
 };
 
-type Entry = { title: string; body: (v: PushVars) => string };
+// P2-254: a title may interpolate vars (venue_review_prompt) — static strings
+// stay the common case.
+type Entry = { title: string | ((v: PushVars) => string); body: (v: PushVars) => string };
 
 function parseIso(iso: string | undefined): Date | null {
   if (!iso) return null;
@@ -349,6 +354,18 @@ const CATALOG: Record<PushKey, Record<PushLocale, Entry>> = {
         `أُلغيت "${v.title ?? 'مباراتك'}" قبل أقل من 12 ساعة من موعدها، لذلك يذهب سعر الملعب ${payoutAmount(v.amount, 'ar-SA')} إلى الملعب. تم إرجاع المبالغ كاملة للاعبين.`,
     },
   },
+  // P2-254 (run #237): completed paid match → invite roster to rate the venue.
+  venue_review_prompt: {
+    en: {
+      title: (v) => `How was ${v.venueName ?? 'the venue'}?`,
+      body: (v) =>
+        `Rate your match at ${v.venueName ?? 'the venue'} and help other players.`,
+    },
+    ar: {
+      title: (v) => `كيف كانت ${v.venueName ?? 'الملعب'}؟`,
+      body: (v) => `قيّم ملعبك في ${v.venueName ?? 'الملعب'} وساعد اللاعبين الآخرين.`,
+    },
+  },
 };
 
 /** Mirror of the SW/controller locale fallback: only 'ar' localizes to Arabic. */
@@ -363,5 +380,6 @@ export function renderPushText(
   locale: PushLocale,
 ): { title: string; body: string } {
   const entry = CATALOG[key][locale];
-  return { title: entry.title, body: entry.body(vars) };
+  const title = typeof entry.title === 'function' ? entry.title(vars) : entry.title;
+  return { title, body: entry.body(vars) };
 }

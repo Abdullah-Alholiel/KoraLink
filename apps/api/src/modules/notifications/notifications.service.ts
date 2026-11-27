@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq, and, inArray, lt } from 'drizzle-orm';
+import { eq, and, inArray, lt, or, isNotNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as webpush from 'web-push';
 import * as Sentry from '@sentry/node';
@@ -17,7 +17,7 @@ import {
 } from '../../common/security/push-endpoint.validator';
 import { SubscribeDto } from './dto/notifications.dto';
 import * as schema from '../../database/schema';
-import { push_subscriptions, match_players, users, user_notification_prefs, type NotificationCategory } from '../../database/schema';
+import { push_subscriptions, match_players, users, user_notification_prefs, venue_reviews, type NotificationCategory } from '../../database/schema';
 
 /**
  * P0-5 (run #28): the canonical mapping from a `PushKey` (semantic catalog) to
@@ -39,6 +39,7 @@ const CATEGORY_BY_KEY: Partial<Record<PushKey, NotificationCategory>> = {
   waitlist_promoted: 'match',
   waitlist_closed: 'match',
   waitlist_removed: 'match',
+  venue_review_prompt: 'match',
 };
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -250,7 +251,7 @@ export class NotificationsService {
       | {
           title: string;
           body: string;
-          data: { type: string; matchId?: string; conversationId?: string; reportId?: string };
+          data: { type: string; matchId?: string; conversationId?: string; reportId?: string; venueId?: string };
           // P0-5 (run #28): the inline form now carries an optional
           // `category` so the per-category mute gate can drop a chat
           // push for a user who has muted `chat`. Omitting the field is
@@ -261,7 +262,7 @@ export class NotificationsService {
         }
       // P2-8 (run #24): semantic-key form — text is rendered per-subscription
       // from push-text.ts using the subscription's stored locale.
-      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string; reportId?: string } },
+      | { key: PushKey; vars?: PushVars; data: { type: string; matchId?: string; conversationId?: string; reportId?: string; venueId?: string } },
   ): Promise<number> {
     if (!this.vapidConfigured || userIds.length === 0) {
       return 0;
@@ -478,6 +479,65 @@ export class NotificationsService {
       key: 'pom_decided',
       vars: { winnerName: payload.winner.fullName },
       data: { type: 'pom-decided', matchId: payload.matchId },
+    });
+  }
+
+  /**
+   * P2-254 (run #237): invite the paying roster of a completed match to rate
+   * the venue (booking-verified reviews, P1-55 — can_review is computed on
+   * GET /venues/:id/reviews; this is the only thing that brings players there).
+   *
+   * Audience: roster rows of THIS match where is_host = true OR
+   * fee_paid_sar IS NOT NULL (free-riders / never-charged rows cannot
+   * leave a booking-verified review anyway).
+   *
+   * Dedupe: there is NO in-app notifications table (the bell is fed by
+   * `activities`, which has no unique key), so a prompt ledger would need a
+   * migration. The durable no-migration guard is `venue_reviews`
+   * (UNIQUE venue_id+user_id): a player who already reviewed this venue is
+   * never prompted again. Per-match single-fire is guaranteed by the callers
+   * (completion is a one-shot status transition).
+   *
+   * Returns the number of subscriptions the push reached (0 when VAPID is
+   * not configured or nobody is eligible).
+   */
+  async sendReviewPromptNotification(
+    matchId: string,
+    venueId: string,
+    venueName: string,
+  ): Promise<number> {
+    if (!this.vapidConfigured) {
+      return 0;
+    }
+
+    const eligibleRows = await this.db
+      .selectDistinct({ user_id: match_players.user_id })
+      .from(match_players)
+      .where(
+        and(
+          eq(match_players.match_id, matchId),
+          or(eq(match_players.is_host, true), isNotNull(match_players.fee_paid_sar)),
+        ),
+      );
+    const eligible = eligibleRows.map((r) => r.user_id);
+    if (eligible.length === 0) return 0;
+
+    const reviewedRows = await this.db
+      .select({ user_id: venue_reviews.user_id })
+      .from(venue_reviews)
+      .where(and(eq(venue_reviews.venue_id, venueId), inArray(venue_reviews.user_id, eligible)));
+    const reviewed = new Set(reviewedRows.map((r) => r.user_id));
+    const recipients = eligible.filter((id) => !reviewed.has(id));
+    if (recipients.length === 0) return 0;
+
+    this.logger.log(
+      `venue_review_prompt match=${matchId} venue=${venueId} recipients=${recipients.length} already_reviewed=${reviewed.size}`,
+    );
+
+    return this.sendPushToUsers(recipients, {
+      key: 'venue_review_prompt',
+      vars: { venueName },
+      data: { type: 'venue-review-prompt', venueId, matchId },
     });
   }
 }
