@@ -188,12 +188,23 @@ export type ApiErrorBucket =
 
 /**
  * Stable backend codes that mean "this change conflicts with current state"
- * (optimistic-locking / already-done class). Code-first so a known conflict
- * can never be misfiled as payload validation (P2-413).
+ * (optimistic-locking / already-done class): the remedy is a REFRESH, so they
+ * route to the state-race copy. Code-first so a known conflict can never be
+ * misfiled as payload validation (P2-413).
  */
 const CONFLICT_CODES = new Set([
   'DISPUTE_ALREADY_DECIDED',
   'DISPUTE_NOT_DECIDED',
+]);
+
+/**
+ * Stable backend codes that mean "a value you submitted collides with an
+ * existing one" (PR-Agent r1 on PR #306: EMAIL_TAKEN under the state-race
+ * copy told admins to refresh — refreshing cannot free a taken email; the
+ * remedy is CHANGE THE INPUT, so these route to the validation copy).
+ * Unknown codes stay with their status bucket (fail-safe for future codes).
+ */
+const DUPLICATE_VALUE_CODES = new Set([
   'EMAIL_TAKEN',
 ]);
 
@@ -211,7 +222,10 @@ export function classifyApiError(e: unknown): ApiErrorBucket {
   // Code-first: a stable backend code beats any status heuristic (P2-283
   // plumbing; the dispute fork proved the need, run #234 MINOR-2).
   const code = e instanceof ApiError ? e.code : undefined;
-  if (code && CONFLICT_CODES.has(code)) return 'conflict';
+  if (code) {
+    if (CONFLICT_CODES.has(code)) return 'conflict';
+    if (DUPLICATE_VALUE_CODES.has(code)) return 'validation';
+  }
 
   const status = statusOf(e);
   if (status !== null) {

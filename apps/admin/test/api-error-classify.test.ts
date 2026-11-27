@@ -27,14 +27,21 @@ describe('P2-413 classifyApiError', () => {
     expect(apiErrorToMessage(new ApiError('bad payload', 400), t)).toBe('errors.validation');
   });
 
-  it('known conflict-codes beat the status heuristic (code-first)', () => {
-    for (const code of ['DISPUTE_ALREADY_DECIDED', 'DISPUTE_NOT_DECIDED', 'EMAIL_TAKEN']) {
+  it('known state-race codes beat the status heuristic (code-first)', () => {
+    for (const code of ['DISPUTE_ALREADY_DECIDED', 'DISPUTE_NOT_DECIDED']) {
       expect(classifyApiError(new ApiError('msg', 400, code))).toBe('conflict');
     }
     // Unknown code → falls through to the status bucket.
     expect(classifyApiError(new ApiError('msg', 400, 'SOMETHING_ELSE'))).toBe('validation');
     // Code-first even when the status is not 4xx-conflict-shaped.
     expect(classifyApiError(new ApiError('msg', 422, 'DISPUTE_ALREADY_DECIDED'))).toBe('conflict');
+  });
+
+  it('duplicate-value codes route to validation — PR-Agent r1 #306: EMAIL_TAKEN under the state-race copy told admins to refresh, which cannot free a taken email', () => {
+    expect(classifyApiError(new ApiError('msg', 409, 'EMAIL_TAKEN'))).toBe('validation');
+    expect(apiErrorToMessage(new ApiError('msg', 409, 'EMAIL_TAKEN'), t)).toBe('errors.validation');
+    // Unknown code on 409 keeps the state-race bucket (fail-safe for future codes).
+    expect(classifyApiError(new ApiError('msg', 409, 'SOME_FUTURE_CODE'))).toBe('conflict');
   });
 
   it('ApiError.code carries through other statuses unchanged', () => {
