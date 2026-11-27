@@ -120,6 +120,9 @@ export class NotificationsService {
       .onConflictDoUpdate({
         target: [push_subscriptions.endpoint],
         set: {
+          // P2-416: re-bind the endpoint to the CURRENT account. Without this a
+          // shared device keeps delivering account A's pushes after B logs in.
+          user_id: userId,
           p256dh: sub.keys.p256dh,
           auth: sub.keys.auth,
           user_agent: userAgent ?? null,
