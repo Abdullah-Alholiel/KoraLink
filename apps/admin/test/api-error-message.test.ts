@@ -15,9 +15,10 @@ const statusLike = (status: number): Error =>
   ({ status, message: 'Internal Server Error' }) as unknown as Error;
 
 const CASES: Array<[number, string]> = [
-  [400, 'errors.conflict'],
+  // P2-413: bare 400/422 = payload validation; 409 = state conflict.
+  [400, 'errors.validation'],
   [409, 'errors.conflict'],
-  [422, 'errors.conflict'],
+  [422, 'errors.validation'],
   [401, 'errors.auth'],
   [403, 'errors.auth'],
   [404, 'errors.notFound'],
@@ -94,7 +95,7 @@ describe('apiErrorToMessage', () => {
 });
 
 describe('errors i18n namespace', () => {
-  const KEYS = ['conflict', 'auth', 'notFound', 'rate', 'server', 'network', 'generic', 'failed'];
+  const KEYS = ['conflict', 'validation', 'auth', 'notFound', 'rate', 'server', 'network', 'generic', 'failed'];
   it('EN and AR have identical, complete, non-empty errors key sets', () => {
     const e = enM.errors;
     const a = arM.errors;
