@@ -8,6 +8,7 @@ import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import LoadingState from '@/components/LoadingState';
 import EmptyState from '@/components/EmptyState';
+import { useOnline } from '@/lib/use-online';
 import { api, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminVenueDetail } from '@/lib/types';
@@ -29,6 +30,8 @@ export default function VenueDetailPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for approve/reject submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -169,16 +172,20 @@ export default function VenueDetailPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => decide('approve')}
-                        disabled={busy}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        disabled={busy || !online}
+                        title={online ? undefined : tHQ('offlineActionTitle')}
+                        aria-disabled={!online}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                         {tHQ('approveAction')}
                       </button>
                       <button
                         onClick={() => decide('reject')}
-                        disabled={busy}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        disabled={busy || !online}
+                        title={online ? undefined : tHQ('offlineActionTitle')}
+                        aria-disabled={!online}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <XCircle className="h-4 w-4" /> {tHQ('rejectAction')}
                       </button>

@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lu
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
+import { useOnline } from '@/lib/use-online';
 import LoadError from '@/components/LoadError';
 import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
@@ -24,6 +25,8 @@ export default function ReportDetailPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for resolve/reopen submits (choke-point backstop in apiFetch).
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -219,8 +222,10 @@ export default function ReportDetailPage() {
                   </button>
                   <button
                     onClick={saveEdit}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                    disabled={saving || !online}
+                    title={!online ? tc('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     {tc('saveChanges')}
@@ -234,8 +239,10 @@ export default function ReportDetailPage() {
                   {canReopen && (
                   <button
                     onClick={() => setConfirmReopen(true)}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    disabled={saving || !online}
+                    title={!online ? tc('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw className="h-4 w-4" /> {t('reopen')}
                   </button>
@@ -301,8 +308,10 @@ export default function ReportDetailPage() {
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={() => (banSubject ? setConfirmBan(true) : resolve())}
-                  disabled={saving}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                  disabled={saving || !online}
+                  title={!online ? tc('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {t('submit')}

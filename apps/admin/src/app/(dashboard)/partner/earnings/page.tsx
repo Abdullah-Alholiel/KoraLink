@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import { api, ApiError } from '@/lib/api';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
@@ -60,6 +61,8 @@ interface PartnerSettlement {
 
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
+  // P2-412: offline guard for the payout-request submit (money-adjacent).
+  const online = useOnline();
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
   const ef = useExportFeedback();
@@ -366,7 +369,9 @@ export default function PartnerEarningsPage() {
                   type="button"
                   role="button"
                   aria-busy={requesting}
-                  disabled={requesting || loading || !!error}
+                  disabled={requesting || loading || !!error || !online}
+                  title={!online ? t('payoutOfflineTitle') : undefined}
+                  aria-disabled={!online}
                   onClick={() => setConfirming(true)}
                   className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >

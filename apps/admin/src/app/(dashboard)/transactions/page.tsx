@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
+import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api, type Role } from '@/lib/api';
@@ -35,6 +36,8 @@ export default function TransactionsPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so the refund button never flashes.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for the refund submit (choke-point backstop in apiFetch).
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -302,7 +305,10 @@ export default function TransactionsPage() {
             ) : (
               <button
                 onClick={() => setConfirmTarget(selected)}
-                className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                disabled={!online}
+                title={online ? undefined : hq('offlineActionTitle')}
+                aria-disabled={!online}
+                className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> {hq('refundAction')}
               </button>

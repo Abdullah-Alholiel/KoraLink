@@ -95,7 +95,7 @@ describe('apiErrorToMessage', () => {
 });
 
 describe('errors i18n namespace', () => {
-  const KEYS = ['conflict', 'validation', 'auth', 'notFound', 'rate', 'server', 'network', 'generic', 'failed'];
+  const KEYS = ['conflict', 'validation', 'auth', 'notFound', 'rate', 'server', 'network', 'offline', 'generic', 'failed'];
   it('EN and AR have identical, complete, non-empty errors key sets', () => {
     const e = enM.errors;
     const a = arM.errors;

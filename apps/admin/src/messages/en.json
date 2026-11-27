@@ -16,6 +16,7 @@
     "filterFromDate": "From date",
     "filterToDate": "To date",
     "filterBySubject": "Filter by subject type",
+    "offlineActionTitle": "You're offline — reconnect to make changes.",
     "prev": "Prev",
     "next": "Next",
     "pageOf": "Page {page} of {pages}",
@@ -273,6 +274,7 @@
       "noRevenueData": "No venue revenue to show yet.",
       "payoutRequestCta": "Request payout",
       "payoutRequesting": "Requesting…",
+      "payoutOfflineTitle": "You're offline — reconnect to make changes.",
       "payoutCtaTitle": "Payout request",
       "payoutCtaSubtitle": "Ask HQ to settle your unsettled completed bookings. HQ reviews and pays the pending settlement.",
       "payoutConfirmTitle": "Request payout from HQ?",
@@ -824,6 +826,7 @@
     "refundSuccess": "Refund completed. The amount was credited back to the user's wallet.",
     "refundFailed": "Refund failed — no money was moved. Check the transaction status and try again.",
     "offlineNotice": "You are offline. Reconnect to sign in — nothing was sent.",
+    "offlineActionTitle": "You're offline — reconnect to make changes.",
     "playerRedirect": "This console is for admins and venue owners only. Players use the KoraLink app.",
     "otpNoToken": "Sign-in was verified, but no session token was returned. This console requires cookie sessions in production. Please try again."
   },
@@ -946,6 +949,7 @@
     "rate": "Too many requests were sent in a short time. Wait a moment, then try again.",
     "server": "The server could not complete this action. Please try again in a moment.",
     "network": "Could not reach the server — your connection may be offline. Check your connection and try again.",
+    "offline": "You're offline — reconnect to make changes. Nothing was sent.",
     "generic": "Something went wrong and the action did not complete. Please try again; if it keeps happening, contact support.",
     "failed": "The action failed and no changes were saved. Check your input and try again."
   }

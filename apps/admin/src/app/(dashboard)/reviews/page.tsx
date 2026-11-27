@@ -15,6 +15,7 @@ import { api, ApiError, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { ListResponse, VenueReview, VenueReviewMutation } from '@/lib/types';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import { cn, formatDate } from '@/lib/utils';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -26,6 +27,9 @@ const PER_PAGE = 25;
 
 function failureReason(err: unknown): FailureReason {
   if (!(err instanceof ApiError)) return 'network';
+  // P2-412: the offline guard throws ApiError(0, 'OFFLINE') — a no-response
+  // failure must never read as a server rejection.
+  if (err.status === 0) return 'network';
   if (err.status === 401) return 'auth';
   if (err.status === 403) return 'access';
   if (err.status === 404) return 'gone';
@@ -43,9 +47,12 @@ function Stars({ rating, label }: { rating: number; label: string }) {
 
 export default function ReviewsPage() {
   const t = useTranslations('reviews');
+  const tr = useTranslations();
   // RBAC (P2-400, run #228): resolve the role once on mount (getRole() reads
   // browser storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for hide/restore/delete submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -353,7 +360,10 @@ export default function ReviewsPage() {
                 <>
                   <button
                     onClick={() => run(selected, selected.hidden_at ? 'restore' : 'hide')}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    disabled={!online}
+                    title={!online ? tr('hq.offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {selected.hidden_at ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     {selected.hidden_at ? t('restore') : t('hide')}

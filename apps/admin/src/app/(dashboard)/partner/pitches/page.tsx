@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
 import { api, type Role } from '@/lib/api';
@@ -26,6 +27,8 @@ interface SlotsResponse {
 export default function MyPitchesPage() {
   const t = useTranslations('partner.pitches');
   const tc = useTranslations('common');
+  // P2-412: offline guard for pitch create/edit/delete/availability submits.
+  const online = useOnline();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -287,8 +290,10 @@ export default function MyPitchesPage() {
                       <>
                       <button
                         onClick={() => toggleActive(p)}
-                        disabled={busy}
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        disabled={busy || !online}
+                        title={!online ? tc('offlineActionTitle') : undefined}
+                        aria-disabled={!online}
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : p.is_active ? t('setUnavailable') : t('setAvailable')}
                       </button>

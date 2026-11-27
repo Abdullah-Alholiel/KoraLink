@@ -7,9 +7,10 @@ import Link from 'next/link';
 import { CheckCircle2, Loader2, Pencil, Search, UserCog, XCircle } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
+import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminVenue, ListResponse, PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -24,11 +25,14 @@ type VenuesResponse = ListResponse<AdminVenue> & { venues: AdminVenue[] };
 
 export default function VenuesPage() {
   const t = useTranslations('hq');
+  const tr = useTranslations();
   const ts = useTranslations('status');
   const tc = useTranslations('common');
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for approve/reject/transfer submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -42,6 +46,8 @@ export default function VenuesPage() {
   const [transferring, setTransferring] = useState<AdminVenue | null>(null);
   const [editing, setEditing] = useState<PartnerVenueRow | null>(null);
   const [selected, setSelected] = useState<AdminVenue | null>(null);
+  // P2-412 r1: approve/reject failure surface (previously silent unhandled rejection).
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (search) qs.set('search', search);
@@ -51,10 +57,15 @@ export default function VenuesPage() {
 
   async function decide(id: string, decision: 'approve' | 'reject') {
     setBusyId(id);
+    setDecisionError(null);
     try {
       await api.post(`/admin/venues/${id}/decision`, { decision });
       reload();
       setSelected(null);
+    } catch (e) {
+      // P2-412 r1: the offline guard (and any other failure) now lands here —
+      // previously a bare try/finally leaked unhandled rejections silently.
+      setDecisionError(apiErrorToMessage(e, tr, 'errors.failed'));
     } finally {
       setBusyId(null);
     }
@@ -213,16 +224,27 @@ export default function VenuesPage() {
                   <>
                     <button
                       onClick={() => decide(selected.id, 'approve')}
-                      className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                      disabled={!online}
+                      title={online ? undefined : t('offlineActionTitle')}
+                      aria-disabled={!online}
+                      className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" /> {t('approveAction')}
                     </button>
                     <button
                       onClick={() => decide(selected.id, 'reject')}
-                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                      disabled={!online}
+                      title={online ? undefined : t('offlineActionTitle')}
+                      aria-disabled={!online}
+                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <XCircle className="h-3.5 w-3.5" /> {t('rejectAction')}
                     </button>
+                    {decisionError && (
+                      <p role="alert" className="mt-2 w-full text-xs text-red-600">
+                        {decisionError}
+                      </p>
+                    )}
                   </>
                 )}
                 {canTransfer && (
