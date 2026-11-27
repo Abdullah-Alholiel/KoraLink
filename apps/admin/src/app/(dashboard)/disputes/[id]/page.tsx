@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lu
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
+import { useOnline } from '@/lib/use-online';
 import LoadError from '@/components/LoadError';
 import { api, type Role } from '@/lib/api';
 import { disputeActionFailure } from '@/lib/dispute-errors';
@@ -56,6 +57,8 @@ export default function DisputeDetailPage() {
   // mount (layout.tsx pattern). null (SSR / pre-mount) = not permitted, so
   // privileged actions never flash and server/client markup never diverges.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for resolve/reopen/saveEdit submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -94,6 +97,7 @@ export default function DisputeDetailPage() {
   async function sendReply() {
     const content = reply.trim();
     if (!content || replySending) return;
+    if (!online) return; // P2-412
     setReplySending(true);
     setReplyError(null);
     try {
@@ -115,6 +119,7 @@ export default function DisputeDetailPage() {
   const [confirmReopen, setConfirmReopen] = useState(false);
 
   async function resolve() {
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
@@ -170,6 +175,7 @@ export default function DisputeDetailPage() {
   }
 
   async function reopen() {
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -185,6 +191,7 @@ export default function DisputeDetailPage() {
   }
 
   async function saveEdit() {
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {

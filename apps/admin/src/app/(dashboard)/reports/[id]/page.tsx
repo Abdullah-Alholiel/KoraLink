@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Pencil, RotateCcw, XCircle } from 'lu
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import { isStaleEditError } from '@/lib/edit-stale';
+import { useOnline } from '@/lib/use-online';
 import LoadError from '@/components/LoadError';
 import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
@@ -24,6 +25,8 @@ export default function ReportDetailPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for resolve/reopen submits (choke-point backstop in apiFetch).
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -54,6 +57,7 @@ export default function ReportDetailPage() {
     // Re-entry guard: the confirm dialog doesn't disable its button during
     // save — a fast double-confirm could POST /resolve twice (Reviewer A).
     if (saving) return;
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -69,6 +73,7 @@ export default function ReportDetailPage() {
   }
 
   async function reopen() {
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -83,6 +88,7 @@ export default function ReportDetailPage() {
   }
 
   async function saveEdit() {
+    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {

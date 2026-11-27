@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import LiveBadge from '@/components/LiveBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import { api, ApiError } from '@/lib/api';
 import LoadError from '@/components/LoadError';
 import type { PartnerEarnings, PartnerVenueRevenue } from '@/lib/types';
@@ -60,6 +61,8 @@ interface PartnerSettlement {
 
 export default function PartnerEarningsPage() {
   const t = useTranslations('partner.earnings');
+  // P2-412: offline guard for the payout-request submit (money-adjacent).
+  const online = useOnline();
   const [selected, setSelected] = useState<PartnerSettlement | null>(null);
   const { data, loading, error, reload, live, stale } = useLiveAdminData<PartnerEarnings>('/partner/earnings', ['settlements']);
   const ef = useExportFeedback();
@@ -71,6 +74,7 @@ export default function PartnerEarningsPage() {
   const [requestNote, setRequestNote] = useState<string | null>(null);
 
   async function onRequestPayout() {
+    if (!online) return; // P2-412
     setConfirming(false);
     setRequesting(true);
     setRequestError(null);

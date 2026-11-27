@@ -48,6 +48,23 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     ...((options.headers as Record<string, string>) ?? {}),
   };
 
+  const writes = options.method != null && options.method !== 'GET';
+  // P2-412: offline guard for WRITE submits — an offline POST/PATCH/PUT/DELETE
+  // can never succeed, so reject it BEFORE fetch with a typed ApiError the
+  // surfaces already classify. GET stays unguarded: reads degrade through the
+  // normal classifier ('network' copy) and cached-browsing behavior is kept.
+  if (
+    writes &&
+    typeof navigator !== 'undefined' &&
+    navigator.onLine === false
+  ) {
+    throw new ApiError(
+      'You are offline. Reconnect to make changes.',
+      0,
+      'OFFLINE',
+    );
+  }
+
   // Abort a hung request after 30s so pages surface an error instead of
   // spinning forever (P2-24). The timeout is cleared once headers arrive;
   // body reads share the same controller via the signal.
@@ -184,6 +201,7 @@ export type ApiErrorBucket =
   | 'rate'
   | 'server'
   | 'network'
+  | 'offline'
   | 'generic';
 
 /**
@@ -223,12 +241,18 @@ export function classifyApiError(e: unknown): ApiErrorBucket {
   // plumbing; the dispute fork proved the need, run #234 MINOR-2).
   const code = e instanceof ApiError ? e.code : undefined;
   if (code) {
+    // P2-412: the client-side offline guard stamps code 'OFFLINE' + status 0 —
+    // proactive rejection BEFORE fetch, distinct remedy copy ("reconnect").
+    if (code === 'OFFLINE') return 'offline';
     if (CONFLICT_CODES.has(code)) return 'conflict';
     if (DUPLICATE_VALUE_CODES.has(code)) return 'validation';
   }
 
   const status = statusOf(e);
   if (status !== null) {
+    // Status 0 without the OFFLINE code = a no-response failure of unknown
+    // origin — 'network' is the fail-safe bucket (run #236 decision 3).
+    if (status === 0) return 'network';
     if (status === 409) return 'conflict';
     // 400/422 = the PAYLOAD is the problem ("check your entries"), distinct
     // from 409 = state raced underneath you ("refresh the page") — a bare

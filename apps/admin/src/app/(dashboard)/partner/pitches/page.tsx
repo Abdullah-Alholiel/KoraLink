@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import LoadError from '@/components/LoadError';
 import EmptyState from '@/components/EmptyState';
 import { api, type Role } from '@/lib/api';
@@ -26,6 +27,8 @@ interface SlotsResponse {
 export default function MyPitchesPage() {
   const t = useTranslations('partner.pitches');
   const tc = useTranslations('common');
+  // P2-412: offline guard for pitch create/edit/delete/availability submits.
+  const online = useOnline();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -82,6 +85,7 @@ export default function MyPitchesPage() {
   const schedulePitch = (data ?? []).find((p) => p.id === schedulePitchId) ?? null;
 
   async function toggleActive(p: PartnerPitch) {
+    if (!online) return; // P2-412
     setBusyId(p.id);
     // P2-323: catch the failure — never an unhandled rejection; surface a
     // localized bucket (raw backend text is never shown).
@@ -98,6 +102,7 @@ export default function MyPitchesPage() {
   }
 
   async function createPitch(values: PitchFormResult) {
+    if (!online) return; // P2-412
     setFormError(null);
     try {
       await api.post('/partner/pitches', values);
@@ -119,6 +124,7 @@ export default function MyPitchesPage() {
   }
 
   async function savePitch(pitchId: string, values: PitchFormResult) {
+    if (!online) return; // P2-412
     // P2-323 (verified, not drive-by wrapped): PitchFormDrawer's own submit
     // catch buckets the failure into its localized saveError and keeps the
     // drawer open (PitchFormDrawer.tsx submit → catch → setSaveError) —
@@ -135,6 +141,7 @@ export default function MyPitchesPage() {
   }
 
   async function deletePitch(p: PartnerPitch) {
+    if (!online) return; // P2-412
     setBusyId(p.id);
     // P2-323: window.alert(raw e.message) → localized role=alert bucket.
     setActionFailure(null);

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { CheckCircle2, Loader2, Pencil, Search, UserCog, XCircle } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
+import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api, type Role } from '@/lib/api';
@@ -29,6 +30,8 @@ export default function VenuesPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for approve/reject/transfer submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -50,6 +53,7 @@ export default function VenuesPage() {
   const { data, loading, error, reload, live, stale } = useLiveAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
 
   async function decide(id: string, decision: 'approve' | 'reject') {
+    if (!online) return; // P2-412
     setBusyId(id);
     try {
       await api.post(`/admin/venues/${id}/decision`, { decision });
@@ -213,13 +217,19 @@ export default function VenuesPage() {
                   <>
                     <button
                       onClick={() => decide(selected.id, 'approve')}
-                      className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                      disabled={!online}
+                      title={online ? undefined : t('offlineActionTitle')}
+                      aria-disabled={!online}
+                      className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" /> {t('approveAction')}
                     </button>
                     <button
                       onClick={() => decide(selected.id, 'reject')}
-                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                      disabled={!online}
+                      title={online ? undefined : t('offlineActionTitle')}
+                      aria-disabled={!online}
+                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <XCircle className="h-3.5 w-3.5" /> {t('rejectAction')}
                     </button>

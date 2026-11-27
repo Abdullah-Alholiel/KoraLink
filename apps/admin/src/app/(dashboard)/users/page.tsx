@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Ban, CheckCircle2, Download, Loader2, RotateCcw, Search, TimerOff } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
+import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api, apiErrorToMessage, type Role } from '@/lib/api';
@@ -72,6 +73,8 @@ export default function UsersPage() {
   // storage). null = not permitted, so write buttons never flash.
   // (`role` below is the list's role filter — hence viewerRole.)
   const [viewerRole, setViewerRole] = useState<Role | null>(null);
+  // P2-412: offline guard for ban/suspend/setRole submits (choke-point backstop in apiFetch).
+  const online = useOnline();
   useEffect(() => {
     setViewerRole(getRole());
   }, []);
@@ -148,6 +151,7 @@ export default function UsersPage() {
   }
 
   async function runBulk(action: 'ban' | 'suspend') {
+    if (!online) return; // P2-412
     setBulkAction(null);
     setBulkRunning(true);
     setActionError(null);
@@ -231,6 +235,7 @@ export default function UsersPage() {
   }
 
   async function act(id: string, body: Record<string, unknown>) {
+    if (!online) return; // P2-412
     setBusyId(id);
     setActionError(null);
     try {
@@ -429,7 +434,9 @@ export default function UsersPage() {
             {canBan && (
             <button
               type="button"
-              disabled={bulkRunning || overCap}
+              disabled={bulkRunning || overCap || !online}
+              title={!online ? t('offlineActionTitle') : undefined}
+              aria-disabled={!online}
               onClick={() => setBulkAction('ban')}
               className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -439,7 +446,9 @@ export default function UsersPage() {
             {canSuspend && (
             <button
               type="button"
-              disabled={bulkRunning || overCap}
+              disabled={bulkRunning || overCap || !online}
+              title={!online ? t('offlineActionTitle') : undefined}
+              aria-disabled={!online}
               onClick={() => setBulkAction('suspend')}
               className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >

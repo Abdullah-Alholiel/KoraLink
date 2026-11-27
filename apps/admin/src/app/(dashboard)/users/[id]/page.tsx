@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Ban, CheckCircle2, Loader2, TimerOff, ChevronDown } from 'lucide-react';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
+import { useOnline } from '@/lib/use-online';
 import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminUser } from '@/lib/types';
@@ -43,6 +44,8 @@ export default function UserDetailPage() {
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for ban/suspend/setRole submits (choke-point backstop in apiFetch).
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -62,6 +65,7 @@ export default function UserDetailPage() {
 
   async function act(body: Record<string, unknown>) {
     if (busy) return; // re-entry guard: menu buttons aren't disabled mid-save
+    if (!online) return; // P2-412
     setBusy(true);
     setActionError(null);
     try {

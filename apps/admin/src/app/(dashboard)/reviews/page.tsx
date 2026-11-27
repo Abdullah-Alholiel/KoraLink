@@ -15,6 +15,7 @@ import { api, ApiError, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { ListResponse, VenueReview, VenueReviewMutation } from '@/lib/types';
 import { useLiveAdminData } from '@/lib/use-live-data';
+import { useOnline } from '@/lib/use-online';
 import { cn, formatDate } from '@/lib/utils';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 
@@ -46,6 +47,8 @@ export default function ReviewsPage() {
   // RBAC (P2-400, run #228): resolve the role once on mount (getRole() reads
   // browser storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
+  // P2-412: offline guard for hide/restore/delete submits.
+  const online = useOnline();
   useEffect(() => {
     setRole(getRole());
   }, []);
@@ -95,6 +98,7 @@ export default function ReviewsPage() {
   }, [loading, data, page]);
 
   async function run(review: VenueReview, action: ReviewAction) {
+    if (!online) return; // P2-412
     setBusyId(review.id);
     setFailure(null);
     try {

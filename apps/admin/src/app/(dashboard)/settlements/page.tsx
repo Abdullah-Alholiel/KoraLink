@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Ban, Download, Loader2, Send } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import LiveBadge from '@/components/LiveBadge';
+import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
 import { api, ApiError, type Role } from '@/lib/api';
@@ -30,6 +31,9 @@ export default function SettlementsPage() {
   const ts = useTranslations('status');
   const tl = useTranslations('list');
   const tc = useTranslations('common');
+  // P2-412: offline guard — write submits are blocked client-side while the
+  // browser is offline (choke-point guard in apiFetch is the backstop).
+  const online = useOnline();
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
   // storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -105,6 +109,7 @@ export default function SettlementsPage() {
   }
 
   async function pay(id: string) {
+    if (!online) return; // P2-412: blocked offline; choke-point throws OFFLINE as backstop
     setBusyId(id);
     setPayFailure(null);
     try {
@@ -126,6 +131,7 @@ export default function SettlementsPage() {
   // P2-285 (run #195): void a pending settlement — same failure buckets as
   // pay; no notification fan-out exists server-side, so none is expected.
   async function voidSettlement(id: string) {
+    if (!online) return; // P2-412
     setBusyId(id);
     setVoidFailure(null);
     setConfirmVoid(false);
@@ -144,6 +150,7 @@ export default function SettlementsPage() {
   }
 
   async function generate() {
+    if (!online) return; // P2-412
     setGenerating(true);
     setGenerateFailure(null);
     try {
@@ -311,8 +318,10 @@ export default function SettlementsPage() {
         {canGenerate && (
         <button
           onClick={generate}
-          disabled={generating}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          disabled={generating || !online}
+          title={online ? undefined : t('offlineActionTitle')}
+          aria-disabled={!online}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {t('generatePayouts')}
@@ -422,13 +431,19 @@ export default function SettlementsPage() {
                 <>
                   <button
                     onClick={() => pay(selected.id)}
-                    className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                    disabled={!online}
+                    title={online ? undefined : t('offlineActionTitle')}
+                    aria-disabled={!online}
+                    className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" /> {t('payAction')}
                   </button>
                   <button
                     onClick={() => setConfirmVoid(true)}
-                    className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                    disabled={!online}
+                    title={online ? undefined : t('offlineActionTitle')}
+                    aria-disabled={!online}
+                    className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Ban className="h-3.5 w-3.5" /> {t('voidAction')}
                   </button>
