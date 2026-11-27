@@ -65,7 +65,6 @@ export default function UserDetailPage() {
 
   async function act(body: Record<string, unknown>) {
     if (busy) return; // re-entry guard: menu buttons aren't disabled mid-save
-    if (!online) return; // P2-412
     setBusy(true);
     setActionError(null);
     try {

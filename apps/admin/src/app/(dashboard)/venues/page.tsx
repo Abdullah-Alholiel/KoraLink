@@ -10,7 +10,7 @@ import LiveBadge from '@/components/LiveBadge';
 import { useOnline } from '@/lib/use-online';
 import { useLiveAdminData } from '@/lib/use-live-data';
 import LoadError from '@/components/LoadError';
-import { api, type Role } from '@/lib/api';
+import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import type { AdminVenue, ListResponse, PartnerVenueRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -25,6 +25,7 @@ type VenuesResponse = ListResponse<AdminVenue> & { venues: AdminVenue[] };
 
 export default function VenuesPage() {
   const t = useTranslations('hq');
+  const tr = useTranslations();
   const ts = useTranslations('status');
   const tc = useTranslations('common');
   // RBAC (P2-400): resolve the role once on mount (getRole() reads browser
@@ -45,6 +46,8 @@ export default function VenuesPage() {
   const [transferring, setTransferring] = useState<AdminVenue | null>(null);
   const [editing, setEditing] = useState<PartnerVenueRow | null>(null);
   const [selected, setSelected] = useState<AdminVenue | null>(null);
+  // P2-412 r1: approve/reject failure surface (previously silent unhandled rejection).
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const qs = new URLSearchParams({ page: String(page), perPage: '20' });
   if (search) qs.set('search', search);
@@ -53,12 +56,16 @@ export default function VenuesPage() {
   const { data, loading, error, reload, live, stale } = useLiveAdminData<VenuesResponse>(`/admin/venues?${qs.toString()}`);
 
   async function decide(id: string, decision: 'approve' | 'reject') {
-    if (!online) return; // P2-412
     setBusyId(id);
+    setDecisionError(null);
     try {
       await api.post(`/admin/venues/${id}/decision`, { decision });
       reload();
       setSelected(null);
+    } catch (e) {
+      // P2-412 r1: the offline guard (and any other failure) now lands here —
+      // previously a bare try/finally leaked unhandled rejections silently.
+      setDecisionError(apiErrorToMessage(e, tr, 'errors.failed'));
     } finally {
       setBusyId(null);
     }
@@ -233,6 +240,11 @@ export default function VenuesPage() {
                     >
                       <XCircle className="h-3.5 w-3.5" /> {t('rejectAction')}
                     </button>
+                    {decisionError && (
+                      <p role="alert" className="mt-2 w-full text-xs text-red-600">
+                        {decisionError}
+                      </p>
+                    )}
                   </>
                 )}
                 {canTransfer && (

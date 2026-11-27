@@ -97,7 +97,6 @@ export default function DisputeDetailPage() {
   async function sendReply() {
     const content = reply.trim();
     if (!content || replySending) return;
-    if (!online) return; // P2-412
     setReplySending(true);
     setReplyError(null);
     try {
@@ -119,7 +118,6 @@ export default function DisputeDetailPage() {
   const [confirmReopen, setConfirmReopen] = useState(false);
 
   async function resolve() {
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     // P2-273: validate BEFORE any request — mirror the server DTO rules exactly
@@ -175,7 +173,6 @@ export default function DisputeDetailPage() {
   }
 
   async function reopen() {
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -191,7 +188,6 @@ export default function DisputeDetailPage() {
   }
 
   async function saveEdit() {
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {

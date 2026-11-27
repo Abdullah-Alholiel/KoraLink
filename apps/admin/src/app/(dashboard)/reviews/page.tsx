@@ -27,6 +27,9 @@ const PER_PAGE = 25;
 
 function failureReason(err: unknown): FailureReason {
   if (!(err instanceof ApiError)) return 'network';
+  // P2-412: the offline guard throws ApiError(0, 'OFFLINE') — a no-response
+  // failure must never read as a server rejection.
+  if (err.status === 0) return 'network';
   if (err.status === 401) return 'auth';
   if (err.status === 403) return 'access';
   if (err.status === 404) return 'gone';
@@ -98,7 +101,6 @@ export default function ReviewsPage() {
   }, [loading, data, page]);
 
   async function run(review: VenueReview, action: ReviewAction) {
-    if (!online) return; // P2-412
     setBusyId(review.id);
     setFailure(null);
     try {

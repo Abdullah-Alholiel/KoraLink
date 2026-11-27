@@ -44,7 +44,6 @@ export default function VenueDetailPage() {
   const [actionError, setActionError] = useState(false);
 
   async function decide(decision: 'approve' | 'reject') {
-    if (!online) return; // P2-412
     setBusy(true);
     setActionError(false);
     try {

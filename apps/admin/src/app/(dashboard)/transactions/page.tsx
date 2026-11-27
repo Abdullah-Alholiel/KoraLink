@@ -78,7 +78,6 @@ export default function TransactionsPage() {
   // P0): assertive localized note + Sentry + analytics; the drawer stays open
   // so the admin can read the amount and retry.
   async function refund(id: string) {
-    if (!online) return; // P2-412
     setBusyId(id);
     try {
       await api.post(`/admin/transactions/${id}/refund`);

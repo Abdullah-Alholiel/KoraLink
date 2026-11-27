@@ -57,7 +57,6 @@ export default function ReportDetailPage() {
     // Re-entry guard: the confirm dialog doesn't disable its button during
     // save — a fast double-confirm could POST /resolve twice (Reviewer A).
     if (saving) return;
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -73,7 +72,6 @@ export default function ReportDetailPage() {
   }
 
   async function reopen() {
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {
@@ -88,7 +86,6 @@ export default function ReportDetailPage() {
   }
 
   async function saveEdit() {
-    if (!online) return; // P2-412
     setSaving(true);
     setSaveError(null);
     try {

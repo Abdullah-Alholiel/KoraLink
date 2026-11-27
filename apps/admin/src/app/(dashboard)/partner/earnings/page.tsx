@@ -74,7 +74,6 @@ export default function PartnerEarningsPage() {
   const [requestNote, setRequestNote] = useState<string | null>(null);
 
   async function onRequestPayout() {
-    if (!online) return; // P2-412
     setConfirming(false);
     setRequesting(true);
     setRequestError(null);

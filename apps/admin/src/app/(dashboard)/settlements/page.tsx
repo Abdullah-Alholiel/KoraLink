@@ -109,7 +109,6 @@ export default function SettlementsPage() {
   }
 
   async function pay(id: string) {
-    if (!online) return; // P2-412: blocked offline; choke-point throws OFFLINE as backstop
     setBusyId(id);
     setPayFailure(null);
     try {
@@ -131,7 +130,6 @@ export default function SettlementsPage() {
   // P2-285 (run #195): void a pending settlement — same failure buckets as
   // pay; no notification fan-out exists server-side, so none is expected.
   async function voidSettlement(id: string) {
-    if (!online) return; // P2-412
     setBusyId(id);
     setVoidFailure(null);
     setConfirmVoid(false);
@@ -150,7 +148,6 @@ export default function SettlementsPage() {
   }
 
   async function generate() {
-    if (!online) return; // P2-412
     setGenerating(true);
     setGenerateFailure(null);
     try {

@@ -85,7 +85,6 @@ export default function MyPitchesPage() {
   const schedulePitch = (data ?? []).find((p) => p.id === schedulePitchId) ?? null;
 
   async function toggleActive(p: PartnerPitch) {
-    if (!online) return; // P2-412
     setBusyId(p.id);
     // P2-323: catch the failure — never an unhandled rejection; surface a
     // localized bucket (raw backend text is never shown).
@@ -102,7 +101,6 @@ export default function MyPitchesPage() {
   }
 
   async function createPitch(values: PitchFormResult) {
-    if (!online) return; // P2-412
     setFormError(null);
     try {
       await api.post('/partner/pitches', values);
@@ -124,7 +122,6 @@ export default function MyPitchesPage() {
   }
 
   async function savePitch(pitchId: string, values: PitchFormResult) {
-    if (!online) return; // P2-412
     // P2-323 (verified, not drive-by wrapped): PitchFormDrawer's own submit
     // catch buckets the failure into its localized saveError and keeps the
     // drawer open (PitchFormDrawer.tsx submit → catch → setSaveError) —
@@ -141,7 +138,6 @@ export default function MyPitchesPage() {
   }
 
   async function deletePitch(p: PartnerPitch) {
-    if (!online) return; // P2-412
     setBusyId(p.id);
     // P2-323: window.alert(raw e.message) → localized role=alert bucket.
     setActionFailure(null);

@@ -151,7 +151,6 @@ export default function UsersPage() {
   }
 
   async function runBulk(action: 'ban' | 'suspend') {
-    if (!online) return; // P2-412
     setBulkAction(null);
     setBulkRunning(true);
     setActionError(null);
@@ -235,7 +234,6 @@ export default function UsersPage() {
   }
 
   async function act(id: string, body: Record<string, unknown>) {
-    if (!online) return; // P2-412
     setBusyId(id);
     setActionError(null);
     try {
