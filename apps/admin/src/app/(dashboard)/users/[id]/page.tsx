@@ -114,7 +114,7 @@ export default function UserDetailPage() {
           <select
             value={data.role}
             onChange={(e) => act({ role: e.target.value as AdminUser['role'] })}
-            disabled={busyState}
+            disabled={busyState || !online}
             aria-label={t('field_role')}
             className="appearance-none rounded-lg border border-gray-300 bg-white py-1 pe-7 ps-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none disabled:opacity-50"
           >
@@ -188,14 +188,20 @@ export default function UserDetailPage() {
               {canBan && (st === 'banned' ? (
                 <button
                   onClick={() => act({ banned: false })}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+                  disabled={!online}
+                  title={!online ? tHQ('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <CheckCircle2 className="h-4 w-4" /> {t('unban')}
                 </button>
               ) : (
                 <button
                   onClick={() => setConfirmBan(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                  disabled={!online}
+                  title={!online ? tHQ('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Ban className="h-4 w-4" /> {t('ban')}
                 </button>
@@ -210,7 +216,10 @@ export default function UserDetailPage() {
                   </button>
                   <button
                     onClick={() => act({ suspendedUntil: null })}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+                    disabled={!online}
+                    title={!online ? tHQ('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {t('liftSuspension')}
                   </button>

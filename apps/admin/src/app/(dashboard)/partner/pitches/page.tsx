@@ -290,8 +290,10 @@ export default function MyPitchesPage() {
                       <>
                       <button
                         onClick={() => toggleActive(p)}
-                        disabled={busy}
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        disabled={busy || !online}
+                        title={!online ? tc('offlineActionTitle') : undefined}
+                        aria-disabled={!online}
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : p.is_active ? t('setUnavailable') : t('setAvailable')}
                       </button>

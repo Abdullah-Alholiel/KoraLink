@@ -383,8 +383,10 @@ export default function DisputeDetailPage() {
                 <span className="text-xs text-gray-400">{reply.length}/2000</span>
                 <button
                   onClick={sendReply}
-                  disabled={replySending || reply.trim().length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                  disabled={replySending || reply.trim().length === 0 || !online}
+                  title={!online ? tc('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {replySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {replySending ? t('replySending') : t('replySend')}
@@ -424,8 +426,10 @@ export default function DisputeDetailPage() {
                   </button>
                   <button
                     onClick={saveEdit}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                    disabled={saving || !online}
+                    title={!online ? tc('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     {tc('saveChanges')}
@@ -439,8 +443,10 @@ export default function DisputeDetailPage() {
                   {canReopen && (
                     <button
                       onClick={() => setConfirmReopen(true)}
-                      disabled={saving}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                      disabled={saving || !online}
+                      title={!online ? tc('offlineActionTitle') : undefined}
+                      aria-disabled={!online}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <RotateCcw className="h-4 w-4" /> {t('reopen')}
                     </button>
@@ -519,8 +525,10 @@ export default function DisputeDetailPage() {
                 {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={resolve}
-                  disabled={saving}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                  disabled={saving || !online}
+                  title={!online ? tc('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {t('submit')}

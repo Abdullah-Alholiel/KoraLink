@@ -47,6 +47,7 @@ function Stars({ rating, label }: { rating: number; label: string }) {
 
 export default function ReviewsPage() {
   const t = useTranslations('reviews');
+  const tr = useTranslations();
   // RBAC (P2-400, run #228): resolve the role once on mount (getRole() reads
   // browser storage). null = not permitted, so write buttons never flash.
   const [role, setRole] = useState<Role | null>(null);
@@ -359,7 +360,10 @@ export default function ReviewsPage() {
                 <>
                   <button
                     onClick={() => run(selected, selected.hidden_at ? 'restore' : 'hide')}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    disabled={!online}
+                    title={!online ? tr('hq.offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {selected.hidden_at ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     {selected.hidden_at ? t('restore') : t('hide')}

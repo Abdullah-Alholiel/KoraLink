@@ -369,7 +369,9 @@ export default function PartnerEarningsPage() {
                   type="button"
                   role="button"
                   aria-busy={requesting}
-                  disabled={requesting || loading || !!error}
+                  disabled={requesting || loading || !!error || !online}
+                  title={!online ? t('payoutOfflineTitle') : undefined}
+                  aria-disabled={!online}
                   onClick={() => setConfirming(true)}
                   className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >

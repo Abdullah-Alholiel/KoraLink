@@ -222,8 +222,10 @@ export default function ReportDetailPage() {
                   </button>
                   <button
                     onClick={saveEdit}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                    disabled={saving || !online}
+                    title={!online ? tc('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     {tc('saveChanges')}
@@ -237,8 +239,10 @@ export default function ReportDetailPage() {
                   {canReopen && (
                   <button
                     onClick={() => setConfirmReopen(true)}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    disabled={saving || !online}
+                    title={!online ? tc('offlineActionTitle') : undefined}
+                    aria-disabled={!online}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw className="h-4 w-4" /> {t('reopen')}
                   </button>
@@ -304,8 +308,10 @@ export default function ReportDetailPage() {
                 {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={() => (banSubject ? setConfirmBan(true) : resolve())}
-                  disabled={saving}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                  disabled={saving || !online}
+                  title={!online ? tc('offlineActionTitle') : undefined}
+                  aria-disabled={!online}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {t('submit')}
