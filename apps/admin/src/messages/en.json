@@ -939,7 +939,8 @@
     "reasonNetwork": "The server couldn't be reached. Check your connection, then try again."
   },
   "errors": {
-    "conflict": "This change could not be applied because the data is invalid or was changed by someone else. Refresh the page, check the values, and try again.",
+    "conflict": "This change could not be applied because someone else updated it first. Refresh the page and try again.",
+    "validation": "Some of the values you entered are invalid. Check the highlighted fields and try again.",
     "auth": "You are not allowed to do this, or your session has expired. Sign in again or ask an administrator for access.",
     "notFound": "The item you are working with no longer exists — it may have been deleted. Refresh the page to see the latest data.",
     "rate": "Too many requests were sent in a short time. Wait a moment, then try again.",

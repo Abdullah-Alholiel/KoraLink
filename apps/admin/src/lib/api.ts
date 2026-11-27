@@ -97,10 +97,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   }
 
   if (res.status === 403) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    const body = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
     throw new ApiError(
       body.message ?? 'You do not have permission to perform this action.',
       403,
+      // P2-413: carry the machine code here too — 401 and other statuses
+      // already do, and classifyApiError's code-first branch needs it.
+      typeof body.code === 'string' ? body.code : undefined,
     );
   }
 
@@ -175,12 +178,24 @@ export function defaultRoute(): string {
 
 export type ApiErrorBucket =
   | 'conflict'
+  | 'validation'
   | 'auth'
   | 'notFound'
   | 'rate'
   | 'server'
   | 'network'
   | 'generic';
+
+/**
+ * Stable backend codes that mean "this change conflicts with current state"
+ * (optimistic-locking / already-done class). Code-first so a known conflict
+ * can never be misfiled as payload validation (P2-413).
+ */
+const CONFLICT_CODES = new Set([
+  'DISPUTE_ALREADY_DECIDED',
+  'DISPUTE_NOT_DECIDED',
+  'EMAIL_TAKEN',
+]);
 
 function statusOf(e: unknown): number | null {
   if (e instanceof ApiError) return e.status;
@@ -193,9 +208,18 @@ function statusOf(e: unknown): number | null {
 
 /** Classify a thrown value into a localized-copy bucket (never inspects message text for output). */
 export function classifyApiError(e: unknown): ApiErrorBucket {
+  // Code-first: a stable backend code beats any status heuristic (P2-283
+  // plumbing; the dispute fork proved the need, run #234 MINOR-2).
+  const code = e instanceof ApiError ? e.code : undefined;
+  if (code && CONFLICT_CODES.has(code)) return 'conflict';
+
   const status = statusOf(e);
   if (status !== null) {
-    if (status === 400 || status === 409 || status === 422) return 'conflict';
+    if (status === 409) return 'conflict';
+    // 400/422 = the PAYLOAD is the problem ("check your entries"), distinct
+    // from 409 = state raced underneath you ("refresh the page") — a bare
+    // 400 no longer lands in the refresh-loop copy (run #234 MINOR-2).
+    if (status === 400 || status === 422) return 'validation';
     if (status === 401 || status === 403) return 'auth';
     if (status === 404) return 'notFound';
     if (status === 429) return 'rate';

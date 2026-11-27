@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api';
+import { ApiError, classifyApiError } from '@/lib/api';
 
 // P2-283: ApiError→bucket mapping for the dispute actions (settlements
 // moneyActionFailure pattern); raw backend text is never rendered. Unlike
@@ -8,11 +8,18 @@ import { ApiError } from '@/lib/api';
 // validation (e.g. an over-long note) → 'invalid', so the admin gets
 // "check your entries" instead of a refresh loop.
 //
-// P2-383: the stable `code` the API now attaches is checked FIRST; the prose
-// regex stays only as a deploy-skew fallback for an older API without codes.
-export type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'invalid' | 'server' | 'network';
+// P2-383: the stable `code` the API attaches is checked; the prose regex
+// stays only as a deploy-skew fallback for an older API without codes.
+//
+// P2-413 (run #235): the stable-code check now DEFERS to classifyApiError's
+// shared CONFLICT_CODES set — single source of "which codes mean state-race"
+// truth, so this fork and the shared classifier can never drift. Retire this
+// fork entirely once EVERY admin-relevant 400 carries a stable code (P2-283
+// completion) — until then it keeps the 400-default-invalid posture that
+// classifyApiError deliberately does not take (a bare 400 from an endpoint
+// without codes is far more often payload validation than a state race).
 
-const DISPUTE_STATE_CODES = new Set(['DISPUTE_ALREADY_DECIDED', 'DISPUTE_NOT_DECIDED']);
+export type DisputeActionFailure = 'auth' | 'access' | 'conflict' | 'invalid' | 'server' | 'network';
 
 export function disputeActionFailure(err: unknown): DisputeActionFailure {
   if (!(err instanceof ApiError)) return 'network';
@@ -21,7 +28,9 @@ export function disputeActionFailure(err: unknown): DisputeActionFailure {
   if (status === 403 || status === 404) return 'access';
   if (status === 409) return 'conflict';
   if (status === 400) {
-    if (err.code) return DISPUTE_STATE_CODES.has(err.code) ? 'conflict' : 'invalid';
+    // P2-413: classifyApiError owns the code→conflict decision; 'validation'
+    // (its 400 fallback) maps to this fork's 'invalid' bucket.
+    if (err.code) return classifyApiError(err) === 'conflict' ? 'conflict' : 'invalid';
     return /already been decided|Only decided disputes can be reopened/.test(err.message)
       ? 'conflict'
       : 'invalid';
