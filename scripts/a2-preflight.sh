@@ -80,6 +80,18 @@ DUMP_AGE=$(( $(date -u +%s) - $(stat -c%Y "$DUMP") ))
 # Integrity check BEFORE preserving (Claude tier-B IMPORTANT-3): a truncated
 # dump over 4 KB would otherwise land in the never-pruned folder as "good".
 gunzip -t "$DUMP" || { echo "PREFLIGHT FAIL: dump fails gzip integrity: $DUMP"; exit 1; }
+# Staleness gate (PR-Agent r1 MINOR on PR #311): a green drill on a stale
+# dump masks a blown RPO. WARN past 26h (the watchdog threshold — current
+# Neon-quota reality makes 8-day-old dumps the best available; the drill
+# must still run pre-cutover). HARD-FAIL past 14 days: the backup pipeline
+# is abandoned, restoring it would be a false safety signal.
+if [ "$DUMP_AGE" -gt 1209600 ]; then
+  echo "PREFLIGHT FAIL: dump is $(( DUMP_AGE / 86400 )) days old (>14d) — RPO blown, fix backups first"
+  exit 1
+fi
+if [ "$DUMP_AGE" -gt 93600 ]; then
+  echo "WARN dump is $(( DUMP_AGE / 3600 ))h old (>26h) — RPO degraded (Neon quota?); drill continues"
+fi
 echo "OK dump $DUMP ($(( $(stat -c%s "$DUMP") )) bytes, gzip-integrity OK, ${DUMP_AGE}s old)"
 
 # 4. Env names the A2 session will need (warn-only — drill does not use them).
