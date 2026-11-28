@@ -29,7 +29,10 @@ DRILL_URI="postgresql://postgres:drillpw@127.0.0.1:${PORT}/${DRILL_DB}?sslmode=d
 BACKUP_DIR="/home/ubuntu/backups/koralink-prod"
 PRESERVE_DIR="/home/ubuntu/backups/koralink-prod-preserved"
 REPO="/home/ubuntu/projects/koralink"
-EXPECT_TABLES=32
+# 30 = the dump's base-table count (verified live, run #239). PostGIS adds 2
+# views (geography_columns/geometry_columns), so total relations = 32; assert
+# BASE TABLEs against the floor below, not the view-inflated total.
+EXPECT_TABLES=30
 
 created=0
 cleanup() {
@@ -37,7 +40,8 @@ cleanup() {
     docker rm -f "$DRILL_NAME" >/dev/null 2>&1 || true
   fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
+umask 077
 
 echo "── A2 PREFLIGHT ──────────────────────────────────────────"
 
@@ -53,6 +57,15 @@ if ss -ltn 2>/dev/null | grep -q ":${PORT} "; then
 fi
 echo "OK port $PORT free"
 
+# 2b. Stale drill container from a SIGKILLed previous run would block every
+# later run (created=1 is only set after docker run succeeds — Claude tier-B
+# IMPORTANT-2). Fail loud instead; the operator removes it explicitly.
+if [ -n "$(docker ps -aq -f name=^${DRILL_NAME}$)" ]; then
+  echo "PREFLIGHT FAIL: stale container '$DRILL_NAME' exists — remove it first: docker rm -f $DRILL_NAME"
+  exit 1
+fi
+echo "OK no stale drill container"
+
 # 3. Newest good prod dump present.
 DUMP="$(ls -t "$BACKUP_DIR"/koralink-prod-*.sql.gz 2>/dev/null | head -1 || true)"
 [ -n "$DUMP" ] || { echo "PREFLIGHT FAIL: no koralink-prod-*.sql.gz in $BACKUP_DIR"; exit 1; }
@@ -64,7 +77,10 @@ DUMP_AGE=$(( $(date -u +%s) - $(stat -c%Y "$DUMP") ))
 # (0-100 bytes) never does.
 [ "$(stat -c%s "$DUMP")" -gt 4096 ] \
   || { echo "PREFLIGHT FAIL: newest dump suspiciously small (corrupt?): $DUMP"; exit 1; }
-echo "OK dump $DUMP ($(( $(stat -c%s "$DUMP") )) bytes, ${DUMP_AGE}s old)"
+# Integrity check BEFORE preserving (Claude tier-B IMPORTANT-3): a truncated
+# dump over 4 KB would otherwise land in the never-pruned folder as "good".
+gunzip -t "$DUMP" || { echo "PREFLIGHT FAIL: dump fails gzip integrity: $DUMP"; exit 1; }
+echo "OK dump $DUMP ($(( $(stat -c%s "$DUMP") )) bytes, gzip-integrity OK, ${DUMP_AGE}s old)"
 
 # 4. Env names the A2 session will need (warn-only — drill does not use them).
 for envf in "$REPO/apps/api/.env" "$REPO/apps/player-pwa/.env.local"; do
@@ -81,37 +97,51 @@ PRESERVED="$PRESERVE_DIR/$(basename "$DUMP")"
 if [ -f "$PRESERVED" ]; then
   echo "OK already preserved: $PRESERVED"
 else
-  cp -p "$DUMP" "$PRESERVED"
-  chmod 600 "$PRESERVED"
+  install -m 600 "$DUMP" "$PRESERVED"
   echo "OK preserved: $PRESERVED"
 fi
+# Retention cap (Claude tier-B "Missing for optimal"): keep the newest 5
+# preserved copies, remove older ones (this folder is out of every prune's
+# scope by design — cap it here or it grows forever).
+ls -t "$PRESERVE_DIR"/koralink-prod-*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
+echo "OK preserved-folder cap: newest 5 kept"
 
 echo "── RESTORE DRILL (throwaway container) ──────────────────"
+created=1  # set BEFORE docker run (Claude tier-B IMPORTANT-2): if the run
+           # creates but fails to start, the EXIT trap still cleans up.
 docker run -d --name "$DRILL_NAME" -e POSTGRES_PASSWORD=drillpw \
   -e POSTGRES_DB="$DRILL_DB" -p "127.0.0.1:${PORT}:5432" "$IMAGE" >/dev/null
-created=1
 
-for i in $(seq 1 30); do
-  if docker exec "$DRILL_NAME" pg_isready -U postgres -d "$DRILL_DB" >/dev/null 2>&1; then
+# TCP readiness ONLY (Claude tier-B IMPORTANT-1 — the TRUE ECONNRESET cause):
+# plain `pg_isready` answers via the postgis entrypoint's TEMPORARY init
+# server (unix socket, no TCP) BEFORE the real server restarts — a restore
+# started in that window lands on a server that then resets everything.
+# Probing with -h 127.0.0.1 forces real TCP, which only exists once init is
+# done. This likely explains run #239's "conntrack race" ECONNRESET.
+for i in $(seq 1 60); do
+  if docker exec "$DRILL_NAME" pg_isready -h 127.0.0.1 -U postgres -d "$DRILL_DB" >/dev/null 2>&1; then
     break
   fi
   sleep 1
-  [ "$i" = "30" ] && { echo "DRILL FAIL: container never became ready"; exit 1; }
+  [ "$i" = "60" ] && { echo "DRILL FAIL: container TCP never became ready"; exit 1; }
 done
-echo "OK container ready (port $PORT)"
+echo "OK container TCP ready (port $PORT, attempt $i)"
 
 echo "── restoring dump (psql ON_ERROR_STOP=1)..."
-gunzip -c "$DUMP" | docker exec -i "$DRILL_NAME" \
+# Bounded restore (Claude tier-B MINOR): a hung restore must not block forever.
+gunzip -c "$DUMP" | timeout 300 docker exec -i "$DRILL_NAME" \
   psql -U postgres -d "$DRILL_DB" -v ON_ERROR_STOP=1 -q
 echo "OK restore completed"
 
 TABLES="$(docker exec "$DRILL_NAME" psql -U postgres -d "$DRILL_DB" -tAc \
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")"
+TOTALS="$(docker exec "$DRILL_NAME" psql -U postgres -d "$DRILL_DB" -tAc \
   "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")"
-if [ "$TABLES" -lt 30 ]; then
-  echo "DRILL FAIL: only $TABLES public tables (expected ~$EXPECT_TABLES)"
+if [ "$TABLES" -lt "$EXPECT_TABLES" ]; then
+  echo "DRILL FAIL: $TABLES public BASE TABLEs (expected >= $EXPECT_TABLES)"
   exit 1
 fi
-echo "OK tables restored: $TABLES (expected ~$EXPECT_TABLES)"
+echo "OK tables restored: $TABLES BASE TABLEs (>= $EXPECT_TABLES; $TOTALS relations incl. PostGIS views)"
 
 # Warmup probe before the applier: the first postgres.js connection straight
 # after a bulk restore hit ECONNRESET once (run #239 — non-deterministic).
@@ -154,18 +184,41 @@ echo "OK host TCP healthy (attempt $i)"
 
 APPLY_OK=0
 for attempt in 1 2 3; do
-  if MIGRATE_DATABASE_URL="$DRILL_URI" node scripts/migrate-vps.mjs; then
+  set +e
+  MIGRATE_DATABASE_URL="$DRILL_URI" timeout 300 node scripts/migrate-vps.mjs
+  RC=$?
+  set -e
+  if [ "$RC" = "0" ]; then
     APPLY_OK=1
     break
   fi
-  echo "WARN applier attempt $attempt failed (conntrack race?) — retrying (idempotent)"
+  # Exit 5 = deterministic failure (journal gap / missing env contract) —
+  # retrying under a "conntrack race?" label would be noise (Claude tier-B
+  # MINOR). Only transient classes retry.
+  if [ "$RC" = "5" ]; then
+    echo "DRILL FAIL: applier exited 5 (deterministic contract failure) — not retrying"
+    exit 1
+  fi
+  echo "WARN applier attempt $attempt failed (rc=$RC) — retrying (idempotent)"
   sleep 5
 done
 [ "$APPLY_OK" = "1" ] || { echo "DRILL FAIL: migration applier failed 3 attempts"; exit 1; }
 
+# Smoke query on a key table (Claude tier-B "Missing for optimal").
+SMOKE="$(docker exec "$DRILL_NAME" psql -U postgres -d "$DRILL_DB" -tAc \
+  "SELECT count(*) FROM users" 2>/dev/null || echo QUERY_FAIL)"
+[ "$SMOKE" != "QUERY_FAIL" ] || { echo "DRILL FAIL: smoke query on users failed"; exit 1; }
+echo "OK smoke query: users row count = $SMOKE"
+
+# Journal must equal the number of repo migration files post-apply.
+REPO_FILES="$(ls "$REPO"/apps/api/drizzle/[0-9][0-9][0-9][0-9]_*.sql | wc -l)"
 J1="$(docker exec "$DRILL_NAME" psql -U postgres -d "$DRILL_DB" -tAc \
   "SELECT count(*) FROM drizzle.__drizzle_migrations")"
-echo "OK journal rows after applier: $J1"
+if [ "$J1" -ne "$REPO_FILES" ]; then
+  echo "DRILL FAIL: journal rows $J1 != repo migration files $REPO_FILES"
+  exit 1
+fi
+echo "OK journal == repo files: $J1 (drill ran against commit $(git -C "$REPO" rev-parse --short HEAD))"
 
 echo "══════════════════════════════════════════════════════════"
 echo "A2 DRILL GREEN"
