@@ -8,7 +8,7 @@ import { formatMoney } from '@/lib/format';
 import {
     ArrowLeft,
     Plus,
-    ArrowUpRight,
+    Info,
     CreditCard,
     Trophy,
     Wallet,
@@ -300,7 +300,9 @@ export default function WalletPage() {
             <div className="flex justify-center gap-6 mt-6 px-4">
                 {[
                     { icon: Plus, label: t('wallet.topUp'), active: true, onClick: () => setShowTopupSheet(true) },
-                    { icon: ArrowUpRight, label: t('wallet.withdraw'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
+                    // D-20261127-02: balance is in-app credit only — no cash-out exists, so this
+                    // slot explains the credit terms instead of advertising a withdrawal.
+                    { icon: Info, label: t('wallet.credit'), active: false, onClick: () => showToast(t('wallet.creditNote'), 'info') },
                     { icon: CreditCard, label: t('wallet.cards'), active: false, onClick: () => showToast(t('wallet.comingSoon'), 'info') },
                     { icon: Download, label: t('wallet.export'), active: false, onClick: () => setShowExportSheet(true) },
                 ].map((action) => (

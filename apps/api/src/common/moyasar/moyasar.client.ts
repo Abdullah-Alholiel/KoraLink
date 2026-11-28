@@ -135,6 +135,30 @@ export function resolveMoyasarSecretKey(get: (key: string) => string | undefined
   return get('MOYASAR_SECRET_KEY') ?? get('MOYASAR_SECRET_KEY_TEST') ?? null;
 }
 
+/**
+ * D-20261127-02: boot guard against accidentally going live with real money.
+ *
+ * Throws when NODE_ENV=production AND the resolved secret key (same
+ * canonical-first resolution as resolveMoyasarSecretKey) is a LIVE key
+ * (`sk_live_`), unless the owner has explicitly opted in with
+ * MOYASAR_LIVE_ALLOWED=true. The secret value itself is NEVER included in the
+ * error — only the env var names. No key at all passes (top-up is flag-gated
+ * elsewhere). Call from main.ts next to assertEmailDelivery (before listen).
+ */
+export function assertMoyasarLiveKeySafety(
+  get: (key: string) => string | undefined,
+  nodeEnv: string | undefined,
+): void {
+  if (nodeEnv !== 'production') return;
+  const secretKey = resolveMoyasarSecretKey(get);
+  if (!secretKey || !secretKey.startsWith('sk_live_')) return;
+  if (get('MOYASAR_LIVE_ALLOWED') === 'true') return;
+  const source = get('MOYASAR_SECRET_KEY') ? 'MOYASAR_SECRET_KEY' : 'MOYASAR_SECRET_KEY_TEST';
+  throw new Error(
+    `${source} resolves to a Moyasar LIVE secret key in production but MOYASAR_LIVE_ALLOWED is not 'true' — refusing to boot (set MOYASAR_LIVE_ALLOWED=true to go live deliberately)`,
+  );
+}
+
 /** Resolves the publishable (client-form) key (canonical env name first). */
 export function resolveMoyasarPublishableKey(get: (key: string) => string | undefined): string | null {
   return (
