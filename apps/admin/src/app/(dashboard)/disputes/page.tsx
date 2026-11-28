@@ -18,6 +18,7 @@ import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { Download } from 'lucide-react';
+import LoadingState from '@/components/LoadingState';
 
 type DisputesResponse = ListResponse<DisputeListItem> & { disputes: DisputeListItem[] };
 
@@ -230,7 +231,7 @@ export default function DisputesPage() {
       <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingDisputes')}</div>
+        <LoadingState message={t('loadingDisputes')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

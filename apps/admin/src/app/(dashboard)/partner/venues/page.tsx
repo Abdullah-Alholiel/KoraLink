@@ -12,6 +12,7 @@ import { can, getRole } from '@/lib/rbac';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import VenueFormDrawer from '@/components/VenueFormDrawer';
+import LoadingState from '@/components/LoadingState';
 
 export default function PartnerVenuesPage() {
   const t = useTranslations('partner.venues');
@@ -52,7 +53,7 @@ export default function PartnerVenuesPage() {
         <VenueFormDrawer open={!!editing} venue={editing} onClose={() => setEditing(null)} onSaved={reload} />
 
         {loading ? (
-          <div className="py-10 text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (

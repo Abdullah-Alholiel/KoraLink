@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
+import LoadingState from '@/components/LoadingState';
 
 /** Row shape of PartnerMatchDetail.players (local: keeps the table generic). */
 interface RosterPlayer {
@@ -44,7 +45,7 @@ export default function PartnerMatchDetailPage() {
         </Link>
 
         {loading ? (
-          <div className="text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (

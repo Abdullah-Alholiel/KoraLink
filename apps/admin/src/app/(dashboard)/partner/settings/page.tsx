@@ -11,6 +11,7 @@ import { can, getRole } from '@/lib/rbac';
 import type { PartnerVerificationRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
+import LoadingState from '@/components/LoadingState';
 
 export default function PartnerSettingsPage() {
   const t = useTranslations('partner.settings');
@@ -72,7 +73,7 @@ export default function PartnerSettingsPage() {
 
       <div className="max-w-2xl p-8">
         {loading ? (
-          <div className="text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : !data?.length ? (

@@ -20,6 +20,7 @@ import DataTable, { type ColumnDef } from '@/components/DataTable';
 import RecordDrawer from '@/components/RecordDrawer';
 import VenueTransferDrawer from '@/components/VenueTransferDrawer';
 import VenueFormDrawer from '@/components/VenueFormDrawer';
+import LoadingState from '@/components/LoadingState';
 
 type VenuesResponse = ListResponse<AdminVenue> & { venues: AdminVenue[] };
 
@@ -178,7 +179,7 @@ export default function VenuesPage() {
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingVenues')}</div>
+        <LoadingState message={t('loadingVenues')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

@@ -23,6 +23,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvAmount, csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
+import LoadingState from '@/components/LoadingState';
 
 type SettlementsResponse = ListResponse<Settlement> & { settlements: Settlement[] };
 
@@ -342,7 +343,7 @@ export default function SettlementsPage() {
       </p>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettlements')}</div>
+        <LoadingState message={t('loadingSettlements')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
