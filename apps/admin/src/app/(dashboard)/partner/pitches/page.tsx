@@ -18,6 +18,7 @@ import StatusBadge from '@/components/StatusBadge';
 import PitchFormDrawer, { type PitchFormResult } from '@/components/PitchFormDrawer';
 import ScheduleDrawer from '@/components/ScheduleDrawer';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import LoadingState from '@/components/LoadingState';
 
 /** Enriched slot bundle fetched per pitch when its schedule drawer opens. */
 interface SlotsResponse {
@@ -242,7 +243,7 @@ export default function MyPitchesPage() {
 
         {/* Pitch cards */}
         {loading ? (
-          <div className="py-10 text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (

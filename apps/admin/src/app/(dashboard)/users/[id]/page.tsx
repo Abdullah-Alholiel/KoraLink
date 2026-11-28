@@ -14,6 +14,7 @@ import { formatDate, formatMoney } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import LoadingState from '@/components/LoadingState';
 
 const ROLES: AdminUser['role'][] = ['Player', 'VenueOwner', 'Admin'];
 // P1-53 (run #62): suspension presets in hours (24h / 7d / 30d).
@@ -83,7 +84,7 @@ export default function UserDetailPage() {
     return (
       <div>
         <PageHeader title={t('titleFallback')} subtitle={t('loading')} />
-        <div className="p-8 text-sm text-gray-500">{t('loading')}</div>
+        <LoadingState message={t('loading')} />
       </div>
     );
   }

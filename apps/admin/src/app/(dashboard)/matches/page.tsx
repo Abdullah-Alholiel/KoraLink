@@ -22,6 +22,7 @@ import MatchEditDrawer from '@/components/MatchEditDrawer';
 import { csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import LoadingState from '@/components/LoadingState';
 
 type MatchesResponse = ListResponse<AdminMatch> & { matches: AdminMatch[] };
 
@@ -203,7 +204,7 @@ export default function MatchesPage() {
       <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingMatches')}</div>
+        <LoadingState message={t('loadingMatches')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

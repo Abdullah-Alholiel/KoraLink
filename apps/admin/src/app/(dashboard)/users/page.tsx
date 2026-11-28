@@ -24,6 +24,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvAmount, csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
+import LoadingState from '@/components/LoadingState';
 
 type UsersResponse = ListResponse<AdminUser> & { users: AdminUser[] };
 
@@ -474,7 +475,7 @@ export default function UsersPage() {
       <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingUsers')}</div>
+        <LoadingState message={t('loadingUsers')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

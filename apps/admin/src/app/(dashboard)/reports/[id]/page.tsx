@@ -15,6 +15,7 @@ import { formatDate } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import LoadingState from '@/components/LoadingState';
 
 const CLOSED = new Set(['resolved', 'dismissed']);
 
@@ -116,7 +117,7 @@ export default function ReportDetailPage() {
     return (
       <div>
         <PageHeader title={t('title')} subtitle={t('loading')} />
-        <div className="p-8 text-sm text-gray-500">{t('loading')}</div>
+        <LoadingState message={t('loading')} />
       </div>
     );
   }

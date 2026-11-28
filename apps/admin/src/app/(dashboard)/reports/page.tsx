@@ -18,6 +18,7 @@ import { trackEvent } from '@/providers/ObservabilityProvider';
 import { csvDate } from '@/lib/csv-export';
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { Download } from 'lucide-react';
+import LoadingState from '@/components/LoadingState';
 
 type ReportsResponse = ListResponse<AdminReportListItem> & { reports: AdminReportListItem[] };
 
@@ -158,7 +159,7 @@ export default function ReportsPage() {
       <ExportFeedbackNote feedback={exportFeedback} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingReports')}</div>
+        <LoadingState message={t('loadingReports')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

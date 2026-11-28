@@ -15,6 +15,7 @@ import StatusBadge from '@/components/StatusBadge';
 import DataTable, { type ColumnDef } from '@/components/DataTable';
 import SortSelect from '@/components/SortSelect';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import LoadingState from '@/components/LoadingState';
 
 const STATUS_OPTIONS = ['Open', 'Full', 'InProgress', 'Completed', 'Cancelled'];
 const PAGE_SIZE = 20;
@@ -152,7 +153,7 @@ export default function PartnerMatchesPage() {
         </div>
 
         {loading ? (
-          <div className="text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (

@@ -18,6 +18,7 @@ import { useLiveAdminData } from '@/lib/use-live-data';
 import { useOnline } from '@/lib/use-online';
 import { cn, formatDate } from '@/lib/utils';
 import { trackEvent } from '@/providers/ObservabilityProvider';
+import LoadingState from '@/components/LoadingState';
 
 type ReviewsResponse = ListResponse<VenueReview> & { reviews: VenueReview[] };
 type ReviewAction = 'hide' | 'restore' | 'delete';
@@ -280,7 +281,7 @@ export default function ReviewsPage() {
       </div>
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loading')}</div>
+        <LoadingState message={t('loading')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (

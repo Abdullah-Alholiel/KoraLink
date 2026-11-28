@@ -27,6 +27,7 @@ import {
 import { useExportFeedback, ExportFeedbackNote } from '@/lib/use-export-feedback';
 import { trackEvent } from '@/providers/ObservabilityProvider';
 import * as Sentry from '@sentry/nextjs';
+import LoadingState from '@/components/LoadingState';
 
 // P2-343: payout-request failure buckets (error-message standard — what
 // happened + why + what next, localized EN+AR). Same shape as blackout.ts
@@ -291,7 +292,7 @@ export default function PartnerEarningsPage() {
 
       <div className="space-y-6 p-8">
         {loading ? (
-          <div className="text-sm text-gray-500">{t('loading')}</div>
+          <LoadingState message={t('loading')} />
         ) : error ? (
           <LoadError error={error} onRetry={reload} className="my-10" />
         ) : (

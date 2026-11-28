@@ -10,6 +10,7 @@ import LoadError from '@/components/LoadError';
 import { api, apiErrorToMessage, type Role } from '@/lib/api';
 import { can, getRole } from '@/lib/rbac';
 import PageHeader from '@/components/PageHeader';
+import LoadingState from '@/components/LoadingState';
 
 interface SettingsResponse {
   settings: Record<string, unknown>;
@@ -71,7 +72,7 @@ export default function SettingsPage() {
       <PageHeader title={t('settingsTitle')} subtitle={t('settingsSubtitle')} actions={<LiveBadge live={live} stale={stale} />} />
 
       {loading ? (
-        <div className="px-8 py-10 text-sm text-gray-500">{t('loadingSettings')}</div>
+        <LoadingState message={t('loadingSettings')} />
       ) : error ? (
         <LoadError error={error} onRetry={reload} className="mx-8 my-10" />
       ) : (
