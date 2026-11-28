@@ -20,6 +20,7 @@ import {
 import { RedisIoAdapter } from './modules/gateway/redis-io.adapter';
 import { assertEnvFlags, isSwaggerEnabled } from './common/utils/env-flags';
 import { assertEmailDelivery } from './common/security/email-delivery';
+import { assertMoyasarLiveKeySafety } from './common/moyasar/moyasar.client';
 
 async function bootstrap(): Promise<void> {
   // F2 (run #223): buffer the raw request body so the Moyasar webhook
@@ -54,6 +55,14 @@ async function bootstrap(): Promise<void> {
   // Prod-like = production OR staging (delivery fail-closed posture,
   // env-flags.ts); local dev keeps the log-only dev mode.
   assertEmailDelivery(configService);
+
+  // ── D-20261127-02: refuse to boot in production with a LIVE Moyasar secret
+  // key unless MOYASAR_LIVE_ALLOWED=true — going live is a deliberate owner
+  // flip, never an accidental env paste. Secret value is never logged.
+  assertMoyasarLiveKeySafety(
+    (k) => configService.get<string>(k),
+    configService.get<string>('NODE_ENV', 'development'),
+  );
 
   const playerUrls = configService
     .get<string>('PLAYER_URL', 'http://localhost:3000')
