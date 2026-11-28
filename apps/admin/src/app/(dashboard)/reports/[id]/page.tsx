@@ -47,6 +47,9 @@ export default function ReportDetailPage() {
   const [confirmBan, setConfirmBan] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // P2-410: bumped on every failed save so the role="alert" <p> remounts
+  // (key change) and screen readers re-announce a repeated identical error.
+  const [saveSeq, setSaveSeq] = useState(0);
 
   // Edit-outcome mode (available in ANY status).
   const [editing, setEditing] = useState(false);
@@ -66,6 +69,7 @@ export default function ReportDetailPage() {
       setBanSubject(false);
     } catch (e) {
       setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
     }
@@ -79,6 +83,7 @@ export default function ReportDetailPage() {
       reload();
     } catch (e) {
       setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
       setConfirmReopen(false);
@@ -101,6 +106,7 @@ export default function ReportDetailPage() {
       } else {
         setSaveError(apiErrorToMessage(e, tr, 'adminReports.failed'));
       }
+      setSaveSeq((s) => s + 1);
     } finally {
       setSaving(false);
     }
@@ -212,7 +218,7 @@ export default function ReportDetailPage() {
                   className="w-full rounded-lg border border-gray-300 p-2 text-sm"
                   rows={3}
                 />
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setEditing(false)}
@@ -256,7 +262,7 @@ export default function ReportDetailPage() {
                   </button>
                   )}
                 </div>
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
               </div>
             ) : canResolve ? (
               <div className="space-y-3">
@@ -269,6 +275,7 @@ export default function ReportDetailPage() {
                       // `dismissed` (the API then 400s the resolve POST).
                       setBanSubject(false);
                     }}
+                    aria-pressed={outcome === 'resolved'}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${
                       outcome === 'resolved' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'
                     }`}
@@ -280,6 +287,7 @@ export default function ReportDetailPage() {
                       setOutcome('dismissed');
                       setBanSubject(false);
                     }}
+                    aria-pressed={outcome === 'dismissed'}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${
                       outcome === 'dismissed' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'
                     }`}
@@ -305,7 +313,7 @@ export default function ReportDetailPage() {
                     {t('banSubject')}
                   </label>
                 )}
-                {saveError && <p className="text-sm text-brand-red">{saveError}</p>}
+                {saveError && <p role="alert" key={`save-${saveSeq}`} className="text-sm text-brand-red">{saveError}</p>}
                 <button
                   onClick={() => (banSubject ? setConfirmBan(true) : resolve())}
                   disabled={saving || !online}

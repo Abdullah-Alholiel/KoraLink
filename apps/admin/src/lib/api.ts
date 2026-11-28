@@ -93,7 +93,9 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       // A caller-initiated abort is a cancellation, not a timeout —
       // rethrow it untouched so the caller's own handling sees it.
       if (options.signal?.aborted) throw err;
-      throw new Error('Request timed out. Check your connection and try again.');
+      // P2-410: typed status-0 ApiError (no code) so classifyApiError routes a
+      // timeout to the 'network' bucket like other no-response failures.
+      throw new ApiError('Request timed out. Check your connection and try again.', 0);
     }
     throw err;
   }
